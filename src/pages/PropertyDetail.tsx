@@ -525,7 +525,13 @@ export default function PropertyDetail() {
       <ViewingDialog
         open={viewingOpen}
         onClose={() => setViewingOpen(false)}
-        property={isDbListing ? { id: dbListing.id, title: dbListing.title, city: dbListing.city, ownerId: dbListing.owner_id } : mockProperty}
+      property={isDbListing ? {
+        id: dbListing.id, title: dbListing.title, city: dbListing.city,
+        price: Number(dbListing.price), sqm: Number(dbListing.sqm),
+        type: dbListing.property_type as any, listingType: dbListing.listing_type as any,
+        images: images, address: dbListing.address || dbListing.city,
+        tags: features as string[]
+      } : mockProperty}
       />
     </div>
   );
