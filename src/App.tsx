@@ -11,10 +11,12 @@ import PropertyDetail from "./pages/PropertyDetail";
 import Auctions from "./pages/Auctions";
 import Firesale from "./pages/Firesale";
 import Professionals from "./pages/Professionals";
+import ProfessionalProfile from "./pages/ProfessionalProfile";
 import Dashboard from "./pages/Dashboard";
 import Signup from "./pages/Signup";
 import Login from "./pages/Login";
 import Messages from "./pages/Messages";
+import CreateListing from "./pages/CreateListing";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -33,11 +35,13 @@ const App = () => (
             <Route path="/auctions" element={<Auctions />} />
             <Route path="/firesale" element={<Firesale />} />
             <Route path="/professionals" element={<Professionals />} />
+            <Route path="/professionals/:id" element={<ProfessionalProfile />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/login" element={<Login />} />
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/dashboard/:section" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
+            <Route path="/listings/new" element={<ProtectedRoute><CreateListing /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
