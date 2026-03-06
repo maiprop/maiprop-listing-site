@@ -44,7 +44,7 @@ export default function PropertyDetail() {
 
   const handleFavorite = () => {
     if (!user) { toast.error("Sign in to save properties"); return; }
-    if (id) toggleFav.mutate({ listing_id: id, is_favorited: isFavorited });
+    if (id) toggleFav.mutate({ listing_id: id, isFavorited });
   };
 
   const handleContact = async () => {
