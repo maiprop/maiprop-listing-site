@@ -1,5 +1,5 @@
 // Mock property data for demo
-import type { Property } from "./PropertyCard";
+import type { Property } from "@/components/PropertyCard";
 
 export const mockProperties: Property[] = [
   {
