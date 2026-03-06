@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Search, MapPin, ChevronDown, TrendingUp, Shield, Zap, Users, ArrowRight, Play, Gavel, Flame, Building2, Home, Store, Trees } from "lucide-react";
+import { Search, MapPin, ChevronDown, TrendingUp, Shield, Zap, Users, ArrowRight, Play, Gavel, Flame, Building2, Home, Store, Trees, ExternalLink, BarChart2, Globe, Maximize2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { MarketTicker } from "@/components/MarketTicker";
@@ -365,6 +365,197 @@ export default function Index() {
             <Button size="lg" className="bg-gradient-accent border-0 text-accent-foreground" asChild>
               <Link to="/professionals">Explore Directory <ArrowRight className="w-4 h-4 ml-2" /></Link>
             </Button>
+          </div>
+        </div>
+      </section>
+
+      {/* ── mAI Prop OS Embed ── */}
+      <section className="py-20 bg-card/30 overflow-hidden">
+        <div className="container">
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            {/* Copy */}
+            <div>
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 mb-5">
+                <BarChart2 className="w-3.5 h-3.5 text-primary" />
+                <span className="text-xs font-semibold text-primary uppercase tracking-wide">Powered by mAI Prop OS</span>
+              </div>
+              <h2 className="font-display text-4xl font-bold leading-tight mb-4">
+                Greece's Real Estate <br />
+                <span className="gradient-text-primary">Data Gateway</span>
+              </h2>
+              <p className="text-muted-foreground leading-relaxed mb-6">
+                Every listing on maiProp is powered by mAI Prop OS — our proprietary data platform aggregating Greek cadastre records, judicial auctions, price indices, and predictive analytics into one live dashboard.
+              </p>
+              <ul className="space-y-3 mb-8">
+                {[
+                  "Real-time €/m² indices for every Greek region",
+                  "3,200+ monthly judicial & bank auctions",
+                  "AI-powered investment scoring & portfolio tools",
+                  "Automated property reports in minutes",
+                ].map(item => (
+                  <li key={item} className="flex items-start gap-2.5 text-sm text-muted-foreground">
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+              <div className="flex gap-3">
+                <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2 glow-cyan" asChild>
+                  <a href="https://os.maiprop.co" target="_blank" rel="noreferrer">
+                    Open mAI Prop OS <ExternalLink className="w-4 h-4" />
+                  </a>
+                </Button>
+                <Button variant="outline" className="border-border gap-2" asChild>
+                  <a href="https://os.maiprop.co" target="_blank" rel="noreferrer">
+                    Learn More
+                  </a>
+                </Button>
+              </div>
+            </div>
+
+            {/* Browser frame */}
+            <div className="relative">
+              {/* Glow behind */}
+              <div className="absolute inset-0 -m-8 rounded-3xl opacity-20 blur-3xl"
+                style={{ background: "radial-gradient(ellipse, hsl(183 100% 42%), transparent 70%)" }}
+              />
+              {/* Frame */}
+              <div className="relative rounded-2xl overflow-hidden border border-primary/30 shadow-elevated glow-cyan">
+                {/* Browser chrome */}
+                <div className="flex items-center gap-2 px-4 py-3 bg-brand-surface-3 border-b border-border">
+                  <div className="flex gap-1.5">
+                    <span className="w-3 h-3 rounded-full bg-destructive/60" />
+                    <span className="w-3 h-3 rounded-full bg-brand-gold/60" />
+                    <span className="w-3 h-3 rounded-full bg-brand-emerald/60" />
+                  </div>
+                  <div className="flex-1 flex items-center gap-2 bg-secondary rounded-lg px-3 py-1.5 mx-2">
+                    <Globe className="w-3 h-3 text-muted-foreground shrink-0" />
+                    <span className="text-xs text-muted-foreground font-mono">os.maiprop.co</span>
+                  </div>
+                  <a href="https://os.maiprop.co" target="_blank" rel="noreferrer"
+                    className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors">
+                    <Maximize2 className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+                {/* Iframe */}
+                <div className="relative aspect-[16/10] bg-brand-surface-2">
+                  <iframe
+                    src="https://os.maiprop.co"
+                    title="mAI Prop OS — Real Estate Data Platform"
+                    className="w-full h-full border-0"
+                    loading="lazy"
+                    style={{ transform: "scale(1)", transformOrigin: "top left" }}
+                  />
+                  {/* Clickable overlay that opens in new tab */}
+                  <a
+                    href="https://os.maiprop.co"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="absolute inset-0 bg-transparent hover:bg-primary/5 transition-colors flex items-end justify-end p-4"
+                    title="Open mAI Prop OS"
+                  >
+                    <span className="flex items-center gap-1.5 bg-background/80 backdrop-blur-sm text-xs text-primary px-3 py-1.5 rounded-full border border-primary/30 font-medium opacity-0 hover:opacity-100 transition-opacity">
+                      <ExternalLink className="w-3 h-3" /> Open Full Site
+                    </span>
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── properties.maiprop.co Embed ── */}
+      <section className="py-20 overflow-hidden">
+        <div className="container">
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            {/* Browser frame — left side */}
+            <div className="relative order-last lg:order-first">
+              {/* Glow behind */}
+              <div className="absolute inset-0 -m-8 rounded-3xl opacity-20 blur-3xl"
+                style={{ background: "radial-gradient(ellipse, hsl(42 95% 55%), transparent 70%)" }}
+              />
+              {/* Frame */}
+              <div className="relative rounded-2xl overflow-hidden border border-brand-gold/30 shadow-elevated"
+                style={{ boxShadow: "0 0 30px -5px hsl(42 95% 55% / 0.3)" }}>
+                {/* Browser chrome */}
+                <div className="flex items-center gap-2 px-4 py-3 bg-brand-surface-3 border-b border-border">
+                  <div className="flex gap-1.5">
+                    <span className="w-3 h-3 rounded-full bg-destructive/60" />
+                    <span className="w-3 h-3 rounded-full bg-brand-gold/60" />
+                    <span className="w-3 h-3 rounded-full bg-brand-emerald/60" />
+                  </div>
+                  <div className="flex-1 flex items-center gap-2 bg-secondary rounded-lg px-3 py-1.5 mx-2">
+                    <Globe className="w-3 h-3 text-muted-foreground shrink-0" />
+                    <span className="text-xs text-muted-foreground font-mono">properties.maiprop.co</span>
+                  </div>
+                  <a href="https://properties.maiprop.co" target="_blank" rel="noreferrer"
+                    className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors">
+                    <Maximize2 className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+                {/* Iframe */}
+                <div className="relative aspect-[16/10] bg-brand-surface-2">
+                  <iframe
+                    src="https://properties.maiprop.co"
+                    title="mAI Prop Properties — Greek Golden Visa & Investment Properties"
+                    className="w-full h-full border-0"
+                    loading="lazy"
+                  />
+                  {/* Overlay */}
+                  <a
+                    href="https://properties.maiprop.co"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="absolute inset-0 bg-transparent hover:bg-brand-gold/5 transition-colors flex items-end justify-end p-4"
+                    title="Open Properties Portal"
+                  >
+                    <span className="flex items-center gap-1.5 bg-background/80 backdrop-blur-sm text-xs text-brand-gold px-3 py-1.5 rounded-full border border-brand-gold/30 font-medium opacity-0 hover:opacity-100 transition-opacity">
+                      <ExternalLink className="w-3 h-3" /> Open Full Site
+                    </span>
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            {/* Copy */}
+            <div>
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-brand-gold/10 border border-brand-gold/20 mb-5">
+                <span className="text-xs font-semibold text-brand-gold uppercase tracking-wide">Greek Golden Visa</span>
+              </div>
+              <h2 className="font-display text-4xl font-bold leading-tight mb-4">
+                Secure EU Residency <br />
+                <span className="gradient-text-gold">Through Greek Property</span>
+              </h2>
+              <p className="text-muted-foreground leading-relaxed mb-6">
+                Our dedicated investment properties portal showcases curated €250K+ properties eligible for the Greek Golden Visa program — your gateway to EU residency, freedom of movement, and long-term capital growth.
+              </p>
+              <ul className="space-y-3 mb-8">
+                {[
+                  "Minimum €250K investment for EU residency",
+                  "6–9 months to visa approval",
+                  "Access for family including spouse & children",
+                  "Strongest real estate yields in Southern Europe",
+                ].map(item => (
+                  <li key={item} className="flex items-start gap-2.5 text-sm text-muted-foreground">
+                    <span className="w-1.5 h-1.5 rounded-full bg-brand-gold mt-1.5 shrink-0" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+              <div className="flex gap-3">
+                <Button className="bg-gradient-gold border-0 text-background font-semibold gap-2" asChild>
+                  <a href="https://properties.maiprop.co" target="_blank" rel="noreferrer">
+                    Explore Properties <ExternalLink className="w-4 h-4" />
+                  </a>
+                </Button>
+                <Button variant="outline" className="border-brand-gold/30 text-brand-gold hover:bg-brand-gold/10" asChild>
+                  <a href="https://properties.maiprop.co" target="_blank" rel="noreferrer">
+                    Golden Visa Guide
+                  </a>
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       </section>
