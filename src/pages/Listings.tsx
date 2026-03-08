@@ -215,10 +215,9 @@ function PropertyTypeButton({
   onSubtypeChange: (v: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [expandedType, setExpandedType] = useState(value);
   const ref = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { setExpandedType(value); }, [value]);
+  useEffect(() => {}, [value]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
