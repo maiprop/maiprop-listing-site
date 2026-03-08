@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Search, MapPin, ChevronDown, TrendingUp, Shield, Zap, Users, ArrowRight, Play, Gavel, Flame, Building2, Home, Store, Trees, ExternalLink, BarChart2, Globe, Maximize2 } from "lucide-react";
+import { Search, MapPin, ChevronDown, TrendingUp, Shield, Zap, Users, ArrowRight, Play, Gavel, Flame, Building2, Home, Store, Trees, ExternalLink, BarChart2, Globe, Maximize2, ListFilter, CalendarCheck, HandshakeIcon, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { MarketTicker } from "@/components/MarketTicker";
