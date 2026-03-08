@@ -117,6 +117,9 @@ export default function PropertyMiniMap({
     try {
       const data = await fetchPOIs(address, city, lat, lng);
       setPois(data);
+      // Compute walk score and notify parent
+      const score = computeWalkScore(data);
+      onWalkScoreChange?.(score);
     } catch (e: any) {
       setPoiError(e.message || "Failed to load nearby places");
     } finally {
