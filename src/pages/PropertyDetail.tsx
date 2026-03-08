@@ -24,6 +24,7 @@ import PropertyMiniMap from "@/components/PropertyMiniMap";
 import PropertyValuation from "@/components/PropertyValuation";
 import NeighbourhoodReport from "@/components/NeighbourhoodReport";
 import { walkScoreLabel, walkScoreColour } from "@/lib/walkScore";
+import AIAssistantWidget from "@/components/AIAssistantWidget";
 
 // ─── Energy class data ──────────────────────────────────────────────────────
 const ENERGY_SCALE = [
@@ -919,6 +920,49 @@ export default function PropertyDetail() {
           images: images, address: dbListing.address || dbListing.city,
           tags: []
         } : mockProperty}
+      />
+      {/* AI property assistant with full property context */}
+      <AIAssistantWidget
+        propertyContext={isDbListing ? {
+          title: dbListing.title,
+          city: dbListing.city,
+          address: dbListing.address ?? undefined,
+          price: Number(dbListing.price),
+          pricePerSqm: dbListing.price_per_sqm ? Number(dbListing.price_per_sqm) : undefined,
+          propertyType: dbListing.property_type,
+          listingType: dbListing.listing_type,
+          sqm: Number(dbListing.sqm),
+          bedrooms: dbListing.bedrooms ?? undefined,
+          bathrooms: dbListing.bathrooms ?? undefined,
+          floor: dbListing.floor ?? undefined,
+          yearBuilt: dbListing.year_built ?? undefined,
+          energyClass: dbListing.energy_class ?? undefined,
+          heatingSystem: dbListing.heating_system ?? undefined,
+          hasParking: dbListing.has_parking ?? undefined,
+          hasPool: dbListing.has_pool ?? undefined,
+          hasElevator: dbListing.has_elevator ?? undefined,
+          hasGarden: dbListing.has_garden ?? undefined,
+          hasBalcony: dbListing.has_balcony ?? undefined,
+          hasAC: dbListing.has_ac ?? undefined,
+          hasFireplace: dbListing.has_fireplace ?? undefined,
+          hasFurnished: dbListing.has_furnished ?? undefined,
+          hasStorage: dbListing.has_storage ?? undefined,
+          hasSmartHome: dbListing.has_smart_home ?? undefined,
+          petsAllowed: dbListing.pets_allowed ?? undefined,
+          hasView: dbListing.has_view ?? undefined,
+          latitude: dbListing.latitude ?? undefined,
+          longitude: dbListing.longitude ?? undefined,
+          region: dbListing.region ?? undefined,
+        } : {
+          title: mockProperty.title,
+          city: mockProperty.city,
+          price: mockProperty.price,
+          propertyType: mockProperty.type,
+          listingType: mockProperty.listingType,
+          sqm: mockProperty.sqm,
+          bedrooms: mockProperty.bedrooms,
+          bathrooms: mockProperty.bathrooms,
+        }}
       />
     </div>
   );

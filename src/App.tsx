@@ -2,9 +2,10 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import AIAssistantWidget from "@/components/AIAssistantWidget";
 import Index from "./pages/Index";
 import Listings from "./pages/Listings";
 import PropertyDetail from "./pages/PropertyDetail";
@@ -20,6 +21,16 @@ import CreateListing from "./pages/CreateListing";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
+
+// Show the global AI widget on all pages except auth & dashboard
+function GlobalAIWidget() {
+  const loc = useLocation();
+  const hide = ["/login", "/signup", "/dashboard", "/messages"].some(p => loc.pathname.startsWith(p));
+  // On property detail pages, the widget is rendered inside PropertyDetail with context instead
+  const isPropertyPage = loc.pathname.startsWith("/property/");
+  if (hide || isPropertyPage) return null;
+  return <AIAssistantWidget />;
+}
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -44,6 +55,7 @@ const App = () => (
             <Route path="/listings/new" element={<ProtectedRoute><CreateListing /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
+          <GlobalAIWidget />
         </BrowserRouter>
       </TooltipProvider>
     </AuthProvider>
