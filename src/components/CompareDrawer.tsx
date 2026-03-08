@@ -181,6 +181,3 @@ function CompareModal({ listings, onRemove }: { listings: Listing[]; onRemove: (
     </>
   );
 }
-
-// Need to import useState
-import { useState } from "react";
