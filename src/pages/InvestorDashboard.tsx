@@ -881,8 +881,7 @@ export default function InvestorDashboard() {
                       variant={tier.highlight ? "default" : "outline"}
                       onClick={e => {
                         e.stopPropagation();
-                        toast.success(`${tier.cta} — Our team will contact you shortly.`);
-                        setShowGate(false);
+                        handleSelectTier(tier.id, tier.cta);
                       }}
                     >
                       {tier.cta}
