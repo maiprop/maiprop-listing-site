@@ -363,14 +363,19 @@ export default function Listings() {
                 )}
               </div>
 
-              {/* Listing type */}
-              <div className="relative">
-                <select value={selectedListingType} onChange={e => setParam("listing_type", e.target.value)}
-                  className="appearance-none bg-secondary border border-border rounded-xl px-3 py-2.5 pr-7 text-sm text-foreground cursor-pointer outline-none focus:border-primary">
-                  {listingTypeOptions.map(o => <option key={o.value} value={o.value} className="bg-card">{o.icon} {o.label}</option>)}
-                </select>
-                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-              </div>
+              {/* Listing type button */}
+              <ListingTypeButton
+                value={selectedListingType}
+                onChange={v => setParam("listing_type", v)}
+              />
+
+              {/* Property type button */}
+              <PropertyTypeButton
+                value={selectedType}
+                subtype={selectedSubtype}
+                onTypeChange={v => { setParam("type", v); setParam("subtype", ""); }}
+                onSubtypeChange={v => setParam("subtype", v)}
+              />
 
               {/* Price */}
               <div className="relative">
