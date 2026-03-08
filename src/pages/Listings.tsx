@@ -580,64 +580,7 @@ export default function Listings() {
               </div>
             </div>
 
-            {/* Property type strip — icon chips */}
-            <div className="flex items-center gap-1.5 mt-3 overflow-x-auto pb-1 scrollbar-hide">
-              <button
-                onClick={() => { setParam("type", ""); setParam("subtype", ""); }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold whitespace-nowrap transition-all shrink-0 ${
-                  !selectedType
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-border bg-secondary text-muted-foreground hover:text-foreground hover:border-primary/40"
-                }`}
-              >
-                🏘️ All Types
-              </button>
-              {PROPERTY_TYPES.map(pt => (
-                <button
-                  key={pt.value}
-                  onClick={() => { setParam("type", pt.value); setParam("subtype", ""); }}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold whitespace-nowrap transition-all shrink-0 ${
-                    selectedType === pt.value
-                      ? `border-primary bg-primary/10 text-primary`
-                      : "border-border bg-secondary text-muted-foreground hover:text-foreground hover:border-primary/40"
-                  }`}
-                >
-                  {pt.emoji} {pt.label}
-                </button>
-              ))}
-            </div>
 
-            {/* Subtype strip — appears when a type is selected */}
-            {selectedType && PROPERTY_TYPE_MAP[selectedType as PropertyTypeKey] && (
-              <div className="flex items-center gap-1.5 mt-2 overflow-x-auto pb-1 scrollbar-hide">
-                <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                <span className="text-xs text-muted-foreground shrink-0 mr-1">Subtype:</span>
-                <button
-                  onClick={() => setParam("subtype", "")}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border text-xs font-medium whitespace-nowrap transition-all shrink-0 ${
-                    !selectedSubtype
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border bg-secondary text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  All {PROPERTY_TYPE_MAP[selectedType as PropertyTypeKey]?.labelPlural}
-                </button>
-                {PROPERTY_TYPE_MAP[selectedType as PropertyTypeKey]?.subtypes.map(st => (
-                  <button
-                    key={st.value}
-                    onClick={() => setParam("subtype", st.value)}
-                    title={st.description}
-                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border text-xs font-medium whitespace-nowrap transition-all shrink-0 ${
-                      selectedSubtype === st.value
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-border bg-secondary text-muted-foreground hover:text-foreground hover:border-primary/40"
-                    }`}
-                  >
-                    {st.label}
-                  </button>
-                ))}
-              </div>
-            )}
 
             {/* Active filter chips */}
             {activeFilterCount > 0 && (
