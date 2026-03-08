@@ -167,6 +167,148 @@ function FilterChip({ active, onClick, children }: {
   );
 }
 
+// ─── ListingTypeButton ────────────────────────────────────────────────────────
+
+function ListingTypeButton({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const current = listingTypeOptions.find(o => o.value === value) || listingTypeOptions[0];
+
+  return (
+    <div ref={ref} className="relative shrink-0">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-medium transition-all whitespace-nowrap ${
+          value
+            ? "border-primary bg-primary/10 text-primary"
+            : "border-border bg-secondary text-foreground hover:border-primary/40"
+        }`}
+      >
+        <span>{current.icon}</span>
+        <span>{current.label}</span>
+        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="absolute top-full mt-1 left-0 z-50 bg-card border border-border rounded-xl shadow-lg overflow-hidden min-w-[160px]">
+          {listingTypeOptions.map(o => (
+            <button
+              key={o.value}
+              onClick={() => { onChange(o.value); setOpen(false); }}
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left transition-colors hover:bg-secondary ${
+                value === o.value ? "text-primary bg-primary/10" : "text-foreground"
+              }`}
+            >
+              <span>{o.icon}</span>
+              <span>{o.label}</span>
+              {value === o.value && <Check className="w-3.5 h-3.5 ml-auto" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── PropertyTypeButton ───────────────────────────────────────────────────────
+
+function PropertyTypeButton({
+  value, subtype, onTypeChange, onSubtypeChange,
+}: {
+  value: string; subtype: string;
+  onTypeChange: (v: string) => void;
+  onSubtypeChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const currentType = value ? PROPERTY_TYPE_MAP[value as PropertyTypeKey] : null;
+  const currentSubtype = currentType?.subtypes.find(s => s.value === subtype);
+
+  const label = currentSubtype
+    ? `${currentType!.emoji} ${currentSubtype.label}`
+    : currentType
+    ? `${currentType.emoji} ${currentType.label}`
+    : "🏘️ All Types";
+
+  return (
+    <div ref={ref} className="relative shrink-0">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-medium transition-all whitespace-nowrap ${
+          value
+            ? "border-primary bg-primary/10 text-primary"
+            : "border-border bg-secondary text-foreground hover:border-primary/40"
+        }`}
+      >
+        <span>{label}</span>
+        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="absolute top-full mt-1 left-0 z-50 bg-card border border-border rounded-xl shadow-lg overflow-hidden min-w-[220px]">
+          {/* All types option */}
+          <button
+            onClick={() => { onTypeChange(""); onSubtypeChange(""); setOpen(false); }}
+            className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left transition-colors hover:bg-secondary ${
+              !value ? "text-primary bg-primary/10" : "text-foreground"
+            }`}
+          >
+            <span>🏘️</span><span className="font-medium">All Types</span>
+            {!value && <Check className="w-3.5 h-3.5 ml-auto" />}
+          </button>
+          <div className="h-px bg-border mx-2" />
+          {PROPERTY_TYPES.map(pt => (
+            <div key={pt.value}>
+              {/* Main type row */}
+              <button
+                onClick={() => { onTypeChange(pt.value); onSubtypeChange(""); if (!pt.subtypes.length) setOpen(false); }}
+                className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left transition-colors hover:bg-secondary ${
+                  value === pt.value && !subtype ? "text-primary bg-primary/10" : "text-foreground"
+                }`}
+              >
+                <span>{pt.emoji}</span>
+                <span className="font-medium">{pt.label}</span>
+                {value === pt.value && !subtype && <Check className="w-3.5 h-3.5 ml-auto" />}
+              </button>
+              {/* Subtypes — show when this type is selected */}
+              {value === pt.value && pt.subtypes.map(st => (
+                <button
+                  key={st.value}
+                  onClick={() => { onSubtypeChange(st.value); setOpen(false); }}
+                  title={st.description}
+                  className={`w-full flex items-center gap-2.5 pl-8 pr-3 py-2 text-xs text-left transition-colors hover:bg-secondary ${
+                    subtype === st.value ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <ChevronRight className="w-3 h-3 shrink-0" />
+                  <span>{st.label}</span>
+                  {subtype === st.value && <Check className="w-3 h-3 ml-auto" />}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function Listings() {
