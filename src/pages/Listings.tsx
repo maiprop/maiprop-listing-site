@@ -264,7 +264,7 @@ function PropertyTypeButton({
             <div key={pt.value}>
               {/* Main type row */}
               <button
-                onClick={() => { onTypeChange(pt.value); onSubtypeChange(""); if (!pt.subtypes.length) setOpen(false); }}
+                onClick={(e) => { e.stopPropagation(); onTypeChange(pt.value); onSubtypeChange(""); if (!pt.subtypes.length) setOpen(false); }}
                 className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left transition-colors hover:bg-secondary ${
                   value === pt.value && !subtype ? "text-primary bg-primary/10" : "text-foreground"
                 }`}
