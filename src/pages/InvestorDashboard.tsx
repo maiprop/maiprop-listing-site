@@ -489,6 +489,17 @@ export default function InvestorDashboard() {
                   <div className="w-1.5 h-1.5 rounded-full bg-brand-emerald animate-pulse" />
                   {liveDeals.length} live deals
                 </div>
+                {subscribed && subscription && (
+                  <div className="flex items-center gap-1.5 text-xs bg-primary/10 border border-primary/20 text-primary px-3 py-1.5 rounded-full font-bold capitalize">
+                    <Crown className="w-3 h-3" />
+                    {subscription.tier} Plan Active
+                  </div>
+                )}
+                {!subscribed && !subLoading && (
+                  <Button size="sm" variant="outline" className="border-primary/30 text-primary text-xs h-8 gap-1.5" onClick={() => setShowGate(true)}>
+                    <Sparkles className="w-3 h-3" /> Subscribe
+                  </Button>
+                )}
                 <Button
                   className="bg-gradient-primary border-0 text-primary-foreground gap-2"
                   onClick={() => navigate("/firesale")}
