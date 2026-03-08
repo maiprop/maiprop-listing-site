@@ -2,18 +2,19 @@ import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
   MapPin, Star, CheckCircle, Globe, ExternalLink,
-  ChevronLeft, Clock, Award, Users, Briefcase, MessageSquare,
+  ChevronLeft, Clock, Users, Briefcase, MessageSquare,
   Calendar, Shield, Loader2, Languages, ChevronRight,
-  Phone, Mail, Euro, FileText, ThumbsUp, Zap, Building2
+  Phone, Euro, FileText, ThumbsUp, Zap, Building2, Video
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { useProfessionals, useProfessional } from "@/hooks/useProfessionals";
-import { useAuth } from "@/contexts/AuthContext";
-import { useStartConversation } from "@/hooks/useMessages";
 import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
+import SendMessageModal from "@/components/SendMessageModal";
+import BookConsultationModal from "@/components/BookConsultationModal";
+import RequestCallbackModal from "@/components/RequestCallbackModal";
+import OnlineViewingModal from "@/components/OnlineViewingModal";
 
 const categoryLabels: Record<string, { label: string; emoji: string; description: string }> = {
   architect: { label: "Licensed Architect", emoji: "🏛️", description: "Building design, planning permits, renovation oversight" },
