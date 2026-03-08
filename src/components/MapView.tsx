@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import Map, {
   Source,
   Layer,
@@ -8,14 +8,14 @@ import Map, {
   MapRef,
 } from "react-map-gl";
 import type { LayerProps } from "react-map-gl";
-import { MapPin, Bed, Bath, Ruler } from "lucide-react";
+import { MapPin, Bed, Bath, Ruler, Maximize2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { MAPBOX_TOKEN } from "@/lib/config";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type MapListing = {
+export type MapListing = {
   id: string;
   title: string;
   price: number;
@@ -49,7 +49,7 @@ function priceLabel(price: number) {
   return `€${price}`;
 }
 
-// ── GeoJSON builder ───────────────────────────────────────────────────────────
+// ── GeoJSON ───────────────────────────────────────────────────────────────────
 
 function buildGeoJSON(listings: MapListing[]) {
   return {
@@ -80,11 +80,8 @@ const clusterCircleLayer: LayerProps = {
   filter: ["has", "point_count"],
   paint: {
     "circle-color": [
-      "step",
-      ["get", "point_count"],
-      "#00d4c8",
-      5,  "#9b6bfc",
-      15, "#e84040",
+      "step", ["get", "point_count"],
+      "#00d4c8", 5, "#9b6bfc", 15, "#e84040",
     ],
     "circle-radius": ["step", ["get", "point_count"], 22, 5, 28, 15, 36],
     "circle-opacity": 0.88,
@@ -106,7 +103,6 @@ const clusterCountLayer: LayerProps = {
   paint: { "text-color": "#0a0f1a" },
 };
 
-// Invisible hit-test layer for unclustered points
 const unclusteredLayer: LayerProps = {
   id: "unclustered-point",
   type: "circle",
@@ -115,7 +111,7 @@ const unclusteredLayer: LayerProps = {
   paint: { "circle-radius": 0, "circle-opacity": 0 },
 };
 
-// ── Popup card ────────────────────────────────────────────────────────────────
+// ── Property Popup ────────────────────────────────────────────────────────────
 
 function PropertyPopup({
   listing,
@@ -158,10 +154,7 @@ function PropertyPopup({
         <Link
           to={`/property/${listing.id}`}
           className="mt-2.5 w-full block text-center px-3 py-1.5 rounded-lg text-xs font-semibold"
-          style={{
-            background: typeColour(listing.listingType),
-            color: "#0a0f1a",
-          }}
+          style={{ background: typeColour(listing.listingType), color: "#0a0f1a" }}
         >
           View Property →
         </Link>
@@ -170,7 +163,7 @@ function PropertyPopup({
   );
 }
 
-// ── Price-tag pin button ──────────────────────────────────────────────────────
+// ── Price pin button ──────────────────────────────────────────────────────────
 
 function PricePin({
   listing,
@@ -202,9 +195,17 @@ function PricePin({
   );
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────────
+// ── MapView ───────────────────────────────────────────────────────────────────
 
-export function MapView({ listings }: { listings: MapListing[] }) {
+interface MapViewProps {
+  listings: MapListing[];
+  /** Called whenever the map viewport changes with ids of visible listings */
+  onVisibleListingsChange?: (ids: Set<string>) => void;
+  /** Height override; defaults to calc(100vh - 14rem) */
+  height?: string;
+}
+
+export function MapView({ listings, onVisibleListingsChange, height }: MapViewProps) {
   const mapRef = useRef<MapRef>(null);
   const [popupInfo, setPopupInfo] = useState<{
     listing: MapListing;
@@ -222,21 +223,46 @@ export function MapView({ listings }: { listings: MapListing[] }) {
 
   const geoJSON = buildGeoJSON(mapped);
 
-  const initialView =
-    mapped.length > 0
-      ? { longitude: 23.7275, latitude: 38.5, zoom: 6 }
-      : { longitude: 23.7275, latitude: 37.9838, zoom: 6 };
+  const initialView = { longitude: 23.7275, latitude: 38.5, zoom: 6 };
 
-  // Click: expand clusters or open popup
+  // ── Fit bounds to all pins ────────────────────────────────────────────────
+  const fitBounds = useCallback(() => {
+    if (!mapRef.current || mapped.length === 0) return;
+    const lngs = mapped.map(l => Number(l.longitude));
+    const lats = mapped.map(l => Number(l.latitude));
+    const sw: [number, number] = [Math.min(...lngs), Math.min(...lats)];
+    const ne: [number, number] = [Math.max(...lngs), Math.max(...lats)];
+    mapRef.current.fitBounds([sw, ne], { padding: 60, duration: 600 });
+  }, [mapped]);
+
+  // Auto fit on first load / when listings change
+  useEffect(() => {
+    const timer = setTimeout(fitBounds, 300);
+    return () => clearTimeout(timer);
+  }, [fitBounds]);
+
+  // ── Compute visible listings after move/zoom ──────────────────────────────
+  const computeVisible = useCallback(() => {
+    if (!onVisibleListingsChange) return;
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+    const bounds = map.getBounds();
+    if (!bounds) return;
+    const visibleIds = new Set<string>();
+    for (const l of mapped) {
+      const lng = Number(l.longitude);
+      const lat = Number(l.latitude);
+      if (bounds.contains([lng, lat])) visibleIds.add(l.id);
+    }
+    onVisibleListingsChange(visibleIds);
+  }, [mapped, onVisibleListingsChange]);
+
+  // ── Click handler ─────────────────────────────────────────────────────────
   const onClick = useCallback(
     (event: any) => {
       const map = mapRef.current?.getMap();
       if (!map) return;
-
-      const features = map.queryRenderedFeatures(event.point, {
-        layers: ["clusters"],
-      });
-
+      const features = map.queryRenderedFeatures(event.point, { layers: ["clusters"] });
       if (features.length) {
         const clusterId = features[0].properties?.cluster_id;
         const source = map.getSource("listings") as any;
@@ -247,11 +273,7 @@ export function MapView({ listings }: { listings: MapListing[] }) {
         });
         return;
       }
-
-      // Click on blank map area → close popup
-      const pinHit = map.queryRenderedFeatures(event.point, {
-        layers: ["unclustered-point"],
-      });
+      const pinHit = map.queryRenderedFeatures(event.point, { layers: ["unclustered-point"] });
       if (!pinHit.length) setPopupInfo(null);
     },
     []
@@ -260,7 +282,7 @@ export function MapView({ listings }: { listings: MapListing[] }) {
   return (
     <div
       className="rounded-2xl overflow-hidden border border-border shadow-card relative"
-      style={{ height: "calc(100vh - 14rem)" }}
+      style={{ height: height ?? "calc(100vh - 14rem)" }}
     >
       <Map
         ref={mapRef}
@@ -270,10 +292,13 @@ export function MapView({ listings }: { listings: MapListing[] }) {
         mapStyle="mapbox://styles/mapbox/dark-v11"
         interactiveLayerIds={["clusters"]}
         onClick={onClick}
+        onMoveEnd={computeVisible}
+        onZoomEnd={computeVisible}
+        onLoad={computeVisible}
       >
         <NavigationControl position="bottom-right" />
 
-        {/* Clustered GeoJSON source */}
+        {/* Clustered source */}
         <Source
           id="listings"
           type="geojson"
@@ -287,7 +312,7 @@ export function MapView({ listings }: { listings: MapListing[] }) {
           <Layer {...unclusteredLayer} />
         </Source>
 
-        {/* HTML price-tag markers (only visible when unclustered) */}
+        {/* HTML price markers */}
         {mapped.map(listing => (
           <Marker
             key={listing.id}
@@ -299,27 +324,19 @@ export function MapView({ listings }: { listings: MapListing[] }) {
               setPopupInfo(
                 popupInfo?.listing.id === listing.id
                   ? null
-                  : {
-                      listing,
-                      lng: Number(listing.longitude),
-                      lat: Number(listing.latitude),
-                    }
+                  : { listing, lng: Number(listing.longitude), lat: Number(listing.latitude) }
               );
             }}
           >
             <PricePin
               listing={listing}
               isActive={popupInfo?.listing.id === listing.id}
-              onClick={(e: React.MouseEvent) => {
+              onClick={(e) => {
                 e.stopPropagation();
                 setPopupInfo(
                   popupInfo?.listing.id === listing.id
                     ? null
-                    : {
-                        listing,
-                        lng: Number(listing.longitude),
-                        lat: Number(listing.latitude),
-                      }
+                    : { listing, lng: Number(listing.longitude), lat: Number(listing.latitude) }
                 );
               }}
             />
@@ -337,13 +354,20 @@ export function MapView({ listings }: { listings: MapListing[] }) {
             onClose={() => setPopupInfo(null)}
             className="mapbox-popup-custom"
           >
-            <PropertyPopup
-              listing={popupInfo.listing}
-              onClose={() => setPopupInfo(null)}
-            />
+            <PropertyPopup listing={popupInfo.listing} onClose={() => setPopupInfo(null)} />
           </Popup>
         )}
       </Map>
+
+      {/* Fit bounds button */}
+      <button
+        onClick={fitBounds}
+        title="Fit all pins"
+        className="absolute top-3 right-12 z-10 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-card/90 border border-border backdrop-blur-sm text-xs font-medium text-foreground hover:bg-card hover:border-primary/50 transition-all shadow-card"
+      >
+        <Maximize2 className="w-3.5 h-3.5" />
+        Fit all
+      </button>
 
       {/* Legend */}
       <div className="absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none">
@@ -351,16 +375,9 @@ export function MapView({ listings }: { listings: MapListing[] }) {
           <div
             key={type}
             className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold backdrop-blur-md"
-            style={{
-              background: `${colour}18`,
-              border: `1px solid ${colour}44`,
-              color: colour,
-            }}
+            style={{ background: `${colour}18`, border: `1px solid ${colour}44`, color: colour }}
           >
-            <span
-              className="w-2 h-2 rounded-full shrink-0"
-              style={{ background: colour }}
-            />
+            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: colour }} />
             {type.charAt(0).toUpperCase() + type.slice(1)}
           </div>
         ))}
