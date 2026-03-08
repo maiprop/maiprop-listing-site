@@ -53,6 +53,60 @@ export type Database = {
         }
         Relationships: []
       }
+      consultation_requests: {
+        Row: {
+          callback_time: string | null
+          created_at: string
+          id: string
+          message: string | null
+          preferred_date: string | null
+          preferred_time: string | null
+          professional_id: string
+          request_type: string
+          requester_email: string
+          requester_id: string | null
+          requester_name: string
+          requester_phone: string | null
+          service: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          callback_time?: string | null
+          created_at?: string
+          id?: string
+          message?: string | null
+          preferred_date?: string | null
+          preferred_time?: string | null
+          professional_id: string
+          request_type: string
+          requester_email: string
+          requester_id?: string | null
+          requester_name: string
+          requester_phone?: string | null
+          service?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          callback_time?: string | null
+          created_at?: string
+          id?: string
+          message?: string | null
+          preferred_date?: string | null
+          preferred_time?: string | null
+          professional_id?: string
+          request_type?: string
+          requester_email?: string
+          requester_id?: string | null
+          requester_name?: string
+          requester_phone?: string | null
+          service?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       conversations: {
         Row: {
           created_at: string
