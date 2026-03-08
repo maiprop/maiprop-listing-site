@@ -13,6 +13,7 @@ import { Footer } from "@/components/Footer";
 import { MapView } from "@/components/MapView";
 import { CompareDrawer } from "@/components/CompareDrawer";
 import { SaveSearchModal } from "@/components/SaveSearchModal";
+import { AISearchBar } from "@/components/AISearchBar";
 import { mockProperties } from "@/data/mockProperties";
 import { useListings } from "@/hooks/useListings";
 import { useAuth } from "@/contexts/AuthContext";
@@ -187,6 +188,37 @@ export default function Listings() {
   const [polygonFilterIds, setPolygonFilterIds] = useState<Set<string> | null>(null);
   const [mobileTab, setMobileTab] = useState<"list" | "map">("list");
   const { user } = useAuth();
+
+  // AI search filter applier — maps AI-parsed filters back to URL params
+  const applyAIFilters = useCallback((filters: Record<string, any>) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      // City
+      if (filters.city) next.set("city", filters.city); 
+      // Types
+      if (filters.listing_type) next.set("listing_type", filters.listing_type); else next.delete("listing_type");
+      if (filters.property_type) next.set("type", filters.property_type); else next.delete("type");
+      // Price
+      if (filters.price_min || filters.price_max) {
+        const min = filters.price_min ?? 0;
+        const max = filters.price_max ?? 9999999;
+        next.set("price", `${min}-${max}`);
+      }
+      // Beds
+      if (filters.beds_min) next.set("beds_min", String(filters.beds_min)); else next.delete("beds_min");
+      if (filters.beds_max) next.set("beds_max", String(filters.beds_max)); else next.delete("beds_max");
+      // Sqm
+      if (filters.sqm_min) next.set("sqm_min", String(filters.sqm_min)); else next.delete("sqm_min");
+      if (filters.sqm_max) next.set("sqm_max", String(filters.sqm_max)); else next.delete("sqm_max");
+      // Features
+      if (filters.features?.length) next.set("features", filters.features.join(","));
+      // Energy
+      if (filters.energy?.length) next.set("energy", filters.energy.join(","));
+      // Heating
+      if (filters.heating) next.set("heating", filters.heating); else next.delete("heating");
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
 
   // URL-based filter state helpers
   const getParam = (key: string, fallback = "") => searchParams.get(key) || fallback;
@@ -382,6 +414,9 @@ export default function Listings() {
                   <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center">{activeFilterCount}</span>
                 )}
               </Button>
+
+              {/* AI Search */}
+              <AISearchBar onFiltersApplied={applyAIFilters} />
 
               {/* Save search – logged-in only */}
               {user && (

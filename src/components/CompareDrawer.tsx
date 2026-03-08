@@ -2,6 +2,7 @@ import { useState } from "react";
 import { X, ArrowRight, Check, Minus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
+import { CompareAIReports } from "@/components/CompareAIReports";
 
 // Energy class colour map
 const energyColour: Record<string, string> = {
@@ -162,6 +163,9 @@ function CompareModal({ listings, onRemove }: { listings: Listing[]; onRemove: (
                   </tr>
                 </thead>
                 <tbody>
+                  {/* AI Reports section — placed at top of body */}
+                  <CompareAIReports listings={listings} />
+
                   {ROWS.map((row, i) => (
                     <tr key={row.key} className={`border-b border-border/50 ${i % 2 === 0 ? "bg-secondary/20" : ""}`}>
                       <td className="px-6 py-3 text-xs text-muted-foreground font-medium whitespace-nowrap">{row.label}</td>
