@@ -2,7 +2,8 @@ import { useState, useCallback } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import {
   Search, SlidersHorizontal, MapPin, LayoutGrid, Map, ChevronDown,
-  X, Gavel, ArrowUpDown, Loader2, Building2, Check, Bookmark, GitCompare
+  X, Gavel, ArrowUpDown, Loader2, Building2, Check, Bookmark, GitCompare,
+  Columns2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
