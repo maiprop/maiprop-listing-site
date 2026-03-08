@@ -621,6 +621,17 @@ export default function PropertyDetail() {
                 address={address}
                 city={city}
                 title={title}
+                onWalkScoreChange={setWalkScore}
+              />
+
+              {/* AI Neighbourhood Report */}
+              <NeighbourhoodReport
+                city={city}
+                address={address}
+                region={db?.region}
+                propertyType={propertyType}
+                lat={db?.latitude ? Number(db.latitude) : undefined}
+                lng={db?.longitude ? Number(db.longitude) : undefined}
               />
 
               {/* Auction details */}
