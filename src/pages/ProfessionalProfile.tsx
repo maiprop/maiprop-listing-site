@@ -62,26 +62,18 @@ const mockReviews = [
 
 export default function ProfessionalProfile() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  const { user } = useAuth();
   const { data: pro, isLoading } = useProfessional(id || "");
   const { data: allProfessionals = [] } = useProfessionals();
-  const startConversation = useStartConversation();
   const [activeTab, setActiveTab] = useState<"overview" | "services" | "reviews">("overview");
+  const [msgOpen, setMsgOpen] = useState(false);
+  const [consultOpen, setConsultOpen] = useState(false);
+  const [callbackOpen, setCallbackOpen] = useState(false);
+  const [videoOpen, setVideoOpen] = useState(false);
 
   const catInfo = pro ? categoryLabels[pro.category] || { label: pro.category, emoji: "👤", description: "" } : null;
   const services = pro ? servicesByCategory[pro.category] || [] : [];
 
   const displayName = pro?.display_name || "Professional";
-
-  const handleContact = async () => {
-    if (!user) { toast.error("Please sign in to contact professionals"); navigate("/login"); return; }
-    if (!pro) return;
-    try {
-      await startConversation.mutateAsync({ other_user_id: pro.user_id });
-      navigate("/messages");
-    } catch { toast.error("Could not start conversation"); }
-  };
 
   if (isLoading) return (
     <div className="min-h-screen bg-background flex items-center justify-center">
