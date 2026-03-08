@@ -97,11 +97,12 @@ export default {
         "gradient-warm": "var(--gradient-warm)",
       },
       boxShadow: {
-        "shadow-glow-cyan": "var(--shadow-glow-amber)",
-        "shadow-glow-amber": "var(--shadow-glow-amber)",
-        "shadow-glow-purple": "var(--shadow-glow-coral)",
+        "glow-cyan": "var(--shadow-glow-amber)",
+        "glow-amber": "var(--shadow-glow-amber)",
+        "glow-purple": "var(--shadow-glow-coral)",
         card: "var(--shadow-card)",
         elevated: "var(--shadow-elevated)",
+        warm: "var(--shadow-warm)",
       },
       keyframes: {
         "accordion-down": {
