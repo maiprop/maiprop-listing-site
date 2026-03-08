@@ -571,116 +571,236 @@ export default function Listings() {
                 <span className="text-xs text-muted-foreground">Active:</span>
                 {selectedType && <button onClick={() => { setParam("type", ""); setParam("subtype", ""); }} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{PROPERTY_TYPE_MAP[selectedType as PropertyTypeKey]?.emoji} {getTypeLabel(selectedType)} <X className="w-3 h-3" /></button>}
                 {selectedSubtype && selectedType && <button onClick={() => setParam("subtype", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{getSubtypeLabel(selectedType, selectedSubtype)} <X className="w-3 h-3" /></button>}
-                
                 {selectedPrice && <button onClick={() => setParam("price", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{priceRanges.find(r => r.value === selectedPrice)?.label} <X className="w-3 h-3" /></button>}
                 {bedsRange[0] && <button onClick={() => setParam("beds_min", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{bedsRange[0]}+ beds <X className="w-3 h-3" /></button>}
                 {selectedEnergyClasses.map(ec => <button key={ec} onClick={() => toggleMulti("energy", ec)} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">Energy {ec} <X className="w-3 h-3" /></button>)}
-                {selectedFeatures.map(f => <button key={f} onClick={() => toggleMulti("features", f)} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{FEATURE_OPTIONS.find(o => o.key === f)?.label.replace(/^[^\s]+ /, "") || f} <X className="w-3 h-3" /></button>)}
-                {selectedHeating && <button onClick={() => setParam("heating", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">Heating: {selectedHeating} <X className="w-3 h-3" /></button>}
-                {selectedConstruction && <button onClick={() => setParam("construction", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{selectedConstruction.replace("_", " ")} <X className="w-3 h-3" /></button>}
+                {selectedFeatures.map(f => {
+                  const allFeats = [...FEATURES_RESIDENTIAL, ...FEATURES_COMMERCIAL, ...FEATURES_OFFICE, ...FEATURES_LAND];
+                  const found = allFeats.find(o => o.key === f);
+                  return <button key={f} onClick={() => toggleMulti("features", f)} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{found?.label.replace(/^[^\s]+ /, "") || f} <X className="w-3 h-3" /></button>;
+                })}
+                {selectedHeating && <button onClick={() => setParam("heating", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">Heating: {HEATING_TYPES.find(h => h.value === selectedHeating)?.label || selectedHeating} <X className="w-3 h-3" /></button>}
+                {selectedConstruction && <button onClick={() => setParam("construction", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{CONSTRUCTION_STATUSES.find(s => s.value === selectedConstruction)?.label || selectedConstruction} <X className="w-3 h-3" /></button>}
                 <button onClick={clearAllFilters} className="text-xs text-muted-foreground hover:text-foreground ml-1">Clear all</button>
               </div>
             )}
           </div>
         </div>
 
-        {/* Advanced Filters Panel */}
-        {showFilters && (
-          <div className="bg-card border-b border-border shadow-sm">
-            <div className="container py-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                <RangeSelector label="Bedrooms" value={bedsRange}
-                  onChange={([min, max]) => { setParam("beds_min", min); setParam("beds_max", max); }}
-                  options={bedsOpts} />
-                <RangeSelector label="Bathrooms" value={bathsRange}
-                  onChange={([min, max]) => { setParam("baths_min", min); setParam("baths_max", max); }}
-                  options={bathsOpts} />
-                <RangeSelector label="Floor" value={floorRange}
-                  onChange={([min, max]) => { setParam("floor_min", min); setParam("floor_max", max); }}
-                  options={floorOpts} />
-                <RangeSelector label="Year Built" value={yearRange}
-                  onChange={([min, max]) => { setParam("year_min", min); setParam("year_max", max); }}
-                  options={yearOpts} />
+        {/* Advanced Filters Panel — contextual per type/subtype */}
+        {showFilters && (() => {
+          const fc = getFilterConfig(selectedType, selectedSubtype);
+          const has = (s: string) => fc.sections.includes(s as any);
+          return (
+            <div className="bg-card border-b border-border shadow-sm">
+              <div className="container py-6">
 
-                {/* Size range */}
-                <div>
-                  <label className="text-xs text-muted-foreground font-medium mb-2 block">Size (m²)</label>
-                  <div className="flex items-center gap-1">
-                    <input type="number" placeholder="Min" value={minSqm} onChange={e => setParam("sqm_min", e.target.value)}
-                      className="flex-1 bg-secondary border border-border rounded-lg px-2 py-2 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:border-primary" />
-                    <span className="text-muted-foreground text-xs">–</span>
-                    <input type="number" placeholder="Max" value={maxSqm} onChange={e => setParam("sqm_max", e.target.value)}
-                      className="flex-1 bg-secondary border border-border rounded-lg px-2 py-2 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:border-primary" />
+                {/* ── Header ─────────────────────────── */}
+                <div className="flex items-center gap-2 mb-5">
+                  <SlidersHorizontal className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-semibold">
+                    {selectedType
+                      ? `Filters for ${selectedSubtype ? getSubtypeLabel(selectedType, selectedSubtype) : getTypeLabel(selectedType)}`
+                      : "Advanced Filters"}
+                  </span>
+                  {selectedType && (
+                    <span className="text-xs text-muted-foreground">(showing relevant filters only)</span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+
+                  {/* Size — always shown */}
+                  {has("size") && (
+                    <div>
+                      <label className="text-xs text-muted-foreground font-medium mb-2 block">{fc.sizeLabelSqm}</label>
+                      <div className="flex items-center gap-1">
+                        <input type="number" placeholder="Min" value={minSqm} onChange={e => setParam("sqm_min", e.target.value)}
+                          className="flex-1 bg-secondary border border-border rounded-lg px-2 py-2 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:border-primary" />
+                        <span className="text-muted-foreground text-xs">–</span>
+                        <input type="number" placeholder="Max" value={maxSqm} onChange={e => setParam("sqm_max", e.target.value)}
+                          className="flex-1 bg-secondary border border-border rounded-lg px-2 py-2 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:border-primary" />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Bedrooms */}
+                  {has("bedrooms") && fc.bedsLabel && (
+                    <RangeSelector label={fc.bedsLabel} value={bedsRange}
+                      onChange={([min, max]) => { setParam("beds_min", min); setParam("beds_max", max); }}
+                      options={bedsOpts} />
+                  )}
+
+                  {/* Bathrooms */}
+                  {has("bathrooms") && (
+                    <RangeSelector label="Bathrooms" value={bathsRange}
+                      onChange={([min, max]) => { setParam("baths_min", min); setParam("baths_max", max); }}
+                      options={bathsOpts} />
+                  )}
+
+                  {/* Floor */}
+                  {has("floor") && (
+                    <RangeSelector label="Floor" value={floorRange}
+                      onChange={([min, max]) => { setParam("floor_min", min); setParam("floor_max", max); }}
+                      options={floorOpts} />
+                  )}
+
+                  {/* Year Built */}
+                  {has("year_built") && (
+                    <RangeSelector label="Year Built" value={yearRange}
+                      onChange={([min, max]) => { setParam("year_min", min); setParam("year_max", max); }}
+                      options={yearOpts} />
+                  )}
+
+                  {/* Heating */}
+                  {has("heating") && (
+                    <div>
+                      <label className="text-xs text-muted-foreground font-medium mb-2 block">Heating Type</label>
+                      <div className="relative">
+                        <select value={selectedHeating} onChange={e => setParam("heating", e.target.value)}
+                          className="w-full bg-secondary border border-border rounded-lg px-2 py-2 text-xs text-foreground outline-none focus:border-primary appearance-none">
+                          <option value="">Any</option>
+                          {HEATING_TYPES.map(h => <option key={h.value} value={h.value}>{h.label}</option>)}
+                        </select>
+                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Construction Status */}
+                  {has("construction_status") && (
+                    <div>
+                      <label className="text-xs text-muted-foreground font-medium mb-2 block">Construction Status</label>
+                      <div className="relative">
+                        <select value={selectedConstruction} onChange={e => setParam("construction", e.target.value)}
+                          className="w-full bg-secondary border border-border rounded-lg px-2 py-2 text-xs text-foreground outline-none focus:border-primary appearance-none">
+                          <option value="">Any</option>
+                          {CONSTRUCTION_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                        </select>
+                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Energy Class */}
+                  {has("energy_class") && (
+                    <div>
+                      <label className="text-xs text-muted-foreground font-medium mb-2 block">Energy Class</label>
+                      <div className="flex flex-wrap gap-1">
+                        {ENERGY_CLASSES.map(ec => (
+                          <button key={ec} onClick={() => toggleMulti("energy", ec)}
+                            className={`px-2 py-1 rounded text-xs font-bold border transition-all ${
+                              selectedEnergyClasses.includes(ec)
+                                ? "bg-primary/20 border-primary text-primary"
+                                : "bg-secondary border-border text-muted-foreground hover:border-primary/40"
+                            }`}>{ec}</button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Land details */}
+                  {has("land_details") && (
+                    <>
+                      <div>
+                        <label className="text-xs text-muted-foreground font-medium mb-2 block">Road Type</label>
+                        <div className="relative">
+                          <select value={getParam("road_type")} onChange={e => setParam("road_type", e.target.value)}
+                            className="w-full bg-secondary border border-border rounded-lg px-2 py-2 text-xs text-foreground outline-none focus:border-primary appearance-none">
+                            <option value="">Any</option>
+                            {ROAD_TYPES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                          </select>
+                          <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-xs text-muted-foreground font-medium mb-2 block">Slope</label>
+                        <div className="relative">
+                          <select value={getParam("slope")} onChange={e => setParam("slope", e.target.value)}
+                            className="w-full bg-secondary border border-border rounded-lg px-2 py-2 text-xs text-foreground outline-none focus:border-primary appearance-none">
+                            <option value="">Any</option>
+                            {SLOPE_TYPES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                          </select>
+                          <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Commercial details */}
+                  {has("commercial_details") && (
+                    <>
+                      <div>
+                        <label className="text-xs text-muted-foreground font-medium mb-2 block">Road Frontage</label>
+                        <div className="relative">
+                          <select value={getParam("road_type")} onChange={e => setParam("road_type", e.target.value)}
+                            className="w-full bg-secondary border border-border rounded-lg px-2 py-2 text-xs text-foreground outline-none focus:border-primary appearance-none">
+                            <option value="">Any</option>
+                            {ROAD_TYPES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                          </select>
+                          <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Rental extras */}
+                  {has("rental_extras") && selectedListingType === "rent" && (
+                    <div>
+                      <label className="text-xs text-muted-foreground font-medium mb-2 block">Min Rental Period</label>
+                      <div className="relative">
+                        <select value={getParam("min_rental")} onChange={e => setParam("min_rental", e.target.value)}
+                          className="w-full bg-secondary border border-border rounded-lg px-2 py-2 text-xs text-foreground outline-none focus:border-primary appearance-none">
+                          <option value="">Any</option>
+                          <option value="1">1 month</option>
+                          <option value="3">3 months</option>
+                          <option value="6">6 months</option>
+                          <option value="12">12 months</option>
+                        </select>
+                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
+                      </div>
+                    </div>
+                  )}
+
+                </div>
+
+                {/* Features section — contextual */}
+                {(has("features_residential") || has("features_commercial") || has("features_office") || has("features_land")) && (
+                  <div className="mt-5">
+                    <label className="text-xs text-muted-foreground font-medium mb-3 block">
+                      {has("features_land") ? "Land Features" :
+                       has("features_commercial") ? "Commercial Features" :
+                       has("features_office") ? "Office Features" : "Features & Amenities"}
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {(
+                        has("features_residential") ? FEATURES_RESIDENTIAL :
+                        has("features_commercial") ? FEATURES_COMMERCIAL :
+                        has("features_office") ? FEATURES_OFFICE :
+                        FEATURES_LAND
+                      ).map(feat => (
+                        <FilterChip key={feat.key} active={selectedFeatures.includes(feat.key)}
+                          onClick={() => toggleMulti("features", feat.key)}>
+                          {feat.label}
+                        </FilterChip>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
 
-                {/* Heating type */}
-                <div>
-                  <label className="text-xs text-muted-foreground font-medium mb-2 block">Heating Type</label>
-                  <div className="relative">
-                    <select value={selectedHeating} onChange={e => setParam("heating", e.target.value)}
-                      className="w-full bg-secondary border border-border rounded-lg px-2 py-2 text-xs text-foreground outline-none focus:border-primary appearance-none">
-                      <option value="">Any</option>
-                      {HEATING_TYPES.map(h => <option key={h} value={h} className="capitalize">{h.replace("_", " ")}</option>)}
-                    </select>
-                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
-                  </div>
+                {/* Actions */}
+                <div className="flex items-center gap-3 mt-5 pt-4 border-t border-border">
+                  <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground" onClick={() => setShowFilters(false)}>
+                    Show {filtered.length} Results
+                  </Button>
+                  <Button size="sm" variant="outline" className="border-border" onClick={clearAllFilters}>
+                    Reset All
+                  </Button>
                 </div>
-
-                {/* Construction status */}
-                <div>
-                  <label className="text-xs text-muted-foreground font-medium mb-2 block">Construction Status</label>
-                  <div className="relative">
-                    <select value={selectedConstruction} onChange={e => setParam("construction", e.target.value)}
-                      className="w-full bg-secondary border border-border rounded-lg px-2 py-2 text-xs text-foreground outline-none focus:border-primary appearance-none">
-                      <option value="">Any</option>
-                      {CONSTRUCTION_STATUSES.map(s => <option key={s} value={s}>{s.replace("_", " ")}</option>)}
-                    </select>
-                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
-                  </div>
-                </div>
-
-                {/* Energy class */}
-                <div>
-                  <label className="text-xs text-muted-foreground font-medium mb-2 block">Energy Class</label>
-                  <div className="flex flex-wrap gap-1">
-                    {ENERGY_CLASSES.map(ec => (
-                      <button key={ec} onClick={() => toggleMulti("energy", ec)}
-                        className={`px-2 py-1 rounded text-xs font-bold border transition-all ${
-                          selectedEnergyClasses.includes(ec)
-                            ? "bg-primary/20 border-primary text-primary"
-                            : "bg-secondary border-border text-muted-foreground hover:border-primary/40"
-                        }`}>{ec}</button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Features */}
-              <div className="mt-5">
-                <label className="text-xs text-muted-foreground font-medium mb-3 block">Features</label>
-                <div className="flex flex-wrap gap-2">
-                  {FEATURE_OPTIONS.map(feat => (
-                    <FilterChip key={feat.key} active={selectedFeatures.includes(feat.key)}
-                      onClick={() => toggleMulti("features", feat.key)}>
-                      {feat.label}
-                    </FilterChip>
-                  ))}
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center gap-3 mt-5 pt-4 border-t border-border">
-                <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground" onClick={() => setShowFilters(false)}>
-                  Show {filtered.length} Results
-                </Button>
-                <Button size="sm" variant="outline" className="border-border" onClick={clearAllFilters}>
-                  Reset All
-                </Button>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Results */}
         <div className={`${viewMode === "split" ? "" : "container"} py-8`}>
