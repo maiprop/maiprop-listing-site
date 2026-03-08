@@ -507,43 +507,80 @@ export default function CreateListing() {
             {step === 1 && (
               <div className="space-y-6">
                 <h2 className="font-display text-xl font-semibold">What are you listing?</h2>
+
+                {/* Listing type */}
                 <div>
                   <FieldLabel>Listing Type</FieldLabel>
                   <div className="grid grid-cols-3 gap-3">
                     {([
-                      { v: "sale", label: "🏷️ For Sale" },
-                      { v: "rent", label: "🔑 For Rent" },
-                      { v: "auction", label: "⚖️ Auction" },
-                    ] as const).map(({ v, label }) => (
+                      { v: "sale", label: "🏷️ For Sale", desc: "Sell your property" },
+                      { v: "rent", label: "🔑 For Rent", desc: "Monthly or long-term" },
+                      { v: "auction", label: "⚖️ Auction", desc: "Greek judicial / bank" },
+                    ] as const).map(({ v, label, desc }) => (
                       <button key={v} onClick={() => set("listing_type", v)}
-                        className={`p-4 rounded-xl border text-sm font-medium transition-all ${
+                        className={`p-4 rounded-xl border text-left transition-all ${
                           lt === v ? "border-primary bg-primary/10 text-primary" : "border-border bg-secondary text-muted-foreground hover:text-foreground hover:border-primary/50"
                         }`}>
-                        {label}
+                        <div className="text-sm font-semibold">{label}</div>
+                        <div className="text-[11px] mt-0.5 opacity-70">{desc}</div>
                       </button>
                     ))}
                   </div>
                 </div>
+
+                {/* Property type — rich cards */}
                 <div>
                   <FieldLabel>Property Type</FieldLabel>
-                  <div className="grid grid-cols-3 gap-3">
-                    {([
-                      { v: "apartment", label: "🏢 Apartment" },
-                      { v: "house", label: "🏠 House" },
-                      { v: "villa", label: "🏡 Villa" },
-                      { v: "land", label: "🌾 Land / Plot" },
-                      { v: "commercial", label: "🏪 Commercial" },
-                      { v: "office", label: "🏗️ Office" },
-                    ] as const).map(({ v, label }) => (
-                      <button key={v} onClick={() => set("property_type", v)}
-                        className={`p-3 rounded-xl border text-sm font-medium transition-all ${
-                          pt === v ? "border-primary bg-primary/10 text-primary" : "border-border bg-secondary text-muted-foreground hover:text-foreground hover:border-primary/50"
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {PROP_TYPES.map(typeConfig => (
+                      <button key={typeConfig.value} onClick={() => { set("property_type", typeConfig.value); set("commercial_subtype", ""); }}
+                        className={`p-4 rounded-xl border text-left transition-all group ${
+                          pt === typeConfig.value
+                            ? "border-primary bg-primary/10"
+                            : "border-border bg-secondary hover:border-primary/50"
                         }`}>
-                        {label}
+                        <div className="text-xl mb-2">{typeConfig.emoji}</div>
+                        <div className={`text-sm font-semibold mb-0.5 ${pt === typeConfig.value ? "text-primary" : "text-foreground"}`}>
+                          {typeConfig.label}
+                        </div>
+                        <div className="text-[10px] text-muted-foreground leading-relaxed">{typeConfig.description}</div>
                       </button>
                     ))}
                   </div>
                 </div>
+
+                {/* Subtype — appears when type is selected */}
+                {pt && PROPERTY_TYPE_MAP[pt as PropertyTypeKey] && (
+                  <div>
+                    <FieldLabel>
+                      {PROPERTY_TYPE_MAP[pt as PropertyTypeKey].label} Subtype
+                      <span className="ml-1 text-muted-foreground font-normal">(optional)</span>
+                    </FieldLabel>
+                    <div className="flex flex-wrap gap-2">
+                      {PROPERTY_TYPE_MAP[pt as PropertyTypeKey].subtypes.map(sub => (
+                        <button
+                          key={sub.value}
+                          type="button"
+                          title={sub.description}
+                          onClick={() => set("commercial_subtype", form.commercial_subtype === sub.value ? "" : sub.value)}
+                          className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
+                            form.commercial_subtype === sub.value
+                              ? "border-primary bg-primary/10 text-primary"
+                              : "border-border bg-secondary text-muted-foreground hover:text-foreground hover:border-primary/40"
+                          }`}
+                        >
+                          {sub.label}
+                        </button>
+                      ))}
+                    </div>
+                    {form.commercial_subtype && (
+                      <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
+                        <Info className="w-3 h-3 shrink-0" />
+                        {PROPERTY_TYPE_MAP[pt as PropertyTypeKey].subtypes.find(s => s.value === form.commercial_subtype)?.description}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
