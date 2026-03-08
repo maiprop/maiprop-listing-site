@@ -1,10 +1,9 @@
-import { useState, useRef, useCallback } from "react";
+import { useState } from "react";
 import Map, { Marker, Popup, NavigationControl } from "react-map-gl";
 import { MapPin, Bed, Bath, Ruler } from "lucide-react";
 import { Link } from "react-router-dom";
 import "mapbox-gl/dist/mapbox-gl.css";
-
-const MAPBOX_TOKEN = "pk.eyJ1IjoibWFpcHJvcCIsImEiOiJkZW1vIn0.placeholder";
+import { MAPBOX_TOKEN } from "@/lib/config";
 
 type MapListing = {
   id: string;
@@ -120,7 +119,7 @@ export function MapView({ listings }: { listings: MapListing[] }) {
   return (
     <div className="rounded-2xl overflow-hidden border border-border shadow-card" style={{ height: "calc(100vh - 14rem)" }}>
       <Map
-        mapboxAccessToken={import.meta.env.VITE_MAPBOX_TOKEN}
+        mapboxAccessToken={MAPBOX_TOKEN}
         initialViewState={initialView}
         style={{ width: "100%", height: "100%" }}
         mapStyle="mapbox://styles/mapbox/dark-v11"
