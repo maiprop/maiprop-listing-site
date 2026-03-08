@@ -24,7 +24,6 @@ import {
   ENERGY_CLASSES, HEATING_TYPES, CONSTRUCTION_STATUSES, ROAD_TYPES, SLOPE_TYPES,
 } from "@/lib/filterConfig";
 
-// ─── Constants ────────────────────────────────────────────────────────────────
 
 const priceRanges = [
   { label: "Any Price", value: "" },
