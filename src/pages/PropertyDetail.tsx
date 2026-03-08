@@ -6,7 +6,7 @@ import {
   Shield, FileText, Zap, ExternalLink, Lock, BarChart2, Eye,
   Home, Clock, Check, Gavel, Download, Loader2, CheckCircle,
   Thermometer, Wrench, TreePine, Flame, Wifi, Car, Building2,
-  Info, ChevronDown, ChevronUp, Euro
+  Info, ChevronDown, ChevronUp, Euro, Tag, Layers
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -61,53 +61,50 @@ function MortgageCalculator({ price }: { price: number }) {
   const monthly = loan > 0
     ? Math.round(loan * (rate / 1200) / (1 - Math.pow(1 + rate / 1200, -years * 12)))
     : 0;
-  const totalPaid   = monthly * years * 12;
+  const totalPaid     = monthly * years * 12;
   const totalInterest = totalPaid - loan;
 
   return (
-    <div className="glass-card rounded-xl overflow-hidden border border-border">
-      {/* Header */}
-      <div className="flex items-center gap-2 px-5 py-3.5 bg-primary/5 border-b border-border">
-        <Euro className="w-4 h-4 text-primary" />
+    <div className="glass-card rounded-2xl overflow-hidden border border-border">
+      <div className="flex items-center gap-2.5 px-5 py-4 border-b border-border">
+        <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+          <Euro className="w-3.5 h-3.5 text-primary" />
+        </div>
         <h4 className="font-display font-semibold text-sm">Mortgage Calculator</h4>
-        <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
-          Indicative
-        </span>
+        <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium border border-border">Indicative</span>
       </div>
 
-      <div className="p-5 space-y-4">
-        {/* Sliders */}
+      <div className="p-5 space-y-5">
         {[
           { label: "Down Payment", value: `${downPct}%`, sub: `€${down.toLocaleString()}`, min: 10, max: 50, step: 5, val: downPct, set: setDownPct },
           { label: "Interest Rate", value: `${rate.toFixed(1)}%`, sub: "p.a.", min: 2, max: 8, step: 0.1, val: rate, set: setRate },
           { label: "Loan Term", value: `${years} yrs`, sub: `${years * 12} payments`, min: 5, max: 30, step: 5, val: years, set: setYears },
         ].map(s => (
-          <div key={s.label}>
-            <div className="flex justify-between items-baseline mb-1.5">
+          <div key={s.label} className="space-y-2">
+            <div className="flex justify-between items-center">
               <span className="text-xs text-muted-foreground">{s.label}</span>
-              <div className="text-right">
-                <span className="text-xs font-bold text-foreground">{s.value}</span>
-                <span className="text-[10px] text-muted-foreground ml-1.5">{s.sub}</span>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-sm font-bold text-foreground">{s.value}</span>
+                <span className="text-[10px] text-muted-foreground">{s.sub}</span>
               </div>
             </div>
             <input type="range" min={s.min} max={s.max} step={s.step} value={s.val}
               onChange={e => s.set(Number(e.target.value))}
-              className="w-full h-1.5 rounded-full appearance-none cursor-pointer accent-primary bg-border" />
+              className="w-full h-1 rounded-full appearance-none cursor-pointer accent-primary bg-border" />
           </div>
         ))}
 
-        {/* Result panel */}
-        <div className="bg-primary/8 rounded-xl p-4 border border-primary/20 text-center mt-1">
-          <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Est. Monthly Payment</p>
-          <p className="font-display font-black text-3xl text-primary">€{monthly.toLocaleString()}</p>
-          <div className="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-primary/10 text-xs">
-            <div>
+        <div className="rounded-xl bg-primary/8 border border-primary/15 p-4 text-center">
+          <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1.5">Est. Monthly Payment</p>
+          <p className="font-display font-black text-4xl text-primary">€{monthly.toLocaleString()}</p>
+          <div className="grid grid-cols-2 gap-3 mt-4 pt-3 border-t border-primary/10 text-xs">
+            <div className="space-y-0.5">
               <p className="text-muted-foreground">Loan Amount</p>
-              <p className="font-semibold mt-0.5">€{loan.toLocaleString()}</p>
+              <p className="font-semibold">€{loan.toLocaleString()}</p>
             </div>
-            <div>
+            <div className="space-y-0.5">
               <p className="text-muted-foreground">Total Interest</p>
-              <p className="font-semibold mt-0.5 text-destructive">€{totalInterest.toLocaleString()}</p>
+              <p className="font-semibold text-destructive">€{totalInterest.toLocaleString()}</p>
             </div>
           </div>
         </div>
@@ -120,35 +117,67 @@ function MortgageCalculator({ price }: { price: number }) {
   );
 }
 
-// ─── Feature pill ────────────────────────────────────────────────────────────
-function FeaturePill({ icon: Icon, label }: { icon?: any; label: string }) {
+// ─── Feature chip ────────────────────────────────────────────────────────────
+function FeatureChip({ icon: Icon, label }: { icon?: any; label: string }) {
   return (
-    <div className="flex items-center gap-2 text-xs bg-secondary border border-border rounded-lg px-3 py-2 text-foreground hover:border-primary/30 transition-colors">
+    <div className="flex items-center gap-2 text-xs bg-muted border border-border rounded-lg px-3 py-2 text-foreground hover:border-primary/30 hover:bg-secondary transition-all duration-200">
       <Check className="w-3 h-3 text-primary shrink-0" />
       {Icon && <Icon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
-      <span>{label}</span>
+      <span className="font-medium">{label}</span>
     </div>
   );
 }
 
 // ─── Feature section ─────────────────────────────────────────────────────────
-function FeatureSection({ title, features, color }: { title: string; features: { icon?: any; label: string }[]; color?: string }) {
+function FeatureSection({ title, features, accent }: { title: string; features: { icon?: any; label: string }[]; accent: string }) {
   if (features.length === 0) return null;
   return (
-    <div>
-      <div className="flex items-center gap-2 mb-3">
-        <div className={`w-1 h-4 rounded-full ${color || "bg-primary"}`} />
-        <h4 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{title}</h4>
-        <span className="text-xs text-muted-foreground ml-auto">{features.length}</span>
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <div className={`w-1 h-3.5 rounded-full ${accent}`} />
+        <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{title}</p>
+        <div className="flex-1 h-px bg-border" />
+        <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full border border-border">{features.length}</span>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-        {features.map(f => <FeaturePill key={f.label} icon={f.icon} label={f.label} />)}
+        {features.map(f => <FeatureChip key={f.label} icon={f.icon} label={f.label} />)}
       </div>
     </div>
   );
 }
 
-// MapSection replaced by PropertyMiniMap component
+// ─── Section wrapper ─────────────────────────────────────────────────────────
+function Section({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={`glass-card rounded-2xl border border-border overflow-hidden ${className}`}>
+      {children}
+    </div>
+  );
+}
+
+function SectionHeader({ icon: Icon, title, badge }: { icon?: any; title: string; badge?: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-3 px-6 py-4 border-b border-border bg-card/50">
+      {Icon && (
+        <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+          <Icon className="w-3.5 h-3.5 text-primary" />
+        </div>
+      )}
+      <h3 className="font-display font-semibold text-sm">{title}</h3>
+      {badge && <div className="ml-auto">{badge}</div>}
+    </div>
+  );
+}
+
+// ─── Detail row ───────────────────────────────────────────────────────────────
+function DetailRow({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="flex items-start justify-between py-2.5 border-b border-border/50 last:border-0 gap-4">
+      <span className="text-xs text-muted-foreground shrink-0">{label}</span>
+      <span className="text-xs font-semibold text-right capitalize">{value}</span>
+    </div>
+  );
+}
 
 // ─── Main component ──────────────────────────────────────────────────────────
 export default function PropertyDetail() {
@@ -221,7 +250,7 @@ export default function PropertyDetail() {
   const energyClass = db?.energy_class;
   const isLandType = propertyType === "land";
 
-  // ── Build feature groups ────────────────────────────────────────────────────
+  // ── Feature groups ──────────────────────────────────────────────────────────
   const internalFeatures: { icon?: any; label: string }[] = [];
   const externalFeatures: { icon?: any; label: string }[] = [];
   const constructionFeatures: { icon?: any; label: string }[] = [];
@@ -274,11 +303,10 @@ export default function PropertyDetail() {
     if (db.has_video_tour) constructionFeatures.push({ label: "Video Tour" });
 
     if ((db as any).suitable_student) suitabilityFeatures.push({ label: "Students" });
-    if ((db as any).suitable_holiday) suitabilityFeatures.push({ label: "Holiday Home / Tourism" });
+    if ((db as any).suitable_holiday) suitabilityFeatures.push({ label: "Holiday Home" });
     if ((db as any).suitable_investment) suitabilityFeatures.push({ label: "Investment" });
     if ((db as any).suitable_commercial_use) suitabilityFeatures.push({ label: "Commercial Use" });
   } else {
-    // mock fallback
     mockProperty.tags?.forEach((t: string) => externalFeatures.push({ label: t }));
   }
 
@@ -289,10 +317,51 @@ export default function PropertyDetail() {
     : mockProperties.filter(p => p.id !== id && p.city === city).slice(0, 4);
 
   const aiInsights = [
-    { label: "Investment Score", value: `${(db?.ai_score ?? mockProperty.aiScore) || 82}/100`, trend: "+3 this month", color: "text-primary" },
-    { label: "Price vs Market", value: "-8% below avg", trend: "Good deal", color: "text-brand-emerald" },
-    { label: "Rental Yield Est.", value: "4.8% p.a.", trend: "Stable", color: "text-brand-gold" },
-    { label: "Capital Growth", value: "+12% (5yr)", trend: "Athens avg +9%", color: "text-accent" },
+    { label: "Investment Score", value: `${(db?.ai_score ?? mockProperty.aiScore) || 82}`, unit: "/100", trend: "+3 this month", color: "text-primary" },
+    { label: "vs Market", value: "-8%", unit: "below avg", trend: "Good deal", color: "text-brand-emerald" },
+    { label: "Rental Yield", value: "4.8%", unit: "p.a. est.", trend: "Stable", color: "text-brand-gold" },
+    { label: "Capital Growth", value: "+12%", unit: "5yr", trend: "Athens avg +9%", color: "text-accent" },
+  ];
+
+  // Build property details rows grouped
+  const detailRows: { label: string; value: string }[] = [
+    { label: "Price", value: `€${price.toLocaleString()}` },
+    { label: "Price / m²", value: pricePerSqm ? `€${Number(pricePerSqm).toLocaleString()}` : "—" },
+    { label: "Surface", value: `${sqm} m²` },
+    ...(isDbListing && db?.year_built ? [{ label: "Year Built", value: String(db.year_built) }] : []),
+    ...(isDbListing && db?.floor != null ? [{ label: "Floor", value: db.floor === 0 ? "Ground" : `${db.floor}${db.total_floors ? ` of ${db.total_floors}` : ""}` }] : []),
+    ...(isDbListing && (db as any)?.levels ? [{ label: "Levels", value: String((db as any).levels) }] : []),
+    ...(isDbListing && (db as any)?.kitchens ? [{ label: "Kitchens", value: String((db as any).kitchens) }] : []),
+    ...(isDbListing && (db as any)?.living_rooms ? [{ label: "Living Rooms", value: String((db as any).living_rooms) }] : []),
+    ...(isDbListing && (db as any)?.wc_count ? [{ label: "WC", value: String((db as any).wc_count) }] : []),
+    ...(isDbListing && (db as any)?.heating_system ? [{ label: "Heating", value: (db as any).heating_system.replace("_", " ") }] : []),
+    ...(isDbListing && db?.energy_class ? [{ label: "Energy Class", value: db.energy_class }] : []),
+    ...(isDbListing && (db as any)?.construction_status ? [{ label: "Construction", value: (db as any).construction_status.replace("_", " ") }] : []),
+    ...(isDbListing && db?.cadastre_number ? [{ label: "Cadastre No.", value: db.cadastre_number }] : []),
+    ...(isDbListing && db?.enfia_zone ? [{ label: "ENFIA Zone", value: db.enfia_zone }] : []),
+    ...(isDbListing && db?.postal_code ? [{ label: "Postal Code", value: db.postal_code }] : []),
+    ...(isDbListing && db?.region ? [{ label: "Region", value: db.region }] : []),
+    // Land
+    ...(isLandType && isDbListing && (db as any)?.coverage_ratio ? [{ label: "Coverage Ratio", value: `${(db as any).coverage_ratio}%` }] : []),
+    ...(isLandType && isDbListing && (db as any)?.building_allowance ? [{ label: "Build Allowance", value: `${(db as any).building_allowance} m²` }] : []),
+    ...(isLandType && isDbListing && (db as any)?.facade_length ? [{ label: "Facade Length", value: `${(db as any).facade_length} m` }] : []),
+    ...(isLandType && isDbListing && (db as any)?.plot_depth ? [{ label: "Plot Depth", value: `${(db as any).plot_depth} m` }] : []),
+    ...(isLandType && isDbListing && (db as any)?.slope ? [{ label: "Slope", value: (db as any).slope }] : []),
+    ...(isLandType && isDbListing && (db as any)?.zone_type ? [{ label: "Zone", value: (db as any).zone_type }] : []),
+    ...(isLandType && isDbListing && (db as any)?.road_type ? [{ label: "Road Type", value: (db as any).road_type }] : []),
+    ...(isLandType && isDbListing && (db as any)?.distance_from_sea ? [{ label: "From Sea", value: `${(db as any).distance_from_sea} m` }] : []),
+    ...(isLandType && isDbListing && (db as any)?.distance_from_city ? [{ label: "From City", value: `${(db as any).distance_from_city} m` }] : []),
+    // Commercial
+    ...(isDbListing && (db as any)?.commercial_subtype ? [{ label: "Subtype", value: (db as any).commercial_subtype }] : []),
+    ...(isDbListing && (db as any)?.plot_surface ? [{ label: "Plot Surface", value: `${(db as any).plot_surface} m²` }] : []),
+    ...(isDbListing && (db as any)?.floor_height ? [{ label: "Floor Height", value: `${(db as any).floor_height} m` }] : []),
+    // Meta
+    ...(isDbListing ? [
+      { label: "System Code", value: db!.id.slice(0, 8).toUpperCase() },
+      { label: "Published", value: new Date(db!.created_at).toLocaleDateString("en-GB") },
+      { label: "Last Updated", value: new Date(db!.updated_at).toLocaleDateString("en-GB") },
+      { label: "Availability", value: (db as any)?.available_from ? `From ${new Date((db as any).available_from).toLocaleDateString("en-GB")}` : "Available now" },
+    ] : []),
   ];
 
   return (
@@ -302,250 +371,265 @@ export default function PropertyDetail() {
 
       <div className="pt-16">
         {/* Breadcrumb */}
-        <div className="container py-4">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Link to="/" className="hover:text-foreground">Home</Link>
+        <div className="container py-3">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Link to="/" className="hover:text-foreground transition-colors">Home</Link>
             <ChevronRight className="w-3 h-3" />
-            <Link to="/listings" className="hover:text-foreground">Listings</Link>
+            <Link to="/listings" className="hover:text-foreground transition-colors">Listings</Link>
             <ChevronRight className="w-3 h-3" />
-            <Link to={`/listings?city=${city}`} className="hover:text-foreground">{city}</Link>
+            <Link to={`/listings?city=${city}`} className="hover:text-foreground transition-colors">{city}</Link>
             <ChevronRight className="w-3 h-3" />
-            <span className="text-foreground truncate max-w-xs">{title}</span>
+            <span className="text-foreground truncate max-w-[240px] font-medium">{title}</span>
           </div>
         </div>
 
-        <div className="container pb-16">
-          <div className="grid lg:grid-cols-3 gap-8">
+        <div className="container pb-20">
+          <div className="grid lg:grid-cols-[1fr_340px] gap-8">
 
-            {/* ──── LEFT: Main content ──── */}
-            <div className="lg:col-span-2 space-y-6">
+            {/* ──── LEFT COLUMN ──── */}
+            <div className="space-y-5">
 
-              {/* Image gallery */}
-              <div className="relative rounded-2xl overflow-hidden aspect-[16/9] bg-secondary group">
-                <img src={images[currentImage] || images[0]} alt={title} className="w-full h-full object-cover" />
+              {/* ── Gallery ── */}
+              <div className="relative rounded-2xl overflow-hidden aspect-[16/9] bg-secondary group shadow-elevated">
+                <img
+                  src={images[currentImage] || images[0]}
+                  alt={title}
+                  className="w-full h-full object-cover transition-opacity duration-300"
+                />
+
+                {/* Badges */}
                 <div className="absolute top-4 left-4 flex gap-2">
-                  {listingType === "auction" && <span className="badge-auction text-xs font-bold px-3 py-1.5 rounded-full">AUCTION</span>}
-                  {listingType === "firesale" && <span className="badge-firesale text-xs font-bold px-3 py-1.5 rounded-full">FIRESALE</span>}
-                  {listingType === "rent" && <span className="bg-primary text-primary-foreground text-xs font-bold px-3 py-1.5 rounded-full">FOR RENT</span>}
+                  {listingType === "auction" && <span className="badge-auction text-xs font-bold px-3 py-1.5 rounded-full shadow">AUCTION</span>}
+                  {listingType === "firesale" && <span className="badge-firesale text-xs font-bold px-3 py-1.5 rounded-full shadow">FIRESALE</span>}
+                  {listingType === "rent" && <span className="bg-primary text-primary-foreground text-xs font-bold px-3 py-1.5 rounded-full shadow">FOR RENT</span>}
                 </div>
+
+                {/* Nav arrows */}
                 {images.length > 1 && (
                   <>
-                    <button className="absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-background/60 backdrop-blur-sm hover:bg-background/80 transition-colors"
+                    <button
+                      className="absolute left-3 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-background/70 backdrop-blur-md hover:bg-background/90 transition-all shadow-lg opacity-0 group-hover:opacity-100"
                       onClick={() => setCurrentImage((currentImage - 1 + images.length) % images.length)}>
                       <ChevronLeft className="w-4 h-4" />
                     </button>
-                    <button className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-background/60 backdrop-blur-sm hover:bg-background/80 transition-colors"
+                    <button
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-background/70 backdrop-blur-md hover:bg-background/90 transition-all shadow-lg opacity-0 group-hover:opacity-100"
                       onClick={() => setCurrentImage((currentImage + 1) % images.length)}>
                       <ChevronRight className="w-4 h-4" />
                     </button>
                   </>
                 )}
+
+                {/* Top right actions */}
                 <div className="absolute top-4 right-4 flex gap-2">
-                  <button className={`p-2 rounded-full backdrop-blur-sm transition-all ${isFavorited ? "bg-destructive" : "bg-background/60 hover:bg-background/80"}`} onClick={handleFavorite}>
-                    <Heart className={`w-4 h-4 ${isFavorited ? "fill-white text-white" : ""}`} />
+                  <button
+                    className={`p-2.5 rounded-full backdrop-blur-md shadow transition-all ${isFavorited ? "bg-destructive text-white" : "bg-background/70 hover:bg-background/90"}`}
+                    onClick={handleFavorite}>
+                    <Heart className={`w-4 h-4 ${isFavorited ? "fill-white" : ""}`} />
                   </button>
-                  <button className="p-2 rounded-full bg-background/60 backdrop-blur-sm hover:bg-background/80">
+                  <button className="p-2.5 rounded-full bg-background/70 backdrop-blur-md hover:bg-background/90 shadow transition-all">
                     <Share2 className="w-4 h-4" />
                   </button>
                 </div>
-                <div className="absolute bottom-4 right-4 bg-background/60 backdrop-blur-sm px-3 py-1 rounded-full text-xs">
+
+                {/* Counter + views */}
+                <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-background/60 to-transparent pointer-events-none" />
+                <div className="absolute bottom-3 right-4 bg-background/70 backdrop-blur-md px-2.5 py-1 rounded-full text-xs font-medium">
                   {currentImage + 1} / {images.length}
                 </div>
                 {isDbListing && (
-                  <div className="absolute bottom-4 left-4 flex items-center gap-1 bg-background/60 backdrop-blur-sm px-3 py-1 rounded-full text-xs">
-                    <Eye className="w-3 h-3" /> {dbListing.views_count || 0} views
+                  <div className="absolute bottom-3 left-4 flex items-center gap-1.5 bg-background/70 backdrop-blur-md px-2.5 py-1 rounded-full text-xs">
+                    <Eye className="w-3 h-3 text-muted-foreground" />
+                    <span>{dbListing.views_count || 0} views</span>
                   </div>
                 )}
               </div>
 
               {/* Thumbnails */}
               {images.length > 1 && (
-                <div className="flex gap-2 overflow-x-auto pb-1">
+                <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-0.5">
                   {images.map((img, i) => (
                     <button key={i} onClick={() => setCurrentImage(i)}
-                      className={`shrink-0 w-16 h-12 rounded-lg overflow-hidden border-2 transition-all ${currentImage === i ? "border-primary" : "border-transparent opacity-60 hover:opacity-100"}`}>
+                      className={`shrink-0 w-16 h-11 rounded-lg overflow-hidden transition-all duration-200 ${
+                        currentImage === i
+                          ? "ring-2 ring-primary ring-offset-2 ring-offset-background opacity-100"
+                          : "opacity-50 hover:opacity-80"
+                      }`}>
                       <img src={img} alt="" className="w-full h-full object-cover" />
                     </button>
                   ))}
                 </div>
               )}
 
-              {/* Title, price & key specs */}
-              <div>
-                <div className="flex items-start justify-between gap-4 flex-wrap">
-                  <div>
-                    <h1 className="font-display text-2xl md:text-3xl font-bold">{title}</h1>
-                    <div className="flex items-center gap-1 mt-2 text-muted-foreground text-sm">
-                      <MapPin className="w-4 h-4" />
-                      {address}{address !== city ? `, ${city}` : ""}
-                      {db?.region && ` · ${db.region}`}
+              {/* ── Title + Price hero ── */}
+              <div className="space-y-4">
+                <div className="flex items-start justify-between gap-6 flex-wrap">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-2">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground bg-muted px-2 py-0.5 rounded-full border border-border capitalize">
+                        {propertyType}
+                      </span>
+                      {listingType && (
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20 capitalize">
+                          For {listingType}
+                        </span>
+                      )}
+                      {energyClass && energyClass !== "Exempt" && (
+                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${ENERGY_COLORS[energyClass] || "bg-secondary"}`}>
+                          <Zap className="w-2.5 h-2.5 inline mr-0.5" />{energyClass}
+                        </span>
+                      )}
+                    </div>
+                    <h1 className="font-display text-2xl md:text-3xl font-bold leading-tight">{title}</h1>
+                    <div className="flex items-center gap-1.5 mt-2 text-sm text-muted-foreground">
+                      <MapPin className="w-3.5 h-3.5 shrink-0" />
+                      <span>{address}{address !== city ? `, ${city}` : ""}{db?.region ? ` · ${db.region}` : ""}</span>
                     </div>
                   </div>
+
                   <div className="text-right shrink-0">
-                    <div className="font-display text-2xl font-bold">
+                    <div className="font-display text-3xl font-black text-foreground">
                       €{price.toLocaleString()}
                       {listingType === "rent" && <span className="text-base font-normal text-muted-foreground">/mo</span>}
                     </div>
-                    {pricePerSqm && <div className="text-sm text-muted-foreground">€{Number(pricePerSqm).toLocaleString()}/m²</div>}
+                    {pricePerSqm && (
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        €{Number(pricePerSqm).toLocaleString()} per m²
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                {/* Quick specs */}
-                <div className="flex items-center gap-2 mt-4 flex-wrap">
+                {/* Key stats bar */}
+                <div className="flex items-center gap-2 flex-wrap">
                   {bedrooms != null && (
-                    <div className="flex items-center gap-1.5 bg-secondary px-3 py-2 rounded-lg text-sm">
-                      <Bed className="w-4 h-4 text-muted-foreground" />{bedrooms} bed
+                    <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium">
+                      <Bed className="w-3.5 h-3.5 text-primary" />{bedrooms} bed
                     </div>
                   )}
                   {bathrooms != null && (
-                    <div className="flex items-center gap-1.5 bg-secondary px-3 py-2 rounded-lg text-sm">
-                      <Bath className="w-4 h-4 text-muted-foreground" />{bathrooms} bath
+                    <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium">
+                      <Bath className="w-3.5 h-3.5 text-primary" />{bathrooms} bath
                     </div>
                   )}
                   {(db as any)?.wc_count != null && (
-                    <div className="flex items-center gap-1.5 bg-secondary px-3 py-2 rounded-lg text-sm">
-                      <Home className="w-4 h-4 text-muted-foreground" />{(db as any).wc_count} WC
+                    <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium">
+                      <Home className="w-3.5 h-3.5 text-primary" />{(db as any).wc_count} WC
                     </div>
                   )}
-                  <div className="flex items-center gap-1.5 bg-secondary px-3 py-2 rounded-lg text-sm">
-                    <Square className="w-4 h-4 text-muted-foreground" />{sqm} m²
+                  <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium">
+                    <Square className="w-3.5 h-3.5 text-primary" />{sqm} m²
                   </div>
                   {db?.floor != null && (
-                    <div className="flex items-center gap-1.5 bg-secondary px-3 py-2 rounded-lg text-sm">
-                      <Building2 className="w-4 h-4 text-muted-foreground" />
+                    <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium">
+                      <Layers className="w-3.5 h-3.5 text-primary" />
                       {db.floor === 0 ? "Ground" : `${db.floor}${["st","nd","rd"][db.floor-1] || "th"}`} floor
-                      {db.total_floors ? ` of ${db.total_floors}` : ""}
+                      {db.total_floors ? ` / ${db.total_floors}` : ""}
                     </div>
                   )}
                   {(db as any)?.heating_system && (
-                    <div className="flex items-center gap-1.5 bg-secondary px-3 py-2 rounded-lg text-sm capitalize">
-                      <Thermometer className="w-4 h-4 text-muted-foreground" />{(db as any).heating_system} heating
-                    </div>
-                  )}
-                  {energyClass && energyClass !== "Exempt" && (
-                    <div className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-bold ${ENERGY_COLORS[energyClass] || "bg-secondary text-foreground"}`}>
-                      <Zap className="w-4 h-4" /> {energyClass}
+                    <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium capitalize">
+                      <Thermometer className="w-3.5 h-3.5 text-primary" />{(db as any).heating_system}
                     </div>
                   )}
                 </div>
 
                 {/* Rent extras */}
                 {listingType === "rent" && isDbListing && (
-                  <div className="flex flex-wrap gap-2 mt-3">
+                  <div className="flex flex-wrap gap-2">
                     {(db as any)?.deposit_months && (
-                      <span className="px-2.5 py-1 rounded-full bg-secondary border border-border text-xs">
-                        🔐 {(db as any).deposit_months} month deposit
+                      <span className="px-2.5 py-1 rounded-full bg-secondary border border-border text-xs font-medium">
+                        🔐 {(db as any).deposit_months}mo deposit
                       </span>
                     )}
                     {(db as any)?.monthly_expenses && (
-                      <span className="px-2.5 py-1 rounded-full bg-secondary border border-border text-xs">
+                      <span className="px-2.5 py-1 rounded-full bg-secondary border border-border text-xs font-medium">
                         💡 €{(db as any).monthly_expenses}/mo expenses
                       </span>
                     )}
                     {(db as any)?.pets_allowed && (
-                      <span className="px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary">🐾 Pets Allowed</span>
+                      <span className="px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs font-medium text-primary">🐾 Pets OK</span>
                     )}
                     {(db as any)?.agent_fee_included && (
-                      <span className="px-2.5 py-1 rounded-full bg-brand-emerald/10 border border-brand-emerald/20 text-xs text-brand-emerald">✓ No Agent Fee</span>
+                      <span className="px-2.5 py-1 rounded-full bg-brand-emerald/10 border border-brand-emerald/20 text-xs font-medium text-brand-emerald">✓ No Agent Fee</span>
                     )}
                     {(db as any)?.short_term_rental && (
-                      <span className="px-2.5 py-1 rounded-full bg-brand-gold/10 border border-brand-gold/20 text-xs text-brand-gold">📅 Short-term OK</span>
+                      <span className="px-2.5 py-1 rounded-full bg-brand-gold/10 border border-brand-gold/20 text-xs font-medium text-brand-gold">📅 Short-term OK</span>
                     )}
                   </div>
                 )}
               </div>
 
-              {/* AI Insights */}
-              <div className="glass-card rounded-xl border border-primary/20 overflow-hidden">
-                <div className="flex items-center gap-2 p-4 bg-primary/5 border-b border-primary/20">
-                  <Zap className="w-4 h-4 text-primary" />
-                  <span className="font-display font-semibold text-sm">AI Market Insights</span>
-                  <span className="ml-auto text-xs text-muted-foreground">Powered by mAI Prop OS</span>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-0 divide-x divide-y divide-border">
+              {/* ── AI Market Insights ── */}
+              <Section>
+                <SectionHeader icon={Zap} title="AI Market Insights" badge={
+                  <span className="text-[10px] text-muted-foreground">Powered by mAI Prop OS</span>
+                } />
+                <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-y divide-border">
                   {aiInsights.map(insight => (
-                    <div key={insight.label} className="p-4">
-                      <div className="text-xs text-muted-foreground mb-1">{insight.label}</div>
-                      <div className={`font-display font-bold text-lg ${insight.color}`}>{insight.value}</div>
-                      <div className="text-xs text-muted-foreground mt-1">{insight.trend}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Property Details table */}
-              <div className="glass-card rounded-xl p-6">
-                <h3 className="font-display font-semibold mb-4">Property Details</h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-4">
-                  {[
-                    { label: "Price", value: `€${price.toLocaleString()}` },
-                    { label: "Price/m²", value: pricePerSqm ? `€${Number(pricePerSqm).toLocaleString()}` : "—" },
-                    { label: "Surface", value: `${sqm} m²` },
-                    isDbListing && db?.year_built && { label: "Year Built", value: db.year_built.toString() },
-                    isDbListing && db?.floor != null && { label: "Floor", value: db.floor === 0 ? "Ground" : `${db.floor}${db.total_floors ? ` of ${db.total_floors}` : ""}` },
-                    isDbListing && (db as any)?.levels && { label: "Levels", value: (db as any).levels },
-                    isDbListing && (db as any)?.kitchens && { label: "Kitchens", value: (db as any).kitchens },
-                    isDbListing && (db as any)?.living_rooms && { label: "Living Rooms", value: (db as any).living_rooms },
-                    isDbListing && (db as any)?.wc_count && { label: "WC", value: (db as any).wc_count },
-                    isDbListing && (db as any)?.heating_system && { label: "Heating", value: (db as any).heating_system?.replace("_", " ") },
-                    isDbListing && db?.energy_class && { label: "Energy Class", value: db.energy_class },
-                    isDbListing && (db as any)?.construction_status && { label: "Construction", value: (db as any).construction_status?.replace("_", " ") },
-                    isDbListing && db?.cadastre_number && { label: "Cadastre No.", value: db.cadastre_number },
-                    isDbListing && db?.enfia_zone && { label: "ENFIA Zone", value: db.enfia_zone },
-                    isDbListing && db?.postal_code && { label: "Postal Code", value: db.postal_code },
-                    isDbListing && db?.region && { label: "Region", value: db.region },
-                    // Land specific
-                    isLandType && isDbListing && (db as any)?.coverage_ratio && { label: "Coverage Ratio", value: `${(db as any).coverage_ratio}%` },
-                    isLandType && isDbListing && (db as any)?.building_allowance && { label: "Build Allowance", value: `${(db as any).building_allowance} m²` },
-                    isLandType && isDbListing && (db as any)?.facade_length && { label: "Facade Length", value: `${(db as any).facade_length} m` },
-                    isLandType && isDbListing && (db as any)?.plot_depth && { label: "Plot Depth", value: `${(db as any).plot_depth} m` },
-                    isLandType && isDbListing && (db as any)?.slope && { label: "Slope", value: (db as any).slope },
-                    isLandType && isDbListing && (db as any)?.zone_type && { label: "Zone", value: (db as any).zone_type },
-                    isLandType && isDbListing && (db as any)?.road_type && { label: "Road Type", value: (db as any).road_type },
-                    isLandType && isDbListing && (db as any)?.distance_from_sea && { label: "From Sea", value: `${(db as any).distance_from_sea} m` },
-                    isLandType && isDbListing && (db as any)?.distance_from_city && { label: "From City", value: `${(db as any).distance_from_city} m` },
-                    // Commercial
-                    isDbListing && (db as any)?.commercial_subtype && { label: "Subtype", value: (db as any).commercial_subtype },
-                    isDbListing && (db as any)?.plot_surface && { label: "Plot Surface", value: `${(db as any).plot_surface} m²` },
-                    isDbListing && (db as any)?.floor_height && { label: "Floor Height", value: `${(db as any).floor_height} m` },
-                    // System
-                    isDbListing && { label: "System Code", value: db!.id.slice(0, 8).toUpperCase() },
-                    isDbListing && { label: "Published", value: new Date(db!.created_at).toLocaleDateString("en-GB") },
-                    isDbListing && { label: "Last Updated", value: new Date(db!.updated_at).toLocaleDateString("en-GB") },
-                    isDbListing && { label: "Availability", value: (db as any)?.available_from ? `From ${new Date((db as any).available_from).toLocaleDateString("en-GB")}` : "Available now" },
-                  ].filter(Boolean).map((dp: any) => (
-                    <div key={dp.label}>
-                      <div className="text-xs text-muted-foreground capitalize">{dp.label}</div>
-                      <div className="text-sm font-medium mt-0.5 capitalize">{dp.value}</div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Energy class visual badge */}
-                {energyClass && energyClass !== "Exempt" && ENERGY_COLORS[energyClass] && (() => {
-                  const energyData = ENERGY_SCALE.find(e => e.cls === energyClass);
-                  return (
-                    <div className="mt-5 pt-5 border-t border-border">
-                      <div className="text-xs text-muted-foreground mb-3 font-semibold uppercase tracking-wider flex items-center gap-2">
-                        <Zap className="w-3.5 h-3.5" /> Energy Performance Certificate
+                    <div key={insight.label} className="p-5 space-y-1">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{insight.label}</p>
+                      <div className="flex items-baseline gap-1">
+                        <span className={`font-display font-black text-2xl ${insight.color}`}>{insight.value}</span>
+                        <span className="text-xs text-muted-foreground">{insight.unit}</span>
                       </div>
-                      {/* Spitogatos-style horizontal arrow scale */}
-                      <div className="relative">
-                        {/* Scale bars */}
-                        <div className="flex gap-0.5 items-end mb-1">
+                      <p className="text-[10px] text-muted-foreground">{insight.trend}</p>
+                    </div>
+                  ))}
+                </div>
+              </Section>
+
+              {/* ── Description ── */}
+              <Section>
+                <SectionHeader icon={FileText} title="Description" />
+                <div className="p-6">
+                  <div className={`text-sm text-muted-foreground leading-relaxed ${!descExpanded ? "line-clamp-4" : ""}`}>
+                    {description ||
+                      `This exceptional property offers a rare combination of modern architecture and premium location in the heart of ${city}. 
+                      Featuring high-end finishes throughout, the property benefits from abundant natural light and exceptional views. 
+                      The open-plan living area flows seamlessly to a private terrace, while the kitchen is equipped with top-of-the-line appliances. 
+                      Ideally positioned near all amenities, transport links, and quality schools — an outstanding opportunity not to be missed.`}
+                  </div>
+                  {(description?.length ?? 200) > 200 && (
+                    <button onClick={() => setDescExpanded(!descExpanded)}
+                      className="flex items-center gap-1 text-xs text-primary mt-3 hover:underline font-medium">
+                      {descExpanded ? <><ChevronUp className="w-3 h-3" />Show less</> : <><ChevronDown className="w-3 h-3" />Read more</>}
+                    </button>
+                  )}
+                </div>
+              </Section>
+
+              {/* ── Property Details ── */}
+              <Section>
+                <SectionHeader icon={Home} title="Property Details" />
+                <div className="p-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10">
+                    {detailRows.map((row) => (
+                      <DetailRow key={row.label} label={row.label} value={row.value} />
+                    ))}
+                  </div>
+
+                  {/* Energy certificate */}
+                  {energyClass && energyClass !== "Exempt" && ENERGY_COLORS[energyClass] && (() => {
+                    const energyData = ENERGY_SCALE.find(e => e.cls === energyClass);
+                    return (
+                      <div className="mt-6 pt-6 border-t border-border">
+                        <div className="flex items-center gap-2 mb-4">
+                          <Zap className="w-3.5 h-3.5 text-muted-foreground" />
+                          <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Energy Performance Certificate</p>
+                        </div>
+                        <div className="flex gap-1 items-end mb-2">
                           {ENERGY_SCALE.map((e, i) => {
                             const isActive = e.cls === energyClass;
-                            const barH = 16 + i * 4; // graduated heights
+                            const barH = 16 + i * 4;
                             return (
                               <div key={e.cls} className="flex-1 flex flex-col items-center gap-0.5">
-                                {isActive && (
-                                  <div className="text-[9px] font-black text-foreground leading-none">▼</div>
-                                )}
+                                {isActive && <div className="text-[8px] font-black text-foreground">▼</div>}
                                 <div
-                                  style={{ backgroundColor: e.hex, height: `${barH}px`, opacity: isActive ? 1 : 0.55 }}
-                                  className={`w-full rounded-sm flex items-end justify-center pb-0.5 transition-all ${isActive ? "ring-2 ring-foreground ring-offset-1 ring-offset-card" : ""}`}
+                                  style={{ backgroundColor: e.hex, height: `${barH}px`, opacity: isActive ? 1 : 0.4 }}
+                                  className={`w-full rounded-sm flex items-end justify-center pb-0.5 transition-all ${isActive ? "ring-2 ring-white/30 ring-offset-1 ring-offset-card" : ""}`}
                                 >
-                                  <span className={`text-[8px] font-bold leading-none ${i > 2 ? "text-black" : "text-white"} ${i >= 4 ? "text-black" : "text-white"}`}
+                                  <span className="text-[8px] font-black leading-none"
                                     style={{ color: ["B","C","D"].includes(e.cls) ? "#000" : "#fff" }}>
                                     {e.cls}
                                   </span>
@@ -554,79 +638,54 @@ export default function PropertyDetail() {
                             );
                           })}
                         </div>
-                        {/* Active class description */}
                         {energyData && (
-                          <div className="flex items-center gap-2 mt-2">
+                          <div className="flex items-center gap-2 mt-3">
                             <div className={`px-2 py-0.5 rounded text-xs font-black ${ENERGY_COLORS[energyClass]}`}>
                               {energyClass}
                             </div>
                             <span className="text-xs text-muted-foreground">{energyData.desc}</span>
                           </div>
                         )}
-                        {/* Percentage bar */}
-                        {energyData && (
-                          <div className="mt-2">
-                            <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
-                              <span>Energy Efficiency</span>
-                              <span>{100 - energyData.pct}%</span>
-                            </div>
-                            <div className="h-1.5 bg-border rounded-full overflow-hidden">
-                              <div className="h-full rounded-full transition-all"
-                                style={{ width: `${100 - energyData.pct}%`, backgroundColor: energyData.hex }} />
-                            </div>
-                          </div>
-                        )}
                       </div>
-                    </div>
-                  );
-                })()}
-              </div>
-
-              {/* Description */}
-              <div className="glass-card rounded-xl p-6">
-                <h3 className="font-display font-semibold mb-4">Description</h3>
-                <div className={`text-sm text-muted-foreground leading-relaxed ${!descExpanded ? "line-clamp-4" : ""}`}>
-                  {description ||
-                    `This exceptional property offers a rare combination of modern architecture and premium location in the heart of ${city}. 
-                    Featuring high-end finishes throughout, the property benefits from abundant natural light and exceptional views. 
-                    The open-plan living area flows seamlessly to a private terrace, while the kitchen is equipped with top-of-the-line appliances. 
-                    Ideally positioned near all amenities, transport links, and quality schools — an outstanding opportunity not to be missed.`}
+                    );
+                  })()}
                 </div>
-                {(description?.length ?? 200) > 200 && (
-                  <button onClick={() => setDescExpanded(!descExpanded)}
-                    className="flex items-center gap-1 text-xs text-primary mt-2 hover:underline">
-                    {descExpanded ? <><ChevronUp className="w-3 h-3" />Show less</> : <><ChevronDown className="w-3 h-3" />Read more</>}
-                  </button>
-                )}
-              </div>
+              </Section>
 
-              {/* Feature sections — Spitogatos style */}
+              {/* ── Features & Amenities ── */}
               {hasAnyFeatures && (
-                <div className="glass-card rounded-xl p-6 space-y-6 border border-border">
-                  <h3 className="font-display font-semibold flex items-center gap-2">
-                    Features & Amenities
-                    <span className="text-xs font-normal text-muted-foreground">
-                      {internalFeatures.length + externalFeatures.length + constructionFeatures.length + suitabilityFeatures.length} total
-                    </span>
-                  </h3>
-                  <FeatureSection title="Internal" features={internalFeatures} color="bg-primary" />
-                  <FeatureSection title="External" features={externalFeatures} color="bg-brand-emerald" />
-                  <FeatureSection title="Construction" features={constructionFeatures} color="bg-accent" />
-                  <FeatureSection title="Suitable For" features={suitabilityFeatures} color="bg-brand-gold" />
-                </div>
+                <Section>
+                  <SectionHeader
+                    icon={Check}
+                    title="Features & Amenities"
+                    badge={
+                      <span className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full border border-border">
+                        {internalFeatures.length + externalFeatures.length + constructionFeatures.length + suitabilityFeatures.length} features
+                      </span>
+                    }
+                  />
+                  <div className="p-6 space-y-6">
+                    <FeatureSection title="Internal" features={internalFeatures} accent="bg-primary" />
+                    <FeatureSection title="External" features={externalFeatures} accent="bg-brand-emerald" />
+                    <FeatureSection title="Construction" features={constructionFeatures} accent="bg-accent" />
+                    <FeatureSection title="Suitable For" features={suitabilityFeatures} accent="bg-brand-gold" />
+                  </div>
+                </Section>
               )}
 
-              {/* Mini map + AI nearby places */}
-              <PropertyMiniMap
-                latitude={db?.latitude}
-                longitude={db?.longitude}
-                address={address}
-                city={city}
-                title={title}
-                onWalkScoreChange={setWalkScore}
-              />
+              {/* ── Mini map ── */}
+              <div className="rounded-2xl overflow-hidden">
+                <PropertyMiniMap
+                  latitude={db?.latitude}
+                  longitude={db?.longitude}
+                  address={address}
+                  city={city}
+                  title={title}
+                  onWalkScoreChange={setWalkScore}
+                />
+              </div>
 
-              {/* AI Neighbourhood Report */}
+              {/* ── Neighbourhood Report ── */}
               <NeighbourhoodReport
                 city={city}
                 address={address}
@@ -636,64 +695,65 @@ export default function PropertyDetail() {
                 lng={db?.longitude ? Number(db.longitude) : undefined}
               />
 
-              {/* Auction details */}
+              {/* ── Auction Details ── */}
               {listingType === "auction" && (
-                <div className="glass-card rounded-xl border border-brand-gold/20 p-6">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Gavel className="w-5 h-5 text-brand-gold" />
-                    <h3 className="font-display font-semibold">Auction Details</h3>
-                  </div>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
-                    <div>
-                      <div className="text-xs text-muted-foreground">Auction Date</div>
-                      <div className="font-semibold text-sm mt-1">
-                        {isDbListing && dbListing.auction_date
-                          ? new Date(dbListing.auction_date).toLocaleDateString("en-GB")
-                          : (mockProperty as any).auctionDate || "TBC"}
+                <Section>
+                  <SectionHeader icon={Gavel} title="Auction Details" badge={
+                    <span className="text-[10px] bg-brand-gold/20 text-brand-gold px-2 py-0.5 rounded-full font-bold">LIVE</span>
+                  } />
+                  <div className="p-6 space-y-4">
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="glass-card rounded-xl p-4 border border-border text-center">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Auction Date</p>
+                        <p className="font-display font-bold text-sm">
+                          {isDbListing && dbListing.auction_date
+                            ? new Date(dbListing.auction_date).toLocaleDateString("en-GB")
+                            : (mockProperty as any).auctionDate || "TBC"}
+                        </p>
                       </div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-muted-foreground">Starting Bid</div>
-                      <div className="font-semibold text-sm mt-1 text-brand-gold">
-                        €{((isDbListing ? Number(dbListing.auction_starting_bid) : (mockProperty as any).auctionStartingBid) || 0).toLocaleString()}
+                      <div className="glass-card rounded-xl p-4 border border-brand-gold/20 text-center">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Starting Bid</p>
+                        <p className="font-display font-bold text-sm text-brand-gold">
+                          €{((isDbListing ? Number(dbListing.auction_starting_bid) : (mockProperty as any).auctionStartingBid) || 0).toLocaleString()}
+                        </p>
                       </div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-muted-foreground">Market Value</div>
-                      <div className="font-semibold text-sm mt-1">€{price.toLocaleString()}</div>
+                      <div className="glass-card rounded-xl p-4 border border-border text-center">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Market Value</p>
+                        <p className="font-display font-bold text-sm">€{price.toLocaleString()}</p>
+                      </div>
                     </div>
                     {isDbListing && dbListing.auction_court && (
-                      <div className="col-span-2 md:col-span-3">
-                        <div className="text-xs text-muted-foreground">Court / Platform</div>
-                        <div className="font-semibold text-sm mt-1">{dbListing.auction_court}</div>
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Court / Platform</p>
+                        <p className="text-sm font-semibold">{dbListing.auction_court}</p>
                       </div>
                     )}
+                    <div className="rounded-xl bg-brand-gold/8 border border-brand-gold/20 p-3 text-xs text-muted-foreground leading-relaxed">
+                      ⚡ Judicial auction — buyer conducts own due diligence. maiProp provides AI-powered pre-auction analysis.
+                    </div>
+                    <Button className="w-full bg-gradient-gold border-0 text-background font-semibold">
+                      Set Auction Alert — Get AI Report
+                    </Button>
                   </div>
-                  <div className="bg-brand-gold/10 rounded-lg p-3 text-xs text-muted-foreground">
-                    ⚡ This is a judicial auction. Buyer must conduct own due diligence. maiProp provides AI-powered pre-auction analysis reports.
-                  </div>
-                  <Button className="mt-4 w-full bg-gradient-gold border-0 text-background font-semibold">
-                    Set Auction Alert — Get AI Report
-                  </Button>
-                </div>
+                </Section>
               )}
 
-              {/* Premium AI Report */}
-              <div className={`rounded-xl border overflow-hidden ${reportPurchased ? "border-primary/30 bg-primary/5" : "border-border bg-card"}`}>
+              {/* ── Premium AI Report ── */}
+              <Section className={reportPurchased ? "border-primary/30" : ""}>
                 <div className="p-6">
                   <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-primary flex items-center justify-center shrink-0">
-                      <BarChart2 className="w-6 h-6 text-primary-foreground" />
+                    <div className="w-11 h-11 rounded-xl bg-gradient-primary flex items-center justify-center shrink-0">
+                      <BarChart2 className="w-5 h-5 text-primary-foreground" />
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-display font-semibold">Full AI Property Report</h3>
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold font-semibold">PREMIUM</span>
+                        <h3 className="font-display font-semibold text-sm">Full AI Property Report</h3>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold font-bold">PREMIUM</span>
                       </div>
-                      <p className="text-sm text-muted-foreground mb-4">
-                        Deep-dive analysis: cadastre verification, full price history, comparable sales, neighborhood trends, investment projection, ENFIA calculation, and legal status check.
+                      <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
+                        Deep-dive: cadastre verification, price history, comparable sales, investment projections, ENFIA calculation, and legal status.
                       </p>
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-4">
+                      <div className="grid grid-cols-2 gap-2 mb-4">
                         {["Cadastre Verification", "5-Year Price History", "Comparable Sales", "Investment Projection", "Legal Status Check", "Neighborhood Score"].map(item => (
                           <div key={item} className={`flex items-center gap-1.5 text-xs ${reportPurchased ? "text-primary" : "text-muted-foreground"}`}>
                             {reportPurchased ? <Check className="w-3 h-3 text-primary" /> : <Lock className="w-3 h-3" />}
@@ -702,36 +762,44 @@ export default function PropertyDetail() {
                         ))}
                       </div>
                       {!reportPurchased ? (
-                        <div className="flex items-center gap-3">
-                          <Button className="bg-gradient-primary border-0 text-primary-foreground" onClick={() => setReportPurchased(true)}>
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <Button className="bg-gradient-primary border-0 text-primary-foreground text-sm" onClick={() => setReportPurchased(true)}>
                             Unlock Report — €29
                           </Button>
-                          <span className="text-xs text-muted-foreground">One-time payment, instant access</span>
+                          <span className="text-xs text-muted-foreground">One-time · instant access</span>
                         </div>
                       ) : (
-                        <Button variant="outline" className="border-primary/30 text-primary gap-2">
-                          <Download className="w-4 h-4" /> Download PDF Report
+                        <Button variant="outline" className="border-primary/30 text-primary gap-2 text-sm">
+                          <Download className="w-4 h-4" /> Download PDF
                         </Button>
                       )}
                     </div>
                   </div>
                 </div>
-              </div>
+              </Section>
 
-              {/* Similar properties */}
+              {/* ── Similar properties ── */}
               {similarListings.length > 0 && (
-                <div>
-                  <h3 className="font-display font-semibold mb-4">Similar in {city}</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-4">
+                  <h3 className="font-display font-semibold flex items-center gap-2">
+                    Similar in {city}
+                    <div className="flex-1 h-px bg-border ml-1" />
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {isDbListing
                       ? (similarListings as any[]).map((l: any) => (
                           <Link key={l.id} to={`/property/${l.id}`}
-                            className="glass-card rounded-xl overflow-hidden block hover:border-primary/30 transition-colors border border-border">
-                            <img src={l.cover_image_url || "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400&q=60"}
-                              alt={l.title} className="w-full h-32 object-cover" />
-                            <div className="p-3">
+                            className="glass-card rounded-xl overflow-hidden block hover:border-primary/40 transition-all duration-200 border border-border group">
+                            <div className="aspect-[3/2] overflow-hidden">
+                              <img
+                                src={l.cover_image_url || "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400&q=60"}
+                                alt={l.title}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              />
+                            </div>
+                            <div className="p-3.5">
                               <p className="font-semibold text-sm truncate">{l.title}</p>
-                              <p className="text-xs text-muted-foreground mt-1">{l.city} · €{Number(l.price).toLocaleString()} · {l.sqm}m²</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">{l.city} · €{Number(l.price).toLocaleString()} · {l.sqm}m²</p>
                             </div>
                           </Link>
                         ))
@@ -742,87 +810,124 @@ export default function PropertyDetail() {
               )}
             </div>
 
-            {/* ──── RIGHT: Sticky sidebar ──── */}
+            {/* ──── RIGHT SIDEBAR ──── */}
             <div className="space-y-4 lg:sticky lg:top-24 self-start">
 
-              {/* Owner / Agent card */}
-              <div className="glass-card rounded-xl p-5 border border-primary/10">
-                {ownerProfile ? (
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-12 h-12 rounded-full bg-gradient-primary flex items-center justify-center text-lg font-bold text-primary-foreground overflow-hidden">
-                      {ownerProfile.avatar_url
-                        ? <img src={ownerProfile.avatar_url} alt="" className="w-full h-full object-cover" />
-                        : (ownerProfile.display_name?.[0] || "O")}
-                    </div>
+              {/* Contact card */}
+              <div className="glass-card rounded-2xl overflow-hidden border border-primary/10 shadow-elevated">
+                {/* Price header */}
+                <div className="bg-gradient-to-br from-primary/10 to-accent/5 border-b border-border px-5 py-4">
+                  <div className="flex items-end justify-between">
                     <div>
-                      <div className="font-semibold text-sm">{ownerProfile.display_name || "Owner"}</div>
-                      <div className="text-xs text-muted-foreground">Listing Owner</div>
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">
+                        {listingType === "rent" ? "Monthly Rent" : "Asking Price"}
+                      </p>
+                      <p className="font-display text-2xl font-black text-foreground">
+                        €{price.toLocaleString()}
+                        {listingType === "rent" && <span className="text-sm font-normal text-muted-foreground">/mo</span>}
+                      </p>
+                      {pricePerSqm && <p className="text-xs text-muted-foreground mt-0.5">€{Number(pricePerSqm).toLocaleString()}/m²</p>}
+                    </div>
+                    {isDbListing && (
+                      <div className="text-right">
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Eye className="w-3 h-3" />{dbListing.views_count || 0}
+                        </div>
+                        <p className="text-[10px] text-muted-foreground">views</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Agent info */}
+                <div className="px-5 py-4 border-b border-border">
+                  {ownerProfile ? (
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-gradient-primary flex items-center justify-center text-sm font-bold text-primary-foreground overflow-hidden shrink-0">
+                        {ownerProfile.avatar_url
+                          ? <img src={ownerProfile.avatar_url} alt="" className="w-full h-full object-cover" />
+                          : (ownerProfile.display_name?.[0] || "O")}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm truncate">{ownerProfile.display_name || "Owner"}</p>
+                        <p className="text-xs text-muted-foreground">Listing Owner</p>
+                      </div>
                       {ownerProfile.verified && (
-                        <div className="flex items-center gap-1 text-xs text-primary mt-0.5">
-                          <CheckCircle className="w-3 h-3" />Verified
+                        <div className="flex items-center gap-1 text-xs text-primary shrink-0">
+                          <CheckCircle className="w-3.5 h-3.5" />
+                          <span>Verified</span>
                         </div>
                       )}
                     </div>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-12 h-12 rounded-full bg-gradient-primary flex items-center justify-center text-lg font-bold text-primary-foreground">A</div>
-                    <div>
-                      <div className="font-semibold text-sm">Licensed Agent</div>
-                      <div className="flex items-center gap-1 text-xs text-brand-gold mt-0.5">
-                        <Star className="w-3 h-3 fill-current" />Verified
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-gradient-primary flex items-center justify-center text-sm font-bold text-primary-foreground shrink-0">A</div>
+                      <div>
+                        <p className="font-semibold text-sm">Licensed Agent</p>
+                        <div className="flex items-center gap-1 text-xs text-brand-gold mt-0.5">
+                          <Star className="w-3 h-3 fill-current" /><span>Verified</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
 
-                <div className="space-y-2">
-                  <Button className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2"
+                {/* Actions */}
+                <div className="p-5 space-y-2.5">
+                  <Button className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2 h-10"
                     onClick={handleContact} disabled={startConversation.isPending}>
                     {startConversation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
                     Send Message
                   </Button>
-                  <Button variant="outline" className="w-full border-border gap-2">
-                    <Phone className="w-4 h-4" />Call Agent
-                  </Button>
-                  <Button variant="outline" className="w-full border-border gap-2" onClick={() => setViewingOpen(true)}>
-                    <Calendar className="w-4 h-4" />Book Viewing
-                  </Button>
-                  <Button variant="outline" className="w-full border-border gap-2" onClick={() => setViewingOpen(true)}>
-                    <Video className="w-4 h-4" />Video Viewing
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button variant="outline" className="border-border gap-1.5 h-9 text-xs">
+                      <Phone className="w-3.5 h-3.5" />Call
+                    </Button>
+                    <Button variant="outline" className="border-border gap-1.5 h-9 text-xs" onClick={() => setViewingOpen(true)}>
+                      <Calendar className="w-3.5 h-3.5" />Viewing
+                    </Button>
+                  </div>
+                  <Button variant="outline" className="w-full border-border gap-2 h-9 text-xs" onClick={() => setViewingOpen(true)}>
+                    <Video className="w-3.5 h-3.5" />Video Viewing
                   </Button>
                 </div>
-                <div className="mt-4 pt-4 border-t border-border text-xs text-muted-foreground text-center">
-                  <Clock className="w-3 h-3 inline mr-1" />Response time: usually within 2 hours
+
+                {/* Response time */}
+                <div className="px-5 pb-4 text-center">
+                  <p className="text-[10px] text-muted-foreground flex items-center justify-center gap-1">
+                    <Clock className="w-3 h-3" />Usually responds within 2 hours
+                  </p>
                 </div>
               </div>
 
-              {/* Verified listing */}
-              <div className="glass-card rounded-xl p-5">
+              {/* Verified listing badge */}
+              <div className="glass-card rounded-2xl p-4 border border-brand-emerald/20">
                 <div className="flex items-center gap-2 mb-3">
-                  <Shield className="w-4 h-4 text-brand-emerald" />
+                  <div className="w-6 h-6 rounded-lg bg-brand-emerald/10 flex items-center justify-center">
+                    <Shield className="w-3.5 h-3.5 text-brand-emerald" />
+                  </div>
                   <span className="font-display font-semibold text-sm">Verified Listing</span>
                 </div>
-                <div className="space-y-2 text-xs text-muted-foreground">
+                <div className="space-y-2">
                   {["Cadastre verified", "Agent ID checked", "No encumbrances found"].map(item => (
-                    <div key={item} className="flex items-center gap-2">
-                      <Check className="w-3 h-3 text-brand-emerald" />{item}
+                    <div key={item} className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Check className="w-3 h-3 text-brand-emerald shrink-0" />{item}
                     </div>
                   ))}
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-3 h-3" />Last verified: today
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Clock className="w-3 h-3 shrink-0" />Last verified: today
                   </div>
                 </div>
               </div>
 
-              {/* Walk Score badge (shows after POIs load) */}
+              {/* Walk Score */}
               {walkScore !== null && (() => {
                 const colour = walkScoreColour(walkScore);
                 const label = walkScoreLabel(walkScore);
                 const r = 20, c = 2 * Math.PI * r;
                 return (
-                  <div className="glass-card rounded-xl p-4 border border-border flex items-center gap-4">
-                    <svg width="56" height="56" viewBox="0 0 56 56">
+                  <div className="glass-card rounded-2xl p-4 border border-border flex items-center gap-4">
+                    <svg width="52" height="52" viewBox="0 0 56 56" className="shrink-0">
                       <circle cx="28" cy="28" r={r} fill="none" stroke="hsl(var(--border))" strokeWidth="4" />
                       <circle cx="28" cy="28" r={r} fill="none"
                         stroke={colour} strokeWidth="4"
@@ -830,10 +935,10 @@ export default function PropertyDetail() {
                         strokeLinecap="round"
                         transform="rotate(-90 28 28)"
                       />
-                      <text x="28" y="33" textAnchor="middle" fontSize="14" fontWeight="800" fill={colour}>{walkScore}</text>
+                      <text x="28" y="33" textAnchor="middle" fontSize="13" fontWeight="900" fill={colour}>{walkScore}</text>
                     </svg>
                     <div>
-                      <p className="text-xs font-bold" style={{ color: colour }}>{label}</p>
+                      <p className="text-sm font-bold" style={{ color: colour }}>{label}</p>
                       <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Walk Score</p>
                       <p className="text-[10px] text-muted-foreground mt-0.5">Based on nearby amenities</p>
                     </div>
@@ -864,44 +969,47 @@ export default function PropertyDetail() {
                 />
               )}
 
-              {/* Interactive Mortgage Calculator (only for sale listings) */}
+              {/* Mortgage Calculator */}
               {listingType !== "rent" && <MortgageCalculator price={price} />}
 
-              {/* Rent summary card */}
+              {/* Rental Summary */}
               {listingType === "rent" && isDbListing && (
-                <div className="glass-card rounded-xl p-5 space-y-3">
-                  <h4 className="font-display font-semibold text-sm">Rental Summary</h4>
-                  <div className="space-y-2 text-sm">
+                <div className="glass-card rounded-2xl border border-border overflow-hidden">
+                  <div className="flex items-center gap-2.5 px-5 py-4 border-b border-border">
+                    <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <Euro className="w-3.5 h-3.5 text-primary" />
+                    </div>
+                    <h4 className="font-display font-semibold text-sm">Rental Summary</h4>
+                  </div>
+                  <div className="p-5 space-y-2.5 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Monthly Rent</span>
-                      <span className="font-semibold">€{price.toLocaleString()}</span>
+                      <span className="text-muted-foreground text-xs">Monthly Rent</span>
+                      <span className="font-semibold text-sm">€{price.toLocaleString()}</span>
                     </div>
                     {(db as any)?.monthly_expenses && (
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Shared Expenses</span>
-                        <span>€{(db as any).monthly_expenses}</span>
+                        <span className="text-muted-foreground text-xs">Shared Expenses</span>
+                        <span className="text-sm">€{(db as any).monthly_expenses}</span>
                       </div>
                     )}
                     {(db as any)?.deposit_months && (
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Deposit</span>
-                        <span>{(db as any).deposit_months} months (€{(price * (db as any).deposit_months).toLocaleString()})</span>
+                        <span className="text-muted-foreground text-xs">Deposit</span>
+                        <span className="text-sm">{(db as any).deposit_months}mo · €{(price * (db as any).deposit_months).toLocaleString()}</span>
                       </div>
                     )}
-                    <div className="pt-2 border-t border-border flex justify-between font-semibold">
-                      <span>Total Move-in Cost</span>
-                      <span className="text-primary">
-                        €{(price * (1 + ((db as any)?.deposit_months || 0))).toLocaleString()}
-                      </span>
+                    <div className="pt-2.5 border-t border-border flex justify-between font-semibold">
+                      <span className="text-xs text-muted-foreground">Total Move-in Cost</span>
+                      <span className="text-primary">€{(price * (1 + ((db as any)?.deposit_months || 0))).toLocaleString()}</span>
                     </div>
                   </div>
                 </div>
               )}
 
               {/* Report error */}
-              <div className="text-center">
-                <button className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 mx-auto">
-                  <Info className="w-3 h-3" />Found an error in this listing? Report it
+              <div className="text-center pt-1">
+                <button className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 mx-auto transition-colors">
+                  <Info className="w-3 h-3" />Found an error? Report this listing
                 </button>
               </div>
             </div>
@@ -910,6 +1018,7 @@ export default function PropertyDetail() {
       </div>
 
       <Footer />
+
       <ViewingDialog
         open={viewingOpen}
         onClose={() => setViewingOpen(false)}
@@ -921,48 +1030,39 @@ export default function PropertyDetail() {
           tags: []
         } : mockProperty}
       />
-      {/* AI property assistant with full property context */}
+
       <AIAssistantWidget
         propertyContext={isDbListing ? {
           title: dbListing.title,
           city: dbListing.city,
-          address: dbListing.address ?? undefined,
+          address: dbListing.address,
           price: Number(dbListing.price),
           pricePerSqm: dbListing.price_per_sqm ? Number(dbListing.price_per_sqm) : undefined,
+          sqm: Number(dbListing.sqm),
+          bedrooms: dbListing.bedrooms,
+          bathrooms: dbListing.bathrooms,
           propertyType: dbListing.property_type,
           listingType: dbListing.listing_type,
-          sqm: Number(dbListing.sqm),
-          bedrooms: dbListing.bedrooms ?? undefined,
-          bathrooms: dbListing.bathrooms ?? undefined,
-          floor: dbListing.floor ?? undefined,
-          yearBuilt: dbListing.year_built ?? undefined,
-          energyClass: dbListing.energy_class ?? undefined,
-          heatingSystem: dbListing.heating_system ?? undefined,
-          hasParking: dbListing.has_parking ?? undefined,
-          hasPool: dbListing.has_pool ?? undefined,
-          hasElevator: dbListing.has_elevator ?? undefined,
-          hasGarden: dbListing.has_garden ?? undefined,
-          hasBalcony: dbListing.has_balcony ?? undefined,
-          hasAC: dbListing.has_ac ?? undefined,
-          hasFireplace: dbListing.has_fireplace ?? undefined,
-          hasFurnished: dbListing.has_furnished ?? undefined,
-          hasStorage: dbListing.has_storage ?? undefined,
-          hasSmartHome: dbListing.has_smart_home ?? undefined,
-          petsAllowed: dbListing.pets_allowed ?? undefined,
-          hasView: dbListing.has_view ?? undefined,
-          latitude: dbListing.latitude ?? undefined,
-          longitude: dbListing.longitude ?? undefined,
-          region: dbListing.region ?? undefined,
-        } : {
-          title: mockProperty.title,
-          city: mockProperty.city,
-          price: mockProperty.price,
-          propertyType: mockProperty.type,
-          listingType: mockProperty.listingType,
-          sqm: mockProperty.sqm,
-          bedrooms: mockProperty.bedrooms,
-          bathrooms: mockProperty.bathrooms,
-        }}
+          floor: dbListing.floor,
+          yearBuilt: dbListing.year_built,
+          energyClass: dbListing.energy_class,
+          heatingSystem: (dbListing as any).heating_system,
+          hasParking: dbListing.has_parking,
+          hasPool: dbListing.has_pool,
+          hasElevator: dbListing.has_elevator,
+          hasGarden: dbListing.has_garden,
+          hasBalcony: (dbListing as any).has_balcony,
+          hasAC: (dbListing as any).has_ac,
+          hasFireplace: (dbListing as any).has_fireplace,
+          hasFurnished: (dbListing as any).has_furnished,
+          hasStorage: dbListing.has_storage,
+          hasSmartHome: dbListing.has_smart_home,
+          petsAllowed: (dbListing as any).pets_allowed,
+          hasView: (dbListing as any).has_view,
+          latitude: dbListing.latitude,
+          longitude: dbListing.longitude,
+          region: dbListing.region,
+        } : undefined}
       />
     </div>
   );
