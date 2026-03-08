@@ -138,7 +138,7 @@ export function MapView({ listings }: { listings: MapListing[] }) {
             <PricePin
               listing={listing}
               isActive={listing.id === activeId}
-              onClick={(e: any) => { e?.stopPropagation(); setActiveId(listing.id); }}
+              onClick={() => setActiveId(listing.id)}
             />
           </Marker>
         ))}
