@@ -1,9 +1,9 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import {
   Search, SlidersHorizontal, MapPin, LayoutGrid, Map, ChevronDown,
   X, Gavel, ArrowUpDown, Loader2, Building2, Check, Bookmark, GitCompare,
-  Columns2
+  Columns2, ChevronRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -17,6 +17,7 @@ import { AISearchBar } from "@/components/AISearchBar";
 import { mockProperties } from "@/data/mockProperties";
 import { useListings } from "@/hooks/useListings";
 import { useAuth } from "@/contexts/AuthContext";
+import { PROPERTY_TYPES, PROPERTY_TYPE_MAP, getTypeLabel, getSubtypeLabel, type PropertyTypeKey } from "@/lib/propertyTypes";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -29,21 +30,11 @@ const priceRanges = [
   { label: "€1M+", value: "1000000-9999999" },
 ];
 
-const propertyTypeOptions = [
-  { label: "All Types", value: "" },
-  { label: "Apartment", value: "apartment" },
-  { label: "House", value: "house" },
-  { label: "Villa", value: "villa" },
-  { label: "Commercial", value: "commercial" },
-  { label: "Land", value: "land" },
-  { label: "Office", value: "office" },
-];
-
 const listingTypeOptions = [
-  { label: "All", value: "" },
-  { label: "For Sale", value: "sale" },
-  { label: "For Rent", value: "rent" },
-  { label: "Auction", value: "auction" },
+  { label: "All", value: "", icon: "🏘️" },
+  { label: "For Sale", value: "sale", icon: "🏷️" },
+  { label: "For Rent", value: "rent", icon: "🔑" },
+  { label: "Auction", value: "auction", icon: "⚖️" },
 ];
 
 const sortOptions = [
