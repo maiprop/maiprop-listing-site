@@ -224,6 +224,15 @@ export function Navbar() {
               </>
             )}
           </div>
+          <div className="pt-2 border-t border-border">
+            <button
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              className="flex items-center gap-2 px-3 py-2.5 w-full rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+            >
+              {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              Switch to {theme === "dark" ? "Light" : "Dark"} Mode
+            </button>
+          </div>
         </div>
       )}
     </header>
