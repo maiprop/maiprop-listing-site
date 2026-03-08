@@ -24,6 +24,7 @@ import PropertyMiniMap from "@/components/PropertyMiniMap";
 import PropertyValuation from "@/components/PropertyValuation";
 import NeighbourhoodReport from "@/components/NeighbourhoodReport";
 import { walkScoreLabel, walkScoreColour } from "@/lib/walkScore";
+import AIAssistantWidget from "@/components/AIAssistantWidget";
 
 // ─── Energy class data ──────────────────────────────────────────────────────
 const ENERGY_SCALE = [
