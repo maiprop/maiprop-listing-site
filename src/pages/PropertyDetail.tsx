@@ -479,6 +479,12 @@ export default function PropertyDetail() {
                       <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground bg-muted px-2 py-0.5 rounded-full border border-border capitalize">
                         {propertyType}
                       </span>
+                      {subtype && (
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-accent bg-accent/10 px-2 py-0.5 rounded-full border border-accent/30 capitalize flex items-center gap-1">
+                          <LayoutGrid className="w-2.5 h-2.5" />
+                          {getSubtypeLabel(propertyType, subtype)}
+                        </span>
+                      )}
                       {listingType && (
                         <span className="text-[10px] font-bold uppercase tracking-widest text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20 capitalize">
                           For {listingType}
