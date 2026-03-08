@@ -77,6 +77,33 @@ const popularCities = [
   { name: "Santorini", listings: 1240, trend: "+1.9%", image: "https://images.unsplash.com/photo-1570077188670-e3a8d69ac5ff?w=600&q=80" },
 ];
 
+const howItWorks = [
+  {
+    step: "1",
+    icon: ListFilter,
+    title: "Tell us what you're looking for",
+    desc: "Search by location, budget, or property type — or let our AI suggest options based on your lifestyle and goals.",
+    color: "text-primary",
+    bg: "bg-primary/10",
+  },
+  {
+    step: "2",
+    icon: CalendarCheck,
+    title: "Explore & schedule viewings",
+    desc: "Browse verified listings with photos, maps, and AI-powered insights. Book in-person or online viewings in seconds.",
+    color: "text-brand-emerald",
+    bg: "bg-brand-emerald/10",
+  },
+  {
+    step: "3",
+    icon: HandshakeIcon,
+    title: "Move in with confidence",
+    desc: "Connect with trusted lawyers, notaries, and agents. We guide you every step of the way — no surprises.",
+    color: "text-accent",
+    bg: "bg-accent/10",
+  },
+];
+
 export default function Index() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchType, setSearchType] = useState("Buy");
@@ -87,57 +114,58 @@ export default function Index() {
       <MarketTicker />
 
       {/* Hero */}
-      <section className="relative min-h-[90vh] flex items-center overflow-hidden pt-16">
+      <section className="relative min-h-[88vh] flex items-center overflow-hidden pt-16">
         {/* Background */}
         <div className="absolute inset-0">
-          <img src={heroBg} alt="Athens at night" className="w-full h-full object-cover opacity-40" />
-          <div className="absolute inset-0 bg-gradient-to-r from-background via-background/80 to-background/20" />
+          <img src={heroBg} alt="Athens at night" className="w-full h-full object-cover opacity-35" />
+          <div className="absolute inset-0 bg-gradient-to-r from-background via-background/85 to-background/30" />
           <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
         </div>
 
-        {/* Animated warm grid lines */}
-        <div className="absolute inset-0 opacity-[0.04]"
+        {/* Warm subtle grid */}
+        <div className="absolute inset-0 opacity-[0.03]"
           style={{
             backgroundImage: "linear-gradient(hsl(38 95% 52%) 1px, transparent 1px), linear-gradient(90deg, hsl(38 95% 52%) 1px, transparent 1px)",
             backgroundSize: "60px 60px",
           }}
         />
 
-        <div className="container relative z-10">
+        <div className="container relative z-10 py-16">
           <div className="max-w-3xl">
-            {/* Label */}
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 mb-6 animate-fade-in">
-              <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-              <span className="text-xs font-semibold text-primary">Greece's Most Advanced Real Estate Platform</span>
+            {/* Friendly label */}
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary/12 border border-primary/25 mb-6 animate-fade-in">
+              <Sparkles className="w-3.5 h-3.5 text-primary" />
+              <span className="text-sm font-semibold text-primary">Trusted by 12,500+ Greeks across Europe</span>
             </div>
 
-            <h1 className="font-display text-5xl md:text-7xl font-bold leading-tight mb-6 animate-fade-in-up">
-              Find Your <br />
-              <span className="gradient-text-primary">Perfect Property</span>
-              <br />
-              in Greece
+            <h1 className="font-display text-5xl md:text-6xl font-bold leading-tight mb-5 animate-fade-in-up">
+              Your next home<br />
+              is waiting for you<br />
+              <span className="gradient-text-primary">in Greece</span>
             </h1>
 
-            <p className="text-lg text-muted-foreground mb-8 max-w-xl animate-fade-in-up" style={{ animationDelay: "0.1s" }}>
-              From luxury villas to bank auctions. Powered by mAI Prop OS — real-time data, AI insights, and instant offers in one platform.
+            {/* Friendly, jargon-free subtitle */}
+            <p className="text-xl text-foreground/75 mb-3 max-w-xl animate-fade-in-up font-medium" style={{ animationDelay: "0.05s" }}>
+              Buy, rent, or sell — simply and with confidence.
+            </p>
+            <p className="text-base text-muted-foreground mb-9 max-w-xl animate-fade-in-up leading-relaxed" style={{ animationDelay: "0.1s" }}>
+              From family apartments to holiday villas, we make finding the right property in Greece easy, transparent, and stress-free. Real listings, real prices, real people.
             </p>
 
             {/* Search bar */}
-            <div className="glass-card rounded-2xl p-2 shadow-elevated animate-fade-in-up" style={{ animationDelay: "0.2s" }}>
+            <div className="bg-card border border-border rounded-2xl p-2 shadow-elevated animate-fade-in-up" style={{ animationDelay: "0.2s" }}>
               {/* Type tabs */}
               <div className="flex gap-1 p-1 mb-2">
-                {["Buy", "Rent", "Auctions", "Firesale"].map(type => (
+                {["Buy", "Rent", "Auctions", "Quick Sale"].map(type => (
                   <button
                     key={type}
                     onClick={() => setSearchType(type)}
-                    className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                    className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
                       searchType === type
-                        ? "bg-gradient-primary text-primary-foreground"
+                        ? "bg-primary text-primary-foreground shadow-sm"
                         : "text-muted-foreground hover:text-foreground hover:bg-secondary"
                     }`}
                   >
-                    {type === "Auctions" && <span className="mr-1.5 text-brand-gold">⚡</span>}
-                    {type === "Firesale" && <span className="mr-1.5">🔥</span>}
                     {type}
                   </button>
                 ))}
@@ -148,17 +176,17 @@ export default function Index() {
                   <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
                   <input
                     type="text"
-                    placeholder="Search by city, area, or address..."
+                    placeholder="City, area, or neighbourhood..."
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
                     className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
                   />
                 </div>
-                <div className="flex items-center gap-2 bg-secondary rounded-xl px-4 py-3">
-                  <span className="text-sm text-muted-foreground">Type</span>
+                <div className="flex items-center gap-2 bg-secondary rounded-xl px-4 py-3 cursor-pointer hover:bg-muted transition-colors">
+                  <span className="text-sm text-muted-foreground hidden sm:block">Property type</span>
                   <ChevronDown className="w-4 h-4 text-muted-foreground" />
                 </div>
-                <Button size="lg" className="bg-gradient-primary border-0 text-primary-foreground rounded-xl px-6 glow-cyan" asChild>
+                <Button size="lg" className="bg-primary hover:opacity-90 border-0 text-primary-foreground rounded-xl px-6 font-semibold" asChild>
                   <Link to="/listings">
                     <Search className="w-4 h-4 mr-2" />
                     Search
@@ -167,15 +195,45 @@ export default function Index() {
               </div>
             </div>
 
-            {/* Quick stats */}
-            <div className="flex items-center gap-6 mt-8 animate-fade-in-up" style={{ animationDelay: "0.3s" }}>
+            {/* Trust indicators */}
+            <div className="flex items-center flex-wrap gap-x-6 gap-y-2 mt-7 animate-fade-in-up" style={{ animationDelay: "0.3s" }}>
               {stats.map(stat => (
-                <div key={stat.label}>
-                  <div className="font-display font-bold text-xl gradient-text-cyan">{stat.value}</div>
+                <div key={stat.label} className="flex items-baseline gap-1.5">
+                  <div className="font-display font-bold text-lg gradient-text-primary">{stat.value}</div>
                   <div className="text-xs text-muted-foreground">{stat.label}</div>
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* How it works */}
+      <section className="py-16 bg-card/40 border-y border-border">
+        <div className="container">
+          <div className="text-center mb-10">
+            <h2 className="font-display text-2xl font-bold">How it works</h2>
+            <p className="text-muted-foreground mt-2">From search to keys — three simple steps</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative">
+            {/* Connector line desktop */}
+            <div className="hidden md:block absolute top-8 left-1/3 right-1/3 h-0.5 bg-gradient-to-r from-primary/40 via-brand-emerald/40 to-accent/40 -translate-y-1/2" style={{ top: "2rem" }} />
+            {howItWorks.map((step, i) => (
+              <div key={step.step} className="relative flex flex-col items-center text-center gap-4 p-6 rounded-2xl bg-card border border-border hover:border-primary/20 transition-all group">
+                <div className="relative">
+                  <div className={`w-14 h-14 rounded-2xl ${step.bg} flex items-center justify-center group-hover:scale-110 transition-transform`}>
+                    <step.icon className={`w-6 h-6 ${step.color}`} />
+                  </div>
+                  <div className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center">
+                    {step.step}
+                  </div>
+                </div>
+                <div>
+                  <h3 className="font-display font-semibold text-base mb-2">{step.title}</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{step.desc}</p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </section>
