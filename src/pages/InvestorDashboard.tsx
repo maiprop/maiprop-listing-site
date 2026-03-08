@@ -301,10 +301,45 @@ export default function InvestorDashboard() {
   const isAdmin = profile?.role === "agent";
   const [activeTab, setActiveTab] = useState<"deals" | "admin">("deals");
 
-  // Subscription state
-  const [subscribed] = useState(false);
-  const [showGate, setShowGate] = useState(!subscribed);
+  // Subscription state (loaded from DB)
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [subLoading, setSubLoading] = useState(true);
+  const subscribed = subscription?.status === "active" || subscription?.status === "trial";
+  const [showGate, setShowGate] = useState(false);
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
+
+  // Load subscription from DB
+  const loadSubscription = useCallback(async () => {
+    if (!user) { setSubLoading(false); return; }
+    setSubLoading(true);
+    const { data } = await supabase
+      .from("investor_subscriptions" as any)
+      .select("*")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    setSubscription(data as Subscription | null);
+    setSubLoading(false);
+  }, [user]);
+
+  useEffect(() => { loadSubscription(); }, [loadSubscription]);
+
+  // Save subscription selection to DB
+  const handleSelectTier = async (tierId: string, ctaLabel: string) => {
+    if (!user) {
+      toast.error("Please sign in to subscribe");
+      return;
+    }
+    const { error } = await supabase
+      .from("investor_subscriptions" as any)
+      .upsert({ user_id: user.id, tier: tierId, status: tierId === "sovereign" ? "trial" : "active" }, { onConflict: "user_id" });
+    if (error) {
+      toast.error("Could not save subscription");
+      return;
+    }
+    await loadSubscription();
+    toast.success(`${ctaLabel} — Welcome to the deal flow!`);
+    setShowGate(false);
+  };
 
   // Deal feed state
   const [filterCity, setFilterCity] = useState("all");
