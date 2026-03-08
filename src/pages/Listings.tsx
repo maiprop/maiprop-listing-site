@@ -343,6 +343,7 @@ export default function Listings() {
         {/* Sticky search bar */}
         <div className="bg-card border-b border-border sticky top-16 z-40">
           <div className="container py-4">
+            {/* Top row */}
             <div className="flex gap-2 flex-wrap items-center">
               {/* Search */}
               <div className="flex-1 min-w-[200px] flex items-center gap-2 bg-secondary rounded-xl px-4 py-2.5 border border-border focus-within:border-primary transition-colors">
@@ -363,16 +364,7 @@ export default function Listings() {
               <div className="relative">
                 <select value={selectedListingType} onChange={e => setParam("listing_type", e.target.value)}
                   className="appearance-none bg-secondary border border-border rounded-xl px-3 py-2.5 pr-7 text-sm text-foreground cursor-pointer outline-none focus:border-primary">
-                  {listingTypeOptions.map(o => <option key={o.value} value={o.value} className="bg-card">{o.label}</option>)}
-                </select>
-                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-              </div>
-
-              {/* Property type */}
-              <div className="relative">
-                <select value={selectedType} onChange={e => setParam("type", e.target.value)}
-                  className="appearance-none bg-secondary border border-border rounded-xl px-3 py-2.5 pr-7 text-sm text-foreground cursor-pointer outline-none focus:border-primary">
-                  {propertyTypeOptions.map(o => <option key={o.value} value={o.value} className="bg-card">{o.label}</option>)}
+                  {listingTypeOptions.map(o => <option key={o.value} value={o.value} className="bg-card">{o.icon} {o.label}</option>)}
                 </select>
                 <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
               </div>
@@ -438,12 +430,72 @@ export default function Listings() {
               </div>
             </div>
 
+            {/* Property type strip — icon chips */}
+            <div className="flex items-center gap-1.5 mt-3 overflow-x-auto pb-1 scrollbar-hide">
+              <button
+                onClick={() => { setParam("type", ""); setParam("subtype", ""); }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold whitespace-nowrap transition-all shrink-0 ${
+                  !selectedType
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border bg-secondary text-muted-foreground hover:text-foreground hover:border-primary/40"
+                }`}
+              >
+                🏘️ All Types
+              </button>
+              {PROPERTY_TYPES.map(pt => (
+                <button
+                  key={pt.value}
+                  onClick={() => { setParam("type", pt.value); setParam("subtype", ""); }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold whitespace-nowrap transition-all shrink-0 ${
+                    selectedType === pt.value
+                      ? `border-primary bg-primary/10 text-primary`
+                      : "border-border bg-secondary text-muted-foreground hover:text-foreground hover:border-primary/40"
+                  }`}
+                >
+                  {pt.emoji} {pt.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Subtype strip — appears when a type is selected */}
+            {selectedType && PROPERTY_TYPE_MAP[selectedType as PropertyTypeKey] && (
+              <div className="flex items-center gap-1.5 mt-2 overflow-x-auto pb-1 scrollbar-hide">
+                <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                <span className="text-xs text-muted-foreground shrink-0 mr-1">Subtype:</span>
+                <button
+                  onClick={() => setParam("subtype", "")}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border text-xs font-medium whitespace-nowrap transition-all shrink-0 ${
+                    !selectedSubtype
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border bg-secondary text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  All {PROPERTY_TYPE_MAP[selectedType as PropertyTypeKey]?.labelPlural}
+                </button>
+                {PROPERTY_TYPE_MAP[selectedType as PropertyTypeKey]?.subtypes.map(st => (
+                  <button
+                    key={st.value}
+                    onClick={() => setParam("subtype", st.value)}
+                    title={st.description}
+                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border text-xs font-medium whitespace-nowrap transition-all shrink-0 ${
+                      selectedSubtype === st.value
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border bg-secondary text-muted-foreground hover:text-foreground hover:border-primary/40"
+                    }`}
+                  >
+                    {st.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {/* Active filter chips */}
             {activeFilterCount > 0 && (
               <div className="flex items-center gap-2 mt-3 flex-wrap">
-                <span className="text-xs text-muted-foreground">Active filters:</span>
-                {selectedType && <button onClick={() => setParam("type", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{selectedType} <X className="w-3 h-3" /></button>}
-                {selectedListingType && <button onClick={() => setParam("listing_type", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{selectedListingType} <X className="w-3 h-3" /></button>}
+                <span className="text-xs text-muted-foreground">Active:</span>
+                {selectedType && <button onClick={() => { setParam("type", ""); setParam("subtype", ""); }} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{PROPERTY_TYPE_MAP[selectedType as PropertyTypeKey]?.emoji} {getTypeLabel(selectedType)} <X className="w-3 h-3" /></button>}
+                {selectedSubtype && selectedType && <button onClick={() => setParam("subtype", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{getSubtypeLabel(selectedType, selectedSubtype)} <X className="w-3 h-3" /></button>}
+                {selectedListingType && <button onClick={() => setParam("listing_type", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{listingTypeOptions.find(o => o.value === selectedListingType)?.label} <X className="w-3 h-3" /></button>}
                 {selectedPrice && <button onClick={() => setParam("price", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{priceRanges.find(r => r.value === selectedPrice)?.label} <X className="w-3 h-3" /></button>}
                 {bedsRange[0] && <button onClick={() => setParam("beds_min", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{bedsRange[0]}+ beds <X className="w-3 h-3" /></button>}
                 {selectedEnergyClasses.map(ec => <button key={ec} onClick={() => toggleMulti("energy", ec)} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">Energy {ec} <X className="w-3 h-3" /></button>)}
