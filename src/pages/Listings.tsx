@@ -2,15 +2,19 @@ import { useState, useCallback } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import {
   Search, SlidersHorizontal, MapPin, LayoutGrid, Map, ChevronDown,
-  X, Gavel, ArrowUpDown, Loader2, Building2, Check
+  X, Gavel, ArrowUpDown, Loader2, Building2, Check, Bookmark, GitCompare
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { MarketTicker } from "@/components/MarketTicker";
 import { PropertyCard } from "@/components/PropertyCard";
 import { Footer } from "@/components/Footer";
+import { MapView } from "@/components/MapView";
+import { CompareDrawer } from "@/components/CompareDrawer";
+import { SaveSearchModal } from "@/components/SaveSearchModal";
 import { mockProperties } from "@/data/mockProperties";
 import { useListings } from "@/hooks/useListings";
+import { useAuth } from "@/contexts/AuthContext";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -85,6 +89,8 @@ function dbListingToCard(l: any) {
     totalFloors: l.total_floors ?? undefined,
     yearBuilt: l.year_built ?? undefined,
     energyClass: l.energy_class ?? undefined,
+    latitude: l.latitude,
+    longitude: l.longitude,
     images: [
       ...(l.cover_image_url ? [l.cover_image_url] : []),
       ...(l.listing_images?.map((img: any) => img.url) || []),
@@ -110,7 +116,6 @@ function dbListingToCard(l: any) {
     ].filter(Boolean) as string[],
     hasVideo: l.has_video_tour,
     hasVirtualTour: l.has_virtual_tour,
-    // raw data for filtering
     _raw: l,
   };
 }
@@ -118,10 +123,7 @@ function dbListingToCard(l: any) {
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function RangeSelector({
-  label,
-  value,
-  onChange,
-  options,
+  label, value, onChange, options,
 }: {
   label: string;
   value: [string, string];
@@ -154,14 +156,8 @@ function RangeSelector({
   );
 }
 
-function FilterChip({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
+function FilterChip({ active, onClick, children }: {
+  active: boolean; onClick: () => void; children: React.ReactNode;
 }) {
   return (
     <button
@@ -184,6 +180,9 @@ export default function Listings() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [viewMode, setViewMode] = useState<"grid" | "map">("grid");
   const [showFilters, setShowFilters] = useState(false);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [compareList, setCompareList] = useState<any[]>([]);
+  const { user } = useAuth();
 
   // URL-based filter state helpers
   const getParam = (key: string, fallback = "") => searchParams.get(key) || fallback;
@@ -209,7 +208,7 @@ export default function Listings() {
   const getMulti = (key: string): string[] =>
     (searchParams.get(key) || "").split(",").filter(Boolean);
 
-  // Read filter state from URL
+  // Read filter state
   const searchQuery = getParam("city");
   const selectedListingType = getParam("listing_type");
   const selectedType = getParam("type");
@@ -239,50 +238,38 @@ export default function Listings() {
   // Client-side filtering
   let filtered = sourceListings.filter((p: any) => {
     const raw = p._raw || p;
-    // Price range
     if (selectedPrice) {
       const [min, max] = selectedPrice.split("-").map(Number);
       if (p.price < min || p.price > max) return false;
     }
-    // Bedrooms range
     if (bedsRange[0] && p.bedrooms != null && p.bedrooms < Number(bedsRange[0])) return false;
     if (bedsRange[1] && p.bedrooms != null && p.bedrooms > Number(bedsRange[1])) return false;
-    // Bathrooms range
     if (bathsRange[0] && p.bathrooms != null && p.bathrooms < Number(bathsRange[0])) return false;
     if (bathsRange[1] && p.bathrooms != null && p.bathrooms > Number(bathsRange[1])) return false;
-    // Floor range
     if (floorRange[0] && raw.floor != null && raw.floor < Number(floorRange[0])) return false;
     if (floorRange[1] && raw.floor != null && raw.floor > Number(floorRange[1])) return false;
-    // Year built range
     const yearBuilt = p.yearBuilt ?? raw.year_built;
     if (yearRange[0] && yearBuilt && yearBuilt < Number(yearRange[0])) return false;
     if (yearRange[1] && yearBuilt && yearBuilt > Number(yearRange[1])) return false;
-    // SQM range
     if (minSqm && p.sqm < Number(minSqm)) return false;
     if (maxSqm && p.sqm > Number(maxSqm)) return false;
-    // Energy class
     if (selectedEnergyClasses.length > 0) {
       const ec = p.energyClass ?? raw.energy_class;
       if (!ec || !selectedEnergyClasses.includes(ec)) return false;
     }
-    // Features (boolean checks on raw DB data)
     for (const feat of selectedFeatures) {
       if (!raw[feat]) return false;
     }
-    // Heating
     if (selectedHeating && raw.heating_system !== selectedHeating) return false;
-    // Construction status
     if (selectedConstruction && raw.construction_status !== selectedConstruction) return false;
     return true;
   });
 
-  // Sorting
   if (selectedSort === "price-asc") filtered = [...filtered].sort((a: any, b: any) => a.price - b.price);
   if (selectedSort === "price-desc") filtered = [...filtered].sort((a: any, b: any) => b.price - a.price);
   if (selectedSort === "ai-score") filtered = [...filtered].sort((a: any, b: any) => (b.aiScore || 0) - (a.aiScore || 0));
   if (selectedSort === "views") filtered = [...filtered].sort((a: any, b: any) => (b.views || 0) - (a.views || 0));
 
-  // Active filter count
   const activeFilterCount = [
     selectedType, selectedListingType, selectedPrice,
     bedsRange[0], bedsRange[1], bathsRange[0], bathsRange[1],
@@ -299,6 +286,22 @@ export default function Listings() {
     }, { replace: true });
   };
 
+  // Current filter object for saving
+  const currentFilters = Object.fromEntries(
+    [...searchParams.entries()].filter(([, v]) => v)
+  );
+
+  // Compare helpers
+  const toggleCompare = (listing: any) => {
+    setCompareList(prev => {
+      const exists = prev.find(l => l.id === listing.id);
+      if (exists) return prev.filter(l => l.id !== listing.id);
+      if (prev.length >= 3) return prev; // max 3
+      return [...prev, listing];
+    });
+  };
+  const isComparing = (id: string) => compareList.some(l => l.id === id);
+
   const bedsOpts = ["1", "2", "3", "4", "5"].map(v => ({ label: v, value: v }));
   const bathsOpts = ["1", "2", "3", "4"].map(v => ({ label: v, value: v }));
   const floorOpts = ["-1", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10+"].map(v => ({ label: v === "-1" ? "Basement" : v === "0" ? "Ground" : v, value: v }));
@@ -310,7 +313,7 @@ export default function Listings() {
       <MarketTicker />
 
       <div className="pt-16">
-        {/* Sticky search + top filters bar */}
+        {/* Sticky search bar */}
         <div className="bg-card border-b border-border sticky top-16 z-40">
           <div className="container py-4">
             <div className="flex gap-2 flex-wrap items-center">
@@ -376,6 +379,15 @@ export default function Listings() {
                 )}
               </Button>
 
+              {/* Save search – logged-in only */}
+              {user && (
+                <Button variant="outline" className="border-border gap-2 shrink-0"
+                  onClick={() => setShowSaveModal(true)}>
+                  <Bookmark className="w-4 h-4" />
+                  Save Search
+                </Button>
+              )}
+
               {/* View toggle */}
               <div className="flex rounded-xl border border-border overflow-hidden shrink-0">
                 <button onClick={() => setViewMode("grid")}
@@ -407,43 +419,23 @@ export default function Listings() {
           </div>
         </div>
 
-        {/* ── Advanced Filters Panel ────────────────────────────────────────── */}
+        {/* Advanced Filters Panel */}
         {showFilters && (
           <div className="bg-card border-b border-border shadow-sm">
             <div className="container py-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-
-                {/* Bedrooms range */}
-                <RangeSelector
-                  label="Bedrooms"
-                  value={bedsRange}
+                <RangeSelector label="Bedrooms" value={bedsRange}
                   onChange={([min, max]) => { setParam("beds_min", min); setParam("beds_max", max); }}
-                  options={bedsOpts}
-                />
-
-                {/* Bathrooms range */}
-                <RangeSelector
-                  label="Bathrooms"
-                  value={bathsRange}
+                  options={bedsOpts} />
+                <RangeSelector label="Bathrooms" value={bathsRange}
                   onChange={([min, max]) => { setParam("baths_min", min); setParam("baths_max", max); }}
-                  options={bathsOpts}
-                />
-
-                {/* Floor range */}
-                <RangeSelector
-                  label="Floor"
-                  value={floorRange}
+                  options={bathsOpts} />
+                <RangeSelector label="Floor" value={floorRange}
                   onChange={([min, max]) => { setParam("floor_min", min); setParam("floor_max", max); }}
-                  options={floorOpts}
-                />
-
-                {/* Year built range */}
-                <RangeSelector
-                  label="Year Built"
-                  value={yearRange}
+                  options={floorOpts} />
+                <RangeSelector label="Year Built" value={yearRange}
                   onChange={([min, max]) => { setParam("year_min", min); setParam("year_max", max); }}
-                  options={yearOpts}
-                />
+                  options={yearOpts} />
 
                 {/* Size range */}
                 <div>
@@ -488,33 +480,24 @@ export default function Listings() {
                   <label className="text-xs text-muted-foreground font-medium mb-2 block">Energy Class</label>
                   <div className="flex flex-wrap gap-1">
                     {ENERGY_CLASSES.map(ec => (
-                      <button
-                        key={ec}
-                        onClick={() => toggleMulti("energy", ec)}
+                      <button key={ec} onClick={() => toggleMulti("energy", ec)}
                         className={`px-2 py-1 rounded text-xs font-bold border transition-all ${
                           selectedEnergyClasses.includes(ec)
                             ? "bg-primary/20 border-primary text-primary"
                             : "bg-secondary border-border text-muted-foreground hover:border-primary/40"
-                        }`}
-                      >
-                        {ec}
-                      </button>
+                        }`}>{ec}</button>
                     ))}
                   </div>
                 </div>
-
               </div>
 
-              {/* Features checkboxes */}
+              {/* Features */}
               <div className="mt-5">
                 <label className="text-xs text-muted-foreground font-medium mb-3 block">Features</label>
                 <div className="flex flex-wrap gap-2">
                   {FEATURE_OPTIONS.map(feat => (
-                    <FilterChip
-                      key={feat.key}
-                      active={selectedFeatures.includes(feat.key)}
-                      onClick={() => toggleMulti("features", feat.key)}
-                    >
+                    <FilterChip key={feat.key} active={selectedFeatures.includes(feat.key)}
+                      onClick={() => toggleMulti("features", feat.key)}>
                       {feat.label}
                     </FilterChip>
                   ))}
@@ -534,7 +517,7 @@ export default function Listings() {
           </div>
         )}
 
-        {/* ── Results ──────────────────────────────────────────────────────── */}
+        {/* Results */}
         <div className="container py-8">
           <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
             <div className="flex items-center gap-3">
@@ -548,6 +531,12 @@ export default function Listings() {
               </span>
             </div>
             <div className="flex items-center gap-3">
+              {compareList.length > 0 && (
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-accent/10 border border-accent/20 text-xs text-accent font-medium">
+                  <GitCompare className="w-3.5 h-3.5" />
+                  {compareList.length} selected to compare
+                </div>
+              )}
               <div className="hidden md:flex items-center gap-2 px-3 py-2 rounded-xl bg-brand-gold/10 border border-brand-gold/20">
                 <Gavel className="w-4 h-4 text-brand-gold" />
                 <span className="text-sm text-brand-gold font-medium">47 auctions this week</span>
@@ -580,22 +569,50 @@ export default function Listings() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {filtered.map((property: any) => (
-                  <PropertyCard key={property.id} property={property as any} />
+                  <div key={property.id} className="relative group">
+                    <PropertyCard property={property as any} />
+                    {/* Compare toggle */}
+                    <button
+                      onClick={() => toggleCompare(property)}
+                      title={isComparing(property.id) ? "Remove from comparison" : compareList.length >= 3 ? "Max 3 properties" : "Add to comparison"}
+                      disabled={!isComparing(property.id) && compareList.length >= 3}
+                      className={`absolute top-2 left-2 z-10 flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold border transition-all shadow-card ${
+                        isComparing(property.id)
+                          ? "bg-accent/90 border-accent text-accent-foreground"
+                          : compareList.length >= 3
+                          ? "bg-secondary/80 border-border text-muted-foreground opacity-50 cursor-not-allowed"
+                          : "bg-card/80 border-border text-muted-foreground hover:border-accent/60 hover:text-accent backdrop-blur-sm opacity-0 group-hover:opacity-100"
+                      }`}
+                    >
+                      <GitCompare className="w-3 h-3" />
+                      {isComparing(property.id) ? "✓" : "Compare"}
+                    </button>
+                  </div>
                 ))}
               </div>
             )
           ) : (
-            <div className="glass-card rounded-xl overflow-hidden aspect-[16/7] flex items-center justify-center">
-              <div className="text-center">
-                <Map className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-                <p className="text-muted-foreground">Interactive map view</p>
-                <p className="text-xs text-muted-foreground mt-1">Connect Mapbox or Google Maps to enable</p>
-              </div>
-            </div>
+            <MapView listings={filtered} />
           )}
         </div>
       </div>
+
       <Footer />
+
+      {/* Compare drawer */}
+      <CompareDrawer
+        listings={compareList}
+        onRemove={id => setCompareList(prev => prev.filter(l => l.id !== id))}
+        onClear={() => setCompareList([])}
+      />
+
+      {/* Save search modal */}
+      {showSaveModal && (
+        <SaveSearchModal
+          currentFilters={currentFilters}
+          onClose={() => setShowSaveModal(false)}
+        />
+      )}
     </div>
   );
 }
