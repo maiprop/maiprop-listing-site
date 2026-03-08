@@ -17,7 +17,7 @@ import { AISearchBar } from "@/components/AISearchBar";
 import { mockProperties } from "@/data/mockProperties";
 import { useListings } from "@/hooks/useListings";
 import { useAuth } from "@/contexts/AuthContext";
-import { PROPERTY_TYPES, PROPERTY_TYPE_MAP, getTypeLabel, getSubtypeLabel, type PropertyTypeKey } from "@/lib/propertyTypes";
+import { PROPERTY_TYPES, PROPERTY_GROUPS, PROPERTY_TYPE_MAP, getTypeLabel, getSubtypeLabel, type PropertyTypeKey } from "@/lib/propertyTypes";
 import {
   getFilterConfig,
   FEATURES_RESIDENTIAL, FEATURES_COMMERCIAL, FEATURES_OFFICE, FEATURES_LAND,
