@@ -97,8 +97,9 @@ export default {
         "gradient-warm": "var(--gradient-warm)",
       },
       boxShadow: {
-        "glow-cyan": "var(--shadow-glow-cyan)",
-        "glow-purple": "var(--shadow-glow-purple)",
+        "shadow-glow-cyan": "var(--shadow-glow-amber)",
+        "shadow-glow-amber": "var(--shadow-glow-amber)",
+        "shadow-glow-purple": "var(--shadow-glow-coral)",
         card: "var(--shadow-card)",
         elevated: "var(--shadow-elevated)",
       },
