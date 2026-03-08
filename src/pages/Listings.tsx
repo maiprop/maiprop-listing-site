@@ -239,6 +239,7 @@ export default function Listings() {
   const searchQuery = getParam("city");
   const selectedListingType = getParam("listing_type");
   const selectedType = getParam("type");
+  const selectedSubtype = getParam("subtype");
   const selectedPrice = getParam("price");
   const selectedSort = getParam("sort", "relevant");
   const bedsRange: [string, string] = [getParam("beds_min"), getParam("beds_max")];
@@ -289,6 +290,8 @@ export default function Listings() {
     }
     if (selectedHeating && raw.heating_system !== selectedHeating) return false;
     if (selectedConstruction && raw.construction_status !== selectedConstruction) return false;
+    // Subtype filter (stored in commercial_subtype for DB listings, or matched via tags/type for mock)
+    if (selectedSubtype && raw.commercial_subtype && raw.commercial_subtype !== selectedSubtype) return false;
     return true;
   });
 
@@ -298,7 +301,7 @@ export default function Listings() {
   if (selectedSort === "views") filtered = [...filtered].sort((a: any, b: any) => (b.views || 0) - (a.views || 0));
 
   const activeFilterCount = [
-    selectedType, selectedListingType, selectedPrice,
+    selectedType, selectedSubtype, selectedListingType, selectedPrice,
     bedsRange[0], bedsRange[1], bathsRange[0], bathsRange[1],
     floorRange[0], floorRange[1], yearRange[0], yearRange[1],
     minSqm, maxSqm, selectedHeating, selectedConstruction,
