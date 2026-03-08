@@ -938,6 +938,215 @@ export default function InvestorDashboard() {
               <p className="text-sm text-muted-foreground">This section is only available to platform admins.</p>
             </div>
           )}
+
+          {/* ─────────────── SUBSCRIBERS TAB ─────────────── */}
+          {activeTab === "subscribers" && isAdmin && (
+            <div className="space-y-6">
+              {/* Sub KPI strip */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                  { label: "Total Subscribers", value: allSubs.length, color: "text-foreground", icon: Users },
+                  { label: "Active", value: allSubs.filter(s => s.status === "active").length, color: "text-brand-emerald", icon: UserCheck },
+                  { label: "Trial", value: allSubs.filter(s => s.status === "trial").length, color: "text-brand-gold", icon: Clock },
+                  { label: "Cancelled / Expired", value: allSubs.filter(s => s.status === "cancelled" || s.status === "expired").length, color: "text-destructive", icon: Ban },
+                ].map(s => (
+                  <div key={s.label} className="glass-card rounded-xl border border-border p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{s.label}</p>
+                      <s.icon className={`w-3.5 h-3.5 ${s.color}`} />
+                    </div>
+                    <p className={`font-display font-black text-2xl ${s.color}`}>{s.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* MRR estimate */}
+              <div className="glass-card rounded-xl border border-primary/20 p-4 flex items-center justify-between flex-wrap gap-4">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Estimated MRR</p>
+                  <p className="font-display font-black text-2xl text-primary">
+                    €{(
+                      allSubs.filter(s => s.status === "active" && s.tier === "analyst").length * 490 +
+                      allSubs.filter(s => s.status === "active" && s.tier === "institutional").length * 1490
+                    ).toLocaleString()}
+                  </p>
+                </div>
+                <Button size="sm" variant="outline" className="border-border text-xs h-8 gap-1.5" onClick={loadAllSubs}>
+                  <RefreshCw className={`w-3 h-3 ${subsLoading ? "animate-spin" : ""}`} /> Refresh
+                </Button>
+              </div>
+
+              {/* Filter */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {(["all", "active", "trial", "cancelled", "expired"] as const).map(s => (
+                  <button
+                    key={s}
+                    onClick={() => setSubsFilter(s)}
+                    className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-all capitalize ${
+                      subsFilter === s ? "bg-primary text-primary-foreground border-primary" : "text-muted-foreground border-border hover:border-primary/40"
+                    }`}
+                  >
+                    {s === "all" ? `All (${allSubs.length})` : `${s} (${allSubs.filter(x => x.status === s).length})`}
+                  </button>
+                ))}
+              </div>
+
+              {/* Subscriber rows */}
+              {subsLoading ? (
+                <div className="flex items-center justify-center py-20">
+                  <RefreshCw className="w-6 h-6 text-muted-foreground animate-spin" />
+                </div>
+              ) : allSubs.filter(s => subsFilter === "all" || s.status === subsFilter).length === 0 ? (
+                <div className="text-center py-20">
+                  <Users className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
+                  <p className="text-sm text-muted-foreground">No subscribers yet.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {allSubs
+                    .filter(s => subsFilter === "all" || s.status === subsFilter)
+                    .map(sub => {
+                      const isEditing = editingSubId === sub.id;
+                      const subDaysLeft = daysUntilExpiry(sub.expires_at);
+                      const tierConfig: Record<string, { color: string; price: string }> = {
+                        analyst: { color: "text-primary border-primary/20 bg-primary/10", price: "€490/mo" },
+                        institutional: { color: "text-accent border-accent/20 bg-accent/10", price: "€1,490/mo" },
+                        sovereign: { color: "text-brand-gold border-brand-gold/20 bg-brand-gold/10", price: "Custom" },
+                      };
+                      const statusColor: Record<string, string> = {
+                        active: "text-brand-emerald border-brand-emerald/20 bg-brand-emerald/10",
+                        trial: "text-brand-gold border-brand-gold/20 bg-brand-gold/10",
+                        cancelled: "text-destructive border-destructive/20 bg-destructive/10",
+                        expired: "text-muted-foreground border-border bg-muted",
+                      };
+                      return (
+                        <div key={sub.id} className="glass-card rounded-xl border border-border overflow-hidden">
+                          <div className="p-4 flex items-center gap-4 flex-wrap">
+                            {/* Avatar initial */}
+                            <div className="w-9 h-9 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center font-bold text-sm text-primary shrink-0 uppercase">
+                              {(sub.display_name || "?")[0]}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-sm truncate">{sub.display_name || "Unknown"}</p>
+                              <p className="text-[10px] text-muted-foreground">
+                                Since {new Date(sub.started_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                                {sub.expires_at && (
+                                  <> · Expires {new Date(sub.expires_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</>
+                                )}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 flex-wrap shrink-0">
+                              <span className={`text-[10px] font-bold uppercase tracking-widest border px-2 py-0.5 rounded-full capitalize ${tierConfig[sub.tier]?.color}`}>
+                                {sub.tier} · {tierConfig[sub.tier]?.price}
+                              </span>
+                              <span className={`text-[10px] font-bold uppercase tracking-widest border px-2 py-0.5 rounded-full capitalize ${statusColor[sub.status]}`}>
+                                {sub.status}
+                              </span>
+                              {subDaysLeft !== null && subDaysLeft <= 7 && subDaysLeft >= 0 && (
+                                <span className="text-[10px] font-bold text-destructive border border-destructive/20 bg-destructive/10 px-2 py-0.5 rounded-full">
+                                  Expires in {subDaysLeft}d
+                                </span>
+                              )}
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-border text-xs h-8 gap-1"
+                              onClick={() => {
+                                if (isEditing) { setEditingSubId(null); return; }
+                                setEditingSubId(sub.id);
+                                setEditTier(sub.tier);
+                                setEditExpiry(sub.expires_at ? sub.expires_at.slice(0, 10) : "");
+                              }}
+                            >
+                              {isEditing ? "Cancel" : "Edit"}
+                            </Button>
+                          </div>
+
+                          {/* Inline edit panel */}
+                          {isEditing && (
+                            <div className="border-t border-border p-4 bg-muted/20 space-y-4">
+                              <div className="grid sm:grid-cols-3 gap-4">
+                                <div>
+                                  <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5 block">Tier</label>
+                                  <select
+                                    value={editTier}
+                                    onChange={e => setEditTier(e.target.value)}
+                                    className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-xs text-foreground outline-none focus:border-primary"
+                                  >
+                                    <option value="analyst">Analyst — €490/mo</option>
+                                    <option value="institutional">Institutional — €1,490/mo</option>
+                                    <option value="sovereign">Sovereign — Custom</option>
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5 block">Status</label>
+                                  <select
+                                    value={sub.status}
+                                    onChange={e => handleSubUpdate(sub.id, { status: e.target.value as Subscription["status"] })}
+                                    className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-xs text-foreground outline-none focus:border-primary"
+                                  >
+                                    <option value="active">Active</option>
+                                    <option value="trial">Trial</option>
+                                    <option value="cancelled">Cancelled</option>
+                                    <option value="expired">Expired</option>
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5 block">Expiry Date</label>
+                                  <input
+                                    type="date"
+                                    value={editExpiry}
+                                    onChange={e => setEditExpiry(e.target.value)}
+                                    className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-xs text-foreground outline-none focus:border-primary"
+                                  />
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <Button
+                                  size="sm"
+                                  className="bg-gradient-primary border-0 text-primary-foreground text-xs h-8 gap-1.5"
+                                  onClick={() => handleSubUpdate(sub.id, {
+                                    tier: editTier as Subscription["tier"],
+                                    expires_at: editExpiry ? new Date(editExpiry).toISOString() : null,
+                                  })}
+                                >
+                                  <Save className="w-3 h-3" /> Save Changes
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="border-destructive/40 text-destructive text-xs h-8 gap-1.5"
+                                  onClick={() => handleSubUpdate(sub.id, { status: "cancelled" })}
+                                >
+                                  <Ban className="w-3 h-3" /> Cancel Sub
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="border-brand-emerald/40 text-brand-emerald text-xs h-8 gap-1.5"
+                                  onClick={() => handleSubUpdate(sub.id, { status: "active", tier: editTier as Subscription["tier"] })}
+                                >
+                                  <ArrowUpCircle className="w-3 h-3" /> Upgrade & Activate
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === "subscribers" && !isAdmin && (
+            <div className="text-center py-24">
+              <ShieldCheck className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+              <p className="font-display font-bold text-xl mb-2">Admin Access Required</p>
+            </div>
+          )}
+
         </div>
 
         {/* ── Subscription Gate / Pricing modal ── */}
