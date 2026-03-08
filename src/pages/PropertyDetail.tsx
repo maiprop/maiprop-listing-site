@@ -653,12 +653,17 @@ export default function PropertyDetail() {
 
               {/* Feature sections — Spitogatos style */}
               {hasAnyFeatures && (
-                <div className="glass-card rounded-xl p-6 space-y-5">
-                  <h3 className="font-display font-semibold">Features & Amenities</h3>
-                  <FeatureSection title="Internal" features={internalFeatures} />
-                  <FeatureSection title="External" features={externalFeatures} />
-                  <FeatureSection title="Construction" features={constructionFeatures} />
-                  <FeatureSection title="Suitable For" features={suitabilityFeatures} />
+                <div className="glass-card rounded-xl p-6 space-y-6 border border-border">
+                  <h3 className="font-display font-semibold flex items-center gap-2">
+                    Features & Amenities
+                    <span className="text-xs font-normal text-muted-foreground">
+                      {internalFeatures.length + externalFeatures.length + constructionFeatures.length + suitabilityFeatures.length} total
+                    </span>
+                  </h3>
+                  <FeatureSection title="Internal" features={internalFeatures} color="bg-primary" />
+                  <FeatureSection title="External" features={externalFeatures} color="bg-brand-emerald" />
+                  <FeatureSection title="Construction" features={constructionFeatures} color="bg-accent" />
+                  <FeatureSection title="Suitable For" features={suitabilityFeatures} color="bg-brand-gold" />
                 </div>
               )}
 
