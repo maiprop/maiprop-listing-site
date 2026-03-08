@@ -544,28 +544,64 @@ export default function PropertyDetail() {
                 </div>
 
                 {/* Energy class visual badge */}
-                {energyClass && energyClass !== "Exempt" && ENERGY_COLORS[energyClass] && (
-                  <div className="mt-5 pt-5 border-t border-border">
-                    <div className="text-xs text-muted-foreground mb-2 font-semibold uppercase tracking-wider">Energy Performance Certificate</div>
-                    <div className="flex items-center gap-3">
-                      <div className={`px-4 py-2 rounded-lg font-display font-black text-2xl ${ENERGY_COLORS[energyClass]}`}>
-                        {energyClass}
+                {energyClass && energyClass !== "Exempt" && ENERGY_COLORS[energyClass] && (() => {
+                  const energyData = ENERGY_SCALE.find(e => e.cls === energyClass);
+                  return (
+                    <div className="mt-5 pt-5 border-t border-border">
+                      <div className="text-xs text-muted-foreground mb-3 font-semibold uppercase tracking-wider flex items-center gap-2">
+                        <Zap className="w-3.5 h-3.5" /> Energy Performance Certificate
                       </div>
-                      <div className="flex-1">
-                        {/* Energy scale bar */}
-                        <div className="flex gap-0.5 mb-1">
-                          {["A+","A","B+","B","C","D","E","F","G"].map(cls => (
-                            <div key={cls}
-                              className={`h-4 flex-1 rounded-sm text-[8px] flex items-center justify-center font-bold ${ENERGY_COLORS[cls]} ${cls === energyClass ? "scale-110 z-10 relative ring-2 ring-foreground" : "opacity-40"}`}>
-                              {cls === energyClass ? cls : ""}
-                            </div>
-                          ))}
+                      {/* Spitogatos-style horizontal arrow scale */}
+                      <div className="relative">
+                        {/* Scale bars */}
+                        <div className="flex gap-0.5 items-end mb-1">
+                          {ENERGY_SCALE.map((e, i) => {
+                            const isActive = e.cls === energyClass;
+                            const barH = 16 + i * 4; // graduated heights
+                            return (
+                              <div key={e.cls} className="flex-1 flex flex-col items-center gap-0.5">
+                                {isActive && (
+                                  <div className="text-[9px] font-black text-foreground leading-none">▼</div>
+                                )}
+                                <div
+                                  style={{ backgroundColor: e.hex, height: `${barH}px`, opacity: isActive ? 1 : 0.55 }}
+                                  className={`w-full rounded-sm flex items-end justify-center pb-0.5 transition-all ${isActive ? "ring-2 ring-foreground ring-offset-1 ring-offset-card" : ""}`}
+                                >
+                                  <span className={`text-[8px] font-bold leading-none ${i > 2 ? "text-black" : "text-white"} ${i >= 4 ? "text-black" : "text-white"}`}
+                                    style={{ color: ["B","C","D"].includes(e.cls) ? "#000" : "#fff" }}>
+                                    {e.cls}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
-                        <p className="text-[10px] text-muted-foreground">{ENERGY_DESCRIPTIONS[energyClass]}</p>
+                        {/* Active class description */}
+                        {energyData && (
+                          <div className="flex items-center gap-2 mt-2">
+                            <div className={`px-2 py-0.5 rounded text-xs font-black ${ENERGY_COLORS[energyClass]}`}>
+                              {energyClass}
+                            </div>
+                            <span className="text-xs text-muted-foreground">{energyData.desc}</span>
+                          </div>
+                        )}
+                        {/* Percentage bar */}
+                        {energyData && (
+                          <div className="mt-2">
+                            <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
+                              <span>Energy Efficiency</span>
+                              <span>{100 - energyData.pct}%</span>
+                            </div>
+                            <div className="h-1.5 bg-border rounded-full overflow-hidden">
+                              <div className="h-full rounded-full transition-all"
+                                style={{ width: `${100 - energyData.pct}%`, backgroundColor: energyData.hex }} />
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
 
               {/* Description */}
