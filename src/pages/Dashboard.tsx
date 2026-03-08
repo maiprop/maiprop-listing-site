@@ -2,8 +2,8 @@ import { useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import {
   Home, Plus, BarChart2, MessageSquare, Heart, Settings, User,
-  TrendingUp, Eye, Bell, LogOut, Building2, Gavel, CheckCircle,
-  Loader2, Calendar, Edit, Trash2, ToggleLeft, ToggleRight
+  Eye, Bell, BellOff, LogOut, Building2, Gavel, CheckCircle,
+  Loader2, Calendar, Trash2, ToggleLeft, ToggleRight, Bookmark, Search
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -11,7 +11,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useMyListings, useUpdateListing, useDeleteListing } from "@/hooks/useListings";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useViewings } from "@/hooks/useViewings";
-import { mockProperties } from "@/data/mockProperties";
+import { useSavedSearches, useDeleteSavedSearch, useToggleSavedSearchAlert } from "@/hooks/useSavedSearches";
 import { PropertyCard } from "@/components/PropertyCard";
 import { toast } from "sonner";
 
@@ -20,6 +20,7 @@ const navItems = [
   { icon: Building2, label: "My Listings", key: "listings" },
   { icon: BarChart2, label: "Analytics", key: "analytics" },
   { icon: Heart, label: "Saved", key: "saved" },
+  { icon: Bookmark, label: "Saved Searches", key: "saved-searches" },
   { icon: MessageSquare, label: "Messages", key: "messages" },
   { icon: Calendar, label: "Viewings", key: "viewings" },
   { icon: Gavel, label: "Auctions", key: "auctions" },
