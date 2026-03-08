@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import {
   Search, SlidersHorizontal, MapPin, LayoutGrid, Map, ChevronDown,
@@ -167,6 +167,148 @@ function FilterChip({ active, onClick, children }: {
   );
 }
 
+// ─── ListingTypeButton ────────────────────────────────────────────────────────
+
+function ListingTypeButton({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const current = listingTypeOptions.find(o => o.value === value) || listingTypeOptions[0];
+
+  return (
+    <div ref={ref} className="relative shrink-0">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-medium transition-all whitespace-nowrap ${
+          value
+            ? "border-primary bg-primary/10 text-primary"
+            : "border-border bg-secondary text-foreground hover:border-primary/40"
+        }`}
+      >
+        <span>{current.icon}</span>
+        <span>{current.label}</span>
+        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="absolute top-full mt-1 left-0 z-50 bg-card border border-border rounded-xl shadow-lg overflow-hidden min-w-[160px]">
+          {listingTypeOptions.map(o => (
+            <button
+              key={o.value}
+              onClick={() => { onChange(o.value); setOpen(false); }}
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left transition-colors hover:bg-secondary ${
+                value === o.value ? "text-primary bg-primary/10" : "text-foreground"
+              }`}
+            >
+              <span>{o.icon}</span>
+              <span>{o.label}</span>
+              {value === o.value && <Check className="w-3.5 h-3.5 ml-auto" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── PropertyTypeButton ───────────────────────────────────────────────────────
+
+function PropertyTypeButton({
+  value, subtype, onTypeChange, onSubtypeChange,
+}: {
+  value: string; subtype: string;
+  onTypeChange: (v: string) => void;
+  onSubtypeChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const currentType = value ? PROPERTY_TYPE_MAP[value as PropertyTypeKey] : null;
+  const currentSubtype = currentType?.subtypes.find(s => s.value === subtype);
+
+  const label = currentSubtype
+    ? `${currentType!.emoji} ${currentSubtype.label}`
+    : currentType
+    ? `${currentType.emoji} ${currentType.label}`
+    : "🏘️ All Types";
+
+  return (
+    <div ref={ref} className="relative shrink-0">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-medium transition-all whitespace-nowrap ${
+          value
+            ? "border-primary bg-primary/10 text-primary"
+            : "border-border bg-secondary text-foreground hover:border-primary/40"
+        }`}
+      >
+        <span>{label}</span>
+        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="absolute top-full mt-1 left-0 z-50 bg-card border border-border rounded-xl shadow-lg overflow-hidden min-w-[220px]">
+          {/* All types option */}
+          <button
+            onClick={() => { onTypeChange(""); onSubtypeChange(""); setOpen(false); }}
+            className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left transition-colors hover:bg-secondary ${
+              !value ? "text-primary bg-primary/10" : "text-foreground"
+            }`}
+          >
+            <span>🏘️</span><span className="font-medium">All Types</span>
+            {!value && <Check className="w-3.5 h-3.5 ml-auto" />}
+          </button>
+          <div className="h-px bg-border mx-2" />
+          {PROPERTY_TYPES.map(pt => (
+            <div key={pt.value}>
+              {/* Main type row */}
+              <button
+                onClick={() => { onTypeChange(pt.value); onSubtypeChange(""); if (!pt.subtypes.length) setOpen(false); }}
+                className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left transition-colors hover:bg-secondary ${
+                  value === pt.value && !subtype ? "text-primary bg-primary/10" : "text-foreground"
+                }`}
+              >
+                <span>{pt.emoji}</span>
+                <span className="font-medium">{pt.label}</span>
+                {value === pt.value && !subtype && <Check className="w-3.5 h-3.5 ml-auto" />}
+              </button>
+              {/* Subtypes — show when this type is selected */}
+              {value === pt.value && pt.subtypes.map(st => (
+                <button
+                  key={st.value}
+                  onClick={() => { onSubtypeChange(st.value); setOpen(false); }}
+                  title={st.description}
+                  className={`w-full flex items-center gap-2.5 pl-8 pr-3 py-2 text-xs text-left transition-colors hover:bg-secondary ${
+                    subtype === st.value ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <ChevronRight className="w-3 h-3 shrink-0" />
+                  <span>{st.label}</span>
+                  {subtype === st.value && <Check className="w-3 h-3 ml-auto" />}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function Listings() {
@@ -301,7 +443,7 @@ export default function Listings() {
   if (selectedSort === "views") filtered = [...filtered].sort((a: any, b: any) => (b.views || 0) - (a.views || 0));
 
   const activeFilterCount = [
-    selectedType, selectedSubtype, selectedListingType, selectedPrice,
+    selectedType, selectedSubtype, selectedPrice,
     bedsRange[0], bedsRange[1], bathsRange[0], bathsRange[1],
     floorRange[0], floorRange[1], yearRange[0], yearRange[1],
     minSqm, maxSqm, selectedHeating, selectedConstruction,
@@ -363,14 +505,19 @@ export default function Listings() {
                 )}
               </div>
 
-              {/* Listing type */}
-              <div className="relative">
-                <select value={selectedListingType} onChange={e => setParam("listing_type", e.target.value)}
-                  className="appearance-none bg-secondary border border-border rounded-xl px-3 py-2.5 pr-7 text-sm text-foreground cursor-pointer outline-none focus:border-primary">
-                  {listingTypeOptions.map(o => <option key={o.value} value={o.value} className="bg-card">{o.icon} {o.label}</option>)}
-                </select>
-                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-              </div>
+              {/* Listing type button */}
+              <ListingTypeButton
+                value={selectedListingType}
+                onChange={v => setParam("listing_type", v)}
+              />
+
+              {/* Property type button */}
+              <PropertyTypeButton
+                value={selectedType}
+                subtype={selectedSubtype}
+                onTypeChange={v => { setParam("type", v); setParam("subtype", ""); }}
+                onSubtypeChange={v => setParam("subtype", v)}
+              />
 
               {/* Price */}
               <div className="relative">
@@ -433,64 +580,7 @@ export default function Listings() {
               </div>
             </div>
 
-            {/* Property type strip — icon chips */}
-            <div className="flex items-center gap-1.5 mt-3 overflow-x-auto pb-1 scrollbar-hide">
-              <button
-                onClick={() => { setParam("type", ""); setParam("subtype", ""); }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold whitespace-nowrap transition-all shrink-0 ${
-                  !selectedType
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-border bg-secondary text-muted-foreground hover:text-foreground hover:border-primary/40"
-                }`}
-              >
-                🏘️ All Types
-              </button>
-              {PROPERTY_TYPES.map(pt => (
-                <button
-                  key={pt.value}
-                  onClick={() => { setParam("type", pt.value); setParam("subtype", ""); }}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold whitespace-nowrap transition-all shrink-0 ${
-                    selectedType === pt.value
-                      ? `border-primary bg-primary/10 text-primary`
-                      : "border-border bg-secondary text-muted-foreground hover:text-foreground hover:border-primary/40"
-                  }`}
-                >
-                  {pt.emoji} {pt.label}
-                </button>
-              ))}
-            </div>
 
-            {/* Subtype strip — appears when a type is selected */}
-            {selectedType && PROPERTY_TYPE_MAP[selectedType as PropertyTypeKey] && (
-              <div className="flex items-center gap-1.5 mt-2 overflow-x-auto pb-1 scrollbar-hide">
-                <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                <span className="text-xs text-muted-foreground shrink-0 mr-1">Subtype:</span>
-                <button
-                  onClick={() => setParam("subtype", "")}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border text-xs font-medium whitespace-nowrap transition-all shrink-0 ${
-                    !selectedSubtype
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border bg-secondary text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  All {PROPERTY_TYPE_MAP[selectedType as PropertyTypeKey]?.labelPlural}
-                </button>
-                {PROPERTY_TYPE_MAP[selectedType as PropertyTypeKey]?.subtypes.map(st => (
-                  <button
-                    key={st.value}
-                    onClick={() => setParam("subtype", st.value)}
-                    title={st.description}
-                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border text-xs font-medium whitespace-nowrap transition-all shrink-0 ${
-                      selectedSubtype === st.value
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-border bg-secondary text-muted-foreground hover:text-foreground hover:border-primary/40"
-                    }`}
-                  >
-                    {st.label}
-                  </button>
-                ))}
-              </div>
-            )}
 
             {/* Active filter chips */}
             {activeFilterCount > 0 && (
@@ -498,7 +588,7 @@ export default function Listings() {
                 <span className="text-xs text-muted-foreground">Active:</span>
                 {selectedType && <button onClick={() => { setParam("type", ""); setParam("subtype", ""); }} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{PROPERTY_TYPE_MAP[selectedType as PropertyTypeKey]?.emoji} {getTypeLabel(selectedType)} <X className="w-3 h-3" /></button>}
                 {selectedSubtype && selectedType && <button onClick={() => setParam("subtype", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{getSubtypeLabel(selectedType, selectedSubtype)} <X className="w-3 h-3" /></button>}
-                {selectedListingType && <button onClick={() => setParam("listing_type", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{listingTypeOptions.find(o => o.value === selectedListingType)?.label} <X className="w-3 h-3" /></button>}
+                
                 {selectedPrice && <button onClick={() => setParam("price", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{priceRanges.find(r => r.value === selectedPrice)?.label} <X className="w-3 h-3" /></button>}
                 {bedsRange[0] && <button onClick={() => setParam("beds_min", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{bedsRange[0]}+ beds <X className="w-3 h-3" /></button>}
                 {selectedEnergyClasses.map(ec => <button key={ec} onClick={() => toggleMulti("energy", ec)} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">Energy {ec} <X className="w-3 h-3" /></button>)}
