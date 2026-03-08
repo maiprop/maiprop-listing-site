@@ -596,7 +596,7 @@ export default function InvestorDashboard() {
             </div>
 
             {/* Tab bar */}
-            <div className="flex items-center gap-1 mt-8">
+            <div className="flex items-center gap-1 mt-8 flex-wrap">
               <button
                 onClick={() => setActiveTab("deals")}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === "deals" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-secondary"}`}
@@ -605,18 +605,49 @@ export default function InvestorDashboard() {
                 Deal Feed
               </button>
               {isAdmin && (
-                <button
-                  onClick={() => setActiveTab("admin")}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === "admin" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-secondary"}`}
-                >
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  Admin Pipeline
-                  {adminDeals.length > 0 && <span className="text-[10px] bg-destructive text-destructive-foreground rounded-full px-1.5 py-0.5 font-bold">{adminStats.pending}</span>}
-                </button>
+                <>
+                  <button
+                    onClick={() => setActiveTab("admin")}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === "admin" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-secondary"}`}
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    Admin Pipeline
+                    {adminStats.pending > 0 && <span className="text-[10px] bg-destructive text-destructive-foreground rounded-full px-1.5 py-0.5 font-bold">{adminStats.pending}</span>}
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("subscribers")}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === "subscribers" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-secondary"}`}
+                  >
+                    <CreditCard className="w-3.5 h-3.5" />
+                    Subscribers
+                    {allSubs.length > 0 && <span className="text-[10px] bg-brand-gold text-background rounded-full px-1.5 py-0.5 font-bold">{allSubs.length}</span>}
+                  </button>
+                </>
               )}
             </div>
           </div>
         </div>
+
+        {/* ── Expiry warning banner ── */}
+        {showExpiryWarning && (
+          <div className="border-b border-destructive/20 bg-destructive/5">
+            <div className="container py-3 flex items-center gap-3 flex-wrap">
+              <AlertCircle className="w-4 h-4 text-destructive shrink-0" />
+              <p className="text-sm text-destructive font-semibold flex-1 min-w-0">
+                Your <span className="capitalize">{subscription?.tier}</span> subscription expires in{" "}
+                <strong>{daysLeft === 0 ? "less than 1 day" : `${daysLeft} day${daysLeft === 1 ? "" : "s"}`}</strong>.
+                Renew now to keep full deal access.
+              </p>
+              <Button
+                size="sm"
+                className="bg-destructive hover:bg-destructive/90 text-destructive-foreground text-xs h-8 shrink-0"
+                onClick={() => setShowGate(true)}
+              >
+                Renew Subscription
+              </Button>
+            </div>
+          </div>
+        )}
 
         <div className="container py-8">
           {/* ─────────────── DEAL FEED TAB ─────────────── */}
