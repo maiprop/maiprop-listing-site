@@ -3,8 +3,9 @@ import { useNavigate } from "react-router-dom";
 import {
   ChevronLeft, ChevronRight, Check, Upload, X, Loader2,
   Home, Building2, Zap, MapPin, DollarSign, Image as ImageIcon,
-  Info, GripVertical, Star
+  Info, GripVertical, Star, ChevronDown
 } from "lucide-react";
+import { PROPERTY_TYPES, PROPERTY_TYPE_MAP, type PropertyTypeKey } from "@/lib/propertyTypes";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { supabase } from "@/integrations/supabase/client";
