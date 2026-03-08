@@ -317,7 +317,7 @@ export default function InvestorDashboard() {
       .select("*")
       .eq("user_id", user.id)
       .maybeSingle();
-    setSubscription(data as Subscription | null);
+    setSubscription(data as unknown as Subscription | null);
     setSubLoading(false);
   }, [user]);
 
