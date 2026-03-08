@@ -119,7 +119,7 @@ export function MapView({ listings }: { listings: MapListing[] }) {
   return (
     <div className="rounded-2xl overflow-hidden border border-border shadow-card" style={{ height: "calc(100vh - 14rem)" }}>
       <Map
-        mapboxAccessToken={import.meta.env.VITE_MAPBOX_TOKEN}
+        mapboxAccessToken={MAPBOX_TOKEN}
         initialViewState={initialView}
         style={{ width: "100%", height: "100%" }}
         mapStyle="mapbox://styles/mapbox/dark-v11"
