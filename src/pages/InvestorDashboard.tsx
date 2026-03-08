@@ -312,7 +312,7 @@ export default function InvestorDashboard() {
   const navigate = useNavigate();
 
   const isAdmin = profile?.role === "agent";
-  const [activeTab, setActiveTab] = useState<"deals" | "admin">("deals");
+  const [activeTab, setActiveTab] = useState<"deals" | "admin" | "subscribers">("deals");
 
   // Subscription state (loaded from DB)
   const [subscription, setSubscription] = useState<Subscription | null>(null);
@@ -320,6 +320,18 @@ export default function InvestorDashboard() {
   const subscribed = subscription?.status === "active" || subscription?.status === "trial";
   const [showGate, setShowGate] = useState(false);
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
+
+  // Admin subscribers list
+  const [allSubs, setAllSubs] = useState<AdminSubscription[]>([]);
+  const [subsLoading, setSubsLoading] = useState(false);
+  const [subsFilter, setSubsFilter] = useState<"all" | "active" | "trial" | "cancelled" | "expired">("all");
+  const [editingSubId, setEditingSubId] = useState<string | null>(null);
+  const [editTier, setEditTier] = useState<string>("");
+  const [editExpiry, setEditExpiry] = useState<string>("");
+
+  // Expiry warning
+  const daysLeft = daysUntilExpiry(subscription?.expires_at ?? null);
+  const showExpiryWarning = subscribed && daysLeft !== null && daysLeft <= 7 && daysLeft >= 0;
 
   // Load subscription from DB
   const loadSubscription = useCallback(async () => {
