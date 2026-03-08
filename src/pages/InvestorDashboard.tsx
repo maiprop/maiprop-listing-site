@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Flame, Lock, BarChart2, TrendingUp, TrendingDown, MapPin, Euro,
-  Building2, Star, Eye, EyeOff, Shield, ChevronRight, Zap,
-  Download, Filter, Search, SlidersHorizontal, Check, Clock,
+  Flame, Lock, BarChart2, TrendingUp, TrendingDown, MapPin,
+  Building2, ChevronRight, Zap,
+  SlidersHorizontal, Check, Clock,
   Users, DollarSign, Activity, ArrowUpRight, Phone, Mail,
-  Crown, Sparkles, AlertCircle, RefreshCw, Settings, Pencil,
-  ChevronDown, FileText, Save, X, LayoutGrid, ShieldCheck
+  Crown, Sparkles, AlertCircle, RefreshCw,
+  ChevronDown, FileText, Save, LayoutGrid, ShieldCheck,
+  Calendar, Ban, ArrowUpCircle, UserCheck, CreditCard
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -23,6 +24,18 @@ type Subscription = {
   started_at: string;
   expires_at: string | null;
 };
+
+type AdminSubscription = Subscription & {
+  display_name?: string | null;
+  email?: string | null;
+};
+
+// Days until expiry (null = never / no expiry set)
+function daysUntilExpiry(expiresAt: string | null): number | null {
+  if (!expiresAt) return null;
+  const diff = new Date(expiresAt).getTime() - Date.now();
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+}
 
 // ─── Subscription tiers ───────────────────────────────────────────────────────
 const TIERS = [
