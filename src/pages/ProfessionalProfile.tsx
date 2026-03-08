@@ -2,18 +2,19 @@ import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
   MapPin, Star, CheckCircle, Globe, ExternalLink,
-  ChevronLeft, Clock, Award, Users, Briefcase, MessageSquare,
+  ChevronLeft, Clock, Users, Briefcase, MessageSquare,
   Calendar, Shield, Loader2, Languages, ChevronRight,
-  Phone, Mail, Euro, FileText, ThumbsUp, Zap, Building2
+  Phone, Euro, FileText, ThumbsUp, Zap, Building2, Video
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { useProfessionals, useProfessional } from "@/hooks/useProfessionals";
-import { useAuth } from "@/contexts/AuthContext";
-import { useStartConversation } from "@/hooks/useMessages";
 import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
+import SendMessageModal from "@/components/SendMessageModal";
+import BookConsultationModal from "@/components/BookConsultationModal";
+import RequestCallbackModal from "@/components/RequestCallbackModal";
+import OnlineViewingModal from "@/components/OnlineViewingModal";
 
 const categoryLabels: Record<string, { label: string; emoji: string; description: string }> = {
   architect: { label: "Licensed Architect", emoji: "🏛️", description: "Building design, planning permits, renovation oversight" },
@@ -61,26 +62,18 @@ const mockReviews = [
 
 export default function ProfessionalProfile() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  const { user } = useAuth();
   const { data: pro, isLoading } = useProfessional(id || "");
   const { data: allProfessionals = [] } = useProfessionals();
-  const startConversation = useStartConversation();
   const [activeTab, setActiveTab] = useState<"overview" | "services" | "reviews">("overview");
+  const [msgOpen, setMsgOpen] = useState(false);
+  const [consultOpen, setConsultOpen] = useState(false);
+  const [callbackOpen, setCallbackOpen] = useState(false);
+  const [videoOpen, setVideoOpen] = useState(false);
 
   const catInfo = pro ? categoryLabels[pro.category] || { label: pro.category, emoji: "👤", description: "" } : null;
   const services = pro ? servicesByCategory[pro.category] || [] : [];
 
   const displayName = pro?.display_name || "Professional";
-
-  const handleContact = async () => {
-    if (!user) { toast.error("Please sign in to contact professionals"); navigate("/login"); return; }
-    if (!pro) return;
-    try {
-      await startConversation.mutateAsync({ other_user_id: pro.user_id });
-      navigate("/messages");
-    } catch { toast.error("Could not start conversation"); }
-  };
 
   if (isLoading) return (
     <div className="min-h-screen bg-background flex items-center justify-center">
@@ -167,12 +160,15 @@ export default function ProfessionalProfile() {
 
                   {/* CTA buttons */}
                   <div className="flex flex-col gap-2 shrink-0 min-w-[160px]">
-                    <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" onClick={handleContact} disabled={startConversation.isPending}>
-                      {startConversation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
+                    <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" onClick={() => setMsgOpen(true)}>
+                      <MessageSquare className="w-4 h-4" />
                       Send Message
                     </Button>
-                    <Button variant="outline" className="border-border gap-2">
+                    <Button variant="outline" className="border-border gap-2" onClick={() => setConsultOpen(true)}>
                       <Calendar className="w-4 h-4" /> Book Consultation
+                    </Button>
+                    <Button variant="outline" className="border-border gap-2 text-muted-foreground" onClick={() => setVideoOpen(true)}>
+                      <Video className="w-4 h-4" /> Video Meeting
                     </Button>
                     {pro.website_url && (
                       <a href={pro.website_url} target="_blank" rel="noopener noreferrer"
@@ -446,15 +442,18 @@ export default function ProfessionalProfile() {
               <div className="glass-card rounded-xl p-5 border border-primary/20 sticky top-24">
                 <h3 className="font-display font-semibold mb-4">Contact {displayName.split(" ")[0]}</h3>
                 <div className="space-y-2.5">
-                  <Button className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2" onClick={handleContact} disabled={startConversation.isPending}>
-                    {startConversation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
+                  <Button className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2" onClick={() => setMsgOpen(true)}>
+                    <MessageSquare className="w-4 h-4" />
                     Send Message
                   </Button>
-                  <Button variant="outline" className="w-full border-border gap-2">
+                  <Button variant="outline" className="w-full border-border gap-2" onClick={() => setConsultOpen(true)}>
                     <Calendar className="w-4 h-4" /> Book Consultation
                   </Button>
-                  <Button variant="outline" className="w-full border-border gap-2 text-muted-foreground">
+                  <Button variant="outline" className="w-full border-border gap-2 text-muted-foreground" onClick={() => setCallbackOpen(true)}>
                     <Phone className="w-4 h-4" /> Request Callback
+                  </Button>
+                  <Button variant="outline" className="w-full border-border gap-2 text-muted-foreground" onClick={() => setVideoOpen(true)}>
+                    <Video className="w-4 h-4" /> Video Meeting
                   </Button>
                   {pro.hourly_rate && (
                     <div className="text-center text-xs text-muted-foreground pt-1">
@@ -469,6 +468,7 @@ export default function ProfessionalProfile() {
                   Usually responds within 2 hours
                 </div>
               </div>
+
 
               {/* Credentials */}
               <div className="glass-card rounded-xl p-5">
@@ -526,6 +526,28 @@ export default function ProfessionalProfile() {
         </div>
       </div>
       <Footer />
+
+      {/* ── Modals ── */}
+      <SendMessageModal
+        open={msgOpen}
+        onClose={() => setMsgOpen(false)}
+        professional={{ id: pro.id, user_id: pro.user_id, display_name: pro.display_name, title: pro.title }}
+      />
+      <BookConsultationModal
+        open={consultOpen}
+        onClose={() => setConsultOpen(false)}
+        professional={{ id: pro.id, user_id: pro.user_id, display_name: pro.display_name, title: pro.title, category: pro.category, hourly_rate: pro.hourly_rate }}
+      />
+      <RequestCallbackModal
+        open={callbackOpen}
+        onClose={() => setCallbackOpen(false)}
+        professional={{ id: pro.id, display_name: pro.display_name, title: pro.title }}
+      />
+      <OnlineViewingModal
+        open={videoOpen}
+        onClose={() => setVideoOpen(false)}
+        professional={{ id: pro.id, display_name: pro.display_name, title: pro.title }}
+      />
     </div>
   );
 }
