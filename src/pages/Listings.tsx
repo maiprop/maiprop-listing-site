@@ -18,6 +18,11 @@ import { mockProperties } from "@/data/mockProperties";
 import { useListings } from "@/hooks/useListings";
 import { useAuth } from "@/contexts/AuthContext";
 import { PROPERTY_TYPES, PROPERTY_TYPE_MAP, getTypeLabel, getSubtypeLabel, type PropertyTypeKey } from "@/lib/propertyTypes";
+import {
+  getFilterConfig,
+  FEATURES_RESIDENTIAL, FEATURES_COMMERCIAL, FEATURES_OFFICE, FEATURES_LAND,
+  ENERGY_CLASSES, HEATING_TYPES, CONSTRUCTION_STATUSES, ROAD_TYPES, SLOPE_TYPES,
+} from "@/lib/filterConfig";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
