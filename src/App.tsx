@@ -22,6 +22,16 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+// Show the global AI widget on all pages except auth & dashboard
+function GlobalAIWidget() {
+  const loc = useLocation();
+  const hide = ["/login", "/signup", "/dashboard", "/messages"].some(p => loc.pathname.startsWith(p));
+  // On property detail pages, the widget is rendered inside PropertyDetail with context instead
+  const isPropertyPage = loc.pathname.startsWith("/property/");
+  if (hide || isPropertyPage) return null;
+  return <AIAssistantWidget />;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
@@ -45,6 +55,7 @@ const App = () => (
             <Route path="/listings/new" element={<ProtectedRoute><CreateListing /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
+          <GlobalAIWidget />
         </BrowserRouter>
       </TooltipProvider>
     </AuthProvider>
