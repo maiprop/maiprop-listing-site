@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { X, ArrowRight, Check, Minus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
@@ -180,6 +181,3 @@ function CompareModal({ listings, onRemove }: { listings: Listing[]; onRemove: (
     </>
   );
 }
-
-// Need to import useState
-import { useState } from "react";
