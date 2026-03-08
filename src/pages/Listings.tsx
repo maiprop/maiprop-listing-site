@@ -215,12 +215,7 @@ function PropertyTypeButton({
   onSubtypeChange: (v: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  // Tracks which type is expanded inside the dropdown (independent of URL state)
-  const [expandedType, setExpandedType] = useState(value);
   const ref = useRef<HTMLDivElement>(null);
-
-  // Sync expandedType when external value changes (e.g. URL changes)
-  useEffect(() => { setExpandedType(value); }, [value]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -231,11 +226,8 @@ function PropertyTypeButton({
   }, []);
 
   const currentType = value ? PROPERTY_TYPE_MAP[value as PropertyTypeKey] : null;
-  const currentSubtype = currentType?.subtypes.find(s => s.value === subtype);
 
-  const label = currentSubtype
-    ? `${currentType!.emoji} ${currentSubtype.label}`
-    : currentType
+  const label = currentType
     ? `${currentType.emoji} ${currentType.label}`
     : "🏘️ All Types";
 
@@ -253,10 +245,10 @@ function PropertyTypeButton({
         <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
-        <div className="absolute top-full mt-1 left-0 z-50 bg-card border border-border rounded-xl shadow-lg min-w-[220px] max-h-[440px] overflow-y-auto">
+        <div className="absolute top-full mt-1 left-0 z-50 bg-card border border-border rounded-xl shadow-lg min-w-[200px] max-h-[440px] overflow-y-auto">
           {/* All types option */}
           <button
-            onClick={() => { onTypeChange(""); onSubtypeChange(""); setExpandedType(""); setOpen(false); }}
+            onClick={() => { onTypeChange(""); onSubtypeChange(""); setOpen(false); }}
             className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left transition-colors hover:bg-secondary ${
               !value ? "text-primary bg-primary/10" : "text-foreground"
             }`}
@@ -265,49 +257,33 @@ function PropertyTypeButton({
             {!value && <Check className="w-3.5 h-3.5 ml-auto" />}
           </button>
           <div className="h-px bg-border mx-2" />
-          {PROPERTY_TYPES.map(pt => (
-            <div key={pt.value}>
-              {/* Main type row — clicking expands subtypes locally without closing dropdown */}
-              <button
-                onClick={() => {
-                  if (pt.subtypes.length) {
-                    // Toggle expand: if already expanded, collapse; otherwise expand
-                    const next = expandedType === pt.value ? "" : pt.value;
-                    setExpandedType(next);
-                    onTypeChange(next);
-                    onSubtypeChange("");
-                  } else {
-                    onTypeChange(pt.value);
-                    onSubtypeChange("");
-                    setOpen(false);
-                  }
-                }}
-                className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left transition-colors hover:bg-secondary ${
-                  value === pt.value && !subtype ? "text-primary bg-primary/10" : "text-foreground"
-                }`}
-              >
-                <span>{pt.emoji}</span>
-                <span className="font-medium">{pt.label}</span>
-                {pt.subtypes.length > 0
-                  ? <ChevronRight className={`w-3.5 h-3.5 ml-auto transition-transform duration-200 ${expandedType === pt.value ? "rotate-90 text-primary" : ""}`} />
-                  : value === pt.value && <Check className="w-3.5 h-3.5 ml-auto" />
-                }
-              </button>
-              {/* Subtypes expand below using local expandedType state */}
-              {expandedType === pt.value && pt.subtypes.map(st => (
-                <button
-                  key={st.value}
-                  onClick={() => { onTypeChange(pt.value); onSubtypeChange(st.value); setOpen(false); }}
-                  title={st.description}
-                  className={`w-full flex items-center gap-2.5 pl-8 pr-3 py-2 text-xs text-left transition-colors hover:bg-secondary ${
-                    subtype === st.value ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  <ChevronRight className="w-3 h-3 shrink-0" />
-                  <span>{st.label}</span>
-                  {subtype === st.value && <Check className="w-3 h-3 ml-auto" />}
-                </button>
-              ))}
+
+          {/* Grouped types */}
+          {PROPERTY_GROUPS.map((group, gi) => (
+            <div key={group.id}>
+              {/* Group header */}
+              <div className="flex items-center gap-2 px-3 pt-2.5 pb-1">
+                <span className="text-xs">{group.emoji}</span>
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{group.label}</span>
+              </div>
+              {/* Types in group */}
+              {group.types.map(typeKey => {
+                const pt = PROPERTY_TYPE_MAP[typeKey];
+                return (
+                  <button
+                    key={pt.value}
+                    onClick={() => { onTypeChange(pt.value); onSubtypeChange(""); setOpen(false); }}
+                    className={`w-full flex items-center gap-2.5 pl-6 pr-3 py-2 text-sm text-left transition-colors hover:bg-secondary ${
+                      value === pt.value ? "text-primary bg-primary/10" : "text-foreground"
+                    }`}
+                  >
+                    <span>{pt.emoji}</span>
+                    <span className="font-medium">{pt.label}</span>
+                    {value === pt.value && <Check className="w-3.5 h-3.5 ml-auto" />}
+                  </button>
+                );
+              })}
+              {gi < PROPERTY_GROUPS.length - 1 && <div className="h-px bg-border mx-2 mt-1.5" />}
             </div>
           ))}
         </div>
