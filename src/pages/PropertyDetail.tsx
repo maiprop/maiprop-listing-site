@@ -21,6 +21,8 @@ import { useStartConversation } from "@/hooks/useMessages";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import PropertyMiniMap from "@/components/PropertyMiniMap";
+import PropertyValuation from "@/components/PropertyValuation";
+import NeighbourhoodReport from "@/components/NeighbourhoodReport";
 
 // ─── Energy class data ──────────────────────────────────────────────────────
 const ENERGY_SCALE = [
