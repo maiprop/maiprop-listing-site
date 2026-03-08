@@ -122,10 +122,10 @@ export default function Index() {
           <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
         </div>
 
-        {/* Warm subtle grid */}
-        <div className="absolute inset-0 opacity-[0.03]"
+        {/* Subtle grid overlay */}
+        <div className="absolute inset-0 opacity-[0.04]"
           style={{
-            backgroundImage: "linear-gradient(hsl(38 95% 52%) 1px, transparent 1px), linear-gradient(90deg, hsl(38 95% 52%) 1px, transparent 1px)",
+            backgroundImage: "linear-gradient(hsl(192 100% 50%) 1px, transparent 1px), linear-gradient(90deg, hsl(192 100% 50%) 1px, transparent 1px)",
             backgroundSize: "60px 60px",
           }}
         />
