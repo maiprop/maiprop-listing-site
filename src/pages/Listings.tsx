@@ -443,7 +443,7 @@ export default function Listings() {
   if (selectedSort === "views") filtered = [...filtered].sort((a: any, b: any) => (b.views || 0) - (a.views || 0));
 
   const activeFilterCount = [
-    selectedType, selectedSubtype, selectedListingType, selectedPrice,
+    selectedType, selectedSubtype, selectedPrice,
     bedsRange[0], bedsRange[1], bathsRange[0], bathsRange[1],
     floorRange[0], floorRange[1], yearRange[0], yearRange[1],
     minSqm, maxSqm, selectedHeating, selectedConstruction,
