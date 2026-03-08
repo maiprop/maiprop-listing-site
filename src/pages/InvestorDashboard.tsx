@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Flame, Lock, BarChart2, TrendingUp, TrendingDown, MapPin, Euro,
-  Building2, Star, Eye, EyeOff, Shield, ChevronRight, Zap,
-  Download, Filter, Search, SlidersHorizontal, Check, Clock,
+  Flame, Lock, BarChart2, TrendingUp, TrendingDown, MapPin,
+  Building2, ChevronRight, Zap,
+  SlidersHorizontal, Check, Clock,
   Users, DollarSign, Activity, ArrowUpRight, Phone, Mail,
-  Crown, Sparkles, AlertCircle, RefreshCw, Settings, Pencil,
-  ChevronDown, FileText, Save, X, LayoutGrid, ShieldCheck
+  Crown, Sparkles, AlertCircle, RefreshCw,
+  ChevronDown, FileText, Save, LayoutGrid, ShieldCheck,
+  Calendar, Ban, ArrowUpCircle, UserCheck, CreditCard
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -23,6 +24,18 @@ type Subscription = {
   started_at: string;
   expires_at: string | null;
 };
+
+type AdminSubscription = Subscription & {
+  display_name?: string | null;
+  email?: string | null;
+};
+
+// Days until expiry (null = never / no expiry set)
+function daysUntilExpiry(expiresAt: string | null): number | null {
+  if (!expiresAt) return null;
+  const diff = new Date(expiresAt).getTime() - Date.now();
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+}
 
 // ─── Subscription tiers ───────────────────────────────────────────────────────
 const TIERS = [
@@ -299,7 +312,7 @@ export default function InvestorDashboard() {
   const navigate = useNavigate();
 
   const isAdmin = profile?.role === "agent";
-  const [activeTab, setActiveTab] = useState<"deals" | "admin">("deals");
+  const [activeTab, setActiveTab] = useState<"deals" | "admin" | "subscribers">("deals");
 
   // Subscription state (loaded from DB)
   const [subscription, setSubscription] = useState<Subscription | null>(null);
@@ -307,6 +320,18 @@ export default function InvestorDashboard() {
   const subscribed = subscription?.status === "active" || subscription?.status === "trial";
   const [showGate, setShowGate] = useState(false);
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
+
+  // Admin subscribers list
+  const [allSubs, setAllSubs] = useState<AdminSubscription[]>([]);
+  const [subsLoading, setSubsLoading] = useState(false);
+  const [subsFilter, setSubsFilter] = useState<"all" | "active" | "trial" | "cancelled" | "expired">("all");
+  const [editingSubId, setEditingSubId] = useState<string | null>(null);
+  const [editTier, setEditTier] = useState<string>("");
+  const [editExpiry, setEditExpiry] = useState<string>("");
+
+  // Expiry warning
+  const daysLeft = daysUntilExpiry(subscription?.expires_at ?? null);
+  const showExpiryWarning = subscribed && daysLeft !== null && daysLeft <= 7 && daysLeft >= 0;
 
   // Load subscription from DB
   const loadSubscription = useCallback(async () => {
@@ -413,10 +438,51 @@ export default function InvestorDashboard() {
   };
 
   useEffect(() => {
-    if (activeTab === "admin" && isAdmin) {
-      loadAdminDeals();
-    }
+    if (activeTab === "admin" && isAdmin) loadAdminDeals();
+    if (activeTab === "subscribers" && isAdmin) loadAllSubs();
   }, [activeTab, isAdmin]);
+
+  // Load all subscriptions with profile names (admin only)
+  const loadAllSubs = async () => {
+    setSubsLoading(true);
+    try {
+      const { data: subs, error } = await supabase
+        .from("investor_subscriptions" as any)
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+
+      // Enrich with profile display names
+      const userIds = (subs || []).map((s: any) => s.user_id);
+      let profileMap: Record<string, string> = {};
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("user_id, display_name")
+          .in("user_id", userIds);
+        (profiles || []).forEach((p: any) => { profileMap[p.user_id] = p.display_name || p.user_id.slice(0, 8); });
+      }
+      setAllSubs((subs || []).map((s: any) => ({ ...s, display_name: profileMap[s.user_id] || s.user_id.slice(0, 8) })));
+    } catch {
+      toast.error("Could not load subscribers.");
+    } finally {
+      setSubsLoading(false);
+    }
+  };
+
+  // Admin: update a subscriber's tier/status/expiry
+  const handleSubUpdate = async (subId: string, updates: Partial<Subscription>) => {
+    const { error } = await supabase
+      .from("investor_subscriptions" as any)
+      .update(updates)
+      .eq("id", subId);
+    if (error) { toast.error("Update failed"); return; }
+    setAllSubs(prev => prev.map(s => s.id === subId ? { ...s, ...updates } : s));
+    setEditingSubId(null);
+    toast.success("Subscription updated");
+  };
+
+
 
   const handleAdminUpdate = async (id: string, status: string, admin_notes: string) => {
     const { error } = await supabase
@@ -530,7 +596,7 @@ export default function InvestorDashboard() {
             </div>
 
             {/* Tab bar */}
-            <div className="flex items-center gap-1 mt-8">
+            <div className="flex items-center gap-1 mt-8 flex-wrap">
               <button
                 onClick={() => setActiveTab("deals")}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === "deals" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-secondary"}`}
@@ -539,18 +605,49 @@ export default function InvestorDashboard() {
                 Deal Feed
               </button>
               {isAdmin && (
-                <button
-                  onClick={() => setActiveTab("admin")}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === "admin" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-secondary"}`}
-                >
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  Admin Pipeline
-                  {adminDeals.length > 0 && <span className="text-[10px] bg-destructive text-destructive-foreground rounded-full px-1.5 py-0.5 font-bold">{adminStats.pending}</span>}
-                </button>
+                <>
+                  <button
+                    onClick={() => setActiveTab("admin")}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === "admin" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-secondary"}`}
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    Admin Pipeline
+                    {adminStats.pending > 0 && <span className="text-[10px] bg-destructive text-destructive-foreground rounded-full px-1.5 py-0.5 font-bold">{adminStats.pending}</span>}
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("subscribers")}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === "subscribers" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-secondary"}`}
+                  >
+                    <CreditCard className="w-3.5 h-3.5" />
+                    Subscribers
+                    {allSubs.length > 0 && <span className="text-[10px] bg-brand-gold text-background rounded-full px-1.5 py-0.5 font-bold">{allSubs.length}</span>}
+                  </button>
+                </>
               )}
             </div>
           </div>
         </div>
+
+        {/* ── Expiry warning banner ── */}
+        {showExpiryWarning && (
+          <div className="border-b border-destructive/20 bg-destructive/5">
+            <div className="container py-3 flex items-center gap-3 flex-wrap">
+              <AlertCircle className="w-4 h-4 text-destructive shrink-0" />
+              <p className="text-sm text-destructive font-semibold flex-1 min-w-0">
+                Your <span className="capitalize">{subscription?.tier}</span> subscription expires in{" "}
+                <strong>{daysLeft === 0 ? "less than 1 day" : `${daysLeft} day${daysLeft === 1 ? "" : "s"}`}</strong>.
+                Renew now to keep full deal access.
+              </p>
+              <Button
+                size="sm"
+                className="bg-destructive hover:bg-destructive/90 text-destructive-foreground text-xs h-8 shrink-0"
+                onClick={() => setShowGate(true)}
+              >
+                Renew Subscription
+              </Button>
+            </div>
+          </div>
+        )}
 
         <div className="container py-8">
           {/* ─────────────── DEAL FEED TAB ─────────────── */}
@@ -841,6 +938,215 @@ export default function InvestorDashboard() {
               <p className="text-sm text-muted-foreground">This section is only available to platform admins.</p>
             </div>
           )}
+
+          {/* ─────────────── SUBSCRIBERS TAB ─────────────── */}
+          {activeTab === "subscribers" && isAdmin && (
+            <div className="space-y-6">
+              {/* Sub KPI strip */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                  { label: "Total Subscribers", value: allSubs.length, color: "text-foreground", icon: Users },
+                  { label: "Active", value: allSubs.filter(s => s.status === "active").length, color: "text-brand-emerald", icon: UserCheck },
+                  { label: "Trial", value: allSubs.filter(s => s.status === "trial").length, color: "text-brand-gold", icon: Clock },
+                  { label: "Cancelled / Expired", value: allSubs.filter(s => s.status === "cancelled" || s.status === "expired").length, color: "text-destructive", icon: Ban },
+                ].map(s => (
+                  <div key={s.label} className="glass-card rounded-xl border border-border p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{s.label}</p>
+                      <s.icon className={`w-3.5 h-3.5 ${s.color}`} />
+                    </div>
+                    <p className={`font-display font-black text-2xl ${s.color}`}>{s.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* MRR estimate */}
+              <div className="glass-card rounded-xl border border-primary/20 p-4 flex items-center justify-between flex-wrap gap-4">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Estimated MRR</p>
+                  <p className="font-display font-black text-2xl text-primary">
+                    €{(
+                      allSubs.filter(s => s.status === "active" && s.tier === "analyst").length * 490 +
+                      allSubs.filter(s => s.status === "active" && s.tier === "institutional").length * 1490
+                    ).toLocaleString()}
+                  </p>
+                </div>
+                <Button size="sm" variant="outline" className="border-border text-xs h-8 gap-1.5" onClick={loadAllSubs}>
+                  <RefreshCw className={`w-3 h-3 ${subsLoading ? "animate-spin" : ""}`} /> Refresh
+                </Button>
+              </div>
+
+              {/* Filter */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {(["all", "active", "trial", "cancelled", "expired"] as const).map(s => (
+                  <button
+                    key={s}
+                    onClick={() => setSubsFilter(s)}
+                    className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-all capitalize ${
+                      subsFilter === s ? "bg-primary text-primary-foreground border-primary" : "text-muted-foreground border-border hover:border-primary/40"
+                    }`}
+                  >
+                    {s === "all" ? `All (${allSubs.length})` : `${s} (${allSubs.filter(x => x.status === s).length})`}
+                  </button>
+                ))}
+              </div>
+
+              {/* Subscriber rows */}
+              {subsLoading ? (
+                <div className="flex items-center justify-center py-20">
+                  <RefreshCw className="w-6 h-6 text-muted-foreground animate-spin" />
+                </div>
+              ) : allSubs.filter(s => subsFilter === "all" || s.status === subsFilter).length === 0 ? (
+                <div className="text-center py-20">
+                  <Users className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
+                  <p className="text-sm text-muted-foreground">No subscribers yet.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {allSubs
+                    .filter(s => subsFilter === "all" || s.status === subsFilter)
+                    .map(sub => {
+                      const isEditing = editingSubId === sub.id;
+                      const subDaysLeft = daysUntilExpiry(sub.expires_at);
+                      const tierConfig: Record<string, { color: string; price: string }> = {
+                        analyst: { color: "text-primary border-primary/20 bg-primary/10", price: "€490/mo" },
+                        institutional: { color: "text-accent border-accent/20 bg-accent/10", price: "€1,490/mo" },
+                        sovereign: { color: "text-brand-gold border-brand-gold/20 bg-brand-gold/10", price: "Custom" },
+                      };
+                      const statusColor: Record<string, string> = {
+                        active: "text-brand-emerald border-brand-emerald/20 bg-brand-emerald/10",
+                        trial: "text-brand-gold border-brand-gold/20 bg-brand-gold/10",
+                        cancelled: "text-destructive border-destructive/20 bg-destructive/10",
+                        expired: "text-muted-foreground border-border bg-muted",
+                      };
+                      return (
+                        <div key={sub.id} className="glass-card rounded-xl border border-border overflow-hidden">
+                          <div className="p-4 flex items-center gap-4 flex-wrap">
+                            {/* Avatar initial */}
+                            <div className="w-9 h-9 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center font-bold text-sm text-primary shrink-0 uppercase">
+                              {(sub.display_name || "?")[0]}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-sm truncate">{sub.display_name || "Unknown"}</p>
+                              <p className="text-[10px] text-muted-foreground">
+                                Since {new Date(sub.started_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                                {sub.expires_at && (
+                                  <> · Expires {new Date(sub.expires_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</>
+                                )}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 flex-wrap shrink-0">
+                              <span className={`text-[10px] font-bold uppercase tracking-widest border px-2 py-0.5 rounded-full capitalize ${tierConfig[sub.tier]?.color}`}>
+                                {sub.tier} · {tierConfig[sub.tier]?.price}
+                              </span>
+                              <span className={`text-[10px] font-bold uppercase tracking-widest border px-2 py-0.5 rounded-full capitalize ${statusColor[sub.status]}`}>
+                                {sub.status}
+                              </span>
+                              {subDaysLeft !== null && subDaysLeft <= 7 && subDaysLeft >= 0 && (
+                                <span className="text-[10px] font-bold text-destructive border border-destructive/20 bg-destructive/10 px-2 py-0.5 rounded-full">
+                                  Expires in {subDaysLeft}d
+                                </span>
+                              )}
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-border text-xs h-8 gap-1"
+                              onClick={() => {
+                                if (isEditing) { setEditingSubId(null); return; }
+                                setEditingSubId(sub.id);
+                                setEditTier(sub.tier);
+                                setEditExpiry(sub.expires_at ? sub.expires_at.slice(0, 10) : "");
+                              }}
+                            >
+                              {isEditing ? "Cancel" : "Edit"}
+                            </Button>
+                          </div>
+
+                          {/* Inline edit panel */}
+                          {isEditing && (
+                            <div className="border-t border-border p-4 bg-muted/20 space-y-4">
+                              <div className="grid sm:grid-cols-3 gap-4">
+                                <div>
+                                  <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5 block">Tier</label>
+                                  <select
+                                    value={editTier}
+                                    onChange={e => setEditTier(e.target.value)}
+                                    className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-xs text-foreground outline-none focus:border-primary"
+                                  >
+                                    <option value="analyst">Analyst — €490/mo</option>
+                                    <option value="institutional">Institutional — €1,490/mo</option>
+                                    <option value="sovereign">Sovereign — Custom</option>
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5 block">Status</label>
+                                  <select
+                                    value={sub.status}
+                                    onChange={e => handleSubUpdate(sub.id, { status: e.target.value as Subscription["status"] })}
+                                    className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-xs text-foreground outline-none focus:border-primary"
+                                  >
+                                    <option value="active">Active</option>
+                                    <option value="trial">Trial</option>
+                                    <option value="cancelled">Cancelled</option>
+                                    <option value="expired">Expired</option>
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5 block">Expiry Date</label>
+                                  <input
+                                    type="date"
+                                    value={editExpiry}
+                                    onChange={e => setEditExpiry(e.target.value)}
+                                    className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-xs text-foreground outline-none focus:border-primary"
+                                  />
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <Button
+                                  size="sm"
+                                  className="bg-gradient-primary border-0 text-primary-foreground text-xs h-8 gap-1.5"
+                                  onClick={() => handleSubUpdate(sub.id, {
+                                    tier: editTier as Subscription["tier"],
+                                    expires_at: editExpiry ? new Date(editExpiry).toISOString() : null,
+                                  })}
+                                >
+                                  <Save className="w-3 h-3" /> Save Changes
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="border-destructive/40 text-destructive text-xs h-8 gap-1.5"
+                                  onClick={() => handleSubUpdate(sub.id, { status: "cancelled" })}
+                                >
+                                  <Ban className="w-3 h-3" /> Cancel Sub
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="border-brand-emerald/40 text-brand-emerald text-xs h-8 gap-1.5"
+                                  onClick={() => handleSubUpdate(sub.id, { status: "active", tier: editTier as Subscription["tier"] })}
+                                >
+                                  <ArrowUpCircle className="w-3 h-3" /> Upgrade & Activate
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === "subscribers" && !isAdmin && (
+            <div className="text-center py-24">
+              <ShieldCheck className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+              <p className="font-display font-bold text-xl mb-2">Admin Access Required</p>
+            </div>
+          )}
+
         </div>
 
         {/* ── Subscription Gate / Pricing modal ── */}
