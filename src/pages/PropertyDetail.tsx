@@ -45,59 +45,70 @@ const ENERGY_COLORS: Record<string, string> = {
   "G":  "bg-[#cc1414] text-white",
 };
 
-// ─── Mortgage calculator (interactive) ─────────────────────────────────────────
+// ─── Mortgage calculator ──────────────────────────────────────────────────────
 function MortgageCalculator({ price }: { price: number }) {
   const [downPct, setDownPct] = useState(20);
-  const [rate, setRate] = useState(3.8);
-  const [years, setYears] = useState(20);
+  const [rate, setRate]       = useState(3.8);
+  const [years, setYears]     = useState(20);
 
-  const down = price * (downPct / 100);
-  const loan = price - down;
+  const down    = Math.round(price * (downPct / 100));
+  const loan    = price - down;
   const monthly = loan > 0
     ? Math.round(loan * (rate / 1200) / (1 - Math.pow(1 + rate / 1200, -years * 12)))
     : 0;
+  const totalPaid   = monthly * years * 12;
+  const totalInterest = totalPaid - loan;
 
   return (
-    <div className="glass-card rounded-xl p-5 space-y-4">
-      <div className="flex items-center gap-2">
+    <div className="glass-card rounded-xl overflow-hidden border border-border">
+      {/* Header */}
+      <div className="flex items-center gap-2 px-5 py-3.5 bg-primary/5 border-b border-border">
         <Euro className="w-4 h-4 text-primary" />
         <h4 className="font-display font-semibold text-sm">Mortgage Calculator</h4>
+        <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
+          Indicative
+        </span>
       </div>
-      <div className="space-y-3 text-sm">
-        <div>
-          <div className="flex justify-between mb-1">
-            <span className="text-xs text-muted-foreground">Down Payment</span>
-            <span className="text-xs font-semibold">{downPct}% — €{down.toLocaleString()}</span>
+
+      <div className="p-5 space-y-4">
+        {/* Sliders */}
+        {[
+          { label: "Down Payment", value: `${downPct}%`, sub: `€${down.toLocaleString()}`, min: 10, max: 50, step: 5, val: downPct, set: setDownPct },
+          { label: "Interest Rate", value: `${rate.toFixed(1)}%`, sub: "p.a.", min: 2, max: 8, step: 0.1, val: rate, set: setRate },
+          { label: "Loan Term", value: `${years} yrs`, sub: `${years * 12} payments`, min: 5, max: 30, step: 5, val: years, set: setYears },
+        ].map(s => (
+          <div key={s.label}>
+            <div className="flex justify-between items-baseline mb-1.5">
+              <span className="text-xs text-muted-foreground">{s.label}</span>
+              <div className="text-right">
+                <span className="text-xs font-bold text-foreground">{s.value}</span>
+                <span className="text-[10px] text-muted-foreground ml-1.5">{s.sub}</span>
+              </div>
+            </div>
+            <input type="range" min={s.min} max={s.max} step={s.step} value={s.val}
+              onChange={e => s.set(Number(e.target.value))}
+              className="w-full h-1.5 rounded-full appearance-none cursor-pointer accent-primary bg-border" />
           </div>
-          <input type="range" min={10} max={50} step={5} value={downPct}
-            onChange={e => setDownPct(Number(e.target.value))}
-            className="w-full accent-primary" />
-        </div>
-        <div>
-          <div className="flex justify-between mb-1">
-            <span className="text-xs text-muted-foreground">Interest Rate</span>
-            <span className="text-xs font-semibold">{rate}% p.a.</span>
+        ))}
+
+        {/* Result panel */}
+        <div className="bg-primary/8 rounded-xl p-4 border border-primary/20 text-center mt-1">
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Est. Monthly Payment</p>
+          <p className="font-display font-black text-3xl text-primary">€{monthly.toLocaleString()}</p>
+          <div className="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-primary/10 text-xs">
+            <div>
+              <p className="text-muted-foreground">Loan Amount</p>
+              <p className="font-semibold mt-0.5">€{loan.toLocaleString()}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Total Interest</p>
+              <p className="font-semibold mt-0.5 text-destructive">€{totalInterest.toLocaleString()}</p>
+            </div>
           </div>
-          <input type="range" min={2} max={8} step={0.1} value={rate}
-            onChange={e => setRate(Number(e.target.value))}
-            className="w-full accent-primary" />
         </div>
-        <div>
-          <div className="flex justify-between mb-1">
-            <span className="text-xs text-muted-foreground">Term</span>
-            <span className="text-xs font-semibold">{years} years</span>
-          </div>
-          <input type="range" min={5} max={30} step={5} value={years}
-            onChange={e => setYears(Number(e.target.value))}
-            className="w-full accent-primary" />
-        </div>
-        <div className="bg-primary/10 rounded-xl p-4 border border-primary/20 text-center">
-          <div className="text-xs text-muted-foreground mb-1">Est. Monthly Payment</div>
-          <div className="font-display font-bold text-2xl text-primary">€{monthly.toLocaleString()}</div>
-          <div className="text-xs text-muted-foreground mt-1">Loan: €{loan.toLocaleString()} · {years}yr term</div>
-        </div>
+
         <p className="text-[10px] text-muted-foreground leading-relaxed">
-          For illustrative purposes only. Final rate depends on credit score and includes 0.12% levy (Law 128/75).
+          Indicative only. Final rate subject to credit assessment. Includes 0.12% annual levy (Law 128/75).
         </p>
       </div>
     </div>
