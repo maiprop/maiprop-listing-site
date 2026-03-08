@@ -7,6 +7,7 @@ import { MarketTicker } from "@/components/MarketTicker";
 import { PropertyCard } from "@/components/PropertyCard";
 import { Footer } from "@/components/Footer";
 import { mockProperties } from "@/data/mockProperties";
+import { PROPERTY_TYPES } from "@/lib/propertyTypes";
 import heroBg from "@/assets/hero-bg.jpg";
 
 const stats = [
@@ -16,14 +17,15 @@ const stats = [
   { value: "3,200+", label: "Monthly Auctions" },
 ];
 
-const propertyTypes = [
-  { icon: Home, label: "Apartments", count: 18420, href: "/listings?type=apartment" },
-  { icon: Building2, label: "Houses", count: 9240, href: "/listings?type=house" },
-  { icon: Store, label: "Commercial", count: 4180, href: "/listings?type=commercial" },
-  { icon: Trees, label: "Land", count: 6350, href: "/listings?type=land" },
-  { icon: Gavel, label: "Auctions", count: 3218, href: "/auctions" },
-  { icon: Flame, label: "Firesale™", count: 127, href: "/firesale" },
-];
+// Property counts per type (could be from DB in production)
+const PROPERTY_TYPE_COUNTS: Record<string, number> = {
+  apartment: 18420,
+  house: 9240,
+  villa: 3150,
+  commercial: 4180,
+  land: 6350,
+  office: 1820,
+};
 
 const features = [
   {
