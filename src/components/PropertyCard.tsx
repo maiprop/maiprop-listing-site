@@ -119,6 +119,11 @@ export function PropertyCard({ property, compact = false }: PropertyCardProps) {
               {badge.label}
             </span>
           )}
+          {property.subtype && (
+            <span className="text-[10px] font-semibold px-2.5 py-1 rounded-full bg-accent/90 text-accent-foreground shadow-sm capitalize">
+              {getSubtypeLabel(property.type, property.subtype)}
+            </span>
+          )}
           {property.aiScore && property.aiScore >= 80 && (
             <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-primary/90 text-primary-foreground flex items-center gap-1 shadow-sm">
               <Zap className="w-2.5 h-2.5" /> AI {property.aiScore}
