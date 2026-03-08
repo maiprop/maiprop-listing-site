@@ -798,20 +798,30 @@ export default function PropertyDetail() {
               {similarListings.length > 0 && (
                 <div className="space-y-4">
                   <h3 className="font-display font-semibold flex items-center gap-2">
-                    Similar in {city}
+                    Similar{subtype ? ` ${getSubtypeLabel(propertyType, subtype)}` : ""} in {city}
                     <div className="flex-1 h-px bg-border ml-1" />
+                    {subtype && (
+                      <span className="text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full border border-border normal-case font-normal">
+                        same type &amp; subtype first
+                      </span>
+                    )}
                   </h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {isDbListing
                       ? (similarListings as any[]).map((l: any) => (
                           <Link key={l.id} to={`/property/${l.id}`}
                             className="glass-card rounded-xl overflow-hidden block hover:border-primary/40 transition-all duration-200 border border-border group">
-                            <div className="aspect-[3/2] overflow-hidden">
+                            <div className="aspect-[3/2] overflow-hidden relative">
                               <img
                                 src={l.cover_image_url || "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400&q=60"}
                                 alt={l.title}
                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                               />
+                              {l.commercial_subtype && (
+                                <span className="absolute top-2 left-2 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-accent/90 text-accent-foreground shadow-sm capitalize">
+                                  {getSubtypeLabel(l.property_type, l.commercial_subtype)}
+                                </span>
+                              )}
                             </div>
                             <div className="p-3.5">
                               <p className="font-semibold text-sm truncate">{l.title}</p>
