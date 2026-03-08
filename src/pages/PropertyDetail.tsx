@@ -4,7 +4,9 @@ import {
   MapPin, Bed, Bath, Square, Heart, Share2, Phone, MessageSquare,
   Calendar, Video, ChevronLeft, ChevronRight, Star, TrendingUp,
   Shield, FileText, Zap, ExternalLink, Lock, BarChart2, Eye,
-  Home, Clock, Check, Gavel, Download, Loader2, CheckCircle
+  Home, Clock, Check, Gavel, Download, Loader2, CheckCircle,
+  Thermometer, Wrench, TreePine, Flame, Wifi, Car, Building2,
+  Navigation, Info, ChevronDown, ChevronUp, Euro
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -19,22 +21,175 @@ import { useStartConversation } from "@/hooks/useMessages";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
+// ─── Energy class colour mapping ───────────────────────────────────────────────
+const ENERGY_COLORS: Record<string, string> = {
+  "A+": "bg-[hsl(142,71%,45%)] text-white",
+  "A":  "bg-[hsl(142,60%,50%)] text-white",
+  "B+": "bg-[hsl(80,60%,45%)] text-white",
+  "B":  "bg-[hsl(80,50%,50%)] text-white",
+  "C":  "bg-[hsl(50,90%,50%)] text-black",
+  "D":  "bg-[hsl(35,90%,55%)] text-black",
+  "E":  "bg-[hsl(25,90%,55%)] text-white",
+  "F":  "bg-[hsl(10,85%,55%)] text-white",
+  "G":  "bg-[hsl(0,80%,50%)] text-white",
+};
+
+const ENERGY_DESCRIPTIONS: Record<string, string> = {
+  "A+": "<33% annual primary energy consumption vs baseline",
+  "A":  "33–50% of baseline",
+  "B+": "50–75% of baseline",
+  "B":  "75–100% of baseline",
+  "C":  "100–125% of baseline",
+  "D":  "125–160% of baseline",
+  "E":  "160–200% of baseline",
+  "F":  "200–250% of baseline",
+  "G":  ">250% — lowest efficiency",
+};
+
+// ─── Mortgage calculator (interactive) ─────────────────────────────────────────
+function MortgageCalculator({ price }: { price: number }) {
+  const [downPct, setDownPct] = useState(20);
+  const [rate, setRate] = useState(3.8);
+  const [years, setYears] = useState(20);
+
+  const down = price * (downPct / 100);
+  const loan = price - down;
+  const monthly = loan > 0
+    ? Math.round(loan * (rate / 1200) / (1 - Math.pow(1 + rate / 1200, -years * 12)))
+    : 0;
+
+  return (
+    <div className="glass-card rounded-xl p-5 space-y-4">
+      <div className="flex items-center gap-2">
+        <Euro className="w-4 h-4 text-primary" />
+        <h4 className="font-display font-semibold text-sm">Mortgage Calculator</h4>
+      </div>
+      <div className="space-y-3 text-sm">
+        <div>
+          <div className="flex justify-between mb-1">
+            <span className="text-xs text-muted-foreground">Down Payment</span>
+            <span className="text-xs font-semibold">{downPct}% — €{down.toLocaleString()}</span>
+          </div>
+          <input type="range" min={10} max={50} step={5} value={downPct}
+            onChange={e => setDownPct(Number(e.target.value))}
+            className="w-full accent-primary" />
+        </div>
+        <div>
+          <div className="flex justify-between mb-1">
+            <span className="text-xs text-muted-foreground">Interest Rate</span>
+            <span className="text-xs font-semibold">{rate}% p.a.</span>
+          </div>
+          <input type="range" min={2} max={8} step={0.1} value={rate}
+            onChange={e => setRate(Number(e.target.value))}
+            className="w-full accent-primary" />
+        </div>
+        <div>
+          <div className="flex justify-between mb-1">
+            <span className="text-xs text-muted-foreground">Term</span>
+            <span className="text-xs font-semibold">{years} years</span>
+          </div>
+          <input type="range" min={5} max={30} step={5} value={years}
+            onChange={e => setYears(Number(e.target.value))}
+            className="w-full accent-primary" />
+        </div>
+        <div className="bg-primary/10 rounded-xl p-4 border border-primary/20 text-center">
+          <div className="text-xs text-muted-foreground mb-1">Est. Monthly Payment</div>
+          <div className="font-display font-bold text-2xl text-primary">€{monthly.toLocaleString()}</div>
+          <div className="text-xs text-muted-foreground mt-1">Loan: €{loan.toLocaleString()} · {years}yr term</div>
+        </div>
+        <p className="text-[10px] text-muted-foreground leading-relaxed">
+          For illustrative purposes only. Final rate depends on credit score and includes 0.12% levy (Law 128/75).
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Feature pill ────────────────────────────────────────────────────────────
+function FeaturePill({ icon: Icon, label }: { icon?: any; label: string }) {
+  return (
+    <div className="flex items-center gap-1.5 text-xs bg-secondary border border-border rounded-lg px-2.5 py-1.5 text-foreground">
+      {Icon && <Icon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
+      {label}
+    </div>
+  );
+}
+
+// ─── Feature section ─────────────────────────────────────────────────────────
+function FeatureSection({ title, features }: { title: string; features: { icon?: any; label: string }[] }) {
+  if (features.length === 0) return null;
+  return (
+    <div>
+      <h4 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">{title}</h4>
+      <div className="flex flex-wrap gap-2">
+        {features.map(f => <FeaturePill key={f.label} icon={f.icon} label={f.label} />)}
+      </div>
+    </div>
+  );
+}
+
+// ─── Map placeholder with toggle ────────────────────────────────────────────
+function MapSection({ address, city }: { address: string; city: string }) {
+  const [revealed, setRevealed] = useState(false);
+  return (
+    <div className="glass-card rounded-xl overflow-hidden">
+      <div className="p-4 border-b border-border flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <MapPin className="w-4 h-4 text-primary" />
+          <h3 className="font-display font-semibold text-sm">Location</h3>
+        </div>
+        {!revealed && (
+          <Button size="sm" variant="outline" onClick={() => setRevealed(true)} className="text-xs gap-1 h-7">
+            <Navigation className="w-3 h-3" /> Request Exact Location
+          </Button>
+        )}
+      </div>
+      <div className="relative">
+        {/* Map embed placeholder */}
+        <div className="w-full h-56 bg-secondary flex items-center justify-center relative overflow-hidden">
+          <iframe
+            title="map"
+            loading="lazy"
+            className="w-full h-full border-0 opacity-70"
+            src={`https://maps.google.com/maps?q=${encodeURIComponent(revealed ? address + ", " + city : city + ", Greece")}&output=embed&z=14`}
+          />
+          {!revealed && (
+            <div className="absolute inset-0 backdrop-blur-[2px] bg-background/40 flex flex-col items-center justify-center gap-2">
+              <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center">
+                <MapPin className="w-5 h-5 text-primary" />
+              </div>
+              <p className="text-xs text-muted-foreground text-center px-8">
+                Approximate location shown. Click "Request Exact Location" to get the precise address.
+              </p>
+            </div>
+          )}
+        </div>
+        {revealed && (
+          <div className="p-3 bg-primary/5 border-t border-primary/10 text-xs text-primary flex items-center gap-1.5">
+            <CheckCircle className="w-3.5 h-3.5" /> Exact address: {address}, {city}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Main component ──────────────────────────────────────────────────────────
 export default function PropertyDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  // Try to fetch from DB first
   const { data: dbListing, isLoading } = useListing(id || "");
   const { data: dbSimilar = [] } = useListings({ city: dbListing?.city });
 
-  // Fallback to mock data if not in DB
   const mockProperty = mockProperties.find(p => p.id === id) || mockProperties[0];
   const isDbListing = !!dbListing;
 
   const [currentImage, setCurrentImage] = useState(0);
   const [viewingOpen, setViewingOpen] = useState(false);
   const [reportPurchased, setReportPurchased] = useState(false);
+  const [descExpanded, setDescExpanded] = useState(false);
 
   const { data: favorites = [] } = useFavorites();
   const toggleFav = useToggleFavorite();
@@ -57,7 +212,6 @@ export default function PropertyDetail() {
     } catch { toast.error("Could not start conversation"); }
   };
 
-  // Build images list
   const dbImages = dbListing
     ? [
         ...(dbListing.cover_image_url ? [dbListing.cover_image_url] : []),
@@ -65,39 +219,6 @@ export default function PropertyDetail() {
       ]
     : null;
   const images = dbImages?.length ? dbImages : mockProperty.images;
-
-  // Build data points
-  const buildDataPoints = () => {
-    if (isDbListing) {
-      return [
-        { label: "Year Built", value: dbListing.year_built?.toString() || "—" },
-        { label: "Energy Class", value: dbListing.energy_class || "—" },
-        { label: "Floor", value: dbListing.floor != null ? `${dbListing.floor}${dbListing.total_floors ? ` of ${dbListing.total_floors}` : ""}` : "—" },
-        { label: "Cadastre No.", value: dbListing.cadastre_number || "—" },
-        { label: "ENFIA Zone", value: dbListing.enfia_zone || "—" },
-        { label: "Region", value: dbListing.region || "—" },
-        { label: "Postal Code", value: dbListing.postal_code || "—" },
-        { label: "Price/m²", value: dbListing.price_per_sqm ? `€${Number(dbListing.price_per_sqm).toLocaleString()}` : "—" },
-      ];
-    }
-    return [
-      { label: "Year Built", value: "2018" },
-      { label: "Energy Class", value: "B+" },
-      { label: "Floor", value: "4th of 6" },
-      { label: "Heating", value: "Autonomous gas" },
-      { label: "Orientation", value: "South-East" },
-      { label: "Zone", value: "Residential" },
-      { label: "Cadastre No.", value: "ATH-2018-104521" },
-      { label: "ENFIA Zone", value: "Zone 3 — €7.80/m²" },
-    ];
-  };
-
-  const aiInsights = [
-    { label: "Investment Score", value: `${(isDbListing ? dbListing.ai_score : mockProperty.aiScore) || 82}/100`, trend: "+3 this month", color: "text-primary" },
-    { label: "Price vs Market", value: "-8% below avg", trend: "Good deal", color: "text-brand-emerald" },
-    { label: "Rental Yield Est.", value: "4.8% p.a.", trend: "Stable", color: "text-brand-gold" },
-    { label: "Capital Growth", value: "+12% (5yr)", trend: "Athens avg +9%", color: "text-accent" },
-  ];
 
   if (isLoading && !mockProperties.find(p => p.id === id)) {
     return (
@@ -107,38 +228,95 @@ export default function PropertyDetail() {
     );
   }
 
-  // Use DB or mock data
-  const title = isDbListing ? dbListing.title : mockProperty.title;
-  const city = isDbListing ? dbListing.city : mockProperty.city;
-  const address = isDbListing ? (dbListing.address || city) : mockProperty.address;
-  const price = isDbListing ? Number(dbListing.price) : mockProperty.price;
-  const sqm = isDbListing ? Number(dbListing.sqm) : mockProperty.sqm;
-  const bedrooms = isDbListing ? dbListing.bedrooms : mockProperty.bedrooms;
-  const bathrooms = isDbListing ? dbListing.bathrooms : mockProperty.bathrooms;
-  const listingType = isDbListing ? dbListing.listing_type : mockProperty.listingType;
-  const propertyType = isDbListing ? dbListing.property_type : mockProperty.type;
-  const description = isDbListing ? dbListing.description : null;
+  const db = isDbListing ? dbListing : null;
+  const title = db?.title ?? mockProperty.title;
+  const city = db?.city ?? mockProperty.city;
+  const address = db?.address ?? mockProperty.address ?? city;
+  const price = Number(db?.price ?? mockProperty.price);
+  const sqm = Number(db?.sqm ?? mockProperty.sqm);
+  const bedrooms = db?.bedrooms ?? mockProperty.bedrooms;
+  const bathrooms = db?.bathrooms ?? mockProperty.bathrooms;
+  const listingType = db?.listing_type ?? mockProperty.listingType;
+  const propertyType = db?.property_type ?? mockProperty.type;
+  const description = db?.description;
   const ownerProfile = isDbListing ? (dbListing as any).profiles : null;
-  const pricePerSqm = isDbListing
-    ? dbListing.price_per_sqm
-    : mockProperty.pricePerSqm;
+  const pricePerSqm = db?.price_per_sqm;
+  const energyClass = db?.energy_class;
+  const isLandType = propertyType === "land";
 
-  const features = isDbListing ? [
-    dbListing.has_parking && "Parking",
-    dbListing.has_elevator && "Elevator",
-    dbListing.has_garden && "Garden",
-    dbListing.has_pool && "Pool",
-    dbListing.has_storage && "Storage",
-    dbListing.has_security && "Security",
-    dbListing.has_smart_home && "Smart Home",
-    dbListing.has_video_tour && "Video Tour",
-  ].filter(Boolean) : mockProperty.tags;
+  // ── Build feature groups ────────────────────────────────────────────────────
+  const internalFeatures: { icon?: any; label: string }[] = [];
+  const externalFeatures: { icon?: any; label: string }[] = [];
+  const constructionFeatures: { icon?: any; label: string }[] = [];
+  const suitabilityFeatures: { icon?: any; label: string }[] = [];
+
+  if (db) {
+    if (db.has_elevator) internalFeatures.push({ icon: Building2, label: "Elevator" });
+    if ((db as any).has_ac) internalFeatures.push({ icon: Thermometer, label: "Air Conditioning" });
+    if ((db as any).has_solar_water) internalFeatures.push({ icon: Zap, label: "Solar Water Heating" });
+    if (db.has_storage) internalFeatures.push({ icon: Home, label: "Storage Space" });
+    if ((db as any).has_secure_door) internalFeatures.push({ icon: Shield, label: "Secure Door" });
+    if ((db as any).has_alarm) internalFeatures.push({ icon: Shield, label: "Alarm" });
+    if ((db as any).has_cctv) internalFeatures.push({ icon: Eye, label: "CCTV" });
+    if (db.has_security) internalFeatures.push({ icon: Shield, label: "Security System" });
+    if ((db as any).has_fireplace) internalFeatures.push({ icon: Flame, label: "Fireplace" });
+    if ((db as any).has_underfloor_heating) internalFeatures.push({ icon: Thermometer, label: "Underfloor Heating" });
+    if ((db as any).has_furnished) internalFeatures.push({ icon: Home, label: "Furnished" });
+    if ((db as any).has_internal_staircase) internalFeatures.push({ label: "Internal Staircase" });
+    if ((db as any).has_double_glazing) internalFeatures.push({ label: "Double Glazed Windows" });
+    if ((db as any).has_window_screens) internalFeatures.push({ label: "Window Screens" });
+    if ((db as any).has_night_power) internalFeatures.push({ icon: Zap, label: "Night Power Rate" });
+    if ((db as any).has_attic) internalFeatures.push({ label: "Attic" });
+    if ((db as any).has_satellite) internalFeatures.push({ icon: Wifi, label: "Satellite Receiver" });
+    if (db.has_smart_home) internalFeatures.push({ icon: Wifi, label: "Smart Home" });
+    if ((db as any).has_equipped) internalFeatures.push({ icon: Wrench, label: "Equipped / Fitted-out" });
+    if ((db as any).has_three_phase_power) internalFeatures.push({ icon: Zap, label: "3-Phase Electricity" });
+    if ((db as any).has_structured_cabling) internalFeatures.push({ label: "Structured Cabling" });
+
+    if (db.has_parking) externalFeatures.push({ icon: Car, label: "Parking Space" });
+    if ((db as any).has_balcony) externalFeatures.push({ label: "Balcony" });
+    if (db.has_garden) externalFeatures.push({ icon: TreePine, label: "Garden" });
+    if (db.has_pool) externalFeatures.push({ label: "Swimming Pool" });
+    if ((db as any).has_view) externalFeatures.push({ icon: Eye, label: "View" });
+    if ((db as any).has_facade) externalFeatures.push({ label: "Facade" });
+    if ((db as any).has_awning) externalFeatures.push({ label: "Awning" });
+    if ((db as any).has_disability_access) externalFeatures.push({ label: "Disability Access" });
+    if ((db as any).is_corner) externalFeatures.push({ label: "Corner Property" });
+    if ((db as any).has_loading_dock) externalFeatures.push({ label: "Loading Dock" });
+    if ((db as any).is_buildable) externalFeatures.push({ label: "Buildable" });
+    if ((db as any).within_city_plan) externalFeatures.push({ label: "Within City Plan" });
+    if ((db as any).within_settlement) externalFeatures.push({ label: "Within Settlement" });
+    if ((db as any).has_water_supply) externalFeatures.push({ icon: Wrench, label: "Water Supply" });
+    if ((db as any).has_electricity_supply) externalFeatures.push({ icon: Zap, label: "Electricity Supply" });
+    if ((db as any).has_land_concession) externalFeatures.push({ label: "Land Concession" });
+
+    if ((db as any).is_penthouse) constructionFeatures.push({ label: "Penthouse" });
+    if ((db as any).is_neoclassical) constructionFeatures.push({ label: "Neoclassical" });
+    if ((db as any).is_preserved) constructionFeatures.push({ label: "Preserved Building" });
+    if (db.has_virtual_tour) constructionFeatures.push({ label: "Virtual Tour" });
+    if (db.has_video_tour) constructionFeatures.push({ label: "Video Tour" });
+
+    if ((db as any).suitable_student) suitabilityFeatures.push({ label: "Students" });
+    if ((db as any).suitable_holiday) suitabilityFeatures.push({ label: "Holiday Home / Tourism" });
+    if ((db as any).suitable_investment) suitabilityFeatures.push({ label: "Investment" });
+    if ((db as any).suitable_commercial_use) suitabilityFeatures.push({ label: "Commercial Use" });
+  } else {
+    // mock fallback
+    mockProperty.tags?.forEach((t: string) => externalFeatures.push({ label: t }));
+  }
+
+  const hasAnyFeatures = internalFeatures.length + externalFeatures.length + constructionFeatures.length + suitabilityFeatures.length > 0;
 
   const similarListings = isDbListing
-    ? dbSimilar.filter((l: any) => l.id !== id).slice(0, 4)
+    ? (dbSimilar as any[]).filter((l: any) => l.id !== id).slice(0, 4)
     : mockProperties.filter(p => p.id !== id && p.city === city).slice(0, 4);
 
-  const mortgageMonthly = Math.round(price * 0.8 * (0.038 / 12) / (1 - Math.pow(1 + 0.038 / 12, -240)));
+  const aiInsights = [
+    { label: "Investment Score", value: `${(db?.ai_score ?? mockProperty.aiScore) || 82}/100`, trend: "+3 this month", color: "text-primary" },
+    { label: "Price vs Market", value: "-8% below avg", trend: "Good deal", color: "text-brand-emerald" },
+    { label: "Rental Yield Est.", value: "4.8% p.a.", trend: "Stable", color: "text-brand-gold" },
+    { label: "Capital Growth", value: "+12% (5yr)", trend: "Athens avg +9%", color: "text-accent" },
+  ];
 
   return (
     <div className="min-h-screen bg-background">
@@ -161,54 +339,38 @@ export default function PropertyDetail() {
 
         <div className="container pb-16">
           <div className="grid lg:grid-cols-3 gap-8">
-            {/* Left: Main content */}
+
+            {/* ──── LEFT: Main content ──── */}
             <div className="lg:col-span-2 space-y-6">
+
               {/* Image gallery */}
               <div className="relative rounded-2xl overflow-hidden aspect-[16/9] bg-secondary group">
-                <img
-                  src={images[currentImage] || images[0]}
-                  alt={title}
-                  className="w-full h-full object-cover"
-                />
-                {/* Badges */}
+                <img src={images[currentImage] || images[0]} alt={title} className="w-full h-full object-cover" />
                 <div className="absolute top-4 left-4 flex gap-2">
-                  {listingType === "auction" && (
-                    <span className="badge-auction text-xs font-bold px-3 py-1.5 rounded-full">AUCTION</span>
-                  )}
-                  {listingType === "firesale" && (
-                    <span className="badge-firesale text-xs font-bold px-3 py-1.5 rounded-full">FIRESALE</span>
-                  )}
+                  {listingType === "auction" && <span className="badge-auction text-xs font-bold px-3 py-1.5 rounded-full">AUCTION</span>}
+                  {listingType === "firesale" && <span className="badge-firesale text-xs font-bold px-3 py-1.5 rounded-full">FIRESALE</span>}
+                  {listingType === "rent" && <span className="bg-primary text-primary-foreground text-xs font-bold px-3 py-1.5 rounded-full">FOR RENT</span>}
                 </div>
-                {/* Nav arrows */}
                 {images.length > 1 && (
                   <>
-                    <button
-                      className="absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-background/60 backdrop-blur-sm hover:bg-background/80 transition-colors"
-                      onClick={() => setCurrentImage((currentImage - 1 + images.length) % images.length)}
-                    >
+                    <button className="absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-background/60 backdrop-blur-sm hover:bg-background/80 transition-colors"
+                      onClick={() => setCurrentImage((currentImage - 1 + images.length) % images.length)}>
                       <ChevronLeft className="w-4 h-4" />
                     </button>
-                    <button
-                      className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-background/60 backdrop-blur-sm hover:bg-background/80 transition-colors"
-                      onClick={() => setCurrentImage((currentImage + 1) % images.length)}
-                    >
+                    <button className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-background/60 backdrop-blur-sm hover:bg-background/80 transition-colors"
+                      onClick={() => setCurrentImage((currentImage + 1) % images.length)}>
                       <ChevronRight className="w-4 h-4" />
                     </button>
                   </>
                 )}
-                {/* Actions overlay */}
                 <div className="absolute top-4 right-4 flex gap-2">
-                  <button
-                    className={`p-2 rounded-full backdrop-blur-sm transition-all ${isFavorited ? "bg-destructive" : "bg-background/60 hover:bg-background/80"}`}
-                    onClick={handleFavorite}
-                  >
+                  <button className={`p-2 rounded-full backdrop-blur-sm transition-all ${isFavorited ? "bg-destructive" : "bg-background/60 hover:bg-background/80"}`} onClick={handleFavorite}>
                     <Heart className={`w-4 h-4 ${isFavorited ? "fill-white text-white" : ""}`} />
                   </button>
                   <button className="p-2 rounded-full bg-background/60 backdrop-blur-sm hover:bg-background/80">
                     <Share2 className="w-4 h-4" />
                   </button>
                 </div>
-                {/* Image count */}
                 <div className="absolute bottom-4 right-4 bg-background/60 backdrop-blur-sm px-3 py-1 rounded-full text-xs">
                   {currentImage + 1} / {images.length}
                 </div>
@@ -219,14 +381,27 @@ export default function PropertyDetail() {
                 )}
               </div>
 
-              {/* Title & price */}
+              {/* Thumbnails */}
+              {images.length > 1 && (
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {images.map((img, i) => (
+                    <button key={i} onClick={() => setCurrentImage(i)}
+                      className={`shrink-0 w-16 h-12 rounded-lg overflow-hidden border-2 transition-all ${currentImage === i ? "border-primary" : "border-transparent opacity-60 hover:opacity-100"}`}>
+                      <img src={img} alt="" className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Title, price & key specs */}
               <div>
-                <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start justify-between gap-4 flex-wrap">
                   <div>
                     <h1 className="font-display text-2xl md:text-3xl font-bold">{title}</h1>
                     <div className="flex items-center gap-1 mt-2 text-muted-foreground text-sm">
                       <MapPin className="w-4 h-4" />
                       {address}{address !== city ? `, ${city}` : ""}
+                      {db?.region && ` · ${db.region}`}
                     </div>
                   </div>
                   <div className="text-right shrink-0">
@@ -234,43 +409,76 @@ export default function PropertyDetail() {
                       €{price.toLocaleString()}
                       {listingType === "rent" && <span className="text-base font-normal text-muted-foreground">/mo</span>}
                     </div>
-                    {pricePerSqm && (
-                      <div className="text-sm text-muted-foreground">€{Number(pricePerSqm).toLocaleString()}/m²</div>
-                    )}
+                    {pricePerSqm && <div className="text-sm text-muted-foreground">€{Number(pricePerSqm).toLocaleString()}/m²</div>}
                   </div>
                 </div>
 
-                {/* Specs */}
-                <div className="flex items-center gap-3 mt-4 flex-wrap">
+                {/* Quick specs */}
+                <div className="flex items-center gap-2 mt-4 flex-wrap">
                   {bedrooms != null && (
                     <div className="flex items-center gap-1.5 bg-secondary px-3 py-2 rounded-lg text-sm">
-                      <Bed className="w-4 h-4 text-muted-foreground" /><span>{bedrooms} bed</span>
+                      <Bed className="w-4 h-4 text-muted-foreground" />{bedrooms} bed
                     </div>
                   )}
                   {bathrooms != null && (
                     <div className="flex items-center gap-1.5 bg-secondary px-3 py-2 rounded-lg text-sm">
-                      <Bath className="w-4 h-4 text-muted-foreground" /><span>{bathrooms} bath</span>
+                      <Bath className="w-4 h-4 text-muted-foreground" />{bathrooms} bath
+                    </div>
+                  )}
+                  {(db as any)?.wc_count != null && (
+                    <div className="flex items-center gap-1.5 bg-secondary px-3 py-2 rounded-lg text-sm">
+                      <Home className="w-4 h-4 text-muted-foreground" />{(db as any).wc_count} WC
                     </div>
                   )}
                   <div className="flex items-center gap-1.5 bg-secondary px-3 py-2 rounded-lg text-sm">
-                    <Square className="w-4 h-4 text-muted-foreground" /><span>{sqm} m²</span>
+                    <Square className="w-4 h-4 text-muted-foreground" />{sqm} m²
                   </div>
-                  <div className="flex items-center gap-1.5 bg-secondary px-3 py-2 rounded-lg text-sm capitalize">
-                    <Home className="w-4 h-4 text-muted-foreground" /><span>{propertyType}</span>
-                  </div>
+                  {db?.floor != null && (
+                    <div className="flex items-center gap-1.5 bg-secondary px-3 py-2 rounded-lg text-sm">
+                      <Building2 className="w-4 h-4 text-muted-foreground" />
+                      {db.floor === 0 ? "Ground" : `${db.floor}${["st","nd","rd"][db.floor-1] || "th"}`} floor
+                      {db.total_floors ? ` of ${db.total_floors}` : ""}
+                    </div>
+                  )}
+                  {(db as any)?.heating_system && (
+                    <div className="flex items-center gap-1.5 bg-secondary px-3 py-2 rounded-lg text-sm capitalize">
+                      <Thermometer className="w-4 h-4 text-muted-foreground" />{(db as any).heating_system} heating
+                    </div>
+                  )}
+                  {energyClass && energyClass !== "Exempt" && (
+                    <div className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-bold ${ENERGY_COLORS[energyClass] || "bg-secondary text-foreground"}`}>
+                      <Zap className="w-4 h-4" /> {energyClass}
+                    </div>
+                  )}
                 </div>
 
-                {/* Feature tags */}
-                {features && features.length > 0 && (
-                  <div className="flex gap-2 mt-3 flex-wrap">
-                    {features.map((tag: any) => tag && (
-                      <span key={tag} className="px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary">{tag}</span>
-                    ))}
+                {/* Rent extras */}
+                {listingType === "rent" && isDbListing && (
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {(db as any)?.deposit_months && (
+                      <span className="px-2.5 py-1 rounded-full bg-secondary border border-border text-xs">
+                        🔐 {(db as any).deposit_months} month deposit
+                      </span>
+                    )}
+                    {(db as any)?.monthly_expenses && (
+                      <span className="px-2.5 py-1 rounded-full bg-secondary border border-border text-xs">
+                        💡 €{(db as any).monthly_expenses}/mo expenses
+                      </span>
+                    )}
+                    {(db as any)?.pets_allowed && (
+                      <span className="px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary">🐾 Pets Allowed</span>
+                    )}
+                    {(db as any)?.agent_fee_included && (
+                      <span className="px-2.5 py-1 rounded-full bg-brand-emerald/10 border border-brand-emerald/20 text-xs text-brand-emerald">✓ No Agent Fee</span>
+                    )}
+                    {(db as any)?.short_term_rental && (
+                      <span className="px-2.5 py-1 rounded-full bg-brand-gold/10 border border-brand-gold/20 text-xs text-brand-gold">📅 Short-term OK</span>
+                    )}
                   </div>
                 )}
               </div>
 
-              {/* AI Insights Panel */}
+              {/* AI Insights */}
               <div className="glass-card rounded-xl border border-primary/20 overflow-hidden">
                 <div className="flex items-center gap-2 p-4 bg-primary/5 border-b border-primary/20">
                   <Zap className="w-4 h-4 text-primary" />
@@ -288,69 +496,110 @@ export default function PropertyDetail() {
                 </div>
               </div>
 
-              {/* Property data */}
+              {/* Property Details table */}
               <div className="glass-card rounded-xl p-6">
                 <h3 className="font-display font-semibold mb-4">Property Details</h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {buildDataPoints().map(dp => (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-4">
+                  {[
+                    { label: "Price", value: `€${price.toLocaleString()}` },
+                    { label: "Price/m²", value: pricePerSqm ? `€${Number(pricePerSqm).toLocaleString()}` : "—" },
+                    { label: "Surface", value: `${sqm} m²` },
+                    isDbListing && db?.year_built && { label: "Year Built", value: db.year_built.toString() },
+                    isDbListing && db?.floor != null && { label: "Floor", value: db.floor === 0 ? "Ground" : `${db.floor}${db.total_floors ? ` of ${db.total_floors}` : ""}` },
+                    isDbListing && (db as any)?.levels && { label: "Levels", value: (db as any).levels },
+                    isDbListing && (db as any)?.kitchens && { label: "Kitchens", value: (db as any).kitchens },
+                    isDbListing && (db as any)?.living_rooms && { label: "Living Rooms", value: (db as any).living_rooms },
+                    isDbListing && (db as any)?.wc_count && { label: "WC", value: (db as any).wc_count },
+                    isDbListing && (db as any)?.heating_system && { label: "Heating", value: (db as any).heating_system?.replace("_", " ") },
+                    isDbListing && db?.energy_class && { label: "Energy Class", value: db.energy_class },
+                    isDbListing && (db as any)?.construction_status && { label: "Construction", value: (db as any).construction_status?.replace("_", " ") },
+                    isDbListing && db?.cadastre_number && { label: "Cadastre No.", value: db.cadastre_number },
+                    isDbListing && db?.enfia_zone && { label: "ENFIA Zone", value: db.enfia_zone },
+                    isDbListing && db?.postal_code && { label: "Postal Code", value: db.postal_code },
+                    isDbListing && db?.region && { label: "Region", value: db.region },
+                    // Land specific
+                    isLandType && isDbListing && (db as any)?.coverage_ratio && { label: "Coverage Ratio", value: `${(db as any).coverage_ratio}%` },
+                    isLandType && isDbListing && (db as any)?.building_allowance && { label: "Build Allowance", value: `${(db as any).building_allowance} m²` },
+                    isLandType && isDbListing && (db as any)?.facade_length && { label: "Facade Length", value: `${(db as any).facade_length} m` },
+                    isLandType && isDbListing && (db as any)?.plot_depth && { label: "Plot Depth", value: `${(db as any).plot_depth} m` },
+                    isLandType && isDbListing && (db as any)?.slope && { label: "Slope", value: (db as any).slope },
+                    isLandType && isDbListing && (db as any)?.zone_type && { label: "Zone", value: (db as any).zone_type },
+                    isLandType && isDbListing && (db as any)?.road_type && { label: "Road Type", value: (db as any).road_type },
+                    isLandType && isDbListing && (db as any)?.distance_from_sea && { label: "From Sea", value: `${(db as any).distance_from_sea} m` },
+                    isLandType && isDbListing && (db as any)?.distance_from_city && { label: "From City", value: `${(db as any).distance_from_city} m` },
+                    // Commercial
+                    isDbListing && (db as any)?.commercial_subtype && { label: "Subtype", value: (db as any).commercial_subtype },
+                    isDbListing && (db as any)?.plot_surface && { label: "Plot Surface", value: `${(db as any).plot_surface} m²` },
+                    isDbListing && (db as any)?.floor_height && { label: "Floor Height", value: `${(db as any).floor_height} m` },
+                    // System
+                    isDbListing && { label: "System Code", value: db!.id.slice(0, 8).toUpperCase() },
+                    isDbListing && { label: "Published", value: new Date(db!.created_at).toLocaleDateString("en-GB") },
+                    isDbListing && { label: "Last Updated", value: new Date(db!.updated_at).toLocaleDateString("en-GB") },
+                    isDbListing && { label: "Availability", value: (db as any)?.available_from ? `From ${new Date((db as any).available_from).toLocaleDateString("en-GB")}` : "Available now" },
+                  ].filter(Boolean).map((dp: any) => (
                     <div key={dp.label}>
-                      <div className="text-xs text-muted-foreground">{dp.label}</div>
-                      <div className="text-sm font-medium mt-0.5">{dp.value}</div>
+                      <div className="text-xs text-muted-foreground capitalize">{dp.label}</div>
+                      <div className="text-sm font-medium mt-0.5 capitalize">{dp.value}</div>
                     </div>
                   ))}
                 </div>
+
+                {/* Energy class visual badge */}
+                {energyClass && energyClass !== "Exempt" && ENERGY_COLORS[energyClass] && (
+                  <div className="mt-5 pt-5 border-t border-border">
+                    <div className="text-xs text-muted-foreground mb-2 font-semibold uppercase tracking-wider">Energy Performance Certificate</div>
+                    <div className="flex items-center gap-3">
+                      <div className={`px-4 py-2 rounded-lg font-display font-black text-2xl ${ENERGY_COLORS[energyClass]}`}>
+                        {energyClass}
+                      </div>
+                      <div className="flex-1">
+                        {/* Energy scale bar */}
+                        <div className="flex gap-0.5 mb-1">
+                          {["A+","A","B+","B","C","D","E","F","G"].map(cls => (
+                            <div key={cls}
+                              className={`h-4 flex-1 rounded-sm text-[8px] flex items-center justify-center font-bold ${ENERGY_COLORS[cls]} ${cls === energyClass ? "scale-110 z-10 relative ring-2 ring-foreground" : "opacity-40"}`}>
+                              {cls === energyClass ? cls : ""}
+                            </div>
+                          ))}
+                        </div>
+                        <p className="text-[10px] text-muted-foreground">{ENERGY_DESCRIPTIONS[energyClass]}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Description */}
               <div className="glass-card rounded-xl p-6">
                 <h3 className="font-display font-semibold mb-4">Description</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">
+                <div className={`text-sm text-muted-foreground leading-relaxed ${!descExpanded ? "line-clamp-4" : ""}`}>
                   {description ||
                     `This exceptional property offers a rare combination of modern architecture and premium location in the heart of ${city}. 
                     Featuring high-end finishes throughout, the property benefits from abundant natural light and exceptional views. 
-                    The open-plan living area flows seamlessly to a private terrace, while the kitchen is equipped with top-of-the-line appliances.`}
-                </p>
+                    The open-plan living area flows seamlessly to a private terrace, while the kitchen is equipped with top-of-the-line appliances. 
+                    Ideally positioned near all amenities, transport links, and quality schools — an outstanding opportunity not to be missed.`}
+                </div>
+                {(description?.length ?? 200) > 200 && (
+                  <button onClick={() => setDescExpanded(!descExpanded)}
+                    className="flex items-center gap-1 text-xs text-primary mt-2 hover:underline">
+                    {descExpanded ? <><ChevronUp className="w-3 h-3" />Show less</> : <><ChevronDown className="w-3 h-3" />Read more</>}
+                  </button>
+                )}
               </div>
 
-              {/* Premium AI Report */}
-              <div className={`rounded-xl border overflow-hidden ${reportPurchased ? "border-primary/30 bg-primary/5" : "border-border bg-card"}`}>
-                <div className="p-6">
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-primary flex items-center justify-center shrink-0">
-                      <BarChart2 className="w-6 h-6 text-primary-foreground" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-display font-semibold">Full AI Property Report</h3>
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold font-semibold">PREMIUM</span>
-                      </div>
-                      <p className="text-sm text-muted-foreground mb-4">
-                        Deep-dive analysis: cadastre verification, full price history, comparable sales, neighborhood trends, investment projection, ENFIA calculation, and legal status check.
-                      </p>
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-4">
-                        {["Cadastre Verification", "5-Year Price History", "Comparable Sales", "Investment Projection", "Legal Status Check", "Neighborhood Score"].map(item => (
-                          <div key={item} className={`flex items-center gap-1.5 text-xs ${reportPurchased ? "text-primary" : "text-muted-foreground"}`}>
-                            {reportPurchased ? <Check className="w-3 h-3 text-primary" /> : <Lock className="w-3 h-3" />}
-                            {item}
-                          </div>
-                        ))}
-                      </div>
-                      {!reportPurchased ? (
-                        <div className="flex items-center gap-3">
-                          <Button className="bg-gradient-primary border-0 text-primary-foreground" onClick={() => setReportPurchased(true)}>
-                            Unlock Report — €29
-                          </Button>
-                          <span className="text-xs text-muted-foreground">One-time payment, instant access</span>
-                        </div>
-                      ) : (
-                        <Button variant="outline" className="border-primary/30 text-primary gap-2">
-                          <Download className="w-4 h-4" /> Download PDF Report
-                        </Button>
-                      )}
-                    </div>
-                  </div>
+              {/* Feature sections — Spitogatos style */}
+              {hasAnyFeatures && (
+                <div className="glass-card rounded-xl p-6 space-y-5">
+                  <h3 className="font-display font-semibold">Features & Amenities</h3>
+                  <FeatureSection title="Internal" features={internalFeatures} />
+                  <FeatureSection title="External" features={externalFeatures} />
+                  <FeatureSection title="Construction" features={constructionFeatures} />
+                  <FeatureSection title="Suitable For" features={suitabilityFeatures} />
                 </div>
-              </div>
+              )}
+
+              {/* Map */}
+              <MapSection address={address} city={city} />
 
               {/* Auction details */}
               {listingType === "auction" && (
@@ -394,6 +643,46 @@ export default function PropertyDetail() {
                 </div>
               )}
 
+              {/* Premium AI Report */}
+              <div className={`rounded-xl border overflow-hidden ${reportPurchased ? "border-primary/30 bg-primary/5" : "border-border bg-card"}`}>
+                <div className="p-6">
+                  <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-primary flex items-center justify-center shrink-0">
+                      <BarChart2 className="w-6 h-6 text-primary-foreground" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="font-display font-semibold">Full AI Property Report</h3>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold font-semibold">PREMIUM</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground mb-4">
+                        Deep-dive analysis: cadastre verification, full price history, comparable sales, neighborhood trends, investment projection, ENFIA calculation, and legal status check.
+                      </p>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-4">
+                        {["Cadastre Verification", "5-Year Price History", "Comparable Sales", "Investment Projection", "Legal Status Check", "Neighborhood Score"].map(item => (
+                          <div key={item} className={`flex items-center gap-1.5 text-xs ${reportPurchased ? "text-primary" : "text-muted-foreground"}`}>
+                            {reportPurchased ? <Check className="w-3 h-3 text-primary" /> : <Lock className="w-3 h-3" />}
+                            {item}
+                          </div>
+                        ))}
+                      </div>
+                      {!reportPurchased ? (
+                        <div className="flex items-center gap-3">
+                          <Button className="bg-gradient-primary border-0 text-primary-foreground" onClick={() => setReportPurchased(true)}>
+                            Unlock Report — €29
+                          </Button>
+                          <span className="text-xs text-muted-foreground">One-time payment, instant access</span>
+                        </div>
+                      ) : (
+                        <Button variant="outline" className="border-primary/30 text-primary gap-2">
+                          <Download className="w-4 h-4" /> Download PDF Report
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* Similar properties */}
               {similarListings.length > 0 && (
                 <div>
@@ -418,45 +707,43 @@ export default function PropertyDetail() {
               )}
             </div>
 
-            {/* Right: Contact sidebar */}
+            {/* ──── RIGHT: Sticky sidebar ──── */}
             <div className="space-y-4 lg:sticky lg:top-24 self-start">
+
               {/* Owner / Agent card */}
               <div className="glass-card rounded-xl p-5 border border-primary/10">
                 {ownerProfile ? (
-                  <>
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="w-12 h-12 rounded-full bg-gradient-primary flex items-center justify-center text-lg font-bold text-primary-foreground overflow-hidden">
-                        {ownerProfile.avatar_url
-                          ? <img src={ownerProfile.avatar_url} alt="" className="w-full h-full object-cover" />
-                          : (ownerProfile.display_name?.[0] || "O")}
-                      </div>
-                      <div>
-                        <div className="font-semibold text-sm">{ownerProfile.display_name || "Owner"}</div>
-                        <div className="text-xs text-muted-foreground capitalize">{isDbListing && "Listing Owner"}</div>
-                        {ownerProfile.verified && (
-                          <div className="flex items-center gap-1 text-xs text-primary mt-0.5">
-                            <CheckCircle className="w-3 h-3" /><span>Verified</span>
-                          </div>
-                        )}
-                      </div>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-12 h-12 rounded-full bg-gradient-primary flex items-center justify-center text-lg font-bold text-primary-foreground overflow-hidden">
+                      {ownerProfile.avatar_url
+                        ? <img src={ownerProfile.avatar_url} alt="" className="w-full h-full object-cover" />
+                        : (ownerProfile.display_name?.[0] || "O")}
                     </div>
-                  </>
+                    <div>
+                      <div className="font-semibold text-sm">{ownerProfile.display_name || "Owner"}</div>
+                      <div className="text-xs text-muted-foreground">Listing Owner</div>
+                      {ownerProfile.verified && (
+                        <div className="flex items-center gap-1 text-xs text-primary mt-0.5">
+                          <CheckCircle className="w-3 h-3" />Verified
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 ) : (
                   <div className="flex items-center gap-3 mb-4">
-                    <div className="w-12 h-12 rounded-full bg-gradient-primary flex items-center justify-center text-lg font-bold text-primary-foreground">
-                      A
-                    </div>
+                    <div className="w-12 h-12 rounded-full bg-gradient-primary flex items-center justify-center text-lg font-bold text-primary-foreground">A</div>
                     <div>
                       <div className="font-semibold text-sm">Licensed Agent</div>
                       <div className="flex items-center gap-1 text-xs text-brand-gold mt-0.5">
-                        <Star className="w-3 h-3 fill-current" /><span>Verified</span>
+                        <Star className="w-3 h-3 fill-current" />Verified
                       </div>
                     </div>
                   </div>
                 )}
 
                 <div className="space-y-2">
-                  <Button className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2" onClick={handleContact} disabled={startConversation.isPending}>
+                  <Button className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2"
+                    onClick={handleContact} disabled={startConversation.isPending}>
                     {startConversation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
                     Send Message
                   </Button>
@@ -471,7 +758,7 @@ export default function PropertyDetail() {
                   </Button>
                 </div>
                 <div className="mt-4 pt-4 border-t border-border text-xs text-muted-foreground text-center">
-                  Response time: usually within 2 hours
+                  <Clock className="w-3 h-3 inline mr-1" />Response time: usually within 2 hours
                 </div>
               </div>
 
@@ -488,33 +775,50 @@ export default function PropertyDetail() {
                     </div>
                   ))}
                   <div className="flex items-center gap-2">
-                    <Clock className="w-3 h-3 text-muted-foreground" />Last verified: today
+                    <Clock className="w-3 h-3" />Last verified: today
                   </div>
                 </div>
               </div>
 
-              {/* Mortgage calculator */}
-              <div className="glass-card rounded-xl p-5">
-                <h4 className="font-display font-semibold text-sm mb-3">Mortgage Calculator</h4>
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-xs text-muted-foreground">Property Price</label>
-                    <div className="bg-secondary rounded-lg px-3 py-2 text-sm font-semibold mt-1">€{price.toLocaleString()}</div>
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground">Down Payment (20%)</label>
-                    <div className="bg-secondary rounded-lg px-3 py-2 text-sm mt-1">€{Math.round(price * 0.2).toLocaleString()}</div>
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground">Rate (estimated)</label>
-                    <div className="bg-secondary rounded-lg px-3 py-2 text-sm mt-1">3.8% p.a.</div>
-                  </div>
-                  <div className="bg-primary/10 rounded-lg p-3 border border-primary/20">
-                    <div className="text-xs text-muted-foreground">Est. Monthly Payment</div>
-                    <div className="font-display font-bold text-lg text-primary mt-1">€{mortgageMonthly.toLocaleString()}/mo</div>
-                    <div className="text-xs text-muted-foreground mt-1">Based on 20yr term</div>
+              {/* Interactive Mortgage Calculator (only for sale listings) */}
+              {listingType !== "rent" && <MortgageCalculator price={price} />}
+
+              {/* Rent summary card */}
+              {listingType === "rent" && isDbListing && (
+                <div className="glass-card rounded-xl p-5 space-y-3">
+                  <h4 className="font-display font-semibold text-sm">Rental Summary</h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Monthly Rent</span>
+                      <span className="font-semibold">€{price.toLocaleString()}</span>
+                    </div>
+                    {(db as any)?.monthly_expenses && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Shared Expenses</span>
+                        <span>€{(db as any).monthly_expenses}</span>
+                      </div>
+                    )}
+                    {(db as any)?.deposit_months && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Deposit</span>
+                        <span>{(db as any).deposit_months} months (€{(price * (db as any).deposit_months).toLocaleString()})</span>
+                      </div>
+                    )}
+                    <div className="pt-2 border-t border-border flex justify-between font-semibold">
+                      <span>Total Move-in Cost</span>
+                      <span className="text-primary">
+                        €{(price * (1 + ((db as any)?.deposit_months || 0))).toLocaleString()}
+                      </span>
+                    </div>
                   </div>
                 </div>
+              )}
+
+              {/* Report error */}
+              <div className="text-center">
+                <button className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 mx-auto">
+                  <Info className="w-3 h-3" />Found an error in this listing? Report it
+                </button>
               </div>
             </div>
           </div>
@@ -525,13 +829,13 @@ export default function PropertyDetail() {
       <ViewingDialog
         open={viewingOpen}
         onClose={() => setViewingOpen(false)}
-      property={isDbListing ? {
-        id: dbListing.id, title: dbListing.title, city: dbListing.city,
-        price: Number(dbListing.price), sqm: Number(dbListing.sqm),
-        type: dbListing.property_type as any, listingType: dbListing.listing_type as any,
-        images: images, address: dbListing.address || dbListing.city,
-        tags: features as string[]
-      } : mockProperty}
+        property={isDbListing ? {
+          id: dbListing.id, title: dbListing.title, city: dbListing.city,
+          price: Number(dbListing.price), sqm: Number(dbListing.sqm),
+          type: dbListing.property_type as any, listingType: dbListing.listing_type as any,
+          images: images, address: dbListing.address || dbListing.city,
+          tags: []
+        } : mockProperty}
       />
     </div>
   );
