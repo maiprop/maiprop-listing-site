@@ -33,9 +33,30 @@ export interface PropertyGroup {
 
 export const PROPERTY_GROUPS: PropertyGroup[] = [
   { id: "residence", label: "Residence", emoji: "🏠", types: ["apartment", "house", "villa"] },
-  { id: "commercial", label: "Commercial", emoji: "🏪", types: ["commercial", "office"] },
+  { id: "commercial", label: "Commercial", emoji: "🏪", types: ["commercial"] },
   { id: "land", label: "Land", emoji: "🌾", types: ["land"] },
 ];
+
+// Contextual filter chips shown in More Filters per type — not used as dropdown subtypes
+export const TYPE_STYLE_FILTERS: Partial<Record<PropertyTypeKey, { value: string; label: string }[]>> = {
+  apartment: [
+    { value: "penthouse",  label: "🏙️ Penthouse" },
+    { value: "loft",       label: "🏭 Loft / Duplex" },
+    { value: "maisonette", label: "🏘️ Maisonette" },
+  ],
+  house: [
+    { value: "neoclassical", label: "🏛️ Neoclassical" },
+    { value: "traditional",  label: "🪨 Traditional" },
+  ],
+  villa: [
+    { value: "seafront",   label: "🌊 Seafront" },
+    { value: "hilltop",    label: "⛰️ Hilltop / View" },
+    { value: "countryside",label: "🌄 Countryside" },
+    { value: "island",     label: "🏝️ Island Villa" },
+    { value: "gated",      label: "🔐 Gated Complex" },
+    { value: "golden_visa",label: "🛂 Golden Visa" },
+  ],
+};
 
 export const PROPERTY_TYPES: PropertyTypeConfig[] = [
   {
@@ -49,16 +70,13 @@ export const PROPERTY_TYPES: PropertyTypeConfig[] = [
     bgClass: "bg-primary/10",
     group: "residence",
     subtypes: [
-      { value: "studio",       label: "Studio",        description: "Open-plan single room, ideal for singles or short-term rental" },
-      { value: "1bedroom",     label: "1-Bedroom",     description: "Compact flat with separate sleeping area" },
-      { value: "2bedroom",     label: "2-Bedroom",     description: "Popular choice for couples and small families" },
-      { value: "3bedroom",     label: "3-Bedroom",     description: "Spacious family apartment" },
-      { value: "4bedroom",     label: "4+ Bedrooms",   description: "Large family or multi-room apartment" },
-      { value: "penthouse",    label: "Penthouse",     description: "Top-floor prestige unit with terrace and panoramic views" },
-      { value: "maisonette",   label: "Maisonette",    description: "Two-storey flat with private internal staircase" },
-      { value: "loft",         label: "Loft / Duplex", description: "Industrial-style open plan or two-level layout" },
-      { value: "ground_floor", label: "Ground Floor",  description: "Street-level unit, often with private garden access" },
-      { value: "basement",     label: "Basement",      description: "Lower-ground level, frequently used for storage or commercial" },
+      { value: "studio",       label: "Studio",       description: "Open-plan single room, ideal for singles or short-term rental" },
+      { value: "1bedroom",     label: "1-Bedroom",    description: "Compact flat with separate sleeping area" },
+      { value: "2bedroom",     label: "2-Bedroom",    description: "Popular choice for couples and small families" },
+      { value: "3bedroom",     label: "3-Bedroom",    description: "Spacious family apartment" },
+      { value: "4bedroom",     label: "4+ Bedrooms",  description: "Large family or multi-room apartment" },
+      { value: "ground_floor", label: "Ground Floor", description: "Street-level unit, often with private garden access" },
+      { value: "basement",     label: "Basement",     description: "Lower-ground level" },
     ],
   },
   {
@@ -72,13 +90,11 @@ export const PROPERTY_TYPES: PropertyTypeConfig[] = [
     bgClass: "bg-brand-emerald/10",
     group: "residence",
     subtypes: [
-      { value: "detached",     label: "Detached",       description: "Freestanding single-family home on its own plot" },
-      { value: "semi_detached",label: "Semi-Detached",  description: "Paired home sharing one party wall" },
-      { value: "terraced",     label: "Terraced / Row", description: "Mid-terrace home in a row of similar properties" },
-      { value: "townhouse",    label: "Townhouse",      description: "Multi-storey home in an urban setting" },
-      { value: "bungalow",     label: "Bungalow",       description: "Single-storey home, accessible and easy to maintain" },
-      { value: "traditional",  label: "Traditional",    description: "Classic Greek stone or plaster construction" },
-      { value: "neoclassical", label: "Neoclassical",   description: "19th–20th century neo-classical architecture" },
+      { value: "detached",      label: "Detached",       description: "Freestanding single-family home on its own plot" },
+      { value: "semi_detached", label: "Semi-Detached",  description: "Paired home sharing one party wall" },
+      { value: "terraced",      label: "Terraced / Row", description: "Mid-terrace home in a row of similar properties" },
+      { value: "townhouse",     label: "Townhouse",      description: "Multi-storey home in an urban setting" },
+      { value: "bungalow",      label: "Bungalow",       description: "Single-storey home, accessible and easy to maintain" },
     ],
   },
   {
@@ -91,14 +107,7 @@ export const PROPERTY_TYPES: PropertyTypeConfig[] = [
     accentClass: "text-brand-gold",
     bgClass: "bg-brand-gold/10",
     group: "residence",
-    subtypes: [
-      { value: "seafront",    label: "Seafront",      description: "Directly on or within walking distance of the beach" },
-      { value: "hilltop",     label: "Hilltop / View",description: "Panoramic views over sea, valleys, or city" },
-      { value: "countryside", label: "Countryside",   description: "Rural retreat surrounded by nature" },
-      { value: "island",      label: "Island Villa",  description: "Cyclades, Ionian, or Dodecanese island property" },
-      { value: "gated",       label: "Gated Complex", description: "Within a managed, secured villa complex" },
-      { value: "golden_visa", label: "Golden Visa",   description: "Qualifies for Greek Golden Visa investment (€250k+)" },
-    ],
+    subtypes: [], // All villa styles are contextual filters
   },
   {
     value: "land",
@@ -113,7 +122,7 @@ export const PROPERTY_TYPES: PropertyTypeConfig[] = [
     subtypes: [
       { value: "buildable",    label: "Buildable Plot",     description: "Within city plan — approved for residential construction" },
       { value: "agricultural", label: "Agricultural",       description: "Farming or olive grove land, sometimes buildable" },
-      { value: "coastal",      label: "Coastal / Seafront", description: "Adjacent to sea or beach — high value and demand" },
+      { value: "coastal",      label: "Coastal / Seafront", description: "Adjacent to sea or beach" },
       { value: "forest",       label: "Forest / Woodland",  description: "Wooded land, often outside city plan" },
       { value: "industrial",   label: "Industrial Zone",    description: "VIPE / VIPA industrial plot for commercial use" },
       { value: "tourism",      label: "Tourism Zone",       description: "Approved for tourist development (hotel, resort)" },
@@ -124,8 +133,8 @@ export const PROPERTY_TYPES: PropertyTypeConfig[] = [
     label: "Commercial",
     labelPlural: "Commercial",
     emoji: "🏪",
-    description: "Retail shops, warehouses, clinics, showrooms & more",
-    keywords: ["shop", "warehouse", "retail", "investment yield"],
+    description: "Retail shops, warehouses, offices, clinics, showrooms & more",
+    keywords: ["shop", "warehouse", "retail", "office", "investment yield"],
     accentClass: "text-accent",
     bgClass: "bg-accent/10",
     group: "commercial",
@@ -141,9 +150,16 @@ export const PROPERTY_TYPES: PropertyTypeConfig[] = [
       { value: "restaurant",         label: "Restaurant / Café",    description: "Food & beverage premises, often with fitted kitchen" },
       { value: "clinic",             label: "Clinic / Medical",     description: "Purpose-built medical or dental practice" },
       { value: "mixed_use",          label: "Mixed-Use Building",   description: "Ground-floor commercial with residential above" },
+      // Office subtypes merged under Commercial
+      { value: "office_private",     label: "Office – Private",     description: "Dedicated closed office space for a single team" },
+      { value: "office_open_plan",   label: "Office – Open Plan",   description: "Flexible open layout — ideal for growing teams" },
+      { value: "office_coworking",   label: "Coworking / Flex",     description: "Shared space with month-to-month flexibility" },
+      { value: "office_business",    label: "Business Centre",      description: "Serviced offices with reception and meeting rooms" },
+      { value: "office_floor",       label: "Whole Floor",          description: "Full building floor — prestige address" },
       { value: "other_commercial",   label: "Other",                description: "Other commercial property type (Λοιπές κατηγορίες)" },
     ],
   },
+  // "office" kept for DB compatibility but hidden from UI groups — maps to commercial
   {
     value: "office",
     label: "Office",
@@ -155,12 +171,12 @@ export const PROPERTY_TYPES: PropertyTypeConfig[] = [
     bgClass: "bg-brand-cyan/10",
     group: "commercial",
     subtypes: [
-      { value: "private_office",  label: "Private Office",  description: "Dedicated closed space for a single team" },
-      { value: "open_plan",       label: "Open Plan",       description: "Flexible open layout — ideal for growing teams" },
-      { value: "coworking",       label: "Coworking / Flex",description: "Shared space with month-to-month flexibility" },
-      { value: "business_centre", label: "Business Centre", description: "Serviced offices with reception and meeting rooms" },
-      { value: "floor",           label: "Whole Floor",     description: "Full building floor — prestige address" },
-      { value: "converted",       label: "Converted Space", description: "Repurposed residential or industrial space" },
+      { value: "private_office",  label: "Private Office",   description: "Dedicated closed space for a single team" },
+      { value: "open_plan",       label: "Open Plan",        description: "Flexible open layout — ideal for growing teams" },
+      { value: "coworking",       label: "Coworking / Flex", description: "Shared space with month-to-month flexibility" },
+      { value: "business_centre", label: "Business Centre",  description: "Serviced offices with reception and meeting rooms" },
+      { value: "floor",           label: "Whole Floor",      description: "Full building floor — prestige address" },
+      { value: "converted",       label: "Converted Space",  description: "Repurposed residential or industrial space" },
     ],
   },
 ];
