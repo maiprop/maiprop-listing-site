@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { X, ArrowRight, Check, Minus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
