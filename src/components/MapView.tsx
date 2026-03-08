@@ -1,10 +1,9 @@
-import { useState, useRef, useCallback } from "react";
+import { useState } from "react";
 import Map, { Marker, Popup, NavigationControl } from "react-map-gl";
 import { MapPin, Bed, Bath, Ruler } from "lucide-react";
 import { Link } from "react-router-dom";
 import "mapbox-gl/dist/mapbox-gl.css";
-
-const MAPBOX_TOKEN = "pk.eyJ1IjoibWFpcHJvcCIsImEiOiJkZW1vIn0.placeholder";
+import { MAPBOX_TOKEN } from "@/lib/config";
 
 type MapListing = {
   id: string;
