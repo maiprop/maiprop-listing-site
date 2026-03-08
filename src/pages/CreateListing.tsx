@@ -2,18 +2,26 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ChevronLeft, ChevronRight, Check, Upload, X, Loader2,
-  Home, Building2, Zap, MapPin, DollarSign, Image as ImageIcon
+  Home, Building2, Zap, MapPin, DollarSign, Image as ImageIcon,
+  Info
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
-import { useCreateListing } from "@/hooks/useListings";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
 const PROPERTY_TYPES = ["apartment", "house", "villa", "land", "commercial", "office"] as const;
+type PropertyType = typeof PROPERTY_TYPES[number];
 const LISTING_TYPES = ["sale", "rent", "auction"] as const;
-const ENERGY_CLASSES = ["A+", "A", "B+", "B", "C", "D", "E", "F", "G"];
+type ListingType = typeof LISTING_TYPES[number];
+const ENERGY_CLASSES = ["A+", "A", "B+", "B", "C", "D", "E", "F", "G", "Exempt"];
+const HEATING_SYSTEMS = ["autonomous", "central", "floor", "none", "other"];
+const CONSTRUCTION_STATUSES = ["new", "under_construction", "renovated", "needs_renovation", "unfinished", "preserved", "neoclassical"];
+const SLOPES = ["flat", "slight", "steep"];
+const ZONE_TYPES = ["residential", "agricultural", "tourist", "industrial", "commercial", "mixed"];
+const ROAD_TYPES = ["asphalt", "paved", "dirt"];
+const COMMERCIAL_SUBTYPES = ["shop", "office", "warehouse", "hotel", "restaurant", "showroom", "clinic", "industrial", "other"];
 
 const steps = [
   { id: 1, label: "Type", icon: Home },
@@ -24,8 +32,12 @@ const steps = [
   { id: 6, label: "Photos", icon: ImageIcon },
 ];
 
-function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <label className="text-xs text-muted-foreground block mb-1.5 font-medium">{children}</label>;
+function FieldLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
+  return (
+    <label className="text-xs text-muted-foreground block mb-1.5 font-medium">
+      {children}{required && <span className="text-destructive ml-1">*</span>}
+    </label>
+  );
 }
 
 function Input({ ...props }: React.InputHTMLAttributes<HTMLInputElement>) {
@@ -34,6 +46,17 @@ function Input({ ...props }: React.InputHTMLAttributes<HTMLInputElement>) {
       {...props}
       className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
     />
+  );
+}
+
+function Select({ children, ...props }: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <select
+      {...props}
+      className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors appearance-none"
+    >
+      {children}
+    </select>
   );
 }
 
@@ -46,10 +69,31 @@ function Textarea({ ...props }: React.TextareaHTMLAttributes<HTMLTextAreaElement
   );
 }
 
+function ToggleChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
+        active ? "border-primary bg-primary/10 text-primary" : "border-border bg-secondary text-muted-foreground hover:text-foreground"
+      }`}
+    >
+      {active && <Check className="w-3 h-3 inline mr-1" />}{children}
+    </button>
+  );
+}
+
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3 mt-5 first:mt-0">{children}</h3>;
+}
+
+const isResidential = (t: PropertyType) => ["apartment", "house", "villa"].includes(t);
+const isLand = (t: PropertyType) => t === "land";
+const isCommercial = (t: PropertyType) => ["commercial", "office"].includes(t);
+
 export default function CreateListing() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const createListing = useCreateListing();
 
   const [step, setStep] = useState(1);
   const [uploading, setUploading] = useState(false);
@@ -57,43 +101,120 @@ export default function CreateListing() {
 
   const [form, setForm] = useState({
     // Step 1 - Type
-    listing_type: "sale" as "sale" | "rent" | "auction",
-    property_type: "apartment" as typeof PROPERTY_TYPES[number],
-    // Step 2 - Details
+    listing_type: "sale" as ListingType,
+    property_type: "apartment" as PropertyType,
+    // Step 2 - Details (core)
     title: "",
     description: "",
-    bedrooms: "",
-    bathrooms: "",
     sqm: "",
-    floor: "",
-    total_floors: "",
     year_built: "",
     energy_class: "",
-    // Step 3 - Features
-    has_parking: false,
+    // Residential
+    bedrooms: "",
+    bathrooms: "",
+    wc_count: "",
+    kitchens: "",
+    living_rooms: "",
+    floor: "",
+    total_floors: "",
+    levels: "",
+    heating_system: "",
+    construction_status: "",
+    // Commercial
+    commercial_subtype: "",
+    plot_surface: "",
+    floor_height: "",
+    // Step 3 - Features (context-aware booleans)
+    // Internal
     has_elevator: false,
-    has_garden: false,
-    has_pool: false,
+    has_ac: false,
+    has_solar_water: false,
     has_storage: false,
+    has_secure_door: false,
+    has_alarm: false,
+    has_cctv: false,
     has_security: false,
     has_smart_home: false,
+    has_fireplace: false,
+    has_underfloor_heating: false,
+    has_furnished: false,
+    has_internal_staircase: false,
+    has_double_glazing: false,
+    has_window_screens: false,
+    has_night_power: false,
+    has_attic: false,
+    has_satellite: false,
+    has_painted: false,
+    // External
+    has_parking: false,
+    has_balcony: false,
+    has_garden: false,
+    has_pool: false,
+    has_view: false,
+    has_facade: false,
+    has_awning: false,
+    has_disability_access: false,
+    is_corner: false,
+    is_penthouse: false,
+    // Construction
+    is_neoclassical: false,
+    is_preserved: false,
+    has_virtual_tour: false,
     has_video_tour: false,
+    // Suitability
+    suitable_student: false,
+    suitable_holiday: false,
+    suitable_investment: false,
+    suitable_commercial_use: false,
+    // Commercial features
+    has_three_phase_power: false,
+    has_loading_dock: false,
+    has_structured_cabling: false,
+    has_equipped: false,
+    // Land features
+    is_buildable: false,
+    within_city_plan: false,
+    within_settlement: false,
+    has_water_supply: false,
+    has_electricity_supply: false,
+    has_land_concession: false,
+    coverage_ratio: "",
+    building_allowance: "",
+    facade_length: "",
+    plot_depth: "",
+    slope: "",
+    zone_type: "",
+    road_type: "",
+    land_use: "",
+    distance_from_sea: "",
+    distance_from_city: "",
     // Step 4 - Location
     address: "",
     city: "",
     region: "",
     postal_code: "",
     cadastre_number: "",
+    enfia_zone: "",
     // Step 5 - Pricing
     price: "",
     auction_starting_bid: "",
     auction_date: "",
     auction_court: "",
-    // Step 6 - Photos (covered by coverImageUrl)
+    // Rent-specific pricing
+    deposit_months: "",
+    monthly_expenses: "",
+    agent_fee_included: false,
+    pets_allowed: false,
+    short_term_rental: false,
+    available_from: "",
+    min_rental_months: "",
   });
 
   const set = (key: string, value: unknown) => setForm(f => ({ ...f, [key]: value }));
   const toggle = (key: string) => setForm(f => ({ ...f, [key]: !(f as any)[key] }));
+
+  const pt = form.property_type;
+  const lt = form.listing_type;
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -128,34 +249,118 @@ export default function CreateListing() {
         region: form.region || undefined,
         postal_code: form.postal_code || undefined,
         cadastre_number: form.cadastre_number || undefined,
+        enfia_zone: form.enfia_zone || undefined,
         property_type: form.property_type,
         listing_type: form.listing_type,
         price: Number(form.price),
         sqm: Number(form.sqm),
-        bedrooms: form.bedrooms ? Number(form.bedrooms) : undefined,
-        bathrooms: form.bathrooms ? Number(form.bathrooms) : undefined,
-        floor: form.floor ? Number(form.floor) : undefined,
-        total_floors: form.total_floors ? Number(form.total_floors) : undefined,
         year_built: form.year_built ? Number(form.year_built) : undefined,
         energy_class: form.energy_class || undefined,
-        has_parking: form.has_parking,
+        heating_system: form.heating_system || undefined,
+        construction_status: form.construction_status || undefined,
+        cover_image_url: coverImageUrl || undefined,
+        price_per_sqm: form.price && form.sqm ? Math.round(Number(form.price) / Number(form.sqm)) : undefined,
+        // Residential
+        ...(isResidential(pt) && {
+          bedrooms: form.bedrooms ? Number(form.bedrooms) : undefined,
+          bathrooms: form.bathrooms ? Number(form.bathrooms) : undefined,
+          wc_count: form.wc_count ? Number(form.wc_count) : undefined,
+          kitchens: form.kitchens ? Number(form.kitchens) : undefined,
+          living_rooms: form.living_rooms ? Number(form.living_rooms) : undefined,
+          floor: form.floor ? Number(form.floor) : undefined,
+          total_floors: form.total_floors ? Number(form.total_floors) : undefined,
+          levels: form.levels ? Number(form.levels) : undefined,
+        }),
+        // Commercial
+        ...(isCommercial(pt) && {
+          commercial_subtype: form.commercial_subtype || undefined,
+          plot_surface: form.plot_surface ? Number(form.plot_surface) : undefined,
+          floor_height: form.floor_height ? Number(form.floor_height) : undefined,
+          floor: form.floor ? Number(form.floor) : undefined,
+          total_floors: form.total_floors ? Number(form.total_floors) : undefined,
+          wc_count: form.wc_count ? Number(form.wc_count) : undefined,
+        }),
+        // Land
+        ...(isLand(pt) && {
+          coverage_ratio: form.coverage_ratio ? Number(form.coverage_ratio) : undefined,
+          building_allowance: form.building_allowance ? Number(form.building_allowance) : undefined,
+          facade_length: form.facade_length ? Number(form.facade_length) : undefined,
+          plot_depth: form.plot_depth ? Number(form.plot_depth) : undefined,
+          slope: form.slope || undefined,
+          zone_type: form.zone_type || undefined,
+          road_type: form.road_type || undefined,
+          land_use: form.land_use || undefined,
+          distance_from_sea: form.distance_from_sea ? Number(form.distance_from_sea) : undefined,
+          distance_from_city: form.distance_from_city ? Number(form.distance_from_city) : undefined,
+        }),
+        // Rent-specific
+        ...(lt === "rent" && {
+          deposit_months: form.deposit_months ? Number(form.deposit_months) : undefined,
+          monthly_expenses: form.monthly_expenses ? Number(form.monthly_expenses) : undefined,
+          agent_fee_included: form.agent_fee_included,
+          pets_allowed: form.pets_allowed,
+          short_term_rental: form.short_term_rental,
+          available_from: form.available_from || undefined,
+          min_rental_months: form.min_rental_months ? Number(form.min_rental_months) : undefined,
+        }),
+        // Auction
+        ...(lt === "auction" && {
+          auction_starting_bid: form.auction_starting_bid ? Number(form.auction_starting_bid) : undefined,
+          auction_date: form.auction_date || undefined,
+          auction_court: form.auction_court || undefined,
+        }),
+        // Boolean features
         has_elevator: form.has_elevator,
-        has_garden: form.has_garden,
-        has_pool: form.has_pool,
+        has_ac: form.has_ac,
+        has_solar_water: form.has_solar_water,
         has_storage: form.has_storage,
+        has_secure_door: form.has_secure_door,
+        has_alarm: form.has_alarm,
+        has_cctv: form.has_cctv,
         has_security: form.has_security,
         has_smart_home: form.has_smart_home,
+        has_fireplace: form.has_fireplace,
+        has_underfloor_heating: form.has_underfloor_heating,
+        has_furnished: form.has_furnished,
+        has_internal_staircase: form.has_internal_staircase,
+        has_double_glazing: form.has_double_glazing,
+        has_window_screens: form.has_window_screens,
+        has_night_power: form.has_night_power,
+        has_attic: form.has_attic,
+        has_satellite: form.has_satellite,
+        has_painted: form.has_painted,
+        has_parking: form.has_parking,
+        has_balcony: form.has_balcony,
+        has_garden: form.has_garden,
+        has_pool: form.has_pool,
+        has_view: form.has_view,
+        has_facade: form.has_facade,
+        has_awning: form.has_awning,
+        has_disability_access: form.has_disability_access,
+        is_corner: form.is_corner,
+        is_penthouse: form.is_penthouse,
+        is_neoclassical: form.is_neoclassical,
+        is_preserved: form.is_preserved,
+        has_virtual_tour: form.has_virtual_tour,
         has_video_tour: form.has_video_tour,
-        cover_image_url: coverImageUrl || undefined,
-        price_per_sqm: Math.round(Number(form.price) / Number(form.sqm)),
+        suitable_student: form.suitable_student,
+        suitable_holiday: form.suitable_holiday,
+        suitable_investment: form.suitable_investment,
+        suitable_commercial_use: form.suitable_commercial_use,
+        // Land booleans
+        is_buildable: form.is_buildable,
+        within_city_plan: form.within_city_plan,
+        within_settlement: form.within_settlement,
+        has_water_supply: form.has_water_supply,
+        has_electricity_supply: form.has_electricity_supply,
+        has_land_concession: form.has_land_concession,
+        // Commercial booleans
+        has_three_phase_power: form.has_three_phase_power,
+        has_loading_dock: form.has_loading_dock,
+        has_structured_cabling: form.has_structured_cabling,
+        has_equipped: form.has_equipped,
       };
-      if (form.listing_type === "auction") {
-        if (form.auction_starting_bid) payload.auction_starting_bid = Number(form.auction_starting_bid);
-        if (form.auction_date) payload.auction_date = form.auction_date;
-        if (form.auction_court) payload.auction_court = form.auction_court;
-      }
 
-      // Create with draft or active status
       const { data, error } = await supabase
         .from("listings")
         .insert({ ...payload, owner_id: user!.id, status: asDraft ? "draft" : "active" } as any)
@@ -168,17 +373,6 @@ export default function CreateListing() {
       toast.error(err.message);
     }
   };
-
-  const features = [
-    { key: "has_parking", label: "Parking", emoji: "🚗" },
-    { key: "has_elevator", label: "Elevator", emoji: "🛗" },
-    { key: "has_garden", label: "Garden", emoji: "🌿" },
-    { key: "has_pool", label: "Pool", emoji: "🏊" },
-    { key: "has_storage", label: "Storage", emoji: "📦" },
-    { key: "has_security", label: "Security", emoji: "🔒" },
-    { key: "has_smart_home", label: "Smart Home", emoji: "🏡" },
-    { key: "has_video_tour", label: "Video Tour", emoji: "🎥" },
-  ];
 
   return (
     <div className="min-h-screen bg-background">
@@ -215,24 +409,24 @@ export default function CreateListing() {
           </div>
 
           <div className="glass-card rounded-2xl p-6 md:p-8">
-            {/* Step 1 - Type */}
+
+            {/* ── STEP 1: Type ── */}
             {step === 1 && (
               <div className="space-y-6">
                 <h2 className="font-display text-xl font-semibold">What are you listing?</h2>
                 <div>
                   <FieldLabel>Listing Type</FieldLabel>
                   <div className="grid grid-cols-3 gap-3">
-                    {LISTING_TYPES.map(t => (
-                      <button
-                        key={t}
-                        onClick={() => set("listing_type", t)}
-                        className={`p-4 rounded-xl border text-sm font-medium transition-all capitalize ${
-                          form.listing_type === t
-                            ? "border-primary bg-primary/10 text-primary"
-                            : "border-border bg-secondary text-muted-foreground hover:text-foreground hover:border-primary/50"
-                        }`}
-                      >
-                        {t === "sale" ? "🏷️ For Sale" : t === "rent" ? "🔑 For Rent" : "⚖️ Auction"}
+                    {([
+                      { v: "sale", label: "🏷️ For Sale" },
+                      { v: "rent", label: "🔑 For Rent" },
+                      { v: "auction", label: "⚖️ Auction" },
+                    ] as const).map(({ v, label }) => (
+                      <button key={v} onClick={() => set("listing_type", v)}
+                        className={`p-4 rounded-xl border text-sm font-medium transition-all ${
+                          lt === v ? "border-primary bg-primary/10 text-primary" : "border-border bg-secondary text-muted-foreground hover:text-foreground hover:border-primary/50"
+                        }`}>
+                        {label}
                       </button>
                     ))}
                   </div>
@@ -240,18 +434,19 @@ export default function CreateListing() {
                 <div>
                   <FieldLabel>Property Type</FieldLabel>
                   <div className="grid grid-cols-3 gap-3">
-                    {PROPERTY_TYPES.map(t => (
-                      <button
-                        key={t}
-                        onClick={() => set("property_type", t)}
-                        className={`p-3 rounded-xl border text-sm font-medium transition-all capitalize ${
-                          form.property_type === t
-                            ? "border-primary bg-primary/10 text-primary"
-                            : "border-border bg-secondary text-muted-foreground hover:text-foreground hover:border-primary/50"
-                        }`}
-                      >
-                        {t === "apartment" ? "🏢" : t === "house" ? "🏠" : t === "villa" ? "🏡" :
-                          t === "land" ? "🌾" : t === "commercial" ? "🏪" : "🏗️"} {t}
+                    {([
+                      { v: "apartment", label: "🏢 Apartment" },
+                      { v: "house", label: "🏠 House" },
+                      { v: "villa", label: "🏡 Villa" },
+                      { v: "land", label: "🌾 Land / Plot" },
+                      { v: "commercial", label: "🏪 Commercial" },
+                      { v: "office", label: "🏗️ Office" },
+                    ] as const).map(({ v, label }) => (
+                      <button key={v} onClick={() => set("property_type", v)}
+                        className={`p-3 rounded-xl border text-sm font-medium transition-all ${
+                          pt === v ? "border-primary bg-primary/10 text-primary" : "border-border bg-secondary text-muted-foreground hover:text-foreground hover:border-primary/50"
+                        }`}>
+                        {label}
                       </button>
                     ))}
                   </div>
@@ -259,110 +454,362 @@ export default function CreateListing() {
               </div>
             )}
 
-            {/* Step 2 - Details */}
+            {/* ── STEP 2: Details ── */}
             {step === 2 && (
               <div className="space-y-4">
                 <h2 className="font-display text-xl font-semibold">Property Details</h2>
                 <div>
-                  <FieldLabel>Title *</FieldLabel>
+                  <FieldLabel required>Title</FieldLabel>
                   <Input placeholder="e.g. Modern 2-bed apartment in Kolonaki" value={form.title} onChange={e => set("title", e.target.value)} />
                 </div>
                 <div>
                   <FieldLabel>Description</FieldLabel>
                   <Textarea placeholder="Describe the property..." value={form.description} onChange={e => set("description", e.target.value)} rows={4} />
                 </div>
+
+                {/* Core measurements */}
                 <div className="grid grid-cols-2 gap-3">
-                  <div><FieldLabel>Bedrooms</FieldLabel><Input type="number" placeholder="2" value={form.bedrooms} onChange={e => set("bedrooms", e.target.value)} /></div>
-                  <div><FieldLabel>Bathrooms</FieldLabel><Input type="number" placeholder="1" value={form.bathrooms} onChange={e => set("bathrooms", e.target.value)} /></div>
-                  <div><FieldLabel>Area (m²) *</FieldLabel><Input type="number" placeholder="85" value={form.sqm} onChange={e => set("sqm", e.target.value)} /></div>
-                  <div><FieldLabel>Year Built</FieldLabel><Input type="number" placeholder="2010" value={form.year_built} onChange={e => set("year_built", e.target.value)} /></div>
-                  <div><FieldLabel>Floor</FieldLabel><Input type="number" placeholder="3" value={form.floor} onChange={e => set("floor", e.target.value)} /></div>
-                  <div><FieldLabel>Total Floors</FieldLabel><Input type="number" placeholder="6" value={form.total_floors} onChange={e => set("total_floors", e.target.value)} /></div>
-                </div>
-                <div>
-                  <FieldLabel>Energy Class</FieldLabel>
-                  <div className="flex gap-2 flex-wrap">
-                    {ENERGY_CLASSES.map(c => (
-                      <button key={c} onClick={() => set("energy_class", c)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                          form.energy_class === c ? "bg-brand-emerald/20 border border-brand-emerald text-brand-emerald" : "bg-secondary border border-border text-muted-foreground"
-                        }`}>{c}</button>
-                    ))}
+                  <div>
+                    <FieldLabel required>Area (m²)</FieldLabel>
+                    <Input type="number" placeholder="85" value={form.sqm} onChange={e => set("sqm", e.target.value)} />
+                  </div>
+                  <div>
+                    <FieldLabel>Year Built</FieldLabel>
+                    <Input type="number" placeholder="2010" value={form.year_built} onChange={e => set("year_built", e.target.value)} />
                   </div>
                 </div>
+
+                {/* Residential fields */}
+                {isResidential(pt) && (
+                  <>
+                    <SectionTitle>Rooms</SectionTitle>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div><FieldLabel>Bedrooms</FieldLabel><Input type="number" placeholder="2" value={form.bedrooms} onChange={e => set("bedrooms", e.target.value)} /></div>
+                      <div><FieldLabel>Bathrooms</FieldLabel><Input type="number" placeholder="1" value={form.bathrooms} onChange={e => set("bathrooms", e.target.value)} /></div>
+                      <div><FieldLabel>WC</FieldLabel><Input type="number" placeholder="1" value={form.wc_count} onChange={e => set("wc_count", e.target.value)} /></div>
+                      <div><FieldLabel>Kitchens</FieldLabel><Input type="number" placeholder="1" value={form.kitchens} onChange={e => set("kitchens", e.target.value)} /></div>
+                      <div><FieldLabel>Living Rooms</FieldLabel><Input type="number" placeholder="1" value={form.living_rooms} onChange={e => set("living_rooms", e.target.value)} /></div>
+                      <div><FieldLabel>Levels</FieldLabel><Input type="number" placeholder="1" value={form.levels} onChange={e => set("levels", e.target.value)} /></div>
+                    </div>
+                    <SectionTitle>Floor</SectionTitle>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div><FieldLabel>Floor</FieldLabel><Input type="number" placeholder="3" value={form.floor} onChange={e => set("floor", e.target.value)} /></div>
+                      <div><FieldLabel>Total Floors in Building</FieldLabel><Input type="number" placeholder="6" value={form.total_floors} onChange={e => set("total_floors", e.target.value)} /></div>
+                    </div>
+                    <SectionTitle>Systems & Construction</SectionTitle>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <FieldLabel>Heating System</FieldLabel>
+                        <Select value={form.heating_system} onChange={e => set("heating_system", e.target.value)}>
+                          <option value="">Select...</option>
+                          {HEATING_SYSTEMS.map(h => <option key={h} value={h} className="capitalize">{h.replace("_", " ")}</option>)}
+                        </Select>
+                      </div>
+                      <div>
+                        <FieldLabel>Construction Status</FieldLabel>
+                        <Select value={form.construction_status} onChange={e => set("construction_status", e.target.value)}>
+                          <option value="">Select...</option>
+                          {CONSTRUCTION_STATUSES.map(s => <option key={s} value={s} className="capitalize">{s.replace("_", " ")}</option>)}
+                        </Select>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* Commercial fields */}
+                {isCommercial(pt) && (
+                  <>
+                    <SectionTitle>Commercial Details</SectionTitle>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <FieldLabel>Subtype</FieldLabel>
+                        <Select value={form.commercial_subtype} onChange={e => set("commercial_subtype", e.target.value)}>
+                          <option value="">Select...</option>
+                          {COMMERCIAL_SUBTYPES.map(s => <option key={s} value={s} className="capitalize">{s}</option>)}
+                        </Select>
+                      </div>
+                      <div><FieldLabel>Plot Surface (m²)</FieldLabel><Input type="number" placeholder="500" value={form.plot_surface} onChange={e => set("plot_surface", e.target.value)} /></div>
+                      <div><FieldLabel>Floor Height (m)</FieldLabel><Input type="number" step="0.1" placeholder="3.5" value={form.floor_height} onChange={e => set("floor_height", e.target.value)} /></div>
+                      <div><FieldLabel>WC Count</FieldLabel><Input type="number" placeholder="2" value={form.wc_count} onChange={e => set("wc_count", e.target.value)} /></div>
+                      <div><FieldLabel>Floor</FieldLabel><Input type="number" placeholder="0" value={form.floor} onChange={e => set("floor", e.target.value)} /></div>
+                      <div><FieldLabel>Total Floors</FieldLabel><Input type="number" placeholder="4" value={form.total_floors} onChange={e => set("total_floors", e.target.value)} /></div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <FieldLabel>Heating System</FieldLabel>
+                        <Select value={form.heating_system} onChange={e => set("heating_system", e.target.value)}>
+                          <option value="">Select...</option>
+                          {HEATING_SYSTEMS.map(h => <option key={h} value={h}>{h.replace("_", " ")}</option>)}
+                        </Select>
+                      </div>
+                      <div>
+                        <FieldLabel>Construction Status</FieldLabel>
+                        <Select value={form.construction_status} onChange={e => set("construction_status", e.target.value)}>
+                          <option value="">Select...</option>
+                          {CONSTRUCTION_STATUSES.map(s => <option key={s} value={s}>{s.replace("_", " ")}</option>)}
+                        </Select>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* Land fields */}
+                {isLand(pt) && (
+                  <>
+                    <SectionTitle>Land Details</SectionTitle>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div><FieldLabel>Facade Length (m)</FieldLabel><Input type="number" step="0.1" placeholder="21" value={form.facade_length} onChange={e => set("facade_length", e.target.value)} /></div>
+                      <div><FieldLabel>Plot Depth (m)</FieldLabel><Input type="number" step="0.1" placeholder="36" value={form.plot_depth} onChange={e => set("plot_depth", e.target.value)} /></div>
+                      <div><FieldLabel>Coverage Ratio (%)</FieldLabel><Input type="number" placeholder="50" value={form.coverage_ratio} onChange={e => set("coverage_ratio", e.target.value)} /></div>
+                      <div><FieldLabel>Max Building Allowance (m²)</FieldLabel><Input type="number" placeholder="400" value={form.building_allowance} onChange={e => set("building_allowance", e.target.value)} /></div>
+                      <div><FieldLabel>Distance from Sea (m)</FieldLabel><Input type="number" placeholder="500" value={form.distance_from_sea} onChange={e => set("distance_from_sea", e.target.value)} /></div>
+                      <div><FieldLabel>Distance from City (m)</FieldLabel><Input type="number" placeholder="2000" value={form.distance_from_city} onChange={e => set("distance_from_city", e.target.value)} /></div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <FieldLabel>Slope</FieldLabel>
+                        <Select value={form.slope} onChange={e => set("slope", e.target.value)}>
+                          <option value="">Select...</option>
+                          {SLOPES.map(s => <option key={s} value={s} className="capitalize">{s}</option>)}
+                        </Select>
+                      </div>
+                      <div>
+                        <FieldLabel>Zone Type</FieldLabel>
+                        <Select value={form.zone_type} onChange={e => set("zone_type", e.target.value)}>
+                          <option value="">Select...</option>
+                          {ZONE_TYPES.map(z => <option key={z} value={z} className="capitalize">{z}</option>)}
+                        </Select>
+                      </div>
+                      <div>
+                        <FieldLabel>Road Type</FieldLabel>
+                        <Select value={form.road_type} onChange={e => set("road_type", e.target.value)}>
+                          <option value="">Select...</option>
+                          {ROAD_TYPES.map(r => <option key={r} value={r} className="capitalize">{r}</option>)}
+                        </Select>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* Energy class (not for land) */}
+                {!isLand(pt) && (
+                  <>
+                    <SectionTitle>Energy</SectionTitle>
+                    <div>
+                      <FieldLabel>Energy Class</FieldLabel>
+                      <div className="flex gap-2 flex-wrap">
+                        {ENERGY_CLASSES.map(c => (
+                          <button key={c} type="button" onClick={() => set("energy_class", c)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                              form.energy_class === c ? "bg-primary/20 border border-primary text-primary" : "bg-secondary border border-border text-muted-foreground"
+                            }`}>{c}</button>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             )}
 
-            {/* Step 3 - Features */}
+            {/* ── STEP 3: Features ── */}
             {step === 3 && (
-              <div className="space-y-6">
-                <h2 className="font-display text-xl font-semibold">Features & Amenities</h2>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {features.map(f => (
-                    <button
-                      key={f.key}
-                      onClick={() => toggle(f.key)}
-                      className={`p-4 rounded-xl border text-sm transition-all ${
-                        (form as any)[f.key]
-                          ? "border-primary bg-primary/10 text-primary"
-                          : "border-border bg-secondary text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      <div className="text-2xl mb-1">{f.emoji}</div>
-                      <div className="text-xs font-medium">{f.label}</div>
-                      {(form as any)[f.key] && <Check className="w-3 h-3 mx-auto mt-1" />}
-                    </button>
-                  ))}
-                </div>
+              <div>
+                <h2 className="font-display text-xl font-semibold mb-4">Features & Amenities</h2>
+
+                {/* Residential / General Internal */}
+                {!isLand(pt) && (
+                  <>
+                    <SectionTitle>Internal</SectionTitle>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { k: "has_elevator", l: "🛗 Elevator" },
+                        { k: "has_ac", l: "❄️ Air Conditioning" },
+                        { k: "has_solar_water", l: "☀️ Solar Water Heating" },
+                        { k: "has_storage", l: "📦 Storage Space" },
+                        { k: "has_secure_door", l: "🚪 Secure Door" },
+                        { k: "has_alarm", l: "🔔 Alarm" },
+                        { k: "has_cctv", l: "📷 CCTV" },
+                        { k: "has_security", l: "🔒 Security System" },
+                        { k: "has_fireplace", l: "🔥 Fireplace" },
+                        { k: "has_underfloor_heating", l: "🌡️ Underfloor Heating" },
+                        { k: "has_furnished", l: "🛋️ Furnished" },
+                        { k: "has_double_glazing", l: "🪟 Double Glazing" },
+                        { k: "has_window_screens", l: "🦟 Window Screens" },
+                        { k: "has_attic", l: "🏠 Attic" },
+                        { k: "has_internal_staircase", l: "🪜 Internal Staircase" },
+                        { k: "has_smart_home", l: "🏡 Smart Home" },
+                        { k: "has_night_power", l: "⚡ Night Power Rate" },
+                        { k: "has_satellite", l: "📡 Satellite Receiver" },
+                        { k: "has_painted", l: "🎨 Painted" },
+                        ...isCommercial(pt) ? [
+                          { k: "has_equipped", l: "🔧 Equipped" },
+                          { k: "has_three_phase_power", l: "⚡ 3-Phase Power" },
+                          { k: "has_structured_cabling", l: "🔌 Structured Cabling" },
+                        ] : [],
+                      ].map(({ k, l }) => (
+                        <ToggleChip key={k} active={(form as any)[k]} onClick={() => toggle(k)}>{l}</ToggleChip>
+                      ))}
+                    </div>
+
+                    <SectionTitle>External</SectionTitle>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { k: "has_parking", l: "🚗 Parking" },
+                        { k: "has_balcony", l: "🏞️ Balcony" },
+                        { k: "has_garden", l: "🌿 Garden" },
+                        { k: "has_pool", l: "🏊 Pool" },
+                        { k: "has_view", l: "👁️ View" },
+                        { k: "has_facade", l: "🏛️ Facade" },
+                        { k: "has_awning", l: "⛱️ Awning" },
+                        { k: "has_disability_access", l: "♿ Disability Access" },
+                        { k: "is_corner", l: "📐 Corner Property" },
+                        { k: "is_penthouse", l: "⭐ Penthouse" },
+                        ...isCommercial(pt) ? [
+                          { k: "has_loading_dock", l: "🚛 Loading Dock" },
+                        ] : [],
+                      ].map(({ k, l }) => (
+                        <ToggleChip key={k} active={(form as any)[k]} onClick={() => toggle(k)}>{l}</ToggleChip>
+                      ))}
+                    </div>
+
+                    <SectionTitle>Construction Characteristics</SectionTitle>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { k: "is_neoclassical", l: "🏛️ Neoclassical" },
+                        { k: "is_preserved", l: "🏺 Preserved Building" },
+                        { k: "has_virtual_tour", l: "🥽 Virtual Tour" },
+                        { k: "has_video_tour", l: "🎥 Video Tour" },
+                      ].map(({ k, l }) => (
+                        <ToggleChip key={k} active={(form as any)[k]} onClick={() => toggle(k)}>{l}</ToggleChip>
+                      ))}
+                    </div>
+
+                    <SectionTitle>Suitable For</SectionTitle>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { k: "suitable_student", l: "🎓 Students" },
+                        { k: "suitable_holiday", l: "🌴 Holiday Home" },
+                        { k: "suitable_investment", l: "💰 Investment" },
+                        { k: "suitable_commercial_use", l: "🏢 Commercial Use" },
+                      ].map(({ k, l }) => (
+                        <ToggleChip key={k} active={(form as any)[k]} onClick={() => toggle(k)}>{l}</ToggleChip>
+                      ))}
+                    </div>
+                  </>
+                )}
+
+                {/* Land features */}
+                {isLand(pt) && (
+                  <>
+                    <SectionTitle>Land Classification</SectionTitle>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { k: "is_buildable", l: "🏗️ Buildable" },
+                        { k: "within_city_plan", l: "🗺️ Within City Plan" },
+                        { k: "within_settlement", l: "🏘️ Within Settlement" },
+                        { k: "has_land_concession", l: "📄 Land Concession" },
+                        { k: "is_corner", l: "📐 Corner Plot" },
+                        { k: "has_view", l: "👁️ View" },
+                        { k: "has_facade", l: "🏛️ Facade" },
+                      ].map(({ k, l }) => (
+                        <ToggleChip key={k} active={(form as any)[k]} onClick={() => toggle(k)}>{l}</ToggleChip>
+                      ))}
+                    </div>
+
+                    <SectionTitle>Utilities</SectionTitle>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { k: "has_water_supply", l: "💧 Water Supply" },
+                        { k: "has_electricity_supply", l: "⚡ Electricity Supply" },
+                      ].map(({ k, l }) => (
+                        <ToggleChip key={k} active={(form as any)[k]} onClick={() => toggle(k)}>{l}</ToggleChip>
+                      ))}
+                    </div>
+
+                    <SectionTitle>Suitable For</SectionTitle>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { k: "suitable_holiday", l: "🌴 Tourism Development" },
+                        { k: "suitable_investment", l: "💰 Investment" },
+                        { k: "suitable_commercial_use", l: "🏢 Commercial" },
+                      ].map(({ k, l }) => (
+                        <ToggleChip key={k} active={(form as any)[k]} onClick={() => toggle(k)}>{l}</ToggleChip>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
             )}
 
-            {/* Step 4 - Location */}
+            {/* ── STEP 4: Location ── */}
             {step === 4 && (
               <div className="space-y-4">
                 <h2 className="font-display text-xl font-semibold">Location</h2>
                 <div>
-                  <FieldLabel>City *</FieldLabel>
+                  <FieldLabel required>City</FieldLabel>
                   <Input placeholder="e.g. Athens" value={form.city} onChange={e => set("city", e.target.value)} />
                 </div>
                 <div>
-                  <FieldLabel>Address</FieldLabel>
-                  <Input placeholder="Street address" value={form.address} onChange={e => set("address", e.target.value)} />
+                  <FieldLabel>Street Address</FieldLabel>
+                  <Input placeholder="e.g. Voukourestiou 14" value={form.address} onChange={e => set("address", e.target.value)} />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div><FieldLabel>Region</FieldLabel><Input placeholder="Attica" value={form.region} onChange={e => set("region", e.target.value)} /></div>
+                  <div><FieldLabel>Region / Municipality</FieldLabel><Input placeholder="Attica" value={form.region} onChange={e => set("region", e.target.value)} /></div>
                   <div><FieldLabel>Postal Code</FieldLabel><Input placeholder="10674" value={form.postal_code} onChange={e => set("postal_code", e.target.value)} /></div>
                 </div>
-                <div>
-                  <FieldLabel>Cadastre Number</FieldLabel>
-                  <Input placeholder="Optional" value={form.cadastre_number} onChange={e => set("cadastre_number", e.target.value)} />
+                <div className="grid grid-cols-2 gap-3">
+                  <div><FieldLabel>Cadastre Number</FieldLabel><Input placeholder="Optional" value={form.cadastre_number} onChange={e => set("cadastre_number", e.target.value)} /></div>
+                  <div><FieldLabel>ENFIA Zone</FieldLabel><Input placeholder="e.g. Zone 3" value={form.enfia_zone} onChange={e => set("enfia_zone", e.target.value)} /></div>
+                </div>
+                <div className="flex items-start gap-2 bg-primary/5 border border-primary/20 rounded-xl p-3 text-xs text-muted-foreground">
+                  <Info className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                  <span>Exact coordinates will be requested separately. Address is shown approximately on the map for privacy.</span>
                 </div>
               </div>
             )}
 
-            {/* Step 5 - Pricing */}
+            {/* ── STEP 5: Pricing ── */}
             {step === 5 && (
               <div className="space-y-4">
                 <h2 className="font-display text-xl font-semibold">Pricing</h2>
                 <div>
-                  <FieldLabel>
-                    {form.listing_type === "rent" ? "Monthly Rent (€) *" : "Price (€) *"}
-                  </FieldLabel>
-                  <Input type="number" placeholder={form.listing_type === "rent" ? "800" : "250000"} value={form.price} onChange={e => set("price", e.target.value)} />
+                  <FieldLabel required>{lt === "rent" ? "Monthly Rent (€)" : "Asking Price (€)"}</FieldLabel>
+                  <Input type="number" placeholder={lt === "rent" ? "800" : "250000"} value={form.price} onChange={e => set("price", e.target.value)} />
                   {form.sqm && form.price && (
                     <p className="text-xs text-muted-foreground mt-1">
                       €{Math.round(Number(form.price) / Number(form.sqm)).toLocaleString()}/m²
                     </p>
                   )}
                 </div>
-                {form.listing_type === "auction" && (
+
+                {/* Rent-specific */}
+                {lt === "rent" && (
                   <>
+                    <SectionTitle>Rental Terms</SectionTitle>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div><FieldLabel>Security Deposit (months)</FieldLabel><Input type="number" placeholder="2" value={form.deposit_months} onChange={e => set("deposit_months", e.target.value)} /></div>
+                      <div><FieldLabel>Avg Monthly Shared Expenses (€)</FieldLabel><Input type="number" placeholder="50" value={form.monthly_expenses} onChange={e => set("monthly_expenses", e.target.value)} /></div>
+                      <div><FieldLabel>Min Rental Period (months)</FieldLabel><Input type="number" placeholder="12" value={form.min_rental_months} onChange={e => set("min_rental_months", e.target.value)} /></div>
+                      <div><FieldLabel>Available From</FieldLabel><Input type="date" value={form.available_from} onChange={e => set("available_from", e.target.value)} /></div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <ToggleChip active={form.agent_fee_included} onClick={() => toggle("agent_fee_included")}>✅ No Agent Fee</ToggleChip>
+                      <ToggleChip active={form.pets_allowed} onClick={() => toggle("pets_allowed")}>🐾 Pets Allowed</ToggleChip>
+                      <ToggleChip active={form.short_term_rental} onClick={() => toggle("short_term_rental")}>📅 Short-term / Airbnb</ToggleChip>
+                    </div>
+                  </>
+                )}
+
+                {/* Auction-specific */}
+                {lt === "auction" && (
+                  <>
+                    <SectionTitle>Auction Details</SectionTitle>
                     <div>
                       <FieldLabel>Starting Bid (€)</FieldLabel>
                       <Input type="number" value={form.auction_starting_bid} onChange={e => set("auction_starting_bid", e.target.value)} />
                     </div>
                     <div>
-                      <FieldLabel>Auction Date</FieldLabel>
+                      <FieldLabel>Auction Date & Time</FieldLabel>
                       <Input type="datetime-local" value={form.auction_date} onChange={e => set("auction_date", e.target.value)} />
                     </div>
                     <div>
@@ -374,7 +821,7 @@ export default function CreateListing() {
               </div>
             )}
 
-            {/* Step 6 - Photos */}
+            {/* ── STEP 6: Photos ── */}
             {step === 6 && (
               <div className="space-y-6">
                 <h2 className="font-display text-xl font-semibold">Cover Photo</h2>
@@ -386,80 +833,49 @@ export default function CreateListing() {
                         onClick={() => setCoverImageUrl("")}
                         className="absolute top-2 right-2 p-1.5 rounded-full bg-destructive text-destructive-foreground"
                       >
-                        <X className="w-3.5 h-3.5" />
+                        <X className="w-3 h-3" />
                       </button>
                     </div>
                   ) : (
                     <>
-                      <Upload className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-                      <p className="font-medium text-sm">Upload cover photo</p>
+                      <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                      <p className="text-sm text-muted-foreground">Upload cover photo</p>
                       <p className="text-xs text-muted-foreground mt-1">JPG, PNG up to 10MB</p>
                     </>
                   )}
                   <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageUpload}
+                    type="file" accept="image/*"
                     className="absolute inset-0 opacity-0 cursor-pointer"
+                    onChange={handleImageUpload}
+                    disabled={uploading}
                   />
-                </div>
-                {uploading && (
-                  <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="w-4 h-4 animate-spin" /> Uploading...
-                  </div>
-                )}
-                {/* Summary */}
-                <div className="bg-secondary rounded-xl p-4 space-y-2 text-sm">
-                  <h3 className="font-semibold text-xs text-muted-foreground uppercase tracking-wider mb-3">Summary</h3>
-                  <div className="flex justify-between"><span className="text-muted-foreground">Type</span><span className="capitalize font-medium">{form.listing_type} · {form.property_type}</span></div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">Title</span><span className="font-medium truncate max-w-[200px]">{form.title || "—"}</span></div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">City</span><span className="font-medium">{form.city || "—"}</span></div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">Price</span><span className="font-medium text-primary">€{Number(form.price).toLocaleString()}</span></div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">Area</span><span className="font-medium">{form.sqm} m²</span></div>
+                  {uploading && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-background/60 rounded-2xl">
+                      <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                    </div>
+                  )}
                 </div>
               </div>
             )}
 
-            {/* Navigation */}
+            {/* ── Navigation ── */}
             <div className="flex items-center justify-between mt-8 pt-6 border-t border-border">
-              <Button
-                variant="outline"
-                className="border-border gap-2"
-                onClick={() => step > 1 ? setStep(step - 1) : navigate("/dashboard")}
-              >
+              <Button variant="outline" onClick={() => step > 1 ? setStep(s => s - 1) : navigate("/dashboard")} className="gap-2">
                 <ChevronLeft className="w-4 h-4" />
                 {step === 1 ? "Cancel" : "Back"}
               </Button>
-
-              <div className="flex gap-2">
-                {step === 6 && (
-                  <Button
-                    variant="outline"
-                    className="border-border"
-                    onClick={() => handleSubmit(true)}
-                    disabled={createListing.isPending}
-                  >
-                    Save as Draft
-                  </Button>
-                )}
-                {step < 6 ? (
-                  <Button
-                    className="bg-gradient-primary border-0 text-primary-foreground gap-2"
-                    onClick={() => setStep(step + 1)}
-                  >
-                    Next <ChevronRight className="w-4 h-4" />
-                  </Button>
-                ) : (
-                  <Button
-                    className="bg-gradient-primary border-0 text-primary-foreground gap-2"
-                    onClick={() => handleSubmit(false)}
-                    disabled={createListing.isPending || uploading}
-                  >
-                    {createListing.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+              {step < 6 ? (
+                <Button onClick={() => setStep(s => s + 1)} className="bg-gradient-primary border-0 text-primary-foreground gap-2">
+                  Next <ChevronRight className="w-4 h-4" />
+                </Button>
+              ) : (
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => handleSubmit(true)}>Save Draft</Button>
+                  <Button className="bg-gradient-primary border-0 text-primary-foreground" onClick={() => handleSubmit(false)}>
                     Publish Listing
                   </Button>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
