@@ -6,6 +6,7 @@ import {
   Home, ArrowRight, Calendar, Layers, Phone, MessageCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { getSubtypeLabel, PROPERTY_TYPE_MAP, type PropertyTypeKey } from "@/lib/propertyTypes";
 
 export interface Property {
   id: string;
