@@ -19,8 +19,9 @@ export interface Property {
   bathrooms?: number;
   sqm: number;
   images: string[];
-  type: "apartment" | "house" | "land" | "commercial" | "villa";
+  type: "apartment" | "house" | "land" | "commercial" | "villa" | "office";
   listingType: "sale" | "rent" | "auction" | "firesale";
+  subtype?: string;
   auctionDate?: string;
   auctionStartingBid?: number;
   isNew?: boolean;
