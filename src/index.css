@@ -2,14 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
-/* maiProp Design System — Warm Dark Real Estate */
-/* Approachable, trustworthy, broad audience: deep warm charcoal, amber gold, coral accents */
+/* maiProp Design System — Warm Real Estate */
+/* Dark default: warm charcoal + amber-gold + coral  |  Light: cream + warm amber */
 
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap');
 
 @layer base {
   :root {
-    /* Core palette — warm dark mode */
+    /* Core palette — warm dark mode default */
     --background: 24 12% 8%;
     --foreground: 36 20% 94%;
 
@@ -83,6 +83,79 @@
     --sidebar-accent-foreground: 36 15% 82%;
     --sidebar-border: 24 10% 16%;
     --sidebar-ring: 38 95% 52%;
+  }
+
+  /* ─── WARM LIGHT MODE ─── */
+  .light {
+    --background: 36 30% 97%;
+    --foreground: 24 20% 14%;
+
+    --card: 36 25% 99%;
+    --card-foreground: 24 20% 14%;
+
+    --popover: 36 25% 99%;
+    --popover-foreground: 24 20% 14%;
+
+    /* Primary: same amber */
+    --primary: 38 90% 46%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Secondary: warm cream */
+    --secondary: 36 20% 92%;
+    --secondary-foreground: 24 15% 25%;
+
+    --muted: 36 18% 93%;
+    --muted-foreground: 24 10% 45%;
+
+    /* Accent: coral */
+    --accent: 14 75% 54%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 30 15% 85%;
+    --input: 36 20% 92%;
+    --ring: 38 90% 46%;
+
+    /* Brand tokens light */
+    --brand-amber: 38 90% 46%;
+    --brand-amber-glow: 42 95% 58%;
+    --brand-coral: 14 75% 54%;
+    --brand-coral-dark: 14 65% 38%;
+    --brand-gold: 44 88% 46%;
+    --brand-emerald: 158 55% 38%;
+    --brand-sky: 200 75% 48%;
+    --brand-surface-1: 36 30% 97%;
+    --brand-surface-2: 36 25% 95%;
+    --brand-surface-3: 36 20% 92%;
+    --brand-surface-4: 36 18% 88%;
+
+    /* Gradients light */
+    --gradient-hero: linear-gradient(135deg, hsl(36 28% 94%) 0%, hsl(32 22% 96%) 50%, hsl(28 20% 97%) 100%);
+    --gradient-card: linear-gradient(145deg, hsl(36 25% 99%) 0%, hsl(36 20% 96%) 100%);
+    --gradient-primary: linear-gradient(135deg, hsl(var(--brand-amber)) 0%, hsl(var(--brand-coral)) 100%);
+    --gradient-accent: linear-gradient(135deg, hsl(var(--brand-coral)) 0%, hsl(var(--brand-amber)) 100%);
+    --gradient-gold: linear-gradient(135deg, hsl(44 88% 46%) 0%, hsl(34 82% 40%) 100%);
+    --gradient-emerald: linear-gradient(135deg, hsl(158 55% 38%) 0%, hsl(170 50% 33%) 100%);
+    --gradient-warm: linear-gradient(135deg, hsl(38 75% 44%) 0%, hsl(20 65% 46%) 100%);
+
+    /* Shadows light */
+    --shadow-glow-amber: 0 0 24px -4px hsl(38 90% 46% / 0.28);
+    --shadow-glow-coral: 0 0 24px -4px hsl(14 75% 54% / 0.28);
+    --shadow-card: 0 4px 24px -8px hsl(24 20% 14% / 0.12);
+    --shadow-elevated: 0 8px 40px -12px hsl(24 20% 14% / 0.18);
+    --shadow-warm: 0 4px 20px -6px hsl(38 80% 40% / 0.18);
+
+    /* Sidebar light */
+    --sidebar-background: 36 28% 95%;
+    --sidebar-foreground: 24 15% 25%;
+    --sidebar-primary: 38 90% 46%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 36 20% 90%;
+    --sidebar-accent-foreground: 24 15% 25%;
+    --sidebar-border: 30 15% 85%;
+    --sidebar-ring: 38 90% 46%;
   }
 }
 
