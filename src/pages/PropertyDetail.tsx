@@ -816,9 +816,8 @@ export default function PropertyDetail() {
 
               {/* Walk Score badge (shows after POIs load) */}
               {walkScore !== null && (() => {
-                const { walkScoreLabel: wsl, walkScoreColour: wsc } = require("@/lib/walkScore") as any;
-                const colour = wsc(walkScore);
-                const label = wsl(walkScore);
+                const colour = walkScoreColour(walkScore);
+                const label = walkScoreLabel(walkScore);
                 const r = 20, c = 2 * Math.PI * r;
                 return (
                   <div className="glass-card rounded-xl p-4 border border-border flex items-center gap-4">
