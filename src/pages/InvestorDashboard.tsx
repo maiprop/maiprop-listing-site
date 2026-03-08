@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Flame, Lock, BarChart2, TrendingUp, TrendingDown, MapPin, Euro,
@@ -14,6 +14,15 @@ import { Footer } from "@/components/Footer";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+
+type Subscription = {
+  id: string;
+  user_id: string;
+  tier: "analyst" | "institutional" | "sovereign";
+  status: "active" | "cancelled" | "expired" | "trial";
+  started_at: string;
+  expires_at: string | null;
+};
 
 // ─── Subscription tiers ───────────────────────────────────────────────────────
 const TIERS = [
@@ -292,10 +301,45 @@ export default function InvestorDashboard() {
   const isAdmin = profile?.role === "agent";
   const [activeTab, setActiveTab] = useState<"deals" | "admin">("deals");
 
-  // Subscription state
-  const [subscribed] = useState(false);
-  const [showGate, setShowGate] = useState(!subscribed);
+  // Subscription state (loaded from DB)
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [subLoading, setSubLoading] = useState(true);
+  const subscribed = subscription?.status === "active" || subscription?.status === "trial";
+  const [showGate, setShowGate] = useState(false);
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
+
+  // Load subscription from DB
+  const loadSubscription = useCallback(async () => {
+    if (!user) { setSubLoading(false); return; }
+    setSubLoading(true);
+    const { data } = await supabase
+      .from("investor_subscriptions" as any)
+      .select("*")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    setSubscription(data as unknown as Subscription | null);
+    setSubLoading(false);
+  }, [user]);
+
+  useEffect(() => { loadSubscription(); }, [loadSubscription]);
+
+  // Save subscription selection to DB
+  const handleSelectTier = async (tierId: string, ctaLabel: string) => {
+    if (!user) {
+      toast.error("Please sign in to subscribe");
+      return;
+    }
+    const { error } = await supabase
+      .from("investor_subscriptions" as any)
+      .upsert({ user_id: user.id, tier: tierId, status: tierId === "sovereign" ? "trial" : "active" }, { onConflict: "user_id" });
+    if (error) {
+      toast.error("Could not save subscription");
+      return;
+    }
+    await loadSubscription();
+    toast.success(`${ctaLabel} — Welcome to the deal flow!`);
+    setShowGate(false);
+  };
 
   // Deal feed state
   const [filterCity, setFilterCity] = useState("all");
@@ -445,6 +489,17 @@ export default function InvestorDashboard() {
                   <div className="w-1.5 h-1.5 rounded-full bg-brand-emerald animate-pulse" />
                   {liveDeals.length} live deals
                 </div>
+                {subscribed && subscription && (
+                  <div className="flex items-center gap-1.5 text-xs bg-primary/10 border border-primary/20 text-primary px-3 py-1.5 rounded-full font-bold capitalize">
+                    <Crown className="w-3 h-3" />
+                    {subscription.tier} Plan Active
+                  </div>
+                )}
+                {!subscribed && !subLoading && (
+                  <Button size="sm" variant="outline" className="border-primary/30 text-primary text-xs h-8 gap-1.5" onClick={() => setShowGate(true)}>
+                    <Sparkles className="w-3 h-3" /> Subscribe
+                  </Button>
+                )}
                 <Button
                   className="bg-gradient-primary border-0 text-primary-foreground gap-2"
                   onClick={() => navigate("/firesale")}
@@ -837,8 +892,7 @@ export default function InvestorDashboard() {
                       variant={tier.highlight ? "default" : "outline"}
                       onClick={e => {
                         e.stopPropagation();
-                        toast.success(`${tier.cta} — Our team will contact you shortly.`);
-                        setShowGate(false);
+                        handleSelectTier(tier.id, tier.cta);
                       }}
                     >
                       {tier.cta}
