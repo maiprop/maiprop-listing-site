@@ -4,16 +4,16 @@ import Map, {
   Layer,
   Popup,
   NavigationControl,
+  Marker,
   MapRef,
 } from "react-map-gl";
 import type { LayerProps } from "react-map-gl";
-import type { GeoJSON } from "geojson";
 import { MapPin, Bed, Bath, Ruler } from "lucide-react";
 import { Link } from "react-router-dom";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { MAPBOX_TOKEN } from "@/lib/config";
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 type MapListing = {
   id: string;
@@ -30,7 +30,7 @@ type MapListing = {
   _raw?: any;
 };
 
-// ── Colour helpers ────────────────────────────────────────────────────────────
+// ── Colours ───────────────────────────────────────────────────────────────────
 
 const TYPE_HEX: Record<string, string> = {
   sale: "#00d4c8",
@@ -43,34 +43,35 @@ function typeColour(listingType?: string) {
   return TYPE_HEX[listingType || "sale"];
 }
 
+function priceLabel(price: number) {
+  if (price >= 1_000_000) return `€${(price / 1_000_000).toFixed(1)}M`;
+  if (price >= 1000) return `€${Math.round(price / 1000)}k`;
+  return `€${price}`;
+}
+
 // ── GeoJSON builder ───────────────────────────────────────────────────────────
 
-function buildGeoJSON(listings: MapListing[]): GeoJSON.FeatureCollection {
+function buildGeoJSON(listings: MapListing[]) {
   return {
-    type: "FeatureCollection",
+    type: "FeatureCollection" as const,
     features: listings.map(l => ({
-      type: "Feature",
+      type: "Feature" as const,
       properties: {
         id: l.id,
         price: l.price,
         listingType: l.listingType || "sale",
         colour: typeColour(l.listingType),
-        label:
-          l.price >= 1_000_000
-            ? `€${(l.price / 1_000_000).toFixed(1)}M`
-            : l.price >= 1000
-            ? `€${Math.round(l.price / 1000)}k`
-            : `€${l.price}`,
+        label: priceLabel(l.price),
       },
       geometry: {
-        type: "Point",
+        type: "Point" as const,
         coordinates: [Number(l.longitude), Number(l.latitude)],
       },
     })),
   };
 }
 
-// ── Layer definitions ─────────────────────────────────────────────────────────
+// ── Cluster layers ────────────────────────────────────────────────────────────
 
 const clusterCircleLayer: LayerProps = {
   id: "clusters",
@@ -85,10 +86,10 @@ const clusterCircleLayer: LayerProps = {
       5,  "#9b6bfc",
       15, "#e84040",
     ],
-    "circle-radius": ["step", ["get", "point_count"], 20, 5, 26, 15, 34],
-    "circle-opacity": 0.9,
+    "circle-radius": ["step", ["get", "point_count"], 22, 5, 28, 15, 36],
+    "circle-opacity": 0.88,
     "circle-stroke-width": 2,
-    "circle-stroke-color": "rgba(255,255,255,0.5)",
+    "circle-stroke-color": "rgba(255,255,255,0.45)",
   },
 };
 
@@ -102,25 +103,19 @@ const clusterCountLayer: LayerProps = {
     "text-font": ["DIN Offc Pro Medium", "Arial Unicode MS Bold"],
     "text-size": 13,
   },
-  paint: {
-    "text-color": "#0a0f1a",
-  },
+  paint: { "text-color": "#0a0f1a" },
 };
 
-// Individual pins are rendered via HTML markers for custom styling
-// but we also keep an invisible symbol layer to track click targets
+// Invisible hit-test layer for unclustered points
 const unclusteredLayer: LayerProps = {
   id: "unclustered-point",
   type: "circle",
   source: "listings",
   filter: ["!", ["has", "point_count"]],
-  paint: {
-    "circle-radius": 0,
-    "circle-opacity": 0,
-  },
+  paint: { "circle-radius": 0, "circle-opacity": 0 },
 };
 
-// ── Property Popup ────────────────────────────────────────────────────────────
+// ── Popup card ────────────────────────────────────────────────────────────────
 
 function PropertyPopup({
   listing,
@@ -162,10 +157,10 @@ function PropertyPopup({
         </div>
         <Link
           to={`/property/${listing.id}`}
-          className="mt-2.5 w-full block text-center px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+          className="mt-2.5 w-full block text-center px-3 py-1.5 rounded-lg text-xs font-semibold"
           style={{
             background: typeColour(listing.listingType),
-            color: "hsl(220 25% 6%)",
+            color: "#0a0f1a",
           }}
         >
           View Property →
@@ -175,24 +170,39 @@ function PropertyPopup({
   );
 }
 
-// ── Price-pin overlay (HTML) ──────────────────────────────────────────────────
+// ── Price-tag pin button ──────────────────────────────────────────────────────
 
-function PricePins({
-  listings,
-  activeId,
-  onSelect,
+function PricePin({
+  listing,
+  isActive,
+  onClick,
 }: {
-  listings: MapListing[];
-  activeId: string | null;
-  onSelect: (id: string) => void;
+  listing: MapListing;
+  isActive: boolean;
+  onClick: (e: React.MouseEvent) => void;
 }) {
-  // These are rendered via react-map-gl Marker but we need mapbox markers for
-  // clustering — we use a separate Marker for each unclustered pin after click.
-  // Instead, we render them via a custom layer + click handler (see parent).
-  return null;
+  const colour = typeColour(listing.listingType);
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        background: isActive ? colour : `${colour}cc`,
+        border: isActive ? "2px solid white" : "1px solid rgba(255,255,255,0.35)",
+        transform: isActive ? "scale(1.18)" : "scale(1)",
+        boxShadow: isActive
+          ? `0 4px 20px ${colour}99`
+          : "0 2px 8px rgba(0,0,0,0.45)",
+        transition: "all 0.15s ease",
+        color: "#0a0f1a",
+      }}
+      className="rounded-full px-2.5 py-1 text-xs font-bold whitespace-nowrap"
+    >
+      {priceLabel(listing.price)}
+    </button>
+  );
 }
 
-// ── Main export ───────────────────────────────────────────────────────────────
+// ── Main ──────────────────────────────────────────────────────────────────────
 
 export function MapView({ listings }: { listings: MapListing[] }) {
   const mapRef = useRef<MapRef>(null);
@@ -214,63 +224,38 @@ export function MapView({ listings }: { listings: MapListing[] }) {
 
   const initialView =
     mapped.length > 0
-      ? {
-          longitude: Number(mapped[0].longitude),
-          latitude: Number(mapped[0].latitude),
-          zoom: 6,
-        }
+      ? { longitude: 23.7275, latitude: 38.5, zoom: 6 }
       : { longitude: 23.7275, latitude: 37.9838, zoom: 6 };
 
-  // ── Click handler ────────────────────────────────────────────────────────────
+  // Click: expand clusters or open popup
   const onClick = useCallback(
     (event: any) => {
       const map = mapRef.current?.getMap();
       if (!map) return;
 
       const features = map.queryRenderedFeatures(event.point, {
-        layers: ["clusters", "unclustered-point"],
+        layers: ["clusters"],
       });
 
-      if (!features.length) {
-        setPopupInfo(null);
-        return;
-      }
-
-      const feature = features[0];
-
-      // Cluster → zoom in
-      if (feature.layer.id === "clusters") {
-        const clusterId = feature.properties?.cluster_id;
+      if (features.length) {
+        const clusterId = features[0].properties?.cluster_id;
         const source = map.getSource("listings") as any;
         source.getClusterExpansionZoom(clusterId, (err: any, zoom: number) => {
           if (err) return;
-          const coords = (feature.geometry as GeoJSON.Point).coordinates as [number, number];
-          map.easeTo({ center: coords, zoom: zoom + 0.5, duration: 400 });
+          const coords = (features[0].geometry as any).coordinates as [number, number];
+          map.easeTo({ center: coords, zoom: zoom + 0.5, duration: 450 });
         });
         return;
       }
 
-      // Individual pin → show popup
-      if (feature.layer.id === "unclustered-point") {
-        const id = feature.properties?.id;
-        const listing = mapped.find(l => l.id === id);
-        if (listing && listing.latitude != null && listing.longitude != null) {
-          setPopupInfo({
-            listing,
-            lng: Number(listing.longitude),
-            lat: Number(listing.latitude),
-          });
-        }
-      }
+      // Click on blank map area → close popup
+      const pinHit = map.queryRenderedFeatures(event.point, {
+        layers: ["unclustered-point"],
+      });
+      if (!pinHit.length) setPopupInfo(null);
     },
-    [mapped]
+    []
   );
-
-  // ── Custom HTML price pins rendered on top via a separate symbol approach ────
-  // We render them as a symbol layer using a canvas-drawn image added to the map.
-  // Simpler: keep using HTML Marker for unclustered pins (they only show when not
-  // clustered anyway), driven by a second invisible source query.
-  const { Marker } = require("react-map-gl");
 
   return (
     <div
@@ -283,30 +268,26 @@ export function MapView({ listings }: { listings: MapListing[] }) {
         initialViewState={initialView}
         style={{ width: "100%", height: "100%" }}
         mapStyle="mapbox://styles/mapbox/dark-v11"
-        interactiveLayerIds={["clusters", "unclustered-point"]}
+        interactiveLayerIds={["clusters"]}
         onClick={onClick}
-        cursor="auto"
       >
         <NavigationControl position="bottom-right" />
 
-        {/* GeoJSON source with clustering enabled */}
+        {/* Clustered GeoJSON source */}
         <Source
           id="listings"
           type="geojson"
           data={geoJSON}
           cluster={true}
           clusterMaxZoom={13}
-          clusterRadius={50}
+          clusterRadius={55}
         >
-          {/* Cluster circles */}
           <Layer {...clusterCircleLayer} />
-          {/* Cluster counts */}
           <Layer {...clusterCountLayer} />
-          {/* Invisible unclustered points for click hit testing */}
           <Layer {...unclusteredLayer} />
         </Source>
 
-        {/* HTML price-tag markers for unclustered pins */}
+        {/* HTML price-tag markers (only visible when unclustered) */}
         {mapped.map(listing => (
           <Marker
             key={listing.id}
@@ -314,45 +295,34 @@ export function MapView({ listings }: { listings: MapListing[] }) {
             latitude={Number(listing.latitude)}
             anchor="bottom"
             onClick={(e: any) => {
-              e.originalEvent.stopPropagation();
-              setPopupInfo({
-                listing,
-                lng: Number(listing.longitude),
-                lat: Number(listing.latitude),
-              });
+              e.originalEvent?.stopPropagation();
+              setPopupInfo(
+                popupInfo?.listing.id === listing.id
+                  ? null
+                  : {
+                      listing,
+                      lng: Number(listing.longitude),
+                      lat: Number(listing.latitude),
+                    }
+              );
             }}
           >
-            <button
-              style={{
-                background:
+            <PricePin
+              listing={listing}
+              isActive={popupInfo?.listing.id === listing.id}
+              onClick={(e: React.MouseEvent) => {
+                e.stopPropagation();
+                setPopupInfo(
                   popupInfo?.listing.id === listing.id
-                    ? typeColour(listing.listingType)
-                    : `${typeColour(listing.listingType)}cc`,
-                border:
-                  popupInfo?.listing.id === listing.id
-                    ? "2px solid white"
-                    : "1px solid rgba(255,255,255,0.35)",
-                transform:
-                  popupInfo?.listing.id === listing.id
-                    ? "scale(1.18)"
-                    : "scale(1)",
-                boxShadow:
-                  popupInfo?.listing.id === listing.id
-                    ? `0 4px 20px ${typeColour(listing.listingType)}99`
-                    : "0 2px 8px rgba(0,0,0,0.45)",
-                transition: "all 0.15s ease",
+                    ? null
+                    : {
+                        listing,
+                        lng: Number(listing.longitude),
+                        lat: Number(listing.latitude),
+                      }
+                );
               }}
-              className="rounded-full px-2.5 py-1 text-xs font-bold whitespace-nowrap"
-              style2={{ color: "hsl(220 25% 6%)" }}
-            >
-              <span style={{ color: "hsl(220 25% 6%)" }}>
-                {listing.price >= 1_000_000
-                  ? `€${(listing.price / 1_000_000).toFixed(1)}M`
-                  : listing.price >= 1000
-                  ? `€${Math.round(listing.price / 1000)}k`
-                  : `€${listing.price}`}
-              </span>
-            </button>
+            />
           </Marker>
         ))}
 
@@ -376,20 +346,31 @@ export function MapView({ listings }: { listings: MapListing[] }) {
       </Map>
 
       {/* Legend */}
-      <div className="absolute top-3 left-3 flex flex-col gap-1 pointer-events-none">
+      <div className="absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none">
         {Object.entries(TYPE_HEX).map(([type, colour]) => (
           <div
             key={type}
-            className="flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-semibold backdrop-blur-sm"
-            style={{ background: `${colour}22`, border: `1px solid ${colour}55`, color: colour }}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold backdrop-blur-md"
+            style={{
+              background: `${colour}18`,
+              border: `1px solid ${colour}44`,
+              color: colour,
+            }}
           >
             <span
-              className="w-2 h-2 rounded-full inline-block"
+              className="w-2 h-2 rounded-full shrink-0"
               style={{ background: colour }}
             />
             {type.charAt(0).toUpperCase() + type.slice(1)}
           </div>
         ))}
+      </div>
+
+      {/* Cluster hint */}
+      <div className="absolute bottom-12 left-3 pointer-events-none">
+        <p className="text-xs text-muted-foreground bg-card/80 backdrop-blur-sm rounded-lg px-2.5 py-1.5 border border-border">
+          Zoom in to expand clusters
+        </p>
       </div>
 
       {mapped.length === 0 && (
