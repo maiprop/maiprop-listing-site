@@ -62,18 +62,19 @@ export default {
           ring: "hsl(var(--sidebar-ring))",
         },
         brand: {
-          amber: "hsl(var(--brand-amber))",
-          "amber-glow": "hsl(var(--brand-amber-glow))",
-          coral: "hsl(var(--brand-coral))",
-          "coral-dark": "hsl(var(--brand-coral-dark))",
+          // Primary brand colours
+          cyan: "hsl(var(--brand-cyan))",
+          "cyan-glow": "hsl(var(--brand-cyan-glow))",
+          purple: "hsl(var(--brand-purple))",
+          "purple-dark": "hsl(var(--brand-purple-dark))",
           gold: "hsl(var(--brand-gold))",
           emerald: "hsl(var(--brand-emerald))",
           sky: "hsl(var(--brand-sky))",
-          // legacy aliases so existing usage doesn't break
-          cyan: "hsl(var(--brand-amber))",
-          "cyan-glow": "hsl(var(--brand-amber-glow))",
-          purple: "hsl(var(--brand-coral))",
-          "purple-dark": "hsl(var(--brand-coral-dark))",
+          // Legacy aliases so existing usage doesn't break
+          amber: "hsl(var(--brand-cyan))",
+          "amber-glow": "hsl(var(--brand-cyan-glow))",
+          coral: "hsl(var(--brand-purple))",
+          "coral-dark": "hsl(var(--brand-purple-dark))",
           surface1: "hsl(var(--brand-surface-1))",
           surface2: "hsl(var(--brand-surface-2))",
           surface3: "hsl(var(--brand-surface-3))",
