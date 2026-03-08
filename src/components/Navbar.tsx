@@ -32,6 +32,7 @@ export function Navbar() {
     { label: "Rent", href: "/listings?type=rent" },
     { label: "Auctions", href: "/auctions", badge: "Live" },
     { label: "Firesale™", href: "/firesale" },
+    { label: "Investors", href: "/investor-dashboard", badge: "INVESTORS", badgeStyle: "gold" },
     { label: "Professionals", href: "/professionals" },
   ];
 
@@ -80,7 +81,12 @@ export function Navbar() {
                 }`}
             >
               {link.label}
-              {link.badge && (
+              {link.badge && link.badgeStyle === "gold" && (
+                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-brand-gold text-background font-black uppercase tracking-widest shadow-sm">
+                  {link.badge}
+                </span>
+              )}
+              {link.badge && !link.badgeStyle && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold font-semibold animate-pulse">
                   {link.badge}
                 </span>
@@ -179,7 +185,10 @@ export function Navbar() {
               onClick={() => setMobileOpen(false)}
             >
               {link.label}
-              {link.badge && (
+              {link.badge && link.badgeStyle === "gold" && (
+                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-brand-gold text-background font-black uppercase tracking-widest">{link.badge}</span>
+              )}
+              {link.badge && !link.badgeStyle && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold font-semibold">{link.badge}</span>
               )}
             </Link>
