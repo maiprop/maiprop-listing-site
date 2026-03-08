@@ -94,6 +94,7 @@ export default {
         "gradient-hero": "var(--gradient-hero)",
         "gradient-card": "var(--gradient-card)",
         "gradient-emerald": "var(--gradient-emerald)",
+        "gradient-warm": "var(--gradient-warm)",
       },
       boxShadow: {
         "glow-cyan": "var(--shadow-glow-cyan)",
