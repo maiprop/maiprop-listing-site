@@ -21,29 +21,28 @@ import { useStartConversation } from "@/hooks/useMessages";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
-// ─── Energy class colour mapping ───────────────────────────────────────────────
+// ─── Energy class data ──────────────────────────────────────────────────────
+const ENERGY_SCALE = [
+  { cls: "A+", hex: "#1a9e4f", pct: 8,  desc: "< 33 kWh/m²·yr — Excellent" },
+  { cls: "A",  hex: "#2db84e", pct: 17, desc: "33–50 kWh/m²·yr — Very Good" },
+  { cls: "B+", hex: "#7dc73a", pct: 26, desc: "50–75 kWh/m²·yr — Good" },
+  { cls: "B",  hex: "#b5d934", pct: 35, desc: "75–100 kWh/m²·yr — Above Average" },
+  { cls: "C",  hex: "#f5d31b", pct: 50, desc: "100–125 kWh/m²·yr — Average" },
+  { cls: "D",  hex: "#f5a623", pct: 62, desc: "125–160 kWh/m²·yr — Below Average" },
+  { cls: "E",  hex: "#f07320", pct: 74, desc: "160–200 kWh/m²·yr — Poor" },
+  { cls: "F",  hex: "#e84020", pct: 86, desc: "200–250 kWh/m²·yr — Very Poor" },
+  { cls: "G",  hex: "#cc1414", pct: 100, desc: "> 250 kWh/m²·yr — Extremely Poor" },
+];
 const ENERGY_COLORS: Record<string, string> = {
-  "A+": "bg-[hsl(142,71%,45%)] text-white",
-  "A":  "bg-[hsl(142,60%,50%)] text-white",
-  "B+": "bg-[hsl(80,60%,45%)] text-white",
-  "B":  "bg-[hsl(80,50%,50%)] text-white",
-  "C":  "bg-[hsl(50,90%,50%)] text-black",
-  "D":  "bg-[hsl(35,90%,55%)] text-black",
-  "E":  "bg-[hsl(25,90%,55%)] text-white",
-  "F":  "bg-[hsl(10,85%,55%)] text-white",
-  "G":  "bg-[hsl(0,80%,50%)] text-white",
-};
-
-const ENERGY_DESCRIPTIONS: Record<string, string> = {
-  "A+": "<33% annual primary energy consumption vs baseline",
-  "A":  "33–50% of baseline",
-  "B+": "50–75% of baseline",
-  "B":  "75–100% of baseline",
-  "C":  "100–125% of baseline",
-  "D":  "125–160% of baseline",
-  "E":  "160–200% of baseline",
-  "F":  "200–250% of baseline",
-  "G":  ">250% — lowest efficiency",
+  "A+": "bg-[#1a9e4f] text-white",
+  "A":  "bg-[#2db84e] text-white",
+  "B+": "bg-[#7dc73a] text-white",
+  "B":  "bg-[#b5d934] text-black",
+  "C":  "bg-[#f5d31b] text-black",
+  "D":  "bg-[#f5a623] text-black",
+  "E":  "bg-[#f07320] text-white",
+  "F":  "bg-[#e84020] text-white",
+  "G":  "bg-[#cc1414] text-white",
 };
 
 // ─── Mortgage calculator (interactive) ─────────────────────────────────────────
