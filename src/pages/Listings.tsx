@@ -179,10 +179,11 @@ function FilterChip({ active, onClick, children }: {
 
 export default function Listings() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [viewMode, setViewMode] = useState<"grid" | "map">("grid");
+  const [viewMode, setViewMode] = useState<"grid" | "split" | "map">("grid");
   const [showFilters, setShowFilters] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [compareList, setCompareList] = useState<any[]>([]);
+  const [viewportIds, setViewportIds] = useState<Set<string> | null>(null);
   const { user } = useAuth();
 
   // URL-based filter state helpers
