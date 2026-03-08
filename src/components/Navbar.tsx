@@ -81,7 +81,12 @@ export function Navbar() {
                 }`}
             >
               {link.label}
-              {link.badge && (
+              {link.badge && link.badgeStyle === "gold" && (
+                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-brand-gold text-background font-black uppercase tracking-widest shadow-sm">
+                  {link.badge}
+                </span>
+              )}
+              {link.badge && !link.badgeStyle && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold font-semibold animate-pulse">
                   {link.badge}
                 </span>
