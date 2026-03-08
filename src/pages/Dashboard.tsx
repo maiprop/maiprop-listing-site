@@ -38,8 +38,11 @@ export default function Dashboard() {
   const { data: favorites = [], isLoading: favLoading } = useFavorites();
   const { data: viewings = [], isLoading: viewingsLoading } = useViewings("requester");
   const { data: ownViewings = [] } = useViewings("owner");
+  const { data: savedSearches = [], isLoading: savedSearchesLoading } = useSavedSearches();
   const updateListing = useUpdateListing();
   const deleteListing = useDeleteListing();
+  const deleteSavedSearch = useDeleteSavedSearch();
+  const toggleAlert = useToggleSavedSearchAlert();
 
   const handleSignOut = async () => {
     await signOut();
