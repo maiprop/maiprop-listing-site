@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import {
   Search, SlidersHorizontal, MapPin, LayoutGrid, Map, ChevronDown,
-  X, Gavel, ArrowUpDown, Loader2, Building2, Layers
+  X, Gavel, ArrowUpDown, Loader2, Building2, Check
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -11,6 +11,8 @@ import { PropertyCard } from "@/components/PropertyCard";
 import { Footer } from "@/components/Footer";
 import { mockProperties } from "@/data/mockProperties";
 import { useListings } from "@/hooks/useListings";
+
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const priceRanges = [
   { label: "Any Price", value: "" },
@@ -46,6 +48,27 @@ const sortOptions = [
   { label: "AI Score", value: "ai-score" },
   { label: "Most Viewed", value: "views" },
 ];
+
+const ENERGY_CLASSES = ["A+", "A", "B+", "B", "C", "D", "E", "F", "G"];
+const HEATING_TYPES = ["autonomous", "central", "floor", "none"];
+const CONSTRUCTION_STATUSES = ["new", "under_construction", "renovated", "needs_renovation", "preserved", "neoclassical"];
+
+const FEATURE_OPTIONS = [
+  { key: "has_parking", label: "🚗 Parking" },
+  { key: "has_elevator", label: "🛗 Elevator" },
+  { key: "has_balcony", label: "🏞️ Balcony" },
+  { key: "has_pool", label: "🏊 Pool" },
+  { key: "pets_allowed", label: "🐾 Pet Friendly" },
+  { key: "has_furnished", label: "🛋️ Furnished" },
+  { key: "has_garden", label: "🌿 Garden" },
+  { key: "has_ac", label: "❄️ Air Conditioning" },
+  { key: "has_fireplace", label: "🔥 Fireplace" },
+  { key: "has_storage", label: "📦 Storage" },
+  { key: "has_view", label: "👁️ View" },
+  { key: "has_smart_home", label: "🏡 Smart Home" },
+];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function dbListingToCard(l: any) {
   return {
@@ -87,20 +110,121 @@ function dbListingToCard(l: any) {
     ].filter(Boolean) as string[],
     hasVideo: l.has_video_tour,
     hasVirtualTour: l.has_virtual_tour,
+    // raw data for filtering
+    _raw: l,
   };
 }
 
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function RangeSelector({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: [string, string];
+  onChange: (v: [string, string]) => void;
+  options: { label: string; value: string }[];
+}) {
+  return (
+    <div>
+      <label className="text-xs text-muted-foreground font-medium mb-2 block">{label}</label>
+      <div className="flex items-center gap-1">
+        <select
+          value={value[0]}
+          onChange={e => onChange([e.target.value, value[1]])}
+          className="flex-1 bg-secondary border border-border rounded-lg px-2 py-2 text-xs text-foreground outline-none focus:border-primary appearance-none"
+        >
+          <option value="">Min</option>
+          {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+        <span className="text-muted-foreground text-xs">–</span>
+        <select
+          value={value[1]}
+          onChange={e => onChange([value[0], e.target.value])}
+          className="flex-1 bg-secondary border border-border rounded-lg px-2 py-2 text-xs text-foreground outline-none focus:border-primary appearance-none"
+        >
+          <option value="">Max</option>
+          {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      </div>
+    </div>
+  );
+}
+
+function FilterChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all ${
+        active
+          ? "border-primary bg-primary/10 text-primary"
+          : "border-border bg-secondary text-muted-foreground hover:text-foreground hover:border-primary/40"
+      }`}
+    >
+      {active && <Check className="w-3 h-3" />}
+      {children}
+    </button>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+
 export default function Listings() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [viewMode, setViewMode] = useState<"grid" | "map">("grid");
   const [showFilters, setShowFilters] = useState(false);
-  const [selectedType, setSelectedType] = useState(searchParams.get("type") || "");
-  const [selectedListingType, setSelectedListingType] = useState("");
-  const [selectedPrice, setSelectedPrice] = useState("");
-  const [selectedSort, setSelectedSort] = useState("relevant");
-  const [searchQuery, setSearchQuery] = useState(searchParams.get("city") || "");
-  const [minBeds, setMinBeds] = useState("");
-  const [minSqm, setMinSqm] = useState("");
+
+  // URL-based filter state helpers
+  const getParam = (key: string, fallback = "") => searchParams.get(key) || fallback;
+  const setParam = useCallback((key: string, value: string) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      if (value) next.set(key, value); else next.delete(key);
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
+
+  const toggleMulti = useCallback((key: string, value: string) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      const current = (next.get(key) || "").split(",").filter(Boolean);
+      const idx = current.indexOf(value);
+      if (idx >= 0) current.splice(idx, 1); else current.push(value);
+      if (current.length) next.set(key, current.join(",")); else next.delete(key);
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
+
+  const getMulti = (key: string): string[] =>
+    (searchParams.get(key) || "").split(",").filter(Boolean);
+
+  // Read filter state from URL
+  const searchQuery = getParam("city");
+  const selectedListingType = getParam("listing_type");
+  const selectedType = getParam("type");
+  const selectedPrice = getParam("price");
+  const selectedSort = getParam("sort", "relevant");
+  const bedsRange: [string, string] = [getParam("beds_min"), getParam("beds_max")];
+  const bathsRange: [string, string] = [getParam("baths_min"), getParam("baths_max")];
+  const floorRange: [string, string] = [getParam("floor_min"), getParam("floor_max")];
+  const yearRange: [string, string] = [getParam("year_min"), getParam("year_max")];
+  const minSqm = getParam("sqm_min");
+  const maxSqm = getParam("sqm_max");
+  const selectedEnergyClasses = getMulti("energy");
+  const selectedFeatures = getMulti("features");
+  const selectedHeating = getParam("heating");
+  const selectedConstruction = getParam("construction");
 
   const { data: dbListings = [], isLoading } = useListings({
     city: searchQuery || undefined,
@@ -108,42 +232,77 @@ export default function Listings() {
     property_type: selectedType || undefined,
   });
 
-  // Use DB data if available, else mock
   const sourceListings = dbListings.length > 0
     ? dbListings.map(dbListingToCard)
-    : mockProperties;
+    : mockProperties.map(p => ({ ...p, _raw: p }));
 
-  // Client-side filter & sort
-  let filtered = sourceListings.filter(p => {
+  // Client-side filtering
+  let filtered = sourceListings.filter((p: any) => {
+    const raw = p._raw || p;
+    // Price range
     if (selectedPrice) {
       const [min, max] = selectedPrice.split("-").map(Number);
       if (p.price < min || p.price > max) return false;
     }
-    if (minBeds && p.bedrooms != null && p.bedrooms < Number(minBeds)) return false;
+    // Bedrooms range
+    if (bedsRange[0] && p.bedrooms != null && p.bedrooms < Number(bedsRange[0])) return false;
+    if (bedsRange[1] && p.bedrooms != null && p.bedrooms > Number(bedsRange[1])) return false;
+    // Bathrooms range
+    if (bathsRange[0] && p.bathrooms != null && p.bathrooms < Number(bathsRange[0])) return false;
+    if (bathsRange[1] && p.bathrooms != null && p.bathrooms > Number(bathsRange[1])) return false;
+    // Floor range
+    if (floorRange[0] && raw.floor != null && raw.floor < Number(floorRange[0])) return false;
+    if (floorRange[1] && raw.floor != null && raw.floor > Number(floorRange[1])) return false;
+    // Year built range
+    const yearBuilt = p.yearBuilt ?? raw.year_built;
+    if (yearRange[0] && yearBuilt && yearBuilt < Number(yearRange[0])) return false;
+    if (yearRange[1] && yearBuilt && yearBuilt > Number(yearRange[1])) return false;
+    // SQM range
     if (minSqm && p.sqm < Number(minSqm)) return false;
+    if (maxSqm && p.sqm > Number(maxSqm)) return false;
+    // Energy class
+    if (selectedEnergyClasses.length > 0) {
+      const ec = p.energyClass ?? raw.energy_class;
+      if (!ec || !selectedEnergyClasses.includes(ec)) return false;
+    }
+    // Features (boolean checks on raw DB data)
+    for (const feat of selectedFeatures) {
+      if (!raw[feat]) return false;
+    }
+    // Heating
+    if (selectedHeating && raw.heating_system !== selectedHeating) return false;
+    // Construction status
+    if (selectedConstruction && raw.construction_status !== selectedConstruction) return false;
     return true;
   });
 
-  if (selectedSort === "price-asc") filtered = [...filtered].sort((a, b) => a.price - b.price);
-  if (selectedSort === "price-desc") filtered = [...filtered].sort((a, b) => b.price - a.price);
-  if (selectedSort === "ai-score") filtered = [...filtered].sort((a, b) => (b.aiScore || 0) - (a.aiScore || 0));
-  if (selectedSort === "views") filtered = [...filtered].sort((a, b) => (b.views || 0) - (a.views || 0));
+  // Sorting
+  if (selectedSort === "price-asc") filtered = [...filtered].sort((a: any, b: any) => a.price - b.price);
+  if (selectedSort === "price-desc") filtered = [...filtered].sort((a: any, b: any) => b.price - a.price);
+  if (selectedSort === "ai-score") filtered = [...filtered].sort((a: any, b: any) => (b.aiScore || 0) - (a.aiScore || 0));
+  if (selectedSort === "views") filtered = [...filtered].sort((a: any, b: any) => (b.views || 0) - (a.views || 0));
 
-  const activeFilters = [
-    selectedType && propertyTypeOptions.find(o => o.value === selectedType)?.label,
-    selectedListingType && listingTypeOptions.find(o => o.value === selectedListingType)?.label,
-    selectedPrice && priceRanges.find(o => o.value === selectedPrice)?.label,
-    minBeds && `${minBeds}+ beds`,
-    minSqm && `${minSqm}m²+`,
-  ].filter(Boolean) as string[];
+  // Active filter count
+  const activeFilterCount = [
+    selectedType, selectedListingType, selectedPrice,
+    bedsRange[0], bedsRange[1], bathsRange[0], bathsRange[1],
+    floorRange[0], floorRange[1], yearRange[0], yearRange[1],
+    minSqm, maxSqm, selectedHeating, selectedConstruction,
+    ...selectedEnergyClasses, ...selectedFeatures,
+  ].filter(Boolean).length;
 
-  const clearFilter = (label: string) => {
-    if (propertyTypeOptions.find(o => o.label === label)) setSelectedType("");
-    if (listingTypeOptions.find(o => o.label === label)) setSelectedListingType("");
-    if (priceRanges.find(o => o.label === label)) setSelectedPrice("");
-    if (label.includes("beds")) setMinBeds("");
-    if (label.includes("m²")) setMinSqm("");
+  const clearAllFilters = () => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams();
+      if (prev.get("city")) next.set("city", prev.get("city")!);
+      return next;
+    }, { replace: true });
   };
+
+  const bedsOpts = ["1", "2", "3", "4", "5"].map(v => ({ label: v, value: v }));
+  const bathsOpts = ["1", "2", "3", "4"].map(v => ({ label: v, value: v }));
+  const floorOpts = ["-1", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10+"].map(v => ({ label: v === "-1" ? "Basement" : v === "0" ? "Ground" : v, value: v }));
+  const yearOpts = ["1950", "1960", "1970", "1980", "1990", "2000", "2005", "2010", "2015", "2018", "2020", "2022", "2024"].map(v => ({ label: v, value: v }));
 
   return (
     <div className="min-h-screen bg-background">
@@ -151,7 +310,7 @@ export default function Listings() {
       <MarketTicker />
 
       <div className="pt-16">
-        {/* Sticky search bar */}
+        {/* Sticky search + top filters bar */}
         <div className="bg-card border-b border-border sticky top-16 z-40">
           <div className="container py-4">
             <div className="flex gap-2 flex-wrap items-center">
@@ -162,17 +321,17 @@ export default function Listings() {
                   type="text"
                   placeholder="City, area, address..."
                   value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
+                  onChange={e => setParam("city", e.target.value)}
                   className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none min-w-0"
                 />
                 {searchQuery && (
-                  <button onClick={() => setSearchQuery("")}><X className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                  <button onClick={() => setParam("city", "")}><X className="w-3.5 h-3.5 text-muted-foreground" /></button>
                 )}
               </div>
 
               {/* Listing type */}
               <div className="relative">
-                <select value={selectedListingType} onChange={e => setSelectedListingType(e.target.value)}
+                <select value={selectedListingType} onChange={e => setParam("listing_type", e.target.value)}
                   className="appearance-none bg-secondary border border-border rounded-xl px-3 py-2.5 pr-7 text-sm text-foreground cursor-pointer outline-none focus:border-primary">
                   {listingTypeOptions.map(o => <option key={o.value} value={o.value} className="bg-card">{o.label}</option>)}
                 </select>
@@ -181,7 +340,7 @@ export default function Listings() {
 
               {/* Property type */}
               <div className="relative">
-                <select value={selectedType} onChange={e => setSelectedType(e.target.value)}
+                <select value={selectedType} onChange={e => setParam("type", e.target.value)}
                   className="appearance-none bg-secondary border border-border rounded-xl px-3 py-2.5 pr-7 text-sm text-foreground cursor-pointer outline-none focus:border-primary">
                   {propertyTypeOptions.map(o => <option key={o.value} value={o.value} className="bg-card">{o.label}</option>)}
                 </select>
@@ -190,7 +349,7 @@ export default function Listings() {
 
               {/* Price */}
               <div className="relative">
-                <select value={selectedPrice} onChange={e => setSelectedPrice(e.target.value)}
+                <select value={selectedPrice} onChange={e => setParam("price", e.target.value)}
                   className="appearance-none bg-secondary border border-border rounded-xl px-3 py-2.5 pr-7 text-sm text-foreground cursor-pointer outline-none focus:border-primary">
                   {priceRanges.map(o => <option key={o.value} value={o.value} className="bg-card">{o.label}</option>)}
                 </select>
@@ -199,7 +358,7 @@ export default function Listings() {
 
               {/* Sort */}
               <div className="relative">
-                <select value={selectedSort} onChange={e => setSelectedSort(e.target.value)}
+                <select value={selectedSort} onChange={e => setParam("sort", e.target.value)}
                   className="appearance-none bg-secondary border border-border rounded-xl px-3 py-2.5 pr-7 text-sm text-foreground cursor-pointer outline-none focus:border-primary">
                   {sortOptions.map(o => <option key={o.value} value={o.value} className="bg-card">{o.label}</option>)}
                 </select>
@@ -210,9 +369,10 @@ export default function Listings() {
               <Button variant="outline"
                 className={`border-border gap-2 shrink-0 ${showFilters ? "bg-primary/10 border-primary/30 text-primary" : ""}`}
                 onClick={() => setShowFilters(!showFilters)}>
-                <SlidersHorizontal className="w-4 h-4" /> Filters
-                {activeFilters.length > 0 && (
-                  <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center">{activeFilters.length}</span>
+                <SlidersHorizontal className="w-4 h-4" />
+                More Filters
+                {activeFilterCount > 0 && (
+                  <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center">{activeFilterCount}</span>
                 )}
               </Button>
 
@@ -230,68 +390,151 @@ export default function Listings() {
             </div>
 
             {/* Active filter chips */}
-            {activeFilters.length > 0 && (
+            {activeFilterCount > 0 && (
               <div className="flex items-center gap-2 mt-3 flex-wrap">
-                <span className="text-xs text-muted-foreground">Active:</span>
-                {activeFilters.map(filter => (
-                  <button key={filter} onClick={() => clearFilter(filter)}
-                    className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">
-                    {filter} <X className="w-3 h-3" />
-                  </button>
-                ))}
-                <button onClick={() => { setSelectedType(""); setSelectedListingType(""); setSelectedPrice(""); setMinBeds(""); setMinSqm(""); }}
-                  className="text-xs text-muted-foreground hover:text-foreground">Clear all</button>
+                <span className="text-xs text-muted-foreground">Active filters:</span>
+                {selectedType && <button onClick={() => setParam("type", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{selectedType} <X className="w-3 h-3" /></button>}
+                {selectedListingType && <button onClick={() => setParam("listing_type", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{selectedListingType} <X className="w-3 h-3" /></button>}
+                {selectedPrice && <button onClick={() => setParam("price", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{priceRanges.find(r => r.value === selectedPrice)?.label} <X className="w-3 h-3" /></button>}
+                {bedsRange[0] && <button onClick={() => setParam("beds_min", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{bedsRange[0]}+ beds <X className="w-3 h-3" /></button>}
+                {selectedEnergyClasses.map(ec => <button key={ec} onClick={() => toggleMulti("energy", ec)} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">Energy {ec} <X className="w-3 h-3" /></button>)}
+                {selectedFeatures.map(f => <button key={f} onClick={() => toggleMulti("features", f)} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{FEATURE_OPTIONS.find(o => o.key === f)?.label.replace(/^[^\s]+ /, "") || f} <X className="w-3 h-3" /></button>)}
+                {selectedHeating && <button onClick={() => setParam("heating", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">Heating: {selectedHeating} <X className="w-3 h-3" /></button>}
+                {selectedConstruction && <button onClick={() => setParam("construction", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{selectedConstruction.replace("_", " ")} <X className="w-3 h-3" /></button>}
+                <button onClick={clearAllFilters} className="text-xs text-muted-foreground hover:text-foreground ml-1">Clear all</button>
               </div>
             )}
           </div>
         </div>
 
-        {/* Advanced filters panel */}
+        {/* ── Advanced Filters Panel ────────────────────────────────────────── */}
         {showFilters && (
-          <div className="bg-card border-b border-border">
-            <div className="container py-5">
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+          <div className="bg-card border-b border-border shadow-sm">
+            <div className="container py-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+
+                {/* Bedrooms range */}
+                <RangeSelector
+                  label="Bedrooms"
+                  value={bedsRange}
+                  onChange={([min, max]) => { setParam("beds_min", min); setParam("beds_max", max); }}
+                  options={bedsOpts}
+                />
+
+                {/* Bathrooms range */}
+                <RangeSelector
+                  label="Bathrooms"
+                  value={bathsRange}
+                  onChange={([min, max]) => { setParam("baths_min", min); setParam("baths_max", max); }}
+                  options={bathsOpts}
+                />
+
+                {/* Floor range */}
+                <RangeSelector
+                  label="Floor"
+                  value={floorRange}
+                  onChange={([min, max]) => { setParam("floor_min", min); setParam("floor_max", max); }}
+                  options={floorOpts}
+                />
+
+                {/* Year built range */}
+                <RangeSelector
+                  label="Year Built"
+                  value={yearRange}
+                  onChange={([min, max]) => { setParam("year_min", min); setParam("year_max", max); }}
+                  options={yearOpts}
+                />
+
+                {/* Size range */}
                 <div>
-                  <label className="text-xs text-muted-foreground font-medium mb-2 block">Min. Bedrooms</label>
-                  <div className="flex gap-1">
-                    {["", "1", "2", "3", "4"].map(val => (
-                      <button key={val} onClick={() => setMinBeds(val)}
-                        className={`flex-1 py-1.5 text-xs rounded-lg border transition-colors ${minBeds === val ? "bg-primary/10 border-primary/40 text-primary" : "bg-secondary border-border text-muted-foreground hover:border-primary/40"}`}>
-                        {val || "Any"}
+                  <label className="text-xs text-muted-foreground font-medium mb-2 block">Size (m²)</label>
+                  <div className="flex items-center gap-1">
+                    <input type="number" placeholder="Min" value={minSqm} onChange={e => setParam("sqm_min", e.target.value)}
+                      className="flex-1 bg-secondary border border-border rounded-lg px-2 py-2 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:border-primary" />
+                    <span className="text-muted-foreground text-xs">–</span>
+                    <input type="number" placeholder="Max" value={maxSqm} onChange={e => setParam("sqm_max", e.target.value)}
+                      className="flex-1 bg-secondary border border-border rounded-lg px-2 py-2 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:border-primary" />
+                  </div>
+                </div>
+
+                {/* Heating type */}
+                <div>
+                  <label className="text-xs text-muted-foreground font-medium mb-2 block">Heating Type</label>
+                  <div className="relative">
+                    <select value={selectedHeating} onChange={e => setParam("heating", e.target.value)}
+                      className="w-full bg-secondary border border-border rounded-lg px-2 py-2 text-xs text-foreground outline-none focus:border-primary appearance-none">
+                      <option value="">Any</option>
+                      {HEATING_TYPES.map(h => <option key={h} value={h} className="capitalize">{h.replace("_", " ")}</option>)}
+                    </select>
+                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
+                  </div>
+                </div>
+
+                {/* Construction status */}
+                <div>
+                  <label className="text-xs text-muted-foreground font-medium mb-2 block">Construction Status</label>
+                  <div className="relative">
+                    <select value={selectedConstruction} onChange={e => setParam("construction", e.target.value)}
+                      className="w-full bg-secondary border border-border rounded-lg px-2 py-2 text-xs text-foreground outline-none focus:border-primary appearance-none">
+                      <option value="">Any</option>
+                      {CONSTRUCTION_STATUSES.map(s => <option key={s} value={s}>{s.replace("_", " ")}</option>)}
+                    </select>
+                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
+                  </div>
+                </div>
+
+                {/* Energy class */}
+                <div>
+                  <label className="text-xs text-muted-foreground font-medium mb-2 block">Energy Class</label>
+                  <div className="flex flex-wrap gap-1">
+                    {ENERGY_CLASSES.map(ec => (
+                      <button
+                        key={ec}
+                        onClick={() => toggleMulti("energy", ec)}
+                        className={`px-2 py-1 rounded text-xs font-bold border transition-all ${
+                          selectedEnergyClasses.includes(ec)
+                            ? "bg-primary/20 border-primary text-primary"
+                            : "bg-secondary border-border text-muted-foreground hover:border-primary/40"
+                        }`}
+                      >
+                        {ec}
                       </button>
                     ))}
                   </div>
                 </div>
-                <div>
-                  <label className="text-xs text-muted-foreground font-medium mb-2 block">Min. Size (m²)</label>
-                  <input type="number" placeholder="e.g. 50" value={minSqm} onChange={e => setMinSqm(e.target.value)}
-                    className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary" />
+
+              </div>
+
+              {/* Features checkboxes */}
+              <div className="mt-5">
+                <label className="text-xs text-muted-foreground font-medium mb-3 block">Features</label>
+                <div className="flex flex-wrap gap-2">
+                  {FEATURE_OPTIONS.map(feat => (
+                    <FilterChip
+                      key={feat.key}
+                      active={selectedFeatures.includes(feat.key)}
+                      onClick={() => toggleMulti("features", feat.key)}
+                    >
+                      {feat.label}
+                    </FilterChip>
+                  ))}
                 </div>
-                <div className="col-span-2">
-                  <label className="text-xs text-muted-foreground font-medium mb-2 block">Features</label>
-                  <div className="flex gap-2 flex-wrap">
-                    {["Pool", "Parking", "Elevator", "Sea View", "Garden", "Smart Home"].map(feat => (
-                      <button key={feat} className="px-2.5 py-1 text-xs rounded-full bg-secondary border border-border hover:border-primary/40 hover:text-primary transition-colors">
-                        {feat}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex flex-col justify-end gap-2 col-span-2 md:col-span-1">
-                  <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground" onClick={() => setShowFilters(false)}>
-                    Apply Filters
-                  </Button>
-                  <Button size="sm" variant="outline" className="border-border"
-                    onClick={() => { setSelectedType(""); setSelectedListingType(""); setSelectedPrice(""); setMinBeds(""); setMinSqm(""); setShowFilters(false); }}>
-                    Reset All
-                  </Button>
-                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-3 mt-5 pt-4 border-t border-border">
+                <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground" onClick={() => setShowFilters(false)}>
+                  Show {filtered.length} Results
+                </Button>
+                <Button size="sm" variant="outline" className="border-border" onClick={clearAllFilters}>
+                  Reset All
+                </Button>
               </div>
             </div>
           </div>
         )}
 
-        {/* Results */}
+        {/* ── Results ──────────────────────────────────────────────────────── */}
         <div className="container py-8">
           <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
             <div className="flex items-center gap-3">
@@ -328,10 +571,15 @@ export default function Listings() {
                 <Building2 className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
                 <p className="font-semibold">No properties found</p>
                 <p className="text-sm text-muted-foreground mt-1">Try adjusting your filters</p>
+                {activeFilterCount > 0 && (
+                  <Button size="sm" variant="outline" className="mt-4" onClick={clearAllFilters}>
+                    Clear Filters
+                  </Button>
+                )}
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {filtered.map((property) => (
+                {filtered.map((property: any) => (
                   <PropertyCard key={property.id} property={property as any} />
                 ))}
               </div>

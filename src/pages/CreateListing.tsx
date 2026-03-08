@@ -1,15 +1,17 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ChevronLeft, ChevronRight, Check, Upload, X, Loader2,
   Home, Building2, Zap, MapPin, DollarSign, Image as ImageIcon,
-  Info
+  Info, GripVertical, Star
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const PROPERTY_TYPES = ["apartment", "house", "villa", "land", "commercial", "office"] as const;
 type PropertyType = typeof PROPERTY_TYPES[number];
@@ -31,6 +33,24 @@ const steps = [
   { id: 5, label: "Pricing", icon: DollarSign },
   { id: 6, label: "Photos", icon: ImageIcon },
 ];
+
+// ─── Image Types ──────────────────────────────────────────────────────────────
+
+interface UploadedImage {
+  id: string;
+  url: string;
+  file?: File;
+  uploading?: boolean;
+  error?: string;
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const isResidential = (t: PropertyType) => ["apartment", "house", "villa"].includes(t);
+const isLand = (t: PropertyType) => t === "land";
+const isCommercial = (t: PropertyType) => ["commercial", "office"].includes(t);
+
+// ─── Small UI Components ──────────────────────────────────────────────────────
 
 function FieldLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
   return (
@@ -87,29 +107,124 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   return <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3 mt-5 first:mt-0">{children}</h3>;
 }
 
-const isResidential = (t: PropertyType) => ["apartment", "house", "villa"].includes(t);
-const isLand = (t: PropertyType) => t === "land";
-const isCommercial = (t: PropertyType) => ["commercial", "office"].includes(t);
+// ─── Image Gallery Component ──────────────────────────────────────────────────
+
+function ImageGallery({
+  images,
+  coverImageId,
+  onSetCover,
+  onRemove,
+  onReorder,
+}: {
+  images: UploadedImage[];
+  coverImageId: string | null;
+  onSetCover: (id: string) => void;
+  onRemove: (id: string) => void;
+  onReorder: (from: number, to: number) => void;
+}) {
+  const dragIdx = useRef<number | null>(null);
+  const dragOverIdx = useRef<number | null>(null);
+
+  const handleDragStart = (idx: number) => { dragIdx.current = idx; };
+  const handleDragOver = (e: React.DragEvent, idx: number) => {
+    e.preventDefault();
+    dragOverIdx.current = idx;
+  };
+  const handleDrop = () => {
+    if (dragIdx.current !== null && dragOverIdx.current !== null && dragIdx.current !== dragOverIdx.current) {
+      onReorder(dragIdx.current, dragOverIdx.current);
+    }
+    dragIdx.current = null;
+    dragOverIdx.current = null;
+  };
+
+  if (images.length === 0) return null;
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4">
+      {images.map((img, idx) => {
+        const isCover = img.id === coverImageId;
+        return (
+          <div
+            key={img.id}
+            draggable
+            onDragStart={() => handleDragStart(idx)}
+            onDragOver={e => handleDragOver(e, idx)}
+            onDrop={handleDrop}
+            className={`relative group rounded-xl overflow-hidden border-2 transition-all cursor-grab active:cursor-grabbing ${
+              isCover ? "border-primary shadow-lg shadow-primary/20" : "border-border hover:border-primary/40"
+            }`}
+          >
+            {/* Image */}
+            <div className="aspect-[4/3] bg-secondary">
+              {img.uploading ? (
+                <div className="w-full h-full flex items-center justify-center">
+                  <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                </div>
+              ) : img.error ? (
+                <div className="w-full h-full flex items-center justify-center text-destructive text-xs p-2 text-center">
+                  Upload failed
+                </div>
+              ) : (
+                <img src={img.url} alt="" className="w-full h-full object-cover" />
+              )}
+            </div>
+
+            {/* Cover badge */}
+            {isCover && (
+              <div className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 bg-primary text-primary-foreground rounded-full text-xs font-bold">
+                <Star className="w-3 h-3 fill-current" /> Cover
+              </div>
+            )}
+
+            {/* Drag handle */}
+            <div className="absolute top-2 right-8 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded bg-background/70">
+              <GripVertical className="w-3 h-3 text-muted-foreground" />
+            </div>
+
+            {/* Remove */}
+            <button
+              onClick={() => onRemove(img.id)}
+              className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-full bg-destructive text-destructive-foreground"
+            >
+              <X className="w-3 h-3" />
+            </button>
+
+            {/* Set as cover (bottom overlay) */}
+            {!isCover && !img.uploading && !img.error && (
+              <button
+                onClick={() => onSetCover(img.id)}
+                className="absolute bottom-0 inset-x-0 py-1.5 bg-background/80 backdrop-blur-sm text-xs text-foreground font-medium opacity-0 group-hover:opacity-100 transition-opacity hover:bg-primary/20 hover:text-primary"
+              >
+                Set as cover
+              </button>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function CreateListing() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
   const [step, setStep] = useState(1);
-  const [uploading, setUploading] = useState(false);
-  const [coverImageUrl, setCoverImageUrl] = useState("");
+  const [images, setImages] = useState<UploadedImage[]>([]);
+  const [coverImageId, setCoverImageId] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const [form, setForm] = useState({
-    // Step 1 - Type
     listing_type: "sale" as ListingType,
     property_type: "apartment" as PropertyType,
-    // Step 2 - Details (core)
     title: "",
     description: "",
     sqm: "",
     year_built: "",
     energy_class: "",
-    // Residential
     bedrooms: "",
     bathrooms: "",
     wc_count: "",
@@ -120,94 +235,31 @@ export default function CreateListing() {
     levels: "",
     heating_system: "",
     construction_status: "",
-    // Commercial
     commercial_subtype: "",
     plot_surface: "",
     floor_height: "",
-    // Step 3 - Features (context-aware booleans)
-    // Internal
-    has_elevator: false,
-    has_ac: false,
-    has_solar_water: false,
-    has_storage: false,
-    has_secure_door: false,
-    has_alarm: false,
-    has_cctv: false,
-    has_security: false,
-    has_smart_home: false,
-    has_fireplace: false,
-    has_underfloor_heating: false,
-    has_furnished: false,
-    has_internal_staircase: false,
-    has_double_glazing: false,
-    has_window_screens: false,
-    has_night_power: false,
-    has_attic: false,
-    has_satellite: false,
-    has_painted: false,
-    // External
-    has_parking: false,
-    has_balcony: false,
-    has_garden: false,
-    has_pool: false,
-    has_view: false,
-    has_facade: false,
-    has_awning: false,
-    has_disability_access: false,
-    is_corner: false,
-    is_penthouse: false,
-    // Construction
-    is_neoclassical: false,
-    is_preserved: false,
-    has_virtual_tour: false,
-    has_video_tour: false,
-    // Suitability
-    suitable_student: false,
-    suitable_holiday: false,
-    suitable_investment: false,
-    suitable_commercial_use: false,
-    // Commercial features
-    has_three_phase_power: false,
-    has_loading_dock: false,
-    has_structured_cabling: false,
-    has_equipped: false,
-    // Land features
-    is_buildable: false,
-    within_city_plan: false,
-    within_settlement: false,
-    has_water_supply: false,
-    has_electricity_supply: false,
-    has_land_concession: false,
-    coverage_ratio: "",
-    building_allowance: "",
-    facade_length: "",
-    plot_depth: "",
-    slope: "",
-    zone_type: "",
-    road_type: "",
-    land_use: "",
-    distance_from_sea: "",
-    distance_from_city: "",
-    // Step 4 - Location
-    address: "",
-    city: "",
-    region: "",
-    postal_code: "",
-    cadastre_number: "",
-    enfia_zone: "",
-    // Step 5 - Pricing
-    price: "",
-    auction_starting_bid: "",
-    auction_date: "",
-    auction_court: "",
-    // Rent-specific pricing
-    deposit_months: "",
-    monthly_expenses: "",
-    agent_fee_included: false,
-    pets_allowed: false,
-    short_term_rental: false,
-    available_from: "",
-    min_rental_months: "",
+    has_elevator: false, has_ac: false, has_solar_water: false, has_storage: false,
+    has_secure_door: false, has_alarm: false, has_cctv: false, has_security: false,
+    has_smart_home: false, has_fireplace: false, has_underfloor_heating: false,
+    has_furnished: false, has_internal_staircase: false, has_double_glazing: false,
+    has_window_screens: false, has_night_power: false, has_attic: false,
+    has_satellite: false, has_painted: false,
+    has_parking: false, has_balcony: false, has_garden: false, has_pool: false,
+    has_view: false, has_facade: false, has_awning: false, has_disability_access: false,
+    is_corner: false, is_penthouse: false, is_neoclassical: false, is_preserved: false,
+    has_virtual_tour: false, has_video_tour: false,
+    suitable_student: false, suitable_holiday: false, suitable_investment: false, suitable_commercial_use: false,
+    has_three_phase_power: false, has_loading_dock: false, has_structured_cabling: false, has_equipped: false,
+    is_buildable: false, within_city_plan: false, within_settlement: false,
+    has_water_supply: false, has_electricity_supply: false, has_land_concession: false,
+    coverage_ratio: "", building_allowance: "", facade_length: "", plot_depth: "",
+    slope: "", zone_type: "", road_type: "", land_use: "",
+    distance_from_sea: "", distance_from_city: "",
+    address: "", city: "", region: "", postal_code: "",
+    cadastre_number: "", enfia_zone: "",
+    price: "", auction_starting_bid: "", auction_date: "", auction_court: "",
+    deposit_months: "", monthly_expenses: "", agent_fee_included: false,
+    pets_allowed: false, short_term_rental: false, available_from: "", min_rental_months: "",
   });
 
   const set = (key: string, value: unknown) => setForm(f => ({ ...f, [key]: value }));
@@ -216,31 +268,89 @@ export default function CreateListing() {
   const pt = form.property_type;
   const lt = form.listing_type;
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !user) return;
-    setUploading(true);
-    try {
-      const ext = file.name.split(".").pop();
-      const path = `${user.id}/${Date.now()}.${ext}`;
-      const { error } = await supabase.storage.from("listing-images").upload(path, file, { upsert: true });
-      if (error) throw error;
-      const { data } = supabase.storage.from("listing-images").getPublicUrl(path);
-      setCoverImageUrl(data.publicUrl);
-      toast.success("Image uploaded!");
-    } catch (err: any) {
-      toast.error(err.message);
-    } finally {
-      setUploading(false);
+  // ── Image Upload ──────────────────────────────────────────────────────────
+
+  const uploadImage = useCallback(async (file: File): Promise<UploadedImage> => {
+    if (!user) throw new Error("Must be logged in");
+    const ext = file.name.split(".").pop();
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const path = `${user.id}/${id}.${ext}`;
+    const { error } = await supabase.storage.from("listing-images").upload(path, file, { upsert: true });
+    if (error) throw error;
+    const { data } = supabase.storage.from("listing-images").getPublicUrl(path);
+    return { id, url: data.publicUrl };
+  }, [user]);
+
+  const handleFilesSelected = async (files: FileList | null) => {
+    if (!files || !user) return;
+    const newFiles = Array.from(files).slice(0, 20 - images.length);
+    if (newFiles.length === 0) return;
+
+    // Add placeholders
+    const placeholders: UploadedImage[] = newFiles.map(file => ({
+      id: `placeholder-${Date.now()}-${Math.random()}`,
+      url: URL.createObjectURL(file),
+      file,
+      uploading: true,
+    }));
+    setImages(prev => [...prev, ...placeholders]);
+
+    // Upload each
+    for (let i = 0; i < newFiles.length; i++) {
+      const placeholder = placeholders[i];
+      try {
+        const uploaded = await uploadImage(newFiles[i]);
+        setImages(prev => prev.map(img =>
+          img.id === placeholder.id
+            ? { ...uploaded, uploading: false }
+            : img
+        ));
+        // Auto-set first uploaded as cover
+        if (i === 0) {
+          setCoverImageId(prev => prev ?? uploaded.id);
+        }
+      } catch (err: any) {
+        setImages(prev => prev.map(img =>
+          img.id === placeholder.id
+            ? { ...img, uploading: false, error: err.message }
+            : img
+        ));
+        toast.error(`Failed to upload ${newFiles[i].name}`);
+      }
     }
   };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    handleFilesSelected(e.dataTransfer.files);
+  };
+
+  const handleReorder = (fromIdx: number, toIdx: number) => {
+    setImages(prev => {
+      const next = [...prev];
+      const [moved] = next.splice(fromIdx, 1);
+      next.splice(toIdx, 0, moved);
+      return next;
+    });
+  };
+
+  const handleRemove = (id: string) => {
+    setImages(prev => prev.filter(img => img.id !== id));
+    setCoverImageId(prev => prev === id ? (images.find(img => img.id !== id)?.id ?? null) : prev);
+  };
+
+  // ── Submit ────────────────────────────────────────────────────────────────
 
   const handleSubmit = async (asDraft = false) => {
     if (!form.title || !form.city || !form.price || !form.sqm) {
       toast.error("Please fill in all required fields");
       return;
     }
+    setSubmitting(true);
     try {
+      const coverImg = images.find(img => img.id === coverImageId);
+      const coverImageUrl = coverImg?.url || undefined;
+
       const payload: any = {
         title: form.title,
         description: form.description || undefined,
@@ -258,9 +368,8 @@ export default function CreateListing() {
         energy_class: form.energy_class || undefined,
         heating_system: form.heating_system || undefined,
         construction_status: form.construction_status || undefined,
-        cover_image_url: coverImageUrl || undefined,
+        cover_image_url: coverImageUrl,
         price_per_sqm: form.price && form.sqm ? Math.round(Number(form.price) / Number(form.sqm)) : undefined,
-        // Residential
         ...(isResidential(pt) && {
           bedrooms: form.bedrooms ? Number(form.bedrooms) : undefined,
           bathrooms: form.bathrooms ? Number(form.bathrooms) : undefined,
@@ -271,7 +380,6 @@ export default function CreateListing() {
           total_floors: form.total_floors ? Number(form.total_floors) : undefined,
           levels: form.levels ? Number(form.levels) : undefined,
         }),
-        // Commercial
         ...(isCommercial(pt) && {
           commercial_subtype: form.commercial_subtype || undefined,
           plot_surface: form.plot_surface ? Number(form.plot_surface) : undefined,
@@ -280,7 +388,6 @@ export default function CreateListing() {
           total_floors: form.total_floors ? Number(form.total_floors) : undefined,
           wc_count: form.wc_count ? Number(form.wc_count) : undefined,
         }),
-        // Land
         ...(isLand(pt) && {
           coverage_ratio: form.coverage_ratio ? Number(form.coverage_ratio) : undefined,
           building_allowance: form.building_allowance ? Number(form.building_allowance) : undefined,
@@ -293,7 +400,6 @@ export default function CreateListing() {
           distance_from_sea: form.distance_from_sea ? Number(form.distance_from_sea) : undefined,
           distance_from_city: form.distance_from_city ? Number(form.distance_from_city) : undefined,
         }),
-        // Rent-specific
         ...(lt === "rent" && {
           deposit_months: form.deposit_months ? Number(form.deposit_months) : undefined,
           monthly_expenses: form.monthly_expenses ? Number(form.monthly_expenses) : undefined,
@@ -303,62 +409,31 @@ export default function CreateListing() {
           available_from: form.available_from || undefined,
           min_rental_months: form.min_rental_months ? Number(form.min_rental_months) : undefined,
         }),
-        // Auction
         ...(lt === "auction" && {
           auction_starting_bid: form.auction_starting_bid ? Number(form.auction_starting_bid) : undefined,
           auction_date: form.auction_date || undefined,
           auction_court: form.auction_court || undefined,
         }),
-        // Boolean features
-        has_elevator: form.has_elevator,
-        has_ac: form.has_ac,
-        has_solar_water: form.has_solar_water,
-        has_storage: form.has_storage,
-        has_secure_door: form.has_secure_door,
-        has_alarm: form.has_alarm,
-        has_cctv: form.has_cctv,
-        has_security: form.has_security,
-        has_smart_home: form.has_smart_home,
-        has_fireplace: form.has_fireplace,
-        has_underfloor_heating: form.has_underfloor_heating,
-        has_furnished: form.has_furnished,
-        has_internal_staircase: form.has_internal_staircase,
-        has_double_glazing: form.has_double_glazing,
-        has_window_screens: form.has_window_screens,
-        has_night_power: form.has_night_power,
-        has_attic: form.has_attic,
-        has_satellite: form.has_satellite,
-        has_painted: form.has_painted,
-        has_parking: form.has_parking,
-        has_balcony: form.has_balcony,
-        has_garden: form.has_garden,
-        has_pool: form.has_pool,
-        has_view: form.has_view,
-        has_facade: form.has_facade,
-        has_awning: form.has_awning,
-        has_disability_access: form.has_disability_access,
-        is_corner: form.is_corner,
-        is_penthouse: form.is_penthouse,
-        is_neoclassical: form.is_neoclassical,
-        is_preserved: form.is_preserved,
-        has_virtual_tour: form.has_virtual_tour,
-        has_video_tour: form.has_video_tour,
-        suitable_student: form.suitable_student,
-        suitable_holiday: form.suitable_holiday,
-        suitable_investment: form.suitable_investment,
-        suitable_commercial_use: form.suitable_commercial_use,
-        // Land booleans
-        is_buildable: form.is_buildable,
-        within_city_plan: form.within_city_plan,
-        within_settlement: form.within_settlement,
-        has_water_supply: form.has_water_supply,
-        has_electricity_supply: form.has_electricity_supply,
-        has_land_concession: form.has_land_concession,
-        // Commercial booleans
-        has_three_phase_power: form.has_three_phase_power,
-        has_loading_dock: form.has_loading_dock,
-        has_structured_cabling: form.has_structured_cabling,
-        has_equipped: form.has_equipped,
+        has_elevator: form.has_elevator, has_ac: form.has_ac, has_solar_water: form.has_solar_water,
+        has_storage: form.has_storage, has_secure_door: form.has_secure_door, has_alarm: form.has_alarm,
+        has_cctv: form.has_cctv, has_security: form.has_security, has_smart_home: form.has_smart_home,
+        has_fireplace: form.has_fireplace, has_underfloor_heating: form.has_underfloor_heating,
+        has_furnished: form.has_furnished, has_internal_staircase: form.has_internal_staircase,
+        has_double_glazing: form.has_double_glazing, has_window_screens: form.has_window_screens,
+        has_night_power: form.has_night_power, has_attic: form.has_attic, has_satellite: form.has_satellite,
+        has_painted: form.has_painted, has_parking: form.has_parking, has_balcony: form.has_balcony,
+        has_garden: form.has_garden, has_pool: form.has_pool, has_view: form.has_view,
+        has_facade: form.has_facade, has_awning: form.has_awning,
+        has_disability_access: form.has_disability_access, is_corner: form.is_corner,
+        is_penthouse: form.is_penthouse, is_neoclassical: form.is_neoclassical, is_preserved: form.is_preserved,
+        has_virtual_tour: form.has_virtual_tour, has_video_tour: form.has_video_tour,
+        suitable_student: form.suitable_student, suitable_holiday: form.suitable_holiday,
+        suitable_investment: form.suitable_investment, suitable_commercial_use: form.suitable_commercial_use,
+        is_buildable: form.is_buildable, within_city_plan: form.within_city_plan,
+        within_settlement: form.within_settlement, has_water_supply: form.has_water_supply,
+        has_electricity_supply: form.has_electricity_supply, has_land_concession: form.has_land_concession,
+        has_three_phase_power: form.has_three_phase_power, has_loading_dock: form.has_loading_dock,
+        has_structured_cabling: form.has_structured_cabling, has_equipped: form.has_equipped,
       };
 
       const { data, error } = await supabase
@@ -367,12 +442,29 @@ export default function CreateListing() {
         .select()
         .single();
       if (error) throw error;
+
+      // Insert additional images into listing_images table
+      const additionalImages = images.filter(img => img.url !== coverImageUrl && !img.uploading && !img.error);
+      if (additionalImages.length > 0) {
+        await supabase.from("listing_images").insert(
+          additionalImages.map((img, idx) => ({
+            listing_id: data.id,
+            url: img.url,
+            sort_order: idx + 1,
+          }))
+        );
+      }
+
       toast.success(asDraft ? "Listing saved as draft!" : "Listing published successfully!");
       navigate(`/property/${data.id}`);
     } catch (err: any) {
       toast.error(err.message);
+    } finally {
+      setSubmitting(false);
     }
   };
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen bg-background">
@@ -466,20 +558,11 @@ export default function CreateListing() {
                   <FieldLabel>Description</FieldLabel>
                   <Textarea placeholder="Describe the property..." value={form.description} onChange={e => set("description", e.target.value)} rows={4} />
                 </div>
-
-                {/* Core measurements */}
                 <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <FieldLabel required>Area (m²)</FieldLabel>
-                    <Input type="number" placeholder="85" value={form.sqm} onChange={e => set("sqm", e.target.value)} />
-                  </div>
-                  <div>
-                    <FieldLabel>Year Built</FieldLabel>
-                    <Input type="number" placeholder="2010" value={form.year_built} onChange={e => set("year_built", e.target.value)} />
-                  </div>
+                  <div><FieldLabel required>Area (m²)</FieldLabel><Input type="number" placeholder="85" value={form.sqm} onChange={e => set("sqm", e.target.value)} /></div>
+                  <div><FieldLabel>Year Built</FieldLabel><Input type="number" placeholder="2010" value={form.year_built} onChange={e => set("year_built", e.target.value)} /></div>
                 </div>
 
-                {/* Residential fields */}
                 {isResidential(pt) && (
                   <>
                     <SectionTitle>Rooms</SectionTitle>
@@ -516,7 +599,6 @@ export default function CreateListing() {
                   </>
                 )}
 
-                {/* Commercial fields */}
                 {isCommercial(pt) && (
                   <>
                     <SectionTitle>Commercial Details</SectionTitle>
@@ -553,7 +635,6 @@ export default function CreateListing() {
                   </>
                 )}
 
-                {/* Land fields */}
                 {isLand(pt) && (
                   <>
                     <SectionTitle>Land Details</SectionTitle>
@@ -591,7 +672,6 @@ export default function CreateListing() {
                   </>
                 )}
 
-                {/* Energy class (not for land) */}
                 {!isLand(pt) && (
                   <>
                     <SectionTitle>Energy</SectionTitle>
@@ -616,7 +696,6 @@ export default function CreateListing() {
               <div>
                 <h2 className="font-display text-xl font-semibold mb-4">Features & Amenities</h2>
 
-                {/* Residential / General Internal */}
                 {!isLand(pt) && (
                   <>
                     <SectionTitle>Internal</SectionTitle>
@@ -650,7 +729,6 @@ export default function CreateListing() {
                         <ToggleChip key={k} active={(form as any)[k]} onClick={() => toggle(k)}>{l}</ToggleChip>
                       ))}
                     </div>
-
                     <SectionTitle>External</SectionTitle>
                     <div className="flex flex-wrap gap-2">
                       {[
@@ -664,14 +742,11 @@ export default function CreateListing() {
                         { k: "has_disability_access", l: "♿ Disability Access" },
                         { k: "is_corner", l: "📐 Corner Property" },
                         { k: "is_penthouse", l: "⭐ Penthouse" },
-                        ...isCommercial(pt) ? [
-                          { k: "has_loading_dock", l: "🚛 Loading Dock" },
-                        ] : [],
+                        ...isCommercial(pt) ? [{ k: "has_loading_dock", l: "🚛 Loading Dock" }] : [],
                       ].map(({ k, l }) => (
                         <ToggleChip key={k} active={(form as any)[k]} onClick={() => toggle(k)}>{l}</ToggleChip>
                       ))}
                     </div>
-
                     <SectionTitle>Construction Characteristics</SectionTitle>
                     <div className="flex flex-wrap gap-2">
                       {[
@@ -683,7 +758,6 @@ export default function CreateListing() {
                         <ToggleChip key={k} active={(form as any)[k]} onClick={() => toggle(k)}>{l}</ToggleChip>
                       ))}
                     </div>
-
                     <SectionTitle>Suitable For</SectionTitle>
                     <div className="flex flex-wrap gap-2">
                       {[
@@ -698,7 +772,6 @@ export default function CreateListing() {
                   </>
                 )}
 
-                {/* Land features */}
                 {isLand(pt) && (
                   <>
                     <SectionTitle>Land Classification</SectionTitle>
@@ -715,7 +788,6 @@ export default function CreateListing() {
                         <ToggleChip key={k} active={(form as any)[k]} onClick={() => toggle(k)}>{l}</ToggleChip>
                       ))}
                     </div>
-
                     <SectionTitle>Utilities</SectionTitle>
                     <div className="flex flex-wrap gap-2">
                       {[
@@ -725,7 +797,6 @@ export default function CreateListing() {
                         <ToggleChip key={k} active={(form as any)[k]} onClick={() => toggle(k)}>{l}</ToggleChip>
                       ))}
                     </div>
-
                     <SectionTitle>Suitable For</SectionTitle>
                     <div className="flex flex-wrap gap-2">
                       {[
@@ -781,8 +852,6 @@ export default function CreateListing() {
                     </p>
                   )}
                 </div>
-
-                {/* Rent-specific */}
                 {lt === "rent" && (
                   <>
                     <SectionTitle>Rental Terms</SectionTitle>
@@ -799,23 +868,12 @@ export default function CreateListing() {
                     </div>
                   </>
                 )}
-
-                {/* Auction-specific */}
                 {lt === "auction" && (
                   <>
                     <SectionTitle>Auction Details</SectionTitle>
-                    <div>
-                      <FieldLabel>Starting Bid (€)</FieldLabel>
-                      <Input type="number" value={form.auction_starting_bid} onChange={e => set("auction_starting_bid", e.target.value)} />
-                    </div>
-                    <div>
-                      <FieldLabel>Auction Date & Time</FieldLabel>
-                      <Input type="datetime-local" value={form.auction_date} onChange={e => set("auction_date", e.target.value)} />
-                    </div>
-                    <div>
-                      <FieldLabel>Court / Platform</FieldLabel>
-                      <Input placeholder="e.g. Athens Court of First Instance" value={form.auction_court} onChange={e => set("auction_court", e.target.value)} />
-                    </div>
+                    <div><FieldLabel>Starting Bid (€)</FieldLabel><Input type="number" value={form.auction_starting_bid} onChange={e => set("auction_starting_bid", e.target.value)} /></div>
+                    <div><FieldLabel>Auction Date & Time</FieldLabel><Input type="datetime-local" value={form.auction_date} onChange={e => set("auction_date", e.target.value)} /></div>
+                    <div><FieldLabel>Court / Platform</FieldLabel><Input placeholder="e.g. Athens Court of First Instance" value={form.auction_court} onChange={e => set("auction_court", e.target.value)} /></div>
                   </>
                 )}
               </div>
@@ -823,38 +881,70 @@ export default function CreateListing() {
 
             {/* ── STEP 6: Photos ── */}
             {step === 6 && (
-              <div className="space-y-6">
-                <h2 className="font-display text-xl font-semibold">Cover Photo</h2>
-                <div className="border-2 border-dashed border-border rounded-2xl p-8 text-center hover:border-primary/50 transition-colors relative">
-                  {coverImageUrl ? (
-                    <div className="relative">
-                      <img src={coverImageUrl} alt="Cover" className="w-full h-48 object-cover rounded-xl" />
-                      <button
-                        onClick={() => setCoverImageUrl("")}
-                        className="absolute top-2 right-2 p-1.5 rounded-full bg-destructive text-destructive-foreground"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-                      <p className="text-sm text-muted-foreground">Upload cover photo</p>
-                      <p className="text-xs text-muted-foreground mt-1">JPG, PNG up to 10MB</p>
-                    </>
-                  )}
-                  <input
-                    type="file" accept="image/*"
-                    className="absolute inset-0 opacity-0 cursor-pointer"
-                    onChange={handleImageUpload}
-                    disabled={uploading}
-                  />
-                  {uploading && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-background/60 rounded-2xl">
-                      <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                    </div>
-                  )}
+              <div className="space-y-5">
+                <div>
+                  <h2 className="font-display text-xl font-semibold">Property Photos</h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Upload up to 20 photos. Drag to reorder. Click "Set as cover" to choose the main photo.
+                  </p>
                 </div>
+
+                {/* Drop zone */}
+                <div
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={handleDrop}
+                  className="relative border-2 border-dashed border-border rounded-2xl p-8 text-center hover:border-primary/50 transition-colors group"
+                >
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="absolute inset-0 opacity-0 cursor-pointer"
+                    onChange={e => handleFilesSelected(e.target.files)}
+                  />
+                  <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2 group-hover:text-primary transition-colors" />
+                  <p className="text-sm font-medium">Drop photos here or click to upload</p>
+                  <p className="text-xs text-muted-foreground mt-1">JPG, PNG, WEBP — up to 10MB each — max 20 photos</p>
+                </div>
+
+                {/* Gallery */}
+                {images.length > 0 && (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs text-muted-foreground font-medium">{images.length} photo{images.length !== 1 ? "s" : ""} uploaded</span>
+                      <span className="text-xs text-muted-foreground">Drag to reorder</span>
+                    </div>
+                    <ImageGallery
+                      images={images}
+                      coverImageId={coverImageId}
+                      onSetCover={setCoverImageId}
+                      onRemove={handleRemove}
+                      onReorder={handleReorder}
+                    />
+                  </div>
+                )}
+
+                {/* Cover preview */}
+                {coverImageId && images.find(img => img.id === coverImageId) && (
+                  <div className="flex items-center gap-3 p-3 bg-primary/5 border border-primary/20 rounded-xl">
+                    <img
+                      src={images.find(img => img.id === coverImageId)?.url}
+                      alt="Cover"
+                      className="w-12 h-12 rounded-lg object-cover"
+                    />
+                    <div>
+                      <p className="text-xs font-semibold text-primary">Cover photo selected</p>
+                      <p className="text-xs text-muted-foreground">This image will be the main thumbnail</p>
+                    </div>
+                  </div>
+                )}
+
+                {images.length === 0 && (
+                  <div className="flex items-start gap-2 bg-muted/40 border border-border rounded-xl p-3 text-xs text-muted-foreground">
+                    <Info className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>Adding photos increases listing visibility by up to 3x. You can still publish without photos.</span>
+                  </div>
+                )}
               </div>
             )}
 
@@ -870,9 +960,9 @@ export default function CreateListing() {
                 </Button>
               ) : (
                 <div className="flex gap-2">
-                  <Button variant="outline" onClick={() => handleSubmit(true)}>Save Draft</Button>
-                  <Button className="bg-gradient-primary border-0 text-primary-foreground" onClick={() => handleSubmit(false)}>
-                    Publish Listing
+                  <Button variant="outline" onClick={() => handleSubmit(true)} disabled={submitting}>Save Draft</Button>
+                  <Button className="bg-gradient-primary border-0 text-primary-foreground" onClick={() => handleSubmit(false)} disabled={submitting}>
+                    {submitting ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Publishing...</> : "Publish Listing"}
                   </Button>
                 </div>
               )}
