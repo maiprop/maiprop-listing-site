@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Bell, MessageSquare, User, Menu, X, ChevronDown, Search, Plus, LogOut, LayoutDashboard, Building2 } from "lucide-react";
+import { Bell, MessageSquare, User, Menu, X, ChevronDown, Search, Plus, LogOut, LayoutDashboard, Building2, Sun, Moon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useTheme } from "next-themes";
 import {
   DropdownMenu,
   DropdownMenuContent,
