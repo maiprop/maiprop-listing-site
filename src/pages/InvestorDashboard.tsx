@@ -438,10 +438,51 @@ export default function InvestorDashboard() {
   };
 
   useEffect(() => {
-    if (activeTab === "admin" && isAdmin) {
-      loadAdminDeals();
-    }
+    if (activeTab === "admin" && isAdmin) loadAdminDeals();
+    if (activeTab === "subscribers" && isAdmin) loadAllSubs();
   }, [activeTab, isAdmin]);
+
+  // Load all subscriptions with profile names (admin only)
+  const loadAllSubs = async () => {
+    setSubsLoading(true);
+    try {
+      const { data: subs, error } = await supabase
+        .from("investor_subscriptions" as any)
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+
+      // Enrich with profile display names
+      const userIds = (subs || []).map((s: any) => s.user_id);
+      let profileMap: Record<string, string> = {};
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("user_id, display_name")
+          .in("user_id", userIds);
+        (profiles || []).forEach((p: any) => { profileMap[p.user_id] = p.display_name || p.user_id.slice(0, 8); });
+      }
+      setAllSubs((subs || []).map((s: any) => ({ ...s, display_name: profileMap[s.user_id] || s.user_id.slice(0, 8) })));
+    } catch {
+      toast.error("Could not load subscribers.");
+    } finally {
+      setSubsLoading(false);
+    }
+  };
+
+  // Admin: update a subscriber's tier/status/expiry
+  const handleSubUpdate = async (subId: string, updates: Partial<Subscription>) => {
+    const { error } = await supabase
+      .from("investor_subscriptions" as any)
+      .update(updates)
+      .eq("id", subId);
+    if (error) { toast.error("Update failed"); return; }
+    setAllSubs(prev => prev.map(s => s.id === subId ? { ...s, ...updates } : s));
+    setEditingSubId(null);
+    toast.success("Subscription updated");
+  };
+
+
 
   const handleAdminUpdate = async (id: string, status: string, admin_notes: string) => {
     const { error } = await supabase
