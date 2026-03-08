@@ -245,6 +245,7 @@ export default function PropertyDetail() {
   const bathrooms = db?.bathrooms ?? mockProperty.bathrooms;
   const listingType = db?.listing_type ?? mockProperty.listingType;
   const propertyType = db?.property_type ?? mockProperty.type;
+  const subtype = isDbListing ? ((db as any)?.commercial_subtype as string | null) : null;
   const description = db?.description;
   const ownerProfile = isDbListing ? (dbListing as any).profiles : null;
   const pricePerSqm = db?.price_per_sqm;
