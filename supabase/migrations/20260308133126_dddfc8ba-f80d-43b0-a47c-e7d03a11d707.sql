@@ -1,0 +1,45 @@
+
+-- Create a demo seed user in auth.users
+INSERT INTO auth.users (
+  id, email, encrypted_password, email_confirmed_at, created_at, updated_at,
+  raw_user_meta_data, role, aud
+)
+VALUES (
+  'a1b2c3d4-0000-0000-0000-000000000001',
+  'demo@maiprop.gr',
+  crypt('DemoPass123!', gen_salt('bf')),
+  now(), now(), now(),
+  '{"full_name": "MaiProp Demo"}',
+  'authenticated', 'authenticated'
+)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.profiles (user_id, display_name, first_name, last_name, verified)
+VALUES ('a1b2c3d4-0000-0000-0000-000000000001', 'MaiProp Demo', 'MaiProp', 'Demo', true)
+ON CONFLICT DO NOTHING;
+
+INSERT INTO public.listings (
+  title, description, city, address, region, property_type, listing_type, status,
+  price, sqm, bedrooms, bathrooms, floor, total_floors, year_built, energy_class,
+  heating_system, construction_status, cover_image_url,
+  has_elevator, has_ac, has_balcony, has_parking, has_garden, has_pool,
+  has_furnished, has_fireplace, has_double_glazing, has_secure_door,
+  suitable_investment, suitable_holiday, suitable_student,
+  price_per_sqm, owner_id, ai_score, latitude, longitude
+)
+VALUES
+('Μοντέρνο Διαμέρισμα στο Κολωνάκι | Modern Apartment in Kolonaki','Εξαιρετικά ανακαινισμένο διαμέρισμα στην καρδιά του Κολωνακίου. Ψηλά ταβάνια, παρκέ. Perfectly renovated in Kolonaki. High ceilings, parquet floors, built-in appliances.','Athens','Patriarchou Ioakeim 22, Kolonaki','Attica','apartment','sale','active',350000,92,2,1,4,7,2019,'B+','autonomous','renovated','https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=900&q=80',true,true,true,false,false,false,false,false,true,true,true,false,true,3804,'a1b2c3d4-0000-0000-0000-000000000001',87,37.9838,23.7430),
+('Πολυτελής Βίλα με Πισίνα στη Βούλα | Luxury Villa with Pool in Voula','Βίλα 4 υπνοδωματίων με πισίνα, κήπο και θέα θάλασσα. 4-bedroom villa with pool, garden and sea views. Smart home included.','Athens','Poseidonos 45, Voula','Attica','villa','sale','active',1850000,380,4,3,0,2,2015,'A','autonomous','new','https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=900&q=80',false,true,true,true,true,true,true,true,true,true,true,true,false,4868,'a1b2c3d4-0000-0000-0000-000000000001',68,37.8280,23.7732),
+('Γοητευτικό Νεοκλασικό στο Μεταξουργείο | Charming Neoclassical in Metaxourgeio','Νεοκλασικό 1920 πλήρως αναστηλωμένο. Τζάκι, ξύλινα πατώματα. Fully restored 1920 neoclassical, 3.5m ceilings, fireplace.','Athens','Achileos 18, Metaxourgeio','Attica','house','sale','active',480000,175,3,2,0,3,1920,'C','autonomous','renovated','https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=900&q=80',false,true,true,false,true,false,false,true,true,true,true,false,false,2743,'a1b2c3d4-0000-0000-0000-000000000001',100,37.9805,23.7156),
+('Διαμέρισμα με Θέα Ακρόπολη | Apartment with Acropolis View','Διαμέρισμα στο Θησείο με θέα Ακρόπολη. Ανακαίνιση 2022. Thissio apartment with unobstructed Acropolis view. Full 2022 renovation.','Athens','Apostolou Pavlou 12, Thissio','Attica','apartment','sale','active',420000,78,1,1,5,6,1975,'D','central','renovated','https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=900&q=80',false,true,true,false,false,false,true,false,true,true,true,true,false,5385,'a1b2c3d4-0000-0000-0000-000000000001',95,37.9768,23.7207),
+('Studio Κοντά στο ΑΠΘ | Studio Near Aristotle University Thessaloniki','Ανακαινισμένο studio για φοιτητές, πλήρως επιπλωμένο. Renovated studio ideal for students, fully furnished, 5 min to campus.','Thessaloniki','Egnatia 94','Central Macedonia','apartment','rent','active',420,28,0,1,3,5,2005,'C','central','renovated','https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=900&q=80',true,true,false,false,false,false,true,false,true,false,true,false,true,15,'a1b2c3d4-0000-0000-0000-000000000001',72,40.6356,22.9432),
+('Επαγγελματικός Χώρος Κέντρο Θεσσαλονίκης | Commercial Space Center Thessaloniki','Γωνιακό κατάστημα 120τμ Τσιμισκή, τριφασικό. Corner shop 120sqm Tsimiski, three-phase power, high footfall.','Thessaloniki','Tsimiski 56','Central Macedonia','commercial','sale','active',320000,120,0,1,0,4,1990,'D','central','renovated','https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=900&q=80',false,true,false,false,false,false,false,false,false,true,true,false,false,2667,'a1b2c3d4-0000-0000-0000-000000000001',65,40.6320,22.9444),
+('Ονειρεμένη Κατοικία στη Σαντορίνη | Dream Caldera Residence Santorini','Παραδοσιακή κατοικία θέα καλντέρας Ημεροβίγλι, infinity pool. Traditional caldera-view residence, infinity pool, UNESCO heritage zone.','Santorini','Imerovigli','South Aegean','villa','sale','active',2400000,220,3,3,0,1,2010,'B','autonomous','new','https://images.unsplash.com/photo-1570077188670-e3a8d69ac5ff?w=900&q=80',false,true,true,false,false,true,true,false,true,true,true,true,false,10909,'a1b2c3d4-0000-0000-0000-000000000001',96,36.4333,25.4215),
+('Ρετιρέ Πεντχάουζ στη Γλυφάδα | Luxury Penthouse Glyfada','Ρετιρέ με θέα Σαρωνικό, ιδιωτική ταράτσα 80τμ, Jacuzzi. Penthouse with Saronic views, 80sqm terrace, Jacuzzi, smart home.','Athens','Lazaraki 8, Glyfada','Attica','apartment','sale','active',980000,185,3,2,7,7,2020,'A+','floor','new','https://images.unsplash.com/photo-1560448205-4d9b3e6bb6db?w=900&q=80',true,true,true,true,false,false,false,false,true,true,true,true,false,5297,'a1b2c3d4-0000-0000-0000-000000000001',91,37.8700,23.7501),
+('Οικόπεδο Θέα Θάλασσα Χαλκιδική | Sea View Buildable Plot Chalkidiki','Οικοδομήσιμο 750τμ εντός σχεδίου, θέα Ορφανού. Buildable 750sqm plot with sea views, water and electricity available.','Chalkidiki','Ouranoupolis','Central Macedonia','land','sale','active',185000,750,0,0,0,0,0,NULL,NULL,NULL,'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=900&q=80',false,false,false,false,false,false,false,false,false,false,true,true,false,247,'a1b2c3d4-0000-0000-0000-000000000001',79,40.3319,23.9500),
+('Μεζονέτα στον Πειραιά | Maisonette near Zea Marina Piraeus','Μεζονέτα 3 υπνοδωματίων κοντά στη Ζέα, parking. 3-bedroom maisonette near Zea Marina, parking, excellent condition.','Athens','Gounari 34, Piraeus','Attica','house','sale','active',295000,130,3,2,1,3,2003,'C','autonomous','renovated','https://images.unsplash.com/photo-1600047509807-ba8f99d2cdde?w=900&q=80',false,true,true,true,false,false,false,false,true,true,false,false,false,2269,'a1b2c3d4-0000-0000-0000-000000000001',66,37.9346,23.6497),
+('Γραφείο στο Μαρούσι | Office Space Marousi Business Park','Γραφείο 200τμ business park, κοντά σε μετρό, 2 θέσεις parking. Modern 200sqm office near metro, structured cabling, 2 parking.','Athens','Kifissias 44, Marousi','Attica','office','rent','active',2800,200,0,2,3,8,2016,'A','central','new','https://images.unsplash.com/photo-1497366216548-37526070297c?w=900&q=80',true,true,false,true,false,false,false,false,false,true,true,false,false,14,'a1b2c3d4-0000-0000-0000-000000000001',82,38.0567,23.8078),
+('Κατοικία στο Βόλο | Traditional Home Volos with Sea View','Κατοικία στο Βόλο με κήπο, τζάκι, θέα Παγασητικό. Detached home, garden, fireplace, Pagasetic Gulf views.','Volos','Argonauton 15','Thessaly','house','sale','active',220000,160,3,2,0,2,1998,'D','autonomous','renovated','https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=900&q=80',false,true,false,true,true,false,false,true,true,true,false,true,false,1375,'a1b2c3d4-0000-0000-0000-000000000001',61,39.3616,22.9430),
+('Νεόδμητο Διαμέρισμα Παραλία Θεσσαλονίκης | New Build Waterfront Thessaloniki','Νεόδμητο 2άρι Νέα Παραλία, Α+ ενέργεια, underfloor heating, θέα θάλασσα. Brand new 2-bed Thessaloniki Waterfront, A+ energy, sea views.','Thessaloniki','Megalou Alexandrou 7','Central Macedonia','apartment','sale','active',320000,85,2,2,4,6,2024,'A+','floor','new','https://images.unsplash.com/photo-1567496898669-ee935f5f647a?w=900&q=80',true,true,true,true,false,false,false,false,true,true,true,false,false,3765,'a1b2c3d4-0000-0000-0000-000000000001',94,40.6220,22.9502),
+('Παραθαλάσσιο Εξοχικό στη Ρόδο | Seaside Holiday Villa Rhodes','3 δωμάτια 50μ από τη θάλασσα Ρόδος, βεράντα, κήπος. 3-room holiday home 50m from sea Rhodes, veranda, pool, rental income €35k/yr.','Rhodes','Faliraki Beach Road 8','South Aegean','villa','sale','active',460000,110,3,2,0,1,2008,'C','autonomous','renovated','https://images.unsplash.com/photo-1613490493576-7fde63acd811?w=900&q=80',false,true,true,true,true,true,false,false,true,false,true,true,false,4182,'a1b2c3d4-0000-0000-0000-000000000001',78,36.3407,28.1918),
+('Βιομηχανικό Κτίριο Γκάζι | Industrial Loft Conversion Gazi Athens','Βιομηχανικό 800τμ για loft μετατροπή, 6μ ύψος, τριφασικό. Industrial 800sqm for loft conversion, 6m ceilings, three-phase power, loading dock.','Athens','Pireos 130, Gazi','Attica','commercial','sale','active',750000,800,0,0,0,1,1975,'F','central','needs_renovation','https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=900&q=80',false,false,false,false,false,false,false,false,false,false,true,false,false,938,'a1b2c3d4-0000-0000-0000-000000000001',55,37.9784,23.7126);
