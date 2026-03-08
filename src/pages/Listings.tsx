@@ -184,6 +184,8 @@ export default function Listings() {
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [compareList, setCompareList] = useState<any[]>([]);
   const [viewportIds, setViewportIds] = useState<Set<string> | null>(null);
+  const [polygonFilterIds, setPolygonFilterIds] = useState<Set<string> | null>(null);
+  const [mobileTab, setMobileTab] = useState<"list" | "map">("list");
   const { user } = useAuth();
 
   // URL-based filter state helpers
