@@ -174,6 +174,7 @@ export type Database = {
       firesale_requests: {
         Row: {
           address: string
+          admin_notes: string | null
           ai_estimate: number | null
           asking_price: number | null
           bedrooms: number | null
@@ -193,6 +194,7 @@ export type Database = {
         }
         Insert: {
           address: string
+          admin_notes?: string | null
           ai_estimate?: number | null
           asking_price?: number | null
           bedrooms?: number | null
@@ -212,6 +214,7 @@ export type Database = {
         }
         Update: {
           address?: string
+          admin_notes?: string | null
           ai_estimate?: number | null
           asking_price?: number | null
           bedrooms?: number | null
