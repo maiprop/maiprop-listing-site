@@ -50,24 +50,7 @@ const sortOptions = [
   { label: "Most Viewed", value: "views" },
 ];
 
-const ENERGY_CLASSES = ["A+", "A", "B+", "B", "C", "D", "E", "F", "G"];
-const HEATING_TYPES = ["autonomous", "central", "floor", "none"];
-const CONSTRUCTION_STATUSES = ["new", "under_construction", "renovated", "needs_renovation", "preserved", "neoclassical"];
 
-const FEATURE_OPTIONS = [
-  { key: "has_parking", label: "🚗 Parking" },
-  { key: "has_elevator", label: "🛗 Elevator" },
-  { key: "has_balcony", label: "🏞️ Balcony" },
-  { key: "has_pool", label: "🏊 Pool" },
-  { key: "pets_allowed", label: "🐾 Pet Friendly" },
-  { key: "has_furnished", label: "🛋️ Furnished" },
-  { key: "has_garden", label: "🌿 Garden" },
-  { key: "has_ac", label: "❄️ Air Conditioning" },
-  { key: "has_fireplace", label: "🔥 Fireplace" },
-  { key: "has_storage", label: "📦 Storage" },
-  { key: "has_view", label: "👁️ View" },
-  { key: "has_smart_home", label: "🏡 Smart Home" },
-];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
