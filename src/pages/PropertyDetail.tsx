@@ -813,6 +813,56 @@ export default function PropertyDetail() {
                 </div>
               </div>
 
+              {/* Walk Score badge (shows after POIs load) */}
+              {walkScore !== null && (() => {
+                const { walkScoreLabel: wsl, walkScoreColour: wsc } = require("@/lib/walkScore") as any;
+                const colour = wsc(walkScore);
+                const label = wsl(walkScore);
+                const r = 20, c = 2 * Math.PI * r;
+                return (
+                  <div className="glass-card rounded-xl p-4 border border-border flex items-center gap-4">
+                    <svg width="56" height="56" viewBox="0 0 56 56">
+                      <circle cx="28" cy="28" r={r} fill="none" stroke="hsl(var(--border))" strokeWidth="4" />
+                      <circle cx="28" cy="28" r={r} fill="none"
+                        stroke={colour} strokeWidth="4"
+                        strokeDasharray={`${c * walkScore / 100} ${c * (1 - walkScore / 100)}`}
+                        strokeLinecap="round"
+                        transform="rotate(-90 28 28)"
+                      />
+                      <text x="28" y="33" textAnchor="middle" fontSize="14" fontWeight="800" fill={colour}>{walkScore}</text>
+                    </svg>
+                    <div>
+                      <p className="text-xs font-bold" style={{ color: colour }}>{label}</p>
+                      <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Walk Score</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">Based on nearby amenities</p>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* AI Property Valuation */}
+              {isDbListing && (
+                <PropertyValuation
+                  title={title}
+                  city={city}
+                  address={address}
+                  price={price}
+                  sqm={sqm}
+                  bedrooms={bedrooms}
+                  bathrooms={bathrooms}
+                  propertyType={propertyType}
+                  listingType={listingType}
+                  floor={db?.floor}
+                  yearBuilt={db?.year_built}
+                  energyClass={energyClass}
+                  pricePerSqm={pricePerSqm ? Number(pricePerSqm) : undefined}
+                  hasParking={db?.has_parking}
+                  hasPool={db?.has_pool}
+                  hasElevator={db?.has_elevator}
+                  region={db?.region}
+                />
+              )}
+
               {/* Interactive Mortgage Calculator (only for sale listings) */}
               {listingType !== "rent" && <MortgageCalculator price={price} />}
 
