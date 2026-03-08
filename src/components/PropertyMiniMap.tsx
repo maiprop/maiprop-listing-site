@@ -344,9 +344,36 @@ export default function PropertyMiniMap({
 
         {/* Disclaimer */}
         {pois && (
-          <p className="text-[10px] text-muted-foreground mt-3 text-center">
-            AI estimates based on property location — distances are approximate walking distances
-          </p>
+          <>
+            {/* Walk Score summary */}
+            {(() => {
+              const ws = computeWalkScore(pois);
+              const label = walkScoreLabel(ws);
+              const colour = walkScoreColour(ws);
+              const r = 14, c = 2 * Math.PI * r;
+              return (
+                <div className="flex items-center gap-3 px-3 py-3 bg-secondary rounded-xl border border-border mt-2">
+                  <svg width="44" height="44" viewBox="0 0 44 44">
+                    <circle cx="22" cy="22" r={r} fill="none" stroke="hsl(var(--border))" strokeWidth="3.5" />
+                    <circle cx="22" cy="22" r={r} fill="none"
+                      stroke={colour} strokeWidth="3.5"
+                      strokeDasharray={`${c * ws / 100} ${c * (1 - ws / 100)}`}
+                      strokeLinecap="round"
+                      transform="rotate(-90 22 22)"
+                    />
+                    <text x="22" y="26" textAnchor="middle" fontSize="11" fontWeight="700" fill={colour}>{ws}</text>
+                  </svg>
+                  <div>
+                    <p className="text-xs font-bold" style={{ color: colour }}>{label}</p>
+                    <p className="text-[10px] text-muted-foreground">Walk Score · out of 100</p>
+                  </div>
+                </div>
+              );
+            })()}
+            <p className="text-[10px] text-muted-foreground mt-3 text-center">
+              AI estimates based on property location — distances are approximate walking distances
+            </p>
+          </>
         )}
       </div>
     </div>
