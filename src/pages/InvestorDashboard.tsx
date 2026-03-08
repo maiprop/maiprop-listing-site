@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Flame, Lock, BarChart2, TrendingUp, TrendingDown, MapPin, Euro,
@@ -14,6 +14,15 @@ import { Footer } from "@/components/Footer";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+
+type Subscription = {
+  id: string;
+  user_id: string;
+  tier: "analyst" | "institutional" | "sovereign";
+  status: "active" | "cancelled" | "expired" | "trial";
+  started_at: string;
+  expires_at: string | null;
+};
 
 // ─── Subscription tiers ───────────────────────────────────────────────────────
 const TIERS = [
