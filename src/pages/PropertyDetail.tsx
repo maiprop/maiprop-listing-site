@@ -6,7 +6,7 @@ import {
   Shield, FileText, Zap, ExternalLink, Lock, BarChart2, Eye,
   Home, Clock, Check, Gavel, Download, Loader2, CheckCircle,
   Thermometer, Wrench, TreePine, Flame, Wifi, Car, Building2,
-  Navigation, Info, ChevronDown, ChevronUp, Euro
+  Info, ChevronDown, ChevronUp, Euro
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -20,6 +20,7 @@ import { useFavorites, useToggleFavorite } from "@/hooks/useFavorites";
 import { useStartConversation } from "@/hooks/useMessages";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import PropertyMiniMap from "@/components/PropertyMiniMap";
 
 // ─── Energy class data ──────────────────────────────────────────────────────
 const ENERGY_SCALE = [
@@ -143,64 +144,7 @@ function FeatureSection({ title, features, color }: { title: string; features: {
   );
 }
 
-// ─── Map section with privacy toggle ─────────────────────────────────────────
-function MapSection({ address, city }: { address: string; city: string }) {
-  const [revealed, setRevealed] = useState(false);
-  return (
-    <div className="glass-card rounded-xl overflow-hidden border border-border">
-      <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <MapPin className="w-4 h-4 text-primary" />
-          <h3 className="font-display font-semibold text-sm">Location</h3>
-          {!revealed && (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">Approximate</span>
-          )}
-          {revealed && (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">Exact</span>
-          )}
-        </div>
-        {!revealed ? (
-          <Button size="sm" variant="outline" onClick={() => setRevealed(true)}
-            className="text-xs gap-1.5 h-7 border-primary/30 text-primary hover:bg-primary/10">
-            <Navigation className="w-3 h-3" /> Request Exact Location
-          </Button>
-        ) : (
-          <button onClick={() => setRevealed(false)} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
-            <Lock className="w-3 h-3" /> Hide
-          </button>
-        )}
-      </div>
-
-      {/* Address strip when revealed */}
-      {revealed && (
-        <div className="px-5 py-2.5 bg-primary/5 border-b border-primary/10 text-xs text-primary flex items-center gap-2">
-          <CheckCircle className="w-3.5 h-3.5 shrink-0" />
-          <span className="font-medium">{address}{address !== city ? `, ${city}` : ""}</span>
-        </div>
-      )}
-
-      <div className="relative h-60 bg-secondary">
-        <iframe
-          title="map"
-          loading="lazy"
-          className="w-full h-full border-0"
-          src={`https://maps.google.com/maps?q=${encodeURIComponent(revealed ? address + ", " + city : city + ", Greece")}&output=embed&z=${revealed ? 16 : 13}`}
-        />
-        {!revealed && (
-          <div className="absolute inset-0 backdrop-blur-[3px] bg-background/30 flex flex-col items-center justify-center gap-3 pointer-events-none">
-            <div className="w-12 h-12 rounded-full bg-background/80 border border-border shadow-lg flex items-center justify-center">
-              <MapPin className="w-5 h-5 text-primary" />
-            </div>
-            <div className="bg-background/90 border border-border rounded-xl px-4 py-2 text-center max-w-[220px]">
-              <p className="text-xs font-medium text-foreground">Approximate area shown</p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">Request exact location to see precise pin</p>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+// MapSection replaced by PropertyMiniMap component
 
 // ─── Main component ──────────────────────────────────────────────────────────
 export default function PropertyDetail() {
@@ -667,8 +611,14 @@ export default function PropertyDetail() {
                 </div>
               )}
 
-              {/* Map */}
-              <MapSection address={address} city={city} />
+              {/* Mini map + AI nearby places */}
+              <PropertyMiniMap
+                latitude={db?.latitude}
+                longitude={db?.longitude}
+                address={address}
+                city={city}
+                title={title}
+              />
 
               {/* Auction details */}
               {listingType === "auction" && (
