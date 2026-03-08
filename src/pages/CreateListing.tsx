@@ -14,8 +14,8 @@ import { toast } from "sonner";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const PROPERTY_TYPES = ["apartment", "house", "villa", "land", "commercial", "office"] as const;
-type PropertyType = typeof PROPERTY_TYPES[number];
+const PROPERTY_TYPE_KEYS = ["apartment", "house", "villa", "land", "commercial", "office"] as const;
+type PropertyType = typeof PROPERTY_TYPE_KEYS[number];
 const LISTING_TYPES = ["sale", "rent", "auction"] as const;
 type ListingType = typeof LISTING_TYPES[number];
 const ENERGY_CLASSES = ["A+", "A", "B+", "B", "C", "D", "E", "F", "G", "Exempt"];
