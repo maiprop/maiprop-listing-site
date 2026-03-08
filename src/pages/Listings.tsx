@@ -505,11 +505,7 @@ export default function Listings() {
                 )}
               </div>
 
-              {/* Listing type button */}
-              <ListingTypeButton
-                value={selectedListingType}
-                onChange={v => setParam("listing_type", v)}
-              />
+
 
               {/* Property type button */}
               <PropertyTypeButton
