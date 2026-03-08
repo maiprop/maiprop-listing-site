@@ -6,6 +6,7 @@ import {
   Home, ArrowRight, Calendar, Layers, Phone, MessageCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { getSubtypeLabel, PROPERTY_TYPE_MAP, type PropertyTypeKey } from "@/lib/propertyTypes";
 
 export interface Property {
   id: string;
@@ -18,8 +19,9 @@ export interface Property {
   bathrooms?: number;
   sqm: number;
   images: string[];
-  type: "apartment" | "house" | "land" | "commercial" | "villa";
+  type: "apartment" | "house" | "land" | "commercial" | "villa" | "office";
   listingType: "sale" | "rent" | "auction" | "firesale";
+  subtype?: string;
   auctionDate?: string;
   auctionStartingBid?: number;
   isNew?: boolean;
@@ -115,6 +117,11 @@ export function PropertyCard({ property, compact = false }: PropertyCardProps) {
           {badge && (
             <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wide shadow-sm ${badge.cls}`}>
               {badge.label}
+            </span>
+          )}
+          {property.subtype && (
+            <span className="text-[10px] font-semibold px-2.5 py-1 rounded-full bg-accent/90 text-accent-foreground shadow-sm capitalize">
+              {getSubtypeLabel(property.type, property.subtype)}
             </span>
           )}
           {property.aiScore && property.aiScore >= 80 && (

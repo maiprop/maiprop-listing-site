@@ -6,8 +6,9 @@ import {
   Shield, FileText, Zap, ExternalLink, Lock, BarChart2, Eye,
   Home, Clock, Check, Gavel, Download, Loader2, CheckCircle,
   Thermometer, Wrench, TreePine, Flame, Wifi, Car, Building2,
-  Info, ChevronDown, ChevronUp, Euro, Tag, Layers
+  Info, ChevronDown, ChevronUp, Euro, Tag, Layers, LayoutGrid
 } from "lucide-react";
+import { getSubtypeLabel, PROPERTY_TYPE_MAP, type PropertyTypeKey } from "@/lib/propertyTypes";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { MarketTicker } from "@/components/MarketTicker";
@@ -186,7 +187,7 @@ export default function PropertyDetail() {
   const { user } = useAuth();
 
   const { data: dbListing, isLoading } = useListing(id || "");
-  const { data: dbSimilar = [] } = useListings({ city: dbListing?.city });
+  const { data: dbSimilar = [] } = useListings({ city: dbListing?.city, property_type: dbListing?.property_type });
 
   const mockProperty = mockProperties.find(p => p.id === id) || mockProperties[0];
   const isDbListing = !!dbListing;
@@ -244,6 +245,7 @@ export default function PropertyDetail() {
   const bathrooms = db?.bathrooms ?? mockProperty.bathrooms;
   const listingType = db?.listing_type ?? mockProperty.listingType;
   const propertyType = db?.property_type ?? mockProperty.type;
+  const subtype = isDbListing ? ((db as any)?.commercial_subtype as string | null) : null;
   const description = db?.description;
   const ownerProfile = isDbListing ? (dbListing as any).profiles : null;
   const pricePerSqm = db?.price_per_sqm;
@@ -313,7 +315,15 @@ export default function PropertyDetail() {
   const hasAnyFeatures = internalFeatures.length + externalFeatures.length + constructionFeatures.length + suitabilityFeatures.length > 0;
 
   const similarListings = isDbListing
-    ? (dbSimilar as any[]).filter((l: any) => l.id !== id).slice(0, 4)
+    ? (dbSimilar as any[])
+        .filter((l: any) => l.id !== id)
+        .sort((a, b) => {
+          // prioritise same subtype first
+          const aMatch = subtype && (a.commercial_subtype === subtype) ? 1 : 0;
+          const bMatch = subtype && (b.commercial_subtype === subtype) ? 1 : 0;
+          return bMatch - aMatch;
+        })
+        .slice(0, 4)
     : mockProperties.filter(p => p.id !== id && p.city === city).slice(0, 4);
 
   const aiInsights = [
@@ -469,6 +479,12 @@ export default function PropertyDetail() {
                       <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground bg-muted px-2 py-0.5 rounded-full border border-border capitalize">
                         {propertyType}
                       </span>
+                      {subtype && (
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-accent bg-accent/10 px-2 py-0.5 rounded-full border border-accent/30 capitalize flex items-center gap-1">
+                          <LayoutGrid className="w-2.5 h-2.5" />
+                          {getSubtypeLabel(propertyType, subtype)}
+                        </span>
+                      )}
                       {listingType && (
                         <span className="text-[10px] font-bold uppercase tracking-widest text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20 capitalize">
                           For {listingType}
@@ -782,20 +798,30 @@ export default function PropertyDetail() {
               {similarListings.length > 0 && (
                 <div className="space-y-4">
                   <h3 className="font-display font-semibold flex items-center gap-2">
-                    Similar in {city}
+                    Similar{subtype ? ` ${getSubtypeLabel(propertyType, subtype)}` : ""} in {city}
                     <div className="flex-1 h-px bg-border ml-1" />
+                    {subtype && (
+                      <span className="text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full border border-border normal-case font-normal">
+                        same type &amp; subtype first
+                      </span>
+                    )}
                   </h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {isDbListing
                       ? (similarListings as any[]).map((l: any) => (
                           <Link key={l.id} to={`/property/${l.id}`}
                             className="glass-card rounded-xl overflow-hidden block hover:border-primary/40 transition-all duration-200 border border-border group">
-                            <div className="aspect-[3/2] overflow-hidden">
+                            <div className="aspect-[3/2] overflow-hidden relative">
                               <img
                                 src={l.cover_image_url || "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400&q=60"}
                                 alt={l.title}
                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                               />
+                              {l.commercial_subtype && (
+                                <span className="absolute top-2 left-2 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-accent/90 text-accent-foreground shadow-sm capitalize">
+                                  {getSubtypeLabel(l.property_type, l.commercial_subtype)}
+                                </span>
+                              )}
                             </div>
                             <div className="p-3.5">
                               <p className="font-semibold text-sm truncate">{l.title}</p>
