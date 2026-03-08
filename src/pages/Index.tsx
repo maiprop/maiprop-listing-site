@@ -95,10 +95,10 @@ export default function Index() {
           <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
         </div>
 
-        {/* Animated grid lines */}
-        <div className="absolute inset-0 opacity-5"
+        {/* Animated warm grid lines */}
+        <div className="absolute inset-0 opacity-[0.04]"
           style={{
-            backgroundImage: "linear-gradient(hsl(183 100% 42%) 1px, transparent 1px), linear-gradient(90deg, hsl(183 100% 42%) 1px, transparent 1px)",
+            backgroundImage: "linear-gradient(hsl(38 95% 52%) 1px, transparent 1px), linear-gradient(90deg, hsl(38 95% 52%) 1px, transparent 1px)",
             backgroundSize: "60px 60px",
           }}
         />
