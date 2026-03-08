@@ -245,49 +245,47 @@ export default function Index() {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h2 className="font-display text-2xl font-bold">Browse by Type</h2>
-            <p className="text-sm text-muted-foreground mt-1">Choose a category, then filter by subtype</p>
+            <p className="text-sm text-muted-foreground mt-1">Choose a category, then narrow by subtype</p>
           </div>
           <Link to="/listings" className="text-sm text-primary hover:underline flex items-center gap-1">
             All listings <ArrowRight className="w-3 h-3" />
           </Link>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {propertyTypes.map(type => {
-            const config = propertyTypeConfigs[type.label.toLowerCase().replace(" / plot", "").replace("commercial", "commercial").trim() as string];
-            const subtypeConfig = propertyTypeSubtypes[type.label.toLowerCase().replace(" / plot", "").trim() as string];
-            return (
-              <Link key={type.label} to={type.href}>
-                <div className="glass-card rounded-xl p-5 hover:border-primary/40 hover:bg-primary/5 transition-all group">
-                  {/* Header */}
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-11 h-11 rounded-xl bg-secondary flex items-center justify-center group-hover:bg-primary/20 transition-colors shrink-0 text-xl">
-                      {type.emoji}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-display font-bold text-sm group-hover:text-primary transition-colors">{type.label}</div>
-                      <div className="text-xs text-muted-foreground">{type.count.toLocaleString()} listings</div>
-                    </div>
-                    <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
+          {PROPERTY_TYPES.map(type => (
+            <Link key={type.value} to={`/listings?type=${type.value}`}>
+              <div className="glass-card rounded-xl p-5 hover:border-primary/40 hover:bg-primary/5 transition-all group">
+                {/* Header */}
+                <div className="flex items-center gap-3 mb-3">
+                  <div className={`w-11 h-11 rounded-xl ${type.bgClass} flex items-center justify-center group-hover:opacity-90 transition-opacity shrink-0 text-xl`}>
+                    {type.emoji}
                   </div>
-                  {/* Description */}
-                  <p className="text-xs text-muted-foreground leading-relaxed mb-3">{type.description}</p>
-                  {/* Subtype chips */}
-                  <div className="flex flex-wrap gap-1">
-                    {type.subtypes.slice(0, 4).map(sub => (
-                      <span key={sub} className="px-2 py-0.5 rounded-full bg-secondary border border-border text-[10px] text-muted-foreground group-hover:border-primary/30 transition-colors">
-                        {sub}
-                      </span>
-                    ))}
-                    {type.subtypes.length > 4 && (
-                      <span className="px-2 py-0.5 rounded-full bg-secondary border border-border text-[10px] text-muted-foreground">
-                        +{type.subtypes.length - 4} more
-                      </span>
-                    )}
+                  <div className="flex-1 min-w-0">
+                    <div className="font-display font-bold text-sm group-hover:text-primary transition-colors">{type.labelPlural}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {(PROPERTY_TYPE_COUNTS[type.value] ?? 0).toLocaleString()} listings
+                    </div>
                   </div>
+                  <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
                 </div>
-              </Link>
-            );
-          })}
+                {/* Description */}
+                <p className="text-xs text-muted-foreground leading-relaxed mb-3">{type.description}</p>
+                {/* Subtype chips */}
+                <div className="flex flex-wrap gap-1">
+                  {type.subtypes.slice(0, 4).map(sub => (
+                    <span key={sub.value} className="px-2 py-0.5 rounded-full bg-secondary border border-border text-[10px] text-muted-foreground group-hover:border-primary/30 transition-colors">
+                      {sub.label}
+                    </span>
+                  ))}
+                  {type.subtypes.length > 4 && (
+                    <span className="px-2 py-0.5 rounded-full bg-secondary border border-border text-[10px] text-muted-foreground">
+                      +{type.subtypes.length - 4} more
+                    </span>
+                  )}
+                </div>
+              </div>
+            </Link>
+          ))}
         </div>
       </section>
 
