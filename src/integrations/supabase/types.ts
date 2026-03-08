@@ -386,6 +386,7 @@ export type Database = {
           category: Database["public"]["Enums"]["professional_category"]
           city: string | null
           created_at: string
+          display_name: string | null
           experience_years: number | null
           hourly_rate: number | null
           id: string
@@ -407,6 +408,7 @@ export type Database = {
           category: Database["public"]["Enums"]["professional_category"]
           city?: string | null
           created_at?: string
+          display_name?: string | null
           experience_years?: number | null
           hourly_rate?: number | null
           id?: string
@@ -428,6 +430,7 @@ export type Database = {
           category?: Database["public"]["Enums"]["professional_category"]
           city?: string | null
           created_at?: string
+          display_name?: string | null
           experience_years?: number | null
           hourly_rate?: number | null
           id?: string
