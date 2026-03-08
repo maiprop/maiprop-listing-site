@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import {
   Search, SlidersHorizontal, MapPin, LayoutGrid, Map, ChevronDown,
@@ -184,6 +184,8 @@ export default function Listings() {
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [compareList, setCompareList] = useState<any[]>([]);
   const [viewportIds, setViewportIds] = useState<Set<string> | null>(null);
+  const [polygonFilterIds, setPolygonFilterIds] = useState<Set<string> | null>(null);
+  const [mobileTab, setMobileTab] = useState<"list" | "map">("list");
   const { user } = useAuth();
 
   // URL-based filter state helpers
@@ -535,7 +537,9 @@ export default function Listings() {
                 <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
               ) : (
                 <span className="font-display font-semibold">
-                  {viewMode === "split" && viewportIds !== null
+                  {viewMode === "split" && polygonFilterIds !== null
+                    ? `${filtered.filter(p => polygonFilterIds.has(p.id)).length} in area`
+                    : viewMode === "split" && viewportIds !== null
                     ? `${filtered.filter(p => viewportIds.has(p.id)).length} in view`
                     : `${filtered.length} properties`}
                 </span>
@@ -543,7 +547,12 @@ export default function Listings() {
               <span className="text-muted-foreground text-sm">
                 {dbListings.length > 0 ? "from database" : "· showing demo listings"}
               </span>
-              {viewMode === "split" && viewportIds !== null && (
+              {viewMode === "split" && polygonFilterIds !== null && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                  Area filter
+                </span>
+              )}
+              {viewMode === "split" && viewportIds !== null && polygonFilterIds === null && (
                 <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
                   Map synced
                 </span>
@@ -570,58 +579,82 @@ export default function Listings() {
           </div>
 
           {/* ── Split view ── */}
-          {viewMode === "split" ? (
-            <div className="flex gap-0 h-[calc(100vh-16rem)]">
-              {/* Left: scrollable grid */}
-              <div className="w-[420px] shrink-0 overflow-y-auto px-4 space-y-3 pb-8 border-r border-border">
-                {isLoading ? (
-                  <div className="flex items-center justify-center py-20">
-                    <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                  </div>
-                ) : (() => {
-                  const displayList = viewportIds !== null
-                    ? filtered.filter(p => viewportIds.has(p.id))
-                    : filtered;
-                  return displayList.length === 0 ? (
-                    <div className="glass-card rounded-xl p-10 text-center mt-4">
-                      <MapPin className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-                      <p className="font-semibold text-sm">No properties in this area</p>
-                      <p className="text-xs text-muted-foreground mt-1">Pan or zoom the map to find listings</p>
-                    </div>
-                  ) : (
-                    displayList.map((property: any) => (
-                      <div key={property.id} className="relative group">
-                        <PropertyCard property={property as any} />
-                        <button
-                          onClick={() => toggleCompare(property)}
-                          title={isComparing(property.id) ? "Remove from comparison" : compareList.length >= 3 ? "Max 3 properties" : "Add to comparison"}
-                          disabled={!isComparing(property.id) && compareList.length >= 3}
-                          className={`absolute top-2 left-2 z-10 flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold border transition-all shadow-card ${
-                            isComparing(property.id)
-                              ? "bg-accent/90 border-accent text-accent-foreground"
-                              : compareList.length >= 3
-                              ? "bg-secondary/80 border-border text-muted-foreground opacity-50 cursor-not-allowed"
-                              : "bg-card/80 border-border text-muted-foreground hover:border-accent/60 hover:text-accent backdrop-blur-sm opacity-0 group-hover:opacity-100"
-                          }`}
-                        >
-                          <GitCompare className="w-3 h-3" />
-                          {isComparing(property.id) ? "✓" : "Compare"}
-                        </button>
-                      </div>
-                    ))
-                  );
-                })()}
+          {viewMode === "split" ? (() => {
+            const splitDisplayList = polygonFilterIds !== null
+              ? filtered.filter(p => polygonFilterIds.has(p.id))
+              : viewportIds !== null
+              ? filtered.filter(p => viewportIds.has(p.id))
+              : filtered;
+
+            const gridCards = splitDisplayList.length === 0 ? (
+              <div className="glass-card rounded-xl p-10 text-center mt-4">
+                <MapPin className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+                <p className="font-semibold text-sm">No properties here</p>
+                <p className="text-xs text-muted-foreground mt-1">Pan the map or clear any area filter</p>
               </div>
-              {/* Right: sticky map */}
-              <div className="flex-1 sticky top-32">
-                <MapView
-                  listings={filtered}
-                  onVisibleListingsChange={setViewportIds}
-                  height="calc(100vh - 16rem)"
-                />
+            ) : (
+              splitDisplayList.map((property: any) => (
+                <div key={property.id} className="relative group">
+                  <PropertyCard property={property as any} />
+                  <button
+                    onClick={() => toggleCompare(property)}
+                    disabled={!isComparing(property.id) && compareList.length >= 3}
+                    className={`absolute top-2 left-2 z-10 flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold border transition-all shadow-card ${
+                      isComparing(property.id)
+                        ? "bg-accent/90 border-accent text-accent-foreground"
+                        : compareList.length >= 3
+                        ? "bg-secondary/80 border-border text-muted-foreground opacity-50 cursor-not-allowed"
+                        : "bg-card/80 border-border text-muted-foreground hover:border-accent/60 hover:text-accent backdrop-blur-sm opacity-0 group-hover:opacity-100"
+                    }`}
+                  >
+                    <GitCompare className="w-3 h-3" />
+                    {isComparing(property.id) ? "✓" : "Compare"}
+                  </button>
+                </div>
+              ))
+            );
+
+            return (
+              <div className="flex flex-col md:flex-row gap-0 md:h-[calc(100vh-16rem)]">
+                {/* Mobile tab bar (split mode only) */}
+                <div className="md:hidden flex border-b border-border shrink-0">
+                  <button
+                    onClick={() => setMobileTab("list")}
+                    className={`flex-1 py-2.5 text-sm font-medium transition-colors ${mobileTab === "list" ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`}
+                  >
+                    List ({splitDisplayList.length})
+                  </button>
+                  <button
+                    onClick={() => setMobileTab("map")}
+                    className={`flex-1 py-2.5 text-sm font-medium transition-colors ${mobileTab === "map" ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`}
+                  >
+                    Map
+                  </button>
+                </div>
+
+                {/* Left: scrollable grid — hidden on mobile when map tab active */}
+                <div className={`md:w-[420px] shrink-0 overflow-y-auto px-4 space-y-3 pb-8 border-r border-border
+                  ${mobileTab === "map" ? "hidden md:block" : "block"}
+                  md:h-full h-[60vh]`}
+                >
+                  {isLoading
+                    ? <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
+                    : gridCards
+                  }
+                </div>
+
+                {/* Right: map — hidden on mobile when list tab active */}
+                <div className={`flex-1 ${mobileTab === "list" ? "hidden md:block" : "block"} md:h-full h-[calc(100vh-12rem)]`}>
+                  <MapView
+                    listings={filtered}
+                    onVisibleListingsChange={setViewportIds}
+                    onPolygonFilter={ids => { setPolygonFilterIds(ids); }}
+                    height="100%"
+                  />
+                </div>
               </div>
-            </div>
-          ) : viewMode === "grid" ? (
+            );
+          })() : viewMode === "grid" ? (
             isLoading ? (
               <div className="flex items-center justify-center py-20">
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -644,7 +677,6 @@ export default function Listings() {
                     <PropertyCard property={property as any} />
                     <button
                       onClick={() => toggleCompare(property)}
-                      title={isComparing(property.id) ? "Remove from comparison" : compareList.length >= 3 ? "Max 3 properties" : "Add to comparison"}
                       disabled={!isComparing(property.id) && compareList.length >= 3}
                       className={`absolute top-2 left-2 z-10 flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold border transition-all shadow-card ${
                         isComparing(property.id)
@@ -666,6 +698,7 @@ export default function Listings() {
             <MapView
               listings={filtered}
               onVisibleListingsChange={setViewportIds}
+              onPolygonFilter={setPolygonFilterIds}
             />
           )}
         </div>
