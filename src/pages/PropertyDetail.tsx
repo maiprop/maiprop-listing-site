@@ -611,8 +611,14 @@ export default function PropertyDetail() {
                 </div>
               )}
 
-              {/* Map */}
-              <MapSection address={address} city={city} />
+              {/* Mini map + AI nearby places */}
+              <PropertyMiniMap
+                latitude={db?.latitude}
+                longitude={db?.longitude}
+                address={address}
+                city={city}
+                title={title}
+              />
 
               {/* Auction details */}
               {listingType === "auction" && (
