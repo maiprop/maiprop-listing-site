@@ -315,7 +315,15 @@ export default function PropertyDetail() {
   const hasAnyFeatures = internalFeatures.length + externalFeatures.length + constructionFeatures.length + suitabilityFeatures.length > 0;
 
   const similarListings = isDbListing
-    ? (dbSimilar as any[]).filter((l: any) => l.id !== id).slice(0, 4)
+    ? (dbSimilar as any[])
+        .filter((l: any) => l.id !== id)
+        .sort((a, b) => {
+          // prioritise same subtype first
+          const aMatch = subtype && (a.commercial_subtype === subtype) ? 1 : 0;
+          const bMatch = subtype && (b.commercial_subtype === subtype) ? 1 : 0;
+          return bMatch - aMatch;
+        })
+        .slice(0, 4)
     : mockProperties.filter(p => p.id !== id && p.city === city).slice(0, 4);
 
   const aiInsights = [
