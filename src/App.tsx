@@ -11,6 +11,7 @@ import Listings from "./pages/Listings";
 import PropertyDetail from "./pages/PropertyDetail";
 import Auctions from "./pages/Auctions";
 import Firesale from "./pages/Firesale";
+import InvestorDashboard from "./pages/InvestorDashboard";
 import Professionals from "./pages/Professionals";
 import ProfessionalProfile from "./pages/ProfessionalProfile";
 import Dashboard from "./pages/Dashboard";
@@ -45,6 +46,7 @@ const App = () => (
             <Route path="/property/:id" element={<PropertyDetail />} />
             <Route path="/auctions" element={<Auctions />} />
             <Route path="/firesale" element={<Firesale />} />
+            <Route path="/investor-dashboard" element={<InvestorDashboard />} />
             <Route path="/professionals" element={<Professionals />} />
             <Route path="/professionals/:id" element={<ProfessionalProfile />} />
             <Route path="/signup" element={<Signup />} />
