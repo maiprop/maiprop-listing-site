@@ -97,7 +97,7 @@ interface PropertyMiniMapProps {
 }
 
 export default function PropertyMiniMap({
-  latitude, longitude, address, city, title,
+  latitude, longitude, address, city, title, onWalkScoreChange,
 }: PropertyMiniMapProps) {
   const mapRef = useRef<MapRef>(null);
   const lat = latitude ? Number(latitude) : null;
