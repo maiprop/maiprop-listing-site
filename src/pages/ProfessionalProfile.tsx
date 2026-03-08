@@ -9,7 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
-import { useProfessionals } from "@/hooks/useProfessionals";
+import { useProfessionals, useProfessional } from "@/hooks/useProfessionals";
 import { useAuth } from "@/contexts/AuthContext";
 import { useStartConversation } from "@/hooks/useMessages";
 import { useNavigate } from "react-router-dom";
@@ -63,19 +63,15 @@ export default function ProfessionalProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { data: professionals = [], isLoading } = useProfessionals();
+  const { data: pro, isLoading } = useProfessional(id || "");
+  const { data: allProfessionals = [] } = useProfessionals();
   const startConversation = useStartConversation();
   const [activeTab, setActiveTab] = useState<"overview" | "services" | "reviews">("overview");
 
-  const pro = professionals.find((p: any) => p.id === id);
   const catInfo = pro ? categoryLabels[pro.category] || { label: pro.category, emoji: "👤", description: "" } : null;
   const services = pro ? servicesByCategory[pro.category] || [] : [];
 
-  const displayName = pro
-    ? (pro.profiles as any)?.display_name ||
-      `${(pro.profiles as any)?.first_name || ""} ${(pro.profiles as any)?.last_name || ""}`.trim() ||
-      "Professional"
-    : "";
+  const displayName = pro?.display_name || "Professional";
 
   const handleContact = async () => {
     if (!user) { toast.error("Please sign in to contact professionals"); navigate("/login"); return; }
@@ -502,11 +498,11 @@ export default function ProfessionalProfile() {
               <div className="glass-card rounded-xl p-5">
                 <h3 className="font-display font-semibold mb-3 text-sm">Similar Professionals</h3>
                 <div className="space-y-3">
-                  {professionals
+                  {allProfessionals
                     .filter((p: any) => p.category === pro.category && p.id !== pro.id)
                     .slice(0, 3)
                     .map((peer: any) => {
-                      const peerName = (peer.profiles as any)?.display_name || "Professional";
+                      const peerName = peer.display_name || "Professional";
                       return (
                         <Link key={peer.id} to={`/professionals/${peer.id}`} className="flex items-center gap-3 group">
                           <div className="w-9 h-9 rounded-lg bg-gradient-primary flex items-center justify-center font-bold text-sm text-primary-foreground shrink-0 overflow-hidden">
@@ -520,7 +516,7 @@ export default function ProfessionalProfile() {
                         </Link>
                       );
                     })}
-                  {professionals.filter((p: any) => p.category === pro.category && p.id !== pro.id).length === 0 && (
+                  {allProfessionals.filter((p: any) => p.category === pro.category && p.id !== pro.id).length === 0 && (
                     <p className="text-xs text-muted-foreground">No others in this category yet.</p>
                   )}
                 </div>
