@@ -415,6 +415,9 @@ export default function Listings() {
                 )}
               </Button>
 
+              {/* AI Search */}
+              <AISearchBar onFiltersApplied={applyAIFilters} />
+
               {/* Save search – logged-in only */}
               {user && (
                 <Button variant="outline" className="border-border gap-2 shrink-0"
