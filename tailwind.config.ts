@@ -14,7 +14,7 @@ export default {
     },
     extend: {
       fontFamily: {
-        display: ["Space Grotesk", "sans-serif"],
+        display: ["Plus Jakarta Sans", "sans-serif"],
         body: ["DM Sans", "sans-serif"],
       },
       colors: {
@@ -62,12 +62,18 @@ export default {
           ring: "hsl(var(--sidebar-ring))",
         },
         brand: {
-          cyan: "hsl(var(--brand-cyan))",
-          "cyan-glow": "hsl(var(--brand-cyan-glow))",
-          purple: "hsl(var(--brand-purple))",
-          "purple-dark": "hsl(var(--brand-purple-dark))",
+          amber: "hsl(var(--brand-amber))",
+          "amber-glow": "hsl(var(--brand-amber-glow))",
+          coral: "hsl(var(--brand-coral))",
+          "coral-dark": "hsl(var(--brand-coral-dark))",
           gold: "hsl(var(--brand-gold))",
           emerald: "hsl(var(--brand-emerald))",
+          sky: "hsl(var(--brand-sky))",
+          // legacy aliases so existing usage doesn't break
+          cyan: "hsl(var(--brand-amber))",
+          "cyan-glow": "hsl(var(--brand-amber-glow))",
+          purple: "hsl(var(--brand-coral))",
+          "purple-dark": "hsl(var(--brand-coral-dark))",
           surface1: "hsl(var(--brand-surface-1))",
           surface2: "hsl(var(--brand-surface-2))",
           surface3: "hsl(var(--brand-surface-3))",
@@ -88,12 +94,15 @@ export default {
         "gradient-hero": "var(--gradient-hero)",
         "gradient-card": "var(--gradient-card)",
         "gradient-emerald": "var(--gradient-emerald)",
+        "gradient-warm": "var(--gradient-warm)",
       },
       boxShadow: {
-        "glow-cyan": "var(--shadow-glow-cyan)",
-        "glow-purple": "var(--shadow-glow-purple)",
+        "glow-cyan": "var(--shadow-glow-amber)",
+        "glow-amber": "var(--shadow-glow-amber)",
+        "glow-purple": "var(--shadow-glow-coral)",
         card: "var(--shadow-card)",
         elevated: "var(--shadow-elevated)",
+        warm: "var(--shadow-warm)",
       },
       keyframes: {
         "accordion-down": {
