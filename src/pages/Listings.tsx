@@ -2,7 +2,8 @@ import { useState, useCallback } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import {
   Search, SlidersHorizontal, MapPin, LayoutGrid, Map, ChevronDown,
-  X, Gavel, ArrowUpDown, Loader2, Building2, Check, Bookmark, GitCompare
+  X, Gavel, ArrowUpDown, Loader2, Building2, Check, Bookmark, GitCompare,
+  Columns2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -178,10 +179,11 @@ function FilterChip({ active, onClick, children }: {
 
 export default function Listings() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [viewMode, setViewMode] = useState<"grid" | "map">("grid");
+  const [viewMode, setViewMode] = useState<"grid" | "split" | "map">("grid");
   const [showFilters, setShowFilters] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [compareList, setCompareList] = useState<any[]>([]);
+  const [viewportIds, setViewportIds] = useState<Set<string> | null>(null);
   const { user } = useAuth();
 
   // URL-based filter state helpers
@@ -391,10 +393,17 @@ export default function Listings() {
               {/* View toggle */}
               <div className="flex rounded-xl border border-border overflow-hidden shrink-0">
                 <button onClick={() => setViewMode("grid")}
+                  title="Grid view"
                   className={`p-2.5 transition-colors ${viewMode === "grid" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:text-foreground"}`}>
                   <LayoutGrid className="w-4 h-4" />
                 </button>
+                <button onClick={() => setViewMode("split")}
+                  title="Split view"
+                  className={`p-2.5 transition-colors ${viewMode === "split" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:text-foreground"}`}>
+                  <Columns2 className="w-4 h-4" />
+                </button>
                 <button onClick={() => setViewMode("map")}
+                  title="Map view"
                   className={`p-2.5 transition-colors ${viewMode === "map" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:text-foreground"}`}>
                   <Map className="w-4 h-4" />
                 </button>
@@ -518,17 +527,27 @@ export default function Listings() {
         )}
 
         {/* Results */}
-        <div className="container py-8">
-          <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+        <div className={`${viewMode === "split" ? "" : "container"} py-8`}>
+          {/* Stats bar */}
+          <div className={`flex items-center justify-between mb-6 flex-wrap gap-3 ${viewMode === "split" ? "container" : ""}`}>
             <div className="flex items-center gap-3">
               {isLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
               ) : (
-                <span className="font-display font-semibold">{filtered.length} properties</span>
+                <span className="font-display font-semibold">
+                  {viewMode === "split" && viewportIds !== null
+                    ? `${filtered.filter(p => viewportIds.has(p.id)).length} in view`
+                    : `${filtered.length} properties`}
+                </span>
               )}
               <span className="text-muted-foreground text-sm">
                 {dbListings.length > 0 ? "from database" : "· showing demo listings"}
               </span>
+              {viewMode === "split" && viewportIds !== null && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                  Map synced
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-3">
               {compareList.length > 0 && (
@@ -550,7 +569,59 @@ export default function Listings() {
             </div>
           </div>
 
-          {viewMode === "grid" ? (
+          {/* ── Split view ── */}
+          {viewMode === "split" ? (
+            <div className="flex gap-0 h-[calc(100vh-16rem)]">
+              {/* Left: scrollable grid */}
+              <div className="w-[420px] shrink-0 overflow-y-auto px-4 space-y-3 pb-8 border-r border-border">
+                {isLoading ? (
+                  <div className="flex items-center justify-center py-20">
+                    <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                  </div>
+                ) : (() => {
+                  const displayList = viewportIds !== null
+                    ? filtered.filter(p => viewportIds.has(p.id))
+                    : filtered;
+                  return displayList.length === 0 ? (
+                    <div className="glass-card rounded-xl p-10 text-center mt-4">
+                      <MapPin className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+                      <p className="font-semibold text-sm">No properties in this area</p>
+                      <p className="text-xs text-muted-foreground mt-1">Pan or zoom the map to find listings</p>
+                    </div>
+                  ) : (
+                    displayList.map((property: any) => (
+                      <div key={property.id} className="relative group">
+                        <PropertyCard property={property as any} />
+                        <button
+                          onClick={() => toggleCompare(property)}
+                          title={isComparing(property.id) ? "Remove from comparison" : compareList.length >= 3 ? "Max 3 properties" : "Add to comparison"}
+                          disabled={!isComparing(property.id) && compareList.length >= 3}
+                          className={`absolute top-2 left-2 z-10 flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold border transition-all shadow-card ${
+                            isComparing(property.id)
+                              ? "bg-accent/90 border-accent text-accent-foreground"
+                              : compareList.length >= 3
+                              ? "bg-secondary/80 border-border text-muted-foreground opacity-50 cursor-not-allowed"
+                              : "bg-card/80 border-border text-muted-foreground hover:border-accent/60 hover:text-accent backdrop-blur-sm opacity-0 group-hover:opacity-100"
+                          }`}
+                        >
+                          <GitCompare className="w-3 h-3" />
+                          {isComparing(property.id) ? "✓" : "Compare"}
+                        </button>
+                      </div>
+                    ))
+                  );
+                })()}
+              </div>
+              {/* Right: sticky map */}
+              <div className="flex-1 sticky top-32">
+                <MapView
+                  listings={filtered}
+                  onVisibleListingsChange={setViewportIds}
+                  height="calc(100vh - 16rem)"
+                />
+              </div>
+            </div>
+          ) : viewMode === "grid" ? (
             isLoading ? (
               <div className="flex items-center justify-center py-20">
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -571,7 +642,6 @@ export default function Listings() {
                 {filtered.map((property: any) => (
                   <div key={property.id} className="relative group">
                     <PropertyCard property={property as any} />
-                    {/* Compare toggle */}
                     <button
                       onClick={() => toggleCompare(property)}
                       title={isComparing(property.id) ? "Remove from comparison" : compareList.length >= 3 ? "Max 3 properties" : "Add to comparison"}
@@ -592,7 +662,11 @@ export default function Listings() {
               </div>
             )
           ) : (
-            <MapView listings={filtered} />
+            /* Full map view */
+            <MapView
+              listings={filtered}
+              onVisibleListingsChange={setViewportIds}
+            />
           )}
         </div>
       </div>
