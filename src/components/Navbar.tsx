@@ -32,6 +32,7 @@ export function Navbar() {
     { label: "Rent", href: "/listings?type=rent" },
     { label: "Auctions", href: "/auctions", badge: "Live" },
     { label: "Firesale™", href: "/firesale" },
+    { label: "Investors", href: "/investor-dashboard", badge: "INVESTORS", badgeStyle: "gold" },
     { label: "Professionals", href: "/professionals" },
   ];
 
