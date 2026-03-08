@@ -215,7 +215,12 @@ function PropertyTypeButton({
   onSubtypeChange: (v: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  // Tracks which type is expanded inside the dropdown (independent of URL state)
+  const [expandedType, setExpandedType] = useState(value);
   const ref = useRef<HTMLDivElement>(null);
+
+  // Sync expandedType when external value changes (e.g. URL changes)
+  useEffect(() => { setExpandedType(value); }, [value]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -248,10 +253,10 @@ function PropertyTypeButton({
         <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
-        <div className="absolute top-full mt-1 left-0 z-50 bg-card border border-border rounded-xl shadow-lg overflow-hidden min-w-[220px]">
+        <div className="absolute top-full mt-1 left-0 z-50 bg-card border border-border rounded-xl shadow-lg min-w-[220px] max-h-[440px] overflow-y-auto">
           {/* All types option */}
           <button
-            onClick={() => { onTypeChange(""); onSubtypeChange(""); setOpen(false); }}
+            onClick={() => { onTypeChange(""); onSubtypeChange(""); setExpandedType(""); setOpen(false); }}
             className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left transition-colors hover:bg-secondary ${
               !value ? "text-primary bg-primary/10" : "text-foreground"
             }`}
@@ -262,22 +267,37 @@ function PropertyTypeButton({
           <div className="h-px bg-border mx-2" />
           {PROPERTY_TYPES.map(pt => (
             <div key={pt.value}>
-              {/* Main type row */}
+              {/* Main type row — clicking expands subtypes locally without closing dropdown */}
               <button
-                onClick={() => { onTypeChange(pt.value); onSubtypeChange(""); if (!pt.subtypes.length) setOpen(false); }}
+                onClick={() => {
+                  if (pt.subtypes.length) {
+                    // Toggle expand: if already expanded, collapse; otherwise expand
+                    const next = expandedType === pt.value ? "" : pt.value;
+                    setExpandedType(next);
+                    onTypeChange(next);
+                    onSubtypeChange("");
+                  } else {
+                    onTypeChange(pt.value);
+                    onSubtypeChange("");
+                    setOpen(false);
+                  }
+                }}
                 className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left transition-colors hover:bg-secondary ${
                   value === pt.value && !subtype ? "text-primary bg-primary/10" : "text-foreground"
                 }`}
               >
                 <span>{pt.emoji}</span>
                 <span className="font-medium">{pt.label}</span>
-                {value === pt.value && !subtype && <Check className="w-3.5 h-3.5 ml-auto" />}
+                {pt.subtypes.length > 0
+                  ? <ChevronRight className={`w-3.5 h-3.5 ml-auto transition-transform duration-200 ${expandedType === pt.value ? "rotate-90 text-primary" : ""}`} />
+                  : value === pt.value && <Check className="w-3.5 h-3.5 ml-auto" />
+                }
               </button>
-              {/* Subtypes — show when this type is selected */}
-              {value === pt.value && pt.subtypes.map(st => (
+              {/* Subtypes expand below using local expandedType state */}
+              {expandedType === pt.value && pt.subtypes.map(st => (
                 <button
                   key={st.value}
-                  onClick={() => { onSubtypeChange(st.value); setOpen(false); }}
+                  onClick={() => { onTypeChange(pt.value); onSubtypeChange(st.value); setOpen(false); }}
                   title={st.description}
                   className={`w-full flex items-center gap-2.5 pl-8 pr-3 py-2 text-xs text-left transition-colors hover:bg-secondary ${
                     subtype === st.value ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground"
@@ -299,6 +319,7 @@ function PropertyTypeButton({
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function Listings() {
+
   const [searchParams, setSearchParams] = useSearchParams();
   const [viewMode, setViewMode] = useState<"grid" | "split" | "map">("grid");
   const [showFilters, setShowFilters] = useState(false);
