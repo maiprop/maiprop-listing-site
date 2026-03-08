@@ -17,7 +17,7 @@ import { AISearchBar } from "@/components/AISearchBar";
 import { mockProperties } from "@/data/mockProperties";
 import { useListings } from "@/hooks/useListings";
 import { useAuth } from "@/contexts/AuthContext";
-import { PROPERTY_TYPES, PROPERTY_GROUPS, PROPERTY_TYPE_MAP, getTypeLabel, getSubtypeLabel, type PropertyTypeKey } from "@/lib/propertyTypes";
+import { PROPERTY_TYPES, PROPERTY_GROUPS, PROPERTY_TYPE_MAP, TYPE_STYLE_FILTERS, getTypeLabel, getSubtypeLabel, type PropertyTypeKey } from "@/lib/propertyTypes";
 import {
   getFilterConfig,
   FEATURES_RESIDENTIAL, FEATURES_COMMERCIAL, FEATURES_OFFICE, FEATURES_LAND,
@@ -794,6 +794,26 @@ export default function Listings() {
                   )}
 
                 </div>
+
+                {/* Property Style — contextual chips for apartment / house / villa */}
+                {(() => {
+                  const styleFilters = TYPE_STYLE_FILTERS[selectedType as PropertyTypeKey];
+                  if (!styleFilters?.length) return null;
+                  const selectedStyles = getMulti("style");
+                  return (
+                    <div className="mt-5">
+                      <label className="text-xs text-muted-foreground font-medium mb-3 block">Property Style</label>
+                      <div className="flex flex-wrap gap-2">
+                        {styleFilters.map(s => (
+                          <FilterChip key={s.value} active={selectedStyles.includes(s.value)}
+                            onClick={() => toggleMulti("style", s.value)}>
+                            {s.label}
+                          </FilterChip>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Features section — contextual */}
                 {(has("features_residential") || has("features_commercial") || has("features_office") || has("features_land")) && (
