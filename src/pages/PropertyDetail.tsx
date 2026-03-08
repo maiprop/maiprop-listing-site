@@ -187,7 +187,7 @@ export default function PropertyDetail() {
   const { user } = useAuth();
 
   const { data: dbListing, isLoading } = useListing(id || "");
-  const { data: dbSimilar = [] } = useListings({ city: dbListing?.city });
+  const { data: dbSimilar = [] } = useListings({ city: dbListing?.city, property_type: dbListing?.property_type });
 
   const mockProperty = mockProperties.find(p => p.id === id) || mockProperties[0];
   const isDbListing = !!dbListing;
