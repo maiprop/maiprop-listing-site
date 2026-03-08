@@ -164,6 +164,7 @@ export default function PropertyDetail() {
   const [viewingOpen, setViewingOpen] = useState(false);
   const [reportPurchased, setReportPurchased] = useState(false);
   const [descExpanded, setDescExpanded] = useState(false);
+  const [walkScore, setWalkScore] = useState<number | null>(null);
 
   const { data: favorites = [] } = useFavorites();
   const toggleFav = useToggleFavorite();
