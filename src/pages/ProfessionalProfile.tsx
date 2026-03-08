@@ -526,6 +526,28 @@ export default function ProfessionalProfile() {
         </div>
       </div>
       <Footer />
+
+      {/* ── Modals ── */}
+      <SendMessageModal
+        open={msgOpen}
+        onClose={() => setMsgOpen(false)}
+        professional={{ id: pro.id, user_id: pro.user_id, display_name: pro.display_name, title: pro.title }}
+      />
+      <BookConsultationModal
+        open={consultOpen}
+        onClose={() => setConsultOpen(false)}
+        professional={{ id: pro.id, user_id: pro.user_id, display_name: pro.display_name, title: pro.title, category: pro.category, hourly_rate: pro.hourly_rate }}
+      />
+      <RequestCallbackModal
+        open={callbackOpen}
+        onClose={() => setCallbackOpen(false)}
+        professional={{ id: pro.id, display_name: pro.display_name, title: pro.title }}
+      />
+      <OnlineViewingModal
+        open={videoOpen}
+        onClose={() => setVideoOpen(false)}
+        professional={{ id: pro.id, display_name: pro.display_name, title: pro.title }}
+      />
     </div>
   );
 }
