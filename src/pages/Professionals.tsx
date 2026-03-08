@@ -1,11 +1,10 @@
 import { useState } from "react";
-import { Search, Star, MapPin, Mail, CheckCircle, Filter, ExternalLink } from "lucide-react";
+import { Search, Star, MapPin, Mail, CheckCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { useProfessionals } from "@/hooks/useProfessionals";
 import { Link } from "react-router-dom";
-import { Loader2 } from "lucide-react";
 
 const categories = [
   { label: "All", value: "" },
@@ -36,29 +35,18 @@ const categoryInfo: Record<string, { emoji: string; label: string }> = {
   financial_advisor: { emoji: "💼", label: "Financial Advisor" },
 };
 
-// Static fallback professionals to show when DB is empty
-const staticPros = [
-  { id: "s1", name: "Stavros Papadimitriou", category: "architect", title: "Licensed Architect", city: "Athens, Kolonaki", rating: 4.9, reviews_count: 84, projects_count: 120, experience_years: 18, verified: true, specialties: ["Residential", "Renovation", "Interior"], avatar: "S" },
-  { id: "s2", name: "Eleni Karamanlis", category: "lawyer", title: "Real Estate Lawyer", city: "Athens, Syntagma", rating: 4.8, reviews_count: 156, projects_count: 400, experience_years: 12, verified: true, specialties: ["Conveyancing", "Auctions", "Golden Visa"], avatar: "E" },
-  { id: "s3", name: "Dimitris Kouros", category: "civil_engineer", title: "Civil Engineer", city: "Thessaloniki", rating: 4.7, reviews_count: 62, projects_count: 89, experience_years: 10, verified: true, specialties: ["Static Analysis", "Renovation", "New Build"], avatar: "D" },
-  { id: "s4", name: "Maria Antoniadou", category: "notary", title: "Notary Public", city: "Athens, Omonoia", rating: 4.9, reviews_count: 210, projects_count: 600, experience_years: 20, verified: true, specialties: ["Property Transfer", "Wills", "Contracts"], avatar: "M" },
-  { id: "s5", name: "Nikos Alexopoulos", category: "electrician", title: "Certified Electrician", city: "Glyfada", rating: 4.6, reviews_count: 48, projects_count: 300, experience_years: 15, verified: true, specialties: ["Smart Home", "Solar", "Commercial"], avatar: "N" },
-  { id: "s6", name: "Petros Georgiou", category: "contractor", title: "General Contractor", city: "Piraeus", rating: 4.7, reviews_count: 91, projects_count: 145, experience_years: 22, verified: false, specialties: ["Full Renovation", "New Build", "Commercial"], avatar: "P" },
-];
-
 export default function Professionals() {
   const [selectedCat, setSelectedCat] = useState("");
   const [search, setSearch] = useState("");
 
-  const { data: dbPros = [], isLoading } = useProfessionals(selectedCat || undefined);
+  const { data: professionals = [], isLoading } = useProfessionals(selectedCat || undefined);
 
-  // Merge DB and static data
-  const allPros = dbPros.length > 0 ? dbPros : staticPros;
-
-  const filtered = allPros.filter((p: any) => {
-    const name = (p.profiles as any)?.display_name || p.name || "";
+  const filtered = professionals.filter((p: any) => {
+    const name = p.display_name || "";
     const title = p.title || "";
-    return !search || name.toLowerCase().includes(search.toLowerCase()) || title.toLowerCase().includes(search.toLowerCase());
+    const specs = (p.specialties || []).join(" ");
+    const q = search.toLowerCase();
+    return !q || name.toLowerCase().includes(q) || title.toLowerCase().includes(q) || specs.toLowerCase().includes(q);
   });
 
   return (
@@ -83,7 +71,7 @@ export default function Professionals() {
               <Search className="w-4 h-4 text-muted-foreground" />
               <input
                 type="text"
-                placeholder="Search by name or specialty..."
+                placeholder="Search by name, specialty..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
@@ -114,14 +102,17 @@ export default function Professionals() {
             <div className="flex items-center justify-center py-20">
               <Loader2 className="w-6 h-6 animate-spin text-primary" />
             </div>
+          ) : filtered.length === 0 ? (
+            <div className="text-center py-20 text-muted-foreground">
+              <p className="text-lg font-medium mb-1">No professionals found</p>
+              <p className="text-sm">Try adjusting your search or category filter</p>
+            </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filtered.map((pro: any) => {
-                const isDb = !!pro.profiles;
-                const name = isDb ? ((pro.profiles as any)?.display_name || "Professional") : pro.name;
+                const name = pro.display_name || "Professional";
                 const catData = categoryInfo[pro.category] || { emoji: "👤", label: pro.category };
                 const initials = name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
-                const city = pro.city || "Greece";
                 const rating = Number(pro.rating) || 0;
                 const specialties = pro.specialties || [];
 
@@ -132,7 +123,7 @@ export default function Professionals() {
                       <div className="w-14 h-14 rounded-xl bg-gradient-primary flex items-center justify-center font-display font-bold text-xl text-primary-foreground shrink-0 overflow-hidden">
                         {pro.avatar_url
                           ? <img src={pro.avatar_url} alt={name} className="w-full h-full object-cover" />
-                          : (initials || (pro.avatar as string))}
+                          : initials}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
@@ -144,7 +135,7 @@ export default function Professionals() {
                         </div>
                         <div className="flex items-center gap-1 mt-0.5">
                           <MapPin className="w-3 h-3 text-muted-foreground" />
-                          <span className="text-xs text-muted-foreground">{city}</span>
+                          <span className="text-xs text-muted-foreground">{pro.city || "Greece"}</span>
                         </div>
                       </div>
                     </div>
@@ -162,6 +153,13 @@ export default function Professionals() {
                       <span className="text-xs text-muted-foreground">{pro.experience_years || 0} yrs</span>
                     </div>
 
+                    {/* Hourly rate */}
+                    {pro.hourly_rate && (
+                      <div className="text-xs text-muted-foreground">
+                        From <span className="font-semibold text-foreground">€{pro.hourly_rate}/hr</span>
+                      </div>
+                    )}
+
                     {/* Specialties */}
                     {specialties.length > 0 && (
                       <div className="flex gap-1.5 flex-wrap">
@@ -173,15 +171,9 @@ export default function Professionals() {
 
                     {/* Actions */}
                     <div className="flex gap-2 mt-auto">
-                      {isDb ? (
-                        <Button size="sm" className="flex-1 bg-gradient-primary border-0 text-primary-foreground text-xs" asChild>
-                          <Link to={`/professionals/${pro.id}`}>View Profile</Link>
-                        </Button>
-                      ) : (
-                        <Button size="sm" className="flex-1 bg-gradient-primary border-0 text-primary-foreground text-xs" disabled>
-                          View Profile
-                        </Button>
-                      )}
+                      <Button size="sm" className="flex-1 bg-gradient-primary border-0 text-primary-foreground text-xs" asChild>
+                        <Link to={`/professionals/${pro.id}`}>View Profile</Link>
+                      </Button>
                       <Button size="sm" variant="outline" className="border-border px-3">
                         <Mail className="w-3.5 h-3.5" />
                       </Button>

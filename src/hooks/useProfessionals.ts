@@ -7,12 +7,28 @@ export function useProfessionals(category?: string) {
     queryFn: async () => {
       let query = supabase
         .from("professionals")
-        .select("*, profiles!professionals_user_id_fkey(display_name, first_name, last_name)")
+        .select("*")
         .order("rating", { ascending: false });
       if (category) query = query.eq("category", category as any);
       const { data, error } = await query;
       if (error) throw error;
       return data || [];
     },
+  });
+}
+
+export function useProfessional(id: string) {
+  return useQuery({
+    queryKey: ["professional", id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("professionals")
+        .select("*")
+        .eq("id", id)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!id,
   });
 }
