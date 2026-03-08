@@ -393,10 +393,17 @@ export default function Listings() {
               {/* View toggle */}
               <div className="flex rounded-xl border border-border overflow-hidden shrink-0">
                 <button onClick={() => setViewMode("grid")}
+                  title="Grid view"
                   className={`p-2.5 transition-colors ${viewMode === "grid" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:text-foreground"}`}>
                   <LayoutGrid className="w-4 h-4" />
                 </button>
+                <button onClick={() => setViewMode("split")}
+                  title="Split view"
+                  className={`p-2.5 transition-colors ${viewMode === "split" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:text-foreground"}`}>
+                  <Columns2 className="w-4 h-4" />
+                </button>
                 <button onClick={() => setViewMode("map")}
+                  title="Map view"
                   className={`p-2.5 transition-colors ${viewMode === "map" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:text-foreground"}`}>
                   <Map className="w-4 h-4" />
                 </button>
