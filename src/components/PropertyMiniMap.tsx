@@ -93,6 +93,7 @@ interface PropertyMiniMapProps {
   address: string;
   city: string;
   title: string;
+  onWalkScoreChange?: (score: number) => void;
 }
 
 export default function PropertyMiniMap({
