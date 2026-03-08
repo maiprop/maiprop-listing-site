@@ -436,7 +436,7 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
         onMoveEnd={computeVisible}
         onZoomEnd={computeVisible}
         onLoad={computeVisible}
-        getCursor={getCursor}
+        cursor={drawMode && !polygonClosed ? "crosshair" : undefined}
       >
         <NavigationControl position="bottom-right" />
 
