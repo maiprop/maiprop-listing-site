@@ -1,1 +1,13 @@
 project_id = "jglqlaynezspefoovqyc"
+
+[functions.ai-search]
+verify_jwt = false
+
+[functions.property-valuation]
+verify_jwt = false
+
+[functions.neighbourhood-report]
+verify_jwt = false
+
+[functions.property-pois]
+verify_jwt = false
