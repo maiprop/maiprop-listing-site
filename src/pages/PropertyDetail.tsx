@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import {
   MapPin, Bed, Bath, Square, Heart, Share2, Phone, MessageSquare,
   Calendar, Video, ChevronLeft, ChevronRight, Star, TrendingUp,
-  Shield, FileText, Zap, ExternalLink, BarChart2, Eye,
+  Shield, FileText, Zap, ExternalLink, Lock, BarChart2, Eye,
   Home, Clock, Check, Gavel, Download, Loader2, CheckCircle,
   Thermometer, Wrench, TreePine, Flame, Wifi, Car, Building2,
   Info, ChevronDown, ChevronUp, Euro
