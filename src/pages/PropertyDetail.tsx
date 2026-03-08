@@ -21,84 +21,94 @@ import { useStartConversation } from "@/hooks/useMessages";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
-// ─── Energy class colour mapping ───────────────────────────────────────────────
+// ─── Energy class data ──────────────────────────────────────────────────────
+const ENERGY_SCALE = [
+  { cls: "A+", hex: "#1a9e4f", pct: 8,  desc: "< 33 kWh/m²·yr — Excellent" },
+  { cls: "A",  hex: "#2db84e", pct: 17, desc: "33–50 kWh/m²·yr — Very Good" },
+  { cls: "B+", hex: "#7dc73a", pct: 26, desc: "50–75 kWh/m²·yr — Good" },
+  { cls: "B",  hex: "#b5d934", pct: 35, desc: "75–100 kWh/m²·yr — Above Average" },
+  { cls: "C",  hex: "#f5d31b", pct: 50, desc: "100–125 kWh/m²·yr — Average" },
+  { cls: "D",  hex: "#f5a623", pct: 62, desc: "125–160 kWh/m²·yr — Below Average" },
+  { cls: "E",  hex: "#f07320", pct: 74, desc: "160–200 kWh/m²·yr — Poor" },
+  { cls: "F",  hex: "#e84020", pct: 86, desc: "200–250 kWh/m²·yr — Very Poor" },
+  { cls: "G",  hex: "#cc1414", pct: 100, desc: "> 250 kWh/m²·yr — Extremely Poor" },
+];
 const ENERGY_COLORS: Record<string, string> = {
-  "A+": "bg-[hsl(142,71%,45%)] text-white",
-  "A":  "bg-[hsl(142,60%,50%)] text-white",
-  "B+": "bg-[hsl(80,60%,45%)] text-white",
-  "B":  "bg-[hsl(80,50%,50%)] text-white",
-  "C":  "bg-[hsl(50,90%,50%)] text-black",
-  "D":  "bg-[hsl(35,90%,55%)] text-black",
-  "E":  "bg-[hsl(25,90%,55%)] text-white",
-  "F":  "bg-[hsl(10,85%,55%)] text-white",
-  "G":  "bg-[hsl(0,80%,50%)] text-white",
+  "A+": "bg-[#1a9e4f] text-white",
+  "A":  "bg-[#2db84e] text-white",
+  "B+": "bg-[#7dc73a] text-white",
+  "B":  "bg-[#b5d934] text-black",
+  "C":  "bg-[#f5d31b] text-black",
+  "D":  "bg-[#f5a623] text-black",
+  "E":  "bg-[#f07320] text-white",
+  "F":  "bg-[#e84020] text-white",
+  "G":  "bg-[#cc1414] text-white",
 };
 
-const ENERGY_DESCRIPTIONS: Record<string, string> = {
-  "A+": "<33% annual primary energy consumption vs baseline",
-  "A":  "33–50% of baseline",
-  "B+": "50–75% of baseline",
-  "B":  "75–100% of baseline",
-  "C":  "100–125% of baseline",
-  "D":  "125–160% of baseline",
-  "E":  "160–200% of baseline",
-  "F":  "200–250% of baseline",
-  "G":  ">250% — lowest efficiency",
-};
-
-// ─── Mortgage calculator (interactive) ─────────────────────────────────────────
+// ─── Mortgage calculator ──────────────────────────────────────────────────────
 function MortgageCalculator({ price }: { price: number }) {
   const [downPct, setDownPct] = useState(20);
-  const [rate, setRate] = useState(3.8);
-  const [years, setYears] = useState(20);
+  const [rate, setRate]       = useState(3.8);
+  const [years, setYears]     = useState(20);
 
-  const down = price * (downPct / 100);
-  const loan = price - down;
+  const down    = Math.round(price * (downPct / 100));
+  const loan    = price - down;
   const monthly = loan > 0
     ? Math.round(loan * (rate / 1200) / (1 - Math.pow(1 + rate / 1200, -years * 12)))
     : 0;
+  const totalPaid   = monthly * years * 12;
+  const totalInterest = totalPaid - loan;
 
   return (
-    <div className="glass-card rounded-xl p-5 space-y-4">
-      <div className="flex items-center gap-2">
+    <div className="glass-card rounded-xl overflow-hidden border border-border">
+      {/* Header */}
+      <div className="flex items-center gap-2 px-5 py-3.5 bg-primary/5 border-b border-border">
         <Euro className="w-4 h-4 text-primary" />
         <h4 className="font-display font-semibold text-sm">Mortgage Calculator</h4>
+        <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
+          Indicative
+        </span>
       </div>
-      <div className="space-y-3 text-sm">
-        <div>
-          <div className="flex justify-between mb-1">
-            <span className="text-xs text-muted-foreground">Down Payment</span>
-            <span className="text-xs font-semibold">{downPct}% — €{down.toLocaleString()}</span>
+
+      <div className="p-5 space-y-4">
+        {/* Sliders */}
+        {[
+          { label: "Down Payment", value: `${downPct}%`, sub: `€${down.toLocaleString()}`, min: 10, max: 50, step: 5, val: downPct, set: setDownPct },
+          { label: "Interest Rate", value: `${rate.toFixed(1)}%`, sub: "p.a.", min: 2, max: 8, step: 0.1, val: rate, set: setRate },
+          { label: "Loan Term", value: `${years} yrs`, sub: `${years * 12} payments`, min: 5, max: 30, step: 5, val: years, set: setYears },
+        ].map(s => (
+          <div key={s.label}>
+            <div className="flex justify-between items-baseline mb-1.5">
+              <span className="text-xs text-muted-foreground">{s.label}</span>
+              <div className="text-right">
+                <span className="text-xs font-bold text-foreground">{s.value}</span>
+                <span className="text-[10px] text-muted-foreground ml-1.5">{s.sub}</span>
+              </div>
+            </div>
+            <input type="range" min={s.min} max={s.max} step={s.step} value={s.val}
+              onChange={e => s.set(Number(e.target.value))}
+              className="w-full h-1.5 rounded-full appearance-none cursor-pointer accent-primary bg-border" />
           </div>
-          <input type="range" min={10} max={50} step={5} value={downPct}
-            onChange={e => setDownPct(Number(e.target.value))}
-            className="w-full accent-primary" />
-        </div>
-        <div>
-          <div className="flex justify-between mb-1">
-            <span className="text-xs text-muted-foreground">Interest Rate</span>
-            <span className="text-xs font-semibold">{rate}% p.a.</span>
+        ))}
+
+        {/* Result panel */}
+        <div className="bg-primary/8 rounded-xl p-4 border border-primary/20 text-center mt-1">
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Est. Monthly Payment</p>
+          <p className="font-display font-black text-3xl text-primary">€{monthly.toLocaleString()}</p>
+          <div className="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-primary/10 text-xs">
+            <div>
+              <p className="text-muted-foreground">Loan Amount</p>
+              <p className="font-semibold mt-0.5">€{loan.toLocaleString()}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Total Interest</p>
+              <p className="font-semibold mt-0.5 text-destructive">€{totalInterest.toLocaleString()}</p>
+            </div>
           </div>
-          <input type="range" min={2} max={8} step={0.1} value={rate}
-            onChange={e => setRate(Number(e.target.value))}
-            className="w-full accent-primary" />
         </div>
-        <div>
-          <div className="flex justify-between mb-1">
-            <span className="text-xs text-muted-foreground">Term</span>
-            <span className="text-xs font-semibold">{years} years</span>
-          </div>
-          <input type="range" min={5} max={30} step={5} value={years}
-            onChange={e => setYears(Number(e.target.value))}
-            className="w-full accent-primary" />
-        </div>
-        <div className="bg-primary/10 rounded-xl p-4 border border-primary/20 text-center">
-          <div className="text-xs text-muted-foreground mb-1">Est. Monthly Payment</div>
-          <div className="font-display font-bold text-2xl text-primary">€{monthly.toLocaleString()}</div>
-          <div className="text-xs text-muted-foreground mt-1">Loan: €{loan.toLocaleString()} · {years}yr term</div>
-        </div>
+
         <p className="text-[10px] text-muted-foreground leading-relaxed">
-          For illustrative purposes only. Final rate depends on credit score and includes 0.12% levy (Law 128/75).
+          Indicative only. Final rate subject to credit assessment. Includes 0.12% annual levy (Law 128/75).
         </p>
       </div>
     </div>
@@ -108,65 +118,83 @@ function MortgageCalculator({ price }: { price: number }) {
 // ─── Feature pill ────────────────────────────────────────────────────────────
 function FeaturePill({ icon: Icon, label }: { icon?: any; label: string }) {
   return (
-    <div className="flex items-center gap-1.5 text-xs bg-secondary border border-border rounded-lg px-2.5 py-1.5 text-foreground">
+    <div className="flex items-center gap-2 text-xs bg-secondary border border-border rounded-lg px-3 py-2 text-foreground hover:border-primary/30 transition-colors">
+      <Check className="w-3 h-3 text-primary shrink-0" />
       {Icon && <Icon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
-      {label}
+      <span>{label}</span>
     </div>
   );
 }
 
 // ─── Feature section ─────────────────────────────────────────────────────────
-function FeatureSection({ title, features }: { title: string; features: { icon?: any; label: string }[] }) {
+function FeatureSection({ title, features, color }: { title: string; features: { icon?: any; label: string }[]; color?: string }) {
   if (features.length === 0) return null;
   return (
     <div>
-      <h4 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">{title}</h4>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex items-center gap-2 mb-3">
+        <div className={`w-1 h-4 rounded-full ${color || "bg-primary"}`} />
+        <h4 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{title}</h4>
+        <span className="text-xs text-muted-foreground ml-auto">{features.length}</span>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
         {features.map(f => <FeaturePill key={f.label} icon={f.icon} label={f.label} />)}
       </div>
     </div>
   );
 }
 
-// ─── Map placeholder with toggle ────────────────────────────────────────────
+// ─── Map section with privacy toggle ─────────────────────────────────────────
 function MapSection({ address, city }: { address: string; city: string }) {
   const [revealed, setRevealed] = useState(false);
   return (
-    <div className="glass-card rounded-xl overflow-hidden">
-      <div className="p-4 border-b border-border flex items-center justify-between">
+    <div className="glass-card rounded-xl overflow-hidden border border-border">
+      <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <MapPin className="w-4 h-4 text-primary" />
           <h3 className="font-display font-semibold text-sm">Location</h3>
-        </div>
-        {!revealed && (
-          <Button size="sm" variant="outline" onClick={() => setRevealed(true)} className="text-xs gap-1 h-7">
-            <Navigation className="w-3 h-3" /> Request Exact Location
-          </Button>
-        )}
-      </div>
-      <div className="relative">
-        {/* Map embed placeholder */}
-        <div className="w-full h-56 bg-secondary flex items-center justify-center relative overflow-hidden">
-          <iframe
-            title="map"
-            loading="lazy"
-            className="w-full h-full border-0 opacity-70"
-            src={`https://maps.google.com/maps?q=${encodeURIComponent(revealed ? address + ", " + city : city + ", Greece")}&output=embed&z=14`}
-          />
           {!revealed && (
-            <div className="absolute inset-0 backdrop-blur-[2px] bg-background/40 flex flex-col items-center justify-center gap-2">
-              <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center">
-                <MapPin className="w-5 h-5 text-primary" />
-              </div>
-              <p className="text-xs text-muted-foreground text-center px-8">
-                Approximate location shown. Click "Request Exact Location" to get the precise address.
-              </p>
-            </div>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">Approximate</span>
+          )}
+          {revealed && (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">Exact</span>
           )}
         </div>
-        {revealed && (
-          <div className="p-3 bg-primary/5 border-t border-primary/10 text-xs text-primary flex items-center gap-1.5">
-            <CheckCircle className="w-3.5 h-3.5" /> Exact address: {address}, {city}
+        {!revealed ? (
+          <Button size="sm" variant="outline" onClick={() => setRevealed(true)}
+            className="text-xs gap-1.5 h-7 border-primary/30 text-primary hover:bg-primary/10">
+            <Navigation className="w-3 h-3" /> Request Exact Location
+          </Button>
+        ) : (
+          <button onClick={() => setRevealed(false)} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+            <Lock className="w-3 h-3" /> Hide
+          </button>
+        )}
+      </div>
+
+      {/* Address strip when revealed */}
+      {revealed && (
+        <div className="px-5 py-2.5 bg-primary/5 border-b border-primary/10 text-xs text-primary flex items-center gap-2">
+          <CheckCircle className="w-3.5 h-3.5 shrink-0" />
+          <span className="font-medium">{address}{address !== city ? `, ${city}` : ""}</span>
+        </div>
+      )}
+
+      <div className="relative h-60 bg-secondary">
+        <iframe
+          title="map"
+          loading="lazy"
+          className="w-full h-full border-0"
+          src={`https://maps.google.com/maps?q=${encodeURIComponent(revealed ? address + ", " + city : city + ", Greece")}&output=embed&z=${revealed ? 16 : 13}`}
+        />
+        {!revealed && (
+          <div className="absolute inset-0 backdrop-blur-[3px] bg-background/30 flex flex-col items-center justify-center gap-3 pointer-events-none">
+            <div className="w-12 h-12 rounded-full bg-background/80 border border-border shadow-lg flex items-center justify-center">
+              <MapPin className="w-5 h-5 text-primary" />
+            </div>
+            <div className="bg-background/90 border border-border rounded-xl px-4 py-2 text-center max-w-[220px]">
+              <p className="text-xs font-medium text-foreground">Approximate area shown</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">Request exact location to see precise pin</p>
+            </div>
           </div>
         )}
       </div>
@@ -545,28 +573,64 @@ export default function PropertyDetail() {
                 </div>
 
                 {/* Energy class visual badge */}
-                {energyClass && energyClass !== "Exempt" && ENERGY_COLORS[energyClass] && (
-                  <div className="mt-5 pt-5 border-t border-border">
-                    <div className="text-xs text-muted-foreground mb-2 font-semibold uppercase tracking-wider">Energy Performance Certificate</div>
-                    <div className="flex items-center gap-3">
-                      <div className={`px-4 py-2 rounded-lg font-display font-black text-2xl ${ENERGY_COLORS[energyClass]}`}>
-                        {energyClass}
+                {energyClass && energyClass !== "Exempt" && ENERGY_COLORS[energyClass] && (() => {
+                  const energyData = ENERGY_SCALE.find(e => e.cls === energyClass);
+                  return (
+                    <div className="mt-5 pt-5 border-t border-border">
+                      <div className="text-xs text-muted-foreground mb-3 font-semibold uppercase tracking-wider flex items-center gap-2">
+                        <Zap className="w-3.5 h-3.5" /> Energy Performance Certificate
                       </div>
-                      <div className="flex-1">
-                        {/* Energy scale bar */}
-                        <div className="flex gap-0.5 mb-1">
-                          {["A+","A","B+","B","C","D","E","F","G"].map(cls => (
-                            <div key={cls}
-                              className={`h-4 flex-1 rounded-sm text-[8px] flex items-center justify-center font-bold ${ENERGY_COLORS[cls]} ${cls === energyClass ? "scale-110 z-10 relative ring-2 ring-foreground" : "opacity-40"}`}>
-                              {cls === energyClass ? cls : ""}
-                            </div>
-                          ))}
+                      {/* Spitogatos-style horizontal arrow scale */}
+                      <div className="relative">
+                        {/* Scale bars */}
+                        <div className="flex gap-0.5 items-end mb-1">
+                          {ENERGY_SCALE.map((e, i) => {
+                            const isActive = e.cls === energyClass;
+                            const barH = 16 + i * 4; // graduated heights
+                            return (
+                              <div key={e.cls} className="flex-1 flex flex-col items-center gap-0.5">
+                                {isActive && (
+                                  <div className="text-[9px] font-black text-foreground leading-none">▼</div>
+                                )}
+                                <div
+                                  style={{ backgroundColor: e.hex, height: `${barH}px`, opacity: isActive ? 1 : 0.55 }}
+                                  className={`w-full rounded-sm flex items-end justify-center pb-0.5 transition-all ${isActive ? "ring-2 ring-foreground ring-offset-1 ring-offset-card" : ""}`}
+                                >
+                                  <span className={`text-[8px] font-bold leading-none ${i > 2 ? "text-black" : "text-white"} ${i >= 4 ? "text-black" : "text-white"}`}
+                                    style={{ color: ["B","C","D"].includes(e.cls) ? "#000" : "#fff" }}>
+                                    {e.cls}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
-                        <p className="text-[10px] text-muted-foreground">{ENERGY_DESCRIPTIONS[energyClass]}</p>
+                        {/* Active class description */}
+                        {energyData && (
+                          <div className="flex items-center gap-2 mt-2">
+                            <div className={`px-2 py-0.5 rounded text-xs font-black ${ENERGY_COLORS[energyClass]}`}>
+                              {energyClass}
+                            </div>
+                            <span className="text-xs text-muted-foreground">{energyData.desc}</span>
+                          </div>
+                        )}
+                        {/* Percentage bar */}
+                        {energyData && (
+                          <div className="mt-2">
+                            <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
+                              <span>Energy Efficiency</span>
+                              <span>{100 - energyData.pct}%</span>
+                            </div>
+                            <div className="h-1.5 bg-border rounded-full overflow-hidden">
+                              <div className="h-full rounded-full transition-all"
+                                style={{ width: `${100 - energyData.pct}%`, backgroundColor: energyData.hex }} />
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
 
               {/* Description */}
@@ -589,12 +653,17 @@ export default function PropertyDetail() {
 
               {/* Feature sections — Spitogatos style */}
               {hasAnyFeatures && (
-                <div className="glass-card rounded-xl p-6 space-y-5">
-                  <h3 className="font-display font-semibold">Features & Amenities</h3>
-                  <FeatureSection title="Internal" features={internalFeatures} />
-                  <FeatureSection title="External" features={externalFeatures} />
-                  <FeatureSection title="Construction" features={constructionFeatures} />
-                  <FeatureSection title="Suitable For" features={suitabilityFeatures} />
+                <div className="glass-card rounded-xl p-6 space-y-6 border border-border">
+                  <h3 className="font-display font-semibold flex items-center gap-2">
+                    Features & Amenities
+                    <span className="text-xs font-normal text-muted-foreground">
+                      {internalFeatures.length + externalFeatures.length + constructionFeatures.length + suitabilityFeatures.length} total
+                    </span>
+                  </h3>
+                  <FeatureSection title="Internal" features={internalFeatures} color="bg-primary" />
+                  <FeatureSection title="External" features={externalFeatures} color="bg-brand-emerald" />
+                  <FeatureSection title="Construction" features={constructionFeatures} color="bg-accent" />
+                  <FeatureSection title="Suitable For" features={suitabilityFeatures} color="bg-brand-gold" />
                 </div>
               )}
 
