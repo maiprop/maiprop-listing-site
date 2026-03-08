@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { computeWalkScore, walkScoreLabel, walkScoreColour } from "@/lib/walkScore";
 import Map, { Marker, NavigationControl, MapRef } from "react-map-gl";
 import {
   MapPin, ExternalLink, School, Bus, Coffee, Hospital,
