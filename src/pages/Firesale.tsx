@@ -202,10 +202,12 @@ export default function Firesale() {
 
               {/* Proof stats */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {proofStats.map((s) => {}
-
-
-
+                {proofStats.map((s) => (
+                  <div key={s.label} className="glass-card rounded-xl p-4 text-center">
+                    <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
+                    <div className="text-muted-foreground text-xs mt-1">{s.label}</div>
+                  </div>
+                ))
 
                 )}
               </div>
