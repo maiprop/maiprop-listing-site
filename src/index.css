@@ -221,10 +221,10 @@
     --sidebar-accent-foreground: 25 15% 30%;
     --sidebar-border: 36 15% 87%;
     --sidebar-ring: 192 65% 32%;
+  }
+}
 
 
-
-@layer base {
   * {
     @apply border-border;
   }
