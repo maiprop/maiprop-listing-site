@@ -61,31 +61,42 @@ function FieldLabel({ children, required }: { children: React.ReactNode; require
   );
 }
 
-function Input({ ...props }: React.InputHTMLAttributes<HTMLInputElement>) {
+function FieldError({ msg }: { msg?: string }) {
+  if (!msg) return null;
+  return <p className="text-xs text-destructive mt-1 flex items-center gap-1 animate-in fade-in-0 slide-in-from-top-1">⚠ {msg}</p>;
+}
+
+function Input({ hasError, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { hasError?: boolean }) {
   return (
     <input
       {...props}
-      className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
+      className={`w-full bg-secondary border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors ${
+        hasError ? "border-destructive ring-1 ring-destructive/30 focus:border-destructive" : "border-border"
+      }`}
     />
   );
 }
 
-function Select({ children, ...props }: React.SelectHTMLAttributes<HTMLSelectElement>) {
+function Select({ hasError, children, ...props }: React.SelectHTMLAttributes<HTMLSelectElement> & { hasError?: boolean }) {
   return (
     <select
       {...props}
-      className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors appearance-none"
+      className={`w-full bg-secondary border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors appearance-none ${
+        hasError ? "border-destructive ring-1 ring-destructive/30" : "border-border"
+      }`}
     >
       {children}
     </select>
   );
 }
 
-function Textarea({ ...props }: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+function Textarea({ hasError, ...props }: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { hasError?: boolean }) {
   return (
     <textarea
       {...props}
-      className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors resize-none"
+      className={`w-full bg-secondary border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors resize-none ${
+        hasError ? "border-destructive ring-1 ring-destructive/30 focus:border-destructive" : "border-border"
+      }`}
     />
   );
 }
