@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Flame, ArrowRight, Check, MapPin, Zap, Clock, Shield, Building2,
   Home, BarChart2, Euro, TrendingDown, ChevronRight, Star, Lock,
-  Loader2, Phone, Mail, Hash
+  Loader2, Phone, Mail, Hash, AlertCircle, Sparkles
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -27,23 +27,31 @@ const proofStats = [
 ];
 
 const conditionOptions = [
-  { value: "excellent", label: "Excellent — Move-in ready", disc: "0%" },
-  { value: "good", label: "Good — Minor works only", disc: "3–5%" },
-  { value: "fair", label: "Fair — Needs renovation", disc: "8–12%" },
-  { value: "needs-work", label: "Major Renovation Required", disc: "15–22%" },
+  { value: "excellent", label: "Excellent", sublabel: "Move-in ready", disc: "−3%", emoji: "✨" },
+  { value: "good",      label: "Good",      sublabel: "Minor works only", disc: "−7%",  emoji: "👍" },
+  { value: "fair",      label: "Fair",      sublabel: "Needs renovation", disc: "−12%", emoji: "🔨" },
+  { value: "needs-work",label: "Major Reno", sublabel: "Full renovation req.", disc: "−20%", emoji: "⚠️" },
 ];
 
-const propertyTypes = ["apartment", "house", "villa", "land", "commercial", "office"];
+const propertyTypeOptions = [
+  { value: "apartment", label: "🏢 Apartment" },
+  { value: "house",     label: "🏡 House" },
+  { value: "villa",     label: "🌴 Villa" },
+  { value: "land",      label: "🌿 Land" },
+  { value: "commercial",label: "🏪 Commercial" },
+  { value: "office",    label: "🖥️ Office" },
+];
 
 export default function Firesale() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
 
-  // Multi-step form state
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [aiEstimate, setAiEstimate] = useState<number | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [requestId, setRequestId] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     address: "",
@@ -53,61 +61,112 @@ export default function Firesale() {
     bedrooms: "",
     condition: "",
     askingPrice: "",
-    contactName: "",
+    contactName: profile?.display_name || profile?.first_name || "",
     contactEmail: user?.email || "",
-    contactPhone: "",
+    contactPhone: profile?.phone || "",
     notes: "",
   });
 
+  // Prefill from profile when it loads
+  useEffect(() => {
+    if (profile) {
+      setForm(prev => ({
+        ...prev,
+        contactName: prev.contactName || profile.display_name || profile.first_name || "",
+        contactEmail: prev.contactEmail || user?.email || "",
+        contactPhone: prev.contactPhone || profile.phone || "",
+      }));
+    }
+  }, [profile, user]);
+
   const upd = (k: string, v: string) => setForm(prev => ({ ...prev, [k]: v }));
 
-  const step1Valid = form.address && form.city && form.propertyType && form.sqm && form.condition;
-  const step2Valid = form.contactName && form.contactEmail;
+  const step1Valid = !!(form.address.trim() && form.city.trim() && form.propertyType && form.sqm && Number(form.sqm) > 0 && form.condition);
+  const step2Valid = !!(form.contactName.trim() && form.contactEmail.trim() && /\S+@\S+\.\S+/.test(form.contactEmail));
 
-  // Simulate AI estimate based on inputs
-  const generateEstimate = () => {
+  const generateEstimate = async () => {
     const basePerSqm: Record<string, number> = {
       villa: 3200, house: 2400, apartment: 2000, commercial: 2800, office: 2600, land: 900,
     };
     const condDiscount: Record<string, number> = {
-      excellent: 0.97, good: 0.93, fair: 0.87, "needs-work": 0.8,
+      excellent: 0.97, good: 0.93, fair: 0.87, "needs-work": 0.80,
     };
     const base = (basePerSqm[form.propertyType] || 2000) * Number(form.sqm);
-    const discounted = Math.round(base * (condDiscount[form.condition] || 0.9) * 0.95);
-    setAiEstimate(discounted);
+    const estimate = Math.round(base * (condDiscount[form.condition] || 0.90) * 0.95);
+    setAiEstimate(estimate);
+
+    // Try edge function for a better estimate (non-blocking)
+    setAiLoading(true);
+    try {
+      const { data } = await supabase.functions.invoke("property-valuation", {
+        body: {
+          city: form.city,
+          property_type: form.propertyType,
+          sqm: Number(form.sqm),
+          bedrooms: form.bedrooms ? Number(form.bedrooms) : undefined,
+          condition: form.condition,
+        },
+      });
+      if (data?.estimated_value) {
+        setAiEstimate(Math.round(data.estimated_value * 0.95));
+      }
+    } catch {
+      // keep the local estimate
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleContinue = async () => {
+    await generateEstimate();
+    setStep(2);
   };
 
   const handleSubmit = async () => {
+    if (!step2Valid) { toast.error("Please fill in all required fields."); return; }
     setSubmitting(true);
     try {
       const estimate = aiEstimate || Math.round(Number(form.sqm) * 1900 * 0.92);
 
-      const { error } = await supabase.from("firesale_requests").insert({
-        address: form.address,
-        city: form.city,
+      const { data, error } = await supabase.from("firesale_requests").insert({
+        address: form.address.trim(),
+        city: form.city.trim(),
         property_type: form.propertyType as any,
         sqm: Number(form.sqm),
         bedrooms: form.bedrooms ? Number(form.bedrooms) : null,
         condition: form.condition,
         asking_price: form.askingPrice ? Number(form.askingPrice) : null,
-        contact_email: form.contactEmail,
-        contact_phone: form.contactPhone || null,
-        notes: form.notes || null,
+        contact_email: form.contactEmail.trim(),
+        contact_phone: form.contactPhone.trim() || null,
+        notes: form.notes.trim() || null,
         ai_estimate: estimate,
         user_id: user?.id || null,
         status: "pending",
-      });
+      }).select("id").single();
 
       if (error) throw error;
 
       setAiEstimate(estimate);
+      setRequestId(data?.id || null);
       setSubmitted(true);
       toast.success("Your Firesale™ request has been submitted!");
     } catch (err: any) {
-      toast.error(err.message || "Submission failed");
+      toast.error(err.message || "Submission failed. Please try again.");
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleReset = () => {
+    setSubmitted(false);
+    setStep(1);
+    setAiEstimate(null);
+    setRequestId(null);
+    setForm(f => ({
+      ...f,
+      address: "", city: "", propertyType: "", sqm: "", bedrooms: "",
+      condition: "", askingPrice: "", notes: "",
+    }));
   };
 
   return (
@@ -240,8 +299,8 @@ export default function Firesale() {
                               className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none capitalize"
                             >
                               <option value="" className="bg-card">Select type...</option>
-                              {propertyTypes.map(t => (
-                                <option key={t} value={t} className="bg-card capitalize">{t}</option>
+                              {propertyTypeOptions.map(t => (
+                                <option key={t.value} value={t.value} className="bg-card">{t.label}</option>
                               ))}
                             </select>
                           </div>
@@ -295,12 +354,17 @@ export default function Firesale() {
                                 onClick={() => upd("condition", opt.value)}
                                 className={`text-left p-3.5 rounded-xl border transition-all duration-200 ${
                                   form.condition === opt.value
-                                    ? "border-primary bg-primary/10 text-foreground"
+                                    ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary/30"
                                     : "border-border bg-muted hover:border-primary/40 text-muted-foreground"
                                 }`}
                               >
-                                <p className="text-xs font-semibold">{opt.label}</p>
-                                <p className="text-[10px] text-muted-foreground mt-0.5">Discount: {opt.disc}</p>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-base leading-none">{opt.emoji}</span>
+                                  <p className="text-xs font-bold">{opt.label}</p>
+                                  {form.condition === opt.value && <Check className="w-3 h-3 text-primary ml-auto" />}
+                                </div>
+                                <p className="text-[10px] text-muted-foreground">{opt.sublabel}</p>
+                                <p className="text-[10px] font-semibold text-destructive/80 mt-0.5">Discount: {opt.disc}</p>
                               </button>
                             ))}
                           </div>
@@ -319,11 +383,14 @@ export default function Firesale() {
 
                         <Button
                           className="w-full bg-gradient-primary border-0 text-primary-foreground h-11"
-                          disabled={!step1Valid}
-                          onClick={() => { generateEstimate(); setStep(2); }}
+                          disabled={!step1Valid || aiLoading}
+                          onClick={handleContinue}
                         >
-                          <Zap className="w-4 h-4 mr-2" />
-                          Continue to Contact Details
+                          {aiLoading ? (
+                            <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Calculating AI estimate...</>
+                          ) : (
+                            <><Sparkles className="w-4 h-4 mr-2" />Get AI Estimate & Continue</>
+                          )}
                         </Button>
                       </div>
                     )}
@@ -415,25 +482,50 @@ export default function Firesale() {
                 </div>
               ) : (
                 /* Success State */
-                <div className="glass-card rounded-2xl border border-primary/30 p-8 text-center shadow-elevated">
-                  <div className="w-16 h-16 rounded-2xl bg-gradient-primary flex items-center justify-center mx-auto mb-5">
-                    <Check className="w-8 h-8 text-primary-foreground" />
+                <div className="glass-card rounded-2xl border border-brand-emerald/30 p-8 text-center shadow-elevated">
+                  {/* Animated check */}
+                  <div className="relative w-20 h-20 mx-auto mb-6">
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-brand-emerald/20 to-primary/10 flex items-center justify-center">
+                      <div className="w-14 h-14 rounded-full bg-gradient-to-br from-brand-emerald to-primary/80 flex items-center justify-center shadow-lg">
+                        <Check className="w-7 h-7 text-white" strokeWidth={3} />
+                      </div>
+                    </div>
                   </div>
-                  <h3 className="font-display font-black text-2xl mb-2">Request Submitted!</h3>
-                  <p className="text-muted-foreground text-sm mb-6 leading-relaxed">
-                    Your Firesale™ request is now live in our investor deal flow.<br />
-                    Expect contact within <strong className="text-foreground">4–24 hours</strong>.
+
+                  <h3 className="font-display font-black text-2xl mb-2">Request Submitted! 🎉</h3>
+                  <p className="text-muted-foreground text-sm mb-2 leading-relaxed">
+                    Your Firesale™ request is live in our investor deal flow.
                   </p>
+                  {requestId && (
+                    <p className="text-[11px] text-muted-foreground mb-6 font-mono bg-secondary border border-border rounded-lg px-3 py-1.5 inline-block">
+                      Ref: <span className="text-primary font-semibold">{requestId.slice(0, 8).toUpperCase()}</span>
+                    </p>
+                  )}
+
+                  {/* Timeline */}
+                  <div className="grid grid-cols-3 gap-3 mb-6">
+                    {[
+                      { time: "Now", label: "Request live", color: "text-brand-emerald", icon: "✅" },
+                      { time: "~2h",  label: "Advisor assigned", color: "text-primary", icon: "👤" },
+                      { time: "24h", label: "Cash offer sent", color: "text-brand-gold", icon: "💰" },
+                    ].map(s => (
+                      <div key={s.label} className="rounded-xl bg-secondary border border-border p-3 text-center">
+                        <div className="text-lg mb-1">{s.icon}</div>
+                        <p className={`font-display font-black text-sm ${s.color}`}>{s.time}</p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">{s.label}</p>
+                      </div>
+                    ))}
+                  </div>
 
                   <div className="rounded-xl bg-gradient-to-r from-primary/10 to-accent/5 border border-primary/20 p-5 mb-6">
-                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1.5">Your AI Offer Estimate</p>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1.5">AI Offer Estimate</p>
                     <p className="font-display font-black text-4xl text-primary mb-1">€{aiEstimate?.toLocaleString()}</p>
                     <p className="text-xs text-muted-foreground">Indicative · Subject to final due diligence</p>
                     <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-primary/10">
                       {[
-                        { label: "Market Value", value: `€${Math.round((aiEstimate || 0) / 0.95).toLocaleString()}` },
-                        { label: "vs Market", value: "-5%" },
-                        { label: "Close Target", value: "48–72h" },
+                        { label: "Est. Market", value: `€${Math.round((aiEstimate || 0) / 0.95).toLocaleString()}` },
+                        { label: "Discount", value: "~5%" },
+                        { label: "Close", value: "48–72h" },
                       ].map(s => (
                         <div key={s.label} className="text-center">
                           <p className="font-bold text-sm">{s.value}</p>
@@ -446,7 +538,7 @@ export default function Firesale() {
                   <div className="space-y-2 text-xs text-muted-foreground text-left mb-6">
                     {[
                       "Deal added to private investor dashboard",
-                      "NDA-protected distribution to 312 buyers",
+                      "NDA-protected distribution to 312 active buyers",
                       "Dedicated advisor assigned within 2h",
                     ].map(t => (
                       <div key={t} className="flex items-center gap-2">
@@ -455,9 +547,15 @@ export default function Firesale() {
                     ))}
                   </div>
 
-                  <Button variant="outline" className="border-border" onClick={() => { setSubmitted(false); setStep(1); setForm(f => ({ ...f, address: "", sqm: "", notes: "" })); }}>
-                    Submit another property
-                  </Button>
+                  <div className="flex gap-3">
+                    <Button variant="outline" className="flex-1 border-border" onClick={handleReset}>
+                      Submit another
+                    </Button>
+                    <Button className="flex-1 bg-gradient-primary border-0 text-primary-foreground gap-2" onClick={() => navigate("/investor-dashboard")}>
+                      <BarChart2 className="w-3.5 h-3.5" />
+                      Track Status
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>

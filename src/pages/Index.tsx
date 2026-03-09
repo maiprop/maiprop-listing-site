@@ -290,8 +290,8 @@ function LocationInput({ value, onChange, onSearch }: {
 
   return (
     <div ref={wrapRef} className="flex-1 min-w-0 relative">
-      <div className="flex items-center gap-2 bg-secondary rounded-xl px-4 py-3">
-        <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
+      <div className="flex items-center gap-2 px-4 py-2.5 h-full min-h-[44px]">
+        <MapPin className="w-4 h-4 text-primary shrink-0" />
         <input
           type="text"
           placeholder="City, area, or neighbourhood..."
@@ -299,7 +299,7 @@ function LocationInput({ value, onChange, onSearch }: {
           onChange={e => onChange(e.target.value)}
           onFocus={() => { refresh(); setFocused(true); }}
           onKeyDown={e => { if (e.key === "Enter") { setFocused(false); onSearch(); } if (e.key === "Escape") setFocused(false); }}
-          className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none min-w-0"
+          className="flex-1 bg-transparent text-sm font-medium text-foreground placeholder:text-muted-foreground outline-none min-w-0"
         />
         {value && (
           <button onClick={() => onChange("")} className="text-muted-foreground hover:text-foreground transition-colors">
@@ -309,8 +309,8 @@ function LocationInput({ value, onChange, onSearch }: {
       </div>
 
       {showDropdown && (
-        <div className="absolute top-full mt-1 left-0 right-0 z-50 bg-card border border-border rounded-xl shadow-lg overflow-hidden">
-          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border">
+        <div className="absolute top-full mt-2 left-0 right-0 z-50 bg-card border border-border rounded-2xl shadow-elevated overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border bg-secondary/40">
             <Clock className="w-3.5 h-3.5 text-muted-foreground" />
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Recent Searches</span>
           </div>
@@ -323,7 +323,7 @@ function LocationInput({ value, onChange, onSearch }: {
               <button
                 onMouseDown={e => e.preventDefault()}
                 onClick={ev => { ev.stopPropagation(); removeRecentSearch(r); refresh(); }}
-                className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-border transition-all text-muted-foreground hover:text-foreground"
+                className="opacity-0 group-hover:opacity-100 p-1 rounded-lg hover:bg-border transition-all text-muted-foreground hover:text-foreground"
               >
                 <X className="w-3 h-3" />
               </button>
@@ -417,50 +417,72 @@ export default function Index() {
             </p>
 
             {/* Search bar */}
-            <div className="bg-card border border-border rounded-2xl p-2 shadow-elevated animate-fade-in-up" style={{ animationDelay: "0.2s" }}>
-              {/* Type tabs */}
-              <div className="flex gap-1 p-1 mb-2">
-                {["Buy", "Rent", "Auctions", "Quick Sale"].map(type => (
+            <div className="animate-fade-in-up" style={{ animationDelay: "0.2s" }}>
+              {/* Frosted card */}
+              <div className="relative bg-card/80 backdrop-blur-xl border border-border/60 rounded-2xl shadow-elevated overflow-visible"
+                style={{ boxShadow: "0 8px 40px -8px hsl(var(--primary) / 0.15), 0 2px 0 0 hsl(var(--primary) / 0.08)" }}>
+
+                {/* Type tabs */}
+                <div className="flex gap-0.5 px-2 pt-2">
+                  {[
+                    { label: "Buy", emoji: "🏠" },
+                    { label: "Rent", emoji: "🔑" },
+                    { label: "Auctions", emoji: "⚖️" },
+                    { label: "Quick Sale", emoji: "⚡" },
+                  ].map(({ label, emoji }) => (
+                    <button
+                      key={label}
+                      onClick={() => setSearchType(label)}
+                      className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                        searchType === label
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground hover:bg-secondary/80"
+                      }`}
+                    >
+                      <span className="text-base leading-none">{emoji}</span>
+                      <span>{label}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Divider */}
+                <div className="mx-3 mt-2 h-px bg-border/60" />
+
+                {/* Search row */}
+                <div className="flex gap-0 p-2">
+                  {/* Location with recent searches */}
+                  <div className="flex-1 min-w-0">
+                    <LocationInput value={searchQuery} onChange={setSearchQuery} onSearch={handleSearch} />
+                  </div>
+
+                  {/* Vertical divider */}
+                  <div className="w-px bg-border/60 mx-1 self-stretch my-1" />
+
+                  {/* Property type */}
+                  <PropertyTypeDropdown value={selectedPropertyType} onChange={setSelectedPropertyType} />
+
+                  {/* Vertical divider */}
+                  <div className="w-px bg-border/60 mx-1 self-stretch my-1" />
+
+                  {/* AI Search */}
                   <button
-                    key={type}
-                    onClick={() => setSearchType(type)}
-                    className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-                      searchType === type
-                        ? "bg-primary text-primary-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground hover:bg-secondary"
-                    }`}
+                    onClick={() => setShowAI(true)}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all text-primary hover:bg-primary/10 shrink-0 whitespace-nowrap"
                   >
-                    {type}
+                    <Sparkles className="w-4 h-4" />
+                    <span className="hidden lg:inline">AI Search</span>
                   </button>
-                ))}
-              </div>
 
-              {/* Search row */}
-              <div className="flex gap-2 flex-wrap sm:flex-nowrap">
-                {/* Location with recent searches */}
-                <LocationInput value={searchQuery} onChange={setSearchQuery} onSearch={handleSearch} />
-
-                {/* Property type */}
-                <PropertyTypeDropdown value={selectedPropertyType} onChange={setSelectedPropertyType} />
-
-                {/* AI Search button */}
-                <button
-                  onClick={() => setShowAI(true)}
-                  className="flex items-center gap-2 bg-primary/10 border border-primary/30 text-primary rounded-xl px-4 py-3 text-sm font-semibold hover:bg-primary/20 transition-colors shrink-0 whitespace-nowrap"
-                >
-                  <Sparkles className="w-4 h-4" />
-                  <span className="hidden md:inline">AI Search</span>
-                </button>
-
-                {/* Search button */}
-                <Button
-                  size="lg"
-                  className="bg-primary hover:opacity-90 border-0 text-primary-foreground rounded-xl px-6 font-semibold shrink-0"
-                  onClick={handleSearch}
-                >
-                  <Search className="w-4 h-4 mr-2" />
-                  Search
-                </Button>
+                  {/* Search button */}
+                  <Button
+                    size="lg"
+                    className="bg-primary hover:opacity-90 border-0 text-primary-foreground rounded-xl px-6 font-semibold shrink-0 ml-1"
+                    onClick={handleSearch}
+                  >
+                    <Search className="w-4 h-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Search</span>
+                  </Button>
+                </div>
               </div>
             </div>
 
