@@ -374,6 +374,9 @@ export default function Dashboard() {
             <ProfileEditor profile={profile} onUpdate={updateProfile} />
           )}
 
+          {/* MY SERVICES (professionals) */}
+          {activeSection === "services" && <ProfessionalServicesEditor />}
+
           {/* OS SYNC */}
           {activeSection === "os-sync" && <OSSyncPanel />}
 
