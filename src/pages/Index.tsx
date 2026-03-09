@@ -839,6 +839,9 @@ export default function Index() {
         </div>
       </section>
 
+      {/* ── Navy Divider ───────────────────────────────────────────────────── */}
+      <div className="h-16 w-full" style={{ background: "linear-gradient(180deg, hsl(240 62% 11%) 0%, hsl(238 100% 17%) 50%, hsl(230 25% 95%) 100%)" }} />
+
       {/* ══ BROWSE BY TYPE ══════════════════════════════════════════════════ */}
       <section className="py-14 bg-secondary">
         <div ref={browseRef} className="container">
