@@ -940,7 +940,7 @@ export default function Index() {
         </div>
       </section>
 
-      {/* ══ FIRESALE CTA ════════════════════════════════════════════════════ */}
+      {/* ══ QUICK SALE CTA ══════════════════════════════════════════════════ */}
       <section className="py-10 sm:py-16 bg-background">
         <div ref={firesaleRef} className="container">
           <div
@@ -952,16 +952,14 @@ export default function Index() {
             />
             <div
               className="absolute inset-0"
-              style={{
-                background: "radial-gradient(ellipse at 20% 50%, hsl(192 100% 50% / 0.05) 0%, transparent 50%)",
-              }}
+              style={{ background: "radial-gradient(ellipse at 20% 50%, hsl(192 100% 50% / 0.05) 0%, transparent 50%)" }}
             />
             <div className="relative p-6 sm:p-10 md:p-16 grid md:grid-cols-2 gap-6 sm:gap-8 items-center">
               <div>
                 <div className="flex items-center gap-2 mb-4">
                   <Flame className="w-5 h-5 text-destructive flame-flicker" />
                   <span className="text-xs font-bold text-destructive uppercase tracking-widest">
-                    Firesale™ Instant Offer
+                    Quick Sale™ Instant Offer
                   </span>
                 </div>
                 <h2 className="font-display text-2xl sm:text-4xl font-bold mb-4">
