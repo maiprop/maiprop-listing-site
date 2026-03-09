@@ -46,7 +46,7 @@ const TIERS = [
     period: "/mo",
     desc: "Deal flow visibility for active allocators",
     features: [
-      "Live firesale deal feed",
+      "Live quick sale deal feed",
       "AI valuation per deal",
       "City & type filters",
       "Weekly digest email",
