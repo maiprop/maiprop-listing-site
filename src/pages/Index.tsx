@@ -5,7 +5,7 @@ import { Link, useNavigate } from "react-router-dom";
 import {
   Search, MapPin, ChevronDown, Users, ArrowRight, Gavel, Flame, ExternalLink,
   BarChart2, Sparkles, Check, X, Loader2, Lightbulb, Clock, TrendingUp,
-  Shield, Zap, Building2, Star, Globe, Brain
+  Shield, Zap, Building2, Star, Globe, Brain, Store
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
