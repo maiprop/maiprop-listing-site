@@ -491,12 +491,13 @@ export default function Index() {
       <section className="relative min-h-[100svh] sm:min-h-[92vh] flex items-center overflow-hidden pt-16">
         {/* Background */}
         <div className="absolute inset-0">
-          <img src={heroBg} alt="Athens skyline" className="w-full h-full object-cover opacity-60 dark:opacity-55" />
-          {/* Light mode: warm cream overlay so headline stays readable */}
-          <div className="absolute inset-0 dark:hidden" style={{ background: "linear-gradient(120deg, hsl(30 20% 10% / 0.82) 0%, hsl(25 15% 12% / 0.62) 50%, hsl(30 10% 14% / 0.25) 100%)" }} />
-          {/* Dark mode: deep navy overlay */}
+          {/* Light mode: show more of the actual photo — lower opacity overlay */}
+          <img src={heroBg} alt="Athens skyline" className="w-full h-full object-cover opacity-100 dark:opacity-70" />
+          {/* Light mode: soft warm vignette — keeps text readable without killing the photo */}
+          <div className="absolute inset-0 dark:hidden" style={{ background: "linear-gradient(120deg, hsl(25 30% 8% / 0.58) 0%, hsl(25 20% 10% / 0.35) 55%, hsl(30 15% 12% / 0.10) 100%)" }} />
+          {/* Dark mode: deep overlay */}
           <div className="absolute inset-0 hidden dark:block" style={{ background: "linear-gradient(120deg, hsl(222 47% 4% / 0.92) 0%, hsl(222 47% 6% / 0.72) 50%, hsl(222 47% 8% / 0.35) 100%)" }} />
-          <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent" />
         </div>
         {/* Grid overlay */}
         <div className="absolute inset-0 opacity-[0.03]"
