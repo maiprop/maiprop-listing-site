@@ -142,7 +142,7 @@ export function OSSyncPanel() {
     onSuccess: (result) => {
       setPollResult(result);
       qc.invalidateQueries({ queryKey: ["sync_log"] });
-      if (result?.status === "skipped") {
+      if (!result) {
         toast.info("Poll queued — OS credentials pending.");
       } else if (result.imported === 0 && result.updated === 0) {
         toast.info(
