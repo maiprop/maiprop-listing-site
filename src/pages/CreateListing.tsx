@@ -61,31 +61,42 @@ function FieldLabel({ children, required }: { children: React.ReactNode; require
   );
 }
 
-function Input({ ...props }: React.InputHTMLAttributes<HTMLInputElement>) {
+function FieldError({ msg }: { msg?: string }) {
+  if (!msg) return null;
+  return <p className="text-xs text-destructive mt-1 flex items-center gap-1 animate-in fade-in-0 slide-in-from-top-1">⚠ {msg}</p>;
+}
+
+function Input({ hasError, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { hasError?: boolean }) {
   return (
     <input
       {...props}
-      className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
+      className={`w-full bg-secondary border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors ${
+        hasError ? "border-destructive ring-1 ring-destructive/30 focus:border-destructive" : "border-border"
+      }`}
     />
   );
 }
 
-function Select({ children, ...props }: React.SelectHTMLAttributes<HTMLSelectElement>) {
+function Select({ hasError, children, ...props }: React.SelectHTMLAttributes<HTMLSelectElement> & { hasError?: boolean }) {
   return (
     <select
       {...props}
-      className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors appearance-none"
+      className={`w-full bg-secondary border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors appearance-none ${
+        hasError ? "border-destructive ring-1 ring-destructive/30" : "border-border"
+      }`}
     >
       {children}
     </select>
   );
 }
 
-function Textarea({ ...props }: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+function Textarea({ hasError, ...props }: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { hasError?: boolean }) {
   return (
     <textarea
       {...props}
-      className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors resize-none"
+      className={`w-full bg-secondary border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors resize-none ${
+        hasError ? "border-destructive ring-1 ring-destructive/30 focus:border-destructive" : "border-border"
+      }`}
     />
   );
 }
@@ -222,6 +233,11 @@ export default function CreateListing() {
   const [aiPriceSuggestion, setAiPriceSuggestion] = useState<{
     min: number; max: number; suggested: number; confidence: string; reasoning: string;
   } | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Field refs for scroll-to-error
+  const fieldRefs = useRef<Record<string, HTMLElement | null>>({});
+  const setFieldRef = (key: string) => (el: HTMLElement | null) => { fieldRefs.current[key] = el; };
 
   const [form, setForm] = useState({
     listing_type: "sale" as ListingType,
@@ -268,29 +284,43 @@ export default function CreateListing() {
     pets_allowed: false, short_term_rental: false, available_from: "", min_rental_months: "",
   });
 
-  const set = (key: string, value: unknown) => setForm(f => ({ ...f, [key]: value }));
+  const set = (key: string, value: unknown) => {
+    setForm(f => ({ ...f, [key]: value }));
+    if (errors[key]) setErrors(e => { const n = { ...e }; delete n[key]; return n; });
+  };
   const toggle = (key: string) => setForm(f => ({ ...f, [key]: !(f as any)[key] }));
 
   const pt = form.property_type;
   const lt = form.listing_type;
 
-  // ── Per-step validation ───────────────────────────────────────────────────
+  // ── Per-step validation with inline errors ────────────────────────────────
+  const scrollToField = (key: string) => {
+    const el = fieldRefs.current[key];
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
+
   const validateStep = (s: number): boolean => {
-    switch (s) {
-      case 2:
-        if (!form.title.trim()) { toast.error("Please add a title for your listing"); return false; }
-        if (!form.sqm) { toast.error("Property area (m²) is required"); return false; }
-        return true;
-      case 4:
-        if (!form.city.trim()) { toast.error("City is required to continue"); return false; }
-        return true;
-      case 5:
-        if (!form.price) { toast.error(`Please enter a ${lt === "rent" ? "monthly rent" : "asking price"}`); return false; }
-        if (lt === "auction" && !form.auction_starting_bid) { toast.error("Auction starting bid is required"); return false; }
-        return true;
-      default:
-        return true;
+    const newErrors: Record<string, string> = {};
+    if (s === 2) {
+      if (!form.title.trim()) newErrors.title = "Title is required";
+      if (!form.sqm) newErrors.sqm = "Property area (m²) is required";
     }
+    if (s === 4) {
+      if (!form.city.trim()) newErrors.city = "City is required";
+    }
+    if (s === 5) {
+      if (!form.price) newErrors.price = lt === "rent" ? "Monthly rent is required" : "Asking price is required";
+      if (lt === "auction" && !form.auction_starting_bid) newErrors.auction_starting_bid = "Starting bid is required";
+    }
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      const firstKey = Object.keys(newErrors)[0];
+      toast.error(newErrors[firstKey]);
+      setTimeout(() => scrollToField(firstKey), 50);
+      return false;
+    }
+    setErrors({});
+    return true;
   };
 
   const handleNext = () => {
@@ -730,9 +760,10 @@ export default function CreateListing() {
             {step === 2 && (
               <div className="space-y-4">
                 <h2 className="font-display text-xl font-semibold">Property Details</h2>
-                <div>
+                <div ref={setFieldRef("title") as any}>
                   <FieldLabel required>Title</FieldLabel>
-                  <Input placeholder="e.g. Modern 2-bed apartment in Kolonaki" value={form.title} onChange={e => set("title", e.target.value)} />
+                  <Input placeholder="e.g. Modern 2-bed apartment in Kolonaki" value={form.title} onChange={e => set("title", e.target.value)} hasError={!!errors.title} />
+                  <FieldError msg={errors.title} />
                 </div>
                 <div>
                   <FieldLabel>Description</FieldLabel>
@@ -762,7 +793,7 @@ export default function CreateListing() {
                   )}
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div><FieldLabel required>Area (m²)</FieldLabel><Input type="number" placeholder="85" value={form.sqm} onChange={e => set("sqm", e.target.value)} /></div>
+                  <div ref={setFieldRef("sqm") as any}><FieldLabel required>Area (m²)</FieldLabel><Input type="number" placeholder="85" value={form.sqm} onChange={e => set("sqm", e.target.value)} hasError={!!errors.sqm} /><FieldError msg={errors.sqm} /></div>
                   <div><FieldLabel>Year Built</FieldLabel><Input type="number" placeholder="2010" value={form.year_built} onChange={e => set("year_built", e.target.value)} /></div>
                 </div>
 
@@ -1019,9 +1050,10 @@ export default function CreateListing() {
             {step === 4 && (
               <div className="space-y-4">
                 <h2 className="font-display text-xl font-semibold">Location</h2>
-                <div>
+                <div ref={setFieldRef("city") as any}>
                   <FieldLabel required>City</FieldLabel>
-                  <Input placeholder="e.g. Athens" value={form.city} onChange={e => set("city", e.target.value)} />
+                  <Input placeholder="e.g. Athens" value={form.city} onChange={e => set("city", e.target.value)} hasError={!!errors.city} />
+                  <FieldError msg={errors.city} />
                 </div>
                 <div>
                   <FieldLabel>Street Address</FieldLabel>
@@ -1115,9 +1147,10 @@ export default function CreateListing() {
                   )}
                 </div>
 
-                <div>
+                <div ref={setFieldRef("price") as any}>
                   <FieldLabel required>{lt === "rent" ? "Monthly Rent (€)" : "Asking Price (€)"}</FieldLabel>
-                  <Input type="number" placeholder={lt === "rent" ? "800" : "250000"} value={form.price} onChange={e => set("price", e.target.value)} />
+                  <Input type="number" placeholder={lt === "rent" ? "800" : "250000"} value={form.price} onChange={e => set("price", e.target.value)} hasError={!!errors.price} />
+                  <FieldError msg={errors.price} />
                   {form.sqm && form.price && (
                     <p className="text-xs text-muted-foreground mt-1">
                       €{Math.round(Number(form.price) / Number(form.sqm)).toLocaleString()}/m²
@@ -1143,7 +1176,7 @@ export default function CreateListing() {
                 {lt === "auction" && (
                   <>
                     <SectionTitle>Auction Details</SectionTitle>
-                    <div><FieldLabel>Starting Bid (€)</FieldLabel><Input type="number" value={form.auction_starting_bid} onChange={e => set("auction_starting_bid", e.target.value)} /></div>
+                    <div ref={setFieldRef("auction_starting_bid") as any}><FieldLabel>Starting Bid (€)</FieldLabel><Input type="number" value={form.auction_starting_bid} onChange={e => set("auction_starting_bid", e.target.value)} hasError={!!errors.auction_starting_bid} /><FieldError msg={errors.auction_starting_bid} /></div>
                     <div><FieldLabel>Auction Date & Time</FieldLabel><Input type="datetime-local" value={form.auction_date} onChange={e => set("auction_date", e.target.value)} /></div>
                     <div><FieldLabel>Court / Platform</FieldLabel><Input placeholder="e.g. Athens Court of First Instance" value={form.auction_court} onChange={e => set("auction_court", e.target.value)} /></div>
                   </>
