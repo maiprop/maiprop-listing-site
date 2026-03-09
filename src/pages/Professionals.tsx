@@ -11,129 +11,129 @@ import ReactMarkdown from "react-markdown";
 
 // ─── Category Groups ──────────────────────────────────────────────────────────
 const categoryGroups = [
-  {
-    id: "legal",
-    label: "Legal & Title",
-    emoji: "⚖️",
-    color: "text-brand-gold",
-    bg: "bg-brand-gold/10",
-    border: "border-brand-gold/20",
-    categories: ["lawyer", "notary"],
-    description: "Property title, contracts, conveyancing",
-  },
-  {
-    id: "design",
-    label: "Design & Build",
-    emoji: "🏛️",
-    color: "text-primary",
-    bg: "bg-primary/10",
-    border: "border-primary/20",
-    categories: ["architect", "civil_engineer", "interior_designer", "contractor"],
-    description: "Architecture, engineering, renovation",
-  },
-  {
-    id: "trades",
-    label: "Trades & Maintenance",
-    emoji: "🔧",
-    color: "text-accent",
-    bg: "bg-accent/10",
-    border: "border-accent/20",
-    categories: ["electrician", "plumber"],
-    description: "Electrical, plumbing, building works",
-  },
-  {
-    id: "finance",
-    label: "Finance & Investment",
-    emoji: "💼",
-    color: "text-brand-emerald",
-    bg: "bg-brand-emerald/10",
-    border: "border-brand-emerald/20",
-    categories: ["financial_advisor", "valuer"],
-    description: "Mortgages, investment advice, valuations",
-  },
-  {
-    id: "management",
-    label: "Property Management",
-    emoji: "🏢",
-    color: "text-brand-sky",
-    bg: "bg-brand-sky/10",
-    border: "border-brand-sky/20",
-    categories: ["property_manager"],
-    description: "Lettings, tenants, asset management",
-  },
-];
+{
+  id: "legal",
+  label: "Legal & Title",
+  emoji: "⚖️",
+  color: "text-brand-gold",
+  bg: "bg-brand-gold/10",
+  border: "border-brand-gold/20",
+  categories: ["lawyer", "notary"],
+  description: "Property title, contracts, conveyancing"
+},
+{
+  id: "design",
+  label: "Design & Build",
+  emoji: "🏛️",
+  color: "text-primary",
+  bg: "bg-primary/10",
+  border: "border-primary/20",
+  categories: ["architect", "civil_engineer", "interior_designer", "contractor"],
+  description: "Architecture, engineering, renovation"
+},
+{
+  id: "trades",
+  label: "Trades & Maintenance",
+  emoji: "🔧",
+  color: "text-accent",
+  bg: "bg-accent/10",
+  border: "border-accent/20",
+  categories: ["electrician", "plumber"],
+  description: "Electrical, plumbing, building works"
+},
+{
+  id: "finance",
+  label: "Finance & Investment",
+  emoji: "💼",
+  color: "text-brand-emerald",
+  bg: "bg-brand-emerald/10",
+  border: "border-brand-emerald/20",
+  categories: ["financial_advisor", "valuer"],
+  description: "Mortgages, investment advice, valuations"
+},
+{
+  id: "management",
+  label: "Property Management",
+  emoji: "🏢",
+  color: "text-brand-sky",
+  bg: "bg-brand-sky/10",
+  border: "border-brand-sky/20",
+  categories: ["property_manager"],
+  description: "Lettings, tenants, asset management"
+}];
 
-const ALL_CATEGORIES = categoryGroups.flatMap(g => g.categories);
 
-const categoryInfo: Record<string, { emoji: string; label: string; group: string }> = {
-  architect:         { emoji: "🏛️", label: "Architect",         group: "design" },
-  civil_engineer:    { emoji: "⚙️", label: "Civil Engineer",    group: "design" },
-  lawyer:            { emoji: "⚖️", label: "Lawyer",            group: "legal" },
-  notary:            { emoji: "📜", label: "Notary",            group: "legal" },
-  electrician:       { emoji: "⚡", label: "Electrician",       group: "trades" },
-  plumber:           { emoji: "🔧", label: "Plumber",           group: "trades" },
-  contractor:        { emoji: "🏗️", label: "Contractor",        group: "design" },
-  property_manager:  { emoji: "🏢", label: "Property Manager",  group: "management" },
-  valuer:            { emoji: "📊", label: "Valuer",            group: "finance" },
+const ALL_CATEGORIES = categoryGroups.flatMap((g) => g.categories);
+
+const categoryInfo: Record<string, {emoji: string;label: string;group: string;}> = {
+  architect: { emoji: "🏛️", label: "Architect", group: "design" },
+  civil_engineer: { emoji: "⚙️", label: "Civil Engineer", group: "design" },
+  lawyer: { emoji: "⚖️", label: "Lawyer", group: "legal" },
+  notary: { emoji: "📜", label: "Notary", group: "legal" },
+  electrician: { emoji: "⚡", label: "Electrician", group: "trades" },
+  plumber: { emoji: "🔧", label: "Plumber", group: "trades" },
+  contractor: { emoji: "🏗️", label: "Contractor", group: "design" },
+  property_manager: { emoji: "🏢", label: "Property Manager", group: "management" },
+  valuer: { emoji: "📊", label: "Valuer", group: "finance" },
   interior_designer: { emoji: "🎨", label: "Interior Designer", group: "design" },
-  financial_advisor: { emoji: "💼", label: "Financial Advisor", group: "finance" },
+  financial_advisor: { emoji: "💼", label: "Financial Advisor", group: "finance" }
 };
 
 // AI capabilities per group
-const aiCapabilities: Record<string, { icon: React.ElementType; label: string }[]> = {
+const aiCapabilities: Record<string, {icon: React.ElementType;label: string;}[]> = {
   legal: [
-    { icon: FileSearch, label: "AI contract risk scan" },
-    { icon: Brain, label: "Title deed anomaly detection" },
-    { icon: Zap, label: "Instant due-diligence summary" },
-  ],
+  { icon: FileSearch, label: "AI contract risk scan" },
+  { icon: Brain, label: "Title deed anomaly detection" },
+  { icon: Zap, label: "Instant due-diligence summary" }],
+
   design: [
-    { icon: Brain, label: "AI permit & regulation check" },
-    { icon: BarChart2, label: "Renovation cost estimator" },
-    { icon: Sparkles, label: "AI-generated floor plan ideas" },
-  ],
+  { icon: Brain, label: "AI permit & regulation check" },
+  { icon: BarChart2, label: "Renovation cost estimator" },
+  { icon: Sparkles, label: "AI-generated floor plan ideas" }],
+
   trades: [
-    { icon: Zap, label: "Smart job scheduling" },
-    { icon: TrendingUp, label: "Material cost forecasting" },
-    { icon: Brain, label: "Fault diagnosis assist" },
-  ],
+  { icon: Zap, label: "Smart job scheduling" },
+  { icon: TrendingUp, label: "Material cost forecasting" },
+  { icon: Brain, label: "Fault diagnosis assist" }],
+
   finance: [
-    { icon: BarChart2, label: "AI property valuation engine" },
-    { icon: TrendingUp, label: "Investment yield projections" },
-    { icon: Brain, label: "Portfolio optimisation AI" },
-  ],
+  { icon: BarChart2, label: "AI property valuation engine" },
+  { icon: TrendingUp, label: "Investment yield projections" },
+  { icon: Brain, label: "Portfolio optimisation AI" }],
+
   management: [
-    { icon: Brain, label: "AI tenant screening" },
-    { icon: Zap, label: "Automated rent collection" },
-    { icon: BarChart2, label: "Occupancy rate optimiser" },
-  ],
+  { icon: Brain, label: "AI tenant screening" },
+  { icon: Zap, label: "Automated rent collection" },
+  { icon: BarChart2, label: "Occupancy rate optimiser" }]
+
 };
 
 // ── AI Tools Modal ─────────────────────────────────────────────────────────────
-const aiToolPrompts: Record<string, { system: string; placeholder: string }> = {
+const aiToolPrompts: Record<string, {system: string;placeholder: string;}> = {
   legal: {
     system: "You are a Greek real estate legal AI assistant. Help with contract risk analysis, title deed checks, due diligence summaries, and conveyancing questions in the Greek property market. Be concise and highlight key risks.",
-    placeholder: "e.g. What should I check in a Greek property purchase contract? Are there risks with cadastre registration?",
+    placeholder: "e.g. What should I check in a Greek property purchase contract? Are there risks with cadastre registration?"
   },
   design: {
     system: "You are a Greek real estate architecture and renovation AI assistant. Help with building permits, renovation cost estimates, floor plan ideas, and Greek building regulations. Be practical and cite typical Greek market costs.",
-    placeholder: "e.g. What permits do I need to renovate an apartment in Athens? Rough cost to renovate 80m²?",
+    placeholder: "e.g. What permits do I need to renovate an apartment in Athens? Rough cost to renovate 80m²?"
   },
   trades: {
     system: "You are a Greek property trades AI assistant specialising in electrical, plumbing, and general building works. Help diagnose issues, estimate costs, and explain Greek building standards.",
-    placeholder: "e.g. What's the typical cost to rewire a 3-bed apartment in Athens? What are Greek electrical standards?",
+    placeholder: "e.g. What's the typical cost to rewire a 3-bed apartment in Athens? What are Greek electrical standards?"
   },
   finance: {
     system: "You are a Greek real estate financial AI assistant. Help with property valuations, investment yield calculations, mortgage advice, portfolio optimisation, and the Greek property tax system (ENFIA, transfer tax).",
-    placeholder: "e.g. What's a good rental yield in Athens Kolonaki? How is ENFIA calculated for a €300K apartment?",
+    placeholder: "e.g. What's a good rental yield in Athens Kolonaki? How is ENFIA calculated for a €300K apartment?"
   },
   management: {
     system: "You are a Greek property management AI assistant. Help with tenant screening, rental contract advice under Greek law, maintenance scheduling, and occupancy optimisation.",
-    placeholder: "e.g. What are the legal requirements for a rental agreement in Greece? How do I handle a non-paying tenant?",
-  },
+    placeholder: "e.g. What are the legal requirements for a rental agreement in Greece? How do I handle a non-paying tenant?"
+  }
 };
 
-function AIToolsModal({ groupId, groupLabel, onClose }: { groupId: string; groupLabel: string; onClose: () => void }) {
-  const [messages, setMessages] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
+function AIToolsModal({ groupId, groupLabel, onClose }: {groupId: string;groupLabel: string;onClose: () => void;}) {
+  const [messages, setMessages] = useState<{role: "user" | "assistant";content: string;}[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -158,9 +158,9 @@ function AIToolsModal({ groupId, groupLabel, onClose }: { groupId: string; group
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`
         },
-        body: JSON.stringify({ messages: newMsgs, groupId }),
+        body: JSON.stringify({ messages: newMsgs, groupId })
       });
 
       if (!resp.ok || !resp.body) {
@@ -173,7 +173,7 @@ function AIToolsModal({ groupId, groupLabel, onClose }: { groupId: string; group
       let buffer = "";
       let assistantContent = "";
 
-      setMessages(prev => [...prev, { role: "assistant", content: "" }]);
+      setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
 
       while (true) {
         const { done, value } = await reader.read();
@@ -193,14 +193,14 @@ function AIToolsModal({ groupId, groupLabel, onClose }: { groupId: string; group
             const delta = chunk.choices?.[0]?.delta?.content;
             if (delta) {
               assistantContent += delta;
-              setMessages(prev => prev.map((m, i) => i === prev.length - 1 ? { ...m, content: assistantContent } : m));
+              setMessages((prev) => prev.map((m, i) => i === prev.length - 1 ? { ...m, content: assistantContent } : m));
             }
-          } catch { /* partial */ }
+          } catch {/* partial */}
         }
       }
     } catch (e: any) {
       toast.error(e.message || "AI request failed");
-      setMessages(prev => prev.filter((_, i) => i !== prev.length - 1));
+      setMessages((prev) => prev.filter((_, i) => i !== prev.length - 1));
     } finally {
       setLoading(false);
     }
@@ -208,7 +208,7 @@ function AIToolsModal({ groupId, groupLabel, onClose }: { groupId: string; group
 
   return (
     <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center sm:p-4 bg-background/70 backdrop-blur-sm"
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+    onClick={(e) => {if (e.target === e.currentTarget) onClose();}}>
       <div className="w-full sm:max-w-xl bg-card border border-border sm:rounded-2xl shadow-elevated flex flex-col overflow-hidden" style={{ maxHeight: "80vh", minHeight: 400 }}>
         {/* Header */}
         <div className="flex items-center gap-3 px-5 py-4 border-b border-border bg-primary/5 shrink-0">
@@ -226,8 +226,8 @@ function AIToolsModal({ groupId, groupLabel, onClose }: { groupId: string; group
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4 min-h-0">
-          {messages.length === 0 && (
-            <div className="text-center py-8">
+          {messages.length === 0 &&
+          <div className="text-center py-8">
               <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto mb-4">
                 <Sparkles className="w-7 h-7 text-primary" />
               </div>
@@ -235,18 +235,18 @@ function AIToolsModal({ groupId, groupLabel, onClose }: { groupId: string; group
               <p className="text-sm text-muted-foreground mb-5 max-w-sm mx-auto">Ask any question about this professional category — contracts, costs, regulations, processes.</p>
               <p className="text-xs text-muted-foreground/60 italic">{config.placeholder}</p>
             </div>
-          )}
-          {messages.map((m, i) => (
-            <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+          }
+          {messages.map((m, i) =>
+          <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
               <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm ${m.role === "user" ? "chat-bubble-sent" : "chat-bubble-received"}`}>
-                {m.role === "assistant" ? (
-                  <div className="prose prose-sm max-w-none prose-invert prose-p:my-1 prose-ul:my-1 prose-headings:my-1">
+                {m.role === "assistant" ?
+              <div className="prose prose-sm max-w-none prose-invert prose-p:my-1 prose-ul:my-1 prose-headings:my-1">
                     <ReactMarkdown>{m.content || (loading && i === messages.length - 1 ? "▋" : "")}</ReactMarkdown>
-                  </div>
-                ) : m.content}
+                  </div> :
+              m.content}
               </div>
             </div>
-          ))}
+          )}
           <div ref={bottomRef} />
         </div>
 
@@ -255,40 +255,40 @@ function AIToolsModal({ groupId, groupLabel, onClose }: { groupId: string; group
           <div className="flex items-end gap-2 bg-secondary rounded-xl border border-border focus-within:border-primary transition-colors px-4 py-2.5">
             <textarea
               value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {if (e.key === "Enter" && !e.shiftKey) {e.preventDefault();send();}}}
               placeholder={config.placeholder}
               rows={1}
               className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none resize-none min-h-[24px] max-h-[96px]"
-              style={{ height: "auto" }}
-            />
+              style={{ height: "auto" }} />
+            
             <button onClick={send} disabled={!input.trim() || loading}
-              className="w-8 h-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center shrink-0 disabled:opacity-40 hover:opacity-90 transition-opacity">
+            className="w-8 h-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center shrink-0 disabled:opacity-40 hover:opacity-90 transition-opacity">
               {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
             </button>
           </div>
         </div>
       </div>
-    </div>
-  );
+    </div>);
+
 }
 
 export default function Professionals() {
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [aiModal, setAiModal] = useState<{ groupId: string; groupLabel: string } | null>(null);
+  const [aiModal, setAiModal] = useState<{groupId: string;groupLabel: string;} | null>(null);
 
   // Derive DB categories from group selection
-  const dbCategory = selectedGroup
-    ? undefined // fetch all, filter client-side by group
-    : undefined;
+  const dbCategory = selectedGroup ?
+  undefined // fetch all, filter client-side by group
+  : undefined;
 
   const { data: professionals = [], isLoading } = useProfessionals(dbCategory);
 
   const filtered = professionals.filter((p: any) => {
     // Group filter
     if (selectedGroup) {
-      const group = categoryGroups.find(g => g.id === selectedGroup);
+      const group = categoryGroups.find((g) => g.id === selectedGroup);
       if (group && !group.categories.includes(p.category)) return false;
     }
     // Text search
@@ -298,11 +298,11 @@ export default function Professionals() {
       (p.display_name || "").toLowerCase().includes(q) ||
       (p.title || "").toLowerCase().includes(q) ||
       (p.specialties || []).join(" ").toLowerCase().includes(q) ||
-      (p.city || "").toLowerCase().includes(q)
-    );
+      (p.city || "").toLowerCase().includes(q));
+
   });
 
-  const activeGroup = selectedGroup ? categoryGroups.find(g => g.id === selectedGroup) : null;
+  const activeGroup = selectedGroup ? categoryGroups.find((g) => g.id === selectedGroup) : null;
 
   return (
     <div className="min-h-screen bg-background">
@@ -313,9 +313,9 @@ export default function Professionals() {
         {/* ── Hero ───────────────────────────────────────────────────── */}
         <div className="relative bg-card border-b border-border overflow-hidden">
           <div className="absolute inset-0 opacity-[0.03]"
-            style={{ backgroundImage: "linear-gradient(hsl(265 80% 60%) 1px, transparent 1px), linear-gradient(90deg, hsl(265 80% 60%) 1px, transparent 1px)", backgroundSize: "48px 48px" }} />
+          style={{ backgroundImage: "linear-gradient(hsl(265 80% 60%) 1px, transparent 1px), linear-gradient(90deg, hsl(265 80% 60%) 1px, transparent 1px)", backgroundSize: "48px 48px" }} />
           <div className="absolute top-0 right-0 w-96 h-96 rounded-full blur-3xl opacity-10"
-            style={{ background: "radial-gradient(hsl(183 100% 42%), transparent 70%)" }} />
+          style={{ background: "radial-gradient(hsl(183 100% 42%), transparent 70%)" }} />
 
           <div className="container relative py-14">
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-accent/15 border border-accent/30 mb-5">
@@ -333,8 +333,8 @@ export default function Professionals() {
                 </p>
                 <button
                   onClick={() => setAiModal({ groupId: "legal", groupLabel: "Legal & Title" })}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary/15 border border-primary/30 text-primary text-sm font-semibold hover:bg-primary/25 transition-colors"
-                >
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary/15 border border-primary/30 text-primary text-sm font-semibold hover:bg-primary/25 transition-colors">
+                  
                   <Brain className="w-4 h-4" />
                   Try AI Tools Now
                   <ChevronRight className="w-3.5 h-3.5" />
@@ -342,16 +342,16 @@ export default function Professionals() {
               </div>
               <div className="flex flex-wrap gap-3 lg:justify-end">
                 {[
-                  { value: "2,400+", label: "Verified Pros" },
-                  { value: "94%", label: "5-star rated" },
-                  { value: "48h", label: "Avg response" },
-                  { value: "AI", label: "Enhanced" },
-                ].map(s => (
-                  <div key={s.label} className="glass-card rounded-xl px-4 py-3 text-center min-w-[80px]">
-                    <div className="font-display font-black text-xl gradient-text-primary">{s.value}</div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5">{s.label}</div>
-                  </div>
-                ))}
+                { value: "2,400+", label: "Verified Pros" },
+                { value: "94%", label: "5-star rated" },
+                { value: "48h", label: "Avg response" },
+                { value: "AI", label: "Enhanced" }].
+                map((s) => {}
+
+
+
+
+                )}
               </div>
             </div>
           </div>
@@ -364,27 +364,27 @@ export default function Professionals() {
               <button
                 onClick={() => setSelectedGroup(null)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border transition-all ${
-                  !selectedGroup
-                    ? "bg-secondary border-primary/40 text-foreground"
-                    : "border-border bg-secondary/50 text-muted-foreground hover:text-foreground"
-                }`}
-              >
+                !selectedGroup ?
+                "bg-secondary border-primary/40 text-foreground" :
+                "border-border bg-secondary/50 text-muted-foreground hover:text-foreground"}`
+                }>
+                
                 All Professionals
               </button>
-              {categoryGroups.map(group => (
-                <button
-                  key={group.id}
-                  onClick={() => setSelectedGroup(selectedGroup === group.id ? null : group.id)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border transition-all ${
-                    selectedGroup === group.id
-                      ? `${group.bg} ${group.border} ${group.color}`
-                      : "border-border bg-secondary/50 text-muted-foreground hover:text-foreground"
-                  }`}
-                >
+              {categoryGroups.map((group) =>
+              <button
+                key={group.id}
+                onClick={() => setSelectedGroup(selectedGroup === group.id ? null : group.id)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border transition-all ${
+                selectedGroup === group.id ?
+                `${group.bg} ${group.border} ${group.color}` :
+                "border-border bg-secondary/50 text-muted-foreground hover:text-foreground"}`
+                }>
+                
                   <span>{group.emoji}</span>
                   <span>{group.label}</span>
                 </button>
-              ))}
+              )}
             </div>
           </div>
         </div>
@@ -392,8 +392,8 @@ export default function Professionals() {
         <div className="container py-8">
 
           {/* ── AI Capabilities Banner (context-aware) ───────────────── */}
-          {activeGroup && (
-            <div className={`mb-8 rounded-2xl border ${activeGroup.border} ${activeGroup.bg} p-5`}>
+          {activeGroup &&
+          <div className={`mb-8 rounded-2xl border ${activeGroup.border} ${activeGroup.bg} p-5`}>
               <div className="flex items-start gap-4 flex-wrap">
                 <div className="flex items-center gap-2 shrink-0">
                   <div className={`w-9 h-9 rounded-xl ${activeGroup.bg} border ${activeGroup.border} flex items-center justify-center text-xl`}>
@@ -410,24 +410,24 @@ export default function Professionals() {
                     <Sparkles className="w-3.5 h-3.5 text-primary" />
                     <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">AI Tools Available</span>
                   </div>
-                  {(aiCapabilities[activeGroup.id] || []).map(cap => (
-                    <div key={cap.label} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-card border border-border text-xs font-medium text-foreground">
+                  {(aiCapabilities[activeGroup.id] || []).map((cap) =>
+                <div key={cap.label} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-card border border-border text-xs font-medium text-foreground">
                       <cap.icon className="w-3 h-3 text-primary shrink-0" />
                       {cap.label}
                     </div>
-                  ))}
+                )}
                 </div>
                 <Button
-                  size="sm"
-                  className="bg-gradient-primary border-0 text-primary-foreground gap-1.5 shrink-0"
-                  onClick={() => setAiModal({ groupId: activeGroup.id, groupLabel: activeGroup.label })}
-                >
+                size="sm"
+                className="bg-gradient-primary border-0 text-primary-foreground gap-1.5 shrink-0"
+                onClick={() => setAiModal({ groupId: activeGroup.id, groupLabel: activeGroup.label })}>
+                
                   <Brain className="w-3.5 h-3.5" />
                   Use AI Tools
                 </Button>
               </div>
             </div>
-          )}
+          }
 
           {/* ── Search ───────────────────────────────────────────────── */}
           <div className="flex gap-3 mb-6 flex-wrap items-center">
@@ -437,59 +437,59 @@ export default function Professionals() {
                 type="text"
                 placeholder="Search by name, specialty, city..."
                 value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
-              />
+                onChange={(e) => setSearch(e.target.value)}
+                className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none" />
+              
             </div>
-            {!selectedGroup && (
-              <div className="flex gap-2 flex-wrap">
-                {categoryGroups.map(g => (
-                  <button key={g.id} onClick={() => setSelectedGroup(g.id)}
-                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all ${g.border} ${g.bg} ${g.color}`}>
+            {!selectedGroup &&
+            <div className="flex gap-2 flex-wrap">
+                {categoryGroups.map((g) =>
+              <button key={g.id} onClick={() => setSelectedGroup(g.id)}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all ${g.border} ${g.bg} ${g.color}`}>
                     {g.emoji} {g.label}
                   </button>
-                ))}
+              )}
               </div>
-            )}
+            }
           </div>
 
           {/* ── Results ──────────────────────────────────────────────── */}
-          {isLoading ? (
-            <div className="flex items-center justify-center py-20">
+          {isLoading ?
+          <div className="flex items-center justify-center py-20">
               <Loader2 className="w-6 h-6 animate-spin text-primary" />
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="text-center py-20 text-muted-foreground">
+            </div> :
+          filtered.length === 0 ?
+          <div className="text-center py-20 text-muted-foreground">
               <p className="text-lg font-medium mb-1">No professionals found</p>
               <p className="text-sm">Try adjusting your search or category filter</p>
-            </div>
-          ) : (
-            <>
+            </div> :
+
+          <>
               <p className="text-sm text-muted-foreground mb-4">{filtered.length} professionals found{activeGroup ? ` in ${activeGroup.label}` : ""}</p>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filtered.map((pro: any) => {
-                  const name = pro.display_name || "Professional";
-                  const catData = categoryInfo[pro.category] || { emoji: "👤", label: pro.category, group: "" };
-                  const group = categoryGroups.find(g => g.id === catData.group);
-                  const initials = name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
-                  const rating = Number(pro.rating) || 0;
-                  const specialties = pro.specialties || [];
+                const name = pro.display_name || "Professional";
+                const catData = categoryInfo[pro.category] || { emoji: "👤", label: pro.category, group: "" };
+                const group = categoryGroups.find((g) => g.id === catData.group);
+                const initials = name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
+                const rating = Number(pro.rating) || 0;
+                const specialties = pro.specialties || [];
 
-                  return (
-                    <div key={pro.id} className="glass-card rounded-xl p-5 flex flex-col gap-4 hover:border-primary/20 transition-all group">
+                return (
+                  <div key={pro.id} className="glass-card rounded-xl p-5 flex flex-col gap-4 hover:border-primary/20 transition-all group">
                       {/* Category badge */}
-                      {group && (
-                        <div className={`self-start flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold ${group.bg} ${group.border} border ${group.color}`}>
+                      {group &&
+                    <div className={`self-start flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold ${group.bg} ${group.border} border ${group.color}`}>
                           {group.emoji} {group.label}
                         </div>
-                      )}
+                    }
 
                       {/* Header */}
                       <div className="flex items-start gap-4">
                         <div className="w-14 h-14 rounded-xl bg-gradient-primary flex items-center justify-center font-display font-bold text-xl text-primary-foreground shrink-0 overflow-hidden">
-                          {pro.avatar_url
-                            ? <img src={pro.avatar_url} alt={name} className="w-full h-full object-cover" />
-                            : initials}
+                          {pro.avatar_url ?
+                        <img src={pro.avatar_url} alt={name} className="w-full h-full object-cover" /> :
+                        initials}
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5">
@@ -520,11 +520,11 @@ export default function Professionals() {
                       </div>
 
                       {/* Hourly rate */}
-                      {pro.hourly_rate && (
-                        <div className="text-xs text-muted-foreground">
+                      {pro.hourly_rate &&
+                    <div className="text-xs text-muted-foreground">
                           From <span className="font-semibold text-foreground">€{pro.hourly_rate}/hr</span>
                         </div>
-                      )}
+                    }
 
                       {/* AI badge */}
                       <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-primary/5 border border-primary/15 self-start">
@@ -533,13 +533,13 @@ export default function Professionals() {
                       </div>
 
                       {/* Specialties */}
-                      {specialties.length > 0 && (
-                        <div className="flex gap-1.5 flex-wrap">
-                          {specialties.slice(0, 3).map((s: string) => (
-                            <span key={s} className="px-2 py-0.5 rounded-full bg-secondary border border-border text-xs text-muted-foreground">{s}</span>
-                          ))}
-                        </div>
+                      {specialties.length > 0 &&
+                    <div className="flex gap-1.5 flex-wrap">
+                          {specialties.slice(0, 3).map((s: string) =>
+                      <span key={s} className="px-2 py-0.5 rounded-full bg-secondary border border-border text-xs text-muted-foreground">{s}</span>
                       )}
+                        </div>
+                    }
 
                       {/* Actions */}
                       <div className="flex gap-2 mt-auto">
@@ -550,16 +550,16 @@ export default function Professionals() {
                           <MessageSquare className="w-3.5 h-3.5" />
                         </Button>
                       </div>
-                    </div>
-                  );
-                })}
+                    </div>);
+
+              })}
               </div>
             </>
-          )}
+          }
 
           {/* ── AI Advantage Section ─────────────────────────────────── */}
           <div className="mt-16 rounded-3xl border border-border overflow-hidden"
-            style={{ background: "linear-gradient(135deg, hsl(183 100% 5%), hsl(265 80% 6%), hsl(183 100% 5%))" }}>
+          style={{ background: "linear-gradient(135deg, hsl(183 100% 5%), hsl(265 80% 6%), hsl(183 100% 5%))" }}>
             <div className="p-8 md:p-12">
               <div className="text-center mb-10">
                 <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary/15 border border-primary/30 mb-5">
@@ -571,14 +571,14 @@ export default function Professionals() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {[
-                  { icon: FileSearch, title: "AI Due Diligence", desc: "Lawyers scan contracts for risks in seconds. Title deed anomalies flagged automatically.", group: "Legal & Title" },
-                  { icon: Brain, title: "Smart Valuations", desc: "Valuers get AI-backed price recommendations from 100K+ data points across Greece.", group: "Finance" },
-                  { icon: BarChart2, title: "Renovation Estimates", desc: "Contractors generate cost estimates instantly using AI-powered material & labour pricing.", group: "Design & Build" },
-                  { icon: Zap, title: "Instant Report Generation", desc: "Architects & engineers produce compliance reports in minutes, not days.", group: "Design & Build" },
-                  { icon: TrendingUp, title: "Investment Forecasting", desc: "Financial advisors model ROI scenarios with live Greek property market data.", group: "Finance" },
-                  { icon: Clock, title: "Automated Scheduling", desc: "Property managers handle tenant communication, maintenance, and rent reminders on autopilot.", group: "Property Management" },
-                ].map(item => (
-                  <div key={item.title} className="glass-card rounded-xl p-5 hover:border-primary/20 transition-all">
+                { icon: FileSearch, title: "AI Due Diligence", desc: "Lawyers scan contracts for risks in seconds. Title deed anomalies flagged automatically.", group: "Legal & Title" },
+                { icon: Brain, title: "Smart Valuations", desc: "Valuers get AI-backed price recommendations from 100K+ data points across Greece.", group: "Finance" },
+                { icon: BarChart2, title: "Renovation Estimates", desc: "Contractors generate cost estimates instantly using AI-powered material & labour pricing.", group: "Design & Build" },
+                { icon: Zap, title: "Instant Report Generation", desc: "Architects & engineers produce compliance reports in minutes, not days.", group: "Design & Build" },
+                { icon: TrendingUp, title: "Investment Forecasting", desc: "Financial advisors model ROI scenarios with live Greek property market data.", group: "Finance" },
+                { icon: Clock, title: "Automated Scheduling", desc: "Property managers handle tenant communication, maintenance, and rent reminders on autopilot.", group: "Property Management" }].
+                map((item) =>
+                <div key={item.title} className="glass-card rounded-xl p-5 hover:border-primary/20 transition-all">
                     <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-3">
                       <item.icon className="w-5 h-5 text-primary" />
                     </div>
@@ -586,7 +586,7 @@ export default function Professionals() {
                     <h4 className="font-display font-bold text-sm mb-1.5">{item.title}</h4>
                     <p className="text-xs text-muted-foreground leading-relaxed">{item.desc}</p>
                   </div>
-                ))}
+                )}
               </div>
             </div>
           </div>
@@ -608,6 +608,6 @@ export default function Professionals() {
         </div>
       </div>
       <Footer />
-    </div>
-  );
+    </div>);
+
 }
