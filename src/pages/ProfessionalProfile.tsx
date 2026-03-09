@@ -537,13 +537,60 @@ export default function ProfessionalProfile() {
               {/* ── Services ── */}
               {activeTab === "services" && (
                 <div className="space-y-5">
+                  {/* Service Cards */}
                   <div className="glass-card rounded-xl p-6">
-                    <h2 className="font-display font-semibold mb-4 flex items-center gap-2">
-                      <Briefcase className="w-4 h-4 text-primary" /> Services Offered
-                    </h2>
-                    {services.length > 0 ? (
+                    <div className="flex items-center justify-between mb-4">
+                      <h2 className="font-display font-semibold flex items-center gap-2">
+                        <Briefcase className="w-4 h-4 text-primary" /> Services Offered
+                      </h2>
+                      <span className="text-xs text-muted-foreground">{dbServices.length > 0 ? `${dbServices.length} services` : fallbackServices.length > 0 ? `${fallbackServices.length} services` : ""}</span>
+                    </div>
+
+                    {dbServices.length > 0 ? (
+                      <div className="grid grid-cols-1 gap-3">
+                        {dbServices.map((svc) => (
+                          <div key={svc.id} className="flex items-start gap-4 p-4 bg-secondary rounded-xl border border-border hover:border-primary/20 transition-colors">
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${svc.video_enabled ? "bg-primary/10" : "bg-gradient-primary"}`}>
+                              {svc.video_enabled
+                                ? <Video className="w-4 h-4 text-primary" />
+                                : <Briefcase className="w-4 h-4 text-primary-foreground" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between gap-3 flex-wrap">
+                                <div>
+                                  <span className="text-sm font-semibold">{svc.service_name}</span>
+                                  {svc.is_premium && (
+                                    <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full bg-brand-gold/15 text-brand-gold font-medium">Pro</span>
+                                  )}
+                                </div>
+                                <span className="text-sm font-bold text-brand-gold shrink-0">
+                                  {svc.rate_amount ? `€${svc.rate_amount}${PRICING_LABELS[svc.pricing_model] ?? ""}` : "On Request"}
+                                </span>
+                              </div>
+                              {svc.description && (
+                                <p className="text-xs text-muted-foreground mt-1 leading-relaxed line-clamp-2">{svc.description}</p>
+                              )}
+                              <div className="flex items-center gap-2 mt-2 flex-wrap">
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-secondary border border-border text-muted-foreground capitalize">
+                                  {svc.pricing_model}
+                                </span>
+                                {svc.video_enabled && (
+                                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary flex items-center gap-1">
+                                    <Video className="w-2.5 h-2.5" /> Remote available
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground text-xs shrink-0 self-center"
+                              onClick={() => setConsultOpen(true)}>
+                              Book
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : fallbackServices.length > 0 ? (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {services.map((service, i) => (
+                        {fallbackServices.map((service, i) => (
                           <div key={service} className="flex items-start gap-3 p-4 bg-secondary rounded-xl border border-border hover:border-primary/30 transition-colors">
                             <div className="w-8 h-8 rounded-lg bg-gradient-primary flex items-center justify-center shrink-0">
                               <span className="text-primary-foreground text-xs font-bold">{i + 1}</span>
@@ -558,24 +605,64 @@ export default function ProfessionalProfile() {
                         ))}
                       </div>
                     ) : (
-                      <p className="text-muted-foreground text-sm">Services list not yet configured.</p>
+                      <div className="text-center py-6 text-sm text-muted-foreground">
+                        <Briefcase className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                        Services not yet configured. Contact directly for information.
+                      </div>
                     )}
+
+                    <Button className="w-full mt-4 bg-gradient-primary border-0 text-primary-foreground gap-2"
+                      onClick={() => setConsultOpen(true)}>
+                      <Calendar className="w-4 h-4" /> Book a Consultation
+                    </Button>
                   </div>
 
-                  {/* Availability */}
+                  {/* Availability Grid */}
                   <div className="glass-card rounded-xl p-6">
                     <h2 className="font-display font-semibold mb-4 flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-brand-emerald" /> Availability
+                      <Calendar className="w-4 h-4 text-brand-emerald" /> Weekly Availability
                     </h2>
-                    <div className="grid grid-cols-7 gap-2">
-                      {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day, i) => (
-                        <div key={day} className={`text-center py-2 px-1 rounded-lg text-xs ${i < 5 ? "bg-brand-emerald/10 text-brand-emerald border border-brand-emerald/20" : "bg-secondary text-muted-foreground border border-border"}`}>
-                          <div className="font-semibold">{day}</div>
-                          <div className="mt-0.5">{i < 5 ? "✓" : "—"}</div>
+                    {dbAvailability.length > 0 ? (
+                      <>
+                        <div className="grid grid-cols-7 gap-1.5">
+                          {DAY_LABELS.map((day, i) => {
+                            const avail = dbAvailability.find(a => a.day_of_week === i);
+                            return (
+                              <div key={day} className={`text-center py-2.5 px-1 rounded-xl text-xs border transition-colors ${
+                                avail
+                                  ? "bg-brand-emerald/10 text-brand-emerald border-brand-emerald/25"
+                                  : "bg-secondary text-muted-foreground/40 border-border"
+                              }`}>
+                                <div className="font-semibold">{day}</div>
+                                <div className="mt-0.5 text-[10px]">{avail ? "✓" : "—"}</div>
+                              </div>
+                            );
+                          })}
                         </div>
-                      ))}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-3">Typical availability Mon–Fri, 9am–6pm. Contact to confirm.</p>
+                        <div className="mt-3 space-y-1">
+                          {dbAvailability.map(a => (
+                            <div key={a.id} className="flex items-center justify-between text-xs text-muted-foreground">
+                              <span className="font-medium text-foreground">{DAY_LABELS[a.day_of_week]}</span>
+                              <span>{a.start_time.slice(0,5)} – {a.end_time.slice(0,5)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="grid grid-cols-7 gap-1.5">
+                        {DAY_LABELS.map((day, i) => (
+                          <div key={day} className={`text-center py-2.5 px-1 rounded-xl text-xs border ${
+                            i >= 1 && i <= 5 ? "bg-brand-emerald/10 text-brand-emerald border-brand-emerald/25" : "bg-secondary text-muted-foreground/40 border-border"
+                          }`}>
+                            <div className="font-semibold">{day}</div>
+                            <div className="mt-0.5 text-[10px]">{i >= 1 && i <= 5 ? "✓" : "—"}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <p className="text-xs text-muted-foreground mt-3">
+                      {dbAvailability.length > 0 ? "Times shown in local time (EET/EEST)." : "Typical availability Mon–Fri. Contact to confirm exact times."}
+                    </p>
                   </div>
                 </div>
               )}
