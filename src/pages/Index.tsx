@@ -1305,7 +1305,7 @@ export default function Index() {
               {
                 icon: Zap,
                 title: "Instant Offers",
-                desc: "Firesale™ cash offers in 48h",
+                desc: "Quick Sale™ cash offers in 96h",
                 color: "text-destructive",
                 bg: "bg-destructive/10",
               },
