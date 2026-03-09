@@ -527,10 +527,14 @@ export default function Listings() {
   };
   const isComparing = (id: string) => compareList.some(l => l.id === id);
 
-  const bedsOpts = ["1", "2", "3", "4", "5"].map(v => ({ label: v, value: v }));
+  // Contextual filter options — buy uses purchase context, rent uses rental context
+  const isRent = selectedListingType === "rent";
+  const bedsOpts = isRent
+    ? [{ label: "Studio", value: "0" }, ...["1", "2", "3", "4", "5"].map(v => ({ label: `${v} bed`, value: v }))]
+    : ["1", "2", "3", "4", "5", "6"].map(v => ({ label: v, value: v }));
   const bathsOpts = ["1", "2", "3", "4"].map(v => ({ label: v, value: v }));
   const floorOpts = ["-1", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10+"].map(v => ({ label: v === "-1" ? "Basement" : v === "0" ? "Ground" : v, value: v }));
-  const yearOpts = ["1950", "1960", "1970", "1980", "1990", "2000", "2005", "2010", "2015", "2018", "2020", "2022", "2024"].map(v => ({ label: v, value: v }));
+  const yearOpts = ["1950", "1960", "1970", "1980", "1990", "2000", "2005", "2010", "2015", "2018", "2020", "2022", "2024", "2025"].map(v => ({ label: v, value: v }));
 
   return (
     <div className="min-h-screen bg-background">
