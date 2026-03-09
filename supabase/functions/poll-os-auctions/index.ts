@@ -155,6 +155,13 @@ Deno.serve(async (req) => {
         const tagKey = `os_auction:${osId}`;
 
         // Map OS fields (real names from AuctionOutputDto schema) → Hub fields
+        // propertyFloor can be -0.5 (semi-basement) in Greek buildings → floor(x) → int
+        const safeFloor = (v: any): number | null => {
+          if (v == null) return null;
+          const n = Number(v);
+          return isNaN(n) ? null : Math.floor(n);
+        };
+
         const mapped: Record<string, unknown> = {
           title:                buildTitle(a),
           description:          a.description ?? null,
@@ -173,14 +180,14 @@ Deno.serve(async (req) => {
           latitude:             a.propertyLatitude  ? Number(a.propertyLatitude)  : null,
           longitude:            a.propertyLongitude ? Number(a.propertyLongitude) : null,
           sqm:                  Number(a.propertySquareMeters ?? 1),
-          floor:                a.propertyFloor ? Number(a.propertyFloor) : null,
-          total_floors:         a.numberOfFloors ? Number(a.numberOfFloors) : null,
+          floor:                safeFloor(a.propertyFloor),
+          total_floors:         safeFloor(a.numberOfFloors),
           year_built:           a.constructionYear ? Number(a.constructionYear) : null,
           cadastre_number:      a.propertyFullKaek ?? null,
-          // No images in the auction endpoint — URL is an S3 bucket link, not image
+          // No images — OS URL field is an S3 bucket link, not a direct image URL
           cover_image_url:      null,
-          // Ownership & financial metadata stored as tags
-          owner_id:             "00000000-0000-0000-0000-000000000001",
+          // OS-imported listings have no Hub user owner (owner_id is now nullable)
+          owner_id:             null,
         };
 
         // Extra metadata as tags
