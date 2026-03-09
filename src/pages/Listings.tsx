@@ -138,11 +138,12 @@ function RangeSelector({
   );
 }
 
-function FilterChip({ active, onClick, children }: {
+const FilterChip = React.forwardRef<HTMLButtonElement, {
   active: boolean; onClick: () => void; children: React.ReactNode;
-}) {
+}>(function FilterChip({ active, onClick, children }, ref) {
   return (
     <button
+      ref={ref}
       onClick={onClick}
       className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all ${
         active
@@ -154,7 +155,7 @@ function FilterChip({ active, onClick, children }: {
       {children}
     </button>
   );
-}
+});
 
 // ─── ListingTypeButton ────────────────────────────────────────────────────────
 
