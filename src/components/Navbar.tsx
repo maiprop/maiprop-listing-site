@@ -14,6 +14,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/contexts/AuthContext";
 
+// Pages that have a full-width dark hero image at the top
+const DARK_HERO_ROUTES = ["/"];
+
 export function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -22,9 +25,14 @@ export function Navbar() {
   const { user, profile, signOut } = useAuth();
   const { theme, setTheme } = useTheme();
 
+  const hasDarkHero = DARK_HERO_ROUTES.includes(location.pathname);
+  // When transparent AND over a dark hero, force white text; otherwise use semantic tokens
+  const isTransparent = !scrolled;
+  const forceLight = isTransparent && hasDarkHero;
+
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
-    window.addEventListener("scroll", handleScroll);
+    window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
@@ -62,8 +70,10 @@ export function Navbar() {
     <header
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         scrolled
-          ? "bg-background/70 backdrop-blur-xl border-b border-border/40 shadow-card"
-          : "bg-transparent backdrop-blur-none border-b border-transparent"
+          ? "bg-background/80 backdrop-blur-xl border-b border-border/50 shadow-card"
+          : hasDarkHero
+            ? "bg-transparent border-b border-transparent"
+            : "bg-background/60 backdrop-blur-md border-b border-border/30"
       }`}
     >
       <div className="container flex items-center justify-between h-16">
@@ -72,7 +82,7 @@ export function Navbar() {
           <img
             src={logoImg}
             alt="maiProp — Real estate | Real decisions."
-            className="h-10 w-auto object-contain"
+            className={`h-10 w-auto object-contain transition-all duration-300 ${forceLight ? "brightness-0 invert" : ""}`}
           />
         </Link>
 
@@ -86,23 +96,33 @@ export function Navbar() {
                 ${isActive(link.href)
                   ? link.accent === "flame"
                     ? "text-destructive bg-destructive/10"
-                    : "text-primary bg-primary/10"
+                    : forceLight
+                      ? "text-white bg-white/20"
+                      : "text-primary bg-primary/10"
                   : link.accent === "flame"
-                    ? "text-destructive/80 hover:text-destructive hover:bg-destructive/10"
+                    ? forceLight
+                      ? "text-orange-300 hover:text-orange-200 hover:bg-white/10"
+                      : "text-destructive/80 hover:text-destructive hover:bg-destructive/10"
                     : link.accent === "subtle"
-                      ? "text-accent/90 hover:text-accent hover:bg-accent/10"
-                      : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                      ? forceLight
+                        ? "text-white/80 hover:text-white hover:bg-white/10"
+                        : "text-accent/90 hover:text-accent hover:bg-accent/10"
+                      : forceLight
+                        ? "text-white/80 hover:text-white hover:bg-white/10"
+                        : "text-muted-foreground hover:text-foreground hover:bg-secondary"
                 }`}
             >
               {link.accent === "flame" && <span className="text-sm">🔥</span>}
               {link.label}
               {link.badge && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold font-semibold animate-pulse">
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold animate-pulse ${
+                  forceLight ? "bg-white/20 text-white" : "bg-brand-gold/20 text-brand-gold"
+                }`}>
                   {link.badge}
                 </span>
               )}
               {link.accent === "subtle" && (
-                <span className="w-1.5 h-1.5 rounded-full bg-accent/60 ml-0.5" />
+                <span className={`w-1.5 h-1.5 rounded-full ml-0.5 ${forceLight ? "bg-white/50" : "bg-accent/60"}`} />
               )}
             </Link>
           ))}
@@ -113,7 +133,11 @@ export function Navbar() {
           {/* Theme toggle */}
           <button
             onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+            className={`p-2 rounded-lg transition-colors ${
+              forceLight
+                ? "text-white/80 hover:text-white hover:bg-white/10"
+                : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+            }`}
             aria-label="Toggle theme"
           >
             {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
@@ -121,24 +145,34 @@ export function Navbar() {
           {user ? (
             <>
               <Link to="/messages">
-                <button className="relative p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
+                <button className={`relative p-2 rounded-lg transition-colors ${
+                  forceLight
+                    ? "text-white/80 hover:text-white hover:bg-white/10"
+                    : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                }`}>
                   <MessageSquare className="w-4 h-4" />
                   <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-primary" />
                 </button>
               </Link>
-              <button className="relative p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
+              <button className={`relative p-2 rounded-lg transition-colors ${
+                forceLight
+                  ? "text-white/80 hover:text-white hover:bg-white/10"
+                  : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+              }`}>
                 <Bell className="w-4 h-4" />
               </button>
 
               <DropdownMenu>
-                <DropdownMenuTrigger className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-secondary transition-colors outline-none">
+                <DropdownMenuTrigger className={`flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors outline-none ${
+                  forceLight ? "hover:bg-white/10" : "hover:bg-secondary"
+                }`}>
                   <div className="w-7 h-7 rounded-full bg-gradient-primary flex items-center justify-center text-xs font-bold text-primary-foreground">
                     {profile?.avatar_url
                       ? <img src={profile.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
                       : initials}
                   </div>
-                  <span className="text-sm text-foreground max-w-[80px] truncate">{displayName}</span>
-                  <ChevronDown className="w-3 h-3 text-muted-foreground" />
+                  <span className={`text-sm max-w-[80px] truncate ${forceLight ? "text-white" : "text-foreground"}`}>{displayName}</span>
+                  <ChevronDown className={`w-3 h-3 ${forceLight ? "text-white/60" : "text-muted-foreground"}`} />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-52 bg-card border-border">
                   <div className="px-3 py-2 border-b border-border">
@@ -176,7 +210,12 @@ export function Navbar() {
             </>
           ) : (
             <>
-              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground" asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={forceLight ? "text-white/90 hover:text-white hover:bg-white/10" : "text-muted-foreground hover:text-foreground"}
+                asChild
+              >
                 <Link to="/login">Sign In</Link>
               </Button>
               <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground hover:opacity-90" asChild>
@@ -188,7 +227,9 @@ export function Navbar() {
 
         {/* Mobile menu button */}
         <button
-          className="lg:hidden p-2 rounded-lg text-muted-foreground hover:text-foreground"
+          className={`lg:hidden p-2 rounded-lg transition-colors ${
+            forceLight ? "text-white/80 hover:text-white" : "text-muted-foreground hover:text-foreground"
+          }`}
           onClick={() => setMobileOpen(!mobileOpen)}
         >
           {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -197,7 +238,7 @@ export function Navbar() {
 
       {/* Mobile dropdown */}
       {mobileOpen && (
-        <div className="lg:hidden bg-card border-b border-border px-4 py-4 space-y-1">
+        <div className="lg:hidden bg-card/95 backdrop-blur-xl border-b border-border px-4 py-4 space-y-1">
           {navLinks.map((link) => (
             <Link
               key={link.href}
@@ -254,7 +295,7 @@ export function Navbar() {
     </header>
 
       {/* ── Mobile Bottom Nav ─────────────────────────────────────────── */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-xl border-t border-border pb-safe">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 backdrop-blur-xl bg-card/60 border-t border-border/40 pb-safe">
         <div className="flex items-stretch h-16">
           {[
             { to: "/", icon: Home, label: "Home" },
