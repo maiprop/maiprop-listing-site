@@ -1147,9 +1147,10 @@ export default function CreateListing() {
                   )}
                 </div>
 
-                <div>
+                <div ref={setFieldRef("price") as any}>
                   <FieldLabel required>{lt === "rent" ? "Monthly Rent (€)" : "Asking Price (€)"}</FieldLabel>
-                  <Input type="number" placeholder={lt === "rent" ? "800" : "250000"} value={form.price} onChange={e => set("price", e.target.value)} />
+                  <Input type="number" placeholder={lt === "rent" ? "800" : "250000"} value={form.price} onChange={e => set("price", e.target.value)} hasError={!!errors.price} />
+                  <FieldError msg={errors.price} />
                   {form.sqm && form.price && (
                     <p className="text-xs text-muted-foreground mt-1">
                       €{Math.round(Number(form.price) / Number(form.sqm)).toLocaleString()}/m²
