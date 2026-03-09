@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Bell, MessageSquare, User, Menu, X, ChevronDown, Search, Plus, LogOut, LayoutDashboard, Building2, Sun, Moon } from "lucide-react";
+import { Bell, MessageSquare, User, Menu, X, ChevronDown, Search, Plus, LogOut, LayoutDashboard, Building2, Sun, Moon, Home, List, Gavel, Flame, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useTheme } from "next-themes";
@@ -57,6 +57,7 @@ export function Navbar() {
   };
 
   return (
+    <>
     <header
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         scrolled
@@ -256,5 +257,29 @@ export function Navbar() {
         </div>
       )}
     </header>
+
+      {/* ── Mobile Bottom Nav ─────────────────────────────────────────── */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-xl border-t border-border pb-safe">
+        <div className="flex items-stretch h-16">
+          {[
+            { to: "/", icon: Home, label: "Home" },
+            { to: "/listings", icon: List, label: "Listings" },
+            { to: "/auctions", icon: Gavel, label: "Auctions" },
+            { to: "/firesale", icon: Flame, label: "Sale™", accent: "text-destructive" },
+            { to: user ? "/dashboard" : "/login", icon: user ? LayoutDashboard : User, label: user ? "Dashboard" : "Sign In" },
+          ].map(({ to, icon: Icon, label, accent }) => {
+            const active = location.pathname === to || (to !== "/" && location.pathname.startsWith(to));
+            return (
+              <Link key={to} to={to} className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-colors ${
+                active ? "text-primary" : accent || "text-muted-foreground hover:text-foreground"
+              }`}>
+                <Icon className="w-5 h-5" />
+                {label}
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
+    </>
   );
 }

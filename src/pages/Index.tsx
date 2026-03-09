@@ -487,7 +487,7 @@ export default function Index() {
       <CookieConsentBanner />
 
       {/* ══ HERO ══════════════════════════════════════════════════════════════ */}
-      <section className="relative min-h-[92vh] flex items-center overflow-hidden pt-16">
+      <section className="relative min-h-[100svh] sm:min-h-[92vh] flex items-center overflow-hidden pt-16">
         {/* Background */}
         <div className="absolute inset-0">
           <img src={heroBg} alt="Athens skyline" className="w-full h-full object-cover opacity-30" />
@@ -501,24 +501,24 @@ export default function Index() {
         <div className="absolute top-1/4 right-1/4 w-[500px] h-[500px] rounded-full blur-[120px] opacity-10"
           style={{ background: "radial-gradient(hsl(192 100% 50%), hsl(270 75% 62%), transparent 70%)" }} />
 
-        <div className="container relative z-10 py-16">
-          <div className="grid lg:grid-cols-[1fr_360px] xl:grid-cols-[1fr_400px] gap-12 items-center">
+        <div className="container relative z-10 py-10 sm:py-16">
+          <div className="grid lg:grid-cols-[1fr_360px] xl:grid-cols-[1fr_400px] gap-8 lg:gap-12 items-center">
 
             {/* ── LEFT: Copy + Search ── */}
             <div>
               {/* Eyebrow */}
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary/10 border border-primary/25 mb-7 animate-fade-in">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/25 mb-5 sm:mb-7 animate-fade-in">
                 <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                <span className="text-sm font-semibold text-primary">Greece's #1 AI-Powered Property Platform</span>
+                <span className="text-xs sm:text-sm font-semibold text-primary">Greece's #1 AI-Powered Property Platform</span>
               </div>
 
               {/* Headline */}
-              <h1 className="font-display font-black leading-[1.05] mb-6 animate-fade-in-up" style={{ fontSize: "clamp(2.8rem, 6vw, 4.5rem)" }}>
-                Find your perfect<br />property in Greece<br />
+              <h1 className="font-display font-black leading-[1.05] mb-4 sm:mb-6 animate-fade-in-up" style={{ fontSize: "clamp(2rem, 8vw, 4.5rem)" }}>
+                Find your perfect<br className="hidden sm:block" />{" "}property in Greece<br />
                 <span className="gradient-text-primary">— with AI precision</span>
               </h1>
 
-              <p className="text-lg text-foreground/70 mb-10 max-w-xl animate-fade-in-up leading-relaxed" style={{ animationDelay: "0.1s" }}>
+              <p className="text-sm sm:text-lg text-foreground/70 mb-6 sm:mb-10 max-w-xl animate-fade-in-up leading-relaxed" style={{ animationDelay: "0.1s" }}>
                 47,000+ verified listings across Greece. Apartments, villas, land, auctions, and investment properties — all in one place.
               </p>
 
@@ -527,8 +527,8 @@ export default function Index() {
                 <div className="bg-card/85 backdrop-blur-2xl border border-border/70 rounded-2xl shadow-elevated overflow-visible"
                   style={{ boxShadow: "0 12px 48px -8px hsl(var(--primary) / 0.2), 0 2px 0 0 hsl(var(--primary) / 0.08), inset 0 1px 0 0 hsl(var(--foreground) / 0.04)" }}>
 
-                  {/* Tabs */}
-                  <div className="flex gap-0.5 px-2 pt-2.5">
+                  {/* Tabs — scrollable on mobile */}
+                  <div className="flex gap-0.5 px-2 pt-2.5 overflow-x-auto scrollbar-none">
                     {[
                       { label: "Buy", emoji: "🏠", color: "" },
                       { label: "Rent", emoji: "🔑", color: "" },
@@ -536,12 +536,12 @@ export default function Index() {
                       { label: "Quick Sale", emoji: "⚡", color: "text-destructive" },
                     ].map(({ label, emoji, color }) => (
                       <button key={label} onClick={() => setSearchType(label)}
-                        className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                        className={`flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all shrink-0 ${
                           searchType === label
                             ? "bg-primary text-primary-foreground shadow-sm"
                             : `${color || "text-muted-foreground"} hover:text-foreground hover:bg-secondary/80`
                         }`}>
-                        <span className="text-base leading-none">{emoji}</span>
+                        <span className="text-sm sm:text-base leading-none">{emoji}</span>
                         <span>{label}</span>
                       </button>
                     ))}
@@ -549,30 +549,33 @@ export default function Index() {
 
                   <div className="mx-3 mt-2 h-px bg-border/50" />
 
-                  {/* Search row */}
-                  <div className="flex gap-0 p-2 items-stretch">
+                  {/* Search row — stacks on mobile */}
+                  <div className="p-2 flex flex-col sm:flex-row gap-2 sm:gap-0 sm:items-stretch">
                     <div className="flex-1 min-w-0">
                       <LocationInput value={searchQuery} onChange={setSearchQuery} onSearch={handleSearch} />
                     </div>
-                    <div className="w-px bg-border/50 mx-1 self-stretch my-1" />
+                    <div className="hidden sm:block w-px bg-border/50 mx-1 self-stretch my-1" />
                     <PropertyTypeDropdown value={selectedPropertyType} onChange={setSelectedPropertyType} />
-                    <div className="w-px bg-border/50 mx-1 self-stretch my-1" />
-                    <button onClick={() => setShowAI(true)}
-                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all text-primary hover:bg-primary/10 shrink-0 whitespace-nowrap">
-                      <Sparkles className="w-4 h-4" />
-                      <span className="hidden lg:inline">AI Search</span>
-                    </button>
-                    <Button size="lg" onClick={handleSearch}
-                      className="bg-primary hover:opacity-90 border-0 text-primary-foreground rounded-xl px-6 font-semibold shrink-0 ml-1">
-                      <Search className="w-4 h-4 sm:mr-2" />
-                      <span className="hidden sm:inline">Search</span>
-                    </Button>
+                    <div className="hidden sm:block w-px bg-border/50 mx-1 self-stretch my-1" />
+                    {/* AI + Search on same row on mobile */}
+                    <div className="flex gap-2 sm:contents">
+                      <button onClick={() => setShowAI(true)}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all text-primary hover:bg-primary/10 shrink-0 whitespace-nowrap border border-border sm:border-0">
+                        <Sparkles className="w-4 h-4" />
+                        <span>AI Search</span>
+                      </button>
+                      <Button size="lg" onClick={handleSearch}
+                        className="flex-1 sm:flex-none bg-primary hover:opacity-90 border-0 text-primary-foreground rounded-xl px-6 font-semibold shrink-0 sm:ml-1">
+                        <Search className="w-4 h-4 mr-2" />
+                        Search
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Stats */}
-              <div className="flex items-center flex-wrap gap-x-6 gap-y-2 mt-7 animate-fade-in-up" style={{ animationDelay: "0.3s" }}>
+              {/* Stats — 2-col grid on mobile */}
+              <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-x-6 gap-y-3 mt-6 sm:mt-7 animate-fade-in-up" style={{ animationDelay: "0.3s" }}>
                 {[
                   { value: "47,000+", label: "Active Listings" },
                   { value: "€2.4B", label: "Properties Sold" },
@@ -580,7 +583,7 @@ export default function Index() {
                   { value: "3,200+", label: "Monthly Auctions" },
                 ].map(stat => (
                   <div key={stat.label} className="flex items-baseline gap-1.5">
-                    <div className="font-display font-bold text-lg gradient-text-primary">{stat.value}</div>
+                    <div className="font-display font-bold text-base sm:text-lg gradient-text-primary">{stat.value}</div>
                     <div className="text-xs text-muted-foreground">{stat.label}</div>
                   </div>
                 ))}
@@ -673,36 +676,36 @@ export default function Index() {
       </section>
 
       {/* ══ FIRESALE CTA ════════════════════════════════════════════════════ */}
-      <section className="py-16 container">
+      <section className="py-10 sm:py-16 container">
         <div className="relative rounded-3xl overflow-hidden bg-card border border-border">
           <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 80% 50%, hsl(0 72% 55% / 0.12) 0%, transparent 60%)" }} />
           <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 20% 50%, hsl(192 100% 50% / 0.05) 0%, transparent 50%)" }} />
-          <div className="relative p-10 md:p-16 grid md:grid-cols-2 gap-8 items-center">
+          <div className="relative p-6 sm:p-10 md:p-16 grid md:grid-cols-2 gap-6 sm:gap-8 items-center">
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <Flame className="w-5 h-5 text-destructive" />
                 <span className="text-xs font-bold text-destructive uppercase tracking-widest">Firesale™ Instant Offer</span>
               </div>
-              <h2 className="font-display text-4xl font-bold mb-4">
+              <h2 className="font-display text-2xl sm:text-4xl font-bold mb-4">
                 Sell Your Property <br />
                 <span className="gradient-text-primary">in 48 Hours</span>
               </h2>
-              <p className="text-muted-foreground mb-6">
+              <p className="text-muted-foreground mb-6 text-sm sm:text-base">
                 Get a guaranteed cash offer for your property powered by our AI valuation engine. No agents, no waiting, no stress.
               </p>
-              <Button size="lg" className="bg-gradient-primary border-0 text-primary-foreground" asChild>
+              <Button size="lg" className="w-full sm:w-auto bg-gradient-primary border-0 text-primary-foreground" asChild>
                 <Link to="/firesale">Get Instant Offer <ArrowRight className="w-4 h-4 ml-2" /></Link>
               </Button>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
               {[
                 { value: "48h", label: "Average Closing" },
                 { value: "100%", label: "Cash Offers" },
                 { value: "€0", label: "Agent Fees" },
                 { value: "AI", label: "Valuation Engine" },
               ].map(item => (
-                <div key={item.label} className="glass-card rounded-xl p-4 text-center">
-                  <div className="font-display text-2xl font-bold gradient-text-cyan">{item.value}</div>
+                <div key={item.label} className="glass-card rounded-xl p-3 sm:p-4 text-center">
+                  <div className="font-display text-xl sm:text-2xl font-bold gradient-text-cyan">{item.value}</div>
                   <div className="text-xs text-muted-foreground mt-1">{item.label}</div>
                 </div>
               ))}
@@ -963,6 +966,8 @@ export default function Index() {
       </section>
 
       <Footer />
+      {/* bottom spacing for mobile nav */}
+      <div className="h-16 lg:hidden" />
     </div>
   );
 }
