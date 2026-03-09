@@ -125,19 +125,19 @@ export function OSSyncPanel() {
   // ── Mutation: poll OS auctions → Hub ────────────────────────────────────────
   const pollAuctionsMutation = useMutation({
     mutationFn: async () => {
-      // Scan multiple pages and aggregate results
-      let totalImported = 0, totalUpdated = 0, totalErrors = 0, totalScanned = 0;
+      let totalImported = 0, totalUpdated = 0, totalErrors = 0, totalScanned = 0, totalAi = 0;
       for (let p = pollPage; p < pollPage + pollPages; p++) {
         const { data, error } = await supabase.functions.invoke("poll-os-auctions", {
           body: { page: p, pageSize: 100 },
         });
         if (error) throw error;
-        totalImported += data?.imported ?? 0;
-        totalUpdated  += data?.updated  ?? 0;
-        totalErrors   += data?.errors   ?? 0;
-        totalScanned  += data?.total    ?? 0;
+        totalImported += data?.imported     ?? 0;
+        totalUpdated  += data?.updated      ?? 0;
+        totalErrors   += data?.errors       ?? 0;
+        totalScanned  += data?.total        ?? 0;
+        totalAi       += data?.aiGenerated  ?? 0;
       }
-      return { imported: totalImported, updated: totalUpdated, errors: totalErrors, scanned: totalScanned };
+      return { imported: totalImported, updated: totalUpdated, errors: totalErrors, scanned: totalScanned, aiGenerated: totalAi };
     },
     onSuccess: (result) => {
       setPollResult(result);
@@ -145,12 +145,10 @@ export function OSSyncPanel() {
       if (!result) {
         toast.info("Poll queued — OS credentials pending.");
       } else if (result.imported === 0 && result.updated === 0) {
-        toast.info(
-          `Scanned ${result.scanned} records — no future auctions on this page range. Try a different page.`,
-        );
+        toast.info(`Scanned ${result.scanned} records — no future auctions on this page range. Try a higher page number.`);
       } else {
         toast.success(
-          `Auctions synced: ${result.imported} new, ${result.updated} updated${result.errors ? `, ${result.errors} errors` : ""}.`,
+          `✅ ${result.imported} new · ${result.updated} updated · 🤖 ${result.aiGenerated} AI-generated`,
         );
       }
     },
@@ -323,14 +321,22 @@ export function OSSyncPanel() {
 
           {/* Last result */}
           {pollResult && (
-            <div className="rounded-lg bg-secondary/50 p-2.5 text-xs space-y-0.5">
+            <div className="rounded-lg bg-secondary/50 p-2.5 text-xs space-y-1">
               <p className="font-medium">Last scan result:</p>
-              <p className="text-muted-foreground">
-                ✅ {pollResult.imported} imported · {pollResult.updated} updated ·{" "}
-                🔍 {pollResult.scanned} scanned · ⏭ skipped past
-              </p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-muted-foreground">
+                <span>✅ Imported: <strong className="text-foreground">{pollResult.imported}</strong></span>
+                <span>🔄 Updated: <strong className="text-foreground">{pollResult.updated}</strong></span>
+                <span>🤖 AI-generated: <strong className="text-brand-emerald">{pollResult.aiGenerated}</strong></span>
+                <span>🔍 Scanned: <strong className="text-foreground">{pollResult.scanned}</strong></span>
+              </div>
             </div>
           )}
+
+          {/* Nightly cron info */}
+          <div className="rounded-lg bg-primary/5 border border-primary/20 p-2.5 text-xs">
+            <p className="font-medium text-primary flex items-center gap-1">⏰ Nightly auto-scan active</p>
+            <p className="text-muted-foreground mt-0.5">Pages 0–2 scanned daily at 03:00, 03:15, 03:30 UTC. AI generates Greek titles & descriptions for each new auction.</p>
+          </div>
 
           <Button
             className="w-full gap-2"
