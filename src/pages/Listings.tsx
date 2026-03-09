@@ -138,7 +138,7 @@ function RangeSelector({
   );
 }
 
-const FilterChip = React.forwardRef<HTMLButtonElement, {
+const FilterChip = forwardRef<HTMLButtonElement, {
   active: boolean; onClick: () => void; children: React.ReactNode;
 }>(function FilterChip({ active, onClick, children }, ref) {
   return (
