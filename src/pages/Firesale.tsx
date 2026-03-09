@@ -245,9 +245,9 @@ export default function Firesale() {
           <div className="grid lg:grid-cols-[1fr_420px] gap-10 items-start">
 
             {/* Left: Form */}
-            <div>
+            <div className="reveal in-view">
               {!submitted ?
-              <div className="glass-card rounded-2xl border border-primary/20 overflow-hidden shadow-elevated">
+              <div className="glass-card rounded-2xl border border-primary/20 overflow-hidden shadow-elevated animate-fade-in">
                   {/* Header */}
                   <div className="px-7 py-5 border-b border-border bg-gradient-to-r from-destructive/5 to-transparent">
                     <div className="flex items-center gap-3">
