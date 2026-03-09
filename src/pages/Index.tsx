@@ -503,11 +503,9 @@ export default function Index() {
         <div className="absolute inset-0">
           {/* Light mode: show more of the actual photo — lower opacity overlay */}
           <img src={heroBg} alt="Athens skyline" className="w-full h-full object-cover opacity-100 dark:opacity-70" />
-          {/* Light mode: soft warm vignette — keeps text readable without killing the photo */}
-          <div className="absolute inset-0 dark:hidden" style={{ background: "linear-gradient(120deg, hsl(25 30% 8% / 0.58) 0%, hsl(25 20% 10% / 0.35) 55%, hsl(30 15% 12% / 0.10) 100%)" }} />
-          {/* Dark mode: deep overlay */}
-          <div className="absolute inset-0 hidden dark:block" style={{ background: "linear-gradient(120deg, hsl(222 47% 4% / 0.92) 0%, hsl(222 47% 6% / 0.72) 50%, hsl(222 47% 8% / 0.35) 100%)" }} />
-          <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent" />
+          {/* Both modes: strong dark-left gradient so white text is always readable */}
+          <div className="absolute inset-0" style={{ background: "linear-gradient(120deg, hsl(25 20% 6% / 0.82) 0%, hsl(25 15% 8% / 0.55) 55%, hsl(30 10% 10% / 0.12) 100%)" }} />
+          <div className="absolute inset-0 bg-gradient-to-t from-background/70 via-transparent to-transparent" />
         </div>
         {/* Grid overlay */}
         <div className="absolute inset-0 opacity-[0.03]"
@@ -520,20 +518,20 @@ export default function Index() {
           <div className="grid lg:grid-cols-[1fr_360px] xl:grid-cols-[1fr_400px] gap-8 lg:gap-12 items-center">
 
             {/* ── LEFT: Copy + Search ── */}
-            <div>
+            <div className="text-white">
               {/* Eyebrow */}
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/25 mb-5 sm:mb-7 animate-fade-in">
-                <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                <span className="text-xs sm:text-sm font-semibold text-primary">Greece's #1 AI-Powered Property Platform</span>
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/15 border border-white/25 mb-5 sm:mb-7 animate-fade-in">
+                <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                <span className="text-xs sm:text-sm font-semibold text-white">Greece's #1 AI-Powered Property Platform</span>
               </div>
 
               {/* Headline */}
-              <h1 className="font-display font-black leading-[1.05] mb-4 sm:mb-6 animate-fade-in-up" style={{ fontSize: "clamp(2rem, 8vw, 4.5rem)" }}>
+              <h1 className="font-display font-black leading-[1.05] mb-4 sm:mb-6 animate-fade-in-up text-white" style={{ fontSize: "clamp(2rem, 8vw, 4.5rem)" }}>
                 Find your perfect<br className="hidden sm:block" />{" "}property in Greece<br />
                 <span className="gradient-text-primary">— with AI precision</span>
               </h1>
 
-              <p className="text-sm sm:text-lg text-foreground/70 mb-6 sm:mb-10 max-w-xl animate-fade-in-up leading-relaxed" style={{ animationDelay: "0.1s" }}>
+              <p className="text-sm sm:text-lg text-white/75 mb-6 sm:mb-10 max-w-xl animate-fade-in-up leading-relaxed" style={{ animationDelay: "0.1s" }}>
                 47,000+ verified listings across Greece. Apartments, villas, land, auctions, and investment properties — all in one place.
               </p>
 
@@ -599,7 +597,7 @@ export default function Index() {
                 ].map(stat => (
                   <div key={stat.label} className="flex items-baseline gap-1.5">
                     <div className="font-display font-bold text-base sm:text-lg gradient-text-primary">{stat.value}</div>
-                    <div className="text-xs text-muted-foreground">{stat.label}</div>
+                    <div className="text-xs text-white/60">{stat.label}</div>
                   </div>
                 ))}
               </div>
