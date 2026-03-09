@@ -649,7 +649,7 @@ export default function Firesale() {
 
                   <h3 className="font-display font-black text-2xl mb-2">Request Submitted! 🎉</h3>
                   <p className="text-muted-foreground text-sm mb-2 leading-relaxed">
-                    Your Firesale™ request is live in our investor deal flow.
+                    Your Quick Sale™ request is live in our investor deal flow.
                   </p>
                   {requestId && (
                     <p className="text-[11px] text-muted-foreground mb-6 font-mono bg-secondary border border-border rounded-lg px-3 py-1.5 inline-block">
