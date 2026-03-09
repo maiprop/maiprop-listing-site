@@ -27,13 +27,23 @@ import { toast } from "sonner";
 
 
 
-const priceRanges = [
+// Price ranges adapt to listing type — buy uses purchase price, rent uses monthly rent
+const buyPriceRanges = [
   { label: "Any Price", value: "" },
-  { label: "Under €100k", value: "0-100000" },
-  { label: "€100k – €300k", value: "100000-300000" },
+  { label: "Under €80k", value: "0-80000" },
+  { label: "€80k – €150k", value: "80000-150000" },
+  { label: "€150k – €300k", value: "150000-300000" },
   { label: "€300k – €600k", value: "300000-600000" },
   { label: "€600k – €1M", value: "600000-1000000" },
   { label: "€1M+", value: "1000000-9999999" },
+];
+const rentPriceRanges = [
+  { label: "Any Rent", value: "" },
+  { label: "Under €400/mo", value: "0-400" },
+  { label: "€400 – €700/mo", value: "400-700" },
+  { label: "€700 – €1,200/mo", value: "700-1200" },
+  { label: "€1,200 – €2,500/mo", value: "1200-2500" },
+  { label: "€2,500+/mo", value: "2500-99999" },
 ];
 
 const listingTypeOptions = [
@@ -517,10 +527,14 @@ export default function Listings() {
   };
   const isComparing = (id: string) => compareList.some(l => l.id === id);
 
-  const bedsOpts = ["1", "2", "3", "4", "5"].map(v => ({ label: v, value: v }));
+  // Contextual filter options — buy uses purchase context, rent uses rental context
+  const isRent = selectedListingType === "rent";
+  const bedsOpts = isRent
+    ? [{ label: "Studio", value: "0" }, ...["1", "2", "3", "4", "5"].map(v => ({ label: `${v} bed`, value: v }))]
+    : ["1", "2", "3", "4", "5", "6"].map(v => ({ label: v, value: v }));
   const bathsOpts = ["1", "2", "3", "4"].map(v => ({ label: v, value: v }));
   const floorOpts = ["-1", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10+"].map(v => ({ label: v === "-1" ? "Basement" : v === "0" ? "Ground" : v, value: v }));
-  const yearOpts = ["1950", "1960", "1970", "1980", "1990", "2000", "2005", "2010", "2015", "2018", "2020", "2022", "2024"].map(v => ({ label: v, value: v }));
+  const yearOpts = ["1950", "1960", "1970", "1980", "1990", "2000", "2005", "2010", "2015", "2018", "2020", "2022", "2024", "2025"].map(v => ({ label: v, value: v }));
 
   return (
     <div className="min-h-screen bg-background">
@@ -564,11 +578,13 @@ export default function Listings() {
                 }}
               />
 
-              {/* Price */}
+              {/* Price — adapts to listing type */}
               <div className="relative">
                 <select value={selectedPrice} onChange={e => setParam("price", e.target.value)}
                   className="appearance-none bg-secondary border border-border rounded-xl px-3 py-2.5 pr-7 text-sm text-foreground cursor-pointer outline-none focus:border-primary">
-                  {priceRanges.map(o => <option key={o.value} value={o.value} className="bg-card">{o.label}</option>)}
+                  {(selectedListingType === "rent" ? rentPriceRanges : buyPriceRanges).map(o => (
+                    <option key={o.value} value={o.value} className="bg-card">{o.label}</option>
+                  ))}
                 </select>
                 <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
               </div>
@@ -633,7 +649,7 @@ export default function Listings() {
                 <span className="text-xs text-muted-foreground">Active:</span>
                 {selectedType && <button onClick={() => { setParam("type", ""); setParam("subtype", ""); }} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{PROPERTY_TYPE_MAP[selectedType as PropertyTypeKey]?.emoji} {getTypeLabel(selectedType)} <X className="w-3 h-3" /></button>}
                 {selectedSubtype && selectedType && <button onClick={() => setParam("subtype", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{getSubtypeLabel(selectedType, selectedSubtype)} <X className="w-3 h-3" /></button>}
-                {selectedPrice && <button onClick={() => setParam("price", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{priceRanges.find(r => r.value === selectedPrice)?.label} <X className="w-3 h-3" /></button>}
+                {selectedPrice && <button onClick={() => setParam("price", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{[...buyPriceRanges, ...rentPriceRanges].find(r => r.value === selectedPrice)?.label || selectedPrice} <X className="w-3 h-3" /></button>}
                 {bedsRange[0] && <button onClick={() => setParam("beds_min", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{bedsRange[0]}+ beds <X className="w-3 h-3" /></button>}
                 {selectedEnergyClasses.map(ec => <button key={ec} onClick={() => toggleMulti("energy", ec)} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">Energy {ec} <X className="w-3 h-3" /></button>)}
                 {selectedFeatures.map(f => {
