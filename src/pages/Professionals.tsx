@@ -328,9 +328,17 @@ export default function Professionals() {
                   Every expert you need,<br />
                   <span className="gradient-text-cyan">amplified by AI</span>
                 </h1>
-                <p className="text-muted-foreground max-w-lg text-lg leading-relaxed">
+                <p className="text-muted-foreground max-w-lg text-lg leading-relaxed mb-5">
                   From legal due-diligence to renovation — every professional on maiProp uses AI to deliver faster, smarter, and more transparent results.
                 </p>
+                <button
+                  onClick={() => setAiModal({ groupId: "legal", groupLabel: "Legal & Title" })}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary/15 border border-primary/30 text-primary text-sm font-semibold hover:bg-primary/25 transition-colors"
+                >
+                  <Brain className="w-4 h-4" />
+                  Try AI Tools Now
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
               </div>
               <div className="flex flex-wrap gap-3 lg:justify-end">
                 {[
