@@ -475,7 +475,7 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
         initialViewState={{ longitude: 23.7275, latitude: 38.5, zoom: 6 }}
         style={{ width: "100%", height: "100%" }}
         mapStyle="mapbox://styles/mapbox/dark-v11"
-        interactiveLayerIds={["clusters"]}
+        interactiveLayerIds={["clusters", "price-labels"]}
         onClick={onClick}
         onMouseMove={onMouseMove}
         onMoveEnd={computeVisible}
