@@ -1,6 +1,6 @@
 /**
- * os-diagnose — enhanced to also extract auction endpoints from live API docs
- * and run a real auction fetch with the working token.
+ * os-diagnose — probes the OS API to understand data shape, filters, and
+ * how many PENDING (future) auctions are available.
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -17,7 +17,6 @@ async function getOsToken(baseUrl: string, email: string, password: string): Pro
     body: JSON.stringify({ email, password }),
   });
   const data = await res.json();
-  // OS wraps token under data.token
   const token = data?.data?.token ?? data.token ?? data.accessToken ?? data.access_token;
   if (!token) throw new Error(`Auth failed (${res.status}): ${JSON.stringify(data).slice(0, 300)}`);
   return token;
@@ -32,64 +31,97 @@ Deno.serve(async (req) => {
   const OS_PASS  = Deno.env.get("MAIPROP_OS_PASSWORD") ?? "";
 
   try {
-    // 1. Auth
     const token = await getOsToken(OS_URL, OS_EMAIL, OS_PASS);
 
-    // 2. Fetch api-docs to extract endpoint list
+    const authHeaders = {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`,
+    };
+
+    // Probe 1: count with no filter (all auctions)
+    const countAllRes = await fetch(`${OS_URL}/api/v1/auctions/filter/count`, {
+      method: "POST",
+      headers: authHeaders,
+      body: JSON.stringify({}),
+    });
+    const countAll = await countAllRes.json().catch(() => null);
+
+    // Probe 2: count with auctionStatus=PENDING
+    const countPendingRes = await fetch(`${OS_URL}/api/v1/auctions/filter/count`, {
+      method: "POST",
+      headers: authHeaders,
+      body: JSON.stringify({ auctionStatus: "PENDING" }),
+    });
+    const countPending = await countPendingRes.json().catch(() => null);
+
+    // Probe 3: count with auctionStatus=COMPLETED
+    const countCompletedRes = await fetch(`${OS_URL}/api/v1/auctions/filter/count`, {
+      method: "POST",
+      headers: authHeaders,
+      body: JSON.stringify({ auctionStatus: "COMPLETED" }),
+    });
+    const countCompleted = await countCompletedRes.json().catch(() => null);
+
+    // Probe 4: try dateFrom filter on /filter/details
+    const today = new Date().toISOString().split("T")[0];
+    const futureFilterRes = await fetch(`${OS_URL}/api/v1/auctions/filter/details`, {
+      method: "POST",
+      headers: authHeaders,
+      body: JSON.stringify({ page: 0, pageSize: 5, dateFrom: today }),
+    });
+    const futureFilter = await futureFilterRes.json().catch(() => null);
+    const futureFilterItems: any[] = futureFilter?.data ?? [];
+    const futureSample = futureFilterItems.slice(0, 3).map((a: any) => ({
+      id: a.auctionListingId,
+      date: a.auctionDate,
+      status: a.auctionStatus,
+    }));
+
+    // Probe 5: PENDING filter on /filter/details
+    const pendingFilterRes = await fetch(`${OS_URL}/api/v1/auctions/filter/details`, {
+      method: "POST",
+      headers: authHeaders,
+      body: JSON.stringify({ page: 0, pageSize: 5, auctionStatus: "PENDING" }),
+    });
+    const pendingFilter = await pendingFilterRes.json().catch(() => null);
+    const pendingItems: any[] = pendingFilter?.data ?? [];
+    const pendingSample = pendingItems.slice(0, 3).map((a: any) => ({
+      id: a.auctionListingId,
+      date: a.auctionDate,
+      status: a.auctionStatus,
+    }));
+
+    // Probe 6: count-comparison endpoint (shows PENDING vs COMPLETED split)
+    const compRes = await fetch(`${OS_URL}/api/v1/auctions/filter/count-comparison`, {
+      method: "POST",
+      headers: authHeaders,
+      body: JSON.stringify({}),
+    });
+    const comp = await compRes.json().catch(() => null);
+
+    // Fetch api-docs for endpoint listing
     const docsRes = await fetch(`${OS_URL}/v3/api-docs`);
-    const docs = await docsRes.json();
+    const docs = await docsRes.json().catch(() => ({}));
     const paths = Object.keys(docs.paths ?? {});
     const auctionPaths = paths.filter(p => p.toLowerCase().includes("auction"));
-    const listingPaths = paths.filter(p => p.toLowerCase().includes("listing") || p.toLowerCase().includes("property"));
-    const firesalePaths = paths.filter(p => p.toLowerCase().includes("firesale") || p.toLowerCase().includes("opportunity") || p.toLowerCase().includes("instant"));
-    const allRelevant = [...auctionPaths, ...listingPaths, ...firesalePaths];
-
-    // 3. Try the auction filter endpoint
-    const probeEndpoint = body.endpoint ?? "/api/v1/auctions/filter/details";
-    const probeBody = body.probeBody ?? { page: 0, size: 5 };
-
-    const auctRes = await fetch(`${OS_URL}${probeEndpoint}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`,
-      },
-      body: JSON.stringify(probeBody),
-    });
-    const auctText = await auctRes.text();
-    let auctParsed: any = null;
-    try { auctParsed = JSON.parse(auctText); } catch { /* ignore */ }
-
-    // 4. Also surface the schema for AuctionOutputDto if present
-    const schemas = docs.components?.schemas ?? {};
-    const auctionSchema = schemas["AuctionOutputDto"] ?? schemas["AuctionDto"] ?? schemas["AuctionResponse"] ?? null;
-    const listingSchema = schemas["ListingDto"] ?? schemas["PropertyDto"] ?? schemas["ListingOutputDto"] ?? null;
 
     return new Response(JSON.stringify({
       auth: "✅ OK",
-      tokenPreview: token.slice(0, 40) + "...",
-      relevantEndpoints: {
-        auction: auctionPaths,
-        listing: listingPaths,
-        firesale: firesalePaths,
-        allRelevant,
+      counts: {
+        all:       countAll,
+        pending:   countPending,
+        completed: countCompleted,
+        comparison: comp,
       },
-      auctionProbe: {
-        endpoint: probeEndpoint,
-        status: auctRes.status,
-        body: auctText.slice(0, 2000),
-        parsed: auctParsed ? {
-          type: Array.isArray(auctParsed) ? "array" : typeof auctParsed,
-          topKeys: Array.isArray(auctParsed) ? Object.keys(auctParsed[0] ?? {}) : Object.keys(auctParsed),
-          contentKeys: auctParsed?.content ? Object.keys(auctParsed.content[0] ?? {}) : null,
-          totalElements: auctParsed?.totalElements ?? null,
-          size: Array.isArray(auctParsed) ? auctParsed.length : auctParsed?.content?.length ?? null,
-        } : null,
+      filters: {
+        dateFromWorks:   futureFilter?.responseMetadata?.pagination?.totalElements !== countAll?.responseMetadata?.pagination?.totalElements,
+        dateFromTotal:   futureFilter?.responseMetadata?.pagination?.totalElements,
+        dateFromSample:  futureSample,
+        pendingFilter:   pendingFilter?.responseMetadata?.pagination?.totalElements,
+        pendingFilterWorks: pendingFilter?.responseMetadata?.pagination?.totalElements !== countAll?.responseMetadata?.pagination?.totalElements,
+        pendingSample:   pendingSample,
       },
-      schemas: {
-        auctionSchema: auctionSchema ? Object.keys(auctionSchema?.properties ?? {}) : "not found",
-        listingSchema: listingSchema ? Object.keys(listingSchema?.properties ?? {}) : "not found",
-      },
+      auctionEndpoints: auctionPaths,
     }, null, 2), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
