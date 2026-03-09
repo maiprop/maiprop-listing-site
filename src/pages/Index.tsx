@@ -524,24 +524,24 @@ export default function Index() {
             {/* ── LEFT: Copy + Search ── */}
             <div className="text-white">
               {/* Eyebrow */}
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/15 border border-white/25 mb-5 sm:mb-7 animate-fade-in">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/15 border border-white/25 mb-5 sm:mb-7 animate-fade-in-up" style={{ animationDelay: "0s" }}>
                 <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
                 <span className="text-xs sm:text-sm font-semibold text-white">Greece's #1 AI-Powered Property Platform</span>
               </div>
 
               {/* Headline */}
-              <h1 className="font-display font-black leading-[1.05] mb-4 sm:mb-6 animate-fade-in-up text-white" style={{ fontSize: "clamp(2rem, 8vw, 4.5rem)" }}>
+              <h1 className="font-display font-black leading-[1.05] mb-4 sm:mb-6 animate-fade-in-up text-white" style={{ fontSize: "clamp(2rem, 8vw, 4.5rem)", animationDelay: "0.08s" }}>
                 Find your perfect<br className="hidden sm:block" />{" "}property in Greece<br />
                 <span className="gradient-text-primary">— with AI precision</span>
               </h1>
 
-              <p className="text-sm sm:text-lg text-white/75 mb-6 sm:mb-10 max-w-xl animate-fade-in-up leading-relaxed" style={{ animationDelay: "0.1s" }}>
+              <p className="text-sm sm:text-lg text-white/75 mb-6 sm:mb-10 max-w-xl animate-fade-in-up leading-relaxed" style={{ animationDelay: "0.18s" }}>
                 47,000+ listings across Greece. 
 Residences, offices, stores, land, auctions, and investment properties — all in one place.
               </p>
 
               {/* ── Search Card ── */}
-              <div className="animate-fade-in-up" style={{ animationDelay: "0.2s" }}>
+              <div className="animate-fade-in-up" style={{ animationDelay: "0.28s" }}>
                 <div className="bg-card/85 backdrop-blur-2xl border border-border/70 rounded-2xl shadow-elevated overflow-visible" style={{ boxShadow: "0 12px 48px -8px hsl(var(--primary) / 0.2), 0 2px 0 0 hsl(var(--primary) / 0.08), inset 0 1px 0 0 hsl(var(--foreground) / 0.04)" }}>
 
                   {/* Tabs — scrollable on mobile */}
