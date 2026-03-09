@@ -536,13 +536,13 @@ export default function Index() {
               </h1>
 
               <p className="text-sm sm:text-lg text-white/75 mb-6 sm:mb-10 max-w-xl animate-fade-in-up leading-relaxed" style={{ animationDelay: "0.1s" }}>
-                47,000+ verified listings across Greece. Apartments, villas, land, auctions, and investment properties — all in one place.
+                47,000+ listings across Greece. 
+Residences, offices, stores, land, auctions, and investment properties — all in one place.
               </p>
 
               {/* ── Search Card ── */}
               <div className="animate-fade-in-up" style={{ animationDelay: "0.2s" }}>
-                <div className="bg-card/85 backdrop-blur-2xl border border-border/70 rounded-2xl shadow-elevated overflow-visible"
-                style={{ boxShadow: "0 12px 48px -8px hsl(var(--primary) / 0.2), 0 2px 0 0 hsl(var(--primary) / 0.08), inset 0 1px 0 0 hsl(var(--foreground) / 0.04)" }}>
+                <div className="bg-card/85 backdrop-blur-2xl border border-border/70 rounded-2xl shadow-elevated overflow-visible" style={{ boxShadow: "0 12px 48px -8px hsl(var(--primary) / 0.2), 0 2px 0 0 hsl(var(--primary) / 0.08), inset 0 1px 0 0 hsl(var(--foreground) / 0.04)" }}>
 
                   {/* Tabs — scrollable on mobile */}
                   <div className="flex gap-0.5 px-2 pt-2.5 overflow-x-auto scrollbar-none">
