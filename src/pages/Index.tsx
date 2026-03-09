@@ -346,28 +346,6 @@ export default function Index() {
         </div>
       </section>
 
-      {/* Features */}
-      <section className="py-16 bg-card/30">
-        <div className="container">
-          <div className="text-center mb-12">
-            <span className="text-xs font-semibold text-primary uppercase tracking-widest">Why maiProp</span>
-            <h2 className="font-display text-3xl font-bold mt-2">Everything You Need</h2>
-            <p className="text-muted-foreground mt-2 max-w-md mx-auto">Greece's only platform combining listings, auctions, instant offers, and AI-powered data in one place.</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {features.map(feature => (
-              <div key={feature.title} className="glass-card rounded-xl p-6 hover:border-primary/20 transition-all">
-                <div className={`w-10 h-10 rounded-xl ${feature.bg} flex items-center justify-center mb-4`}>
-                  <feature.icon className={`w-5 h-5 ${feature.color}`} />
-                </div>
-                <h3 className="font-display font-semibold mb-2">{feature.title}</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">{feature.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* Popular cities */}
       <section className="py-16 container">
         <div className="flex items-center justify-between mb-8">
@@ -397,34 +375,62 @@ export default function Index() {
         </div>
       </section>
 
-      {/* Pro directory CTA */}
-      <section className="py-16 container">
-        <div className="relative rounded-3xl overflow-hidden bg-card border border-border p-10 md:p-16">
-          <div className="absolute inset-0 opacity-5"
-            style={{
-              backgroundImage: "radial-gradient(hsl(265 80% 60%) 1px, transparent 1px)",
-              backgroundSize: "30px 30px",
-            }}
-          />
-          <div className="relative max-w-2xl mx-auto text-center">
-            <div className="flex items-center justify-center gap-2 mb-4">
-              <Users className="w-5 h-5 text-accent" />
-              <span className="text-xs font-semibold text-accent uppercase tracking-widest">Pro Network</span>
+      {/* Pro directory CTA — immersive */}
+      <section className="py-20 container">
+        <div className="relative rounded-3xl overflow-hidden border border-accent/20"
+          style={{ background: "linear-gradient(135deg, hsl(265 80% 8%), hsl(265 40% 12%), hsl(183 100% 6%))" }}>
+          {/* Decorative glows */}
+          <div className="absolute top-0 left-0 w-72 h-72 rounded-full blur-3xl opacity-20"
+            style={{ background: "radial-gradient(hsl(265 80% 60%), transparent 70%)" }} />
+          <div className="absolute bottom-0 right-0 w-72 h-72 rounded-full blur-3xl opacity-15"
+            style={{ background: "radial-gradient(hsl(183 100% 42%), transparent 70%)" }} />
+          <div className="absolute inset-0 opacity-[0.03]"
+            style={{ backgroundImage: "linear-gradient(hsl(265 80% 60%) 1px, transparent 1px), linear-gradient(90deg, hsl(265 80% 60%) 1px, transparent 1px)", backgroundSize: "40px 40px" }} />
+
+          <div className="relative p-10 md:p-14 lg:p-20">
+            <div className="grid lg:grid-cols-2 gap-12 items-center">
+              {/* Left: copy */}
+              <div>
+                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-accent/15 border border-accent/30 mb-6">
+                  <Users className="w-3.5 h-3.5 text-accent" />
+                  <span className="text-xs font-bold text-accent uppercase tracking-widest">Pro Network</span>
+                </div>
+                <h2 className="font-display text-4xl lg:text-5xl font-bold leading-tight mb-4">
+                  The right expert,<br />
+                  <span className="gradient-text-cyan">one click away</span>
+                </h2>
+                <p className="text-muted-foreground text-lg leading-relaxed mb-8">
+                  Every transaction needs a team. Architects, lawyers, notaries, engineers, contractors — all vetted, verified, and rated by real clients.
+                </p>
+                <Button size="lg" className="bg-gradient-accent border-0 text-accent-foreground font-semibold px-8 gap-2" asChild>
+                  <Link to="/professionals">Explore Directory <ArrowRight className="w-4 h-4" /></Link>
+                </Button>
+              </div>
+
+              {/* Right: profession cards grid */}
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { emoji: "🏛️", title: "Architects", count: "340+", color: "text-primary", bg: "bg-primary/10" },
+                  { emoji: "⚖️", title: "Lawyers", count: "180+", color: "text-brand-gold", bg: "bg-brand-gold/10" },
+                  { emoji: "📋", title: "Notaries", count: "95+", color: "text-brand-emerald", bg: "bg-brand-emerald/10" },
+                  { emoji: "🔧", title: "Engineers", count: "520+", color: "text-accent", bg: "bg-accent/10" },
+                  { emoji: "🏗️", title: "Contractors", count: "410+", color: "text-brand-purple", bg: "bg-brand-purple/10" },
+                  { emoji: "🏡", title: "Property Managers", count: "230+", color: "text-brand-sky", bg: "bg-brand-sky/10" },
+                ].map(pro => (
+                  <Link key={pro.title} to={`/professionals?category=${pro.title.toLowerCase()}`}>
+                    <div className="group flex items-center gap-3 p-4 rounded-2xl bg-card/30 border border-border hover:border-accent/30 hover:bg-card/60 transition-all backdrop-blur-sm">
+                      <div className={`w-10 h-10 rounded-xl ${pro.bg} flex items-center justify-center text-xl shrink-0 group-hover:scale-110 transition-transform`}>
+                        {pro.emoji}
+                      </div>
+                      <div>
+                        <div className={`font-semibold text-sm ${pro.color}`}>{pro.title}</div>
+                        <div className="text-xs text-muted-foreground">{pro.count} verified</div>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
             </div>
-            <h2 className="font-display text-3xl font-bold mb-4">Find the Right Professional</h2>
-            <p className="text-muted-foreground mb-8">
-              Architects, lawyers, notaries, contractors, plumbers, and more. All vetted and rated by verified clients.
-            </p>
-            <div className="flex flex-wrap gap-2 justify-center mb-8">
-              {["Architects", "Lawyers", "Notaries", "Engineers", "Contractors", "Electricians", "Plumbers", "Property Managers"].map(pro => (
-                <span key={pro} className="px-3 py-1.5 rounded-full bg-secondary border border-border text-sm text-muted-foreground hover:border-accent/40 hover:text-foreground cursor-pointer transition-colors">
-                  {pro}
-                </span>
-              ))}
-            </div>
-            <Button size="lg" className="bg-gradient-accent border-0 text-accent-foreground" asChild>
-              <Link to="/professionals">Explore Directory <ArrowRight className="w-4 h-4 ml-2" /></Link>
-            </Button>
           </div>
         </div>
       </section>
