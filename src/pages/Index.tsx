@@ -676,36 +676,36 @@ export default function Index() {
       </section>
 
       {/* ══ FIRESALE CTA ════════════════════════════════════════════════════ */}
-      <section className="py-16 container">
+      <section className="py-10 sm:py-16 container">
         <div className="relative rounded-3xl overflow-hidden bg-card border border-border">
           <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 80% 50%, hsl(0 72% 55% / 0.12) 0%, transparent 60%)" }} />
           <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 20% 50%, hsl(192 100% 50% / 0.05) 0%, transparent 50%)" }} />
-          <div className="relative p-10 md:p-16 grid md:grid-cols-2 gap-8 items-center">
+          <div className="relative p-6 sm:p-10 md:p-16 grid md:grid-cols-2 gap-6 sm:gap-8 items-center">
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <Flame className="w-5 h-5 text-destructive" />
                 <span className="text-xs font-bold text-destructive uppercase tracking-widest">Firesale™ Instant Offer</span>
               </div>
-              <h2 className="font-display text-4xl font-bold mb-4">
+              <h2 className="font-display text-2xl sm:text-4xl font-bold mb-4">
                 Sell Your Property <br />
                 <span className="gradient-text-primary">in 48 Hours</span>
               </h2>
-              <p className="text-muted-foreground mb-6">
+              <p className="text-muted-foreground mb-6 text-sm sm:text-base">
                 Get a guaranteed cash offer for your property powered by our AI valuation engine. No agents, no waiting, no stress.
               </p>
-              <Button size="lg" className="bg-gradient-primary border-0 text-primary-foreground" asChild>
+              <Button size="lg" className="w-full sm:w-auto bg-gradient-primary border-0 text-primary-foreground" asChild>
                 <Link to="/firesale">Get Instant Offer <ArrowRight className="w-4 h-4 ml-2" /></Link>
               </Button>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
               {[
                 { value: "48h", label: "Average Closing" },
                 { value: "100%", label: "Cash Offers" },
                 { value: "€0", label: "Agent Fees" },
                 { value: "AI", label: "Valuation Engine" },
               ].map(item => (
-                <div key={item.label} className="glass-card rounded-xl p-4 text-center">
-                  <div className="font-display text-2xl font-bold gradient-text-cyan">{item.value}</div>
+                <div key={item.label} className="glass-card rounded-xl p-3 sm:p-4 text-center">
+                  <div className="font-display text-xl sm:text-2xl font-bold gradient-text-cyan">{item.value}</div>
                   <div className="text-xs text-muted-foreground mt-1">{item.label}</div>
                 </div>
               ))}
