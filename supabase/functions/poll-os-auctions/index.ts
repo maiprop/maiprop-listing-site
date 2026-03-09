@@ -108,15 +108,18 @@ Deno.serve(async (req) => {
     const token = await getOsToken(OS_URL, OS_EMAIL, OS_PASS);
 
     // 2. Build filter — support optional overrides from caller
+    // Default dateFrom = today (ISO date string) to only fetch FUTURE auctions
+    const today = new Date().toISOString().split("T")[0]; // "YYYY-MM-DD"
+
     const filterPayload: Record<string, unknown> = {
       page:     body.page     ?? 0,
       pageSize: body.pageSize ?? body.size ?? 100,
+      dateFrom: body.dateFrom ?? today, // Only future auctions by default
     };
     // Optional: filter by status, date range, region etc.
-    if (body.auctionStatus)   filterPayload.auctionStatus   = body.auctionStatus;
+    if (body.auctionStatus)    filterPayload.auctionStatus    = body.auctionStatus;
     if (body.propertyCategory) filterPayload.propertyCategory = body.propertyCategory;
-    if (body.dateFrom)        filterPayload.dateFrom        = body.dateFrom;
-    if (body.dateTo)          filterPayload.dateTo          = body.dateTo;
+    if (body.dateTo)           filterPayload.dateTo           = body.dateTo;
 
     // 3. Fetch auctions
     const auctRes = await fetch(`${OS_URL}/api/v1/auctions/filter/details`, {
@@ -148,8 +151,14 @@ Deno.serve(async (req) => {
     let updated  = 0;
     let errors   = 0;
 
-    // 4. Upsert each auction
+    // 4. Upsert each auction (skip past auctions as a safety net)
+    const nowMs = Date.now();
     for (const a of auctions) {
+      // Skip if auctionDate is in the past
+      if (a.auctionDate) {
+        const auctionMs = new Date(a.auctionDate).getTime();
+        if (!isNaN(auctionMs) && auctionMs < nowMs) continue;
+      }
       try {
         const osId   = String(a.auctionListingId ?? a.id ?? "unknown");
         const tagKey = `os_auction:${osId}`;
