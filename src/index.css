@@ -205,6 +205,18 @@
     -webkit-font-smoothing: antialiased;
     font-size: 16px;
     line-height: 1.65;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  /* Smooth theme transitions for all major surface elements */
+  *, *::before, *::after {
+    transition-property: background-color, border-color, color, fill, stroke;
+    transition-duration: 200ms;
+    transition-timing-function: ease;
+  }
+  /* Exclude animation-heavy elements from the blanket transition */
+  .ticker-track, [class*="animate-"], button:active, a:active {
+    transition-property: none;
   }
 
   h1, h2, h3, h4, h5, h6 {
