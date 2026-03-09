@@ -626,7 +626,7 @@ export default function Firesale() {
                             ) : (
                               <>
                                 <Flame className="w-4 h-4 mr-2" />
-                                Submit Firesale™ Request
+                                Submit Quick Sale™ Request
                               </>
                             )}
                           </Button>
