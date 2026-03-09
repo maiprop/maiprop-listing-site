@@ -514,8 +514,14 @@ export default function Listings() {
               <PropertyTypeButton
                 value={selectedType}
                 subtype={selectedSubtype}
-                onTypeChange={v => { setParam("type", v); setParam("subtype", ""); }}
-                onSubtypeChange={v => setParam("subtype", v)}
+                onChange={(type, sub) => {
+                  setSearchParams(prev => {
+                    const next = new URLSearchParams(prev);
+                    if (type) next.set("type", type); else next.delete("type");
+                    if (sub) next.set("subtype", sub); else next.delete("subtype");
+                    return next;
+                  }, { replace: true });
+                }}
               />
 
               {/* Price */}
