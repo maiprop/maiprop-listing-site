@@ -251,9 +251,6 @@ function PropertyPopup({ listing, onClose }: { listing: MapListing; onClose: () 
   );
 }
 
-function PricePin({
-  listing, isActive, onClick,
-}: { listing: MapListing; isActive: boolean; onClick: (e: React.MouseEvent) => void }) {
   const c = typeColour(listing.listingType);
   return (
     <button
