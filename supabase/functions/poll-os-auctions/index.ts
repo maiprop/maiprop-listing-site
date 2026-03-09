@@ -15,6 +15,27 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+/**
+ * OS auction statuses that represent FUTURE / upcoming auctions.
+ * The OS API does NOT support server-side status filtering — we must filter
+ * client-side.  All other statuses (COMPLETED, COMPLETED_NO_BIDDERS,
+ * CANCELED, SUSPENDED, …) are past/irrelevant and get skipped.
+ *
+ * Verified breakdown (2026-03-09):
+ *   POSTED                    9,222  ← upcoming, published
+ *   READY_TO_CONDUCT            179  ← imminent
+ *   FINALIZED_PARTICIPANT_LIST  364  ← scheduled, participant list finalised
+ *   SUSPENDED               111,436  ← postponed (skip)
+ *   COMPLETED                40,187  ← past (skip)
+ *   COMPLETED_NO_BIDDERS    131,902  ← past (skip)
+ *   CANCELED                  2,195  ← cancelled (skip)
+ */
+const FUTURE_STATUSES = new Set([
+  "POSTED",
+  "READY_TO_CONDUCT",
+  "FINALIZED_PARTICIPANT_LIST",
+]);
+
 // ── OS propertyCategory → Hub property_type ──────────────────────────────────
 const CATEGORY_MAP: Record<string, string> = {
   RESIDENCE:   "apartment",

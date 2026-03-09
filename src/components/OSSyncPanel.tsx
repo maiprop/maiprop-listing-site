@@ -117,19 +117,37 @@ export function OSSyncPanel() {
     onError: (err: any) => { setSyncingId(null); toast.error("Firesale sync failed: " + err.message); },
   });
 
+  // ── Poll config state ────────────────────────────────────────────────────────
+  const [pollPage, setPollPage]     = useState(0);
+  const [pollPages, setPollPages]   = useState(1); // how many pages to scan
+  const [pollResult, setPollResult] = useState<any>(null);
+
   // ── Mutation: poll OS auctions → Hub ────────────────────────────────────────
   const pollAuctionsMutation = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke("poll-os-auctions", {
-        body: { size: 100 },
-      });
-      if (error) throw error;
-      return data;
+      // Scan multiple pages and aggregate results
+      let totalImported = 0, totalUpdated = 0, totalErrors = 0, totalScanned = 0;
+      for (let p = pollPage; p < pollPage + pollPages; p++) {
+        const { data, error } = await supabase.functions.invoke("poll-os-auctions", {
+          body: { page: p, pageSize: 100 },
+        });
+        if (error) throw error;
+        totalImported += data?.imported ?? 0;
+        totalUpdated  += data?.updated  ?? 0;
+        totalErrors   += data?.errors   ?? 0;
+        totalScanned  += data?.total    ?? 0;
+      }
+      return { imported: totalImported, updated: totalUpdated, errors: totalErrors, scanned: totalScanned };
     },
     onSuccess: (result) => {
+      setPollResult(result);
       qc.invalidateQueries({ queryKey: ["sync_log"] });
       if (result?.status === "skipped") {
         toast.info("Poll queued — OS credentials pending.");
+      } else if (result.imported === 0 && result.updated === 0) {
+        toast.info(
+          `Scanned ${result.scanned} records — no future auctions on this page range. Try a different page.`,
+        );
       } else {
         toast.success(
           `Auctions synced: ${result.imported} new, ${result.updated} updated${result.errors ? `, ${result.errors} errors` : ""}.`,
