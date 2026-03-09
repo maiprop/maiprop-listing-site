@@ -189,7 +189,7 @@ export default function Firesale() {
                 <span className="gradient-text-primary">in 96 Hours.</span>
               </h1>
               <p className="text-muted-foreground text-xl mb-8 leading-relaxed max-w-2xl">
-                AI-powered guaranteed cash offer. No agent fees, no viewings, no negotiations.
+                AI-powered guaranteed cash offer. Fast viewings, no negotiations.
                 Your property is matched instantly to our network of <strong className="text-foreground">private investors</strong>.
               </p>
               <div className="flex flex-wrap gap-3 mb-10">
