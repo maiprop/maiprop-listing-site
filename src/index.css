@@ -403,6 +403,31 @@
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/* ── Firesale hero animated glow orbs ─────────────────────────────────── */
+@keyframes firesale-orb-1 {
+  0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.08; }
+  33%       { transform: translate(40px, -30px) scale(1.15); opacity: 0.14; }
+  66%       { transform: translate(-20px, 20px) scale(0.9); opacity: 0.06; }
+}
+@keyframes firesale-orb-2 {
+  0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.05; }
+  40%       { transform: translate(-50px, 30px) scale(1.2); opacity: 0.10; }
+  70%       { transform: translate(30px, -20px) scale(0.85); opacity: 0.07; }
+}
+@keyframes firesale-orb-3 {
+  0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.06; }
+  50%       { transform: translate(20px, 40px) scale(1.1); opacity: 0.11; }
+}
+.firesale-orb-1 {
+  animation: firesale-orb-1 9s ease-in-out infinite;
+}
+.firesale-orb-2 {
+  animation: firesale-orb-2 12s ease-in-out infinite;
+}
+.firesale-orb-3 {
+  animation: firesale-orb-3 7s ease-in-out infinite;
+}
+
 /* ── Scroll-reveal animations ───────────────────────────────────────────── */
 .reveal {
   opacity: 0;
