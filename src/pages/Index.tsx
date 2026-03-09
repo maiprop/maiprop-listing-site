@@ -234,22 +234,19 @@ function AISearchModal({ onFiltersApplied, onClose }: { onFiltersApplied: (f: Re
 function LocationInput({ value, onChange, onSearch }: { value: string; onChange: (v: string) => void; onSearch: () => void }) {
   const [focused, setFocused] = useState(false);
   const [recents, setRecents] = useState<string[]>([]);
-  const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
   const wrapRef = useRef<HTMLDivElement>(null);
-  const isOpeningRef = useRef(false);
   const refresh = useCallback(() => setRecents(getRecentSearches()), []);
 
-  const calcPos = useCallback(() => {
-    if (wrapRef.current) {
-      const r = wrapRef.current.getBoundingClientRect();
-      setPos({ top: r.bottom + window.scrollY + 4, left: r.left + window.scrollX, width: r.width });
-    }
-  }, []);
+  // Compute portal position live from the DOM ref each render — no stale-state race
+  const getPos = () => {
+    if (!wrapRef.current) return { top: 0, left: 0, width: 300 };
+    const r = wrapRef.current.getBoundingClientRect();
+    return { top: r.bottom + window.scrollY + 4, left: r.left + window.scrollX, width: r.width };
+  };
 
   useEffect(() => {
     refresh();
     const handler = (e: MouseEvent) => {
-      if (isOpeningRef.current) return;
       const portal = document.getElementById("location-dropdown-portal");
       if (wrapRef.current?.contains(e.target as Node)) return;
       if (portal?.contains(e.target as Node)) return;
@@ -260,8 +257,9 @@ function LocationInput({ value, onChange, onSearch }: { value: string; onChange:
   }, [refresh]);
 
   const showDropdown = focused && recents.length > 0 && !value;
+  const pos = showDropdown ? getPos() : null;
 
-  const dropdown = showDropdown ? (
+  const dropdown = showDropdown && pos ? (
     <div
       id="location-dropdown-portal"
       style={{ position: "absolute", top: pos.top, left: pos.left, width: pos.width, zIndex: 9999 }}
@@ -293,7 +291,7 @@ function LocationInput({ value, onChange, onSearch }: { value: string; onChange:
         <MapPin className="w-4 h-4 text-primary shrink-0" />
         <input type="text" placeholder="City, area, or neighbourhood..." value={value}
           onChange={e => onChange(e.target.value)}
-          onFocus={() => { refresh(); calcPos(); isOpeningRef.current = true; setFocused(true); setTimeout(() => { isOpeningRef.current = false; }, 50); }}
+          onFocus={() => { refresh(); setFocused(true); }}
           onKeyDown={e => { if (e.key === "Enter") { setFocused(false); onSearch(); } if (e.key === "Escape") setFocused(false); }}
           className="flex-1 bg-transparent text-sm font-medium text-foreground placeholder:text-muted-foreground outline-none min-w-0" />
         {value && (
