@@ -53,73 +53,94 @@ const AI_SUGGESTIONS = [
 // ── Property Type Dropdown ─────────────────────────────────────────────────────
 function PropertyTypeDropdown({ value, onChange }: { value: string; onChange: (type: string) => void }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const commercialType = PROPERTY_TYPE_MAP["commercial"];
+  const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
+  const btnRef = useRef<HTMLButtonElement>(null);
+
+  // Position the portal dropdown under the button
+  const openDropdown = () => {
+    if (btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      setPos({ top: r.bottom + window.scrollY + 4, left: r.left + window.scrollX, width: r.width });
+    }
+    setOpen(o => !o);
+  };
 
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (btnRef.current && !btnRef.current.contains(e.target as Node)) {
+        // Check if click is inside the portal list
+        const portal = document.getElementById("type-dropdown-portal");
+        if (portal && portal.contains(e.target as Node)) return;
+        setOpen(false);
+      }
     };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
 
   const currentType = value ? PROPERTY_TYPE_MAP[value as PropertyTypeKey] : null;
   const label = currentType ? `${currentType.emoji} ${currentType.label}` : "Property type";
 
-  return (
-    <div ref={ref} className="relative">
+  const dropdownList = (
+    <div
+      id="type-dropdown-portal"
+      style={{ position: "absolute", top: pos.top, left: pos.left, minWidth: Math.max(pos.width, 220), zIndex: 9999 }}
+      className="bg-card border border-border rounded-xl shadow-elevated max-h-[360px] overflow-y-auto pb-2"
+    >
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={() => { onChange(""); setOpen(false); }}
+        className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left transition-colors hover:bg-secondary ${!value ? "text-primary bg-primary/10" : "text-foreground"}`}
+      >
+        <span>🏘️</span><span className="font-medium">All Types</span>
+        {!value && <Check className="w-3.5 h-3.5 ml-auto" />}
+      </button>
+      <div className="h-px bg-border mx-2" />
+      {PROPERTY_GROUPS.map((group, gi) => (
+        <div key={group.id}>
+          <div className="flex items-center gap-2 px-3 pt-2.5 pb-1">
+            <span className="text-xs">{group.emoji}</span>
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{group.label}</span>
+          </div>
+          {group.id === "commercial" ? (
+            <button
+              onClick={() => { onChange("commercial"); setOpen(false); }}
+              className={`w-full flex items-center gap-2.5 pl-6 pr-3 py-2 text-sm text-left transition-colors hover:bg-secondary ${value === "commercial" ? "text-primary bg-primary/10" : "text-foreground"}`}
+            >
+              <span className="text-base">🏪</span>
+              <span className="font-medium">All Commercial & Offices</span>
+              {value === "commercial" && <Check className="w-3.5 h-3.5 ml-auto" />}
+            </button>
+          ) : (
+            group.types.map(typeKey => {
+              const pt = PROPERTY_TYPE_MAP[typeKey];
+              return (
+                <button key={pt.value} onClick={() => { onChange(pt.value); setOpen(false); }}
+                  className={`w-full flex items-center gap-2.5 pl-6 pr-3 py-2 text-sm text-left transition-colors hover:bg-secondary ${value === pt.value ? "text-primary bg-primary/10" : "text-foreground"}`}>
+                  <span>{pt.emoji}</span>
+                  <span className="font-medium">{pt.label}</span>
+                  {value === pt.value && <Check className="w-3.5 h-3.5 ml-auto" />}
+                </button>
+              );
+            })
+          )}
+          {gi < PROPERTY_GROUPS.length - 1 && <div className="h-px bg-border mx-2 mt-1.5" />}
+        </div>
+      ))}
+    </div>
+  );
+
+  return (
+    <div className="relative">
+      <button
+        ref={btnRef}
+        onClick={openDropdown}
         className={`flex items-center gap-2 bg-secondary/60 rounded-xl px-4 py-3 h-full cursor-pointer hover:bg-secondary transition-colors whitespace-nowrap ${value ? "text-primary" : "text-muted-foreground"}`}
       >
         <span className="text-sm font-medium">{label}</span>
         <ChevronDown className={`w-4 h-4 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
-      {open && (
-        <div className="absolute top-full mt-1 left-0 z-[200] bg-card border border-border rounded-xl shadow-elevated min-w-[220px] max-h-[400px] overflow-y-auto pb-2">
-          <button
-            onClick={() => { onChange(""); setOpen(false); }}
-            className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left transition-colors hover:bg-secondary ${!value ? "text-primary bg-primary/10" : "text-foreground"}`}
-          >
-            <span>🏘️</span><span className="font-medium">All Types</span>
-            {!value && <Check className="w-3.5 h-3.5 ml-auto" />}
-          </button>
-          <div className="h-px bg-border mx-2" />
-          {PROPERTY_GROUPS.map((group, gi) => (
-            <div key={group.id}>
-              <div className="flex items-center gap-2 px-3 pt-2.5 pb-1">
-                <span className="text-xs">{group.emoji}</span>
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{group.label}</span>
-              </div>
-              {group.id === "commercial" ? (
-                <button
-                  key="commercial-all"
-                  onClick={() => { onChange("commercial"); setOpen(false); }}
-                  className={`w-full flex items-center gap-2.5 pl-6 pr-3 py-2 text-sm text-left transition-colors hover:bg-secondary ${value === "commercial" ? "text-primary bg-primary/10" : "text-foreground"}`}
-                >
-                  <span className="text-base">🏪</span>
-                  <span className="font-medium">All Commercial</span>
-                  {value === "commercial" && <Check className="w-3.5 h-3.5 ml-auto" />}
-                </button>
-              ) : (
-                group.types.map(typeKey => {
-                  const pt = PROPERTY_TYPE_MAP[typeKey];
-                  return (
-                    <button key={pt.value} onClick={() => { onChange(pt.value); setOpen(false); }}
-                      className={`w-full flex items-center gap-2.5 pl-6 pr-3 py-2 text-sm text-left transition-colors hover:bg-secondary ${value === pt.value ? "text-primary bg-primary/10" : "text-foreground"}`}>
-                      <span>{pt.emoji}</span>
-                      <span className="font-medium">{pt.label}</span>
-                      {value === pt.value && <Check className="w-3.5 h-3.5 ml-auto" />}
-                    </button>
-                  );
-                })
-              )}
-              {gi < PROPERTY_GROUPS.length - 1 && <div className="h-px bg-border mx-2 mt-1.5" />}
-            </div>
-          ))}
-        </div>
-      )}
+      {open && ReactDOM.createPortal(dropdownList, document.body)}
     </div>
   );
 }
