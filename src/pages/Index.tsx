@@ -889,10 +889,10 @@ export default function Index() {
 
       {/* ══ PROPERTIES PORTAL / GOLDEN VISA ══════════════════════════════════ */}
       <section className="py-20 bg-background overflow-hidden">
-        <div className="container">
+        <div ref={goldenRef} className="container">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             {/* App Mockup */}
-            <div className="relative order-last lg:order-first">
+            <div className={`relative order-last lg:order-first reveal ${goldenInView ? "in-view" : ""}`}>
               <div className="absolute inset-0 -m-8 rounded-3xl opacity-20 blur-3xl"
                 style={{ background: "radial-gradient(ellipse, hsl(42 95% 55%), transparent 70%)" }} />
               <div className="relative rounded-2xl overflow-hidden border border-brand-gold/30 shadow-elevated"
