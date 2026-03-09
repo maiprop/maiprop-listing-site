@@ -188,7 +188,7 @@ export default function ProfessionalServicesEditor() {
         ))}
       </div>
 
-      {/* ── Services panel ── */}
+              {/* Services panel tab label */}
       {activePanel === "services" && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
