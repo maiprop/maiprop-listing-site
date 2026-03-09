@@ -1,10 +1,13 @@
-import { useState } from "react";
-import { Search, Star, MapPin, Mail, CheckCircle, Loader2, Sparkles, TrendingUp, Clock, MessageSquare, ArrowRight, Zap, Brain, FileSearch, BarChart2 } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { Search, Star, MapPin, CheckCircle, Loader2, Sparkles, TrendingUp, Clock, MessageSquare, ArrowRight, Zap, Brain, FileSearch, BarChart2, X, Send, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { useProfessionals } from "@/hooks/useProfessionals";
 import { Link } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import ReactMarkdown from "react-markdown";
 
 // ─── Category Groups ──────────────────────────────────────────────────────────
 const categoryGroups = [
