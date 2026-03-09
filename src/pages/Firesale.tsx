@@ -210,7 +210,7 @@ export default function Firesale() {
       setAiEstimate(estimate);
       setRequestId(data?.id || null);
       setSubmitted(true);
-      toast.success("Your Firesale™ request has been submitted!");
+      toast.success("Your Quick Sale™ request has been submitted!");
     } catch (err: any) {
       toast.error(err.message || "Submission failed. Please try again.");
     } finally {
