@@ -1204,6 +1204,8 @@ export default function Listings() {
       </div>
 
       <Footer />
+      {/* bottom spacing for mobile nav */}
+      <div className="h-16 lg:hidden" />
 
       {/* Compare drawer */}
       <CompareDrawer
