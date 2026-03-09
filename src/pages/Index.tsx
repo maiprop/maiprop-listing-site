@@ -5,6 +5,7 @@ import {
   BarChart2, Sparkles, Check, X, Loader2, Lightbulb, Clock, TrendingUp,
   Shield, Zap, Building2, Star, Activity, Globe, Brain
 } from "lucide-react";
+import { usePriceIndex, CITY_TRENDS } from "@/hooks/usePriceIndex";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { MarketTicker } from "@/components/MarketTicker";
@@ -37,15 +38,6 @@ function removeRecentSearch(query: string) {
   const existing = getRecentSearches().filter(s => s !== query);
   localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(existing));
 }
-
-const PRICE_INDEX = [
-  { city: "Athens", sale: 2180, trend: "+4.2%", up: true },
-  { city: "Thessaloniki", sale: 1640, trend: "+2.8%", up: true },
-  { city: "Mykonos", sale: 6200, trend: "+7.1%", up: true },
-  { city: "Santorini", sale: 5100, trend: "+5.3%", up: true },
-  { city: "Crete", sale: 1890, trend: "+1.4%", up: true },
-  { city: "Rhodes", sale: 2340, trend: "+3.6%", up: true },
-];
 
 const PROPERTY_TYPE_COUNTS: Record<string, number> = {
   apartment: 18420, house: 9240, villa: 3150, commercial: 4180, land: 6350, office: 1820,
@@ -401,6 +393,7 @@ export default function Index() {
   const [searchType, setSearchType] = useState("Buy");
   const [selectedPropertyType, setSelectedPropertyType] = useState("");
   const [showAI, setShowAI] = useState(false);
+  const { data: priceIndex = [] } = usePriceIndex();
 
   const listingTypeMap: Record<string, string> = {
     "Buy": "sale", "Rent": "rent", "Auctions": "auction", "Quick Sale": "firesale",
@@ -538,23 +531,34 @@ export default function Index() {
             <div className="mt-5 animate-fade-in-up" style={{ animationDelay: "0.35s" }}>
               <div className="inline-flex items-center gap-0.5 rounded-2xl bg-card/70 backdrop-blur border border-border/60 px-1 py-1 shadow-card overflow-x-auto max-w-full">
                 <div className="px-3 py-1 flex items-center gap-1.5 shrink-0">
-                  <Activity className="w-3 h-3 text-primary animate-pulse" />
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Live €/m²</span>
+                  {priceIndex.some(i => i.is_live) ? (
+                    <span className="relative flex h-2 w-2 shrink-0">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-emerald opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-emerald" />
+                    </span>
+                  ) : (
+                    <Activity className="w-3 h-3 text-muted-foreground" />
+                  )}
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                    {priceIndex.some(i => i.is_live) ? "Live €/m²" : "Avg €/m²"}
+                  </span>
                 </div>
                 <div className="w-px h-5 bg-border/60 shrink-0" />
-                {PRICE_INDEX.map((item, i) => (
+                {priceIndex.map((item, i) => (
                   <div key={item.city} className="flex items-center gap-0 shrink-0">
                     {i > 0 && <div className="w-px h-4 bg-border/40 mx-0.5 shrink-0" />}
                     <Link to={`/listings?city=${item.city}`}
                       className="flex items-center gap-2 px-3 py-1.5 rounded-xl hover:bg-secondary/80 transition-colors group">
                       <span className="text-[11px] font-semibold text-foreground/80 group-hover:text-foreground">{item.city}</span>
-                      <span className="text-[11px] font-bold text-foreground">€{item.sale.toLocaleString()}</span>
-                      <span className={`text-[10px] font-semibold ${item.up ? "text-brand-emerald" : "text-destructive"}`}>{item.trend}</span>
+                      <span className="text-[11px] font-bold text-foreground">€{item.avg_price_per_sqm.toLocaleString()}</span>
+                      <span className="text-[10px] font-semibold text-brand-emerald">{CITY_TRENDS[item.city] ?? ""}</span>
                     </Link>
                   </div>
                 ))}
               </div>
-              <p className="text-[10px] text-muted-foreground/50 mt-1.5 ml-2">Sale price per m² · Updated monthly</p>
+              <p className="text-[10px] text-muted-foreground/50 mt-1.5 ml-2">
+                {priceIndex.some(i => i.is_live) ? "Live avg sale price per m² from active listings" : "Sale price per m² · Updated monthly"}
+              </p>
             </div>
           </div>
         </div>
