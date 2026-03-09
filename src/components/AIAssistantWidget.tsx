@@ -59,7 +59,7 @@ const SUGGESTIONS_PROPERTY = (ctx: PropertyContext) => [
   "What should I know about this neighbourhood?",
 ];
 
-export default function AIAssistantWidget({ propertyContext }: AIAssistantWidgetProps) {
+const AIAssistantWidget = forwardRef<HTMLDivElement, AIAssistantWidgetProps>(function AIAssistantWidget({ propertyContext }, _ref) {
   const [open, setOpen] = useState(false);
   const [minimized, setMinimized] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
