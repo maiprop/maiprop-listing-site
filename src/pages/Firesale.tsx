@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Flame, ArrowRight, Check, MapPin, Zap, Clock, Shield, Building2,
   Home, BarChart2, Euro, TrendingDown, ChevronRight, Star, Lock,
-  Loader2, Phone, Mail, Hash
+  Loader2, Phone, Mail, Hash, AlertCircle, Sparkles
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -27,23 +27,31 @@ const proofStats = [
 ];
 
 const conditionOptions = [
-  { value: "excellent", label: "Excellent — Move-in ready", disc: "0%" },
-  { value: "good", label: "Good — Minor works only", disc: "3–5%" },
-  { value: "fair", label: "Fair — Needs renovation", disc: "8–12%" },
-  { value: "needs-work", label: "Major Renovation Required", disc: "15–22%" },
+  { value: "excellent", label: "Excellent", sublabel: "Move-in ready", disc: "−3%", emoji: "✨" },
+  { value: "good",      label: "Good",      sublabel: "Minor works only", disc: "−7%",  emoji: "👍" },
+  { value: "fair",      label: "Fair",      sublabel: "Needs renovation", disc: "−12%", emoji: "🔨" },
+  { value: "needs-work",label: "Major Reno", sublabel: "Full renovation req.", disc: "−20%", emoji: "⚠️" },
 ];
 
-const propertyTypes = ["apartment", "house", "villa", "land", "commercial", "office"];
+const propertyTypeOptions = [
+  { value: "apartment", label: "🏢 Apartment" },
+  { value: "house",     label: "🏡 House" },
+  { value: "villa",     label: "🌴 Villa" },
+  { value: "land",      label: "🌿 Land" },
+  { value: "commercial",label: "🏪 Commercial" },
+  { value: "office",    label: "🖥️ Office" },
+];
 
 export default function Firesale() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
 
-  // Multi-step form state
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [aiEstimate, setAiEstimate] = useState<number | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [requestId, setRequestId] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     address: "",
@@ -53,61 +61,112 @@ export default function Firesale() {
     bedrooms: "",
     condition: "",
     askingPrice: "",
-    contactName: "",
+    contactName: profile?.display_name || profile?.first_name || "",
     contactEmail: user?.email || "",
-    contactPhone: "",
+    contactPhone: profile?.phone || "",
     notes: "",
   });
 
+  // Prefill from profile when it loads
+  useEffect(() => {
+    if (profile) {
+      setForm(prev => ({
+        ...prev,
+        contactName: prev.contactName || profile.display_name || profile.first_name || "",
+        contactEmail: prev.contactEmail || user?.email || "",
+        contactPhone: prev.contactPhone || profile.phone || "",
+      }));
+    }
+  }, [profile, user]);
+
   const upd = (k: string, v: string) => setForm(prev => ({ ...prev, [k]: v }));
 
-  const step1Valid = form.address && form.city && form.propertyType && form.sqm && form.condition;
-  const step2Valid = form.contactName && form.contactEmail;
+  const step1Valid = !!(form.address.trim() && form.city.trim() && form.propertyType && form.sqm && Number(form.sqm) > 0 && form.condition);
+  const step2Valid = !!(form.contactName.trim() && form.contactEmail.trim() && /\S+@\S+\.\S+/.test(form.contactEmail));
 
-  // Simulate AI estimate based on inputs
-  const generateEstimate = () => {
+  const generateEstimate = async () => {
     const basePerSqm: Record<string, number> = {
       villa: 3200, house: 2400, apartment: 2000, commercial: 2800, office: 2600, land: 900,
     };
     const condDiscount: Record<string, number> = {
-      excellent: 0.97, good: 0.93, fair: 0.87, "needs-work": 0.8,
+      excellent: 0.97, good: 0.93, fair: 0.87, "needs-work": 0.80,
     };
     const base = (basePerSqm[form.propertyType] || 2000) * Number(form.sqm);
-    const discounted = Math.round(base * (condDiscount[form.condition] || 0.9) * 0.95);
-    setAiEstimate(discounted);
+    const estimate = Math.round(base * (condDiscount[form.condition] || 0.90) * 0.95);
+    setAiEstimate(estimate);
+
+    // Try edge function for a better estimate (non-blocking)
+    setAiLoading(true);
+    try {
+      const { data } = await supabase.functions.invoke("property-valuation", {
+        body: {
+          city: form.city,
+          property_type: form.propertyType,
+          sqm: Number(form.sqm),
+          bedrooms: form.bedrooms ? Number(form.bedrooms) : undefined,
+          condition: form.condition,
+        },
+      });
+      if (data?.estimated_value) {
+        setAiEstimate(Math.round(data.estimated_value * 0.95));
+      }
+    } catch {
+      // keep the local estimate
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleContinue = async () => {
+    await generateEstimate();
+    setStep(2);
   };
 
   const handleSubmit = async () => {
+    if (!step2Valid) { toast.error("Please fill in all required fields."); return; }
     setSubmitting(true);
     try {
       const estimate = aiEstimate || Math.round(Number(form.sqm) * 1900 * 0.92);
 
-      const { error } = await supabase.from("firesale_requests").insert({
-        address: form.address,
-        city: form.city,
+      const { data, error } = await supabase.from("firesale_requests").insert({
+        address: form.address.trim(),
+        city: form.city.trim(),
         property_type: form.propertyType as any,
         sqm: Number(form.sqm),
         bedrooms: form.bedrooms ? Number(form.bedrooms) : null,
         condition: form.condition,
         asking_price: form.askingPrice ? Number(form.askingPrice) : null,
-        contact_email: form.contactEmail,
-        contact_phone: form.contactPhone || null,
-        notes: form.notes || null,
+        contact_email: form.contactEmail.trim(),
+        contact_phone: form.contactPhone.trim() || null,
+        notes: form.notes.trim() || null,
         ai_estimate: estimate,
         user_id: user?.id || null,
         status: "pending",
-      });
+      }).select("id").single();
 
       if (error) throw error;
 
       setAiEstimate(estimate);
+      setRequestId(data?.id || null);
       setSubmitted(true);
       toast.success("Your Firesale™ request has been submitted!");
     } catch (err: any) {
-      toast.error(err.message || "Submission failed");
+      toast.error(err.message || "Submission failed. Please try again.");
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleReset = () => {
+    setSubmitted(false);
+    setStep(1);
+    setAiEstimate(null);
+    setRequestId(null);
+    setForm(f => ({
+      ...f,
+      address: "", city: "", propertyType: "", sqm: "", bedrooms: "",
+      condition: "", askingPrice: "", notes: "",
+    }));
   };
 
   return (
