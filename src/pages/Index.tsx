@@ -953,6 +953,7 @@ export default function Index() {
         </div>
       </section>
 
+      <NavyDivider fromDark={false} />
       {/* ══ AUCTIONS ════════════════════════════════════════════════════════ */}
       <section className="py-16 bg-secondary">
         <div ref={auctionsRef} className="container">
