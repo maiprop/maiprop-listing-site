@@ -133,6 +133,28 @@ const unclusteredHit: LayerProps = {
   paint: { "circle-radius": 0, "circle-opacity": 0 },
 };
 
+// GPU-rendered price label pins (replaces DOM Marker components entirely)
+const priceLabelLayer: LayerProps = {
+  id: "price-labels",
+  type: "symbol",
+  source: "listings",
+  filter: ["!", ["has", "point_count"]],
+  layout: {
+    "text-field": ["get", "label"],
+    "text-font": ["DIN Offc Pro Bold", "Arial Unicode MS Bold"],
+    "text-size": 11,
+    "text-anchor": "center",
+    "icon-allow-overlap": true,
+    "text-allow-overlap": true,
+  },
+  paint: {
+    "text-color": "#0a0f1a",
+    "text-halo-color": ["get", "colour"],
+    "text-halo-width": 8,
+    "text-halo-blur": 1,
+  },
+};
+
 const heatmapLayer: LayerProps = {
   id: "price-heatmap",
   type: "heatmap",
