@@ -733,14 +733,14 @@ export default function Index() {
 
       {/* ══ POPULAR LOCATIONS ════════════════════════════════════════════════ */}
       <section className="py-16 bg-secondary">
-        <div className="container">
-        <div className="flex items-center justify-between mb-8">
+        <div ref={locationsRef} className="container">
+        <div className={`flex items-center justify-between mb-8 reveal ${locationsInView ? "in-view" : ""}`}>
           <h2 className="font-display text-2xl font-bold">Popular Locations</h2>
           <Link to="/listings" className="text-sm text-primary hover:underline flex items-center gap-1">
             Explore All <ArrowRight className="w-3 h-3" />
           </Link>
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className={`grid grid-cols-2 lg:grid-cols-4 gap-4 reveal reveal-delay-1 ${locationsInView ? "in-view" : ""}`}>
           {[
             { name: "Athens", listings: 24860, trend: "+1.2%", image: "https://images.unsplash.com/photo-1555993539-1732b0258235?w=600&q=80" },
             { name: "Thessaloniki", listings: 8240, trend: "+0.8%", image: "https://images.unsplash.com/photo-1570939274717-7eda259b50ed?w=600&q=80" },
