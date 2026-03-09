@@ -351,4 +351,6 @@ const AIAssistantWidget = forwardRef<HTMLDivElement, AIAssistantWidgetProps>(fun
       )}
     </div>
   );
-}
+});
+
+export default AIAssistantWidget;
