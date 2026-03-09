@@ -601,7 +601,7 @@ export default function Firesale() {
               </div>
 
               {/* Comparison table — redesigned */}
-              <div className="glass-card rounded-2xl border border-border overflow-hidden">
+              <div className="reveal in-view reveal-delay-1 glass-card rounded-2xl border border-border overflow-hidden transition-all duration-300 hover:border-primary/20 hover:shadow-elevated">
                 {/* Header */}
                 <div className="grid grid-cols-3 bg-muted/60 border-b border-border text-[10px] font-bold uppercase tracking-widest">
                   <div className="px-4 py-3 text-muted-foreground"></div>
