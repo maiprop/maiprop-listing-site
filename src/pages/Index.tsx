@@ -1124,9 +1124,9 @@ export default function Index() {
                 <span className="text-xs font-semibold text-brand-gold uppercase tracking-widest">Greek Auctions</span>
               </div>
               <h2 className="font-display text-2xl font-bold">This Week's Auctions</h2>
-              <p className="text-sm text-muted-foreground mt-1">
-                Judicial & bank repo auctions — live from Greek courts
-              </p>
+              
+
+              
             </div>
             <Button variant="outline" className="border-brand-gold/30 text-brand-gold hover:bg-brand-gold/10" asChild>
               <Link to="/auctions">
