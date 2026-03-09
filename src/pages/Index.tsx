@@ -668,8 +668,8 @@ export default function Index() {
 
       {/* ══ AUCTIONS ════════════════════════════════════════════════════════ */}
       <section className="py-16 bg-secondary">
-        <div className="container">
-          <div className="flex items-center justify-between mb-8">
+        <div ref={auctionsRef} className="container">
+          <div className={`flex items-center justify-between mb-8 reveal ${auctionsInView ? "in-view" : ""}`}>
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <Gavel className="w-5 h-5 text-brand-gold" />
