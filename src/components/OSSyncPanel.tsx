@@ -321,14 +321,22 @@ export function OSSyncPanel() {
 
           {/* Last result */}
           {pollResult && (
-            <div className="rounded-lg bg-secondary/50 p-2.5 text-xs space-y-0.5">
+            <div className="rounded-lg bg-secondary/50 p-2.5 text-xs space-y-1">
               <p className="font-medium">Last scan result:</p>
-              <p className="text-muted-foreground">
-                ✅ {pollResult.imported} imported · {pollResult.updated} updated ·{" "}
-                🔍 {pollResult.scanned} scanned · ⏭ skipped past
-              </p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-muted-foreground">
+                <span>✅ Imported: <strong className="text-foreground">{pollResult.imported}</strong></span>
+                <span>🔄 Updated: <strong className="text-foreground">{pollResult.updated}</strong></span>
+                <span>🤖 AI-generated: <strong className="text-brand-emerald">{pollResult.aiGenerated}</strong></span>
+                <span>🔍 Scanned: <strong className="text-foreground">{pollResult.scanned}</strong></span>
+              </div>
             </div>
           )}
+
+          {/* Nightly cron info */}
+          <div className="rounded-lg bg-primary/5 border border-primary/20 p-2.5 text-xs">
+            <p className="font-medium text-primary flex items-center gap-1">⏰ Nightly auto-scan active</p>
+            <p className="text-muted-foreground mt-0.5">Pages 0–2 scanned daily at 03:00, 03:15, 03:30 UTC. AI generates Greek titles & descriptions for each new auction.</p>
+          </div>
 
           <Button
             className="w-full gap-2"
