@@ -210,7 +210,7 @@ export default function Firesale() {
       setAiEstimate(estimate);
       setRequestId(data?.id || null);
       setSubmitted(true);
-      toast.success("Your Firesale™ request has been submitted!");
+      toast.success("Your Quick Sale™ request has been submitted!");
     } catch (err: any) {
       toast.error(err.message || "Submission failed. Please try again.");
     } finally {
@@ -267,7 +267,7 @@ export default function Firesale() {
           <div className="container relative">
             <div className="max-w-3xl">
               <div className="reveal in-view inline-flex items-center gap-2 bg-destructive/10 border border-destructive/20 text-destructive px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest mb-6">
-                <Flame className="w-3.5 h-3.5 flame-flicker" /> Firesale™ — Instant Cash Offer
+                <Flame className="w-3.5 h-3.5 flame-flicker" /> Quick Sale™ — Instant Cash Offer
               </div>
               <h1 className="reveal in-view reveal-delay-1 font-display text-5xl md:text-6xl font-black mb-5 leading-tight">
                 Sell Your Property
@@ -626,7 +626,7 @@ export default function Firesale() {
                             ) : (
                               <>
                                 <Flame className="w-4 h-4 mr-2" />
-                                Submit Firesale™ Request
+                                Submit Quick Sale™ Request
                               </>
                             )}
                           </Button>
@@ -649,7 +649,7 @@ export default function Firesale() {
 
                   <h3 className="font-display font-black text-2xl mb-2">Request Submitted! 🎉</h3>
                   <p className="text-muted-foreground text-sm mb-2 leading-relaxed">
-                    Your Firesale™ request is live in our investor deal flow.
+                    Your Quick Sale™ request is live in our investor deal flow.
                   </p>
                   {requestId && (
                     <p className="text-[11px] text-muted-foreground mb-6 font-mono bg-secondary border border-border rounded-lg px-3 py-1.5 inline-block">
@@ -766,7 +766,7 @@ export default function Firesale() {
                 <div className="grid grid-cols-3 bg-muted/60 border-b border-border text-[10px] font-bold uppercase tracking-widest">
                   <div className="px-4 py-3 text-muted-foreground"></div>
                   <div className="px-4 py-3 flex items-center justify-center gap-1.5 text-destructive border-x border-border">
-                    <Flame className="w-3 h-3" /> Firesale™
+                    <Flame className="w-3 h-3" /> Quick Sale™
                   </div>
                   <div className="px-4 py-3 text-center text-muted-foreground/60">Traditional</div>
                 </div>
@@ -809,7 +809,7 @@ export default function Firesale() {
                   </p>
                   <div className="space-y-1.5 mb-4">
                     {[
-                      "Live firesale deal feed",
+                      "Live quick sale deal feed",
                       "AI valuation reports",
                       "Seller contact details",
                       "Portfolio analytics",
