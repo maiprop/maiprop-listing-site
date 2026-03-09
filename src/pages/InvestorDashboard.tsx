@@ -160,24 +160,84 @@ type AdminDeal = {
   created_at: string;
 };
 
-function AdminDealRow({ deal, onUpdate }: { deal: AdminDeal; onUpdate: (id: string, status: string, notes: string) => Promise<void> }) {
+type AdminDealRowProps = {
+  deal: AdminDeal;
+  onUpdate: (id: string, status: string, notes: string, offerPrice?: number) => Promise<void>;
+};
+
+// Seller response recorded in admin_notes as a prefix tag
+function parseSellerResponse(notes: string | null): { response: string | null; cleanNotes: string } {
+  if (!notes) return { response: null, cleanNotes: "" };
+  const match = notes.match(/^\[SELLER:(\w+)\]\s*/);
+  if (match) return { response: match[1], cleanNotes: notes.slice(match[0].length) };
+  return { response: null, cleanNotes: notes };
+}
+
+function AdminDealRow({ deal, onUpdate }: AdminDealRowProps) {
   const [expanded, setExpanded] = useState(false);
-  const [editNotes, setEditNotes] = useState(deal.admin_notes || "");
+  const { response: sellerResponse, cleanNotes } = parseSellerResponse(deal.admin_notes);
+  const [editNotes, setEditNotes] = useState(cleanNotes);
   const [saving, setSaving] = useState(false);
+
+  // Offer modal state
+  const [showOfferModal, setShowOfferModal] = useState(false);
+  const [offerPrice, setOfferPrice] = useState(deal.offer_price ? String(deal.offer_price) : "");
+  const [offerValidity, setOfferValidity] = useState("");
+  const [offerConditions, setOfferConditions] = useState("");
+
+  // Counter offer state
+  const [showCounterInput, setShowCounterInput] = useState(false);
+  const [counterPrice, setCounterPrice] = useState("");
 
   const statusCfg = STATUS_CONFIG[deal.status] || STATUS_CONFIG.pending;
 
   const handleSave = async () => {
     setSaving(true);
-    await onUpdate(deal.id, deal.status, editNotes);
+    const prefix = sellerResponse ? `[SELLER:${sellerResponse}] ` : "";
+    await onUpdate(deal.id, deal.status, prefix + editNotes);
     setSaving(false);
   };
 
   const handleStatusChange = async (newStatus: string) => {
+    if (newStatus === "offer_sent") {
+      setShowOfferModal(true);
+      return;
+    }
     setSaving(true);
-    await onUpdate(deal.id, newStatus, editNotes);
+    const prefix = sellerResponse ? `[SELLER:${sellerResponse}] ` : "";
+    await onUpdate(deal.id, newStatus, prefix + editNotes);
     setSaving(false);
   };
+
+  const handleSendOffer = async () => {
+    if (!offerPrice) return;
+    setSaving(true);
+    const notes = [
+      offerConditions && `Terms: ${offerConditions}`,
+      offerValidity && `Valid until: ${offerValidity}`,
+    ].filter(Boolean).join(" | ");
+    await onUpdate(deal.id, "offer_sent", notes, Number(offerPrice));
+    setShowOfferModal(false);
+    setSaving(false);
+  };
+
+  const handleSellerResponse = async (resp: "ACCEPTED" | "COUNTERED" | "REJECTED") => {
+    if (resp === "COUNTERED" && !showCounterInput) {
+      setShowCounterInput(true);
+      return;
+    }
+    setSaving(true);
+    const newNotes = `[SELLER:${resp}] ${editNotes}`;
+    const newStatus = resp === "ACCEPTED" ? "closed" : resp === "REJECTED" ? "reviewed" : "offer_sent";
+    const counterVal = resp === "COUNTERED" && counterPrice ? Number(counterPrice) : undefined;
+    await onUpdate(deal.id, newStatus, newNotes, counterVal);
+    setShowCounterInput(false);
+    setSaving(false);
+  };
+
+  const discountPct = deal.ai_estimate && deal.asking_price
+    ? ((1 - deal.asking_price / deal.ai_estimate) * 100).toFixed(1)
+    : null;
 
   return (
     <div className="glass-card rounded-xl border border-border overflow-hidden">
@@ -191,6 +251,15 @@ function AdminDealRow({ deal, onUpdate }: { deal: AdminDeal; onUpdate: (id: stri
             <span className={`text-[10px] font-bold uppercase tracking-widest border px-2 py-0.5 rounded-full ${statusCfg.color}`}>
               {statusCfg.label}
             </span>
+            {sellerResponse && (
+              <span className={`text-[10px] font-bold uppercase tracking-widest border px-2 py-0.5 rounded-full ${
+                sellerResponse === "ACCEPTED" ? "bg-brand-emerald/15 text-brand-emerald border-brand-emerald/20" :
+                sellerResponse === "REJECTED" ? "bg-destructive/15 text-destructive border-destructive/20" :
+                "bg-brand-gold/15 text-brand-gold border-brand-gold/20"
+              }`}>
+                Seller: {sellerResponse.toLowerCase()}
+              </span>
+            )}
             <span className="text-[10px] font-semibold text-muted-foreground bg-muted border border-border px-2 py-0.5 rounded-full capitalize">
               {deal.property_type || "property"}
             </span>
@@ -205,17 +274,52 @@ function AdminDealRow({ deal, onUpdate }: { deal: AdminDeal; onUpdate: (id: stri
         <div className="text-right shrink-0 hidden sm:block">
           <p className="text-[10px] text-muted-foreground">Asking</p>
           <p className="font-display font-black text-base">€{(deal.asking_price || 0).toLocaleString()}</p>
-          {deal.ai_estimate && (
+          {deal.offer_price ? (
+            <p className="text-[10px] text-primary font-bold">Offer: €{deal.offer_price.toLocaleString()}</p>
+          ) : deal.ai_estimate ? (
             <p className="text-[10px] text-muted-foreground">AI: €{deal.ai_estimate.toLocaleString()}</p>
-          )}
+          ) : null}
         </div>
         <ChevronDown className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`} />
       </button>
 
       {/* Expanded panel */}
       {expanded && (
-        <div className="border-t border-border p-4 space-y-4 bg-muted/20">
-          {/* Contact + deal data */}
+        <div className="border-t border-border p-4 space-y-5 bg-muted/20">
+
+          {/* ── STEP INDICATOR ── */}
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Deal Journey</p>
+            <div className="flex items-center gap-0">
+              {STATUS_FLOW.map((s, i) => {
+                const cfg = STATUS_CONFIG[s];
+                const currentIdx = STATUS_FLOW.indexOf(deal.status as typeof STATUS_FLOW[number]);
+                const isDone = i < currentIdx;
+                const isCurrent = deal.status === s;
+                return (
+                  <div key={s} className="flex items-center flex-1">
+                    <div className={`flex flex-col items-center gap-1 flex-1`}>
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black border transition-all ${
+                        isCurrent ? cfg.color + " ring-2 ring-offset-1 ring-offset-background" :
+                        isDone ? "bg-brand-emerald/20 text-brand-emerald border-brand-emerald/30" :
+                        "bg-muted text-muted-foreground border-border"
+                      }`}>
+                        {isDone ? <Check className="w-3 h-3" /> : i + 1}
+                      </div>
+                      <span className={`text-[9px] font-bold uppercase tracking-wider text-center leading-tight ${isCurrent ? "text-foreground" : "text-muted-foreground"}`}>
+                        {cfg.label}
+                      </span>
+                    </div>
+                    {i < STATUS_FLOW.length - 1 && (
+                      <div className={`h-px w-4 shrink-0 mb-4 ${isDone || isCurrent ? "bg-brand-emerald/40" : "bg-border"}`} />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* ── CONTACT + METRICS ── */}
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Contact Info</p>
@@ -246,9 +350,15 @@ function AdminDealRow({ deal, onUpdate }: { deal: AdminDeal; onUpdate: (id: stri
                   <p className="text-muted-foreground">AI Estimate</p>
                   <p className="font-bold text-brand-emerald">€{(deal.ai_estimate || 0).toLocaleString()}</p>
                 </div>
+                {discountPct && (
+                  <div className="bg-destructive/10 rounded-lg p-2">
+                    <p className="text-muted-foreground">Discount</p>
+                    <p className="font-bold text-destructive">{discountPct}% below value</p>
+                  </div>
+                )}
                 {deal.offer_price && (
-                  <div className="bg-muted rounded-lg p-2 col-span-2">
-                    <p className="text-muted-foreground">Offer Price</p>
+                  <div className="bg-primary/10 rounded-lg p-2">
+                    <p className="text-muted-foreground">Our Offer</p>
                     <p className="font-bold text-primary">€{deal.offer_price.toLocaleString()}</p>
                   </div>
                 )}
@@ -256,30 +366,125 @@ function AdminDealRow({ deal, onUpdate }: { deal: AdminDeal; onUpdate: (id: stri
             </div>
           </div>
 
-          {/* Status pipeline */}
+          {/* ── OFFER SECTION (when offer_sent) ── */}
+          {deal.status === "offer_sent" && (
+            <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-primary flex items-center gap-1.5">
+                  <SendHorizonal className="w-3.5 h-3.5" /> Offer Sent — Awaiting Seller Response
+                </p>
+                {deal.offer_price && (
+                  <span className="text-sm font-black text-primary">€{deal.offer_price.toLocaleString()}</span>
+                )}
+              </div>
+              {deal.admin_notes && !sellerResponse && (
+                <p className="text-xs text-muted-foreground bg-muted rounded-lg px-3 py-2">{deal.admin_notes}</p>
+              )}
+              <p className="text-xs text-muted-foreground">Record how the seller responded to this offer:</p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  className="bg-brand-emerald/15 hover:bg-brand-emerald/25 text-brand-emerald border border-brand-emerald/30 gap-1.5 h-8 text-xs"
+                  onClick={() => handleSellerResponse("ACCEPTED")}
+                  disabled={saving}
+                >
+                  <ThumbsUp className="w-3 h-3" /> Seller Accepted
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-brand-gold/30 text-brand-gold hover:bg-brand-gold/10 gap-1.5 h-8 text-xs"
+                  onClick={() => handleSellerResponse("COUNTERED")}
+                  disabled={saving}
+                >
+                  <ArrowLeftRight className="w-3 h-3" /> Counter-Offer
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-destructive/30 text-destructive hover:bg-destructive/10 gap-1.5 h-8 text-xs"
+                  onClick={() => handleSellerResponse("REJECTED")}
+                  disabled={saving}
+                >
+                  <ThumbsDown className="w-3 h-3" /> Rejected
+                </Button>
+              </div>
+              {showCounterInput && (
+                <div className="flex gap-2 items-center pt-1">
+                  <div className="relative flex-1">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">€</span>
+                    <input
+                      type="number"
+                      value={counterPrice}
+                      onChange={e => setCounterPrice(e.target.value)}
+                      placeholder="Seller's counter price"
+                      className="w-full bg-background border border-border rounded-lg pl-7 pr-3 py-2 text-xs outline-none focus:border-primary"
+                    />
+                  </div>
+                  <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground text-xs h-9 gap-1.5" onClick={() => handleSellerResponse("COUNTERED")} disabled={saving || !counterPrice}>
+                    {saving ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />} Save Counter
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-9 px-2" onClick={() => setShowCounterInput(false)}><XIcon className="w-3 h-3" /></Button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── CLOSED DEAL SUMMARY ── */}
+          {deal.status === "closed" && (
+            <div className="rounded-xl border border-brand-emerald/30 bg-brand-emerald/5 p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <Trophy className="w-4 h-4 text-brand-emerald" />
+                <p className="text-sm font-bold text-brand-emerald">Deal Closed!</p>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-xs">
+                <div className="bg-background rounded-lg p-2 text-center">
+                  <p className="text-muted-foreground mb-0.5">Asking</p>
+                  <p className="font-bold">€{(deal.asking_price || 0).toLocaleString()}</p>
+                </div>
+                <div className="bg-background rounded-lg p-2 text-center">
+                  <p className="text-muted-foreground mb-0.5">Closed At</p>
+                  <p className="font-bold text-brand-emerald">€{(deal.offer_price || deal.asking_price || 0).toLocaleString()}</p>
+                </div>
+                {deal.ai_estimate && deal.offer_price && (
+                  <div className="bg-background rounded-lg p-2 text-center">
+                    <p className="text-muted-foreground mb-0.5">Saved vs. Market</p>
+                    <p className="font-bold text-primary">
+                      €{(deal.ai_estimate - deal.offer_price).toLocaleString()}
+                    </p>
+                  </div>
+                )}
+              </div>
+              {sellerResponse && (
+                <p className="text-[10px] text-muted-foreground">Seller response on file: <span className="font-bold text-foreground capitalize">{sellerResponse.toLowerCase()}</span></p>
+              )}
+            </div>
+          )}
+
+          {/* ── STATUS PIPELINE BUTTONS ── */}
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Update Status</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Move to Stage</p>
             <div className="flex items-center gap-2 flex-wrap">
-              {STATUS_FLOW.map((s, i) => {
+              {STATUS_FLOW.map((s) => {
                 const cfg = STATUS_CONFIG[s];
                 const isCurrent = deal.status === s;
                 return (
                   <button
                     key={s}
                     onClick={() => handleStatusChange(s)}
-                    disabled={saving}
-                    className={`text-[10px] font-bold uppercase tracking-widest border px-3 py-1.5 rounded-full transition-all ${
+                    disabled={saving || isCurrent}
+                    className={`text-[10px] font-bold uppercase tracking-widest border px-3 py-1.5 rounded-full transition-all disabled:opacity-50 ${
                       isCurrent ? cfg.color + " ring-2 ring-offset-1 ring-offset-background" : "text-muted-foreground border-border hover:border-primary/40"
                     }`}
                   >
-                    {cfg.label}
+                    {s === "offer_sent" ? "✉ Send Offer" : cfg.label}
                   </button>
                 );
               })}
             </div>
           </div>
 
-          {/* Admin notes */}
+          {/* ── ADMIN NOTES ── */}
           <div>
             <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Internal Notes</p>
             <textarea
@@ -298,6 +503,97 @@ function AdminDealRow({ deal, onUpdate }: { deal: AdminDeal; onUpdate: (id: stri
               >
                 {saving ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
                 Save Notes
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── OFFER MODAL ── */}
+      {showOfferModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
+          <div className="glass-card rounded-2xl border border-border w-full max-w-md p-6 space-y-5 shadow-elevated">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="font-display font-bold text-lg">Send Offer</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">{deal.address}, {deal.city}</p>
+              </div>
+              <button className="p-1 rounded-lg text-muted-foreground hover:text-foreground" onClick={() => setShowOfferModal(false)}>
+                <XIcon className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {/* Context */}
+              <div className="flex gap-2 text-xs">
+                <div className="flex-1 bg-muted rounded-lg p-2.5">
+                  <p className="text-muted-foreground">Asking</p>
+                  <p className="font-bold text-base">€{(deal.asking_price || 0).toLocaleString()}</p>
+                </div>
+                <div className="flex-1 bg-brand-emerald/10 rounded-lg p-2.5">
+                  <p className="text-muted-foreground">AI Estimate</p>
+                  <p className="font-bold text-base text-brand-emerald">€{(deal.ai_estimate || 0).toLocaleString()}</p>
+                </div>
+              </div>
+
+              {/* Offer price */}
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground block mb-1.5">Your Offer Price *</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-bold">€</span>
+                  <input
+                    type="number"
+                    value={offerPrice}
+                    onChange={e => setOfferPrice(e.target.value)}
+                    placeholder={String(Math.round((deal.asking_price || 0) * 0.9))}
+                    className="w-full bg-background border border-border rounded-xl pl-8 pr-4 py-3 text-sm font-bold outline-none focus:border-primary transition-colors"
+                  />
+                </div>
+                {offerPrice && deal.asking_price && (
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    {Number(offerPrice) < deal.asking_price
+                      ? <span className="text-brand-emerald font-semibold">↓ {((1 - Number(offerPrice) / deal.asking_price) * 100).toFixed(1)}% below asking</span>
+                      : <span className="text-primary font-semibold">↑ {((Number(offerPrice) / deal.asking_price - 1) * 100).toFixed(1)}% above asking</span>}
+                  </p>
+                )}
+              </div>
+
+              {/* Validity */}
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground block mb-1.5">Offer Valid Until</label>
+                <input
+                  type="date"
+                  value={offerValidity}
+                  onChange={e => setOfferValidity(e.target.value)}
+                  className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm outline-none focus:border-primary transition-colors"
+                />
+              </div>
+
+              {/* Conditions */}
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground block mb-1.5">Key Conditions / Terms</label>
+                <textarea
+                  value={offerConditions}
+                  onChange={e => setOfferConditions(e.target.value)}
+                  placeholder="e.g. Subject to survey, completion within 60 days, cash buyer..."
+                  rows={2}
+                  className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm outline-none focus:border-primary resize-none transition-colors"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <Button variant="outline" size="sm" className="flex-1 border-border" onClick={() => setShowOfferModal(false)}>
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                className="flex-1 bg-gradient-primary border-0 text-primary-foreground gap-1.5"
+                onClick={handleSendOffer}
+                disabled={saving || !offerPrice}
+              >
+                {saving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <SendHorizonal className="w-3.5 h-3.5" />}
+                Send Offer
               </Button>
             </div>
           </div>
