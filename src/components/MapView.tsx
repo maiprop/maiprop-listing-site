@@ -251,24 +251,6 @@ function PropertyPopup({ listing, onClose }: { listing: MapListing; onClose: () 
   );
 }
 
-  const c = typeColour(listing.listingType);
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        background: isActive ? c : `${c}cc`,
-        border: isActive ? "2px solid white" : "1px solid rgba(255,255,255,0.35)",
-        transform: isActive ? "scale(1.18)" : "scale(1)",
-        boxShadow: isActive ? `0 4px 20px ${c}99` : "0 2px 8px rgba(0,0,0,0.45)",
-        transition: "all 0.15s ease",
-        color: "#0a0f1a",
-      }}
-      className="rounded-full px-2.5 py-1 text-xs font-bold whitespace-nowrap"
-    >
-      {priceLabel(listing.price)}
-    </button>
-  );
-}
 
 // ── MapView ───────────────────────────────────────────────────────────────────
 
