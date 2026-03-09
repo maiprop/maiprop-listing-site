@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, forwardRef } from "react";
 import { Sparkles, X, Send, Loader2, Bot, User, ChevronDown, RotateCcw } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 
@@ -59,7 +59,7 @@ const SUGGESTIONS_PROPERTY = (ctx: PropertyContext) => [
   "What should I know about this neighbourhood?",
 ];
 
-export default function AIAssistantWidget({ propertyContext }: AIAssistantWidgetProps) {
+const AIAssistantWidget = forwardRef<HTMLDivElement, AIAssistantWidgetProps>(function AIAssistantWidget({ propertyContext }, _ref) {
   const [open, setOpen] = useState(false);
   const [minimized, setMinimized] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -351,4 +351,6 @@ export default function AIAssistantWidget({ propertyContext }: AIAssistantWidget
       )}
     </div>
   );
-}
+});
+
+export default AIAssistantWidget;
