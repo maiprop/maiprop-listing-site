@@ -76,7 +76,7 @@ function PropertyTypeDropdown({ value, onChange }: { value: string; onChange: (t
         <ChevronDown className={`w-4 h-4 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
-        <div className="absolute top-full mt-1 left-0 z-50 bg-card border border-border rounded-xl shadow-elevated min-w-[220px] max-h-[400px] overflow-y-auto">
+        <div className="absolute top-full mt-1 left-0 z-[200] bg-card border border-border rounded-xl shadow-elevated min-w-[220px] max-h-[400px] overflow-y-auto">
           <button
             onClick={() => { onChange(""); setOpen(false); }}
             className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left transition-colors hover:bg-secondary ${!value ? "text-primary bg-primary/10" : "text-foreground"}`}
