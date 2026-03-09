@@ -29,11 +29,10 @@ import CookiePolicy from "./pages/CookiePolicy";
 
 const queryClient = new QueryClient();
 
-// Show the global AI widget on all pages except auth & dashboard
+// Show the global AI widget on all pages except auth & onboarding
 function GlobalAIWidget() {
   const loc = useLocation();
-  const hide = ["/login", "/signup", "/dashboard", "/messages"].some(p => loc.pathname.startsWith(p));
-  // On property detail pages, the widget is rendered inside PropertyDetail with context instead
+  const hide = ["/login", "/signup", "/onboarding", "/dashboard", "/messages"].some(p => loc.pathname.startsWith(p));
   const isPropertyPage = loc.pathname.startsWith("/property/");
   if (hide || isPropertyPage) return null;
   return <AIAssistantWidget />;
@@ -58,6 +57,7 @@ const App = () => (
               <Route path="/professionals/:id" element={<ProfessionalProfile />} />
               <Route path="/signup" element={<Signup />} />
               <Route path="/login" element={<Login />} />
+              <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
               <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
               <Route path="/dashboard/:section" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
               <Route path="/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
