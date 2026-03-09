@@ -440,9 +440,13 @@ export default function Listings() {
     property_type: selectedType || undefined,
   });
 
-  const sourceListings = dbListings.length > 0
+  // Only fall back to mock data when: not loading, no filters active, and DB returned nothing
+  const hasActiveFilters = !!(searchQuery || selectedListingType || selectedType);
+  const sourceListings = (dbListings.length > 0)
     ? dbListings.map(dbListingToCard)
-    : mockProperties.map(p => ({ ...p, _raw: p }));
+    : (!isLoading && !hasActiveFilters)
+      ? mockProperties.map(p => ({ ...p, _raw: p }))
+      : [];
 
   // Client-side filtering
   let filtered = sourceListings.filter((p: any) => {
