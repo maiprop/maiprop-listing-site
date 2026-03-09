@@ -561,18 +561,6 @@ export default function InvestorDashboard() {
                     {subscription.tier} Plan Active
                   </div>
                 )}
-                {!subscribed && !subLoading && (
-                  <Button size="sm" variant="outline" className="border-primary/30 text-primary text-xs h-8 gap-1.5" onClick={() => setShowGate(true)}>
-                    <Sparkles className="w-3 h-3" /> Subscribe
-                  </Button>
-                )}
-                <Button
-                  className="bg-gradient-primary border-0 text-primary-foreground gap-2"
-                  onClick={() => navigate("/firesale")}
-                >
-                  <Flame className="w-4 h-4" />
-                  Submit a Property
-                </Button>
               </div>
             </div>
 
