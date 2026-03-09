@@ -1212,6 +1212,7 @@ export default function Index() {
         </div>
       </section>
 
+      <NavyDivider fromDark={false} />
       {/* ══ mAI PROP OS ═════════════════════════════════════════════════════ */}
       <section className="py-20 bg-secondary overflow-hidden">
         <div ref={osRef} className="container">
