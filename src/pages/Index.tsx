@@ -55,27 +55,32 @@ function PropertyTypeDropdown({ value, onChange }: { value: string; onChange: (t
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0, width: 0, openUp: false });
   const btnRef = useRef<HTMLButtonElement>(null);
+  const isOpeningRef = useRef(false);
 
   const openDropdown = () => {
     if (btnRef.current) {
       const r = btnRef.current.getBoundingClientRect();
       const spaceBelow = window.innerHeight - r.bottom;
-      const openUp = spaceBelow < 360; // if less than 360px below, open upward
+      const openUp = spaceBelow < 360;
       setPos({
         top: openUp
-          ? r.top + window.scrollY - 360 - 4  // above button
-          : r.bottom + window.scrollY + 4,     // below button
+          ? r.top + window.scrollY - 360 - 4
+          : r.bottom + window.scrollY + 4,
         left: r.left + window.scrollX,
         width: r.width,
         openUp,
       });
     }
+    // Mark that we're in the process of opening so the close handler ignores this event
+    isOpeningRef.current = true;
     setOpen(o => !o);
+    setTimeout(() => { isOpeningRef.current = false; }, 50);
   };
 
   useEffect(() => {
     if (!open) return;
     const close = (e: MouseEvent) => {
+      if (isOpeningRef.current) return;
       const portal = document.getElementById("type-dropdown-portal");
       if (btnRef.current?.contains(e.target as Node)) return;
       if (portal?.contains(e.target as Node)) return;
