@@ -170,36 +170,44 @@ const FilterChip = forwardRef<HTMLButtonElement, {
 
 // ─── ListingTypeButton ────────────────────────────────────────────────────────
 
-function useDropdownPosition(ref: React.RefObject<HTMLDivElement>, open: boolean) {
-  const [pos, setPos] = useState({ top: 0, left: 0 });
-  useEffect(() => {
-    if (!open || !ref.current) return;
-    const rect = ref.current.getBoundingClientRect();
-    setPos({ top: rect.bottom + window.scrollY + 4, left: rect.left + window.scrollX });
-  }, [open, ref]);
-  return pos;
-}
-
-function ListingTypeButton({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function usePortalDropdown() {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const pos = useDropdownPosition(ref, open);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const portalRef = useRef<HTMLDivElement>(null);
+
+  const toggle = () => {
+    if (!open && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setPos({ top: rect.bottom + window.scrollY + 4, left: rect.left + window.scrollX });
+    }
+    setOpen(o => !o);
+  };
 
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (
+        triggerRef.current?.contains(e.target as Node) ||
+        portalRef.current?.contains(e.target as Node)
+      ) return;
+      setOpen(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
+  return { open, setOpen, pos, triggerRef, portalRef, toggle };
+}
+
+function ListingTypeButton({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const { open, setOpen, pos, triggerRef, portalRef, toggle } = usePortalDropdown();
   const current = listingTypeOptions.find(o => o.value === value) || listingTypeOptions[0];
 
   return (
-    <div ref={ref} className="relative shrink-0">
+    <div ref={triggerRef} className="relative shrink-0">
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={toggle}
         className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-medium transition-all whitespace-nowrap ${
           value
             ? "border-primary bg-primary/10 text-primary"
@@ -212,13 +220,13 @@ function ListingTypeButton({ value, onChange }: { value: string; onChange: (v: s
       </button>
       {open && createPortal(
         <div
+          ref={portalRef}
           style={{ position: "absolute", top: pos.top, left: pos.left, zIndex: 9999 }}
           className="bg-card border border-border rounded-xl shadow-lg overflow-hidden min-w-[160px]"
         >
           {listingTypeOptions.map(o => (
             <button
               key={o.value}
-              onMouseDown={e => e.preventDefault()}
               onClick={() => { onChange(o.value); setOpen(false); }}
               className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left transition-colors hover:bg-secondary ${
                 value === o.value ? "text-primary bg-primary/10" : "text-foreground"
@@ -244,24 +252,10 @@ function PropertyTypeButton({
   value: string; subtype: string;
   onChange: (type: string, subtype: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const pos = useDropdownPosition(ref, open);
-
+  const { open, setOpen, pos, triggerRef, portalRef, toggle } = usePortalDropdown();
   const commercialType = PROPERTY_TYPE_MAP["commercial"];
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
-
   const currentType = value ? PROPERTY_TYPE_MAP[value as PropertyTypeKey] : null;
   const currentSubtype = currentType?.subtypes.find(s => s.value === subtype);
-
   const label = currentSubtype
     ? `${currentType!.emoji} ${currentSubtype.label}`
     : currentType
@@ -269,9 +263,9 @@ function PropertyTypeButton({
     : "🏘️ All Types";
 
   return (
-    <div ref={ref} className="relative shrink-0">
+    <div ref={triggerRef} className="relative shrink-0">
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={toggle}
         className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-medium transition-all whitespace-nowrap ${
           value
             ? "border-primary bg-primary/10 text-primary"
@@ -283,11 +277,11 @@ function PropertyTypeButton({
       </button>
       {open && createPortal(
         <div
+          ref={portalRef}
           style={{ position: "absolute", top: pos.top, left: pos.left, zIndex: 9999 }}
           className="bg-card border border-border rounded-xl shadow-lg min-w-[220px] max-h-[480px] overflow-y-auto"
         >
           <button
-            onMouseDown={e => e.preventDefault()}
             onClick={() => { onChange("", ""); setOpen(false); }}
             className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left transition-colors hover:bg-secondary ${
               !value ? "text-primary bg-primary/10" : "text-foreground"
@@ -297,19 +291,16 @@ function PropertyTypeButton({
             {!value && <Check className="w-3.5 h-3.5 ml-auto" />}
           </button>
           <div className="h-px bg-border mx-2" />
-
           {PROPERTY_GROUPS.map((group, gi) => (
             <div key={group.id}>
               <div className="flex items-center gap-2 px-3 pt-2.5 pb-1">
                 <span className="text-xs">{group.emoji}</span>
                 <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{group.label}</span>
               </div>
-
               {group.id === "commercial" ? (
                 commercialType.subtypes.map(st => (
                   <button
                     key={st.value}
-                    onMouseDown={e => e.preventDefault()}
                     onClick={() => { onChange("commercial", st.value); setOpen(false); }}
                     title={st.description}
                     className={`w-full flex items-center gap-2.5 pl-6 pr-3 py-2 text-sm text-left transition-colors hover:bg-secondary ${
@@ -327,7 +318,6 @@ function PropertyTypeButton({
                   return (
                     <button
                       key={pt.value}
-                      onMouseDown={e => e.preventDefault()}
                       onClick={() => { onChange(pt.value, ""); setOpen(false); }}
                       className={`w-full flex items-center gap-2.5 pl-6 pr-3 py-2 text-sm text-left transition-colors hover:bg-secondary ${
                         value === pt.value && !subtype ? "text-primary bg-primary/10" : "text-foreground"
@@ -340,7 +330,6 @@ function PropertyTypeButton({
                   );
                 })
               )}
-
               {gi < PROPERTY_GROUPS.length - 1 && <div className="h-px bg-border mx-2 mt-1.5" />}
             </div>
           ))}
@@ -350,6 +339,11 @@ function PropertyTypeButton({
     </div>
   );
 }
+
+
+
+
+
 
 // ── MapGate — only renders map if user accepted mapping cookies ─────────────────
 function MapGate({ consent, accept, children, height }: {
