@@ -10,7 +10,10 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { address, city, lat, lng } = await req.json();
+    const body = await req.json();
+    const { address, city } = body;
+    const lat = body.lat ?? body.latitude;
+    const lng = body.lng ?? body.longitude;
 
     if (!lat || !lng) {
       return new Response(
