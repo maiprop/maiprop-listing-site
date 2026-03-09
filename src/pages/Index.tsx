@@ -1104,6 +1104,7 @@ export default function Index() {
         </div>
       </section>
 
+      <NavyDivider fromDark={false} />
       {/* ══ PROFESSIONALS CTA ════════════════════════════════════════════════ */}
       <section className="py-20 bg-background">
         <div ref={prosRef} className="container">
