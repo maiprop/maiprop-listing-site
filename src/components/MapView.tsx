@@ -422,6 +422,8 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
 
     const map = mapRef.current?.getMap();
     if (!map) return;
+
+    // Cluster click → expand
     const clusters = map.queryRenderedFeatures(event.point, { layers: ["clusters"] });
     if (clusters.length) {
       const clusterId = clusters[0].properties?.cluster_id;
@@ -431,9 +433,24 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
       });
       return;
     }
-    if (!map.queryRenderedFeatures(event.point, { layers: ["unclustered-point"] }).length)
-      setPopupInfo(null);
-  }, [closePolygon]);
+
+    // Price label click → open popup (GPU layer)
+    const pins = map.queryRenderedFeatures(event.point, { layers: ["price-labels"] });
+    if (pins.length) {
+      const props = pins[0].properties!;
+      const id = props.id;
+      const listing = mapped.find(l => l.id === id);
+      if (listing) {
+        setPopupInfo(p =>
+          p?.listing.id === id ? null
+            : { listing, lng: Number(listing.longitude), lat: Number(listing.latitude) }
+        );
+      }
+      return;
+    }
+
+    setPopupInfo(null);
+  }, [closePolygon, mapped]);
 
   const onMouseMove = useCallback((e: any) => {
     const { drawMode, polygonClosed } = stateRef.current;
