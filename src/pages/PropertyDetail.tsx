@@ -11,7 +11,7 @@ import {
 import { getSubtypeLabel, PROPERTY_TYPE_MAP, type PropertyTypeKey } from "@/lib/propertyTypes";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
-import { MarketTicker } from "@/components/MarketTicker";
+
 import { Footer } from "@/components/Footer";
 import { PropertyCard } from "@/components/PropertyCard";
 import { mockProperties } from "@/data/mockProperties";
@@ -377,7 +377,6 @@ export default function PropertyDetail() {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <MarketTicker />
 
       <div className="pt-16">
         {/* Breadcrumb */}
