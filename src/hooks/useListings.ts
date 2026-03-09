@@ -17,8 +17,7 @@ export function useListings(filters?: {
         .from("listings")
         .select(`
           *,
-          listing_images(url, sort_order),
-          profiles!listings_owner_id_fkey(display_name, avatar_url, verified)
+          listing_images(url, sort_order)
         `)
         .order("created_at", { ascending: false });
 
