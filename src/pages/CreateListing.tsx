@@ -686,7 +686,30 @@ export default function CreateListing() {
                 </div>
                 <div>
                   <FieldLabel>Description</FieldLabel>
-                  <Textarea placeholder="Describe the property..." value={form.description} onChange={e => set("description", e.target.value)} rows={4} />
+                  <div className="relative">
+                    <Textarea
+                      placeholder="Describe the property in detail — highlights, condition, location perks, investment potential..."
+                      value={form.description}
+                      onChange={e => set("description", e.target.value)}
+                      rows={5}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAiDescription}
+                    disabled={aiDescLoading}
+                    className="mt-2 flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all disabled:opacity-50 border-primary/40 bg-primary/5 text-primary hover:bg-primary/10"
+                  >
+                    {aiDescLoading
+                      ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Generating...</>
+                      : <><Sparkles className="w-3.5 h-3.5" /> {form.description ? "Regenerate with AI" : "Write with AI"}</>
+                    }
+                  </button>
+                  {!form.sqm && (
+                    <p className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1">
+                      <Info className="w-3 h-3 shrink-0" /> Fill in Area (m²) below for better AI results
+                    </p>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div><FieldLabel required>Area (m²)</FieldLabel><Input type="number" placeholder="85" value={form.sqm} onChange={e => set("sqm", e.target.value)} /></div>
