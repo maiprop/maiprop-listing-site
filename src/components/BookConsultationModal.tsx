@@ -238,7 +238,7 @@ export default function BookConsultationModal({ open, onClose, professional }: B
                                 </span>
                               )}
                               {svc.is_premium && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400">Pro</span>
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-gold/15 text-brand-gold">Pro</span>
                               )}
                             </div>
                           </div>
