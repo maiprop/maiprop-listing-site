@@ -206,16 +206,21 @@ export function Navbar() {
             <Link
               key={link.href}
               to={link.href}
-              className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+              className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                link.accent === "flame"
+                  ? "text-destructive/80 hover:text-destructive hover:bg-destructive/10"
+                  : link.accent === "subtle"
+                    ? "text-accent/80 hover:text-accent hover:bg-accent/10"
+                    : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+              }`}
               onClick={() => setMobileOpen(false)}
             >
+              {link.accent === "flame" && <span>🔥</span>}
               {link.label}
-              {link.badge && link.badgeStyle === "gold" && (
-                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-brand-gold text-background font-black uppercase tracking-widest">{link.badge}</span>
-              )}
-              {link.badge && !link.badgeStyle && (
+              {link.badge && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold font-semibold">{link.badge}</span>
               )}
+              {link.accent === "subtle" && <span className="w-1.5 h-1.5 rounded-full bg-accent/60" />}
             </Link>
           ))}
           <div className="pt-2 flex gap-2">
