@@ -15,8 +15,8 @@ import { toast } from "sonner";
 const steps = [
 { step: "01", title: "Property Details", desc: "Address, type, size, condition — takes 2 minutes." },
 { step: "02", title: "AI Valuation Engine", desc: "100+ data points analyzed from mAI Prop OS." },
-{ step: "03", title: "Confidential Offer", desc: "Guaranteed cash offer within 48 hours." },
-{ step: "04", title: "Close in 48h", desc: "Accept and close. We handle title, notary, everything." }];
+{ step: "03", title: "Confidential Offer", desc: "Guaranteed cash offer within 96 hours." },
+{ step: "04", title: "Close in 96h", desc: "Accept and close. We handle title, notary, everything." }];
 
 
 const proofStats = [
@@ -190,7 +190,7 @@ export default function Firesale() {
           <div className="container relative">
             <div className="max-w-3xl">
               <div className="reveal in-view inline-flex items-center gap-2 bg-destructive/10 border border-destructive/20 text-destructive px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest mb-6">
-                <Flame className="w-3.5 h-3.5" /> Firesale™ — Instant Cash Offer
+                <Flame className="w-3.5 h-3.5 flame-flicker" /> Firesale™ — Instant Cash Offer
               </div>
               <h1 className="reveal in-view reveal-delay-1 font-display text-5xl md:text-6xl font-black mb-5 leading-tight">
                 Sell Your Property<br />
@@ -611,7 +611,7 @@ export default function Firesale() {
                   <div className="px-4 py-3 text-center text-muted-foreground/60">Traditional</div>
                 </div>
                 {[
-                  { label: "Time to offer", firesale: "48 hours", trad: "3–6 months", icon: "⚡" },
+                  { label: "Time to offer", firesale: "96 hours", trad: "3–6 months", icon: "⚡" },
                   { label: "Viewings", firesale: "Fast & private", trad: "10–30 open days", icon: "🔑" },
                   { label: "Negotiations", firesale: "None", trad: "Weeks of back-forth", icon: "🤝" },
                   { label: "Certainty of sale", firesale: "Guaranteed", trad: "~60% chance", icon: "🎯" },

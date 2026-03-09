@@ -428,6 +428,19 @@
   animation: firesale-orb-3 7s ease-in-out infinite;
 }
 
+/* ── Flame flicker animation ─────────────────────────────────────────── */
+@keyframes flame-flicker {
+  0%, 100% { transform: scale(1) rotate(-2deg); opacity: 1; filter: drop-shadow(0 0 3px hsl(0 80% 55% / 0.7)); }
+  20%       { transform: scale(1.15) rotate(3deg); opacity: 0.9; filter: drop-shadow(0 0 6px hsl(20 90% 55% / 0.9)); }
+  40%       { transform: scale(0.92) rotate(-4deg); opacity: 1; filter: drop-shadow(0 0 4px hsl(0 75% 50% / 0.8)); }
+  60%       { transform: scale(1.1) rotate(2deg); opacity: 0.85; filter: drop-shadow(0 0 8px hsl(15 85% 58% / 0.95)); }
+  80%       { transform: scale(0.97) rotate(-1deg); opacity: 1; filter: drop-shadow(0 0 5px hsl(0 80% 52% / 0.75)); }
+}
+.flame-flicker {
+  animation: flame-flicker 1.8s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+
 /* ── Scroll-reveal animations ───────────────────────────────────────────── */
 .reveal {
   opacity: 0;
@@ -446,4 +459,13 @@
 /* Exclude transition override for reveal so it isn't clobbered by the global 200ms rule */
 .reveal, .reveal.in-view {
   transition-property: opacity, transform, background-color, border-color, color, fill, stroke, box-shadow;
+}
+
+/* ── Hero scroll-reveal (fires on mount, no IntersectionObserver needed) */
+@keyframes hero-fade-up {
+  from { opacity: 0; transform: translateY(32px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in-up {
+  animation: hero-fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
