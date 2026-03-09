@@ -571,7 +571,7 @@ export default function Firesale() {
             {/* Right: Investor pitch panel */}
             <div className="space-y-4">
               {/* Who buys */}
-              <div className="glass-card rounded-2xl border border-brand-gold/20 p-6 relative overflow-hidden">
+              <div className="reveal in-view glass-card rounded-2xl border border-brand-gold/20 p-6 relative overflow-hidden transition-all duration-300 hover:border-brand-gold/40 hover:shadow-elevated">
                 <div className="absolute top-0 right-0 w-40 h-40 rounded-bl-full bg-brand-gold/5 pointer-events-none" />
                 <div className="relative">
                   <div className="flex items-center gap-2 mb-1">
