@@ -5,6 +5,7 @@ import {
   BarChart2, Sparkles, Check, X, Loader2, Lightbulb, Clock, TrendingUp,
   Shield, Zap, Building2, Star, Activity, Globe, Brain
 } from "lucide-react";
+import { usePriceIndex, CITY_TRENDS } from "@/hooks/usePriceIndex";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { MarketTicker } from "@/components/MarketTicker";
