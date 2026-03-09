@@ -1073,12 +1073,6 @@ export default function Index() {
             <div className="relative p-10 md:p-14 lg:p-16 text-background">
               <div className="grid lg:grid-cols-2 gap-12 items-center">
                 <div>
-                  <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-accent/20 border border-accent/40 mb-6">
-                    <Users className="w-3.5 h-3.5 text-accent" />
-                    <span className="text-xs font-bold text-accent uppercase tracking-widest">
-                      AI-Powered Pro Network
-                    </span>
-                  </div>
                   <h2 className="font-display text-4xl lg:text-5xl font-bold leading-tight mb-4 text-destructive-foreground">
                     The right expert,
                     <br />
