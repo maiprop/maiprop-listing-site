@@ -96,45 +96,54 @@ export function MarketTicker() {
 
   return (
     <div
-      className="border border-border rounded-2xl overflow-hidden shadow-elevated"
-      style={{ background: "hsl(220 40% 8%)" }}
+      className="relative rounded-2xl overflow-hidden"
+      style={{
+        background: "hsl(220 40% 7%)",
+        border: "1px solid hsl(192 100% 50% / 0.2)",
+        boxShadow: "0 0 0 1px hsl(192 100% 50% / 0.06), 0 8px 40px -8px hsl(192 100% 50% / 0.15), inset 0 1px 0 0 hsl(192 100% 50% / 0.08)",
+      }}
     >
+      {/* Ambient glow behind the card */}
+      <div
+        className="absolute -inset-px rounded-2xl pointer-events-none animate-pulse"
+        style={{ boxShadow: "0 0 28px 4px hsl(192 100% 50% / 0.08)" }}
+      />
+
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-border">
-        <div className="flex items-center gap-2">
-          <span
-            className="w-2 h-2 rounded-full shrink-0 animate-pulse"
-            style={{ background: "hsl(192 100% 50%)" }}
-          />
-          <span
-            className="text-xs font-bold tracking-widest uppercase"
-            style={{ color: "hsl(210 40% 96%)" }}
-          >
+      <div
+        className="flex items-center justify-between px-5 py-3 border-b"
+        style={{ borderColor: "hsl(192 100% 50% / 0.15)", background: "hsl(220 40% 6%)" }}
+      >
+        <div className="flex items-center gap-2.5">
+          {/* Animated live dot */}
+          <span className="relative flex w-2.5 h-2.5 shrink-0">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-50" style={{ background: "hsl(192 100% 50%)" }} />
+            <span className="relative inline-flex rounded-full w-2.5 h-2.5" style={{ background: "hsl(192 100% 50%)" }} />
+          </span>
+          <span className="text-xs font-black tracking-widest uppercase" style={{ color: "hsl(192 100% 75%)" }}>
             Live Market
           </span>
         </div>
-        <div className="flex items-center gap-1.5">
-          {anyLive && !isLoading && (
-            <span
-              className="w-1.5 h-1.5 rounded-full animate-pulse"
-              style={{ background: "hsl(192 100% 50%)" }}
-            />
-          )}
-          <span
-            className="text-[10px] font-bold tracking-widest uppercase"
-            style={{ color: "hsl(192 100% 50%)" }}
-          >
+        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full" style={{ background: "hsl(192 100% 50% / 0.1)", border: "1px solid hsl(192 100% 50% / 0.25)" }}>
+          <span className="w-1 h-1 rounded-full animate-pulse" style={{ background: "hsl(192 100% 50%)" }} />
+          <span className="text-[9px] font-black tracking-widest uppercase" style={{ color: "hsl(192 100% 60%)" }}>
             {isLoading ? "…" : "LIVE"}
           </span>
         </div>
       </div>
 
       {/* City rows */}
-      <div className="divide-y divide-border/40">
-        {rows.map(row => (
-          <div key={row.city} className="flex items-center gap-3 px-5 py-2.5 hover:bg-white/[0.02] transition-colors">
+      <div className="divide-y" style={{ borderColor: "hsl(192 100% 50% / 0.07)" }}>
+        {rows.map((row, i) => (
+          <div
+            key={row.city}
+            className="flex items-center gap-3 px-5 py-2.5 transition-colors"
+            style={{ background: i % 2 === 0 ? "transparent" : "hsl(192 100% 50% / 0.015)" }}
+            onMouseEnter={e => (e.currentTarget.style.background = "hsl(192 100% 50% / 0.04)")}
+            onMouseLeave={e => (e.currentTarget.style.background = i % 2 === 0 ? "transparent" : "hsl(192 100% 50% / 0.015)")}
+          >
             {/* City name */}
-            <span className="w-28 text-sm font-medium" style={{ color: "hsl(210 30% 75%)" }}>
+            <span className="w-28 text-sm font-medium" style={{ color: "hsl(210 30% 72%)" }}>
               {row.city}
             </span>
 
@@ -143,50 +152,50 @@ export function MarketTicker() {
 
             {/* Price */}
             <span className="flex-1 text-right text-sm font-bold tabular-nums" style={{ color: "hsl(210 40% 96%)" }}>
-              {row.price.toLocaleString()}
+              €{row.price.toLocaleString()}
             </span>
 
-            {/* Change */}
+            {/* Change badge */}
             <span
-              className="w-14 text-right text-xs font-bold tabular-nums"
-              style={{ color: row.up ? "hsl(192 100% 50%)" : "hsl(0 70% 52%)" }}
+              className="w-16 text-right text-xs font-black tabular-nums px-1.5 py-0.5 rounded-md"
+              style={{
+                color: row.up ? "hsl(192 100% 55%)" : "hsl(0 72% 60%)",
+                background: row.up ? "hsl(192 100% 50% / 0.1)" : "hsl(0 72% 55% / 0.1)",
+              }}
             >
-              {row.up ? "▲" : "▼"}{Math.abs(row.change).toFixed(1)}%
+              {row.up ? "▲" : "▼"} {Math.abs(row.change).toFixed(1)}%
             </span>
           </div>
         ))}
       </div>
 
       {/* Footer — auctions */}
-      <div className="border-t border-border px-5 py-3 space-y-1">
+      <div className="px-5 py-3 space-y-1.5" style={{ borderTop: "1px solid hsl(270 75% 62% / 0.2)", background: "hsl(270 40% 8% / 0.5)" }}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-[10px]">🔨</span>
-            <span
-              className="text-[11px] font-bold tracking-wider uppercase"
-              style={{ color: "hsl(270 75% 72%)" }}
-            >
+            <span className="text-[11px]">🔨</span>
+            <span className="text-[11px] font-black tracking-wider uppercase" style={{ color: "hsl(270 75% 75%)" }}>
               New Auctions Today
             </span>
           </div>
           <span
-            className="text-sm font-bold tabular-nums"
-            style={{ color: "hsl(270 75% 72%)" }}
+            className="text-sm font-black tabular-nums px-2 py-0.5 rounded-md"
+            style={{ color: "hsl(270 75% 75%)", background: "hsl(270 75% 62% / 0.15)" }}
           >
             {auctionCount ?? 47}
           </span>
         </div>
         {latestAuction && (
           <div className="flex items-center justify-between">
-            <span className="text-[11px]" style={{ color: "hsl(215 20% 50%)" }}>
+            <span className="text-[10px]" style={{ color: "hsl(215 20% 45%)" }}>
               Latest:{" "}
-              <span style={{ color: "hsl(210 40% 96%)", fontWeight: 600 }}>
+              <span style={{ color: "hsl(210 40% 88%)", fontWeight: 700 }}>
                 {latestAuction.property_type?.charAt(0).toUpperCase() + latestAuction.property_type?.slice(1)}{" "}
                 · {latestAuction.city}
               </span>
             </span>
             {latestAuction.auction_starting_bid && (
-              <span className="text-[11px] font-semibold tabular-nums" style={{ color: "hsl(210 40% 96%)" }}>
+              <span className="text-[10px] font-bold tabular-nums" style={{ color: "hsl(270 75% 75%)" }}>
                 €{latestAuction.auction_starting_bid.toLocaleString()}
               </span>
             )}
@@ -196,10 +205,11 @@ export function MarketTicker() {
 
       {/* Caption */}
       <div
-        className="px-5 pb-3 text-[10px] tracking-widest uppercase"
-        style={{ color: "hsl(215 20% 38%)" }}
+        className="px-5 pb-3 pt-1 text-[9px] tracking-widest uppercase flex items-center gap-1.5"
+        style={{ color: "hsl(215 20% 35%)" }}
       >
-        €/m² · Greek Real Estate Index
+        <span className="w-1 h-1 rounded-full inline-block" style={{ background: "hsl(192 100% 50% / 0.4)" }} />
+        €/m² · Greek Real Estate Index · Updates every 5 min
       </div>
     </div>
   );

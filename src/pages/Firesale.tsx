@@ -36,9 +36,17 @@ const propertyTypeOptions = [
   { value: "apartment", label: "🏢 Apartment" },
   { value: "house", label: "🏡 House" },
   { value: "villa", label: "🌴 Villa" },
-  { value: "land", label: "🌿 Land" },
-  { value: "commercial", label: "🏪 Commercial" },
+  { value: "land", label: "🌿 Land / Plot" },
   { value: "office", label: "🖥️ Office" },
+  { value: "commercial_shop", label: "🛍️ Retail Shop" },
+  { value: "commercial_warehouse", label: "📦 Warehouse / Storage" },
+  { value: "commercial_hotel", label: "🏨 Hotel / B&B" },
+  { value: "commercial_restaurant", label: "🍽️ Restaurant / Café" },
+  { value: "commercial_clinic", label: "🔬 Clinic / Medical" },
+  { value: "commercial_industrial", label: "🏗️ Industrial Space" },
+  { value: "commercial_showroom", label: "🖼️ Showroom" },
+  { value: "commercial_hall", label: "🎪 Hall / Event Space" },
+  { value: "commercial_mixed", label: "🔀 Mixed-Use Building" },
 ];
 
 export default function Firesale() {
