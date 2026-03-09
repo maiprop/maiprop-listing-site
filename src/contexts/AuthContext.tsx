@@ -10,7 +10,7 @@ interface AuthContextType {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
-  signUp: (email: string, password: string, meta: { full_name: string; role: string }) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, meta: { full_name: string; role: string; business_name?: string; tax_id?: string; phone?: string; license_number?: string }) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: Error | null }>;
