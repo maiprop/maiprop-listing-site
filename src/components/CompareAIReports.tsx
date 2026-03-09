@@ -165,10 +165,26 @@ export function CompareAIReports({ listings }: { listings: Listing[] }) {
         let neighbourhood: NeighbourhoodData | null = null;
         if (nbRes.status === "fulfilled" && !nbRes.value.error) {
           const nb = nbRes.value.data;
-          neighbourhood = {
-            safetyScore: nb?.safetyScore ?? nb?.safety_score ?? 70,
-            noiseLevel: nb?.noiseLevel ?? nb?.noise_level ?? "moderate",
-          };
+          // safetyScore is returned as an object {score, label, trend, notes}
+          const rawSafety = nb?.safetyScore ?? nb?.safety_score;
+          const safetyScore: number =
+            typeof rawSafety === "object" && rawSafety !== null
+              ? (rawSafety.score ?? 70)
+              : (rawSafety ?? 70);
+          // noiseLevel is returned as an object {score, label, notes}
+          const rawNoise = nb?.noiseLevel ?? nb?.noise_level;
+          const noiseLabelRaw: string =
+            typeof rawNoise === "object" && rawNoise !== null
+              ? (rawNoise.label ?? "Moderate")
+              : (rawNoise ?? "Moderate");
+          const noiseLevelNorm = noiseLabelRaw.toLowerCase();
+          const noiseLevel: "low" | "moderate" | "high" =
+            noiseLevelNorm.includes("quiet") || noiseLevelNorm === "low" || noiseLevelNorm === "very quiet"
+              ? "low"
+              : noiseLevelNorm.includes("busy") || noiseLevelNorm === "high" || noiseLevelNorm.includes("noisy")
+              ? "high"
+              : "moderate";
+          neighbourhood = { safetyScore, noiseLevel };
         }
 
         // Walk score — use POI endpoint if coords available, else estimate
