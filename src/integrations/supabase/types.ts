@@ -814,6 +814,42 @@ export type Database = {
         }
         Relationships: []
       }
+      sync_log: {
+        Row: {
+          created_at: string
+          direction: string
+          entity_id: string
+          entity_type: string
+          error_message: string | null
+          id: string
+          payload: Json | null
+          records_affected: number | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          direction: string
+          entity_id: string
+          entity_type: string
+          error_message?: string | null
+          id?: string
+          payload?: Json | null
+          records_affected?: number | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          direction?: string
+          entity_id?: string
+          entity_type?: string
+          error_message?: string | null
+          id?: string
+          payload?: Json | null
+          records_affected?: number | null
+          status?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           id: string
