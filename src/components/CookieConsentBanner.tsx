@@ -44,20 +44,20 @@ export function CookieConsentBanner() {
 
   if (!visible) return null;
 
-  const handleAcceptAll = () => {
-    saveCookieConsent({ accepted: true, functional: true, analytics: true, mapping: true, timestamp: Date.now() });
+  const save = (c: CookieConsent) => {
+    saveCookieConsent(c);
+    window.dispatchEvent(new Event("maiprop_consent_updated"));
     setVisible(false);
   };
 
-  const handleRejectAll = () => {
-    saveCookieConsent({ accepted: true, functional: true, analytics: false, mapping: false, timestamp: Date.now() });
-    setVisible(false);
-  };
+  const handleAcceptAll = () =>
+    save({ accepted: true, functional: true, analytics: true, mapping: true, timestamp: Date.now() });
 
-  const handleSavePreferences = () => {
-    saveCookieConsent({ accepted: true, functional, analytics, mapping, timestamp: Date.now() });
-    setVisible(false);
-  };
+  const handleRejectAll = () =>
+    save({ accepted: true, functional: true, analytics: false, mapping: false, timestamp: Date.now() });
+
+  const handleSavePreferences = () =>
+    save({ accepted: true, functional, analytics, mapping, timestamp: Date.now() });
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-[100] p-4 animate-slide-up">
