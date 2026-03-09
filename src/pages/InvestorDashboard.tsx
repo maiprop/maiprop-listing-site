@@ -7,7 +7,8 @@ import {
   Users, DollarSign, Activity, ArrowUpRight, Phone, Mail,
   Crown, Sparkles, AlertCircle, RefreshCw,
   ChevronDown, FileText, Save, LayoutGrid, ShieldCheck,
-  Calendar, Ban, ArrowUpCircle, UserCheck, CreditCard
+  Calendar, Ban, ArrowUpCircle, UserCheck, CreditCard,
+  SendHorizonal, ThumbsUp, ThumbsDown, MessageCircle, Trophy, X as XIcon, ArrowLeftRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
