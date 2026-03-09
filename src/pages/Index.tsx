@@ -784,9 +784,9 @@ export default function Index() {
                   The right expert,<br />
                   <span className="gradient-text-cyan">one click away</span>
                 </h2>
-                <p className="text-lg leading-relaxed mb-8 text-popover-foreground">
-                  Architects, lawyers, notaries, engineers — all vetted, verified, and enhanced with AI tools that make every transaction faster and safer.
-                </p>
+                
+
+                  
                 <Button size="lg" className="bg-gradient-accent border-0 text-accent-foreground font-semibold px-8 gap-2" asChild>
                   <Link to="/professionals">Explore Directory <ArrowRight className="w-4 h-4" /></Link>
                 </Button>
