@@ -320,9 +320,14 @@ export default function ProfessionalProfile() {
                   <div>
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <h1 className="font-display text-2xl md:text-3xl font-bold">{displayName}</h1>
-                      {pro.verified && (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-semibold">✓ Verified</span>
-                      )}
+                      {pro.verified
+                        ? <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-semibold border border-primary/20">
+                            <CheckCircle className="w-3 h-3" /> Verified
+                          </span>
+                        : <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 font-semibold border border-amber-500/20">
+                            <Clock className="w-3 h-3" /> Pending Verification
+                          </span>
+                      }
                       <span className="text-xs px-2 py-0.5 rounded-full bg-brand-emerald/10 text-brand-emerald font-semibold border border-brand-emerald/20">Available</span>
                     </div>
                     <p className="flex items-center gap-2 text-muted-foreground text-sm">
