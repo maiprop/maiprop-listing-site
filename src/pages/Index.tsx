@@ -1536,9 +1536,9 @@ export default function Index() {
                   className="border-brand-gold/30 text-brand-gold hover:bg-brand-gold/10"
                   asChild>
                   
-                  <a href="https://properties.maiprop.co" target="_blank" rel="noreferrer">
-                    Golden Visa Guide
-                  </a>
+                  
+
+                  
                 </Button>
               </div>
             </div>
