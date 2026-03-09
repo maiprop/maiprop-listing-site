@@ -695,14 +695,6 @@ export default function Index() {
                 <span className="gradient-text-primary">— with AI precision</span>
               </h1>
 
-              <p
-                className="text-sm sm:text-lg text-white/75 mb-6 sm:mb-10 max-w-xl animate-fade-in-up leading-relaxed"
-                style={{ animationDelay: "0.18s" }}
-              >
-                47,000+ listings across Greece. Residences, offices, stores, land, auctions, and investment properties —
-                all in one place.
-              </p>
-
               {/* ── Search Card ── */}
               <div className="animate-fade-in-up" style={{ animationDelay: "0.28s" }}>
                 <div
