@@ -382,6 +382,9 @@ export default function Dashboard() {
           {/* OS SYNC */}
           {activeSection === "os-sync" && <OSSyncPanel />}
 
+          {/* ADMIN */}
+          {activeSection === "admin" && <AdminPanel />}
+
           {(activeSection === "analytics" || activeSection === "auctions" || activeSection === "settings") && (
             <div className="glass-card rounded-xl p-12 flex items-center justify-center">
               <div className="text-center">
