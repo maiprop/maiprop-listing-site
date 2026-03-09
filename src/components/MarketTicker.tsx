@@ -1,6 +1,7 @@
 import { usePriceIndex } from "@/hooks/usePriceIndex";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useState, useEffect, useRef } from "react";
 
 // ── Sparkline paths – pre-generated organic waves per city ────────────────────
 const SPARKLINES: Record<string, string> = {
@@ -49,6 +50,32 @@ function Sparkline({ city, up }: { city: string; up: boolean }) {
       <path d={d} stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
+}
+
+// ── Live flicker hook: randomly nudges one city price every 3 s ───────────────
+function useLiveFlicker(basePrices: Record<string, number>) {
+  const [prices, setPrices] = useState<Record<string, number>>(basePrices);
+  const [flickeringCity, setFlickeringCity] = useState<string | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const cities = Object.keys(basePrices);
+    const tick = () => {
+      const city = cities[Math.floor(Math.random() * cities.length)];
+      const base = basePrices[city];
+      // Nudge ±0.05–0.25 % 
+      const delta = base * (0.0005 + Math.random() * 0.002) * (Math.random() > 0.35 ? 1 : -1);
+      setPrices(prev => ({ ...prev, [city]: Math.round(prev[city] + delta) }));
+      setFlickeringCity(city);
+      // Clear highlight after 700 ms
+      setTimeout(() => setFlickeringCity(null), 700);
+      timerRef.current = setTimeout(tick, 2800 + Math.random() * 600);
+    };
+    timerRef.current = setTimeout(tick, 1500);
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return { prices, flickeringCity };
 }
 
 export function MarketTicker() {
