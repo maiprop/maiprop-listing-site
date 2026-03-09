@@ -39,22 +39,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import heroBg from "@/assets/hero-bg.jpg";
 
-// ── Navy Brand Divider ─────────────────────────────────────────────────────────
-// fromDark: true  → top is dark (#0f132e-ish), bottom is light (secondary)
-// fromDark: false → top is light, bottom is dark
-function NavyDivider({ fromDark = false }: { fromDark?: boolean }) {
-  const stops = fromDark
-    ? "hsl(240 62% 11%) 0%, hsl(238 100% 17%) 48%, hsl(230 25% 95%) 100%"
-    : "hsl(230 25% 95%) 0%, hsl(238 100% 17%) 48%, hsl(240 62% 11%) 100%";
-  return (
-    <div
-      aria-hidden
-      className="h-16 w-full pointer-events-none"
-      style={{ background: `linear-gradient(180deg, ${stops})` }}
-    />
-  );
-}
-
 const RECENT_SEARCHES_KEY = "maiprop_recent_searches";
 const MAX_RECENT = 6;
 
@@ -704,22 +688,17 @@ export default function Index() {
       <section className="relative min-h-[100svh] sm:min-h-[92vh] flex items-center overflow-hidden pt-16">
         {/* Background */}
         <div className="absolute inset-0">
-          {/* Photo base */}
-          <img src={heroBg} alt="Athens skyline" className="w-full h-full object-cover opacity-80 dark:opacity-50" />
-          {/* Deep navy (#000059) gradient overlay — primary brand layer */}
+          {/* Light mode: show more of the actual photo — lower opacity overlay */}
+          <img src={heroBg} alt="Athens skyline" className="w-full h-full object-cover opacity-100 dark:opacity-70" />
+          {/* Both modes: strong dark-left gradient so white text is always readable */}
           <div
             className="absolute inset-0"
             style={{
               background:
-              "linear-gradient(120deg, hsl(238 100% 17% / 0.92) 0%, hsl(238 100% 17% / 0.70) 45%, hsl(238 100% 17% / 0.25) 100%)"
+              "linear-gradient(120deg, hsl(25 20% 6% / 0.82) 0%, hsl(25 15% 8% / 0.55) 55%, hsl(30 10% 10% / 0.12) 100%)"
             }} />
-          {/* Secondary depth layer — blackout at bottom for section bleed */}
-          <div
-            className="absolute inset-0"
-            style={{
-              background:
-              "linear-gradient(to bottom, transparent 0%, transparent 55%, hsl(240 62% 11% / 0.85) 100%)"
-            }} />
+          
+          <div className="absolute inset-0 bg-gradient-to-t from-background/70 via-transparent to-transparent" />
         </div>
         {/* Grid overlay */}
         <div
@@ -855,9 +834,6 @@ export default function Index() {
         </div>
       </section>
 
-      {/* ── Navy Divider ───────────────────────────────────────────────────── */}
-      <div className="h-16 w-full" style={{ background: "linear-gradient(180deg, hsl(240 62% 11%) 0%, hsl(238 100% 17%) 50%, hsl(230 25% 95%) 100%)" }} />
-
       {/* ══ BROWSE BY TYPE ══════════════════════════════════════════════════ */}
       <section className="py-14 bg-secondary">
         <div ref={browseRef} className="container">
@@ -953,7 +929,6 @@ export default function Index() {
         </div>
       </section>
 
-      <NavyDivider fromDark={false} />
       {/* ══ AUCTIONS ════════════════════════════════════════════════════════ */}
       <section className="py-16 bg-secondary">
         <div ref={auctionsRef} className="container">
@@ -986,7 +961,6 @@ export default function Index() {
         </div>
       </section>
 
-      <NavyDivider fromDark={false} />
       {/* ══ QUICK SALE CTA ══════════════════════════════════════════════════ */}
       <section className="py-10 sm:py-16 bg-background">
         <div ref={firesaleRef} className="container">
@@ -1045,7 +1019,6 @@ export default function Index() {
         </div>
       </section>
 
-      <NavyDivider fromDark={false} />
       {/* ══ POPULAR LOCATIONS ════════════════════════════════════════════════ */}
       <section className="py-16 bg-secondary">
         <div ref={locationsRef} className="container">
@@ -1104,7 +1077,6 @@ export default function Index() {
         </div>
       </section>
 
-      <NavyDivider fromDark={false} />
       {/* ══ PROFESSIONALS CTA ════════════════════════════════════════════════ */}
       <section className="py-20 bg-background">
         <div ref={prosRef} className="container">
@@ -1212,7 +1184,6 @@ export default function Index() {
         </div>
       </section>
 
-      <NavyDivider fromDark={false} />
       {/* ══ mAI PROP OS ═════════════════════════════════════════════════════ */}
       <section className="py-20 bg-secondary overflow-hidden">
         <div ref={osRef} className="container">
@@ -1293,7 +1264,6 @@ export default function Index() {
       </section>
 
       {/* ══ PROPERTIES PORTAL / GOLDEN VISA ══════════════════════════════════ */}
-      <NavyDivider fromDark={false} />
       <section className="py-20 bg-background overflow-hidden">
         <div ref={goldenRef} className="container">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
@@ -1383,7 +1353,6 @@ export default function Index() {
       </section>
 
       {/* ══ TRUST BAR ════════════════════════════════════════════════════════ */}
-      <NavyDivider fromDark={false} />
       <section className="py-12 bg-secondary">
         <div ref={trustRef} className="container">
           <div className={`grid grid-cols-2 md:grid-cols-4 gap-6 reveal ${trustInView ? "in-view" : ""}`}>
