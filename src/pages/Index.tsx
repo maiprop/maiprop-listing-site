@@ -451,7 +451,17 @@ export default function Index() {
   const [searchType, setSearchType] = useState("Buy");
   const [selectedPropertyType, setSelectedPropertyType] = useState("");
   const [showAI, setShowAI] = useState(false);
-  
+
+  // Scroll-reveal refs
+  const { ref: browseRef, inView: browseInView } = useInView();
+  const { ref: featuredRef, inView: featuredInView } = useInView();
+  const { ref: auctionsRef, inView: auctionsInView } = useInView();
+  const { ref: firesaleRef, inView: firesaleInView } = useInView();
+  const { ref: locationsRef, inView: locationsInView } = useInView();
+  const { ref: prosRef, inView: prosInView } = useInView();
+  const { ref: osRef, inView: osInView } = useInView();
+  const { ref: goldenRef, inView: goldenInView } = useInView();
+  const { ref: trustRef, inView: trustInView } = useInView();
 
   const listingTypeMap: Record<string, string> = {
     "Buy": "sale", "Rent": "rent", "Auctions": "auction", "Quick Sale": "firesale",
