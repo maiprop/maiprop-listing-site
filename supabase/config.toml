@@ -24,3 +24,9 @@ verify_jwt = false
 [functions.ai-service-match]
 verify_jwt = false
 
+[functions.sync-to-os]
+verify_jwt = false
+
+[functions.receive-from-os]
+verify_jwt = false
+
