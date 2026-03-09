@@ -254,6 +254,8 @@ export default function ProfessionalProfile() {
   const [consultOpen, setConsultOpen] = useState(false);
   const [callbackOpen, setCallbackOpen] = useState(false);
   const [videoOpen, setVideoOpen] = useState(false);
+  const [aiMatchOpen, setAiMatchOpen] = useState(false);
+  const navigate = useNavigate();
 
   const catInfo = pro ? categoryLabels[pro.category] || { label: pro.category, emoji: "👤", description: "" } : null;
   const services = pro ? servicesByCategory[pro.category] || [] : [];
