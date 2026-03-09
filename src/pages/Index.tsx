@@ -424,14 +424,33 @@ function LocationInput({
 
 // ── OS Dashboard Mockup (faithful to os.maiprop.co) ──────────────────────────
 function OSDashboardMockup() {
+  const [flickeringIdx, setFlickeringIdx] = useState<number | null>(null);
+  const [prices, setPrices] = useState([2860, 1920, 6450, 3772, 2290, 5120, 4180]);
+
+  useEffect(() => {
+    const basePrices = [2860, 1920, 6450, 3772, 2290, 5120, 4180];
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = () => {
+      const idx = Math.floor(Math.random() * basePrices.length);
+      const base = basePrices[idx];
+      const delta = Math.round(base * (0.001 + Math.random() * 0.003) * (Math.random() > 0.35 ? 1 : -1));
+      setPrices(prev => prev.map((p, i) => i === idx ? p + delta : p));
+      setFlickeringIdx(idx);
+      setTimeout(() => setFlickeringIdx(null), 700);
+      timer = setTimeout(tick, 2800 + Math.random() * 600);
+    };
+    timer = setTimeout(tick, 1500);
+    return () => clearTimeout(timer);
+  }, []);
+
   const marketData = [
-    { city: "Athens", value: "2,860", delta: "▲1.3%" },
-    { city: "Thessaloniki", value: "1,920", delta: "▲0.8%" },
-    { city: "Mykonos", value: "6,450", delta: "▲2.3%" },
-    { city: "Glyfada", value: "3,772", delta: "▲1.7%" },
-    { city: "Rhodes", value: "2,290", delta: "▲3.1%" },
-    { city: "Santorini", value: "5,120", delta: "▲1.9%" },
-    { city: "Kifisia", value: "4,180", delta: "▲0.6%" },
+    { city: "Athens",       delta: "▲1.3%" },
+    { city: "Thessaloniki", delta: "▲0.8%" },
+    { city: "Mykonos",      delta: "▲2.3%" },
+    { city: "Glyfada",      delta: "▲1.7%" },
+    { city: "Rhodes",       delta: "▲3.1%" },
+    { city: "Santorini",    delta: "▲1.9%" },
+    { city: "Kifisia",      delta: "▲0.6%" },
   ];
   const sparklines = [
     "M0,10 C5,8 10,6 15,4 C20,2 25,5 30,2",
