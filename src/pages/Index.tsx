@@ -986,6 +986,7 @@ export default function Index() {
         </div>
       </section>
 
+      <NavyDivider fromDark={false} />
       {/* ══ QUICK SALE CTA ══════════════════════════════════════════════════ */}
       <section className="py-10 sm:py-16 bg-background">
         <div ref={firesaleRef} className="container">
