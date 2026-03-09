@@ -781,18 +781,22 @@ export default function InvestorDashboard() {
 
 
 
-  const handleAdminUpdate = async (id: string, status: string, admin_notes: string) => {
+  const handleAdminUpdate = async (id: string, status: string, admin_notes: string, offerPrice?: number) => {
+    const updates: Record<string, unknown> = { status, admin_notes };
+    if (offerPrice !== undefined) updates.offer_price = offerPrice;
     const { error } = await supabase
       .from("firesale_requests")
-      .update({ status, admin_notes } as any)
+      .update(updates as any)
       .eq("id", id);
 
     if (error) {
       toast.error("Failed to update deal");
       return;
     }
-    setAdminDeals(prev => prev.map(d => d.id === id ? { ...d, status, admin_notes } : d));
-    toast.success("Deal updated");
+    setAdminDeals(prev => prev.map(d =>
+      d.id === id ? { ...d, status, admin_notes, ...(offerPrice !== undefined ? { offer_price: offerPrice } : {}) } : d
+    ));
+    toast.success(status === "offer_sent" ? "Offer sent & recorded!" : status === "closed" ? "🎉 Deal closed!" : "Deal updated");
   };
 
   const cities = ["all", ...Array.from(new Set(liveDeals.map(d => d.city)))];
