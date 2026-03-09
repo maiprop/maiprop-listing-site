@@ -597,7 +597,7 @@ export default function Index() {
                 ].map(stat => (
                   <div key={stat.label} className="flex items-baseline gap-1.5">
                     <div className="font-display font-bold text-base sm:text-lg gradient-text-primary">{stat.value}</div>
-                    <div className="text-xs text-muted-foreground">{stat.label}</div>
+                    <div className="text-xs text-white/60">{stat.label}</div>
                   </div>
                 ))}
               </div>
