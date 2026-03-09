@@ -5,7 +5,7 @@ import { Link, useNavigate } from "react-router-dom";
 import {
   Search, MapPin, ChevronDown, Users, ArrowRight, Gavel, Flame, ExternalLink,
   BarChart2, Sparkles, Check, X, Loader2, Lightbulb, Clock, TrendingUp,
-  Shield, Zap, Building2, Star, Globe, Brain
+  Shield, Zap, Building2, Star, Globe, Brain, Store
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -92,7 +92,7 @@ function PropertyTypeDropdown({ value, onChange }: { value: string; onChange: (t
   }, [open]);
 
   const currentType = value ? PROPERTY_TYPE_MAP[value as PropertyTypeKey] : null;
-  const label = currentType ? `${currentType.emoji} ${currentType.label}` : "Property type";
+  const TypeIcon = currentType?.icon;
 
   const dropdownList = (
     <div
@@ -110,32 +110,32 @@ function PropertyTypeDropdown({ value, onChange }: { value: string; onChange: (t
         onClick={() => { onChange(""); setOpen(false); }}
         className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left transition-colors hover:bg-secondary ${!value ? "text-primary bg-primary/10" : "text-foreground"}`}
       >
-        <span>🏘️</span><span className="font-medium">All Types</span>
+        <Building2 className="w-4 h-4 shrink-0" /><span className="font-medium">All Types</span>
         {!value && <Check className="w-3.5 h-3.5 ml-auto" />}
       </button>
       <div className="h-px bg-border mx-2" />
       {PROPERTY_GROUPS.map((group, gi) => (
         <div key={group.id}>
           <div className="flex items-center gap-2 px-3 pt-2.5 pb-1">
-            <span className="text-xs">{group.emoji}</span>
             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{group.label}</span>
           </div>
           {group.id === "commercial" ? (
             <button
               onClick={() => { onChange("commercial"); setOpen(false); }}
-              className={`w-full flex items-center gap-2.5 pl-6 pr-3 py-2 text-sm text-left transition-colors hover:bg-secondary ${value === "commercial" ? "text-primary bg-primary/10" : "text-foreground"}`}
+              className={`w-full flex items-center gap-2.5 pl-5 pr-3 py-2 text-sm text-left transition-colors hover:bg-secondary ${value === "commercial" ? "text-primary bg-primary/10" : "text-foreground"}`}
             >
-              <span className="text-base">🏪</span>
+              <Store className={`w-4 h-4 shrink-0 ${value === "commercial" ? "text-primary" : "text-muted-foreground"}`} />
               <span className="font-medium">All Commercial & Offices</span>
               {value === "commercial" && <Check className="w-3.5 h-3.5 ml-auto" />}
             </button>
           ) : (
             group.types.map(typeKey => {
               const pt = PROPERTY_TYPE_MAP[typeKey];
+              const Icon = pt.icon;
               return (
                 <button key={pt.value} onClick={() => { onChange(pt.value); setOpen(false); }}
-                  className={`w-full flex items-center gap-2.5 pl-6 pr-3 py-2 text-sm text-left transition-colors hover:bg-secondary ${value === pt.value ? "text-primary bg-primary/10" : "text-foreground"}`}>
-                  <span>{pt.emoji}</span>
+                  className={`w-full flex items-center gap-2.5 pl-5 pr-3 py-2 text-sm text-left transition-colors hover:bg-secondary ${value === pt.value ? "text-primary bg-primary/10" : "text-foreground"}`}>
+                  <Icon className={`w-4 h-4 shrink-0 ${value === pt.value ? "text-primary" : "text-muted-foreground"}`} />
                   <span className="font-medium">{pt.label}</span>
                   {value === pt.value && <Check className="w-3.5 h-3.5 ml-auto" />}
                 </button>
@@ -155,7 +155,11 @@ function PropertyTypeDropdown({ value, onChange }: { value: string; onChange: (t
         onClick={openDropdown}
         className={`flex items-center gap-2 bg-secondary/60 rounded-xl px-4 py-3 h-full cursor-pointer hover:bg-secondary transition-colors whitespace-nowrap ${value ? "text-primary" : "text-muted-foreground"}`}
       >
-        <span className="text-sm font-medium">{label}</span>
+        {TypeIcon
+          ? <TypeIcon className="w-4 h-4 shrink-0" />
+          : <Building2 className="w-4 h-4 shrink-0" />
+        }
+        <span className="text-sm font-medium">{currentType?.label ?? "Property type"}</span>
         <ChevronDown className={`w-4 h-4 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && ReactDOM.createPortal(dropdownList, document.body)}
