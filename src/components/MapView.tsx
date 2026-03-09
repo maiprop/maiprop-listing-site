@@ -4,7 +4,6 @@ import Map, {
   Layer,
   Popup,
   NavigationControl,
-  Marker,
   MapRef,
 } from "react-map-gl";
 import type { LayerProps } from "react-map-gl";
