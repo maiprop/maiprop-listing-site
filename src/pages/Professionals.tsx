@@ -560,35 +560,35 @@ export default function Professionals() {
           {/* ── AI Advantage Section ─────────────────────────────────── */}
           <div className="mt-16 rounded-3xl border border-border overflow-hidden"
           style={{ background: "linear-gradient(135deg, hsl(183 100% 5%), hsl(265 80% 6%), hsl(183 100% 5%))" }}>
-            <div className="p-8 md:p-12">
-              <div className="text-center mb-10">
-                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary/15 border border-primary/30 mb-5">
-                  <Sparkles className="w-3.5 h-3.5 text-primary" />
-                  <span className="text-xs font-bold text-primary uppercase tracking-widest">AI Advantage</span>
-                </div>
-                <h3 className="font-display text-3xl font-bold text-foreground mb-2">How AI makes every pro 10× better</h3>
-                <p className="text-muted-foreground max-w-lg mx-auto">Every professional category on mAI prop integrates our AI engine to speed up tasks, reduce errors, and deliver smarter outcomes.</p>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {[
-                { icon: FileSearch, title: "AI Due Diligence", desc: "Lawyers scan contracts for risks in seconds. Title deed anomalies flagged automatically.", group: "Legal & Title" },
-                { icon: Brain, title: "Smart Valuations", desc: "Valuers get AI-backed price recommendations from 100K+ data points across Greece.", group: "Finance" },
-                { icon: BarChart2, title: "Renovation Estimates", desc: "Contractors generate cost estimates instantly using AI-powered material & labour pricing.", group: "Design & Build" },
-                { icon: Zap, title: "Instant Report Generation", desc: "Architects & engineers produce compliance reports in minutes, not days.", group: "Design & Build" },
-                { icon: TrendingUp, title: "Investment Forecasting", desc: "Financial advisors model ROI scenarios with live Greek property market data.", group: "Finance" },
-                { icon: Clock, title: "Automated Scheduling", desc: "Property managers handle tenant communication, maintenance, and rent reminders on autopilot.", group: "Property Management" }].
-                map((item) =>
-                <div key={item.title} className="glass-card rounded-xl p-5 hover:border-primary/20 transition-all">
-                    <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-3">
-                      <item.icon className="w-5 h-5 text-primary" />
-                    </div>
-                    <div className="text-[10px] font-bold text-primary/70 uppercase tracking-wider mb-1">{item.group}</div>
-                    <h4 className="font-display font-bold text-sm mb-1.5">{item.title}</h4>
-                    <p className="text-xs text-muted-foreground leading-relaxed">{item.desc}</p>
-                  </div>
-                )}
-              </div>
-            </div>
+            
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            
           </div>
 
           {/* ── Join CTA ─────────────────────────────────────────────── */}
