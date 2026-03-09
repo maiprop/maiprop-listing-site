@@ -3,7 +3,7 @@ import { useSearchParams, Link } from "react-router-dom";
 import {
   Search, SlidersHorizontal, MapPin, LayoutGrid, Map, ChevronDown,
   X, Gavel, ArrowUpDown, Loader2, Building2, Check, Bookmark, GitCompare,
-  Columns2
+  Columns2, Sparkles
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -17,12 +17,13 @@ import { AISearchBar } from "@/components/AISearchBar";
 import { mockProperties } from "@/data/mockProperties";
 import { useListings } from "@/hooks/useListings";
 import { useAuth } from "@/contexts/AuthContext";
-import { PROPERTY_TYPES, PROPERTY_GROUPS, PROPERTY_TYPE_MAP, TYPE_STYLE_FILTERS, getTypeLabel, getSubtypeLabel, type PropertyTypeKey } from "@/lib/propertyTypes";
+import { PROPERTY_GROUPS, PROPERTY_TYPE_MAP, TYPE_STYLE_FILTERS, getTypeLabel, getSubtypeLabel, type PropertyTypeKey } from "@/lib/propertyTypes";
 import {
-  getFilterConfig,
-  FEATURES_RESIDENTIAL, FEATURES_COMMERCIAL, FEATURES_OFFICE, FEATURES_LAND,
   ENERGY_CLASSES, HEATING_TYPES, CONSTRUCTION_STATUSES, ROAD_TYPES, SLOPE_TYPES,
 } from "@/lib/filterConfig";
+import { useSmartFilters } from "@/hooks/useSmartFilters";
+import { toast } from "sonner";
+
 
 
 const priceRanges = [
