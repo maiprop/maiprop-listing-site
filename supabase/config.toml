@@ -17,3 +17,7 @@ verify_jwt = false
 
 [functions.smart-filters]
 verify_jwt = false
+
+[functions.pro-ai-tools]
+verify_jwt = false
+
