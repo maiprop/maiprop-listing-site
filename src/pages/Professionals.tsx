@@ -276,6 +276,7 @@ function AIToolsModal({ groupId, groupLabel, onClose }: { groupId: string; group
 export default function Professionals() {
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [aiModal, setAiModal] = useState<{ groupId: string; groupLabel: string } | null>(null);
 
   // Derive DB categories from group selection
   const dbCategory = selectedGroup
