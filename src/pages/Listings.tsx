@@ -339,7 +339,6 @@ function PropertyTypeButton({
     </div>
   );
 }
-  const [pos, setPos] = useState({ top: 0, left: 0 });
   useEffect(() => {
     if (!open || !ref.current) return;
     const rect = ref.current.getBoundingClientRect();
