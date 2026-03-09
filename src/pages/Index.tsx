@@ -789,14 +789,14 @@ export default function Index() {
               </div>
             </div>
 
-            {/* Browser mockup — no iframe, avoids cookie banner */}
+            {/* Live iframe preview */}
             <div className="relative">
               <div className="absolute inset-0 -m-8 rounded-3xl opacity-20 blur-3xl"
                 style={{ background: "radial-gradient(ellipse, hsl(183 100% 42%), transparent 70%)" }} />
-              <div className="relative rounded-2xl overflow-hidden border border-primary/30 shadow-elevated glow-cyan">
+              <div className="relative rounded-2xl overflow-hidden border border-primary/30 shadow-elevated glow-cyan group">
                 {/* Browser chrome */}
-                <div className="flex items-center gap-2 px-4 py-3 bg-card border-b border-border">
-                  <div className="flex gap-1.5">
+                <div className="flex items-center gap-2 px-4 py-2.5 bg-card border-b border-border">
+                  <div className="flex gap-1.5 shrink-0">
                     <span className="w-3 h-3 rounded-full bg-destructive/60" />
                     <span className="w-3 h-3 rounded-full bg-brand-gold/60" />
                     <span className="w-3 h-3 rounded-full bg-brand-emerald/60" />
@@ -805,41 +805,29 @@ export default function Index() {
                     <Globe className="w-3 h-3 text-muted-foreground shrink-0" />
                     <span className="text-xs text-muted-foreground font-mono">os.maiprop.co</span>
                   </div>
-                  <Maximize2 className="w-3.5 h-3.5 text-muted-foreground" />
+                  <a href="https://os.maiprop.co" target="_blank" rel="noreferrer"
+                    className="shrink-0 p-1 rounded hover:bg-secondary transition-colors">
+                    <Maximize2 className="w-3.5 h-3.5 text-muted-foreground" />
+                  </a>
                 </div>
-                {/* Mockup screen */}
-                <a href="https://os.maiprop.co" target="_blank" rel="noreferrer"
-                  className="group block relative aspect-[16/10] bg-gradient-to-br from-background to-secondary overflow-hidden cursor-pointer">
-                  {/* Decorative data grid */}
-                  <div className="absolute inset-0 p-6 flex flex-col gap-4">
-                    <div className="flex gap-3">
-                      {["€/m² Athens", "Thessaloniki", "Mykonos", "Crete"].map((label, i) => (
-                        <div key={label} className="flex-1 bg-card/80 rounded-xl p-3 border border-border">
-                          <div className="text-[10px] text-muted-foreground mb-1">{label}</div>
-                          <div className="font-display font-bold text-sm gradient-text-primary">{["€3,840", "€2,120", "€8,650", "€2,480"][i]}</div>
-                          <div className={`text-[9px] font-semibold ${i === 0 || i === 2 ? "text-brand-emerald" : "text-brand-emerald"}`}>{["+4.2%", "+2.8%", "+11.3%", "+3.1%"][i]}</div>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="flex-1 bg-card/60 rounded-xl border border-border p-3">
-                      <div className="text-[10px] text-muted-foreground mb-2">Greek Auctions — Live Feed</div>
-                      <div className="space-y-1.5">
-                        {["3-bed apt, Kolonaki · €285k · 14 Mar", "Villa, Glyfada · €920k · 16 Mar", "Plot 450m², Paros · €180k · 18 Mar"].map(item => (
-                          <div key={item} className="flex items-center gap-2 text-[10px] text-foreground/80">
-                            <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
-                            {item}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                  {/* Hover CTA */}
-                  <div className="absolute inset-0 bg-background/0 group-hover:bg-background/40 transition-all flex items-center justify-center">
-                    <span className="flex items-center gap-2 bg-primary text-primary-foreground text-sm font-semibold px-5 py-2.5 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">
-                      <ExternalLink className="w-4 h-4" /> Open mAI Prop OS
+                {/* Live iframe — scaled down to fit, cookie banners blocked via sandbox */}
+                <div className="relative aspect-[16/10] bg-background overflow-hidden">
+                  <iframe
+                    src="https://os.maiprop.co"
+                    title="mAI Prop OS"
+                    className="absolute top-0 left-0 w-[200%] h-[200%] origin-top-left pointer-events-none"
+                    style={{ transform: "scale(0.5)" }}
+                    loading="lazy"
+                    sandbox="allow-scripts allow-same-origin"
+                  />
+                  {/* Clickable overlay */}
+                  <a href="https://os.maiprop.co" target="_blank" rel="noreferrer"
+                    className="absolute inset-0 flex items-end justify-end p-4">
+                    <span className="flex items-center gap-2 bg-primary/90 backdrop-blur text-primary-foreground text-xs font-semibold px-3 py-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">
+                      <ExternalLink className="w-3.5 h-3.5" /> Open mAI Prop OS
                     </span>
-                  </div>
-                </a>
+                  </a>
+                </div>
               </div>
             </div>
           </div>
