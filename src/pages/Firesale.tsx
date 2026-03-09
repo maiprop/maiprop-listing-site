@@ -190,7 +190,7 @@ export default function Firesale() {
           <div className="container relative">
             <div className="max-w-3xl">
               <div className="reveal in-view inline-flex items-center gap-2 bg-destructive/10 border border-destructive/20 text-destructive px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest mb-6">
-                <Flame className="w-3.5 h-3.5" /> Firesale™ — Instant Cash Offer
+                <Flame className="w-3.5 h-3.5 flame-flicker" /> Firesale™ — Instant Cash Offer
               </div>
               <h1 className="reveal in-view reveal-delay-1 font-display text-5xl md:text-6xl font-black mb-5 leading-tight">
                 Sell Your Property<br />
