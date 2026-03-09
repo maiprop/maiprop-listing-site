@@ -223,10 +223,10 @@ export default function Firesale() {
 
         {/* How it works */}
         <div className="container py-16 border-b border-border">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground text-center mb-8">How It Works</p>
+          <p className="reveal in-view text-[11px] font-bold uppercase tracking-widest text-muted-foreground text-center mb-8">How It Works</p>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {steps.map((s, i) =>
-            <div key={s.step} className="relative flex gap-4 md:flex-col md:gap-0 glass-card rounded-xl p-5 border border-border">
+            <div key={s.step} className={`reveal in-view reveal-delay-${i + 1} relative flex gap-4 md:flex-col md:gap-0 glass-card rounded-xl p-5 border border-border transition-all duration-300 hover:-translate-y-1 hover:shadow-elevated hover:border-primary/30`}>
                 <div className="font-display text-5xl font-black gradient-text-cyan opacity-20 leading-none md:mb-3">{s.step}</div>
                 <div>
                   <h3 className="font-display font-bold text-sm mb-1">{s.title}</h3>
