@@ -27,15 +27,25 @@ export function Navbar() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  const isActive = (path: string) => location.pathname.startsWith(path) && path !== "/";
+  const isActive = (href: string) => {
+    const [path, qs] = href.split("?");
+    if (path !== "/" && !location.pathname.startsWith(path)) return false;
+    if (qs) {
+      const params = new URLSearchParams(qs);
+      const current = new URLSearchParams(location.search);
+      for (const [k, v] of params.entries()) {
+        if (current.get(k) !== v) return false;
+      }
+    }
+    return path !== "/" || location.pathname === "/";
+  };
 
   const navLinks = [
-    { label: "Buy", href: "/listings?type=buy" },
-    { label: "Rent", href: "/listings?type=rent" },
+    { label: "Buy", href: "/listings?listing_type=sale" },
+    { label: "Rent", href: "/listings?listing_type=rent" },
     { label: "Auctions", href: "/auctions", badge: "Live" },
-    { label: "Firesale™", href: "/firesale" },
-    { label: "Investors", href: "/investor-dashboard", badge: "INVESTORS", badgeStyle: "gold" },
-    { label: "Professionals", href: "/professionals" },
+    { label: "Firesale™", href: "/firesale", accent: "flame" },
+    { label: "Professionals", href: "/professionals", accent: "subtle" },
   ];
 
   const displayName = profile?.display_name || profile?.first_name || user?.email?.split("@")[0] || "Account";
@@ -77,21 +87,26 @@ export function Navbar() {
               key={link.href}
               to={link.href}
               className={`relative px-3 py-2 text-sm font-medium rounded-md transition-colors flex items-center gap-2
-                ${isActive(link.href.split("?")[0])
-                  ? "text-primary bg-primary/10"
-                  : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                ${isActive(link.href)
+                  ? link.accent === "flame"
+                    ? "text-destructive bg-destructive/10"
+                    : "text-primary bg-primary/10"
+                  : link.accent === "flame"
+                    ? "text-destructive/80 hover:text-destructive hover:bg-destructive/10"
+                    : link.accent === "subtle"
+                      ? "text-accent/90 hover:text-accent hover:bg-accent/10"
+                      : "text-muted-foreground hover:text-foreground hover:bg-secondary"
                 }`}
             >
+              {link.accent === "flame" && <span className="text-sm">🔥</span>}
               {link.label}
-              {link.badge && link.badgeStyle === "gold" && (
-                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-brand-gold text-background font-black uppercase tracking-widest shadow-sm">
-                  {link.badge}
-                </span>
-              )}
-              {link.badge && !link.badgeStyle && (
+              {link.badge && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold font-semibold animate-pulse">
                   {link.badge}
                 </span>
+              )}
+              {link.accent === "subtle" && (
+                <span className="w-1.5 h-1.5 rounded-full bg-accent/60 ml-0.5" />
               )}
             </Link>
           ))}
@@ -191,16 +206,21 @@ export function Navbar() {
             <Link
               key={link.href}
               to={link.href}
-              className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+              className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                link.accent === "flame"
+                  ? "text-destructive/80 hover:text-destructive hover:bg-destructive/10"
+                  : link.accent === "subtle"
+                    ? "text-accent/80 hover:text-accent hover:bg-accent/10"
+                    : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+              }`}
               onClick={() => setMobileOpen(false)}
             >
+              {link.accent === "flame" && <span>🔥</span>}
               {link.label}
-              {link.badge && link.badgeStyle === "gold" && (
-                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-brand-gold text-background font-black uppercase tracking-widest">{link.badge}</span>
-              )}
-              {link.badge && !link.badgeStyle && (
+              {link.badge && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold font-semibold">{link.badge}</span>
               )}
+              {link.accent === "subtle" && <span className="w-1.5 h-1.5 rounded-full bg-accent/60" />}
             </Link>
           ))}
           <div className="pt-2 flex gap-2">
