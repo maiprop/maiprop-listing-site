@@ -426,7 +426,6 @@ export default function Index() {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <MarketTicker />
       {showAI && <AISearchModal onFiltersApplied={handleAIFilters} onClose={() => setShowAI(false)} />}
       <CookieConsentBanner />
 
@@ -446,85 +445,98 @@ export default function Index() {
           style={{ background: "radial-gradient(hsl(192 100% 50%), hsl(270 75% 62%), transparent 70%)" }} />
 
         <div className="container relative z-10 py-16">
-          <div className="max-w-3xl">
-            {/* Eyebrow */}
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary/10 border border-primary/25 mb-7 animate-fade-in">
-              <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-              <span className="text-sm font-semibold text-primary">Greece's #1 AI-Powered Property Platform</span>
-            </div>
+          <div className="grid lg:grid-cols-[1fr_360px] xl:grid-cols-[1fr_400px] gap-12 items-center">
 
-            {/* Headline */}
-            <h1 className="font-display font-black leading-[1.05] mb-6 animate-fade-in-up" style={{ fontSize: "clamp(2.8rem, 6vw, 4.5rem)" }}>
-              Find your perfect<br />property in Greece<br />
-              <span className="gradient-text-primary">— with AI precision</span>
-            </h1>
+            {/* ── LEFT: Copy + Search ── */}
+            <div>
+              {/* Eyebrow */}
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary/10 border border-primary/25 mb-7 animate-fade-in">
+                <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                <span className="text-sm font-semibold text-primary">Greece's #1 AI-Powered Property Platform</span>
+              </div>
 
-            <p className="text-lg text-foreground/70 mb-10 max-w-xl animate-fade-in-up leading-relaxed" style={{ animationDelay: "0.1s" }}>
-              47,000+ verified listings across Greece. Apartments, villas, land, auctions, and investment properties — all in one place.
-            </p>
+              {/* Headline */}
+              <h1 className="font-display font-black leading-[1.05] mb-6 animate-fade-in-up" style={{ fontSize: "clamp(2.8rem, 6vw, 4.5rem)" }}>
+                Find your perfect<br />property in Greece<br />
+                <span className="gradient-text-primary">— with AI precision</span>
+              </h1>
 
-            {/* ── Search Card ── */}
-            <div className="animate-fade-in-up" style={{ animationDelay: "0.2s" }}>
-              <div className="bg-card/85 backdrop-blur-2xl border border-border/70 rounded-2xl shadow-elevated overflow-visible"
-                style={{ boxShadow: "0 12px 48px -8px hsl(var(--primary) / 0.2), 0 2px 0 0 hsl(var(--primary) / 0.08), inset 0 1px 0 0 hsl(var(--foreground) / 0.04)" }}>
+              <p className="text-lg text-foreground/70 mb-10 max-w-xl animate-fade-in-up leading-relaxed" style={{ animationDelay: "0.1s" }}>
+                47,000+ verified listings across Greece. Apartments, villas, land, auctions, and investment properties — all in one place.
+              </p>
 
-                {/* Tabs */}
-                <div className="flex gap-0.5 px-2 pt-2.5">
-                  {[
-                    { label: "Buy", emoji: "🏠", color: "" },
-                    { label: "Rent", emoji: "🔑", color: "" },
-                    { label: "Auctions", emoji: "⚖️", color: "" },
-                    { label: "Quick Sale", emoji: "⚡", color: "text-destructive" },
-                  ].map(({ label, emoji, color }) => (
-                    <button key={label} onClick={() => setSearchType(label)}
-                      className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-                        searchType === label
-                          ? "bg-primary text-primary-foreground shadow-sm"
-                          : `${color || "text-muted-foreground"} hover:text-foreground hover:bg-secondary/80`
-                      }`}>
-                      <span className="text-base leading-none">{emoji}</span>
-                      <span>{label}</span>
-                    </button>
-                  ))}
-                </div>
+              {/* ── Search Card ── */}
+              <div className="animate-fade-in-up" style={{ animationDelay: "0.2s" }}>
+                <div className="bg-card/85 backdrop-blur-2xl border border-border/70 rounded-2xl shadow-elevated overflow-visible"
+                  style={{ boxShadow: "0 12px 48px -8px hsl(var(--primary) / 0.2), 0 2px 0 0 hsl(var(--primary) / 0.08), inset 0 1px 0 0 hsl(var(--foreground) / 0.04)" }}>
 
-                <div className="mx-3 mt-2 h-px bg-border/50" />
-
-                {/* Search row */}
-                <div className="flex gap-0 p-2 items-stretch">
-                  <div className="flex-1 min-w-0">
-                    <LocationInput value={searchQuery} onChange={setSearchQuery} onSearch={handleSearch} />
+                  {/* Tabs */}
+                  <div className="flex gap-0.5 px-2 pt-2.5">
+                    {[
+                      { label: "Buy", emoji: "🏠", color: "" },
+                      { label: "Rent", emoji: "🔑", color: "" },
+                      { label: "Auctions", emoji: "⚖️", color: "" },
+                      { label: "Quick Sale", emoji: "⚡", color: "text-destructive" },
+                    ].map(({ label, emoji, color }) => (
+                      <button key={label} onClick={() => setSearchType(label)}
+                        className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                          searchType === label
+                            ? "bg-primary text-primary-foreground shadow-sm"
+                            : `${color || "text-muted-foreground"} hover:text-foreground hover:bg-secondary/80`
+                        }`}>
+                        <span className="text-base leading-none">{emoji}</span>
+                        <span>{label}</span>
+                      </button>
+                    ))}
                   </div>
-                  <div className="w-px bg-border/50 mx-1 self-stretch my-1" />
-                  <PropertyTypeDropdown value={selectedPropertyType} onChange={setSelectedPropertyType} />
-                  <div className="w-px bg-border/50 mx-1 self-stretch my-1" />
-                  <button onClick={() => setShowAI(true)}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all text-primary hover:bg-primary/10 shrink-0 whitespace-nowrap">
-                    <Sparkles className="w-4 h-4" />
-                    <span className="hidden lg:inline">AI Search</span>
-                  </button>
-                  <Button size="lg" onClick={handleSearch}
-                    className="bg-primary hover:opacity-90 border-0 text-primary-foreground rounded-xl px-6 font-semibold shrink-0 ml-1">
-                    <Search className="w-4 h-4 sm:mr-2" />
-                    <span className="hidden sm:inline">Search</span>
-                  </Button>
+
+                  <div className="mx-3 mt-2 h-px bg-border/50" />
+
+                  {/* Search row */}
+                  <div className="flex gap-0 p-2 items-stretch">
+                    <div className="flex-1 min-w-0">
+                      <LocationInput value={searchQuery} onChange={setSearchQuery} onSearch={handleSearch} />
+                    </div>
+                    <div className="w-px bg-border/50 mx-1 self-stretch my-1" />
+                    <PropertyTypeDropdown value={selectedPropertyType} onChange={setSelectedPropertyType} />
+                    <div className="w-px bg-border/50 mx-1 self-stretch my-1" />
+                    <button onClick={() => setShowAI(true)}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all text-primary hover:bg-primary/10 shrink-0 whitespace-nowrap">
+                      <Sparkles className="w-4 h-4" />
+                      <span className="hidden lg:inline">AI Search</span>
+                    </button>
+                    <Button size="lg" onClick={handleSearch}
+                      className="bg-primary hover:opacity-90 border-0 text-primary-foreground rounded-xl px-6 font-semibold shrink-0 ml-1">
+                      <Search className="w-4 h-4 sm:mr-2" />
+                      <span className="hidden sm:inline">Search</span>
+                    </Button>
+                  </div>
                 </div>
+              </div>
+
+              {/* Stats */}
+              <div className="flex items-center flex-wrap gap-x-6 gap-y-2 mt-7 animate-fade-in-up" style={{ animationDelay: "0.3s" }}>
+                {[
+                  { value: "47,000+", label: "Active Listings" },
+                  { value: "€2.4B", label: "Properties Sold" },
+                  { value: "12,500+", label: "Verified Agents" },
+                  { value: "3,200+", label: "Monthly Auctions" },
+                ].map(stat => (
+                  <div key={stat.label} className="flex items-baseline gap-1.5">
+                    <div className="font-display font-bold text-lg gradient-text-primary">{stat.value}</div>
+                    <div className="text-xs text-muted-foreground">{stat.label}</div>
+                  </div>
+                ))}
               </div>
             </div>
 
-            {/* Stats */}
-            <div className="flex items-center flex-wrap gap-x-6 gap-y-2 mt-7 animate-fade-in-up" style={{ animationDelay: "0.3s" }}>
-              {[
-                { value: "47,000+", label: "Active Listings" },
-                { value: "€2.4B", label: "Properties Sold" },
-                { value: "12,500+", label: "Verified Agents" },
-                { value: "3,200+", label: "Monthly Auctions" },
-              ].map(stat => (
-                <div key={stat.label} className="flex items-baseline gap-1.5">
-                  <div className="font-display font-bold text-lg gradient-text-primary">{stat.value}</div>
-                  <div className="text-xs text-muted-foreground">{stat.label}</div>
-                </div>
-              ))}
+            {/* ── RIGHT: Live Market Ticker Card ── */}
+            <div className="hidden lg:block animate-fade-in-up relative" style={{ animationDelay: "0.25s" }}>
+              <div className="absolute -inset-6 rounded-3xl blur-3xl opacity-15"
+                style={{ background: "radial-gradient(ellipse, hsl(192 100% 50%), hsl(270 75% 62%), transparent 70%)" }} />
+              <div className="relative">
+                <MarketTicker />
+              </div>
             </div>
 
             {/* Price Index Strip */}
