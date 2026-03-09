@@ -346,12 +346,12 @@ export default function Professionals() {
                 { value: "94%", label: "5-star rated" },
                 { value: "48h", label: "Avg response" },
                 { value: "AI", label: "Enhanced" }].
-                map((s) => {}
-
-
-
-
-                )}
+                map((s) => (
+                  <div key={s.label} className="glass-card rounded-xl p-4 border border-border text-center">
+                    <div className="font-display font-black text-2xl text-primary">{s.value}</div>
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider mt-1">{s.label}</div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
