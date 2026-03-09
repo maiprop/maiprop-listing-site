@@ -427,7 +427,7 @@ function OSDashboardMockup() {
       const idx = Math.floor(Math.random() * basePrices.length);
       const base = basePrices[idx];
       const delta = Math.round(base * (0.001 + Math.random() * 0.003) * (Math.random() > 0.35 ? 1 : -1));
-      setPrices(prev => prev.map((p, i) => i === idx ? p + delta : p));
+      setPrices((prev) => prev.map((p, i) => i === idx ? p + delta : p));
       setFlickeringIdx(idx);
       setTimeout(() => setFlickeringIdx(null), 700);
       timer = setTimeout(tick, 2800 + Math.random() * 600);
@@ -437,23 +437,23 @@ function OSDashboardMockup() {
   }, []);
 
   const marketData = [
-    { city: "Athens",       delta: "▲1.3%" },
-    { city: "Thessaloniki", delta: "▲0.8%" },
-    { city: "Mykonos",      delta: "▲2.3%" },
-    { city: "Glyfada",      delta: "▲1.7%" },
-    { city: "Rhodes",       delta: "▲3.1%" },
-    { city: "Santorini",    delta: "▲1.9%" },
-    { city: "Kifisia",      delta: "▲0.6%" },
-  ];
+  { city: "Athens", delta: "▲1.3%" },
+  { city: "Thessaloniki", delta: "▲0.8%" },
+  { city: "Mykonos", delta: "▲2.3%" },
+  { city: "Glyfada", delta: "▲1.7%" },
+  { city: "Rhodes", delta: "▲3.1%" },
+  { city: "Santorini", delta: "▲1.9%" },
+  { city: "Kifisia", delta: "▲0.6%" }];
+
   const sparklines = [
-    "M0,10 C5,8 10,6 15,4 C20,2 25,5 30,2",
-    "M0,8 C5,10 10,7 15,9 C20,5 25,3 30,4",
-    "M0,10 C5,9 10,6 15,7 C20,4 25,2 30,1",
-    "M0,9 C5,7 10,8 15,5 C20,6 25,4 30,3",
-    "M0,10 C5,8 10,11 15,7 C20,5 25,6 30,3",
-    "M0,9 C5,6 10,7 15,5 C20,8 25,4 30,2",
-    "M0,10 C5,9 10,8 15,9 C20,7 25,8 30,9",
-  ];
+  "M0,10 C5,8 10,6 15,4 C20,2 25,5 30,2",
+  "M0,8 C5,10 10,7 15,9 C20,5 25,3 30,4",
+  "M0,10 C5,9 10,6 15,7 C20,4 25,2 30,1",
+  "M0,9 C5,7 10,8 15,5 C20,6 25,4 30,3",
+  "M0,10 C5,8 10,11 15,7 C20,5 25,6 30,3",
+  "M0,9 C5,6 10,7 15,5 C20,8 25,4 30,2",
+  "M0,10 C5,9 10,8 15,9 C20,7 25,8 30,9"];
+
   return (
     <div className="w-full h-full overflow-hidden select-none font-sans" style={{ background: "hsl(220 30% 7%)" }}>
       {/* Navbar */}
@@ -464,9 +464,9 @@ function OSDashboardMockup() {
             <span className="text-[7px] font-black ml-0.5 px-1 rounded-sm" style={{ background: "hsl(183 100% 50% / 0.15)", color: "hsl(183 100% 70%)" }}>OS</span>
           </div>
           <div className="flex gap-1.5">
-            {["Modules", "Benefits", "Pricing", "Resources"].map((t) => (
-              <span key={t} className="text-[7px] px-1.5 py-0.5 rounded" style={{ color: "rgba(255,255,255,0.4)" }}>{t}</span>
-            ))}
+            {["Modules", "Benefits", "Pricing", "Resources"].map((t) =>
+            <span key={t} className="text-[7px] px-1.5 py-0.5 rounded" style={{ color: "rgba(255,255,255,0.4)" }}>{t}</span>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -484,14 +484,14 @@ function OSDashboardMockup() {
           </div>
           <p className="text-[7px] mb-2.5" style={{ color: "hsl(183 100% 70%)" }}>Gain The Edge In Greek Real Estate Market With:</p>
           <div className="space-y-1.5 mb-4">
-            {["Data Accessibility", "Predictive Analytics", "Mapped Data & Automated Reports", "Portfolio & Asset Management", "Auctions Analysis & Automations"].map((f) => (
-              <div key={f} className="flex items-center gap-1.5 text-[7px]" style={{ color: "rgba(255,255,255,0.7)" }}>
+            {["Data Accessibility", "Predictive Analytics", "Mapped Data & Automated Reports", "Portfolio & Asset Management", "Auctions Analysis & Automations"].map((f) =>
+            <div key={f} className="flex items-center gap-1.5 text-[7px]" style={{ color: "rgba(255,255,255,0.7)" }}>
                 <div className="w-2.5 h-2.5 rounded-full border flex items-center justify-center shrink-0" style={{ borderColor: "hsl(183 100% 50% / 0.5)" }}>
                   <div className="w-1 h-1 rounded-full" style={{ background: "hsl(183 100% 50%)" }} />
                 </div>
                 {f}
               </div>
-            ))}
+            )}
           </div>
           <div className="inline-flex items-center gap-1.5 text-[7px] font-bold px-3 py-1.5 rounded-full w-fit" style={{ background: "hsl(183 100% 50% / 0.12)", border: "1px solid hsl(183 100% 50% / 0.35)", color: "hsl(183 100% 60%)" }}>
             <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "hsl(183 100% 50%)" }} />
@@ -515,7 +515,7 @@ function OSDashboardMockup() {
               const isFlick = flickeringIdx === i;
               return (
                 <div key={row.city} className="flex items-center gap-1 px-2.5 py-[3px] border-b last:border-0 transition-all duration-300"
-                  style={{ borderColor: "rgba(255,255,255,0.04)", background: isFlick ? "rgba(0,255,240,0.07)" : "transparent" }}>
+                style={{ borderColor: "rgba(255,255,255,0.04)", background: isFlick ? "rgba(0,255,240,0.07)" : "transparent" }}>
                   <span className="text-[7px] w-16 truncate transition-colors duration-300" style={{ color: isFlick ? "hsl(183 100% 75%)" : "rgba(255,255,255,0.7)" }}>{row.city}</span>
                   <svg viewBox="0 0 30 12" className="w-7 h-2.5 shrink-0" preserveAspectRatio="none">
                     <path d={sparklines[i]} fill="none" stroke="hsl(183 100% 50%)" strokeWidth="1.2" strokeLinecap="round" />
@@ -524,8 +524,8 @@ function OSDashboardMockup() {
                     {prices[i].toLocaleString()}
                   </span>
                   <span className="text-[6px] font-bold w-8 text-right" style={{ color: "hsl(142 70% 55%)" }}>{row.delta}</span>
-                </div>
-              );
+                </div>);
+
             })}
           </div>
           <div className="mx-2 my-1.5 rounded-lg px-2 py-1.5 border" style={{ background: "hsl(183 100% 50% / 0.06)", borderColor: "hsl(183 100% 50% / 0.15)" }}>
@@ -544,17 +544,17 @@ function OSDashboardMockup() {
           </div>
         </div>
       </div>
-    </div>
-  );
+    </div>);
+
 }
 
 // ── Properties Portal Mockup (faithful to properties.maiprop.co) ──────────────
 function PropertiesMockup() {
   const stats = [
-    { value: "€250K", label: "Minimum Investment" },
-    { value: "6-9 Months", label: "To Visa Approval" },
-    { value: "27 Countries", label: "Schengen Access" },
-  ];
+  { value: "€250K", label: "Minimum Investment" },
+  { value: "6-9 Months", label: "To Visa Approval" },
+  { value: "27 Countries", label: "Schengen Access" }];
+
   return (
     <div className="w-full h-full overflow-hidden select-none font-sans relative" style={{ background: "hsl(210 30% 8%)" }}>
       {/* Hero bg: Acropolis */}
@@ -562,8 +562,8 @@ function PropertiesMockup() {
         <img
           src="https://images.unsplash.com/photo-1555993539-1732b0258235?w=600&q=50&fm=webp"
           alt=""
-          className="w-full h-full object-cover opacity-30"
-        />
+          className="w-full h-full object-cover opacity-30" />
+        
         <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, hsl(200 40% 12% / 0.75) 0%, hsl(200 40% 6% / 0.95) 100%)" }} />
       </div>
       {/* Navbar */}
@@ -575,9 +575,9 @@ function PropertiesMockup() {
           <span className="text-[9px] font-black text-white">mAI prop</span>
         </div>
         <div className="flex items-center gap-2">
-          {["Benefits", "Opportunities", "Track Record", "mAI Prop OS"].map((l) => (
-            <span key={l} className="text-[6px]" style={{ color: "rgba(255,255,255,0.5)" }}>{l}</span>
-          ))}
+          {["Benefits", "Opportunities", "Track Record", "mAI Prop OS"].map((l) =>
+          <span key={l} className="text-[6px]" style={{ color: "rgba(255,255,255,0.5)" }}>{l}</span>
+          )}
         </div>
         <div className="text-[7px] font-bold px-2.5 py-1 rounded-full" style={{ background: "hsl(183 100% 50%)", color: "hsl(220 30% 8%)" }}>
           Get Started
@@ -602,16 +602,16 @@ function PropertiesMockup() {
           <div className="text-[7px] font-semibold" style={{ color: "rgba(255,255,255,0.55)" }}>View Properties</div>
         </div>
         <div className="flex gap-6">
-          {stats.map((s) => (
-            <div key={s.value}>
+          {stats.map((s) =>
+          <div key={s.value}>
               <div className="text-[12px] font-black text-white">{s.value}</div>
               <div className="text-[6px]" style={{ color: "rgba(255,255,255,0.4)" }}>{s.label}</div>
             </div>
-          ))}
+          )}
         </div>
       </div>
-    </div>
-  );
+    </div>);
+
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────────
@@ -625,19 +625,19 @@ export default function Index() {
 
   // Fetch live listing counts grouped by property_type
   useEffect(() => {
-    supabase
-      .from("listings")
-      .select("property_type")
-      .eq("status", "active")
-      .then(({ data }) => {
-        if (!data) return;
-        const counts: Record<string, number> = {};
-        data.forEach((row) => {
-          const k = row.property_type as string;
-          counts[k] = (counts[k] || 0) + 1;
-        });
-        setTypeCounts(counts);
+    supabase.
+    from("listings").
+    select("property_type").
+    eq("status", "active").
+    then(({ data }) => {
+      if (!data) return;
+      const counts: Record<string, number> = {};
+      data.forEach((row) => {
+        const k = row.property_type as string;
+        counts[k] = (counts[k] || 0) + 1;
       });
+      setTypeCounts(counts);
+    });
   }, []);
 
   // Scroll-reveal refs
@@ -756,13 +756,13 @@ export default function Index() {
                 <span className="gradient-text-primary">— with AI precision</span>
               </h1>
 
-              <p
-                className="text-sm sm:text-lg text-white/75 mb-6 sm:mb-10 max-w-xl animate-fade-in-up leading-relaxed"
-                style={{ animationDelay: "0.18s" }}>
-                
-                47,000+ listings across Greece. Residences, offices, stores, land, auctions, and investment properties —
-                all in one place.
-              </p>
+              
+
+
+
+
+
+              
 
               {/* ── Search Card ── */}
               <div className="animate-fade-in-up" style={{ animationDelay: "0.28s" }}>
@@ -860,8 +860,8 @@ export default function Index() {
           {/* ── ROW 1: Primary types — Apartment, Land, New Development (big) */}
           <div className={`grid grid-cols-3 gap-3 reveal reveal-delay-1 ${browseInView ? "in-view" : ""}`}>
             {/* Apartment */}
-            {PROPERTY_TYPES.filter((t) => ["apartment", "land"].includes(t.value)).map((type) => (
-              <Link key={type.value} to={`/listings?type=${type.value}`}>
+            {PROPERTY_TYPES.filter((t) => ["apartment", "land"].includes(t.value)).map((type) =>
+            <Link key={type.value} to={`/listings?type=${type.value}`}>
                 <div className="relative glass-card rounded-xl p-4 flex flex-col items-center text-center hover:border-primary/40 hover:bg-primary/5 transition-all group gap-2 cursor-pointer overflow-hidden">
                   <span className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-primary/30 animate-pulse" />
                   <div className={`w-12 h-12 rounded-xl ${type.bgClass} flex items-center justify-center text-2xl group-hover:scale-110 transition-transform`}>
@@ -873,7 +873,7 @@ export default function Index() {
                   </div>
                 </div>
               </Link>
-            ))}
+            )}
 
             {/* New Development — featured card */}
             <Link to="/listings?construction_status=new_build">
@@ -894,22 +894,22 @@ export default function Index() {
           {/* ── ROW 3: Commercial subtypes — Retail Shop, Office, Mixed-Use (big icons) */}
           <div className={`mt-5 grid grid-cols-3 gap-3 reveal reveal-delay-2 ${browseInView ? "in-view" : ""}`}>
             {[
-              { label: "Retail Shop", emoji: "🛍️", sub: "shop", bg: "bg-accent/10", animated: true },
-              { label: "Mixed-Use", emoji: "🔀", sub: "mixed_use", bg: "bg-primary/10", animated: true },
-              { label: "Coworking", emoji: "🤝", sub: "office_coworking", bg: "bg-brand-cyan/10", animated: false },
-            ].map((item) => (
-              <Link key={item.sub} to={`/listings?type=commercial&subtype=${item.sub}`}>
+            { label: "Retail Shop", emoji: "🛍️", sub: "shop", bg: "bg-accent/10", animated: true },
+            { label: "Mixed-Use", emoji: "🔀", sub: "mixed_use", bg: "bg-primary/10", animated: true },
+            { label: "Coworking", emoji: "🤝", sub: "office_coworking", bg: "bg-brand-cyan/10", animated: false }].
+            map((item) =>
+            <Link key={item.sub} to={`/listings?type=commercial&subtype=${item.sub}`}>
                 <div className={`relative glass-card rounded-xl p-4 flex flex-col items-center text-center hover:border-accent/40 hover:bg-accent/5 transition-all group gap-2 cursor-pointer${item.animated ? " overflow-hidden" : ""}`}>
-                  {item.animated && (
-                    <span className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-accent/40 animate-pulse" />
-                  )}
+                  {item.animated &&
+                <span className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-accent/40 animate-pulse" />
+                }
                   <div className={`w-12 h-12 rounded-xl ${item.bg} flex items-center justify-center text-2xl group-hover:scale-110 transition-transform`}>
                     {item.emoji}
                   </div>
                   <div className="font-display font-semibold text-xs group-hover:text-accent transition-colors">{item.label}</div>
                 </div>
               </Link>
-            ))}
+            )}
           </div>
 
           {/* ── More Commercial chips */}
@@ -924,8 +924,8 @@ export default function Index() {
               { label: "🏗️ Industrial Space", sub: "industrial" },
               { label: "🖼️ Showroom", sub: "showroom" },
               { label: "🎪 Hall / Event Space", sub: "hall" },
-              { label: "🏛️ Business Centre", sub: "office_business" },
-              ].map((item) =>
+              { label: "🏛️ Business Centre", sub: "office_business" }].
+              map((item) =>
               <Link key={item.sub} to={`/listings?type=commercial&subtype=${item.sub}`}>
                   <div className="glass-card rounded-xl px-3.5 py-2 text-xs font-medium hover:border-accent/40 hover:bg-accent/5 hover:text-accent transition-all cursor-pointer whitespace-nowrap">
                     {item.label}
