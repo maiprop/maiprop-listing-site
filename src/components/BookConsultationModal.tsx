@@ -205,9 +205,9 @@ export default function BookConsultationModal({ open, onClose, professional }: B
                     <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
                       {services.map(svc => (
                         <button key={svc.id} onClick={() => setSelectedService(svc)}
-                          className={`w-full flex items-start gap-3 p-3.5 rounded-xl border text-left transition-all ${
+                        className={`w-full flex items-start gap-3 p-3.5 rounded-xl border text-left transition-all ${
                             selectedService?.id === svc.id
-                              ? "border-primary bg-primary/8"
+                              ? "border-primary bg-primary/10"
                               : "border-border hover:border-primary/30 bg-secondary/40"
                           }`}
                         >
