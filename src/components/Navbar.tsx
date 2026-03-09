@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import logoImg from "@/assets/logo.png";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Bell, MessageSquare, User, Menu, X, ChevronDown, Search, Plus, LogOut, LayoutDashboard, Building2, Sun, Moon, Home, List, Gavel, Flame, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -67,18 +68,12 @@ export function Navbar() {
     >
       <div className="container flex items-center justify-between h-16">
         {/* Logo */}
-        <Link to="/" className="flex items-center gap-2 shrink-0">
-          <div className="relative">
-            <div className="w-8 h-8 rounded-lg bg-gradient-primary flex items-center justify-center">
-              <span className="font-display font-bold text-sm text-background">m</span>
-            </div>
-            <div className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-accent flex items-center justify-center">
-              <span className="text-[6px] font-bold text-accent-foreground">AI</span>
-            </div>
-          </div>
-          <span className="font-display font-bold text-lg tracking-tight">
-            mai<span className="gradient-text-cyan">prop</span>
-          </span>
+        <Link to="/" className="flex items-center shrink-0">
+          <img
+            src={logoImg}
+            alt="maiProp — Real estate | Real decisions."
+            className="h-10 w-auto object-contain"
+          />
         </Link>
 
         {/* Desktop nav */}
