@@ -326,6 +326,7 @@ export default function Listings() {
   const [polygonFilterIds, setPolygonFilterIds] = useState<Set<string> | null>(null);
   const [mobileTab, setMobileTab] = useState<"list" | "map">("list");
   const { user } = useAuth();
+  const { consent, accept } = useCookieConsent();
 
   // AI search filter applier — maps AI-parsed filters back to URL params
   const applyAIFilters = useCallback((filters: Record<string, any>) => {
