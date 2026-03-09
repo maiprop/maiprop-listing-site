@@ -21,9 +21,9 @@ const steps = [
 
 const proofStats = [
 { value: "€2.4B+", label: "Deal flow processed", color: "text-primary" },
-{ value: "312", label: "Active buyers", color: "text-brand-gold" },
+{ value: "Professional", label: "Active buyers", color: "text-brand-gold" },
 { value: "94%", label: "AI confidence avg.", color: "text-brand-emerald" },
-{ value: "48h", label: "Average close time", color: "text-accent" }];
+{ value: "96h", label: "Average close time", color: "text-accent" }];
 
 
 const conditionOptions = [
