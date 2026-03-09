@@ -567,7 +567,7 @@ export default function Professionals() {
                   <span className="text-xs font-bold text-primary uppercase tracking-widest">AI Advantage</span>
                 </div>
                 <h3 className="font-display text-3xl font-bold text-foreground mb-2">How AI makes every pro 10× better</h3>
-                <p className="text-muted-foreground max-w-lg mx-auto">Every professional category on maiProp integrates our AI engine to speed up tasks, reduce errors, and deliver smarter outcomes.</p>
+                <p className="text-muted-foreground max-w-lg mx-auto">Every professional category on mAI prop integrates our AI engine to speed up tasks, reduce errors, and deliver smarter outcomes.</p>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {[
