@@ -287,43 +287,46 @@ function PropertyTypeButton({
               !value ? "text-primary bg-primary/10" : "text-foreground"
             }`}
           >
-            <span>🏘️</span><span className="font-medium">All Types</span>
+            <Building2 className="w-4 h-4 shrink-0" /><span className="font-medium">All Types</span>
             {!value && <Check className="w-3.5 h-3.5 ml-auto" />}
           </button>
           <div className="h-px bg-border mx-2" />
           {PROPERTY_GROUPS.map((group, gi) => (
             <div key={group.id}>
               <div className="flex items-center gap-2 px-3 pt-2.5 pb-1">
-                <span className="text-xs">{group.emoji}</span>
                 <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{group.label}</span>
               </div>
               {group.id === "commercial" ? (
-                commercialType.subtypes.map(st => (
-                  <button
-                    key={st.value}
-                    onClick={() => { onChange("commercial", st.value); setOpen(false); }}
-                    title={st.description}
-                    className={`w-full flex items-center gap-2.5 pl-6 pr-3 py-2 text-sm text-left transition-colors hover:bg-secondary ${
-                      value === "commercial" && subtype === st.value ? "text-primary bg-primary/10" : "text-foreground"
-                    }`}
-                  >
-                    <span className="text-base">🏪</span>
-                    <span>{st.label}</span>
-                    {value === "commercial" && subtype === st.value && <Check className="w-3.5 h-3.5 ml-auto" />}
-                  </button>
-                ))
+                commercialType.subtypes.map(st => {
+                  const Icon = st.icon ?? Store;
+                  return (
+                    <button
+                      key={st.value}
+                      onClick={() => { onChange("commercial", st.value); setOpen(false); }}
+                      title={st.description}
+                      className={`w-full flex items-center gap-2.5 pl-5 pr-3 py-2 text-sm text-left transition-colors hover:bg-secondary ${
+                        value === "commercial" && subtype === st.value ? "text-primary bg-primary/10" : "text-foreground"
+                      }`}
+                    >
+                      <Icon className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+                      <span>{st.label}</span>
+                      {value === "commercial" && subtype === st.value && <Check className="w-3.5 h-3.5 ml-auto" />}
+                    </button>
+                  );
+                })
               ) : (
                 group.types.map(typeKey => {
                   const pt = PROPERTY_TYPE_MAP[typeKey];
+                  const Icon = pt.icon;
                   return (
                     <button
                       key={pt.value}
                       onClick={() => { onChange(pt.value, ""); setOpen(false); }}
-                      className={`w-full flex items-center gap-2.5 pl-6 pr-3 py-2 text-sm text-left transition-colors hover:bg-secondary ${
+                      className={`w-full flex items-center gap-2.5 pl-5 pr-3 py-2 text-sm text-left transition-colors hover:bg-secondary ${
                         value === pt.value && !subtype ? "text-primary bg-primary/10" : "text-foreground"
                       }`}
                     >
-                      <span>{pt.emoji}</span>
+                      <Icon className={`w-4 h-4 shrink-0 ${value === pt.value && !subtype ? "text-primary" : "text-muted-foreground"}`} />
                       <span className="font-medium">{pt.label}</span>
                       {value === pt.value && !subtype && <Check className="w-3.5 h-3.5 ml-auto" />}
                     </button>
