@@ -274,6 +274,44 @@ export default function CreateListing() {
   const pt = form.property_type;
   const lt = form.listing_type;
 
+  // ── Per-step validation ───────────────────────────────────────────────────
+  const validateStep = (s: number): boolean => {
+    switch (s) {
+      case 2:
+        if (!form.title.trim()) { toast.error("Please add a title for your listing"); return false; }
+        if (!form.sqm) { toast.error("Property area (m²) is required"); return false; }
+        return true;
+      case 4:
+        if (!form.city.trim()) { toast.error("City is required to continue"); return false; }
+        return true;
+      case 5:
+        if (!form.price) { toast.error(`Please enter a ${lt === "rent" ? "monthly rent" : "asking price"}`); return false; }
+        if (lt === "auction" && !form.auction_starting_bid) { toast.error("Auction starting bid is required"); return false; }
+        return true;
+      default:
+        return true;
+    }
+  };
+
+  const handleNext = () => {
+    if (validateStep(step)) setStep(s => s + 1);
+  };
+
+  // ── Completion percentage ─────────────────────────────────────────────────
+  const completionPct = (() => {
+    let filled = 0;
+    const checks = [
+      true,
+      !!(form.title && form.sqm),
+      true,
+      !!form.city,
+      !!form.price,
+      images.length > 0,
+    ];
+    checks.forEach(c => { if (c) filled++; });
+    return Math.round((filled / checks.length) * 100);
+  })();
+
   // ── Image Upload ──────────────────────────────────────────────────────────
 
   const uploadImage = useCallback(async (file: File): Promise<UploadedImage> => {
@@ -563,10 +601,22 @@ export default function CreateListing() {
     <div className="min-h-screen bg-background">
       <Navbar />
       <div className="pt-16">
-        <div className="border-b border-border bg-card py-6">
+        <div className="border-b border-border bg-card py-5">
           <div className="container">
-            <h1 className="font-display text-2xl font-bold">Create New Listing</h1>
-            <p className="text-muted-foreground text-sm mt-1">Fill in your property details step by step</p>
+            <div className="flex items-center justify-between mb-1">
+              <h1 className="font-display text-2xl font-bold">Create New Listing</h1>
+              <span className="text-sm font-semibold tabular-nums text-primary">{completionPct}%</span>
+            </div>
+            <p className="text-muted-foreground text-xs mb-3">
+              Step {step} of {steps.length} — {steps[step - 1].label}
+            </p>
+            {/* Progress bar */}
+            <div className="w-full h-1.5 bg-secondary rounded-full overflow-hidden">
+              <div
+                className="h-full bg-primary rounded-full transition-all duration-500 ease-out"
+                style={{ width: `${completionPct}%` }}
+              />
+            </div>
           </div>
         </div>
 
@@ -1177,7 +1227,7 @@ export default function CreateListing() {
                 {step === 1 ? "Cancel" : "Back"}
               </Button>
               {step < 6 ? (
-                <Button onClick={() => setStep(s => s + 1)} className="bg-gradient-primary border-0 text-primary-foreground gap-2">
+                <Button onClick={handleNext} className="bg-gradient-primary border-0 text-primary-foreground gap-2">
                   Next <ChevronRight className="w-4 h-4" />
                 </Button>
               ) : (
