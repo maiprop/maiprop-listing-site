@@ -679,7 +679,8 @@ export default function Index() {
       </section>
 
       {/* ══ FIRESALE CTA ════════════════════════════════════════════════════ */}
-      <section className="py-10 sm:py-16 container">
+      <section className="py-10 sm:py-16 bg-background">
+        <div className="container">
         <div className="relative rounded-3xl overflow-hidden bg-card border border-border">
           <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 80% 50%, hsl(0 72% 55% / 0.12) 0%, transparent 60%)" }} />
           <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 20% 50%, hsl(192 100% 50% / 0.05) 0%, transparent 50%)" }} />
