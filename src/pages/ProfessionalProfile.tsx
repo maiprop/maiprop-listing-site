@@ -830,7 +830,7 @@ export default function ProfessionalProfile() {
       <BookConsultationModal
         open={consultOpen}
         onClose={() => setConsultOpen(false)}
-        professional={{ id: pro.id, user_id: pro.user_id, display_name: pro.display_name, title: pro.title, category: pro.category, hourly_rate: pro.hourly_rate }}
+        professional={{ id: pro.id, user_id: pro.user_id, display_name: pro.display_name, title: pro.title, category: pro.category, hourly_rate: pro.hourly_rate, video_link: pro.video_link }}
       />
       <RequestCallbackModal
         open={callbackOpen}
