@@ -48,6 +48,7 @@ const App = () => (
           <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <Routes>
               <Route path="/" element={<Index />} />
+              <Route path="/listings/new" element={<ProtectedRoute><CreateListing /></ProtectedRoute>} />
               <Route path="/listings" element={<Listings />} />
               <Route path="/property/:id" element={<PropertyDetail />} />
               <Route path="/auctions" element={<Auctions />} />
@@ -61,7 +62,6 @@ const App = () => (
               <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
               <Route path="/dashboard/:section" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
               <Route path="/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
-              <Route path="/listings/new" element={<ProtectedRoute><CreateListing /></ProtectedRoute>} />
               <Route path="/privacy-policy" element={<PrivacyPolicy />} />
               <Route path="/terms-of-service" element={<TermsOfService />} />
               <Route path="/cookie-policy" element={<CookiePolicy />} />
