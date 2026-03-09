@@ -125,19 +125,19 @@ export function OSSyncPanel() {
   // ── Mutation: poll OS auctions → Hub ────────────────────────────────────────
   const pollAuctionsMutation = useMutation({
     mutationFn: async () => {
-      // Scan multiple pages and aggregate results
-      let totalImported = 0, totalUpdated = 0, totalErrors = 0, totalScanned = 0;
+      let totalImported = 0, totalUpdated = 0, totalErrors = 0, totalScanned = 0, totalAi = 0;
       for (let p = pollPage; p < pollPage + pollPages; p++) {
         const { data, error } = await supabase.functions.invoke("poll-os-auctions", {
           body: { page: p, pageSize: 100 },
         });
         if (error) throw error;
-        totalImported += data?.imported ?? 0;
-        totalUpdated  += data?.updated  ?? 0;
-        totalErrors   += data?.errors   ?? 0;
-        totalScanned  += data?.total    ?? 0;
+        totalImported += data?.imported     ?? 0;
+        totalUpdated  += data?.updated      ?? 0;
+        totalErrors   += data?.errors       ?? 0;
+        totalScanned  += data?.total        ?? 0;
+        totalAi       += data?.aiGenerated  ?? 0;
       }
-      return { imported: totalImported, updated: totalUpdated, errors: totalErrors, scanned: totalScanned };
+      return { imported: totalImported, updated: totalUpdated, errors: totalErrors, scanned: totalScanned, aiGenerated: totalAi };
     },
     onSuccess: (result) => {
       setPollResult(result);
@@ -145,12 +145,10 @@ export function OSSyncPanel() {
       if (!result) {
         toast.info("Poll queued — OS credentials pending.");
       } else if (result.imported === 0 && result.updated === 0) {
-        toast.info(
-          `Scanned ${result.scanned} records — no future auctions on this page range. Try a different page.`,
-        );
+        toast.info(`Scanned ${result.scanned} records — no future auctions on this page range. Try a higher page number.`);
       } else {
         toast.success(
-          `Auctions synced: ${result.imported} new, ${result.updated} updated${result.errors ? `, ${result.errors} errors` : ""}.`,
+          `✅ ${result.imported} new · ${result.updated} updated · 🤖 ${result.aiGenerated} AI-generated`,
         );
       }
     },
