@@ -404,7 +404,7 @@ export default function Listings() {
     selectedType, selectedSubtype, selectedListingType
   );
 
-
+  const { data: dbListings = [], isLoading } = useListings({
     city: searchQuery || undefined,
     listing_type: selectedListingType || undefined,
     property_type: selectedType || undefined,
