@@ -372,12 +372,6 @@ export default function ProfessionalProfile() {
                       </a>
                     )}
                   </div>
-                      <a href={pro.website_url} target="_blank" rel="noopener noreferrer"
-                        className="flex items-center justify-center gap-2 text-xs text-muted-foreground hover:text-primary transition-colors py-1">
-                        <Globe className="w-3.5 h-3.5" /> Visit Website <ExternalLink className="w-3 h-3" />
-                      </a>
-                    )}
-                  </div>
                 </div>
 
                 {/* Specialty chips */}
