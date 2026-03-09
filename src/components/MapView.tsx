@@ -4,7 +4,6 @@ import Map, {
   Layer,
   Popup,
   NavigationControl,
-  Marker,
   MapRef,
 } from "react-map-gl";
 import type { LayerProps } from "react-map-gl";
@@ -81,6 +80,13 @@ function buildGeoJSON(listings: MapListing[]) {
         listingType: l.listingType || "sale",
         colour: typeColour(l.listingType),
         label: priceLabel(l.price),
+        // Store full data for popup lookup by id
+        title: l.title,
+        sqm: l.sqm,
+        bedrooms: l.bedrooms ?? null,
+        bathrooms: l.bathrooms ?? null,
+        images: JSON.stringify(l.images ?? []),
+        city: l.city,
       },
       geometry: {
         type: "Point" as const,
@@ -125,6 +131,28 @@ const unclusteredHit: LayerProps = {
   source: "listings",
   filter: ["!", ["has", "point_count"]],
   paint: { "circle-radius": 0, "circle-opacity": 0 },
+};
+
+// GPU-rendered price label pins (replaces DOM Marker components entirely)
+const priceLabelLayer: LayerProps = {
+  id: "price-labels",
+  type: "symbol",
+  source: "listings",
+  filter: ["!", ["has", "point_count"]],
+  layout: {
+    "text-field": ["get", "label"],
+    "text-font": ["DIN Offc Pro Bold", "Arial Unicode MS Bold"],
+    "text-size": 11,
+    "text-anchor": "center",
+    "icon-allow-overlap": true,
+    "text-allow-overlap": true,
+  },
+  paint: {
+    "text-color": "#0a0f1a",
+    "text-halo-color": ["get", "colour"],
+    "text-halo-width": 8,
+    "text-halo-blur": 1,
+  },
 };
 
 const heatmapLayer: LayerProps = {
@@ -223,9 +251,6 @@ function PropertyPopup({ listing, onClose }: { listing: MapListing; onClose: () 
   );
 }
 
-function PricePin({
-  listing, isActive, onClick,
-}: { listing: MapListing; isActive: boolean; onClick: (e: React.MouseEvent) => void }) {
   const c = typeColour(listing.listingType);
   return (
     <button
@@ -394,6 +419,8 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
 
     const map = mapRef.current?.getMap();
     if (!map) return;
+
+    // Cluster click → expand
     const clusters = map.queryRenderedFeatures(event.point, { layers: ["clusters"] });
     if (clusters.length) {
       const clusterId = clusters[0].properties?.cluster_id;
@@ -403,9 +430,24 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
       });
       return;
     }
-    if (!map.queryRenderedFeatures(event.point, { layers: ["unclustered-point"] }).length)
-      setPopupInfo(null);
-  }, [closePolygon]);
+
+    // Price label click → open popup (GPU layer)
+    const pins = map.queryRenderedFeatures(event.point, { layers: ["price-labels"] });
+    if (pins.length) {
+      const props = pins[0].properties!;
+      const id = props.id;
+      const listing = mapped.find(l => l.id === id);
+      if (listing) {
+        setPopupInfo(p =>
+          p?.listing.id === id ? null
+            : { listing, lng: Number(listing.longitude), lat: Number(listing.latitude) }
+        );
+      }
+      return;
+    }
+
+    setPopupInfo(null);
+  }, [closePolygon, mapped]);
 
   const onMouseMove = useCallback((e: any) => {
     const { drawMode, polygonClosed } = stateRef.current;
@@ -430,7 +472,7 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
         initialViewState={{ longitude: 23.7275, latitude: 38.5, zoom: 6 }}
         style={{ width: "100%", height: "100%" }}
         mapStyle="mapbox://styles/mapbox/dark-v11"
-        interactiveLayerIds={["clusters"]}
+        interactiveLayerIds={["clusters", "price-labels"]}
         onClick={onClick}
         onMouseMove={onMouseMove}
         onMoveEnd={computeVisible}
@@ -440,12 +482,13 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
       >
         <NavigationControl position="bottom-right" />
 
-        {/* ── Main listings source ── */}
+        {/* ── Main listings source — GPU rendered, no DOM markers ── */}
         <Source id="listings" type="geojson" data={geoJSON} cluster clusterMaxZoom={13} clusterRadius={55}>
           {showHeatmap && <Layer {...heatmapLayer} />}
           <Layer {...clusterCircle} />
           <Layer {...clusterCount} />
           <Layer {...unclusteredHit} />
+          <Layer {...priceLabelLayer} />
         </Source>
 
         {/* ── Draw sources ── */}
@@ -459,37 +502,6 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
         <Source id="draw-dots" type="geojson" data={drawDotsGJ}>
           <Layer {...drawDotLyr} />
         </Source>
-
-        {/* ── HTML price markers ── */}
-        {mapped.map(listing => (
-          <Marker
-            key={listing.id}
-            longitude={Number(listing.longitude)}
-            latitude={Number(listing.latitude)}
-            anchor="bottom"
-            onClick={(e: any) => {
-              e.originalEvent?.stopPropagation();
-              if (stateRef.current.drawMode) return;
-              setPopupInfo(p =>
-                p?.listing.id === listing.id ? null
-                  : { listing, lng: Number(listing.longitude), lat: Number(listing.latitude) }
-              );
-            }}
-          >
-            <PricePin
-              listing={listing}
-              isActive={popupInfo?.listing.id === listing.id}
-              onClick={(e) => {
-                e.stopPropagation();
-                if (stateRef.current.drawMode) return;
-                setPopupInfo(p =>
-                  p?.listing.id === listing.id ? null
-                    : { listing, lng: Number(listing.longitude), lat: Number(listing.latitude) }
-                );
-              }}
-            />
-          </Marker>
-        ))}
 
         {/* ── Popup ── */}
         {popupInfo && (
