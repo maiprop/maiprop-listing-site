@@ -1383,6 +1383,7 @@ export default function Index() {
       </section>
 
       {/* ══ TRUST BAR ════════════════════════════════════════════════════════ */}
+      <NavyDivider fromDark={false} />
       <section className="py-12 bg-secondary">
         <div ref={trustRef} className="container">
           <div className={`grid grid-cols-2 md:grid-cols-4 gap-6 reveal ${trustInView ? "in-view" : ""}`}>
