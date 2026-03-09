@@ -8,19 +8,6 @@ export function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8">
           {/* Brand */}
           <div className="lg:col-span-2">
-            
-
-
-
-
-
-
-
-
-
-
-
-            
             <p className="text-sm text-muted-foreground max-w-xs leading-relaxed mb-4">
               Greece's most advanced real estate platform. Data-driven listings, Greek auctions, instant offers, and AI-powered market insights.
             </p>
@@ -42,7 +29,7 @@ export function Footer() {
               { label: "Rent Property", to: "/listings?listing_type=rent" },
               { label: "Sell Property", to: "/firesale" },
               { label: "Greek Auctions", to: "/auctions" },
-              { label: "Firesale™", to: "/firesale" },
+              { label: "Quick Sale™", to: "/firesale" },
               { label: "Professionals", to: "/professionals" },
               { label: "AI Reports", to: "/listings" }].
               map((item) =>
@@ -73,7 +60,7 @@ export function Footer() {
             </ul>
           </div>
 
-          {/* Legal */}
+          {/* Legal + Contact */}
           <div>
             <h4 className="font-display font-semibold text-sm mb-3">Legal</h4>
             <ul className="space-y-2">
@@ -103,6 +90,49 @@ export function Footer() {
 
         <div className="section-divider my-8" />
 
+        {/* Our Products row */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-6">
+          <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground whitespace-nowrap">Our Products</span>
+          <div className="flex flex-wrap items-center gap-3">
+            {/* maiProp OS */}
+            <a
+              href="https://os.maiprop.co"
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary border border-border hover:border-primary/40 hover:bg-primary/5 transition-all group">
+              <span className="text-base leading-none">🖥️</span>
+              <div>
+                <div className="text-xs font-semibold text-foreground group-hover:text-primary transition-colors leading-tight">maiProp OS</div>
+                <div className="text-[10px] text-muted-foreground leading-tight">Operator platform</div>
+              </div>
+              <ExternalLink className="w-3 h-3 text-muted-foreground group-hover:text-primary transition-colors ml-0.5" />
+            </a>
+
+            {/* mai Properties */}
+            <a
+              href="https://properties.maiprop.co"
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary border border-border hover:border-brand-gold/40 hover:bg-brand-gold/5 transition-all group">
+              <span className="text-base leading-none">🏛️</span>
+              <div>
+                <div className="text-xs font-semibold text-foreground group-hover:text-brand-gold transition-colors leading-tight">mai Properties</div>
+                <div className="text-[10px] text-muted-foreground leading-tight">Investment &amp; Golden Visa</div>
+              </div>
+              <ExternalLink className="w-3 h-3 text-muted-foreground group-hover:text-brand-gold transition-colors ml-0.5" />
+            </a>
+
+            {/* maiProp (current) */}
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20">
+              <span className="text-base leading-none">🔍</span>
+              <div>
+                <div className="text-xs font-semibold text-primary leading-tight">maiProp</div>
+                <div className="text-[10px] text-muted-foreground leading-tight">You are here</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-muted-foreground">
           <span>© 2026 maiProp. All rights reserved. Powered by mAI Prop OS.</span>
           <div className="flex items-center gap-1">
@@ -113,6 +143,6 @@ export function Footer() {
           </div>
         </div>
       </div>
-    </footer>);
-
+    </footer>
+  );
 }
