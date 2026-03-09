@@ -87,21 +87,26 @@ export function Navbar() {
               key={link.href}
               to={link.href}
               className={`relative px-3 py-2 text-sm font-medium rounded-md transition-colors flex items-center gap-2
-                ${isActive(link.href.split("?")[0])
-                  ? "text-primary bg-primary/10"
-                  : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                ${isActive(link.href)
+                  ? link.accent === "flame"
+                    ? "text-destructive bg-destructive/10"
+                    : "text-primary bg-primary/10"
+                  : link.accent === "flame"
+                    ? "text-destructive/80 hover:text-destructive hover:bg-destructive/10"
+                    : link.accent === "subtle"
+                      ? "text-accent/90 hover:text-accent hover:bg-accent/10"
+                      : "text-muted-foreground hover:text-foreground hover:bg-secondary"
                 }`}
             >
+              {link.accent === "flame" && <span className="text-sm">🔥</span>}
               {link.label}
-              {link.badge && link.badgeStyle === "gold" && (
-                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-brand-gold text-background font-black uppercase tracking-widest shadow-sm">
-                  {link.badge}
-                </span>
-              )}
-              {link.badge && !link.badgeStyle && (
+              {link.badge && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold font-semibold animate-pulse">
                   {link.badge}
                 </span>
+              )}
+              {link.accent === "subtle" && (
+                <span className="w-1.5 h-1.5 rounded-full bg-accent/60 ml-0.5" />
               )}
             </Link>
           ))}
