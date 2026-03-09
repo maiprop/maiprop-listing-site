@@ -635,7 +635,7 @@ export default function Index() {
       </section>
 
       {/* ══ FEATURED PROPERTIES ══════════════════════════════════════════════ */}
-      <section className="py-16">
+      <section className="py-16 bg-background">
         <div className="container">
           <div className="flex items-center justify-between mb-8">
             <div>
