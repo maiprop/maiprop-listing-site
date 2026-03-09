@@ -539,39 +539,6 @@ export default function Index() {
               </div>
             </div>
 
-            {/* Price Index Strip */}
-            <div className="mt-5 animate-fade-in-up" style={{ animationDelay: "0.35s" }}>
-              <div className="inline-flex items-center gap-0.5 rounded-2xl bg-card/70 backdrop-blur border border-border/60 px-1 py-1 shadow-card overflow-x-auto max-w-full">
-                <div className="px-3 py-1 flex items-center gap-1.5 shrink-0">
-                  {priceIndex.some(i => i.is_live) ? (
-                    <span className="relative flex h-2 w-2 shrink-0">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-emerald opacity-75" />
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-emerald" />
-                    </span>
-                  ) : (
-                    <Activity className="w-3 h-3 text-muted-foreground" />
-                  )}
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                    {priceIndex.some(i => i.is_live) ? "Live €/m²" : "Avg €/m²"}
-                  </span>
-                </div>
-                <div className="w-px h-5 bg-border/60 shrink-0" />
-                {priceIndex.map((item, i) => (
-                  <div key={item.city} className="flex items-center gap-0 shrink-0">
-                    {i > 0 && <div className="w-px h-4 bg-border/40 mx-0.5 shrink-0" />}
-                    <Link to={`/listings?city=${item.city}`}
-                      className="flex items-center gap-2 px-3 py-1.5 rounded-xl hover:bg-secondary/80 transition-colors group">
-                      <span className="text-[11px] font-semibold text-foreground/80 group-hover:text-foreground">{item.city}</span>
-                      <span className="text-[11px] font-bold text-foreground">€{item.avg_price_per_sqm.toLocaleString()}</span>
-                      <span className="text-[10px] font-semibold text-brand-emerald">{CITY_TRENDS[item.city] ?? ""}</span>
-                    </Link>
-                  </div>
-                ))}
-              </div>
-              <p className="text-[10px] text-muted-foreground/50 mt-1.5 ml-2">
-                {priceIndex.some(i => i.is_live) ? "Live avg sale price per m² from active listings" : "Sale price per m² · Updated monthly"}
-              </p>
-            </div>
           </div>
         </div>
       </section>
