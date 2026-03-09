@@ -544,11 +544,11 @@ export default function Listings() {
       <div className="pt-16">
         {/* Sticky search bar */}
         <div className="bg-card border-b border-border sticky top-16 z-40">
-          <div className="container py-4">
-            {/* Top row */}
-            <div className="flex gap-2 flex-wrap items-center">
-              {/* Search */}
-              <div className="flex-1 min-w-[200px] flex items-center gap-2 bg-secondary rounded-xl px-4 py-2.5 border border-border focus-within:border-primary transition-colors">
+          <div className="container py-3 sm:py-4">
+            {/* Top row — scrollable on mobile */}
+            <div className="flex gap-2 items-center overflow-x-auto scrollbar-none pb-1 sm:pb-0 sm:flex-wrap">
+              {/* Search — full width on mobile, then auto */}
+              <div className="shrink-0 sm:flex-1 w-[180px] sm:min-w-[200px] flex items-center gap-2 bg-secondary rounded-xl px-3 sm:px-4 py-2.5 border border-border focus-within:border-primary transition-colors">
                 <Search className="w-4 h-4 text-muted-foreground shrink-0" />
                 <input
                   type="text"
@@ -1204,6 +1204,8 @@ export default function Listings() {
       </div>
 
       <Footer />
+      {/* bottom spacing for mobile nav */}
+      <div className="h-16 lg:hidden" />
 
       {/* Compare drawer */}
       <CompareDrawer
