@@ -607,7 +607,7 @@ export default function Index() {
       </section>
 
       {/* ══ BROWSE BY TYPE ══════════════════════════════════════════════════ */}
-      <section className="py-14 bg-card/30 border-y border-border">
+      <section className="py-14 bg-secondary">
         <div className="container">
           <div className="flex items-center justify-between mb-7">
             <div>
@@ -635,7 +635,7 @@ export default function Index() {
       </section>
 
       {/* ══ FEATURED PROPERTIES ══════════════════════════════════════════════ */}
-      <section className="py-16">
+      <section className="py-16 bg-background">
         <div className="container">
           <div className="flex items-center justify-between mb-8">
             <div>
@@ -655,7 +655,7 @@ export default function Index() {
       </section>
 
       {/* ══ AUCTIONS ════════════════════════════════════════════════════════ */}
-      <section className="py-16 bg-card/20 border-y border-border">
+      <section className="py-16 bg-secondary">
         <div className="container">
           <div className="flex items-center justify-between mb-8">
             <div>
@@ -679,7 +679,8 @@ export default function Index() {
       </section>
 
       {/* ══ FIRESALE CTA ════════════════════════════════════════════════════ */}
-      <section className="py-10 sm:py-16 container">
+      <section className="py-10 sm:py-16 bg-background">
+        <div className="container">
         <div className="relative rounded-3xl overflow-hidden bg-card border border-border">
           <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 80% 50%, hsl(0 72% 55% / 0.12) 0%, transparent 60%)" }} />
           <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 20% 50%, hsl(192 100% 50% / 0.05) 0%, transparent 50%)" }} />
@@ -715,10 +716,12 @@ export default function Index() {
             </div>
           </div>
         </div>
+        </div>
       </section>
 
       {/* ══ POPULAR LOCATIONS ════════════════════════════════════════════════ */}
-      <section className="py-16 container">
+      <section className="py-16 bg-secondary">
+        <div className="container">
         <div className="flex items-center justify-between mb-8">
           <h2 className="font-display text-2xl font-bold">Popular Locations</h2>
           <Link to="/listings" className="text-sm text-primary hover:underline flex items-center gap-1">
@@ -745,10 +748,12 @@ export default function Index() {
             </Link>
           ))}
         </div>
+        </div>
       </section>
 
       {/* ══ PROFESSIONALS CTA ════════════════════════════════════════════════ */}
-      <section className="py-20 container">
+      <section className="py-20 bg-background">
+        <div className="container">
         <div className="relative rounded-3xl overflow-hidden border border-accent/20 bg-foreground dark:bg-[hsl(265_40%_7%)]">
           <div className="absolute top-0 left-0 w-80 h-80 rounded-full blur-3xl opacity-20"
             style={{ background: "radial-gradient(hsl(265 80% 60%), transparent 70%)" }} />
@@ -797,10 +802,11 @@ export default function Index() {
             </div>
           </div>
         </div>
+        </div>
       </section>
 
       {/* ══ mAI PROP OS ═════════════════════════════════════════════════════ */}
-      <section className="py-20 bg-card/20 overflow-hidden border-y border-border">
+      <section className="py-20 bg-secondary overflow-hidden">
         <div className="container">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             {/* Copy */}
@@ -870,7 +876,7 @@ export default function Index() {
       </section>
 
       {/* ══ PROPERTIES PORTAL / GOLDEN VISA ══════════════════════════════════ */}
-      <section className="py-20 overflow-hidden">
+      <section className="py-20 bg-background overflow-hidden">
         <div className="container">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             {/* App Mockup */}
@@ -944,7 +950,7 @@ export default function Index() {
       </section>
 
       {/* ══ TRUST BAR ════════════════════════════════════════════════════════ */}
-      <section className="py-12 bg-card/40 border-y border-border">
+      <section className="py-12 bg-secondary">
         <div className="container">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             {[
