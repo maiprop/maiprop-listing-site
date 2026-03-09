@@ -112,13 +112,18 @@ export function MarketTicker() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const rows = DISPLAY_CITIES.map(city => {
+  const baseRows = DISPLAY_CITIES.map(city => {
     const live = liveData?.find(d => d.city === city);
     const price = live?.is_live ? live.avg_price_per_sqm : (STATIC_PRICES[city] ?? 0);
     const trend = CITY_CHANGES[city] ?? { change: 1.0, up: true };
     return { city, price, ...trend, isLive: live?.is_live ?? false };
   });
 
+  // Build base prices map for flicker hook
+  const basePriceMap = Object.fromEntries(baseRows.map(r => [r.city, r.price]));
+  const { prices: livePrices, flickeringCity } = useLiveFlicker(basePriceMap);
+
+  const rows = baseRows.map(r => ({ ...r, price: livePrices[r.city] ?? r.price }));
   const anyLive = rows.some(r => r.isLive);
 
   return (
