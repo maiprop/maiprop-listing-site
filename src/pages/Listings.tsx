@@ -574,11 +574,13 @@ export default function Listings() {
                 }}
               />
 
-              {/* Price */}
+              {/* Price — adapts to listing type */}
               <div className="relative">
                 <select value={selectedPrice} onChange={e => setParam("price", e.target.value)}
                   className="appearance-none bg-secondary border border-border rounded-xl px-3 py-2.5 pr-7 text-sm text-foreground cursor-pointer outline-none focus:border-primary">
-                  {priceRanges.map(o => <option key={o.value} value={o.value} className="bg-card">{o.label}</option>)}
+                  {(selectedListingType === "rent" ? rentPriceRanges : buyPriceRanges).map(o => (
+                    <option key={o.value} value={o.value} className="bg-card">{o.label}</option>
+                  ))}
                 </select>
                 <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
               </div>
