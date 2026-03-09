@@ -1058,8 +1058,6 @@ export default function Listings() {
                 </div>
               </div>
             </div>
-          );
-        })()}
 
         {/* Results */}
         <div className={`${viewMode === "split" ? "" : "container"} py-8`}>
