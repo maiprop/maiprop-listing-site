@@ -290,8 +290,8 @@ function LocationInput({ value, onChange, onSearch }: {
 
   return (
     <div ref={wrapRef} className="flex-1 min-w-0 relative">
-      <div className="flex items-center gap-2 bg-secondary rounded-xl px-4 py-3">
-        <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
+      <div className="flex items-center gap-2 px-4 py-2.5 h-full min-h-[44px]">
+        <MapPin className="w-4 h-4 text-primary shrink-0" />
         <input
           type="text"
           placeholder="City, area, or neighbourhood..."
@@ -299,7 +299,7 @@ function LocationInput({ value, onChange, onSearch }: {
           onChange={e => onChange(e.target.value)}
           onFocus={() => { refresh(); setFocused(true); }}
           onKeyDown={e => { if (e.key === "Enter") { setFocused(false); onSearch(); } if (e.key === "Escape") setFocused(false); }}
-          className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none min-w-0"
+          className="flex-1 bg-transparent text-sm font-medium text-foreground placeholder:text-muted-foreground outline-none min-w-0"
         />
         {value && (
           <button onClick={() => onChange("")} className="text-muted-foreground hover:text-foreground transition-colors">
@@ -309,8 +309,8 @@ function LocationInput({ value, onChange, onSearch }: {
       </div>
 
       {showDropdown && (
-        <div className="absolute top-full mt-1 left-0 right-0 z-50 bg-card border border-border rounded-xl shadow-lg overflow-hidden">
-          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border">
+        <div className="absolute top-full mt-2 left-0 right-0 z-50 bg-card border border-border rounded-2xl shadow-elevated overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border bg-secondary/40">
             <Clock className="w-3.5 h-3.5 text-muted-foreground" />
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Recent Searches</span>
           </div>
@@ -323,7 +323,7 @@ function LocationInput({ value, onChange, onSearch }: {
               <button
                 onMouseDown={e => e.preventDefault()}
                 onClick={ev => { ev.stopPropagation(); removeRecentSearch(r); refresh(); }}
-                className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-border transition-all text-muted-foreground hover:text-foreground"
+                className="opacity-0 group-hover:opacity-100 p-1 rounded-lg hover:bg-border transition-all text-muted-foreground hover:text-foreground"
               >
                 <X className="w-3 h-3" />
               </button>
