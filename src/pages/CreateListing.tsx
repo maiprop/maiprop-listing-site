@@ -1050,9 +1050,10 @@ export default function CreateListing() {
             {step === 4 && (
               <div className="space-y-4">
                 <h2 className="font-display text-xl font-semibold">Location</h2>
-                <div>
+                <div ref={setFieldRef("city") as any}>
                   <FieldLabel required>City</FieldLabel>
-                  <Input placeholder="e.g. Athens" value={form.city} onChange={e => set("city", e.target.value)} />
+                  <Input placeholder="e.g. Athens" value={form.city} onChange={e => set("city", e.target.value)} hasError={!!errors.city} />
+                  <FieldError msg={errors.city} />
                 </div>
                 <div>
                   <FieldLabel>Street Address</FieldLabel>
