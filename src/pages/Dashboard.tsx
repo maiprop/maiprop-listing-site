@@ -372,6 +372,9 @@ export default function Dashboard() {
             <ProfileEditor profile={profile} onUpdate={updateProfile} />
           )}
 
+          {/* OS SYNC */}
+          {activeSection === "os-sync" && <OSSyncPanel />}
+
           {(activeSection === "analytics" || activeSection === "auctions" || activeSection === "settings") && (
             <div className="glass-card rounded-xl p-12 flex items-center justify-center">
               <div className="text-center">
