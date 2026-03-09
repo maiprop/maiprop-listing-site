@@ -37,9 +37,17 @@ export function Footer() {
           <div>
             <h4 className="font-display font-semibold text-sm mb-3">Platform</h4>
             <ul className="space-y-2">
-              {["Buy Property", "Rent Property", "Sell Property", "Greek Auctions", "Firesale™", "Market Data", "AI Reports"].map(item => (
-                <li key={item}>
-                  <Link to="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">{item}</Link>
+              {[
+                { label: "Buy Property", to: "/listings?listing_type=sale" },
+                { label: "Rent Property", to: "/listings?listing_type=rent" },
+                { label: "Sell Property", to: "/firesale" },
+                { label: "Greek Auctions", to: "/auctions" },
+                { label: "Firesale™", to: "/firesale" },
+                { label: "Professionals", to: "/professionals" },
+                { label: "AI Reports", to: "/listings" },
+              ].map(item => (
+                <li key={item.label}>
+                  <Link to={item.to} className="text-sm text-muted-foreground hover:text-foreground transition-colors">{item.label}</Link>
                 </li>
               ))}
             </ul>
@@ -49,21 +57,33 @@ export function Footer() {
           <div>
             <h4 className="font-display font-semibold text-sm mb-3">Professionals</h4>
             <ul className="space-y-2">
-              {["Agent Directory", "Legal Experts", "Architects", "Contractors", "Property Managers", "Valuers", "Join as Pro"].map(item => (
-                <li key={item}>
-                  <Link to="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">{item}</Link>
+              {[
+                { label: "Agent Directory", to: "/professionals" },
+                { label: "Legal Experts", to: "/professionals?category=lawyer" },
+                { label: "Architects", to: "/professionals?category=architect" },
+                { label: "Contractors", to: "/professionals?category=contractor" },
+                { label: "Property Managers", to: "/professionals?category=property_manager" },
+                { label: "Valuers", to: "/professionals?category=valuer" },
+                { label: "Join as Pro", to: "/signup" },
+              ].map(item => (
+                <li key={item.label}>
+                  <Link to={item.to} className="text-sm text-muted-foreground hover:text-foreground transition-colors">{item.label}</Link>
                 </li>
               ))}
             </ul>
           </div>
 
-          {/* Company */}
+          {/* Legal */}
           <div>
-            <h4 className="font-display font-semibold text-sm mb-3">Company</h4>
+            <h4 className="font-display font-semibold text-sm mb-3">Legal</h4>
             <ul className="space-y-2">
-              {["About Us", "Careers", "Press", "Blog", "Privacy Policy", "Terms of Service", "Cookie Policy"].map(item => (
-                <li key={item}>
-                  <Link to="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">{item}</Link>
+              {[
+                { label: "Privacy Policy", to: "/privacy-policy" },
+                { label: "Terms of Service", to: "/terms-of-service" },
+                { label: "Cookie Policy", to: "/cookie-policy" },
+              ].map(item => (
+                <li key={item.label}>
+                  <Link to={item.to} className="text-sm text-muted-foreground hover:text-foreground transition-colors">{item.label}</Link>
                 </li>
               ))}
             </ul>
