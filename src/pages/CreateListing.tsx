@@ -233,80 +233,11 @@ export default function CreateListing() {
   const [aiPriceSuggestion, setAiPriceSuggestion] = useState<{
     min: number; max: number; suggested: number; confidence: string; reasoning: string;
   } | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const [form, setForm] = useState({
-    listing_type: "sale" as ListingType,
-    property_type: "apartment" as PropertyType,
-    title: "",
-    description: "",
-    sqm: "",
-    year_built: "",
-    energy_class: "",
-    bedrooms: "",
-    bathrooms: "",
-    wc_count: "",
-    kitchens: "",
-    living_rooms: "",
-    floor: "",
-    total_floors: "",
-    levels: "",
-    heating_system: "",
-    construction_status: "",
-    commercial_subtype: "",
-    plot_surface: "",
-    floor_height: "",
-    has_elevator: false, has_ac: false, has_solar_water: false, has_storage: false,
-    has_secure_door: false, has_alarm: false, has_cctv: false, has_security: false,
-    has_smart_home: false, has_fireplace: false, has_underfloor_heating: false,
-    has_furnished: false, has_internal_staircase: false, has_double_glazing: false,
-    has_window_screens: false, has_night_power: false, has_attic: false,
-    has_satellite: false, has_painted: false,
-    has_parking: false, has_balcony: false, has_garden: false, has_pool: false,
-    has_view: false, has_facade: false, has_awning: false, has_disability_access: false,
-    is_corner: false, is_penthouse: false, is_neoclassical: false, is_preserved: false,
-    has_virtual_tour: false, has_video_tour: false,
-    suitable_student: false, suitable_holiday: false, suitable_investment: false, suitable_commercial_use: false,
-    has_three_phase_power: false, has_loading_dock: false, has_structured_cabling: false, has_equipped: false,
-    is_buildable: false, within_city_plan: false, within_settlement: false,
-    has_water_supply: false, has_electricity_supply: false, has_land_concession: false,
-    coverage_ratio: "", building_allowance: "", facade_length: "", plot_depth: "",
-    slope: "", zone_type: "", road_type: "", land_use: "",
-    distance_from_sea: "", distance_from_city: "",
-    address: "", city: "", region: "", postal_code: "",
-    cadastre_number: "", enfia_zone: "",
-    price: "", auction_starting_bid: "", auction_date: "", auction_court: "",
-    deposit_months: "", monthly_expenses: "", agent_fee_included: false,
-    pets_allowed: false, short_term_rental: false, available_from: "", min_rental_months: "",
-  });
-
-  const set = (key: string, value: unknown) => setForm(f => ({ ...f, [key]: value }));
-  const toggle = (key: string) => setForm(f => ({ ...f, [key]: !(f as any)[key] }));
-
-  const pt = form.property_type;
-  const lt = form.listing_type;
-
-  // ── Per-step validation ───────────────────────────────────────────────────
-  const validateStep = (s: number): boolean => {
-    switch (s) {
-      case 2:
-        if (!form.title.trim()) { toast.error("Please add a title for your listing"); return false; }
-        if (!form.sqm) { toast.error("Property area (m²) is required"); return false; }
-        return true;
-      case 4:
-        if (!form.city.trim()) { toast.error("City is required to continue"); return false; }
-        return true;
-      case 5:
-        if (!form.price) { toast.error(`Please enter a ${lt === "rent" ? "monthly rent" : "asking price"}`); return false; }
-        if (lt === "auction" && !form.auction_starting_bid) { toast.error("Auction starting bid is required"); return false; }
-        return true;
-      default:
-        return true;
-    }
-  };
-
-  const handleNext = () => {
-    if (validateStep(step)) setStep(s => s + 1);
-  };
+  // Field refs for scroll-to-error
+  const fieldRefs = useRef<Record<string, HTMLElement | null>>({});
+  const setFieldRef = (key: string) => (el: HTMLElement | null) => { fieldRefs.current[key] = el; };
 
   // ── Completion percentage ─────────────────────────────────────────────────
   const completionPct = (() => {
