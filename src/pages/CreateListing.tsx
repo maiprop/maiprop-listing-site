@@ -217,6 +217,11 @@ export default function CreateListing() {
   const [images, setImages] = useState<UploadedImage[]>([]);
   const [coverImageId, setCoverImageId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [aiDescLoading, setAiDescLoading] = useState(false);
+  const [aiPriceLoading, setAiPriceLoading] = useState(false);
+  const [aiPriceSuggestion, setAiPriceSuggestion] = useState<{
+    min: number; max: number; suggested: number; confidence: string; reasoning: string;
+  } | null>(null);
 
   const [form, setForm] = useState({
     listing_type: "sale" as ListingType,
