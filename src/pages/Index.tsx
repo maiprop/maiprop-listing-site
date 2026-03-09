@@ -1095,7 +1095,7 @@ export default function Index() {
           <div className={`flex items-center justify-between mb-8 reveal ${featuredInView ? "in-view" : ""}`}>
             <div>
               <h2 className="font-display text-2xl font-bold">Featured Properties</h2>
-              <p className="text-sm text-muted-foreground mt-1">Premium & verified listings</p>
+              
             </div>
             <Button variant="outline" className="border-border" asChild>
               <Link to="/listings">View All</Link>
