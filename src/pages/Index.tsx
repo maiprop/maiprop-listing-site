@@ -28,51 +28,6 @@ const PROPERTY_TYPE_COUNTS: Record<string, number> = {
   office: 1820,
 };
 
-const features = [
-  {
-    icon: Zap,
-    title: "AI-Powered Insights",
-    desc: "Deep data analysis for every property. Price trends, neighborhood scores, investment potential — all powered by mAI Prop OS.",
-    color: "text-primary",
-    bg: "bg-primary/10",
-  },
-  {
-    icon: Gavel,
-    title: "Greek Auctions",
-    desc: "Direct integration with judicial auctions, bank repos, and OAED listings. Real-time alerts and automated bidding tools.",
-    color: "text-brand-gold",
-    bg: "bg-brand-gold/10",
-  },
-  {
-    icon: Flame,
-    title: "Firesale™ Instant Offers",
-    desc: "Sell your property in 48 hours. Get a guaranteed cash offer powered by our AI valuation engine.",
-    color: "text-destructive",
-    bg: "bg-destructive/10",
-  },
-  {
-    icon: Users,
-    title: "Pro Directory",
-    desc: "Connect with vetted architects, lawyers, electricians, and plumbers. All with standardized profiles and verified reviews.",
-    color: "text-accent",
-    bg: "bg-accent/10",
-  },
-  {
-    icon: Shield,
-    title: "Verified Listings",
-    desc: "Every listing cross-checked against cadastre records. No fraud, no duplicate entries — just clean, reliable data.",
-    color: "text-brand-emerald",
-    bg: "bg-brand-emerald/10",
-  },
-  {
-    icon: TrendingUp,
-    title: "Portfolio Analytics",
-    desc: "Track your real estate portfolio with live P&L, market exposure analysis, and AI-driven rebalancing suggestions.",
-    color: "text-brand-purple",
-    bg: "bg-brand-purple/10",
-  },
-];
-
 const popularCities = [
   { name: "Athens", listings: 24860, trend: "+1.2%", image: "https://images.unsplash.com/photo-1555993539-1732b0258235?w=600&q=80" },
   { name: "Thessaloniki", listings: 8240, trend: "+0.8%", image: "https://images.unsplash.com/photo-1570939274717-7eda259b50ed?w=600&q=80" },
