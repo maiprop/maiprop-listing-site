@@ -501,7 +501,7 @@ export default function Index() {
         <div className="absolute top-1/4 right-1/4 w-[500px] h-[500px] rounded-full blur-[120px] opacity-10"
           style={{ background: "radial-gradient(hsl(192 100% 50%), hsl(270 75% 62%), transparent 70%)" }} />
 
-        <div className="container relative z-10 py-10 sm:py-16">
+        <div className="container relative z-10 py-10 sm:py-16 lg:pl-16 xl:pl-24">
           <div className="grid lg:grid-cols-[1fr_360px] xl:grid-cols-[1fr_400px] gap-8 lg:gap-12 items-center">
 
             {/* ── LEFT: Copy + Search ── */}
