@@ -963,8 +963,8 @@ export default function Index() {
 
       {/* ══ TRUST BAR ════════════════════════════════════════════════════════ */}
       <section className="py-12 bg-secondary">
-        <div className="container">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+        <div ref={trustRef} className="container">
+          <div className={`grid grid-cols-2 md:grid-cols-4 gap-6 reveal ${trustInView ? "in-view" : ""}`}>
             {[
               { icon: Shield, title: "100% Verified Listings", desc: "Every property manually reviewed", color: "text-brand-emerald", bg: "bg-brand-emerald/10" },
               { icon: Brain, title: "AI-Powered Insights", desc: "Smart recommendations & valuations", color: "text-primary", bg: "bg-primary/10" },
