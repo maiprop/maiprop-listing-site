@@ -122,9 +122,9 @@ export default function Firesale() {
 
 
 
+
       // keep the local estimate
-    } finally {setAiLoading(false);}};const handleContinue = async () => {await generateEstimate();setStep(2);};const handleSubmit = async () => {if (!step2Valid) {toast.error("Please fill in all required fields.");return;}
-    setSubmitting(true);
+    } finally {setAiLoading(false);}};const handleContinue = async () => {await generateEstimate();setStep(2);};const handleSubmit = async () => {if (!step2Valid) {toast.error("Please fill in all required fields.");return;}setSubmitting(true);
     try {
       const estimate = aiEstimate || Math.round(Number(form.sqm) * 1900 * 0.92);
 
@@ -202,11 +202,11 @@ export default function Firesale() {
 
               {/* Proof stats */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {proofStats.map((s) =>
-                <div key={s.label} className="glass-card rounded-xl p-4 border border-border text-center">
-                    <div className={`font-display font-black text-2xl ${s.color}`}>{s.value}</div>
-                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider mt-1">{s.label}</div>
-                  </div>
+                {proofStats.map((s) => {}
+
+
+
+
                 )}
               </div>
             </div>
