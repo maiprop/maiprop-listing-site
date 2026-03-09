@@ -45,7 +45,7 @@ export function Navbar() {
     { label: "Buy", href: "/listings?listing_type=sale" },
     { label: "Rent", href: "/listings?listing_type=rent" },
     { label: "Auctions", href: "/auctions", badge: "Live" },
-    { label: "Firesale™", href: "/firesale", accent: "flame" },
+    { label: "Quick Sale™", href: "/firesale", accent: "flame" },
     { label: "Professionals", href: "/professionals", accent: "subtle" },
   ];
 
@@ -260,7 +260,7 @@ export function Navbar() {
             { to: "/", icon: Home, label: "Home" },
             { to: "/listings", icon: List, label: "Listings" },
             { to: "/auctions", icon: Gavel, label: "Auctions" },
-            { to: "/firesale", icon: Flame, label: "Sale™", accent: "text-destructive" },
+            { to: "/firesale", icon: Flame, label: "Quick Sale", accent: "text-destructive" },
             { to: user ? "/dashboard" : "/login", icon: user ? LayoutDashboard : User, label: user ? "Dashboard" : "Sign In" },
           ].map(({ to, icon: Icon, label, accent }) => {
             const active = location.pathname === to || (to !== "/" && location.pathname.startsWith(to));
