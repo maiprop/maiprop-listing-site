@@ -977,12 +977,14 @@ export default function Listings() {
 
                 {/* Right: map — hidden on mobile when list tab active */}
                 <div className={`flex-1 ${mobileTab === "list" ? "hidden md:block" : "block"} md:h-full h-[calc(100vh-12rem)]`}>
-                  <MapView
-                    listings={filtered}
-                    onVisibleListingsChange={setViewportIds}
-                    onPolygonFilter={ids => { setPolygonFilterIds(ids); }}
-                    height="100%"
-                  />
+                  <MapGate consent={consent} accept={accept} height="100%">
+                    <MapView
+                      listings={filtered}
+                      onVisibleListingsChange={setViewportIds}
+                      onPolygonFilter={ids => { setPolygonFilterIds(ids); }}
+                      height="100%"
+                    />
+                  </MapGate>
                 </div>
               </div>
             );
@@ -1027,11 +1029,13 @@ export default function Listings() {
             )
           ) : (
             /* Full map view */
-            <MapView
-              listings={filtered}
-              onVisibleListingsChange={setViewportIds}
-              onPolygonFilter={setPolygonFilterIds}
-            />
+            <MapGate consent={consent} accept={accept}>
+              <MapView
+                listings={filtered}
+                onVisibleListingsChange={setViewportIds}
+                onPolygonFilter={setPolygonFilterIds}
+              />
+            </MapGate>
           )}
         </div>
       </div>
