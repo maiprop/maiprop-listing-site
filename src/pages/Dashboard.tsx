@@ -3,7 +3,7 @@ import { Link, useParams, useNavigate } from "react-router-dom";
 import {
   Home, Plus, BarChart2, MessageSquare, Heart, Settings, User,
   Eye, Bell, BellOff, LogOut, Building2, Gavel, CheckCircle,
-  Loader2, Calendar, Trash2, ToggleLeft, ToggleRight, Bookmark, Search, Activity
+  Loader2, Calendar, Trash2, ToggleLeft, ToggleRight, Bookmark, Search, Activity, Wrench
 } from "lucide-react";
 import { OSSyncPanel } from "@/components/OSSyncPanel";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import { useFavorites } from "@/hooks/useFavorites";
 import { useViewings } from "@/hooks/useViewings";
 import { useSavedSearches, useDeleteSavedSearch, useToggleSavedSearchAlert } from "@/hooks/useSavedSearches";
 import { PropertyCard } from "@/components/PropertyCard";
+import ProfessionalServicesEditor from "@/components/ProfessionalServicesEditor";
 import { toast } from "sonner";
 
 const navItems = [
@@ -25,6 +26,7 @@ const navItems = [
   { icon: MessageSquare, label: "Messages", key: "messages" },
   { icon: Calendar, label: "Viewings", key: "viewings" },
   { icon: Gavel, label: "Auctions", key: "auctions" },
+  { icon: Wrench, label: "My Services", key: "services" },
   { icon: Activity, label: "OS Sync", key: "os-sync" },
   { icon: User, label: "Profile", key: "profile" },
   { icon: Settings, label: "Settings", key: "settings" },
@@ -371,6 +373,9 @@ export default function Dashboard() {
           {activeSection === "profile" && (
             <ProfileEditor profile={profile} onUpdate={updateProfile} />
           )}
+
+          {/* MY SERVICES (professionals) */}
+          {activeSection === "services" && <ProfessionalServicesEditor />}
 
           {/* OS SYNC */}
           {activeSection === "os-sync" && <OSSyncPanel />}
