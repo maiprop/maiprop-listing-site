@@ -670,14 +670,18 @@ export default function Index() {
             {/* ── LEFT: Copy + Search ── */}
             <div className="text-white">
               {/* Eyebrow */}
-              <div
-                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/15 border border-white/25 mb-5 sm:mb-7 animate-fade-in-up"
-                style={{ animationDelay: "0s" }}
-              >
-                <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
-                <span className="text-xs sm:text-sm font-semibold text-white">
-                  Greece's #1 AI-Powered Property Platform
-                </span>
+              <div className="relative inline-flex mb-5 sm:mb-7 animate-fade-in-up" style={{ animationDelay: "0s" }}>
+                {/* Glow ring */}
+                <span className="absolute inset-0 rounded-full animate-pulse" style={{ boxShadow: "0 0 0 4px hsl(192 100% 50% / 0.18), 0 0 18px 4px hsl(192 100% 50% / 0.12)" }} />
+                <div className="relative inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/15 border border-white/30 backdrop-blur-sm">
+                  <span className="relative flex w-2 h-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-300 opacity-60" />
+                    <span className="relative inline-flex rounded-full w-2 h-2 bg-cyan-300" />
+                  </span>
+                  <span className="text-xs sm:text-sm font-semibold text-white">
+                    Greece's #1 AI-Powered Property Platform
+                  </span>
+                </div>
               </div>
 
               {/* Headline */}
