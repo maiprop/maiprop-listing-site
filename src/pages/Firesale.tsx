@@ -299,8 +299,8 @@ export default function Firesale() {
                               className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none capitalize"
                             >
                               <option value="" className="bg-card">Select type...</option>
-                              {propertyTypes.map(t => (
-                                <option key={t} value={t} className="bg-card capitalize">{t}</option>
+                              {propertyTypeOptions.map(t => (
+                                <option key={t.value} value={t.value} className="bg-card">{t.label}</option>
                               ))}
                             </select>
                           </div>
