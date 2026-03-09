@@ -3,9 +3,10 @@ import { Link, useParams, useNavigate } from "react-router-dom";
 import {
   Home, Plus, BarChart2, MessageSquare, Heart, Settings, User,
   Eye, Bell, BellOff, LogOut, Building2, Gavel, CheckCircle,
-  Loader2, Calendar, Trash2, ToggleLeft, ToggleRight, Bookmark, Search, Activity, Wrench
+  Loader2, Calendar, Trash2, ToggleLeft, ToggleRight, Bookmark, Search, Activity, Wrench, Shield
 } from "lucide-react";
 import { OSSyncPanel } from "@/components/OSSyncPanel";
+import AdminPanel from "@/components/AdminPanel";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { useAuth } from "@/contexts/AuthContext";
