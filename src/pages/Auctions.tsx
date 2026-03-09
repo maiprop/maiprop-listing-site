@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Gavel, Clock, TrendingUp, Bell, Filter, ExternalLink, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
-import { MarketTicker } from "@/components/MarketTicker";
+
 import { PropertyCard } from "@/components/PropertyCard";
 import { Footer } from "@/components/Footer";
 import { mockProperties } from "@/data/mockProperties";
