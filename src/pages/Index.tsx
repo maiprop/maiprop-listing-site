@@ -797,39 +797,54 @@ export default function Index() {
             </Link>
           </div>
           {/* Residential types */}
-          <div className={`grid grid-cols-3 sm:grid-cols-6 gap-3 reveal reveal-delay-1 ${browseInView ? "in-view" : ""}`}>
-            {PROPERTY_TYPES.filter((t) => t.value !== "office").map((type) =>
-            <Link key={type.value} to={`/listings?type=${type.value}`}>
-                <div className="glass-card rounded-xl p-4 flex flex-col items-center text-center hover:border-primary/40 hover:bg-primary/5 transition-all group gap-2 cursor-pointer">
-                  <div className={`w-12 h-12 rounded-xl ${type.bgClass} flex items-center justify-center text-2xl group-hover:scale-110 transition-transform`}>
-                    {type.emoji}
-                  </div>
-                  <div className="font-display font-semibold text-xs group-hover:text-primary transition-colors">{type.label}</div>
-                  <div className="text-[10px] text-muted-foreground">{(PROPERTY_TYPE_COUNTS[type.value] ?? 0).toLocaleString()}</div>
-                </div>
-              </Link>
-            )}
-          </div>
+          {/* Animated type values */}
+          {(() => {
+            const ANIMATED_TYPES = new Set(["apartment", "house", "land"]);
+            return (
+              <div className={`grid grid-cols-3 sm:grid-cols-6 gap-3 reveal reveal-delay-1 ${browseInView ? "in-view" : ""}`}>
+                {PROPERTY_TYPES.filter((t) => t.value !== "office").map((type) => {
+                  const isAnimated = ANIMATED_TYPES.has(type.value);
+                  return (
+                    <Link key={type.value} to={`/listings?type=${type.value}`}>
+                      <div className={`relative glass-card rounded-xl p-4 flex flex-col items-center text-center hover:border-primary/40 hover:bg-primary/5 transition-all group gap-2 cursor-pointer${isAnimated ? " overflow-hidden" : ""}`}>
+                        {isAnimated && (
+                          <span className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-primary/30 animate-pulse" />
+                        )}
+                        <div className={`w-12 h-12 rounded-xl ${type.bgClass} flex items-center justify-center text-2xl group-hover:scale-110 transition-transform`}>
+                          {type.emoji}
+                        </div>
+                        <div className="font-display font-semibold text-xs group-hover:text-primary transition-colors">{type.label}</div>
+                        <div className="text-[10px] text-muted-foreground">{(PROPERTY_TYPE_COUNTS[type.value] ?? 0).toLocaleString()}</div>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            );
+          })()}
           {/* Commercial subtypes */}
           <div className={`mt-5 reveal reveal-delay-2 ${browseInView ? "in-view" : ""}`}>
             <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Commercial & Offices</p>
             <div className="flex flex-wrap gap-2">
               {[
-              { label: "🛍️ Retail Shop", sub: "shop" },
-              { label: "🏢 Office", sub: "office_private" },
-              { label: "📦 Warehouse", sub: "warehouse" },
-              { label: "🍽️ Restaurant / Café", sub: "restaurant" },
-              { label: "🏨 Hotel / B&B", sub: "hotel" },
-              { label: "🔬 Clinic / Medical", sub: "clinic" },
-              { label: "🏗️ Industrial Space", sub: "industrial" },
-              { label: "🖼️ Showroom", sub: "showroom" },
-              { label: "🎪 Hall / Event Space", sub: "hall" },
-              { label: "🤝 Coworking", sub: "office_coworking" },
-              { label: "🏛️ Business Centre", sub: "office_business" },
-              { label: "🔀 Mixed-Use", sub: "mixed_use" }].
+              { label: "🛍️ Retail Shop", sub: "shop", animated: true },
+              { label: "🏢 Office", sub: "office_private", animated: false },
+              { label: "📦 Warehouse", sub: "warehouse", animated: false },
+              { label: "🍽️ Restaurant / Café", sub: "restaurant", animated: false },
+              { label: "🏨 Hotel / B&B", sub: "hotel", animated: false },
+              { label: "🔬 Clinic / Medical", sub: "clinic", animated: false },
+              { label: "🏗️ Industrial Space", sub: "industrial", animated: false },
+              { label: "🖼️ Showroom", sub: "showroom", animated: false },
+              { label: "🎪 Hall / Event Space", sub: "hall", animated: false },
+              { label: "🤝 Coworking", sub: "office_coworking", animated: false },
+              { label: "🏛️ Business Centre", sub: "office_business", animated: false },
+              { label: "🔀 Mixed-Use", sub: "mixed_use", animated: true }].
               map((item) =>
               <Link key={item.sub} to={`/listings?type=commercial&subtype=${item.sub}`}>
-                  <div className="glass-card rounded-xl px-3.5 py-2 text-xs font-medium hover:border-accent/40 hover:bg-accent/5 hover:text-accent transition-all cursor-pointer whitespace-nowrap">
+                  <div className={`relative glass-card rounded-xl px-3.5 py-2 text-xs font-medium hover:border-accent/40 hover:bg-accent/5 hover:text-accent transition-all cursor-pointer whitespace-nowrap${item.animated ? " overflow-hidden" : ""}`}>
+                    {item.animated && (
+                      <span className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-accent/40 animate-pulse" />
+                    )}
                     {item.label}
                   </div>
                 </Link>
