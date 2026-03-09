@@ -39,7 +39,7 @@ export function useProfessionalServices(professionalId: string) {
         .eq("is_active", true)
         .order("service_name");
       if (error) throw error;
-      return (data || []) as ProfessionalService[];
+      return (data || []) as unknown as ProfessionalService[];
     },
     enabled: !!professionalId,
   });
@@ -56,7 +56,7 @@ export function useProfessionalAvailability(professionalId: string) {
         .eq("is_active", true)
         .order("day_of_week");
       if (error) throw error;
-      return (data || []) as ProfessionalAvailability[];
+      return (data || []) as unknown as ProfessionalAvailability[];
     },
     enabled: !!professionalId,
   });

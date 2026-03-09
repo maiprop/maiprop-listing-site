@@ -272,7 +272,7 @@ export default function BookConsultationModal({ open, onClose, professional }: B
                   <button
                     onClick={() => canVideo ? setBookingType("video") : toast.info("This service is not available via video")}
                     className={`p-4 rounded-xl border-2 text-center transition-all relative ${
-                      bookingType === "video" ? "border-primary bg-primary/8" : canVideo ? "border-border hover:border-primary/30" : "border-border opacity-50 cursor-not-allowed"
+                      bookingType === "video" ? "border-primary bg-primary/10" : canVideo ? "border-border hover:border-primary/30" : "border-border opacity-50 cursor-not-allowed"
                     }`}>
                     <Video className={`w-7 h-7 mx-auto mb-2 ${bookingType === "video" ? "text-primary" : "text-muted-foreground"}`} />
                     <div className="font-semibold text-sm">Video Call</div>
