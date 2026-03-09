@@ -966,6 +966,8 @@ export default function Index() {
       </section>
 
       <Footer />
+      {/* bottom spacing for mobile nav */}
+      <div className="h-16 lg:hidden" />
     </div>
   );
 }
