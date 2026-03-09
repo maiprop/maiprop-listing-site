@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect, forwardRef } from "react";
+import { createPortal } from "react-dom";
 import { useSearchParams, Link } from "react-router-dom";
 import {
   Search, SlidersHorizontal, MapPin, LayoutGrid, Map, ChevronDown,
