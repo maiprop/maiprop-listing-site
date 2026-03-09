@@ -495,6 +495,37 @@ export default function Index() {
                 </div>
               ))}
             </div>
+
+            {/* Price Index Strip */}
+            <div className="mt-6 animate-fade-in-up" style={{ animationDelay: "0.35s" }}>
+              <div className="inline-flex items-center gap-0.5 rounded-2xl bg-card/60 backdrop-blur border border-border/60 px-1 py-1 shadow-card overflow-x-auto">
+                <div className="px-3 py-1 flex items-center gap-1.5 shrink-0">
+                  <BarChart2 className="w-3 h-3 text-muted-foreground" />
+                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Avg €/m²</span>
+                </div>
+                <div className="w-px h-5 bg-border/60 shrink-0" />
+                {[
+                  { city: "Athens", sale: 2180, rent: 11.4, trend: "+4.2%", up: true },
+                  { city: "Thessaloniki", sale: 1640, rent: 8.9, trend: "+2.8%", up: true },
+                  { city: "Mykonos", sale: 6200, rent: 42, trend: "+7.1%", up: true },
+                  { city: "Santorini", sale: 5100, rent: 36, trend: "+5.3%", up: true },
+                  { city: "Crete", sale: 1890, rent: 9.2, trend: "+1.4%", up: true },
+                ].map((item, i) => (
+                  <div key={item.city} className="flex items-center gap-0 shrink-0">
+                    {i > 0 && <div className="w-px h-5 bg-border/40 mx-0.5 shrink-0" />}
+                    <Link to={`/listings?city=${item.city}`}
+                      className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl hover:bg-secondary/80 transition-colors group">
+                      <span className="text-xs font-semibold text-foreground/80 group-hover:text-foreground">{item.city}</span>
+                      <div className="text-right">
+                        <span className="text-xs font-bold text-foreground">€{item.sale.toLocaleString()}</span>
+                        <span className={`ml-1.5 text-[10px] font-semibold ${item.up ? "text-brand-emerald" : "text-destructive"}`}>{item.trend}</span>
+                      </div>
+                    </Link>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-muted-foreground/60 mt-1.5 ml-2">Sale price per m² · Updated monthly</p>
+            </div>
           </div>
         </div>
       </section>
