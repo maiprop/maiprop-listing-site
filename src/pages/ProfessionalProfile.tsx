@@ -354,8 +354,7 @@ export default function ProfessionalProfile() {
                   {/* CTA buttons */}
                   <div className="flex flex-col gap-2 shrink-0 min-w-[160px]">
                     <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" onClick={() => setMsgOpen(true)}>
-                      <MessageSquare className="w-4 h-4" />
-                      Send Message
+                      <MessageSquare className="w-4 h-4" /> Send Message
                     </Button>
                     <Button variant="outline" className="border-border gap-2" onClick={() => setConsultOpen(true)}>
                       <Calendar className="w-4 h-4" /> Book Consultation
@@ -363,7 +362,13 @@ export default function ProfessionalProfile() {
                     <Button variant="outline" className="border-border gap-2 text-muted-foreground" onClick={() => setVideoOpen(true)}>
                       <Video className="w-4 h-4" /> Video Meeting
                     </Button>
-                    {pro.website_url && (
+                    <Button
+                      variant="outline"
+                      className="border-primary/40 text-primary hover:bg-primary/10 gap-2"
+                      onClick={() => setAiMatchOpen(true)}
+                    >
+                      <Sparkles className="w-4 h-4" /> AI-Powered Request
+                    </Button>
                       <a href={pro.website_url} target="_blank" rel="noopener noreferrer"
                         className="flex items-center justify-center gap-2 text-xs text-muted-foreground hover:text-primary transition-colors py-1">
                         <Globe className="w-3.5 h-3.5" /> Visit Website <ExternalLink className="w-3 h-3" />
