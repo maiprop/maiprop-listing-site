@@ -379,7 +379,7 @@ export type Database = {
           longitude: number | null
           min_rental_months: number | null
           monthly_expenses: number | null
-          owner_id: string
+          owner_id: string | null
           pets_allowed: boolean | null
           plot_depth: number | null
           plot_surface: number | null
@@ -487,7 +487,7 @@ export type Database = {
           longitude?: number | null
           min_rental_months?: number | null
           monthly_expenses?: number | null
-          owner_id: string
+          owner_id?: string | null
           pets_allowed?: boolean | null
           plot_depth?: number | null
           plot_surface?: number | null
@@ -595,7 +595,7 @@ export type Database = {
           longitude?: number | null
           min_rental_months?: number | null
           monthly_expenses?: number | null
-          owner_id?: string
+          owner_id?: string | null
           pets_allowed?: boolean | null
           plot_depth?: number | null
           plot_surface?: number | null
