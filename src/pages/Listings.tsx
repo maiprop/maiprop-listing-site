@@ -48,8 +48,8 @@ const rentPriceRanges = [
 
 const listingTypeOptions = [
   { label: "All", value: "", icon: "🏘️" },
-  { label: "For Sale", value: "sale", icon: "🏷️" },
-  { label: "For Rent", value: "rent", icon: "🔑" },
+  { label: "Buy", value: "sale", icon: "🏷️" },
+  { label: "Rent", value: "rent", icon: "🔑" },
   { label: "Auction", value: "auction", icon: "⚖️" },
 ];
 
@@ -174,12 +174,13 @@ function ListingTypeButton({ value, onChange }: { value: string; onChange: (v: s
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!open) return;
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, []);
+  }, [open]);
 
   const current = listingTypeOptions.find(o => o.value === value) || listingTypeOptions[0];
 
@@ -232,12 +233,13 @@ function PropertyTypeButton({
   const commercialType = PROPERTY_TYPE_MAP["commercial"];
 
   useEffect(() => {
+    if (!open) return;
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, []);
+  }, [open]);
 
   const currentType = value ? PROPERTY_TYPE_MAP[value as PropertyTypeKey] : null;
   const currentSubtype = currentType?.subtypes.find(s => s.value === subtype);
