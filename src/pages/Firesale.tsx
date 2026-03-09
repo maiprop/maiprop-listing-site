@@ -356,59 +356,60 @@ export default function Firesale() {
                       <div className="space-y-5">
                         <h4 className="font-display font-semibold text-sm">Property Details</h4>
 
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="col-span-2">
-                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                              Property Address
-                            </label>
-                            <div className="flex gap-2 bg-muted border border-border rounded-xl px-3 py-2.5 focus-within:border-primary transition-colors">
-                              <MapPin className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
-                              <input
-                                type="text"
-                                placeholder="e.g. Kifisia, Dekelia 24"
-                                value={form.address}
-                                onChange={(e) => upd("address", e.target.value)}
-                                className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
-                              />
-                            </div>
-                          </div>
-
-                          <div>
-                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                              City
-                            </label>
+                        {/* Address */}
+                        <div>
+                          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
+                            Property Address <span className="text-destructive">*</span>
+                          </label>
+                          <div className="flex gap-2 bg-muted border border-border rounded-xl px-3 py-2.5 focus-within:border-primary transition-colors">
+                            <MapPin className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
                             <input
                               type="text"
-                              placeholder="e.g. Athens"
-                              value={form.city}
-                              onChange={(e) => upd("city", e.target.value)}
-                              className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
+                              placeholder="e.g. Kifisia, Dekelia 24, Athens"
+                              value={form.address}
+                              onChange={(e) => upd("address", e.target.value)}
+                              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
                             />
                           </div>
+                        </div>
 
+                        {/* KAEK */}
+                        <div>
+                          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
+                            KAEK <span className="text-[10px] font-normal normal-case text-muted-foreground">(Κωδικός Αριθμός Εθνικού Κτηματολογίου)</span>
+                          </label>
+                          <div className="flex gap-2 bg-muted border border-border rounded-xl px-3 py-2.5 focus-within:border-primary transition-colors">
+                            <Hash className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
+                            <input
+                              type="text"
+                              placeholder="e.g. 050240601001/0/1"
+                              value={form.kaek}
+                              onChange={(e) => upd("kaek", e.target.value)}
+                              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none font-mono"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
                           <div>
                             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                              Property Type
+                              Property Type <span className="text-destructive">*</span>
                             </label>
                             <select
                               value={form.propertyType}
                               onChange={(e) => upd("propertyType", e.target.value)}
                               className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none capitalize"
                             >
-                              <option value="" className="bg-card">
-                                Select type...
-                              </option>
+                              <option value="" className="bg-card">Select type...</option>
                               {propertyTypeOptions.map((t) => (
-                                <option key={t.value} value={t.value} className="bg-card">
-                                  {t.label}
-                                </option>
+                                <option key={t.value} value={t.value} className="bg-card">{t.label}</option>
                               ))}
                             </select>
                           </div>
 
                           <div>
                             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                              Size (m²)
+                              Size (m²) <span className="text-destructive">*</span>
                             </label>
                             <input
                               type="number"
@@ -419,32 +420,9 @@ export default function Firesale() {
                             />
                           </div>
 
-                          <div>
+                          <div className="col-span-2">
                             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                              Bedrooms
-                            </label>
-                            <select
-                              value={form.bedrooms}
-                              onChange={(e) => upd("bedrooms", e.target.value)}
-                              className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none"
-                            >
-                              <option value="" className="bg-card">
-                                —
-                              </option>
-                              {[1, 2, 3, 4, 5, 6].map((n) => (
-                                <option key={n} value={n} className="bg-card">
-                                  {n}
-                                </option>
-                              ))}
-                              <option value="7" className="bg-card">
-                                7+
-                              </option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                              Asking Price (optional)
+                              Asking Price <span className="text-[10px] font-normal normal-case">(optional)</span>
                             </label>
                             <div className="flex gap-2 bg-muted border border-border rounded-xl px-3 py-2.5 focus-within:border-primary transition-colors">
                               <Euro className="w-4 h-4 text-muted-foreground shrink-0" />
@@ -459,43 +437,71 @@ export default function Firesale() {
                           </div>
                         </div>
 
-                        {/* Condition selector */}
+                        {/* Photo upload */}
                         <div>
-                          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-3">
-                            Property Condition
+                          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
+                            Property Photos <span className="text-[10px] font-normal normal-case">(up to 10 images)</span>
                           </label>
-                          <div className="grid grid-cols-2 gap-2">
-                            {conditionOptions.map((opt) => (
-                              <button
-                                key={opt.value}
-                                onClick={() => upd("condition", opt.value)}
-                                className={`text-left p-3.5 rounded-xl border transition-all duration-200 ${
-                                  form.condition === opt.value
-                                    ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary/30"
-                                    : "border-border bg-muted hover:border-primary/40 text-muted-foreground"
-                                }`}
-                              >
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className="text-base leading-none">{opt.emoji}</span>
-                                  <p className="text-xs font-bold">{opt.label}</p>
-                                  {form.condition === opt.value && <Check className="w-3 h-3 text-primary ml-auto" />}
-                                </div>
-                                <p className="text-[10px] text-muted-foreground">{opt.sublabel}</p>
-                                <p className="text-[10px] font-semibold text-destructive/80 mt-0.5">
-                                  Discount: {opt.disc}
-                                </p>
-                              </button>
-                            ))}
-                          </div>
+                          <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            className="hidden"
+                            onChange={handlePhotoSelect}
+                          />
+                          {photoPreviews.length === 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => fileInputRef.current?.click()}
+                              className="w-full flex flex-col items-center justify-center gap-2 bg-muted border-2 border-dashed border-border rounded-xl py-7 text-muted-foreground hover:border-primary/40 hover:bg-primary/5 transition-all duration-200 group"
+                            >
+                              <div className="w-10 h-10 rounded-full bg-muted-foreground/10 group-hover:bg-primary/10 flex items-center justify-center transition-colors">
+                                <Upload className="w-5 h-5 group-hover:text-primary transition-colors" />
+                              </div>
+                              <div className="text-center">
+                                <p className="text-sm font-medium group-hover:text-foreground transition-colors">Click to upload photos</p>
+                                <p className="text-[11px] mt-0.5">JPG, PNG · Max 10MB each</p>
+                              </div>
+                            </button>
+                          ) : (
+                            <div className="space-y-3">
+                              <div className="grid grid-cols-3 gap-2">
+                                {photoPreviews.map((src, idx) => (
+                                  <div key={idx} className="relative group rounded-xl overflow-hidden aspect-square bg-muted border border-border">
+                                    <img src={src} alt="" className="w-full h-full object-cover" />
+                                    <button
+                                      type="button"
+                                      onClick={() => removePhoto(idx)}
+                                      className="absolute top-1 right-1 w-5 h-5 rounded-full bg-background/90 border border-border flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive hover:border-destructive hover:text-destructive-foreground"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                ))}
+                                {photoPreviews.length < 10 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="aspect-square rounded-xl border-2 border-dashed border-border bg-muted hover:border-primary/40 hover:bg-primary/5 flex items-center justify-center transition-all"
+                                  >
+                                    <ImageIcon className="w-5 h-5 text-muted-foreground" />
+                                  </button>
+                                )}
+                              </div>
+                              <p className="text-[10px] text-muted-foreground">{photoPreviews.length} photo{photoPreviews.length > 1 ? "s" : ""} selected</p>
+                            </div>
+                          )}
                         </div>
 
+                        {/* Notes */}
                         <div>
                           <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
                             Additional Notes
                           </label>
                           <textarea
                             rows={2}
-                            placeholder="Legal issues, urgent timeline, renovation details..."
+                            placeholder="Legal issues, urgent timeline, property history..."
                             value={form.notes}
                             onChange={(e) => upd("notes", e.target.value)}
                             className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary resize-none transition-colors"
