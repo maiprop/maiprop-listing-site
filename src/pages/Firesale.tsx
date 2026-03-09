@@ -123,9 +123,9 @@ export default function Firesale() {
 
 
 
+
       // keep the local estimate
-    } finally {setAiLoading(false);}};const handleContinue = async () => {await generateEstimate();setStep(2);};const handleSubmit = async () => {if (!step2Valid) {toast.error("Please fill in all required fields.");return;}setSubmitting(true);
-    try {
+    } finally {setAiLoading(false);}};const handleContinue = async () => {await generateEstimate();setStep(2);};const handleSubmit = async () => {if (!step2Valid) {toast.error("Please fill in all required fields.");return;}setSubmitting(true);try {
       const estimate = aiEstimate || Math.round(Number(form.sqm) * 1900 * 0.92);
 
       const { data, error } = await supabase.from("firesale_requests").insert({
@@ -201,14 +201,14 @@ export default function Firesale() {
               </div>
 
               {/* Proof stats */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {proofStats.map((s) => (
-                  <div key={s.label} className="glass-card rounded-xl p-4 text-center">
-                    <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
-                    <div className="text-muted-foreground text-xs mt-1">{s.label}</div>
-                  </div>
-                ))}
-              </div>
+              
+
+
+
+
+
+
+              
             </div>
           </div>
         </div>
