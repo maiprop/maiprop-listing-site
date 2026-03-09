@@ -890,22 +890,6 @@ export default function Index() {
             </Link>
           </div>
 
-          {/* ── ROW 2: Secondary types — House, Villa, Commercial, Office (smaller) */}
-          <div className={`mt-3 grid grid-cols-4 gap-3 reveal reveal-delay-2 ${browseInView ? "in-view" : ""}`}>
-            {PROPERTY_TYPES.filter((t) => ["house", "villa", "commercial", "office"].includes(t.value)).map((type) => (
-              <Link key={type.value} to={`/listings?type=${type.value}`}>
-                <div className="relative glass-card rounded-xl p-3 flex flex-col items-center text-center hover:border-primary/40 hover:bg-primary/5 transition-all group gap-1.5 cursor-pointer">
-                  <div className={`w-9 h-9 rounded-lg ${type.bgClass} flex items-center justify-center text-lg group-hover:scale-110 transition-transform`}>
-                    {type.emoji}
-                  </div>
-                  <div className="font-display font-semibold text-[11px] group-hover:text-primary transition-colors leading-tight">{type.label}</div>
-                  <div className="text-[9px] text-muted-foreground">
-                    {typeCounts[type.value] ? typeCounts[type.value].toLocaleString() : "—"}
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
 
           {/* ── ROW 3: Commercial subtypes — Retail Shop, Office, Mixed-Use (big icons) */}
           <div className={`mt-5 grid grid-cols-3 gap-3 reveal reveal-delay-2 ${browseInView ? "in-view" : ""}`}>
@@ -1397,54 +1381,6 @@ export default function Index() {
                 </Button>
               </div>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ══ TRUST BAR ════════════════════════════════════════════════════════ */}
-      <section className="py-12 bg-secondary">
-        <div ref={trustRef} className="container">
-          <div className={`grid grid-cols-2 md:grid-cols-4 gap-6 reveal ${trustInView ? "in-view" : ""}`}>
-            {[
-            {
-              icon: Shield,
-              title: "100% Verified Listings",
-              desc: "Every property manually reviewed",
-              color: "text-brand-emerald",
-              bg: "bg-brand-emerald/10"
-            },
-            {
-              icon: Brain,
-              title: "AI-Powered Insights",
-              desc: "Smart recommendations & valuations",
-              color: "text-primary",
-              bg: "bg-primary/10"
-            },
-            {
-              icon: Zap,
-              title: "Instant Offers",
-              desc: "Quick Sale™ cash offers in 96h",
-              color: "text-destructive",
-              bg: "bg-destructive/10"
-            },
-            {
-              icon: Building2,
-              title: "47,000+ Properties",
-              desc: "Greece's largest portfolio",
-              color: "text-accent",
-              bg: "bg-accent/10"
-            }].
-            map((item) =>
-            <div key={item.title} className="flex items-start gap-3">
-                <div className={`w-10 h-10 rounded-xl ${item.bg} flex items-center justify-center shrink-0`}>
-                  <item.icon className={`w-5 h-5 ${item.color}`} />
-                </div>
-                <div>
-                  <div className="font-semibold text-sm text-foreground">{item.title}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">{item.desc}</div>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </section>
