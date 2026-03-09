@@ -214,6 +214,48 @@ export default function CreateListing() {
   const { user } = useAuth();
 
   const [step, setStep] = useState(1);
+
+  // ── Per-step validation ───────────────────────────────────────────────────
+  const validateStep = (s: number): boolean => {
+    switch (s) {
+      case 1:
+        return true; // property_type & listing_type always have defaults
+      case 2:
+        if (!form.title.trim()) { toast.error("Please add a title for your listing"); return false; }
+        if (!form.sqm) { toast.error("Property area (m²) is required"); return false; }
+        return true;
+      case 3:
+        return true; // features are optional
+      case 4:
+        if (!form.city.trim()) { toast.error("City is required to continue"); return false; }
+        return true;
+      case 5:
+        if (!form.price) { toast.error(`Please enter a ${lt === "rent" ? "monthly rent" : "asking price"}`); return false; }
+        if (lt === "auction" && !form.auction_starting_bid) { toast.error("Auction starting bid is required"); return false; }
+        return true;
+      default:
+        return true;
+    }
+  };
+
+  const handleNext = () => {
+    if (validateStep(step)) setStep(s => s + 1);
+  };
+
+  // ── Completion percentage ─────────────────────────────────────────────────
+  const completionPct = (() => {
+    let filled = 0;
+    const checks = [
+      true,                             // step 1: type always filled
+      !!(form.title && form.sqm),       // step 2
+      true,                             // step 3: optional
+      !!form.city,                      // step 4
+      !!form.price,                     // step 5
+      images.length > 0,                // step 6
+    ];
+    checks.forEach(c => { if (c) filled++; });
+    return Math.round((filled / checks.length) * 100);
+  })();
   const [images, setImages] = useState<UploadedImage[]>([]);
   const [coverImageId, setCoverImageId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
