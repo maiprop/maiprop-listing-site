@@ -377,7 +377,6 @@ export default function PropertyDetail() {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <MarketTicker />
 
       <div className="pt-16">
         {/* Breadcrumb */}
