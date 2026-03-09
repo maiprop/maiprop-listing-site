@@ -27,13 +27,23 @@ import { toast } from "sonner";
 
 
 
-const priceRanges = [
+// Price ranges adapt to listing type — buy uses purchase price, rent uses monthly rent
+const buyPriceRanges = [
   { label: "Any Price", value: "" },
-  { label: "Under €100k", value: "0-100000" },
-  { label: "€100k – €300k", value: "100000-300000" },
+  { label: "Under €80k", value: "0-80000" },
+  { label: "€80k – €150k", value: "80000-150000" },
+  { label: "€150k – €300k", value: "150000-300000" },
   { label: "€300k – €600k", value: "300000-600000" },
   { label: "€600k – €1M", value: "600000-1000000" },
   { label: "€1M+", value: "1000000-9999999" },
+];
+const rentPriceRanges = [
+  { label: "Any Rent", value: "" },
+  { label: "Under €400/mo", value: "0-400" },
+  { label: "€400 – €700/mo", value: "400-700" },
+  { label: "€700 – €1,200/mo", value: "700-1200" },
+  { label: "€1,200 – €2,500/mo", value: "1200-2500" },
+  { label: "€2,500+/mo", value: "2500-99999" },
 ];
 
 const listingTypeOptions = [
