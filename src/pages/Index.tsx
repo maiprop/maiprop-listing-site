@@ -754,18 +754,18 @@ export default function Index() {
             style={{ background: "radial-gradient(hsl(265 80% 60%), transparent 70%)" }} />
           <div className="absolute bottom-0 right-0 w-80 h-80 rounded-full blur-3xl opacity-15"
             style={{ background: "radial-gradient(hsl(183 100% 42%), transparent 70%)" }} />
-          <div className="relative p-10 md:p-14 lg:p-16">
+          <div className="relative p-10 md:p-14 lg:p-16 text-background">
             <div className="grid lg:grid-cols-2 gap-12 items-center">
               <div>
                 <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-accent/20 border border-accent/40 mb-6">
                   <Users className="w-3.5 h-3.5 text-accent" />
                   <span className="text-xs font-bold text-accent uppercase tracking-widest">AI-Powered Pro Network</span>
                 </div>
-                <h2 className="font-display text-4xl lg:text-5xl font-bold leading-tight mb-4 text-foreground">
+                <h2 className="font-display text-4xl lg:text-5xl font-bold leading-tight mb-4 text-background">
                   The right expert,<br />
                   <span className="gradient-text-cyan">one click away</span>
                 </h2>
-                <p className="text-foreground/70 text-lg leading-relaxed mb-8">
+                <p className="text-background/70 text-lg leading-relaxed mb-8">
                   Architects, lawyers, notaries, engineers — all vetted, verified, and enhanced with AI tools that make every transaction faster and safer.
                 </p>
                 <Button size="lg" className="bg-gradient-accent border-0 text-accent-foreground font-semibold px-8 gap-2" asChild>
@@ -782,13 +782,13 @@ export default function Index() {
                   { emoji: "🏡", title: "Property Mgrs", count: "230+", color: "text-brand-sky", border: "border-brand-sky/30", bg: "bg-brand-sky/15" },
                 ].map(pro => (
                   <Link key={pro.title} to="/professionals">
-                    <div className={`group flex items-center gap-3 p-4 rounded-2xl bg-card/40 border ${pro.border} hover:bg-card/80 transition-all`}>
+                    <div className={`group flex items-center gap-3 p-4 rounded-2xl bg-background/10 border ${pro.border} hover:bg-background/20 transition-all`}>
                       <div className={`w-10 h-10 rounded-xl ${pro.bg} flex items-center justify-center text-xl shrink-0 group-hover:scale-110 transition-transform`}>
                         {pro.emoji}
                       </div>
                       <div>
                         <div className={`font-bold text-sm ${pro.color}`}>{pro.title}</div>
-                        <div className="text-xs text-foreground/60">{pro.count} verified</div>
+                        <div className="text-xs text-background/60">{pro.count} verified</div>
                       </div>
                     </div>
                   </Link>
