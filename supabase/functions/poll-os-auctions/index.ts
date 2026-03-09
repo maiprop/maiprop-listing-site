@@ -1,15 +1,11 @@
 /**
  * poll-os-auctions
  * ─────────────────────────────────────────────────────────────────────────────
- * Pulls auctions from maiProp OS using token-based auth, maps them to Hub
- * listing schema (listing_type = 'auction'), and upserts them.
+ * Pulls auctions from maiProp OS using verified auth + real field names from
+ * the live API schema, and upserts them as Hub listings (listing_type='auction').
  *
- * Triggered manually (POST with optional filters) or by a pg_cron job.
- *
- * OS flow:
- *   1. POST /auth/login  → Bearer token
- *   2. POST /api/v1/auctions/filter/details  → auction list
- *   3. Upsert each into Hub listings (dedup via tags: os_auction:{id})
+ * Auth: POST /auth/login → { data: { token } }
+ * Fetch: POST /api/v1/auctions/filter/details → { responseMetadata, data: [...] }
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -19,18 +15,19 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// ── OS Property Category → Hub property_type ─────────────────────────────────
+// ── OS propertyCategory → Hub property_type ──────────────────────────────────
 const CATEGORY_MAP: Record<string, string> = {
-  RESIDENCE: "apartment",
-  APARTMENT: "apartment",
-  HOUSE: "house",
-  VILLA: "villa",
-  LAND: "land",
-  PLOT: "land",
-  COMMERCIAL: "commercial",
-  OFFICE: "office",
-  STORE: "commercial",
-  WAREHOUSE: "commercial",
+  RESIDENCE:   "apartment",
+  APARTMENT:   "apartment",
+  HOUSE:       "house",
+  VILLA:       "villa",
+  LAND:        "land",
+  PLOT:        "land",
+  COMMERCIAL:  "commercial",
+  OFFICE:      "office",
+  STORE:       "commercial",
+  WAREHOUSE:   "commercial",
+  INDUSTRIAL:  "commercial",
 };
 
 function mapCategory(cat?: string): string {
@@ -39,27 +36,28 @@ function mapCategory(cat?: string): string {
 }
 
 function buildTitle(a: any): string {
-  const type = a.propertyCategory ? CATEGORY_MAP[a.propertyCategory.toUpperCase()] ?? a.propertyCategory : "Property";
-  const city = a.city ?? a.municipalityName ?? "";
-  const court = a.courtName ? ` · ${a.courtName}` : "";
-  return `[Auction] ${type.charAt(0).toUpperCase() + type.slice(1)} in ${city}${court}`;
+  const cat = a.propertyCategory
+    ? (CATEGORY_MAP[a.propertyCategory.toUpperCase()] ?? a.propertyCategory)
+    : "Property";
+  const displayCat = cat.charAt(0).toUpperCase() + cat.slice(1);
+  const city = a.propertyMunicipalityName ?? a.city ?? "";
+  const court = a.auctionStatus ? ` [${a.auctionStatus}]` : "";
+  return `[Πλειστηριασμός] ${displayCat} – ${city}${court}`;
 }
 
-// ── Auth helper ───────────────────────────────────────────────────────────────
+// ── Verified auth helper ──────────────────────────────────────────────────────
 async function getOsToken(baseUrl: string, email: string, password: string): Promise<string> {
   const res = await fetch(`${baseUrl}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(`OS auth failed (${res.status}): ${txt}`);
+  const json = await res.json();
+  // OS response shape: { responseMetadata: {...}, data: { token, expiresIn, ... } }
+  const token = json?.data?.token ?? json?.token ?? json?.accessToken;
+  if (!token) {
+    throw new Error(`OS auth failed (${res.status}): ${JSON.stringify(json).slice(0, 300)}`);
   }
-  const data = await res.json();
-  // Support both { token } and { accessToken } response shapes
-  const token = data.token ?? data.accessToken ?? data.access_token;
-  if (!token) throw new Error("OS auth returned no token");
   return token;
 }
 
@@ -91,34 +89,37 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
-  const OS_URL    = Deno.env.get("MAIPROP_OS_URL");
-  const OS_EMAIL  = Deno.env.get("MAIPROP_OS_EMAIL");
-  const OS_PASS   = Deno.env.get("MAIPROP_OS_PASSWORD");
+  const OS_URL   = Deno.env.get("MAIPROP_OS_URL")?.replace(/\/$/, "");
+  const OS_EMAIL = Deno.env.get("MAIPROP_OS_EMAIL");
+  const OS_PASS  = Deno.env.get("MAIPROP_OS_PASSWORD");
 
   if (!OS_URL || !OS_EMAIL || !OS_PASS) {
     await logSync(supabase, "skipped",
       "MAIPROP_OS_URL / MAIPROP_OS_EMAIL / MAIPROP_OS_PASSWORD not configured");
-    return new Response(JSON.stringify({
-      ok: true, status: "skipped",
-      message: "OS credentials not configured. Add MAIPROP_OS_URL, MAIPROP_OS_EMAIL, MAIPROP_OS_PASSWORD to enable live poll.",
-    }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ ok: true, status: "skipped" }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 
   try {
+    const body = await req.json().catch(() => ({}));
+
     // 1. Authenticate
     const token = await getOsToken(OS_URL, OS_EMAIL, OS_PASS);
 
-    // 2. Parse optional filter overrides from request body
-    const body = await req.json().catch(() => ({}));
-    const filterPayload = {
-      page: body.page ?? 0,
-      size: body.size ?? 100,
-      // Optional filters passed through as-is
-      ...(body.filters ?? {}),
+    // 2. Build filter — support optional overrides from caller
+    const filterPayload: Record<string, unknown> = {
+      page:     body.page     ?? 0,
+      pageSize: body.pageSize ?? body.size ?? 100,
     };
+    // Optional: filter by status, date range, region etc.
+    if (body.auctionStatus)   filterPayload.auctionStatus   = body.auctionStatus;
+    if (body.propertyCategory) filterPayload.propertyCategory = body.propertyCategory;
+    if (body.dateFrom)        filterPayload.dateFrom        = body.dateFrom;
+    if (body.dateTo)          filterPayload.dateTo          = body.dateTo;
 
-    // 3. Fetch auctions from OS
-    const auctionsRes = await fetch(`${OS_URL}/api/v1/auctions/filter/details`, {
+    // 3. Fetch auctions
+    const auctRes = await fetch(`${OS_URL}/api/v1/auctions/filter/details`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -127,60 +128,74 @@ Deno.serve(async (req) => {
       body: JSON.stringify(filterPayload),
     });
 
-    if (!auctionsRes.ok) {
-      const errText = await auctionsRes.text();
-      await logSync(supabase, "error", `OS auctions fetch failed (${auctionsRes.status}): ${errText}`);
-      return new Response(JSON.stringify({ error: `OS returned ${auctionsRes.status}` }), {
+    if (!auctRes.ok) {
+      const errText = await auctRes.text();
+      await logSync(supabase, "error", `OS auction fetch failed (${auctRes.status}): ${errText}`);
+      return new Response(JSON.stringify({ error: `OS returned ${auctRes.status}` }), {
         status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const auctionsData = await auctionsRes.json();
-    // OS may return { content: [...] } (Spring Page) or a plain array
-    const auctions: any[] = Array.isArray(auctionsData)
-      ? auctionsData
-      : (auctionsData.content ?? auctionsData.data ?? auctionsData.auctions ?? []);
+    const auctJson = await auctRes.json();
+    // OS wraps list in { data: [...], responseMetadata: { pagination: { totalElements } } }
+    const auctions: any[] = Array.isArray(auctJson)
+      ? auctJson
+      : (auctJson.data ?? auctJson.content ?? []);
+
+    const totalAvailable = auctJson?.responseMetadata?.pagination?.totalElements ?? auctions.length;
 
     let imported = 0;
     let updated  = 0;
     let errors   = 0;
 
-    // 4. Upsert each auction as a Hub listing
+    // 4. Upsert each auction
     for (const a of auctions) {
       try {
-        const osId = String(a.auctionListingId ?? a.id ?? a.auctionId);
+        const osId   = String(a.auctionListingId ?? a.id ?? "unknown");
         const tagKey = `os_auction:${osId}`;
 
-        const mapped = {
+        // Map OS fields (real names from AuctionOutputDto schema) → Hub fields
+        const mapped: Record<string, unknown> = {
           title:                buildTitle(a),
-          description:          a.description ?? a.additionalInfo ?? null,
-          price:                Number(a.firstPriceOffer ?? a.startingBid ?? a.price ?? 0),
-          auction_starting_bid: Number(a.firstPriceOffer ?? a.startingBid ?? 0),
-          auction_date:         a.auctionDate ?? null,
-          auction_court:        a.courtName ?? null,
-          property_type:        mapCategory(a.propertyCategory) as any,
-          listing_type:         "auction" as const,
-          status:               "active" as const,
-          city:                 a.city ?? a.municipalityName ?? a.area ?? "Unknown",
-          region:               a.region ?? a.prefecture ?? null,
-          address:              a.auctionAddress ?? a.address ?? null,
-          latitude:             a.latitude ? Number(a.latitude) : null,
-          longitude:            a.longitude ? Number(a.longitude) : null,
-          sqm:                  Number(a.sqm ?? a.propertyArea ?? 1),
-          bedrooms:             a.bedrooms ? Number(a.bedrooms) : null,
-          bathrooms:            a.bathrooms ? Number(a.bathrooms) : null,
-          floor:                a.floor ? Number(a.floor) : null,
-          year_built:           a.yearBuilt ? Number(a.yearBuilt) : null,
-          cadastre_number:      a.propertyKaek ?? a.kaek ?? null,
-          cover_image_url:      (a.imageUrls ?? a.images ?? [])[0] ?? null,
-          // System owner placeholder — OS-sourced listings are platform-owned
+          description:          a.description ?? null,
+          price:                Number(a.firstPriceOffer ?? a.registrationAmount ?? 0),
+          price_per_sqm:        a.pricePerSquareMeter ? Number(a.pricePerSquareMeter) : null,
+          auction_starting_bid: Number(a.firstPriceOffer ?? a.registrationAmount ?? 0),
+          auction_date:         a.auctionDate ?? null,         // "YYYY-MM-DD"
+          auction_court:        a.auctionStatus ?? null,       // COMPLETED / PENDING / etc.
+          property_type:        mapCategory(a.propertyCategory),
+          listing_type:         "auction",
+          status:               "active",
+          city:                 a.propertyMunicipalityName ?? a.city ?? "Άγνωστο",
+          region:               a.propertyPrefectureName   ?? null,
+          address:              a.propertyAddress          ?? null,
+          postal_code:          a.propertyPostalCode        ?? null,
+          latitude:             a.propertyLatitude  ? Number(a.propertyLatitude)  : null,
+          longitude:            a.propertyLongitude ? Number(a.propertyLongitude) : null,
+          sqm:                  Number(a.propertySquareMeters ?? 1),
+          floor:                a.propertyFloor ? Number(a.propertyFloor) : null,
+          total_floors:         a.numberOfFloors ? Number(a.numberOfFloors) : null,
+          year_built:           a.constructionYear ? Number(a.constructionYear) : null,
+          cadastre_number:      a.propertyFullKaek ?? null,
+          // No images in the auction endpoint — URL is an S3 bucket link, not image
+          cover_image_url:      null,
+          // Ownership & financial metadata stored as tags
           owner_id:             "00000000-0000-0000-0000-000000000001",
         };
 
-        // Check dedup via tag
+        // Extra metadata as tags
+        const extraTags: string[] = [
+          tagKey,
+          "source:maiprop-os",
+          `municipality_id:${a.propertyMunicipalityId ?? ""}`,
+        ];
+        if (a.ownershipStatus) extraTags.push(`ownership:${a.ownershipStatus}`);
+        if (a.auctionStatus)   extraTags.push(`auction_status:${a.auctionStatus}`);
+
+        // Dedup check
         const { data: existing } = await supabase
           .from("listings")
-          .select("id, tags")
+          .select("id")
           .contains("tags", [tagKey])
           .maybeSingle();
 
@@ -192,42 +207,37 @@ Deno.serve(async (req) => {
           if (error) throw error;
           updated++;
         } else {
-          const tags = [tagKey, "source:maiprop-os"];
           const { error } = await supabase
             .from("listings")
-            .insert({ ...mapped, tags });
+            .insert({ ...mapped, tags: extraTags });
           if (error) throw error;
-
-          // Insert images if present
-          if (a.imageUrls?.length > 1 || a.images?.length > 1) {
-            const imgList = a.imageUrls ?? a.images ?? [];
-            const { data: newListing } = await supabase
-              .from("listings")
-              .select("id")
-              .contains("tags", [tagKey])
-              .single();
-            if (newListing) {
-              await supabase.from("listing_images").insert(
-                imgList.slice(0, 20).map((url: string, i: number) => ({
-                  listing_id: newListing.id,
-                  url,
-                  sort_order: i,
-                }))
-              );
-            }
-          }
           imported++;
         }
       } catch (itemErr: any) {
-        console.error("Error upserting auction:", itemErr.message);
+        console.error("Upsert error:", itemErr.message, JSON.stringify(a).slice(0, 200));
         errors++;
       }
     }
 
-    const summary = { total: auctions.length, imported, updated, errors };
-    await logSync(supabase, errors === 0 ? "success" : "error",
-      errors > 0 ? `${errors} item(s) failed` : null,
-      summary, imported + updated);
+    const summary = {
+      total:           auctions.length,
+      totalAvailableInOS: totalAvailable,
+      imported,
+      updated,
+      errors,
+      page:            filterPayload.page,
+      pageSize:        filterPayload.pageSize,
+    };
+
+    await logSync(
+      supabase,
+      errors > 0 && (imported + updated) === 0 ? "error" : "success",
+      errors > 0 ? `${errors} item(s) failed to upsert` : null,
+      summary,
+      imported + updated,
+    );
+
+    console.log("poll-os-auctions summary:", summary);
 
     return new Response(JSON.stringify({ ok: true, ...summary }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

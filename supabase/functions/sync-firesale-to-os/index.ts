@@ -1,13 +1,10 @@
 /**
  * sync-firesale-to-os
  * ─────────────────────────────────────────────────────────────────────────────
- * Pushes a Firesale™ request to maiProp OS as an opportunity/lead.
+ * Pushes a Firesale™ request to maiProp OS as an auction creation request
+ * (closest available endpoint: POST /api/v1/auctions/create).
  *
- * OS flow:
- *   1. POST /auth/login  → Bearer token
- *   2. POST /bo/firesale/save  (or /api/v1/opportunities/save)  → opportunity
- *
- * Called with { firesale_id } in the request body.
+ * Auth: POST /auth/login → { data: { token } }
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -17,7 +14,15 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// ── Hub condition → OS condition label ───────────────────────────────────────
+const TYPE_MAP: Record<string, string> = {
+  apartment:  "RESIDENCE",
+  house:      "HOUSE",
+  villa:      "VILLA",
+  land:       "LAND",
+  commercial: "COMMERCIAL",
+  office:     "OFFICE",
+};
+
 const CONDITION_MAP: Record<string, string> = {
   excellent:        "EXCELLENT",
   good:             "GOOD",
@@ -26,30 +31,18 @@ const CONDITION_MAP: Record<string, string> = {
   shell:            "SHELL",
 };
 
-// ── Hub property_type → OS propertyCategory ──────────────────────────────────
-const TYPE_MAP: Record<string, string> = {
-  apartment:  "APARTMENT",
-  house:      "HOUSE",
-  villa:      "VILLA",
-  land:       "LAND",
-  commercial: "COMMERCIAL",
-  office:     "OFFICE",
-};
-
-// ── Auth helper ───────────────────────────────────────────────────────────────
+// ── Verified auth helper ──────────────────────────────────────────────────────
 async function getOsToken(baseUrl: string, email: string, password: string): Promise<string> {
   const res = await fetch(`${baseUrl}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(`OS auth failed (${res.status}): ${txt}`);
+  const json = await res.json();
+  const token = json?.data?.token ?? json?.token ?? json?.accessToken;
+  if (!token) {
+    throw new Error(`OS auth failed (${res.status}): ${JSON.stringify(json).slice(0, 300)}`);
   }
-  const data = await res.json();
-  const token = data.token ?? data.accessToken ?? data.access_token;
-  if (!token) throw new Error("OS auth returned no token");
   return token;
 }
 
@@ -65,8 +58,7 @@ async function logSync(
   await supabase.from("sync_log").insert({
     direction: "hub_to_os",
     entity_type: "firesale",
-    entity_id,
-    status,
+    entity_id, status,
     error_message: error_message ?? null,
     payload: payload ?? null,
     records_affected,
@@ -82,7 +74,7 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
-  const OS_URL   = Deno.env.get("MAIPROP_OS_URL");
+  const OS_URL   = Deno.env.get("MAIPROP_OS_URL")?.replace(/\/$/, "");
   const OS_EMAIL = Deno.env.get("MAIPROP_OS_EMAIL");
   const OS_PASS  = Deno.env.get("MAIPROP_OS_PASSWORD");
 
@@ -110,26 +102,36 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Build OS payload
+    // Build OS payload using real OS field names
     const osPayload = {
-      externalId:      fs.id,
-      source:          "maiprop-hub-firesale",
-      address:         fs.address,
-      city:            fs.city,
-      propertyCategory: fs.property_type ? (TYPE_MAP[fs.property_type] ?? "APARTMENT") : "APARTMENT",
-      sqm:             fs.sqm,
-      bedrooms:        fs.bedrooms ?? null,
-      condition:       CONDITION_MAP[fs.condition] ?? fs.condition,
-      askingPrice:     fs.asking_price ?? null,
-      aiEstimate:      fs.ai_estimate ?? null,
-      offerPrice:      fs.offer_price ?? null,
-      contactEmail:    fs.contact_email,
-      contactPhone:    fs.contact_phone ?? null,
-      notes:           fs.notes ?? null,
-      adminNotes:      fs.admin_notes ?? null,
-      status:          fs.status.toUpperCase(),
-      submittedAt:     fs.created_at,
-      updatedAt:       fs.updated_at,
+      // Identification
+      externalId:           fs.id,
+      source:               "maiprop-hub-firesale",
+
+      // Property details (mapped to OS AuctionOutputDto / create schema)
+      propertyCategory:     fs.property_type ? (TYPE_MAP[fs.property_type] ?? "RESIDENCE") : "RESIDENCE",
+      propertyAddress:      fs.address,
+      propertyMunicipalityName: fs.city,
+      propertySquareMeters: fs.sqm,
+      numberOfBedrooms:     fs.bedrooms ?? null,
+      condition:            CONDITION_MAP[fs.condition] ?? fs.condition,
+
+      // Pricing
+      firstPriceOffer:      fs.asking_price ?? fs.ai_estimate ?? null,
+      registrationAmount:   fs.asking_price ?? null,
+      aiEstimate:           fs.ai_estimate ?? null,
+      offerPrice:           fs.offer_price ?? null,
+
+      // Contact
+      contactEmail:         fs.contact_email,
+      contactPhone:         fs.contact_phone ?? null,
+      notes:                fs.notes ?? null,
+      adminNotes:           fs.admin_notes ?? null,
+
+      // Status
+      auctionStatus:        fs.status.toUpperCase(),
+      submittedAt:          fs.created_at,
+      updatedAt:            fs.updated_at,
     };
 
     // No credentials → queue as skipped
@@ -138,7 +140,7 @@ Deno.serve(async (req) => {
         "OS credentials not configured", osPayload);
       return new Response(JSON.stringify({
         ok: true, status: "skipped",
-        message: "OS credentials not configured. Add MAIPROP_OS_URL, MAIPROP_OS_EMAIL, MAIPROP_OS_PASSWORD.",
+        message: "OS credentials not configured.",
         payload: osPayload,
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
@@ -146,9 +148,8 @@ Deno.serve(async (req) => {
     // Authenticate
     const token = await getOsToken(OS_URL, OS_EMAIL, OS_PASS);
 
-    // Push to OS — try backoffice firesale endpoint first, fallback to opportunities
-    const endpoint = `${OS_URL}/bo/firesale/save`;
-    const osRes = await fetch(endpoint, {
+    // Push to OS — use /api/v1/auctions/create (the only create endpoint available)
+    const osRes = await fetch(`${OS_URL}/api/v1/auctions/create`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -162,7 +163,7 @@ Deno.serve(async (req) => {
       const errText = await osRes.text();
       await logSync(supabase, firesale_id, "error",
         `OS returned ${osRes.status}: ${errText}`, osPayload);
-      return new Response(JSON.stringify({ error: `OS sync failed: ${osRes.status}` }), {
+      return new Response(JSON.stringify({ error: `OS sync failed: ${osRes.status}: ${errText}` }), {
         status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
