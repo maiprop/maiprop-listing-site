@@ -172,13 +172,23 @@ Deno.serve(async (req) => {
     let updated  = 0;
     let errors   = 0;
 
-    // 4. Upsert each auction (skip past auctions as a safety net)
-    const nowMs = Date.now();
+    // 4. Upsert each auction — skip non-future statuses (OS API filters don't work server-side)
+    // Future statuses: POSTED, READY_TO_CONDUCT, FINALIZED_PARTICIPANT_LIST
+    // Past/irrelevant: COMPLETED, COMPLETED_NO_BIDDERS, CANCELED, SUSPENDED
+    let skippedPast = 0;
     for (const a of auctions) {
-      // Skip if auctionDate is in the past
+      // Primary guard: skip by OS auctionStatus
+      if (a.auctionStatus && !FUTURE_STATUSES.has(a.auctionStatus)) {
+        skippedPast++;
+        continue;
+      }
+      // Secondary guard: skip if auctionDate is in the past (even for unknown statuses)
       if (a.auctionDate) {
         const auctionMs = new Date(a.auctionDate).getTime();
-        if (!isNaN(auctionMs) && auctionMs < nowMs) continue;
+        if (!isNaN(auctionMs) && auctionMs < Date.now()) {
+          skippedPast++;
+          continue;
+        }
       }
       try {
         const osId   = String(a.auctionListingId ?? a.id ?? "unknown");
