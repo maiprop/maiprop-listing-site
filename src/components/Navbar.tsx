@@ -45,7 +45,7 @@ export function Navbar() {
     { label: "Buy", href: "/listings?listing_type=sale" },
     { label: "Rent", href: "/listings?listing_type=rent" },
     { label: "Auctions", href: "/auctions", badge: "Live" },
-    { label: "Firesale™", href: "/firesale", accent: "flame" },
+    { label: "Quick Sale™", href: "/firesale", accent: "flame" },
     { label: "Professionals", href: "/professionals", accent: "subtle" },
   ];
 
