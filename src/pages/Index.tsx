@@ -988,7 +988,7 @@ export default function Index() {
           <div className={`flex items-center justify-between mb-7 reveal ${browseInView ? "in-view" : ""}`}>
             <div>
               <h2 className="font-display text-2xl font-bold">Browse by Type</h2>
-              <p className="text-sm text-muted-foreground mt-1">Find exactly what you're looking for</p>
+              
             </div>
             <Link to="/listings" className="text-sm text-primary hover:underline flex items-center gap-1">
               All listings <ArrowRight className="w-3 h-3" />
