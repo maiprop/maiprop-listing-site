@@ -3,8 +3,9 @@ import { Link, useParams, useNavigate } from "react-router-dom";
 import {
   Home, Plus, BarChart2, MessageSquare, Heart, Settings, User,
   Eye, Bell, BellOff, LogOut, Building2, Gavel, CheckCircle,
-  Loader2, Calendar, Trash2, ToggleLeft, ToggleRight, Bookmark, Search
+  Loader2, Calendar, Trash2, ToggleLeft, ToggleRight, Bookmark, Search, Activity
 } from "lucide-react";
+import { OSSyncPanel } from "@/components/OSSyncPanel";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { useAuth } from "@/contexts/AuthContext";
@@ -24,6 +25,7 @@ const navItems = [
   { icon: MessageSquare, label: "Messages", key: "messages" },
   { icon: Calendar, label: "Viewings", key: "viewings" },
   { icon: Gavel, label: "Auctions", key: "auctions" },
+  { icon: Activity, label: "OS Sync", key: "os-sync" },
   { icon: User, label: "Profile", key: "profile" },
   { icon: Settings, label: "Settings", key: "settings" },
 ];
@@ -369,6 +371,9 @@ export default function Dashboard() {
           {activeSection === "profile" && (
             <ProfileEditor profile={profile} onUpdate={updateProfile} />
           )}
+
+          {/* OS SYNC */}
+          {activeSection === "os-sync" && <OSSyncPanel />}
 
           {(activeSection === "analytics" || activeSection === "auctions" || activeSection === "settings") && (
             <div className="glass-card rounded-xl p-12 flex items-center justify-center">
