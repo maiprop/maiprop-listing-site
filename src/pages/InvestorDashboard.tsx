@@ -542,7 +542,7 @@ export default function InvestorDashboard() {
                   <Crown className="w-3.5 h-3.5" /> Investor Deal Flow — Exclusive Access
                 </div>
                 <h1 className="font-display text-4xl font-black mb-3">
-                  Private Firesale™ <br />
+                  Private Quick Sale™ <br />
                   <span className="gradient-text-primary">Deal Pipeline</span>
                 </h1>
                 <p className="text-muted-foreground max-w-xl text-sm">

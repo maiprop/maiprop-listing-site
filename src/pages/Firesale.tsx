@@ -766,7 +766,7 @@ export default function Firesale() {
                 <div className="grid grid-cols-3 bg-muted/60 border-b border-border text-[10px] font-bold uppercase tracking-widest">
                   <div className="px-4 py-3 text-muted-foreground"></div>
                   <div className="px-4 py-3 flex items-center justify-center gap-1.5 text-destructive border-x border-border">
-                    <Flame className="w-3 h-3" /> Firesale™
+                    <Flame className="w-3 h-3" /> Quick Sale™
                   </div>
                   <div className="px-4 py-3 text-center text-muted-foreground/60">Traditional</div>
                 </div>
