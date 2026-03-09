@@ -422,13 +422,34 @@ function LocationInput({
 
 }
 
-// ── OS Dashboard Mockup ────────────────────────────────────────────────────────
+// ── OS Dashboard Mockup (faithful to os.maiprop.co) ──────────────────────────
 function OSDashboardMockup() {
+  const marketData = [
+    { city: "Athens", value: "2,860", delta: "▲1.3%" },
+    { city: "Thessaloniki", value: "1,920", delta: "▲0.8%" },
+    { city: "Mykonos", value: "6,450", delta: "▲2.3%" },
+    { city: "Glyfada", value: "3,772", delta: "▲1.7%" },
+    { city: "Rhodes", value: "2,290", delta: "▲3.1%" },
+    { city: "Santorini", value: "5,120", delta: "▲1.9%" },
+    { city: "Kifisia", value: "4,180", delta: "▲0.6%" },
+  ];
+  const sparklines = [
+    "M0,10 C5,8 10,6 15,4 C20,2 25,5 30,2",
+    "M0,8 C5,10 10,7 15,9 C20,5 25,3 30,4",
+    "M0,10 C5,9 10,6 15,7 C20,4 25,2 30,1",
+    "M0,9 C5,7 10,8 15,5 C20,6 25,4 30,3",
+    "M0,10 C5,8 10,11 15,7 C20,5 25,6 30,3",
+    "M0,9 C5,6 10,7 15,5 C20,8 25,4 30,2",
+    "M0,10 C5,9 10,8 15,9 C20,7 25,8 30,9",
+  ];
   return (
-    <div className="w-full h-full bg-[hsl(220_20%_8%)] overflow-hidden select-none font-sans">
-      {/* Top nav bar */}
-      <div className="flex items-center gap-3 px-4 py-2.5 border-b border-white/10 bg-[hsl(220_20%_6%)]">
-        <div className="text-[10px] font-black text-primary tracking-tight">mAI Prop OS</div>
+    <div className="w-full h-full overflow-hidden select-none font-sans" style={{ background: "hsl(220 30% 7%)" }}>
+      {/* Navbar */}
+      <div className="flex items-center justify-between px-4 py-2 border-b" style={{ borderColor: "rgba(255,255,255,0.08)", background: "hsl(220 30% 5%)" }}>
+        <div className="flex items-center gap-3">
+          <div className="text-[10px] font-black tracking-tight flex items-center gap-1" style={{ color: "hsl(183 100% 50%)" }}>
+            mAI Prop<span className="text-[7px] font-black ml-0.5 px-1 rounded-sm" style={{ background: "hsl(183 100% 50% / 0.15)", color: "hsl(183 100% 70%)" }}>OS</span>
+          </div>
         <div className="flex gap-1.5 ml-1">
           {["Market", "Auctions", "Quick Sale", "Portfolio"].map((t, i) =>
           <span key={t} className={`text-[8px] px-2 py-0.5 rounded-md ${i === 0 ? "bg-primary/20 text-primary border border-primary/30" : "text-white/40 hover:text-white/70"}`}>{t}</span>
