@@ -345,7 +345,94 @@ export default function CreateListing() {
     setCoverImageId(prev => prev === id ? (images.find(img => img.id !== id)?.id ?? null) : prev);
   };
 
-  // ── Submit ────────────────────────────────────────────────────────────────
+  // ── AI helpers ────────────────────────────────────────────────────────────
+
+  const getActiveFeatures = () => {
+    const featureKeys = [
+      "has_elevator", "has_ac", "has_solar_water", "has_storage", "has_secure_door",
+      "has_parking", "has_balcony", "has_garden", "has_pool", "has_view",
+      "has_fireplace", "has_furnished", "has_smart_home", "has_disability_access",
+    ] as const;
+    return featureKeys.filter(k => (form as any)[k]).map(k =>
+      k.replace("has_", "").replace("is_", "").replace(/_/g, " ")
+    );
+  };
+
+  const handleAiDescription = async () => {
+    if (!form.property_type || !form.sqm) {
+      toast.error("Please fill in property type and area first");
+      return;
+    }
+    setAiDescLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("listing-ai-assist", {
+        body: {
+          type: "description",
+          property: {
+            property_type: form.property_type,
+            listing_type: form.listing_type,
+            city: form.city || "Greece",
+            address: form.address,
+            sqm: form.sqm,
+            bedrooms: form.bedrooms,
+            bathrooms: form.bathrooms,
+            floor: form.floor,
+            year_built: form.year_built,
+            energy_class: form.energy_class,
+            features: getActiveFeatures(),
+            condition: form.construction_status,
+          },
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      set("description", data.content);
+      toast.success("AI description generated!");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to generate description");
+    } finally {
+      setAiDescLoading(false);
+    }
+  };
+
+  const handleAiPrice = async () => {
+    if (!form.property_type || !form.sqm || !form.city) {
+      toast.error("Please fill in property type, area, and city first");
+      return;
+    }
+    setAiPriceLoading(true);
+    setAiPriceSuggestion(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("listing-ai-assist", {
+        body: {
+          type: "price",
+          property: {
+            property_type: form.property_type,
+            listing_type: form.listing_type,
+            city: form.city,
+            region: form.region,
+            sqm: form.sqm,
+            bedrooms: form.bedrooms,
+            floor: form.floor,
+            year_built: form.year_built,
+            energy_class: form.energy_class,
+            features: getActiveFeatures(),
+            condition: form.construction_status,
+          },
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      const parsed = JSON.parse(data.content);
+      setAiPriceSuggestion(parsed);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to get price estimate");
+    } finally {
+      setAiPriceLoading(false);
+    }
+  };
+
+
 
   const handleSubmit = async (asDraft = false) => {
     if (!form.title || !form.city || !form.price || !form.sqm) {
