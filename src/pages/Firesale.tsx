@@ -118,12 +118,12 @@ export default function Firesale() {
 
 
 
-      // keep the local estimate
-    } finally {setAiLoading(false);}};const handleContinue = async () => {await generateEstimate();setStep(2);
-  };
 
-  const handleSubmit = async () => {
-    if (!step2Valid) {toast.error("Please fill in all required fields.");return;}
+
+
+
+      // keep the local estimate
+    } finally {setAiLoading(false);}};const handleContinue = async () => {await generateEstimate();setStep(2);};const handleSubmit = async () => {if (!step2Valid) {toast.error("Please fill in all required fields.");return;}
     setSubmitting(true);
     try {
       const estimate = aiEstimate || Math.round(Number(form.sqm) * 1900 * 0.92);
@@ -186,7 +186,7 @@ export default function Firesale() {
               </div>
               <h1 className="font-display text-5xl md:text-6xl font-black mb-5 leading-tight">
                 Sell Your Property<br />
-                <span className="gradient-text-primary">in 48 Hours.</span>
+                <span className="gradient-text-primary">in 96 Hours.</span>
               </h1>
               <p className="text-muted-foreground text-xl mb-8 leading-relaxed max-w-2xl">
                 AI-powered guaranteed cash offer. No agent fees, no viewings, no negotiations.
