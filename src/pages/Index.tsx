@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useInView } from "@/hooks/useInView";
 import ReactDOM from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -450,7 +451,17 @@ export default function Index() {
   const [searchType, setSearchType] = useState("Buy");
   const [selectedPropertyType, setSelectedPropertyType] = useState("");
   const [showAI, setShowAI] = useState(false);
-  
+
+  // Scroll-reveal refs
+  const { ref: browseRef, inView: browseInView } = useInView();
+  const { ref: featuredRef, inView: featuredInView } = useInView();
+  const { ref: auctionsRef, inView: auctionsInView } = useInView();
+  const { ref: firesaleRef, inView: firesaleInView } = useInView();
+  const { ref: locationsRef, inView: locationsInView } = useInView();
+  const { ref: prosRef, inView: prosInView } = useInView();
+  const { ref: osRef, inView: osInView } = useInView();
+  const { ref: goldenRef, inView: goldenInView } = useInView();
+  const { ref: trustRef, inView: trustInView } = useInView();
 
   const listingTypeMap: Record<string, string> = {
     "Buy": "sale", "Rent": "rent", "Auctions": "auction", "Quick Sale": "firesale",
@@ -490,12 +501,13 @@ export default function Index() {
       <section className="relative min-h-[100svh] sm:min-h-[92vh] flex items-center overflow-hidden pt-16">
         {/* Background */}
         <div className="absolute inset-0">
-          <img src={heroBg} alt="Athens skyline" className="w-full h-full object-cover opacity-60 dark:opacity-55" />
-          {/* Light mode: warm cream overlay so headline stays readable */}
-          <div className="absolute inset-0 dark:hidden" style={{ background: "linear-gradient(120deg, hsl(30 20% 10% / 0.82) 0%, hsl(25 15% 12% / 0.62) 50%, hsl(30 10% 14% / 0.25) 100%)" }} />
-          {/* Dark mode: deep navy overlay */}
+          {/* Light mode: show more of the actual photo — lower opacity overlay */}
+          <img src={heroBg} alt="Athens skyline" className="w-full h-full object-cover opacity-100 dark:opacity-70" />
+          {/* Light mode: soft warm vignette — keeps text readable without killing the photo */}
+          <div className="absolute inset-0 dark:hidden" style={{ background: "linear-gradient(120deg, hsl(25 30% 8% / 0.58) 0%, hsl(25 20% 10% / 0.35) 55%, hsl(30 15% 12% / 0.10) 100%)" }} />
+          {/* Dark mode: deep overlay */}
           <div className="absolute inset-0 hidden dark:block" style={{ background: "linear-gradient(120deg, hsl(222 47% 4% / 0.92) 0%, hsl(222 47% 6% / 0.72) 50%, hsl(222 47% 8% / 0.35) 100%)" }} />
-          <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent" />
         </div>
         {/* Grid overlay */}
         <div className="absolute inset-0 opacity-[0.03]"
@@ -608,8 +620,8 @@ export default function Index() {
 
       {/* ══ BROWSE BY TYPE ══════════════════════════════════════════════════ */}
       <section className="py-14 bg-secondary">
-        <div className="container">
-          <div className="flex items-center justify-between mb-7">
+        <div ref={browseRef} className="container">
+          <div className={`flex items-center justify-between mb-7 reveal ${browseInView ? "in-view" : ""}`}>
             <div>
               <h2 className="font-display text-2xl font-bold">Browse by Type</h2>
               <p className="text-sm text-muted-foreground mt-1">Find exactly what you're looking for</p>
@@ -618,7 +630,7 @@ export default function Index() {
               All listings <ArrowRight className="w-3 h-3" />
             </Link>
           </div>
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+          <div className={`grid grid-cols-3 sm:grid-cols-6 gap-3 reveal reveal-delay-1 ${browseInView ? "in-view" : ""}`}>
             {PROPERTY_TYPES.filter(t => t.value !== "office").map(type => (
               <Link key={type.value} to={`/listings?type=${type.value}`}>
                 <div className="glass-card rounded-xl p-4 flex flex-col items-center text-center hover:border-primary/40 hover:bg-primary/5 transition-all group gap-2 cursor-pointer">
@@ -636,8 +648,8 @@ export default function Index() {
 
       {/* ══ FEATURED PROPERTIES ══════════════════════════════════════════════ */}
       <section className="py-16 bg-background">
-        <div className="container">
-          <div className="flex items-center justify-between mb-8">
+        <div ref={featuredRef} className="container">
+          <div className={`flex items-center justify-between mb-8 reveal ${featuredInView ? "in-view" : ""}`}>
             <div>
               <h2 className="font-display text-2xl font-bold">Featured Properties</h2>
               <p className="text-sm text-muted-foreground mt-1">Premium & verified listings</p>
@@ -646,7 +658,7 @@ export default function Index() {
               <Link to="/listings">View All</Link>
             </Button>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 reveal reveal-delay-1 ${featuredInView ? "in-view" : ""}`}>
             {mockProperties.filter(p => p.isFeatured || p.isPremium).slice(0, 4).map(property => (
               <PropertyCard key={property.id} property={property} />
             ))}
@@ -656,8 +668,8 @@ export default function Index() {
 
       {/* ══ AUCTIONS ════════════════════════════════════════════════════════ */}
       <section className="py-16 bg-secondary">
-        <div className="container">
-          <div className="flex items-center justify-between mb-8">
+        <div ref={auctionsRef} className="container">
+          <div className={`flex items-center justify-between mb-8 reveal ${auctionsInView ? "in-view" : ""}`}>
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <Gavel className="w-5 h-5 text-brand-gold" />
@@ -670,7 +682,7 @@ export default function Index() {
               <Link to="/auctions">All Auctions <ArrowRight className="w-3 h-3 ml-1" /></Link>
             </Button>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 reveal reveal-delay-1 ${auctionsInView ? "in-view" : ""}`}>
             {mockProperties.filter(p => p.listingType === "auction").map(property => (
               <PropertyCard key={property.id} property={property} />
             ))}
@@ -680,8 +692,8 @@ export default function Index() {
 
       {/* ══ FIRESALE CTA ════════════════════════════════════════════════════ */}
       <section className="py-10 sm:py-16 bg-background">
-        <div className="container">
-        <div className="relative rounded-3xl overflow-hidden bg-card border border-border">
+        <div ref={firesaleRef} className="container">
+        <div className={`relative rounded-3xl overflow-hidden bg-card border border-border reveal ${firesaleInView ? "in-view" : ""}`}>
           <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 80% 50%, hsl(0 72% 55% / 0.12) 0%, transparent 60%)" }} />
           <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 20% 50%, hsl(192 100% 50% / 0.05) 0%, transparent 50%)" }} />
           <div className="relative p-6 sm:p-10 md:p-16 grid md:grid-cols-2 gap-6 sm:gap-8 items-center">
@@ -721,14 +733,14 @@ export default function Index() {
 
       {/* ══ POPULAR LOCATIONS ════════════════════════════════════════════════ */}
       <section className="py-16 bg-secondary">
-        <div className="container">
-        <div className="flex items-center justify-between mb-8">
+        <div ref={locationsRef} className="container">
+        <div className={`flex items-center justify-between mb-8 reveal ${locationsInView ? "in-view" : ""}`}>
           <h2 className="font-display text-2xl font-bold">Popular Locations</h2>
           <Link to="/listings" className="text-sm text-primary hover:underline flex items-center gap-1">
             Explore All <ArrowRight className="w-3 h-3" />
           </Link>
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className={`grid grid-cols-2 lg:grid-cols-4 gap-4 reveal reveal-delay-1 ${locationsInView ? "in-view" : ""}`}>
           {[
             { name: "Athens", listings: 24860, trend: "+1.2%", image: "https://images.unsplash.com/photo-1555993539-1732b0258235?w=600&q=80" },
             { name: "Thessaloniki", listings: 8240, trend: "+0.8%", image: "https://images.unsplash.com/photo-1570939274717-7eda259b50ed?w=600&q=80" },
@@ -753,8 +765,8 @@ export default function Index() {
 
       {/* ══ PROFESSIONALS CTA ════════════════════════════════════════════════ */}
       <section className="py-20 bg-background">
-        <div className="container">
-        <div className="relative rounded-3xl overflow-hidden border border-accent/20 bg-foreground dark:bg-[hsl(265_40%_7%)]">
+        <div ref={prosRef} className="container">
+        <div className={`relative rounded-3xl overflow-hidden border border-accent/20 bg-foreground dark:bg-[hsl(265_40%_7%)] reveal ${prosInView ? "in-view" : ""}`}>
           <div className="absolute top-0 left-0 w-80 h-80 rounded-full blur-3xl opacity-20"
             style={{ background: "radial-gradient(hsl(265 80% 60%), transparent 70%)" }} />
           <div className="absolute bottom-0 right-0 w-80 h-80 rounded-full blur-3xl opacity-15"
@@ -807,10 +819,10 @@ export default function Index() {
 
       {/* ══ mAI PROP OS ═════════════════════════════════════════════════════ */}
       <section className="py-20 bg-secondary overflow-hidden">
-        <div className="container">
+        <div ref={osRef} className="container">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             {/* Copy */}
-            <div>
+            <div className={`reveal ${osInView ? "in-view" : ""}`}>
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 mb-5">
                 <BarChart2 className="w-3.5 h-3.5 text-primary" />
                 <span className="text-xs font-semibold text-primary uppercase tracking-wide">Powered by mAI Prop OS</span>
@@ -845,7 +857,7 @@ export default function Index() {
             </div>
 
             {/* App Mockup */}
-            <div className="relative">
+            <div className={`relative reveal reveal-delay-1 ${osInView ? "in-view" : ""}`}>
               <div className="absolute inset-0 -m-8 rounded-3xl opacity-20 blur-3xl"
                 style={{ background: "radial-gradient(ellipse, hsl(183 100% 42%), transparent 70%)" }} />
               <div className="relative rounded-2xl overflow-hidden border border-primary/30 shadow-elevated glow-cyan">
@@ -877,10 +889,10 @@ export default function Index() {
 
       {/* ══ PROPERTIES PORTAL / GOLDEN VISA ══════════════════════════════════ */}
       <section className="py-20 bg-background overflow-hidden">
-        <div className="container">
+        <div ref={goldenRef} className="container">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             {/* App Mockup */}
-            <div className="relative order-last lg:order-first">
+            <div className={`relative order-last lg:order-first reveal ${goldenInView ? "in-view" : ""}`}>
               <div className="absolute inset-0 -m-8 rounded-3xl opacity-20 blur-3xl"
                 style={{ background: "radial-gradient(ellipse, hsl(42 95% 55%), transparent 70%)" }} />
               <div className="relative rounded-2xl overflow-hidden border border-brand-gold/30 shadow-elevated"
@@ -909,7 +921,7 @@ export default function Index() {
             </div>
 
             {/* Copy */}
-            <div>
+            <div className={`reveal reveal-delay-1 ${goldenInView ? "in-view" : ""}`}>
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-brand-gold/10 border border-brand-gold/20 mb-5">
                 <Star className="w-3.5 h-3.5 text-brand-gold" />
                 <span className="text-xs font-semibold text-brand-gold uppercase tracking-wide">Greek Golden Visa</span>
@@ -951,8 +963,8 @@ export default function Index() {
 
       {/* ══ TRUST BAR ════════════════════════════════════════════════════════ */}
       <section className="py-12 bg-secondary">
-        <div className="container">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+        <div ref={trustRef} className="container">
+          <div className={`grid grid-cols-2 md:grid-cols-4 gap-6 reveal ${trustInView ? "in-view" : ""}`}>
             {[
               { icon: Shield, title: "100% Verified Listings", desc: "Every property manually reviewed", color: "text-brand-emerald", bg: "bg-brand-emerald/10" },
               { icon: Brain, title: "AI-Powered Insights", desc: "Smart recommendations & valuations", color: "text-primary", bg: "bg-primary/10" },
