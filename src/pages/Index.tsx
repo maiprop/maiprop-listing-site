@@ -1401,54 +1401,6 @@ export default function Index() {
         </div>
       </section>
 
-      {/* ══ TRUST BAR ════════════════════════════════════════════════════════ */}
-      <section className="py-12 bg-secondary">
-        <div ref={trustRef} className="container">
-          <div className={`grid grid-cols-2 md:grid-cols-4 gap-6 reveal ${trustInView ? "in-view" : ""}`}>
-            {[
-            {
-              icon: Shield,
-              title: "100% Verified Listings",
-              desc: "Every property manually reviewed",
-              color: "text-brand-emerald",
-              bg: "bg-brand-emerald/10"
-            },
-            {
-              icon: Brain,
-              title: "AI-Powered Insights",
-              desc: "Smart recommendations & valuations",
-              color: "text-primary",
-              bg: "bg-primary/10"
-            },
-            {
-              icon: Zap,
-              title: "Instant Offers",
-              desc: "Quick Sale™ cash offers in 96h",
-              color: "text-destructive",
-              bg: "bg-destructive/10"
-            },
-            {
-              icon: Building2,
-              title: "47,000+ Properties",
-              desc: "Greece's largest portfolio",
-              color: "text-accent",
-              bg: "bg-accent/10"
-            }].
-            map((item) =>
-            <div key={item.title} className="flex items-start gap-3">
-                <div className={`w-10 h-10 rounded-xl ${item.bg} flex items-center justify-center shrink-0`}>
-                  <item.icon className={`w-5 h-5 ${item.color}`} />
-                </div>
-                <div>
-                  <div className="font-semibold text-sm text-foreground">{item.title}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">{item.desc}</div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
-
       <Footer />
       {/* bottom spacing for mobile nav */}
       <div className="h-16 lg:hidden" />
