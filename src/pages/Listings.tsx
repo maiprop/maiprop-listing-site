@@ -613,10 +613,223 @@ export default function Listings() {
           </div>
         </div>
 
-        {/* Advanced Filters Panel — contextual per type/subtype */}
-        {showFilters && (() => {
-          const fc = getFilterConfig(selectedType, selectedSubtype);
-          const has = (s: string) => fc.sections.includes(s as any);
+        {/* Advanced Filters Panel — AI-powered */}
+        {showFilters && (
+          <div className="bg-card border-b border-border shadow-sm">
+            <div className="container py-6">
+              <div className="flex items-center gap-2 mb-5">
+                <SlidersHorizontal className="w-4 h-4 text-primary" />
+                <span className="text-sm font-semibold">
+                  {selectedType
+                    ? `Filters for ${selectedSubtype ? getSubtypeLabel(selectedType, selectedSubtype) : getTypeLabel(selectedType)}`
+                    : "Advanced Filters"}
+                </span>
+                {aiFiltersLoading
+                  ? <span className="flex items-center gap-1 text-xs text-muted-foreground"><Sparkles className="w-3 h-3 animate-pulse text-primary" />AI is selecting relevant filters…</span>
+                  : selectedType && <span className="flex items-center gap-1 text-xs text-muted-foreground"><Sparkles className="w-3 h-3 text-primary" />AI-curated filters</span>
+                }
+              </div>
+
+              {aiFiltersLoading ? (
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  {[...Array(4)].map((_, i) => (
+                    <div key={i} className="h-16 bg-secondary/60 rounded-lg animate-pulse" />
+                  ))}
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {/* Size */}
+                    {aiFilterConfig.sections.includes("size") && (
+                      <div>
+                        <label className="text-xs text-muted-foreground font-medium mb-2 block">{aiFilterConfig.sizeLabel}</label>
+                        <div className="flex items-center gap-1">
+                          <input type="number" placeholder="Min" value={minSqm} onChange={e => setParam("sqm_min", e.target.value)}
+                            className="flex-1 bg-secondary border border-border rounded-lg px-2 py-2 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:border-primary" />
+                          <span className="text-muted-foreground text-xs">–</span>
+                          <input type="number" placeholder="Max" value={maxSqm} onChange={e => setParam("sqm_max", e.target.value)}
+                            className="flex-1 bg-secondary border border-border rounded-lg px-2 py-2 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:border-primary" />
+                        </div>
+                      </div>
+                    )}
+                    {/* Bedrooms */}
+                    {aiFilterConfig.sections.includes("bedrooms") && aiFilterConfig.bedsLabel && (
+                      <RangeSelector label={aiFilterConfig.bedsLabel} value={bedsRange}
+                        onChange={([min, max]) => { setParam("beds_min", min); setParam("beds_max", max); }}
+                        options={bedsOpts} />
+                    )}
+                    {/* Bathrooms */}
+                    {aiFilterConfig.sections.includes("bathrooms") && (
+                      <RangeSelector label="Bathrooms" value={bathsRange}
+                        onChange={([min, max]) => { setParam("baths_min", min); setParam("baths_max", max); }}
+                        options={bathsOpts} />
+                    )}
+                    {/* Floor */}
+                    {aiFilterConfig.sections.includes("floor") && (
+                      <RangeSelector label="Floor" value={floorRange}
+                        onChange={([min, max]) => { setParam("floor_min", min); setParam("floor_max", max); }}
+                        options={floorOpts} />
+                    )}
+                    {/* Year Built */}
+                    {aiFilterConfig.sections.includes("year_built") && (
+                      <RangeSelector label="Year Built" value={yearRange}
+                        onChange={([min, max]) => { setParam("year_min", min); setParam("year_max", max); }}
+                        options={yearOpts} />
+                    )}
+                    {/* Heating */}
+                    {aiFilterConfig.sections.includes("heating") && (
+                      <div>
+                        <label className="text-xs text-muted-foreground font-medium mb-2 block">Heating Type</label>
+                        <div className="relative">
+                          <select value={selectedHeating} onChange={e => setParam("heating", e.target.value)}
+                            className="w-full bg-secondary border border-border rounded-lg px-2 py-2 text-xs text-foreground outline-none focus:border-primary appearance-none">
+                            <option value="">Any</option>
+                            {HEATING_TYPES.map(h => <option key={h.value} value={h.value}>{h.label}</option>)}
+                          </select>
+                          <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
+                        </div>
+                      </div>
+                    )}
+                    {/* Construction Status */}
+                    {aiFilterConfig.sections.includes("construction_status") && (
+                      <div>
+                        <label className="text-xs text-muted-foreground font-medium mb-2 block">Construction Status</label>
+                        <div className="relative">
+                          <select value={selectedConstruction} onChange={e => setParam("construction", e.target.value)}
+                            className="w-full bg-secondary border border-border rounded-lg px-2 py-2 text-xs text-foreground outline-none focus:border-primary appearance-none">
+                            <option value="">Any</option>
+                            {CONSTRUCTION_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                          </select>
+                          <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
+                        </div>
+                      </div>
+                    )}
+                    {/* Energy Class */}
+                    {aiFilterConfig.sections.includes("energy_class") && (
+                      <div>
+                        <label className="text-xs text-muted-foreground font-medium mb-2 block">Energy Class</label>
+                        <div className="flex flex-wrap gap-1">
+                          {ENERGY_CLASSES.map(ec => (
+                            <button key={ec} onClick={() => toggleMulti("energy", ec)}
+                              className={`px-2 py-1 rounded text-xs font-bold border transition-all ${
+                                selectedEnergyClasses.includes(ec)
+                                  ? "bg-primary/20 border-primary text-primary"
+                                  : "bg-secondary border-border text-muted-foreground hover:border-primary/40"
+                              }`}>{ec}</button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {/* Land details */}
+                    {aiFilterConfig.sections.includes("land_details") && (
+                      <>
+                        <div>
+                          <label className="text-xs text-muted-foreground font-medium mb-2 block">Road Type</label>
+                          <div className="relative">
+                            <select value={getParam("road_type")} onChange={e => setParam("road_type", e.target.value)}
+                              className="w-full bg-secondary border border-border rounded-lg px-2 py-2 text-xs text-foreground outline-none focus:border-primary appearance-none">
+                              <option value="">Any</option>
+                              {ROAD_TYPES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                            </select>
+                            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-xs text-muted-foreground font-medium mb-2 block">Slope</label>
+                          <div className="relative">
+                            <select value={getParam("slope")} onChange={e => setParam("slope", e.target.value)}
+                              className="w-full bg-secondary border border-border rounded-lg px-2 py-2 text-xs text-foreground outline-none focus:border-primary appearance-none">
+                              <option value="">Any</option>
+                              {SLOPE_TYPES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                            </select>
+                            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
+                          </div>
+                        </div>
+                      </>
+                    )}
+                    {/* Commercial details */}
+                    {aiFilterConfig.sections.includes("commercial_details") && (
+                      <div>
+                        <label className="text-xs text-muted-foreground font-medium mb-2 block">Road Frontage</label>
+                        <div className="relative">
+                          <select value={getParam("road_type")} onChange={e => setParam("road_type", e.target.value)}
+                            className="w-full bg-secondary border border-border rounded-lg px-2 py-2 text-xs text-foreground outline-none focus:border-primary appearance-none">
+                            <option value="">Any</option>
+                            {ROAD_TYPES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                          </select>
+                          <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
+                        </div>
+                      </div>
+                    )}
+                    {/* Rental extras */}
+                    {aiFilterConfig.sections.includes("rental_extras") && selectedListingType === "rent" && (
+                      <div>
+                        <label className="text-xs text-muted-foreground font-medium mb-2 block">Min Rental Period</label>
+                        <div className="relative">
+                          <select value={getParam("min_rental")} onChange={e => setParam("min_rental", e.target.value)}
+                            className="w-full bg-secondary border border-border rounded-lg px-2 py-2 text-xs text-foreground outline-none focus:border-primary appearance-none">
+                            <option value="">Any</option>
+                            <option value="1">1 month</option>
+                            <option value="3">3 months</option>
+                            <option value="6">6 months</option>
+                            <option value="12">12 months</option>
+                          </select>
+                          <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Property Style chips */}
+                  {(() => {
+                    const styleFilters = TYPE_STYLE_FILTERS[selectedType as PropertyTypeKey];
+                    if (!styleFilters?.length) return null;
+                    const selectedStyles = getMulti("style");
+                    return (
+                      <div className="mt-5">
+                        <label className="text-xs text-muted-foreground font-medium mb-3 block">Property Style</label>
+                        <div className="flex flex-wrap gap-2">
+                          {styleFilters.map(s => (
+                            <FilterChip key={s.value} active={selectedStyles.includes(s.value)}
+                              onClick={() => toggleMulti("style", s.value)}>
+                              {s.label}
+                            </FilterChip>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* AI-curated feature chips */}
+                  {aiFilterConfig.features.length > 0 && (
+                    <div className="mt-5">
+                      <label className="text-xs text-muted-foreground font-medium mb-3 block">
+                        {aiFilterConfig.featuresLabel}
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {aiFilterConfig.features.map(feat => (
+                          <FilterChip key={feat.key} active={selectedFeatures.includes(feat.key)}
+                            onClick={() => toggleMulti("features", feat.key)}>
+                            {feat.label}
+                          </FilterChip>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              <div className="flex items-center gap-3 mt-5 pt-4 border-t border-border">
+                <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground" onClick={() => setShowFilters(false)}>
+                  Show {filtered.length} Results
+                </Button>
+                <Button size="sm" variant="outline" className="border-border" onClick={clearAllFilters}>
+                  Reset All
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
           return (
             <div className="bg-card border-b border-border shadow-sm">
               <div className="container py-6">
