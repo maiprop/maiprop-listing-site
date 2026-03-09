@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import ReactDOM from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Search, MapPin, ChevronDown, Users, ArrowRight, Gavel, Flame, ExternalLink,
