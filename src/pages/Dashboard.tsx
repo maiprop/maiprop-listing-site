@@ -3,9 +3,10 @@ import { Link, useParams, useNavigate } from "react-router-dom";
 import {
   Home, Plus, BarChart2, MessageSquare, Heart, Settings, User,
   Eye, Bell, BellOff, LogOut, Building2, Gavel, CheckCircle,
-  Loader2, Calendar, Trash2, ToggleLeft, ToggleRight, Bookmark, Search, Activity, Wrench
+  Loader2, Calendar, Trash2, ToggleLeft, ToggleRight, Bookmark, Search, Activity, Wrench, Shield
 } from "lucide-react";
 import { OSSyncPanel } from "@/components/OSSyncPanel";
+import AdminPanel from "@/components/AdminPanel";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { useAuth } from "@/contexts/AuthContext";
@@ -28,6 +29,7 @@ const navItems = [
   { icon: Gavel, label: "Auctions", key: "auctions" },
   { icon: Wrench, label: "My Services", key: "services" },
   { icon: Activity, label: "OS Sync", key: "os-sync" },
+  { icon: Shield, label: "Admin", key: "admin" },
   { icon: User, label: "Profile", key: "profile" },
   { icon: Settings, label: "Settings", key: "settings" },
 ];
@@ -379,6 +381,9 @@ export default function Dashboard() {
 
           {/* OS SYNC */}
           {activeSection === "os-sync" && <OSSyncPanel />}
+
+          {/* ADMIN */}
+          {activeSection === "admin" && <AdminPanel />}
 
           {(activeSection === "analytics" || activeSection === "auctions" || activeSection === "settings") && (
             <div className="glass-card rounded-xl p-12 flex items-center justify-center">
