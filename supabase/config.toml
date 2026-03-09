@@ -36,3 +36,6 @@ verify_jwt = false
 [functions.sync-firesale-to-os]
 verify_jwt = false
 
+[functions.os-diagnose]
+verify_jwt = false
+
