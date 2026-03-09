@@ -25,6 +25,7 @@ const navItems = [
   { icon: MessageSquare, label: "Messages", key: "messages" },
   { icon: Calendar, label: "Viewings", key: "viewings" },
   { icon: Gavel, label: "Auctions", key: "auctions" },
+  { icon: Activity, label: "OS Sync", key: "os-sync" },
   { icon: User, label: "Profile", key: "profile" },
   { icon: Settings, label: "Settings", key: "settings" },
 ];
