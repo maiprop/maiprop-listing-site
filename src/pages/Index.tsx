@@ -39,6 +39,22 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import heroBg from "@/assets/hero-bg.jpg";
 
+// ── Navy Brand Divider ─────────────────────────────────────────────────────────
+// fromDark: true  → top is dark (#0f132e-ish), bottom is light (secondary)
+// fromDark: false → top is light, bottom is dark
+function NavyDivider({ fromDark = false }: { fromDark?: boolean }) {
+  const stops = fromDark
+    ? "hsl(240 62% 11%) 0%, hsl(238 100% 17%) 48%, hsl(230 25% 95%) 100%"
+    : "hsl(230 25% 95%) 0%, hsl(238 100% 17%) 48%, hsl(240 62% 11%) 100%";
+  return (
+    <div
+      aria-hidden
+      className="h-16 w-full pointer-events-none"
+      style={{ background: `linear-gradient(180deg, ${stops})` }}
+    />
+  );
+}
+
 const RECENT_SEARCHES_KEY = "maiprop_recent_searches";
 const MAX_RECENT = 6;
 
