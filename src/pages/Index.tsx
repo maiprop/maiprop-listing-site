@@ -503,11 +503,9 @@ export default function Index() {
         <div className="absolute inset-0">
           {/* Light mode: show more of the actual photo — lower opacity overlay */}
           <img src={heroBg} alt="Athens skyline" className="w-full h-full object-cover opacity-100 dark:opacity-70" />
-          {/* Light mode: soft warm vignette — keeps text readable without killing the photo */}
-          <div className="absolute inset-0 dark:hidden" style={{ background: "linear-gradient(120deg, hsl(25 30% 8% / 0.58) 0%, hsl(25 20% 10% / 0.35) 55%, hsl(30 15% 12% / 0.10) 100%)" }} />
-          {/* Dark mode: deep overlay */}
-          <div className="absolute inset-0 hidden dark:block" style={{ background: "linear-gradient(120deg, hsl(222 47% 4% / 0.92) 0%, hsl(222 47% 6% / 0.72) 50%, hsl(222 47% 8% / 0.35) 100%)" }} />
-          <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent" />
+          {/* Both modes: strong dark-left gradient so white text is always readable */}
+          <div className="absolute inset-0" style={{ background: "linear-gradient(120deg, hsl(25 20% 6% / 0.82) 0%, hsl(25 15% 8% / 0.55) 55%, hsl(30 10% 10% / 0.12) 100%)" }} />
+          <div className="absolute inset-0 bg-gradient-to-t from-background/70 via-transparent to-transparent" />
         </div>
         {/* Grid overlay */}
         <div className="absolute inset-0 opacity-[0.03]"
