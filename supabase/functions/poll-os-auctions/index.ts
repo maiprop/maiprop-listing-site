@@ -15,6 +15,27 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+/**
+ * OS auction statuses that represent FUTURE / upcoming auctions.
+ * The OS API does NOT support server-side status filtering — we must filter
+ * client-side.  All other statuses (COMPLETED, COMPLETED_NO_BIDDERS,
+ * CANCELED, SUSPENDED, …) are past/irrelevant and get skipped.
+ *
+ * Verified breakdown (2026-03-09):
+ *   POSTED                    9,222  ← upcoming, published
+ *   READY_TO_CONDUCT            179  ← imminent
+ *   FINALIZED_PARTICIPANT_LIST  364  ← scheduled, participant list finalised
+ *   SUSPENDED               111,436  ← postponed (skip)
+ *   COMPLETED                40,187  ← past (skip)
+ *   COMPLETED_NO_BIDDERS    131,902  ← past (skip)
+ *   CANCELED                  2,195  ← cancelled (skip)
+ */
+const FUTURE_STATUSES = new Set([
+  "POSTED",
+  "READY_TO_CONDUCT",
+  "FINALIZED_PARTICIPANT_LIST",
+]);
+
 // ── OS propertyCategory → Hub property_type ──────────────────────────────────
 const CATEGORY_MAP: Record<string, string> = {
   RESIDENCE:   "apartment",
@@ -151,13 +172,23 @@ Deno.serve(async (req) => {
     let updated  = 0;
     let errors   = 0;
 
-    // 4. Upsert each auction (skip past auctions as a safety net)
-    const nowMs = Date.now();
+    // 4. Upsert each auction — skip non-future statuses (OS API filters don't work server-side)
+    // Future statuses: POSTED, READY_TO_CONDUCT, FINALIZED_PARTICIPANT_LIST
+    // Past/irrelevant: COMPLETED, COMPLETED_NO_BIDDERS, CANCELED, SUSPENDED
+    let skippedPast = 0;
     for (const a of auctions) {
-      // Skip if auctionDate is in the past
+      // Primary guard: skip by OS auctionStatus
+      if (a.auctionStatus && !FUTURE_STATUSES.has(a.auctionStatus)) {
+        skippedPast++;
+        continue;
+      }
+      // Secondary guard: skip if auctionDate is in the past (even for unknown statuses)
       if (a.auctionDate) {
         const auctionMs = new Date(a.auctionDate).getTime();
-        if (!isNaN(auctionMs) && auctionMs < nowMs) continue;
+        if (!isNaN(auctionMs) && auctionMs < Date.now()) {
+          skippedPast++;
+          continue;
+        }
       }
       try {
         const osId   = String(a.auctionListingId ?? a.id ?? "unknown");
@@ -236,13 +267,15 @@ Deno.serve(async (req) => {
     }
 
     const summary = {
-      total:           auctions.length,
+      total:              auctions.length,
+      skippedPast,
+      futureFound:        auctions.length - skippedPast,
       totalAvailableInOS: totalAvailable,
       imported,
       updated,
       errors,
-      page:            filterPayload.page,
-      pageSize:        filterPayload.pageSize,
+      page:               filterPayload.page,
+      pageSize:           filterPayload.pageSize,
     };
 
     await logSync(
