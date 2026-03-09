@@ -29,6 +29,7 @@ const navItems = [
   { icon: Gavel, label: "Auctions", key: "auctions" },
   { icon: Wrench, label: "My Services", key: "services" },
   { icon: Activity, label: "OS Sync", key: "os-sync" },
+  { icon: Shield, label: "Admin", key: "admin" },
   { icon: User, label: "Profile", key: "profile" },
   { icon: Settings, label: "Settings", key: "settings" },
 ];
