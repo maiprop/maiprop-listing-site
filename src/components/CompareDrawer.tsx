@@ -76,7 +76,7 @@ export function CompareDrawer({
   if (listings.length === 0) return null;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 shadow-elevated">
+    <div className="fixed bottom-0 left-0 right-0 z-[55] shadow-elevated">
       {/* ── collapsed bar ── */}
       <div className="bg-card border-t border-border px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
