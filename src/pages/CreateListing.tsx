@@ -760,9 +760,10 @@ export default function CreateListing() {
             {step === 2 && (
               <div className="space-y-4">
                 <h2 className="font-display text-xl font-semibold">Property Details</h2>
-                <div>
+                <div ref={setFieldRef("title") as any}>
                   <FieldLabel required>Title</FieldLabel>
-                  <Input placeholder="e.g. Modern 2-bed apartment in Kolonaki" value={form.title} onChange={e => set("title", e.target.value)} />
+                  <Input placeholder="e.g. Modern 2-bed apartment in Kolonaki" value={form.title} onChange={e => set("title", e.target.value)} hasError={!!errors.title} />
+                  <FieldError msg={errors.title} />
                 </div>
                 <div>
                   <FieldLabel>Description</FieldLabel>
