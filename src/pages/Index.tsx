@@ -950,7 +950,7 @@ export default function Index() {
       </section>
 
       {/* ══ TRUST BAR ════════════════════════════════════════════════════════ */}
-      <section className="py-12 bg-card/40 border-y border-border">
+      <section className="py-12 bg-secondary">
         <div className="container">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             {[
