@@ -620,8 +620,8 @@ export default function Index() {
 
       {/* ══ BROWSE BY TYPE ══════════════════════════════════════════════════ */}
       <section className="py-14 bg-secondary">
-        <div className="container">
-          <div className="flex items-center justify-between mb-7">
+        <div ref={browseRef} className="container">
+          <div className={`flex items-center justify-between mb-7 reveal ${browseInView ? "in-view" : ""}`}>
             <div>
               <h2 className="font-display text-2xl font-bold">Browse by Type</h2>
               <p className="text-sm text-muted-foreground mt-1">Find exactly what you're looking for</p>
@@ -630,7 +630,7 @@ export default function Index() {
               All listings <ArrowRight className="w-3 h-3" />
             </Link>
           </div>
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+          <div className={`grid grid-cols-3 sm:grid-cols-6 gap-3 reveal reveal-delay-1 ${browseInView ? "in-view" : ""}`}>
             {PROPERTY_TYPES.filter(t => t.value !== "office").map(type => (
               <Link key={type.value} to={`/listings?type=${type.value}`}>
                 <div className="glass-card rounded-xl p-4 flex flex-col items-center text-center hover:border-primary/40 hover:bg-primary/5 transition-all group gap-2 cursor-pointer">
