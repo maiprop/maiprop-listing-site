@@ -621,6 +621,24 @@ export default function Index() {
   const [searchType, setSearchType] = useState("Buy");
   const [selectedPropertyType, setSelectedPropertyType] = useState("");
   const [showAI, setShowAI] = useState(false);
+  const [typeCounts, setTypeCounts] = useState<Record<string, number>>({});
+
+  // Fetch live listing counts grouped by property_type
+  useEffect(() => {
+    supabase
+      .from("listings")
+      .select("property_type")
+      .eq("status", "active")
+      .then(({ data }) => {
+        if (!data) return;
+        const counts: Record<string, number> = {};
+        data.forEach((row) => {
+          const k = row.property_type as string;
+          counts[k] = (counts[k] || 0) + 1;
+        });
+        setTypeCounts(counts);
+      });
+  }, []);
 
   // Scroll-reveal refs
   const { ref: browseRef, inView: browseInView } = useInView();
