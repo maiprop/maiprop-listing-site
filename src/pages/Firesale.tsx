@@ -563,28 +563,32 @@ export default function Firesale() {
             {/* Right: Investor pitch panel */}
             <div className="space-y-4">
               {/* Who buys */}
-              <div className="glass-card rounded-2xl border border-brand-gold/20 p-6">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="w-7 h-7 rounded-lg bg-brand-gold/10 flex items-center justify-center">
-                    <Star className="w-3.5 h-3.5 text-brand-gold fill-current" />
-                  </div>
-                  <h4 className="font-display font-semibold text-sm">Who Buys Your Property</h4>
-                </div>
-                <div className="space-y-3">
-                  {[
-                  { type: "Family Offices", desc: "Greek & Cypriot family offices deploying capital", share: "38%" },
-                  { type: "Hedge Funds", desc: "International RE-focused alternative funds", share: "27%" },
-                  { type: "Private Equity", desc: "Buy-to-hold and value-add strategies", share: "22%" },
-                  { type: "HNWIs", desc: "Ultra-high-net-worth private individuals", share: "13%" }].
-                  map((b) =>
-                  <div key={b.type} className="flex items-start justify-between gap-3">
-                      <div className="flex-1">
-                        <p className="text-xs font-semibold">{b.type}</p>
-                        <p className="text-[10px] text-muted-foreground mt-0.5">{b.desc}</p>
-                      </div>
-                      <span className="text-xs font-black text-brand-gold shrink-0">{b.share}</span>
+              <div className="glass-card rounded-2xl border border-brand-gold/20 p-6 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-40 h-40 rounded-bl-full bg-brand-gold/5 pointer-events-none" />
+                <div className="relative">
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="w-7 h-7 rounded-lg bg-brand-gold/15 flex items-center justify-center">
+                      <Star className="w-3.5 h-3.5 text-brand-gold fill-current" />
                     </div>
-                  )}
+                    <h4 className="font-display font-bold text-sm">Who Buys Your Property</h4>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mb-4 ml-9">Pre-vetted, capital-ready buyers — no time-wasters.</p>
+                  <div className="space-y-2">
+                    {[
+                      { type: "Family Offices", desc: "Greek & Cypriot capital deploying at scale", icon: "🏛️" },
+                      { type: "Hedge Funds", desc: "International RE-focused alternative funds", icon: "📈" },
+                      { type: "Private Equity", desc: "Buy-to-hold and value-add strategies", icon: "💼" },
+                      { type: "HNWIs", desc: "Ultra-high-net-worth private individuals", icon: "👤" },
+                    ].map((b) =>
+                      <div key={b.type} className="flex items-center gap-3 rounded-xl bg-brand-gold/5 border border-brand-gold/10 px-3 py-2.5 hover:border-brand-gold/30 transition-colors">
+                        <span className="text-base leading-none">{b.icon}</span>
+                        <div>
+                          <p className="text-xs font-bold text-foreground">{b.type}</p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">{b.desc}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
