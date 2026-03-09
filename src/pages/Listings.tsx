@@ -513,8 +513,8 @@ export default function Listings() {
                   <button onClick={() => setParam("city", "")}><X className="w-3.5 h-3.5 text-muted-foreground" /></button>
                 )}
               </div>
-
-
+              {/* Listing type button */}
+              <ListingTypeButton value={selectedListingType} onChange={v => setParam("listing_type", v)} />
 
               {/* Property type button */}
               <PropertyTypeButton
