@@ -747,13 +747,13 @@ export default function Index() {
 
               {/* Headline */}
               <h1
-                className="font-display font-black leading-[1.05] mb-4 sm:mb-6 animate-fade-in-up text-white"
+                className="font-display font-black leading-[1.05] mb-4 sm:mb-6 animate-fade-in-up text-white text-5xl"
                 style={{ fontSize: "clamp(2rem, 8vw, 4.5rem)", animationDelay: "0.08s" }}>
                 
                 Find your perfect
                 <br className="hidden sm:block" /> property in Greece
                 <br />
-                <span className="gradient-text-primary">— with AI precision</span>
+                <span className="gradient-text-primary">with AI precision</span>
               </h1>
 
               
