@@ -890,22 +890,6 @@ export default function Index() {
             </Link>
           </div>
 
-          {/* ── ROW 2: Secondary types — House, Villa, Commercial, Office (smaller) */}
-          <div className={`mt-3 grid grid-cols-4 gap-3 reveal reveal-delay-2 ${browseInView ? "in-view" : ""}`}>
-            {PROPERTY_TYPES.filter((t) => ["house", "villa", "commercial", "office"].includes(t.value)).map((type) => (
-              <Link key={type.value} to={`/listings?type=${type.value}`}>
-                <div className="relative glass-card rounded-xl p-3 flex flex-col items-center text-center hover:border-primary/40 hover:bg-primary/5 transition-all group gap-1.5 cursor-pointer">
-                  <div className={`w-9 h-9 rounded-lg ${type.bgClass} flex items-center justify-center text-lg group-hover:scale-110 transition-transform`}>
-                    {type.emoji}
-                  </div>
-                  <div className="font-display font-semibold text-[11px] group-hover:text-primary transition-colors leading-tight">{type.label}</div>
-                  <div className="text-[9px] text-muted-foreground">
-                    {typeCounts[type.value] ? typeCounts[type.value].toLocaleString() : "—"}
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
 
           {/* ── ROW 3: Commercial subtypes — Retail Shop, Office, Mixed-Use (big icons) */}
           <div className={`mt-5 grid grid-cols-3 gap-3 reveal reveal-delay-2 ${browseInView ? "in-view" : ""}`}>
