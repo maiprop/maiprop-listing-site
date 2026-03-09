@@ -10,7 +10,7 @@ interface AuthContextType {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
-  signUp: (email: string, password: string, meta: { full_name: string; role: string }) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, meta: { full_name: string; role: string; business_name?: string; tax_id?: string; phone?: string; license_number?: string }) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: Error | null }>;
@@ -63,7 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signUp = async (email: string, password: string, meta: { full_name: string; role: string }) => {
+  const signUp = async (email: string, password: string, meta: { full_name: string; role: string; business_name?: string; tax_id?: string; phone?: string; license_number?: string }) => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -73,11 +73,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
     });
 
-    // After signup, update the role in the profile
+    // After signup, update the role and professional fields in the profile
     if (data.user && !error && meta.role) {
       await supabase
         .from("profiles")
-        .update({ role: meta.role as "individual" | "agent" | "professional" })
+        .update({
+          role: meta.role as "individual" | "agent" | "professional",
+          ...(meta.phone && { phone: meta.phone }),
+          ...(meta.business_name && { bio: `Business: ${meta.business_name}${meta.tax_id ? ` | AFM: ${meta.tax_id}` : ""}${meta.license_number ? ` | License: ${meta.license_number}` : ""}` }),
+        })
         .eq("user_id", data.user.id);
     }
 
