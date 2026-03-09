@@ -340,19 +340,19 @@ export default function Professionals() {
                   <ChevronRight className="w-3.5 h-3.5" />
                 </button>
               </div>
-              <div className="flex flex-wrap gap-3 lg:justify-end">
-                {[
-                { value: "2,400+", label: "Verified Pros" },
-                { value: "94%", label: "5-star rated" },
-                { value: "48h", label: "Avg response" },
-                { value: "AI", label: "Enhanced" }].
-                map((s) => (
-                  <div key={s.label} className="glass-card rounded-xl p-4 border border-border text-center">
-                    <div className="font-display font-black text-2xl text-primary">{s.value}</div>
-                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider mt-1">{s.label}</div>
-                  </div>
-                ))}
-              </div>
+              
+
+
+
+
+
+
+
+
+
+
+
+              
             </div>
           </div>
         </div>
