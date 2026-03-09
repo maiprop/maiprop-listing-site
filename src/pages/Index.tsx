@@ -607,7 +607,7 @@ export default function Index() {
       </section>
 
       {/* ══ BROWSE BY TYPE ══════════════════════════════════════════════════ */}
-      <section className="py-14 bg-card/30 border-y border-border">
+      <section className="py-14 bg-secondary">
         <div className="container">
           <div className="flex items-center justify-between mb-7">
             <div>
