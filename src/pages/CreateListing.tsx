@@ -1227,7 +1227,7 @@ export default function CreateListing() {
                 {step === 1 ? "Cancel" : "Back"}
               </Button>
               {step < 6 ? (
-                <Button onClick={() => setStep(s => s + 1)} className="bg-gradient-primary border-0 text-primary-foreground gap-2">
+                <Button onClick={handleNext} className="bg-gradient-primary border-0 text-primary-foreground gap-2">
                   Next <ChevronRight className="w-4 h-4" />
                 </Button>
               ) : (
