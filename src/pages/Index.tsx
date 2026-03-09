@@ -857,7 +857,7 @@ export default function Index() {
             </div>
 
             {/* App Mockup */}
-            <div className="relative">
+            <div className={`relative reveal reveal-delay-1 ${osInView ? "in-view" : ""}`}>
               <div className="absolute inset-0 -m-8 rounded-3xl opacity-20 blur-3xl"
                 style={{ background: "radial-gradient(ellipse, hsl(183 100% 42%), transparent 70%)" }} />
               <div className="relative rounded-2xl overflow-hidden border border-primary/30 shadow-elevated glow-cyan">
