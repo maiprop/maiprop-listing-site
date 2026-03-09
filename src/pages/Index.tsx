@@ -857,40 +857,62 @@ export default function Index() {
               All listings <ArrowRight className="w-3 h-3" />
             </Link>
           </div>
-          {/* Main type grid — Apartment, Land, Commercial get big icons; House & Villa get smaller icons */}
-          {(() => {
-            const ANIMATED_TYPES = new Set(["apartment", "house", "land"]);
-            const SMALL_ICON_TYPES = new Set(["house", "villa"]);
-            return (
-              <div className={`grid grid-cols-3 sm:grid-cols-6 gap-3 reveal reveal-delay-1 ${browseInView ? "in-view" : ""}`}>
-                {PROPERTY_TYPES.filter((t) => t.value !== "office").map((type) => {
-                  const isAnimated = ANIMATED_TYPES.has(type.value);
-                  const isSmall = SMALL_ICON_TYPES.has(type.value);
-                  return (
-                    <Link key={type.value} to={`/listings?type=${type.value}`}>
-                      <div className={`relative glass-card rounded-xl p-4 flex flex-col items-center text-center hover:border-primary/40 hover:bg-primary/5 transition-all group gap-2 cursor-pointer${isAnimated ? " overflow-hidden" : ""}`}>
-                        {isAnimated && (
-                          <span className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-primary/30 animate-pulse" />
-                        )}
-                        <div className={`${isSmall ? "w-8 h-8 rounded-lg text-lg" : "w-12 h-12 rounded-xl text-2xl"} ${type.bgClass} flex items-center justify-center group-hover:scale-110 transition-transform`}>
-                          {type.emoji}
-                        </div>
-                        <div className="font-display font-semibold text-xs group-hover:text-primary transition-colors">{type.label}</div>
-                        <div className="text-[10px] text-muted-foreground">{(PROPERTY_TYPE_COUNTS[type.value] ?? 0).toLocaleString()}</div>
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
-            );
-          })()}
+          {/* ── ROW 1: Primary types — Apartment, Land, New Development (big) */}
+          <div className={`grid grid-cols-3 gap-3 reveal reveal-delay-1 ${browseInView ? "in-view" : ""}`}>
+            {/* Apartment */}
+            {PROPERTY_TYPES.filter((t) => ["apartment", "land"].includes(t.value)).map((type) => (
+              <Link key={type.value} to={`/listings?type=${type.value}`}>
+                <div className="relative glass-card rounded-xl p-4 flex flex-col items-center text-center hover:border-primary/40 hover:bg-primary/5 transition-all group gap-2 cursor-pointer overflow-hidden">
+                  <span className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-primary/30 animate-pulse" />
+                  <div className={`w-12 h-12 rounded-xl ${type.bgClass} flex items-center justify-center text-2xl group-hover:scale-110 transition-transform`}>
+                    {type.emoji}
+                  </div>
+                  <div className="font-display font-semibold text-xs group-hover:text-primary transition-colors">{type.label}</div>
+                  <div className="text-[10px] text-muted-foreground">
+                    {typeCounts[type.value] ? `${typeCounts[type.value].toLocaleString()} listings` : "—"}
+                  </div>
+                </div>
+              </Link>
+            ))}
 
-          {/* Featured commercial cards — Retail Shop, Office, Mixed-Use get big icons */}
+            {/* New Development — featured card */}
+            <Link to="/listings?construction_status=new_build">
+              <div className="relative glass-card rounded-xl p-4 flex flex-col items-center text-center hover:border-primary/50 hover:bg-primary/8 transition-all group gap-2 cursor-pointer overflow-hidden border-primary/20">
+                <span className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-primary/40 animate-pulse" />
+                {/* NEW badge */}
+                <span className="absolute top-2 right-2 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-primary text-primary-foreground leading-tight tracking-wide">NEW</span>
+                <div className="w-12 h-12 rounded-xl bg-primary/15 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                  🏗️
+                </div>
+                <div className="font-display font-semibold text-xs group-hover:text-primary transition-colors">New Development</div>
+                <div className="text-[10px] text-muted-foreground">Off-plan &amp; new builds</div>
+              </div>
+            </Link>
+          </div>
+
+          {/* ── ROW 2: Secondary types — House, Villa, Commercial, Office (smaller) */}
+          <div className={`mt-3 grid grid-cols-4 gap-3 reveal reveal-delay-2 ${browseInView ? "in-view" : ""}`}>
+            {PROPERTY_TYPES.filter((t) => ["house", "villa", "commercial", "office"].includes(t.value)).map((type) => (
+              <Link key={type.value} to={`/listings?type=${type.value}`}>
+                <div className="relative glass-card rounded-xl p-3 flex flex-col items-center text-center hover:border-primary/40 hover:bg-primary/5 transition-all group gap-1.5 cursor-pointer">
+                  <div className={`w-9 h-9 rounded-lg ${type.bgClass} flex items-center justify-center text-lg group-hover:scale-110 transition-transform`}>
+                    {type.emoji}
+                  </div>
+                  <div className="font-display font-semibold text-[11px] group-hover:text-primary transition-colors leading-tight">{type.label}</div>
+                  <div className="text-[9px] text-muted-foreground">
+                    {typeCounts[type.value] ? typeCounts[type.value].toLocaleString() : "—"}
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+
+          {/* ── ROW 3: Commercial subtypes — Retail Shop, Office, Mixed-Use (big icons) */}
           <div className={`mt-5 grid grid-cols-3 gap-3 reveal reveal-delay-2 ${browseInView ? "in-view" : ""}`}>
             {[
               { label: "Retail Shop", emoji: "🛍️", sub: "shop", bg: "bg-accent/10", animated: true },
-              { label: "Office", emoji: "🏢", sub: "office_private", bg: "bg-brand-cyan/10", animated: false },
               { label: "Mixed-Use", emoji: "🔀", sub: "mixed_use", bg: "bg-primary/10", animated: true },
+              { label: "Coworking", emoji: "🤝", sub: "office_coworking", bg: "bg-brand-cyan/10", animated: false },
             ].map((item) => (
               <Link key={item.sub} to={`/listings?type=commercial&subtype=${item.sub}`}>
                 <div className={`relative glass-card rounded-xl p-4 flex flex-col items-center text-center hover:border-accent/40 hover:bg-accent/5 transition-all group gap-2 cursor-pointer${item.animated ? " overflow-hidden" : ""}`}>
@@ -906,7 +928,7 @@ export default function Index() {
             ))}
           </div>
 
-          {/* Other commercial subtypes as chips */}
+          {/* ── More Commercial chips */}
           <div className={`mt-4 reveal reveal-delay-2 ${browseInView ? "in-view" : ""}`}>
             <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3">More Commercial</p>
             <div className="flex flex-wrap gap-2">
@@ -918,7 +940,6 @@ export default function Index() {
               { label: "🏗️ Industrial Space", sub: "industrial" },
               { label: "🖼️ Showroom", sub: "showroom" },
               { label: "🎪 Hall / Event Space", sub: "hall" },
-              { label: "🤝 Coworking", sub: "office_coworking" },
               { label: "🏛️ Business Centre", sub: "office_business" },
               ].map((item) =>
               <Link key={item.sub} to={`/listings?type=commercial&subtype=${item.sub}`}>
