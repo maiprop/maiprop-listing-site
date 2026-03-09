@@ -4,7 +4,8 @@ import {
   MapPin, Star, CheckCircle, Globe, ExternalLink,
   ChevronLeft, Clock, Users, Briefcase, MessageSquare,
   Calendar, Shield, Loader2, Languages, ChevronRight,
-  Phone, Euro, FileText, ThumbsUp, Zap, Building2, Video
+  Phone, Euro, FileText, ThumbsUp, Zap, Building2, Video,
+  Sparkles, Brain, ArrowRight, Send, X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -15,6 +16,8 @@ import SendMessageModal from "@/components/SendMessageModal";
 import BookConsultationModal from "@/components/BookConsultationModal";
 import RequestCallbackModal from "@/components/RequestCallbackModal";
 import OnlineViewingModal from "@/components/OnlineViewingModal";
+import { toast } from "sonner";
+import ReactMarkdown from "react-markdown";
 
 const categoryLabels: Record<string, { label: string; emoji: string; description: string }> = {
   architect: { label: "Licensed Architect", emoji: "🏛️", description: "Building design, planning permits, renovation oversight" },
