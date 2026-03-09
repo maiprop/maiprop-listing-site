@@ -921,7 +921,7 @@ export default function Index() {
             </div>
 
             {/* Copy */}
-            <div>
+            <div className={`reveal reveal-delay-1 ${goldenInView ? "in-view" : ""}`}>
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-brand-gold/10 border border-brand-gold/20 mb-5">
                 <Star className="w-3.5 h-3.5 text-brand-gold" />
                 <span className="text-xs font-semibold text-brand-gold uppercase tracking-wide">Greek Golden Visa</span>
