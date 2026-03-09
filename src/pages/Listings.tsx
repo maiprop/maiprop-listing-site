@@ -399,7 +399,12 @@ export default function Listings() {
   const selectedHeating = getParam("heating");
   const selectedConstruction = getParam("construction");
 
-  const { data: dbListings = [], isLoading } = useListings({
+  // AI-powered smart filters — fetch once per type/subtype combo, cached in memory
+  const { config: aiFilterConfig, loading: aiFiltersLoading } = useSmartFilters(
+    selectedType, selectedSubtype, selectedListingType
+  );
+
+
     city: searchQuery || undefined,
     listing_type: selectedListingType || undefined,
     property_type: selectedType || undefined,
