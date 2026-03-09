@@ -897,7 +897,7 @@ export default function Index() {
                 
                 Find your perfect property in Greece
                 <div> </div>
-                <span className="gradient-text-primary">with AI precision</span>
+                <span className="gradient-text-primary text-6xl">with AI precision</span>
               </h1>
 
               {/* ── Search Card ── */}
