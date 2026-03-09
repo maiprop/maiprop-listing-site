@@ -896,6 +896,7 @@ export default function Index() {
                 style={{ fontSize: "clamp(2rem, 8vw, 4.5rem)", animationDelay: "0.08s" }}
               >
                 Find your perfect property in Greece
+                <div> </div>
                 <span className="gradient-text-primary">with AI precision</span>
               </h1>
 
