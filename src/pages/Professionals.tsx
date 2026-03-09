@@ -1,103 +1,273 @@
 import { useState } from "react";
-import { Search, Star, MapPin, Mail, CheckCircle, Loader2 } from "lucide-react";
+import { Search, Star, MapPin, Mail, CheckCircle, Loader2, Sparkles, TrendingUp, Clock, MessageSquare, ArrowRight, Zap, Brain, FileSearch, BarChart2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { useProfessionals } from "@/hooks/useProfessionals";
 import { Link } from "react-router-dom";
 
-const categories = [
-  { label: "All", value: "" },
-  { label: "Architects", value: "architect", emoji: "🏛️" },
-  { label: "Civil Engineers", value: "civil_engineer", emoji: "⚙️" },
-  { label: "Lawyers", value: "lawyer", emoji: "⚖️" },
-  { label: "Notaries", value: "notary", emoji: "📜" },
-  { label: "Electricians", value: "electrician", emoji: "⚡" },
-  { label: "Plumbers", value: "plumber", emoji: "🔧" },
-  { label: "Contractors", value: "contractor", emoji: "🏗️" },
-  { label: "Property Managers", value: "property_manager", emoji: "🏢" },
-  { label: "Valuers", value: "valuer", emoji: "📊" },
-  { label: "Interior Designers", value: "interior_designer", emoji: "🎨" },
-  { label: "Financial Advisors", value: "financial_advisor", emoji: "💼" },
+// ─── Category Groups ──────────────────────────────────────────────────────────
+const categoryGroups = [
+  {
+    id: "legal",
+    label: "Legal & Title",
+    emoji: "⚖️",
+    color: "text-brand-gold",
+    bg: "bg-brand-gold/10",
+    border: "border-brand-gold/20",
+    categories: ["lawyer", "notary"],
+    description: "Property title, contracts, conveyancing",
+  },
+  {
+    id: "design",
+    label: "Design & Build",
+    emoji: "🏛️",
+    color: "text-primary",
+    bg: "bg-primary/10",
+    border: "border-primary/20",
+    categories: ["architect", "civil_engineer", "interior_designer", "contractor"],
+    description: "Architecture, engineering, renovation",
+  },
+  {
+    id: "trades",
+    label: "Trades & Maintenance",
+    emoji: "🔧",
+    color: "text-accent",
+    bg: "bg-accent/10",
+    border: "border-accent/20",
+    categories: ["electrician", "plumber"],
+    description: "Electrical, plumbing, building works",
+  },
+  {
+    id: "finance",
+    label: "Finance & Investment",
+    emoji: "💼",
+    color: "text-brand-emerald",
+    bg: "bg-brand-emerald/10",
+    border: "border-brand-emerald/20",
+    categories: ["financial_advisor", "valuer"],
+    description: "Mortgages, investment advice, valuations",
+  },
+  {
+    id: "management",
+    label: "Property Management",
+    emoji: "🏢",
+    color: "text-brand-sky",
+    bg: "bg-brand-sky/10",
+    border: "border-brand-sky/20",
+    categories: ["property_manager"],
+    description: "Lettings, tenants, asset management",
+  },
 ];
 
-const categoryInfo: Record<string, { emoji: string; label: string }> = {
-  architect: { emoji: "🏛️", label: "Architect" },
-  civil_engineer: { emoji: "⚙️", label: "Civil Engineer" },
-  lawyer: { emoji: "⚖️", label: "Lawyer" },
-  notary: { emoji: "📜", label: "Notary" },
-  electrician: { emoji: "⚡", label: "Electrician" },
-  plumber: { emoji: "🔧", label: "Plumber" },
-  contractor: { emoji: "🏗️", label: "Contractor" },
-  property_manager: { emoji: "🏢", label: "Property Manager" },
-  valuer: { emoji: "📊", label: "Valuer" },
-  interior_designer: { emoji: "🎨", label: "Interior Designer" },
-  financial_advisor: { emoji: "💼", label: "Financial Advisor" },
+const ALL_CATEGORIES = categoryGroups.flatMap(g => g.categories);
+
+const categoryInfo: Record<string, { emoji: string; label: string; group: string }> = {
+  architect:         { emoji: "🏛️", label: "Architect",         group: "design" },
+  civil_engineer:    { emoji: "⚙️", label: "Civil Engineer",    group: "design" },
+  lawyer:            { emoji: "⚖️", label: "Lawyer",            group: "legal" },
+  notary:            { emoji: "📜", label: "Notary",            group: "legal" },
+  electrician:       { emoji: "⚡", label: "Electrician",       group: "trades" },
+  plumber:           { emoji: "🔧", label: "Plumber",           group: "trades" },
+  contractor:        { emoji: "🏗️", label: "Contractor",        group: "design" },
+  property_manager:  { emoji: "🏢", label: "Property Manager",  group: "management" },
+  valuer:            { emoji: "📊", label: "Valuer",            group: "finance" },
+  interior_designer: { emoji: "🎨", label: "Interior Designer", group: "design" },
+  financial_advisor: { emoji: "💼", label: "Financial Advisor", group: "finance" },
+};
+
+// AI capabilities per group
+const aiCapabilities: Record<string, { icon: React.ElementType; label: string }[]> = {
+  legal: [
+    { icon: FileSearch, label: "AI contract risk scan" },
+    { icon: Brain, label: "Title deed anomaly detection" },
+    { icon: Zap, label: "Instant due-diligence summary" },
+  ],
+  design: [
+    { icon: Brain, label: "AI permit & regulation check" },
+    { icon: BarChart2, label: "Renovation cost estimator" },
+    { icon: Sparkles, label: "AI-generated floor plan ideas" },
+  ],
+  trades: [
+    { icon: Zap, label: "Smart job scheduling" },
+    { icon: TrendingUp, label: "Material cost forecasting" },
+    { icon: Brain, label: "Fault diagnosis assist" },
+  ],
+  finance: [
+    { icon: BarChart2, label: "AI property valuation engine" },
+    { icon: TrendingUp, label: "Investment yield projections" },
+    { icon: Brain, label: "Portfolio optimisation AI" },
+  ],
+  management: [
+    { icon: Brain, label: "AI tenant screening" },
+    { icon: Zap, label: "Automated rent collection" },
+    { icon: BarChart2, label: "Occupancy rate optimiser" },
+  ],
 };
 
 export default function Professionals() {
-  const [selectedCat, setSelectedCat] = useState("");
+  const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
-  const { data: professionals = [], isLoading } = useProfessionals(selectedCat || undefined);
+  // Derive DB categories from group selection
+  const dbCategory = selectedGroup
+    ? undefined // fetch all, filter client-side by group
+    : undefined;
+
+  const { data: professionals = [], isLoading } = useProfessionals(dbCategory);
 
   const filtered = professionals.filter((p: any) => {
-    const name = p.display_name || "";
-    const title = p.title || "";
-    const specs = (p.specialties || []).join(" ");
+    // Group filter
+    if (selectedGroup) {
+      const group = categoryGroups.find(g => g.id === selectedGroup);
+      if (group && !group.categories.includes(p.category)) return false;
+    }
+    // Text search
     const q = search.toLowerCase();
-    return !q || name.toLowerCase().includes(q) || title.toLowerCase().includes(q) || specs.toLowerCase().includes(q);
+    if (!q) return true;
+    return (
+      (p.display_name || "").toLowerCase().includes(q) ||
+      (p.title || "").toLowerCase().includes(q) ||
+      (p.specialties || []).join(" ").toLowerCase().includes(q) ||
+      (p.city || "").toLowerCase().includes(q)
+    );
   });
+
+  const activeGroup = selectedGroup ? categoryGroups.find(g => g.id === selectedGroup) : null;
 
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
       <div className="pt-16">
-        {/* Header */}
-        <div className="bg-card border-b border-border py-12">
-          <div className="container">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-xs font-bold text-accent uppercase tracking-widest">Pro Network</span>
+
+        {/* ── Hero ───────────────────────────────────────────────────── */}
+        <div className="relative bg-card border-b border-border overflow-hidden">
+          <div className="absolute inset-0 opacity-[0.03]"
+            style={{ backgroundImage: "linear-gradient(hsl(265 80% 60%) 1px, transparent 1px), linear-gradient(90deg, hsl(265 80% 60%) 1px, transparent 1px)", backgroundSize: "48px 48px" }} />
+          <div className="absolute top-0 right-0 w-96 h-96 rounded-full blur-3xl opacity-10"
+            style={{ background: "radial-gradient(hsl(183 100% 42%), transparent 70%)" }} />
+
+          <div className="container relative py-14">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-accent/15 border border-accent/30 mb-5">
+              <Sparkles className="w-3.5 h-3.5 text-accent" />
+              <span className="text-xs font-bold text-accent uppercase tracking-widest">AI-Powered Pro Network</span>
             </div>
-            <h1 className="font-display text-4xl font-bold mb-2">Professional Directory</h1>
-            <p className="text-muted-foreground max-w-xl">Find vetted architects, lawyers, engineers, and tradespeople for your property project. Standardized profiles, verified credentials.</p>
+            <div className="grid lg:grid-cols-2 gap-8 items-end">
+              <div>
+                <h1 className="font-display text-5xl font-bold mb-3 leading-tight">
+                  Every expert you need,<br />
+                  <span className="gradient-text-cyan">amplified by AI</span>
+                </h1>
+                <p className="text-muted-foreground max-w-lg text-lg leading-relaxed">
+                  From legal due-diligence to renovation — every professional on maiProp uses AI to deliver faster, smarter, and more transparent results.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-3 lg:justify-end">
+                {[
+                  { value: "2,400+", label: "Verified Pros" },
+                  { value: "94%", label: "5-star rated" },
+                  { value: "48h", label: "Avg response" },
+                  { value: "AI", label: "Enhanced" },
+                ].map(s => (
+                  <div key={s.label} className="glass-card rounded-xl px-4 py-3 text-center min-w-[80px]">
+                    <div className="font-display font-black text-xl gradient-text-primary">{s.value}</div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">{s.label}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Category Groups ─────────────────────────────────────────── */}
+        <div className="bg-card/40 border-b border-border">
+          <div className="container py-6">
+            <div className="flex gap-3 flex-wrap">
+              <button
+                onClick={() => setSelectedGroup(null)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border transition-all ${
+                  !selectedGroup
+                    ? "bg-secondary border-primary/40 text-foreground"
+                    : "border-border bg-secondary/50 text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                All Professionals
+              </button>
+              {categoryGroups.map(group => (
+                <button
+                  key={group.id}
+                  onClick={() => setSelectedGroup(selectedGroup === group.id ? null : group.id)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border transition-all ${
+                    selectedGroup === group.id
+                      ? `${group.bg} ${group.border} ${group.color}`
+                      : "border-border bg-secondary/50 text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <span>{group.emoji}</span>
+                  <span>{group.label}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
         <div className="container py-8">
-          {/* Search */}
-          <div className="flex gap-3 mb-6 flex-wrap">
+
+          {/* ── AI Capabilities Banner (context-aware) ───────────────── */}
+          {activeGroup && (
+            <div className={`mb-8 rounded-2xl border ${activeGroup.border} ${activeGroup.bg} p-5`}>
+              <div className="flex items-start gap-4 flex-wrap">
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className={`w-9 h-9 rounded-xl ${activeGroup.bg} border ${activeGroup.border} flex items-center justify-center text-xl`}>
+                    {activeGroup.emoji}
+                  </div>
+                  <div>
+                    <div className={`font-display font-bold text-sm ${activeGroup.color}`}>{activeGroup.label}</div>
+                    <div className="text-[11px] text-muted-foreground">{activeGroup.description}</div>
+                  </div>
+                </div>
+                <div className="w-px bg-border/60 self-stretch hidden sm:block" />
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <div className="flex items-center gap-1.5 mr-2">
+                    <Sparkles className="w-3.5 h-3.5 text-primary" />
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">AI Tools Available</span>
+                  </div>
+                  {(aiCapabilities[activeGroup.id] || []).map(cap => (
+                    <div key={cap.label} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-card border border-border text-xs font-medium text-foreground">
+                      <cap.icon className="w-3 h-3 text-primary shrink-0" />
+                      {cap.label}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Search ───────────────────────────────────────────────── */}
+          <div className="flex gap-3 mb-6 flex-wrap items-center">
             <div className="flex-1 min-w-[200px] flex items-center gap-2 bg-secondary border border-border rounded-xl px-4 py-2.5 focus-within:border-primary transition-colors">
-              <Search className="w-4 h-4 text-muted-foreground" />
+              <Search className="w-4 h-4 text-muted-foreground shrink-0" />
               <input
                 type="text"
-                placeholder="Search by name, specialty..."
+                placeholder="Search by name, specialty, city..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
               />
             </div>
+            {!selectedGroup && (
+              <div className="flex gap-2 flex-wrap">
+                {categoryGroups.map(g => (
+                  <button key={g.id} onClick={() => setSelectedGroup(g.id)}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all ${g.border} ${g.bg} ${g.color}`}>
+                    {g.emoji} {g.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Categories */}
-          <div className="flex gap-2 flex-wrap mb-8">
-            {categories.map(cat => (
-              <button
-                key={cat.value}
-                onClick={() => setSelectedCat(cat.value)}
-                className={`px-3 py-1.5 rounded-full text-sm transition-all ${
-                  selectedCat === cat.value
-                    ? "bg-accent/20 border border-accent/40 text-accent"
-                    : "bg-secondary border border-border text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {cat.emoji && <span className="mr-1.5">{cat.emoji}</span>}
-                {cat.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Cards */}
+          {/* ── Results ──────────────────────────────────────────────── */}
           {isLoading ? (
             <div className="flex items-center justify-center py-20">
               <Loader2 className="w-6 h-6 animate-spin text-primary" />
@@ -108,88 +278,145 @@ export default function Professionals() {
               <p className="text-sm">Try adjusting your search or category filter</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filtered.map((pro: any) => {
-                const name = pro.display_name || "Professional";
-                const catData = categoryInfo[pro.category] || { emoji: "👤", label: pro.category };
-                const initials = name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
-                const rating = Number(pro.rating) || 0;
-                const specialties = pro.specialties || [];
+            <>
+              <p className="text-sm text-muted-foreground mb-4">{filtered.length} professionals found{activeGroup ? ` in ${activeGroup.label}` : ""}</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filtered.map((pro: any) => {
+                  const name = pro.display_name || "Professional";
+                  const catData = categoryInfo[pro.category] || { emoji: "👤", label: pro.category, group: "" };
+                  const group = categoryGroups.find(g => g.id === catData.group);
+                  const initials = name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
+                  const rating = Number(pro.rating) || 0;
+                  const specialties = pro.specialties || [];
 
-                return (
-                  <div key={pro.id} className="glass-card rounded-xl p-5 property-card flex flex-col gap-4">
-                    {/* Header */}
-                    <div className="flex items-start gap-4">
-                      <div className="w-14 h-14 rounded-xl bg-gradient-primary flex items-center justify-center font-display font-bold text-xl text-primary-foreground shrink-0 overflow-hidden">
-                        {pro.avatar_url
-                          ? <img src={pro.avatar_url} alt={name} className="w-full h-full object-cover" />
-                          : initials}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-display font-semibold text-sm truncate">{name}</span>
-                          {pro.verified && <CheckCircle className="w-3.5 h-3.5 text-primary shrink-0" />}
+                  return (
+                    <div key={pro.id} className="glass-card rounded-xl p-5 flex flex-col gap-4 hover:border-primary/20 transition-all group">
+                      {/* Category badge */}
+                      {group && (
+                        <div className={`self-start flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold ${group.bg} ${group.border} border ${group.color}`}>
+                          {group.emoji} {group.label}
                         </div>
+                      )}
+
+                      {/* Header */}
+                      <div className="flex items-start gap-4">
+                        <div className="w-14 h-14 rounded-xl bg-gradient-primary flex items-center justify-center font-display font-bold text-xl text-primary-foreground shrink-0 overflow-hidden">
+                          {pro.avatar_url
+                            ? <img src={pro.avatar_url} alt={name} className="w-full h-full object-cover" />
+                            : initials}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-display font-semibold text-sm truncate">{name}</span>
+                            {pro.verified && <CheckCircle className="w-3.5 h-3.5 text-primary shrink-0" />}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            <span className="mr-1">{catData.emoji}</span>{pro.title || catData.label}
+                          </div>
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <MapPin className="w-3 h-3 text-muted-foreground" />
+                            <span className="text-xs text-muted-foreground">{pro.city || "Greece"}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Stats */}
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1">
+                          <Star className="w-3.5 h-3.5 text-brand-gold fill-brand-gold" />
+                          <span className="text-sm font-semibold">{rating > 0 ? rating : "—"}</span>
+                          <span className="text-xs text-muted-foreground">({pro.reviews_count || 0})</span>
+                        </div>
+                        <span className="text-muted-foreground text-xs">·</span>
+                        <span className="text-xs text-muted-foreground">{pro.projects_count || 0} projects</span>
+                        <span className="text-muted-foreground text-xs">·</span>
+                        <span className="text-xs text-muted-foreground">{pro.experience_years || 0} yrs</span>
+                      </div>
+
+                      {/* Hourly rate */}
+                      {pro.hourly_rate && (
                         <div className="text-xs text-muted-foreground">
-                          <span className="mr-1">{catData.emoji}</span>{pro.title || catData.label}
+                          From <span className="font-semibold text-foreground">€{pro.hourly_rate}/hr</span>
                         </div>
-                        <div className="flex items-center gap-1 mt-0.5">
-                          <MapPin className="w-3 h-3 text-muted-foreground" />
-                          <span className="text-xs text-muted-foreground">{pro.city || "Greece"}</span>
+                      )}
+
+                      {/* AI badge */}
+                      <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-primary/5 border border-primary/15 self-start">
+                        <Sparkles className="w-3 h-3 text-primary" />
+                        <span className="text-[10px] font-semibold text-primary">AI-enhanced workflow</span>
+                      </div>
+
+                      {/* Specialties */}
+                      {specialties.length > 0 && (
+                        <div className="flex gap-1.5 flex-wrap">
+                          {specialties.slice(0, 3).map((s: string) => (
+                            <span key={s} className="px-2 py-0.5 rounded-full bg-secondary border border-border text-xs text-muted-foreground">{s}</span>
+                          ))}
                         </div>
+                      )}
+
+                      {/* Actions */}
+                      <div className="flex gap-2 mt-auto">
+                        <Button size="sm" className="flex-1 bg-gradient-primary border-0 text-primary-foreground text-xs gap-1.5" asChild>
+                          <Link to={`/professionals/${pro.id}`}>View Profile <ArrowRight className="w-3 h-3" /></Link>
+                        </Button>
+                        <Button size="sm" variant="outline" className="border-border px-3">
+                          <MessageSquare className="w-3.5 h-3.5" />
+                        </Button>
                       </div>
                     </div>
-
-                    {/* Stats */}
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-1">
-                        <Star className="w-3.5 h-3.5 text-brand-gold fill-brand-gold" />
-                        <span className="text-sm font-semibold">{rating > 0 ? rating : "—"}</span>
-                        <span className="text-xs text-muted-foreground">({pro.reviews_count || 0})</span>
-                      </div>
-                      <span className="text-muted-foreground text-xs">·</span>
-                      <span className="text-xs text-muted-foreground">{pro.projects_count || 0} projects</span>
-                      <span className="text-muted-foreground text-xs">·</span>
-                      <span className="text-xs text-muted-foreground">{pro.experience_years || 0} yrs</span>
-                    </div>
-
-                    {/* Hourly rate */}
-                    {pro.hourly_rate && (
-                      <div className="text-xs text-muted-foreground">
-                        From <span className="font-semibold text-foreground">€{pro.hourly_rate}/hr</span>
-                      </div>
-                    )}
-
-                    {/* Specialties */}
-                    {specialties.length > 0 && (
-                      <div className="flex gap-1.5 flex-wrap">
-                        {specialties.slice(0, 3).map((s: string) => (
-                          <span key={s} className="px-2 py-0.5 rounded-full bg-secondary border border-border text-xs text-muted-foreground">{s}</span>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Actions */}
-                    <div className="flex gap-2 mt-auto">
-                      <Button size="sm" className="flex-1 bg-gradient-primary border-0 text-primary-foreground text-xs" asChild>
-                        <Link to={`/professionals/${pro.id}`}>View Profile</Link>
-                      </Button>
-                      <Button size="sm" variant="outline" className="border-border px-3">
-                        <Mail className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            </>
           )}
 
-          {/* Join CTA */}
-          <div className="mt-12 glass-card rounded-2xl p-8 text-center border border-accent/20">
+          {/* ── AI Advantage Section ─────────────────────────────────── */}
+          <div className="mt-16 rounded-3xl border border-border overflow-hidden"
+            style={{ background: "linear-gradient(135deg, hsl(183 100% 5%), hsl(265 80% 6%), hsl(183 100% 5%))" }}>
+            <div className="p-8 md:p-12">
+              <div className="text-center mb-10">
+                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary/15 border border-primary/30 mb-5">
+                  <Sparkles className="w-3.5 h-3.5 text-primary" />
+                  <span className="text-xs font-bold text-primary uppercase tracking-widest">AI Advantage</span>
+                </div>
+                <h3 className="font-display text-3xl font-bold text-foreground mb-2">How AI makes every pro 10× better</h3>
+                <p className="text-muted-foreground max-w-lg mx-auto">Every professional category on maiProp integrates our AI engine to speed up tasks, reduce errors, and deliver smarter outcomes.</p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {[
+                  { icon: FileSearch, title: "AI Due Diligence", desc: "Lawyers scan contracts for risks in seconds. Title deed anomalies flagged automatically.", group: "Legal & Title" },
+                  { icon: Brain, title: "Smart Valuations", desc: "Valuers get AI-backed price recommendations from 100K+ data points across Greece.", group: "Finance" },
+                  { icon: BarChart2, title: "Renovation Estimates", desc: "Contractors generate cost estimates instantly using AI-powered material & labour pricing.", group: "Design & Build" },
+                  { icon: Zap, title: "Instant Report Generation", desc: "Architects & engineers produce compliance reports in minutes, not days.", group: "Design & Build" },
+                  { icon: TrendingUp, title: "Investment Forecasting", desc: "Financial advisors model ROI scenarios with live Greek property market data.", group: "Finance" },
+                  { icon: Clock, title: "Automated Scheduling", desc: "Property managers handle tenant communication, maintenance, and rent reminders on autopilot.", group: "Property Management" },
+                ].map(item => (
+                  <div key={item.title} className="glass-card rounded-xl p-5 hover:border-primary/20 transition-all">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-3">
+                      <item.icon className="w-5 h-5 text-primary" />
+                    </div>
+                    <div className="text-[10px] font-bold text-primary/70 uppercase tracking-wider mb-1">{item.group}</div>
+                    <h4 className="font-display font-bold text-sm mb-1.5">{item.title}</h4>
+                    <p className="text-xs text-muted-foreground leading-relaxed">{item.desc}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* ── Join CTA ─────────────────────────────────────────────── */}
+          <div className="mt-10 glass-card rounded-2xl p-8 text-center border border-accent/20">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent/10 border border-accent/20 mb-4">
+              <Sparkles className="w-3.5 h-3.5 text-accent" />
+              <span className="text-xs font-semibold text-accent">Free to join</span>
+            </div>
             <h3 className="font-display text-xl font-bold mb-2">Are you a Professional?</h3>
-            <p className="text-muted-foreground mb-4 text-sm">Join 12,000+ verified professionals on maiProp. Get leads from property buyers, sellers, and investors.</p>
-            <Button className="bg-gradient-accent border-0 text-accent-foreground" asChild>
-              <Link to="/signup?role=professional">Create Pro Profile — Free</Link>
+            <p className="text-muted-foreground mb-5 text-sm max-w-sm mx-auto">Join 2,400+ verified professionals. Get qualified leads from buyers, sellers, and investors — powered by AI.</p>
+            <Button className="bg-gradient-accent border-0 text-accent-foreground gap-2" asChild>
+              <Link to="/signup?role=professional">
+                Create Pro Profile — Free <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
             </Button>
           </div>
         </div>
