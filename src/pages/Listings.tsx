@@ -342,9 +342,6 @@ function PropertyTypeButton({
 
 
 
-
-  const currentSubtype = currentType?.subtypes.find(s => s.value === subtype);
-
   const label = currentSubtype
     ? `${currentType!.emoji} ${currentSubtype.label}`
     : currentType
