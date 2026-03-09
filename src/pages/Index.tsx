@@ -466,6 +466,7 @@ export default function Index() {
                     title="mAI Prop OS — Real Estate Data Platform"
                     className="w-full h-full border-0"
                     loading="lazy"
+                    sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
                     style={{ transform: "scale(1)", transformOrigin: "top left" }}
                   />
                   {/* Clickable overlay that opens in new tab */}
