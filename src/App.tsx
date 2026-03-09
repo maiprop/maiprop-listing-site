@@ -21,6 +21,9 @@ import Login from "./pages/Login";
 import Messages from "./pages/Messages";
 import CreateListing from "./pages/CreateListing";
 import NotFound from "./pages/NotFound";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import TermsOfService from "./pages/TermsOfService";
+import CookiePolicy from "./pages/CookiePolicy";
 
 const queryClient = new QueryClient();
 
@@ -57,6 +60,9 @@ const App = () => (
               <Route path="/dashboard/:section" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
               <Route path="/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
               <Route path="/listings/new" element={<ProtectedRoute><CreateListing /></ProtectedRoute>} />
+              <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+              <Route path="/terms-of-service" element={<TermsOfService />} />
+              <Route path="/cookie-policy" element={<CookiePolicy />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
             <GlobalAIWidget />
