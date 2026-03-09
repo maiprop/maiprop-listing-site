@@ -1,44 +1,52 @@
-import { useState } from "react";
-import { Calendar, Clock, CheckCircle2, Loader2, Euro, Briefcase } from "lucide-react";
+import { useState, useMemo } from "react";
+import { Calendar, Clock, CheckCircle2, Loader2, Euro, Briefcase, Video, Users, ChevronRight } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubmitConsultation } from "@/hooks/useConsultations";
-import { useNavigate } from "react-router-dom";
+import { useProfessionalServices, useProfessionalAvailability } from "@/hooks/useProfessionalServices";
 import { toast } from "sonner";
 
-const servicesByCategory: Record<string, string[]> = {
-  architect: ["Architectural Plans", "Building Permits", "Renovation Design", "Site Supervision", "Energy Certificate"],
-  civil_engineer: ["Static Report", "Structural Analysis", "Seismic Assessment", "Building Compliance"],
-  lawyer: ["Title Search", "Contract Review", "Conveyancing", "Golden Visa", "Auction Representation"],
-  notary: ["Property Transfer Deed", "Mortgage Deed", "Company Incorporation", "Wills & Inheritance"],
-  electrician: ["Electrical Installation", "Smart Home", "Solar Panels", "EV Charging", "Energy Audit"],
-  plumber: ["Pipe Installation", "Bathroom Remodel", "Boiler Install", "Emergency Repair"],
-  contractor: ["Full Renovation", "New Build", "Kitchen & Bath", "Structural Work"],
-  property_manager: ["Tenant Sourcing", "Rent Collection", "Maintenance", "Short-Term Rental"],
-  valuer: ["Market Appraisal", "Mortgage Valuation", "Investment Analysis", "RICS Report"],
-  interior_designer: ["Space Planning", "3D Visualisation", "Property Staging", "FF&E Specification"],
-  financial_advisor: ["Mortgage Advice", "Investment Strategy", "Tax Planning", "Golden Visa Finance"],
-};
+const DAYS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const PRICING_LABELS: Record<string, string> = { hourly: "/hr", daily: "/day", fixed: "fixed" };
 
-const timeSlots = ["09:00", "10:00", "11:00", "12:00", "14:00", "15:00", "16:00", "17:00", "18:00"];
-
-function getNextDays(count: number) {
-  const days = [];
+function getAvailableDays(availability: { day_of_week: number; start_time: string; end_time: string }[], count = 14) {
+  const days: { label: string; date: string; display: string; dayOfWeek: number; startTime: string; endTime: string }[] = [];
   const d = new Date();
   d.setDate(d.getDate() + 1);
-  while (days.length < count) {
+  let checked = 0;
+  while (days.length < count && checked < 60) {
     const dow = d.getDay();
-    if (dow !== 0 && dow !== 6) {
+    const avail = availability.find(a => a.day_of_week === dow);
+    if (avail) {
       days.push({
         label: d.toLocaleDateString("en-GB", { weekday: "short" }),
         date: d.toISOString().split("T")[0],
         display: d.toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
+        dayOfWeek: dow,
+        startTime: avail.start_time,
+        endTime: avail.end_time,
       });
     }
     d.setDate(d.getDate() + 1);
+    checked++;
   }
   return days;
+}
+
+function generateTimeSlots(startTime: string, endTime: string) {
+  const slots: string[] = [];
+  const [sh, sm] = startTime.split(":").map(Number);
+  const [eh] = endTime.split(":").map(Number);
+  let hour = sh;
+  const startMinute = sm === 30 ? 30 : 0;
+  let minute = startMinute;
+  while (hour < eh || (hour === eh && minute === 0)) {
+    slots.push(`${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`);
+    minute += 60;
+    if (minute >= 60) { hour += Math.floor(minute / 60); minute = minute % 60; }
+  }
+  return slots;
 }
 
 interface BookConsultationModalProps {
@@ -51,16 +59,20 @@ interface BookConsultationModalProps {
     title?: string | null;
     category: string;
     hourly_rate?: number | null;
+    video_link?: string | null;
   };
 }
 
 export default function BookConsultationModal({ open, onClose, professional }: BookConsultationModalProps) {
   const { user, profile } = useAuth();
-  const navigate = useNavigate();
   const submitConsultation = useSubmitConsultation();
 
-  const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [service, setService] = useState("");
+  const { data: services = [] } = useProfessionalServices(professional.id);
+  const { data: availability = [] } = useProfessionalAvailability(professional.id);
+
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const [selectedService, setSelectedService] = useState<typeof services[0] | null>(null);
+  const [bookingType, setBookingType] = useState<"in_person" | "video">("in_person");
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedTime, setSelectedTime] = useState("");
   const [name, setName] = useState(profile?.display_name || "");
@@ -71,12 +83,19 @@ export default function BookConsultationModal({ open, onClose, professional }: B
 
   const proName = professional.display_name || "Professional";
   const firstName = proName.split(" ")[0];
-  const services = servicesByCategory[professional.category] || ["Consultation"];
-  const days = getNextDays(6);
+
+  const availableDays = useMemo(() => getAvailableDays(availability), [availability]);
+  const selectedDayData = availableDays.find(d => d.date === selectedDate);
+  const timeSlots = useMemo(() => {
+    if (!selectedDayData) return [];
+    return generateTimeSlots(selectedDayData.startTime, selectedDayData.endTime);
+  }, [selectedDayData]);
+
+  const canVideo = selectedService?.video_enabled && !!professional.video_link;
 
   const handleClose = () => {
-    setStep(1); setService(""); setSelectedDate(""); setSelectedTime("");
-    setNote(""); setDone(false);
+    setStep(1); setSelectedService(null); setBookingType("in_person");
+    setSelectedDate(""); setSelectedTime(""); setNote(""); setDone(false);
     onClose();
   };
 
@@ -84,7 +103,6 @@ export default function BookConsultationModal({ open, onClose, professional }: B
     const resolvedName = user ? (profile?.display_name || user.email || name) : name;
     const resolvedEmail = user ? (user.email || email) : email;
     if (!resolvedName || !resolvedEmail) { toast.error("Please fill in your details"); return; }
-
     try {
       await submitConsultation.mutateAsync({
         professional_id: professional.id,
@@ -92,10 +110,13 @@ export default function BookConsultationModal({ open, onClose, professional }: B
         requester_email: resolvedEmail,
         requester_phone: phone || undefined,
         request_type: "consultation",
-        service,
+        service: selectedService?.service_name,
         preferred_date: selectedDate,
         preferred_time: selectedTime,
-        message: note || undefined,
+        message: [
+          bookingType === "video" ? "🎥 Video consultation requested" : "📍 In-person consultation requested",
+          note,
+        ].filter(Boolean).join("\n"),
       });
       setDone(true);
     } catch {
@@ -103,15 +124,19 @@ export default function BookConsultationModal({ open, onClose, professional }: B
     }
   };
 
-  const selectedDayDisplay = days.find(d => d.date === selectedDate);
+  const pricingLabel = selectedService
+    ? selectedService.rate_amount
+      ? `€${selectedService.rate_amount}${PRICING_LABELS[selectedService.pricing_model] ?? ""}`
+      : "On Request"
+    : null;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="bg-card border-border max-w-lg">
+      <DialogContent className="bg-card border-border max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-display text-lg flex items-center gap-2">
             <Calendar className="w-5 h-5 text-primary" />
-            {done ? "Consultation Booked!" : `Book Consultation with ${firstName}`}
+            {done ? "Consultation Booked!" : `Book with ${firstName}`}
           </DialogTitle>
         </DialogHeader>
 
@@ -121,139 +146,215 @@ export default function BookConsultationModal({ open, onClose, professional }: B
               <CheckCircle2 className="w-8 h-8 text-brand-emerald" />
             </div>
             <div>
-              <p className="font-semibold text-foreground">Consultation request confirmed!</p>
+              <p className="font-semibold text-foreground">Booking confirmed!</p>
               <p className="text-sm text-muted-foreground mt-1">{firstName} will confirm within 2 hours.</p>
             </div>
             <div className="bg-secondary rounded-xl p-4 text-sm text-left space-y-2">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Service</span>
-                <span className="font-medium">{service || "Consultation"}</span>
+              {selectedService && (
+                <div className="flex justify-between"><span className="text-muted-foreground">Service</span><span className="font-medium">{selectedService.service_name}</span></div>
+              )}
+              <div className="flex justify-between"><span className="text-muted-foreground">Type</span>
+                <span className="font-medium flex items-center gap-1">
+                  {bookingType === "video" ? <><Video className="w-3.5 h-3.5" /> Video</> : <><Users className="w-3.5 h-3.5" /> In-person</>}
+                </span>
               </div>
-              {selectedDayDisplay && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Date & Time</span>
-                  <span className="font-medium">{selectedDayDisplay.display} at {selectedTime}</span>
-                </div>
-              )}
-              {professional.hourly_rate && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Rate</span>
-                  <span className="font-medium">€{professional.hourly_rate}/hr</span>
-                </div>
-              )}
+              {selectedDate && <div className="flex justify-between"><span className="text-muted-foreground">Date & Time</span><span className="font-medium">{selectedDate} at {selectedTime}</span></div>}
+              {pricingLabel && <div className="flex justify-between"><span className="text-muted-foreground">Rate</span><span className="font-medium">{pricingLabel}</span></div>}
             </div>
+            {bookingType === "video" && professional.video_link && (
+              <a href={professional.video_link} target="_blank" rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-primary/10 border border-primary/20 text-primary text-sm font-medium hover:bg-primary/20 transition-colors">
+                <Video className="w-4 h-4" /> Join Video Call
+              </a>
+            )}
             <Button className="w-full bg-gradient-primary border-0 text-primary-foreground" onClick={handleClose}>Done</Button>
           </div>
         ) : (
           <div className="space-y-5">
             {/* Step indicator */}
-            <div className="flex items-center gap-2">
-              {[1, 2, 3].map(s => (
-                <div key={s} className="flex items-center gap-2">
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+            <div className="flex items-center gap-1.5">
+              {([1, 2, 3, 4] as const).map(s => (
+                <div key={s} className="flex items-center gap-1.5 flex-1">
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-all ${
                     step === s ? "bg-primary text-primary-foreground" :
                     step > s ? "bg-brand-emerald/20 text-brand-emerald" : "bg-secondary text-muted-foreground"
                   }`}>
                     {step > s ? "✓" : s}
                   </div>
-                  <span className={`text-xs ${step === s ? "text-foreground font-medium" : "text-muted-foreground"}`}>
-                    {s === 1 ? "Service" : s === 2 ? "Schedule" : "Details"}
+                  <span className={`text-[11px] hidden sm:block ${step === s ? "text-foreground font-medium" : "text-muted-foreground"}`}>
+                    {s === 1 ? "Service" : s === 2 ? "Type" : s === 3 ? "Schedule" : "Details"}
                   </span>
-                  {s < 3 && <div className="w-8 h-px bg-border flex-1" />}
+                  {s < 4 && <div className="flex-1 h-px bg-border" />}
                 </div>
               ))}
             </div>
 
-            {/* Step 1: Service */}
+            {/* Step 1: Service selection */}
             {step === 1 && (
               <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">What do you need help with?</p>
-                <div className="grid grid-cols-1 gap-2 max-h-56 overflow-y-auto pr-1">
-                  {services.map(s => (
-                    <button
-                      key={s}
-                      onClick={() => setService(s)}
-                      className={`flex items-center gap-3 p-3 rounded-xl border text-sm text-left transition-all ${
-                        service === s ? "border-primary bg-primary/10 text-primary" : "border-border text-foreground hover:border-primary/40"
-                      }`}
-                    >
-                      <Briefcase className="w-4 h-4 shrink-0 text-muted-foreground" />
-                      {s}
-                    </button>
-                  ))}
-                </div>
-                <Button
-                  className="w-full bg-gradient-primary border-0 text-primary-foreground"
-                  disabled={!service}
-                  onClick={() => setStep(2)}
-                >
-                  Continue
-                </Button>
-              </div>
-            )}
-
-            {/* Step 2: Date & Time */}
-            {step === 2 && (
-              <div className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium block mb-2">Select Date</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {days.map(day => (
-                      <button
-                        key={day.date}
-                        onClick={() => setSelectedDate(day.date)}
-                        className={`p-2.5 rounded-xl border text-center text-xs transition-all ${
-                          selectedDate === day.date ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/40"
-                        }`}
-                      >
-                        <div className="font-semibold">{day.label}</div>
-                        <div className="mt-0.5 opacity-80">{day.display}</div>
-                      </button>
-                    ))}
+                <p className="text-sm text-muted-foreground">What service do you need?</p>
+                {services.length === 0 ? (
+                  <div className="text-center py-6 text-sm text-muted-foreground">
+                    <Briefcase className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                    No services configured yet. Select any consultation type.
+                    <Button className="w-full mt-3 bg-gradient-primary border-0 text-primary-foreground"
+                      onClick={() => setStep(2)}>Continue as General Consultation</Button>
                   </div>
-                </div>
-
-                {selectedDate && (
-                  <div>
-                    <label className="text-sm font-medium block mb-2">Select Time</label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {timeSlots.map(time => (
-                        <button
-                          key={time}
-                          onClick={() => setSelectedTime(time)}
-                          className={`py-2 rounded-lg border text-sm transition-all ${
-                            selectedTime === time ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/40"
+                ) : (
+                  <>
+                    <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                      {services.map(svc => (
+                        <button key={svc.id} onClick={() => setSelectedService(svc)}
+                          className={`w-full flex items-start gap-3 p-3.5 rounded-xl border text-left transition-all ${
+                            selectedService?.id === svc.id
+                              ? "border-primary bg-primary/8"
+                              : "border-border hover:border-primary/30 bg-secondary/40"
                           }`}
                         >
-                          {time}
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
+                            selectedService?.id === svc.id ? "bg-primary/20" : "bg-secondary"
+                          }`}>
+                            {svc.video_enabled ? <Video className="w-3.5 h-3.5 text-primary" /> : <Briefcase className="w-3.5 h-3.5 text-muted-foreground" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <span className="text-sm font-medium">{svc.service_name}</span>
+                              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                                svc.rate_amount ? "bg-brand-gold/15 text-brand-gold" : "bg-secondary text-muted-foreground"
+                              }`}>
+                                {svc.rate_amount ? `€${svc.rate_amount}${PRICING_LABELS[svc.pricing_model] ?? ""}` : "On Request"}
+                              </span>
+                            </div>
+                            {svc.description && (
+                              <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{svc.description}</p>
+                            )}
+                            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground capitalize">
+                                {svc.pricing_model}
+                              </span>
+                              {svc.video_enabled && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary flex items-center gap-1">
+                                  <Video className="w-2.5 h-2.5" /> Remote available
+                                </span>
+                              )}
+                              {svc.is_premium && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400">Pro</span>
+                              )}
+                            </div>
+                          </div>
+                          <ChevronRight className={`w-4 h-4 shrink-0 mt-2 transition-colors ${selectedService?.id === svc.id ? "text-primary" : "text-muted-foreground/30"}`} />
                         </button>
                       ))}
                     </div>
+                    <Button className="w-full bg-gradient-primary border-0 text-primary-foreground"
+                      disabled={!selectedService}
+                      onClick={() => setStep(2)}>
+                      Continue
+                    </Button>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Step 2: In-person vs Video */}
+            {step === 2 && (
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">How would you like to meet?</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <button onClick={() => setBookingType("in_person")}
+                    className={`p-4 rounded-xl border-2 text-center transition-all ${
+                      bookingType === "in_person" ? "border-primary bg-primary/8" : "border-border hover:border-primary/30"
+                    }`}>
+                    <Users className={`w-7 h-7 mx-auto mb-2 ${bookingType === "in_person" ? "text-primary" : "text-muted-foreground"}`} />
+                    <div className="font-semibold text-sm">In-Person</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">Meet at their office or site</div>
+                  </button>
+                  <button
+                    onClick={() => canVideo ? setBookingType("video") : toast.info("This service is not available via video")}
+                    className={`p-4 rounded-xl border-2 text-center transition-all relative ${
+                      bookingType === "video" ? "border-primary bg-primary/8" : canVideo ? "border-border hover:border-primary/30" : "border-border opacity-50 cursor-not-allowed"
+                    }`}>
+                    <Video className={`w-7 h-7 mx-auto mb-2 ${bookingType === "video" ? "text-primary" : "text-muted-foreground"}`} />
+                    <div className="font-semibold text-sm">Video Call</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">Google Meet / Zoom</div>
+                    {!canVideo && (
+                      <div className="absolute inset-0 flex items-center justify-center rounded-xl">
+                        <span className="text-[10px] bg-secondary/90 px-2 py-1 rounded-full text-muted-foreground">Not available</span>
+                      </div>
+                    )}
+                  </button>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" className="border-border" onClick={() => setStep(1)}>Back</Button>
+                  <Button className="flex-1 bg-gradient-primary border-0 text-primary-foreground" onClick={() => setStep(3)}>Continue</Button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 3: Date & Time */}
+            {step === 3 && (
+              <div className="space-y-4">
+                {availableDays.length === 0 ? (
+                  <div className="text-center py-4 text-sm text-muted-foreground">
+                    <Clock className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                    No availability set. Contact directly to schedule.
                   </div>
+                ) : (
+                  <>
+                    <div>
+                      <label className="text-sm font-medium block mb-2">Select a day</label>
+                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-44 overflow-y-auto pr-1">
+                        {availableDays.map(day => (
+                          <button key={day.date} onClick={() => { setSelectedDate(day.date); setSelectedTime(""); }}
+                            className={`p-2.5 rounded-xl border text-center text-xs transition-all ${
+                              selectedDate === day.date ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/40"
+                            }`}>
+                            <div className="font-semibold">{day.label}</div>
+                            <div className="mt-0.5 opacity-80">{day.display}</div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {selectedDate && timeSlots.length > 0 && (
+                      <div>
+                        <label className="text-sm font-medium block mb-2">Select time</label>
+                        <div className="grid grid-cols-4 gap-1.5">
+                          {timeSlots.map(time => (
+                            <button key={time} onClick={() => setSelectedTime(time)}
+                              className={`py-2 rounded-lg border text-xs font-medium transition-all ${
+                                selectedTime === time ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/40"
+                              }`}>
+                              {time}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
 
-                {professional.hourly_rate && (
+                {selectedService?.rate_amount && (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground bg-secondary rounded-lg p-3">
                     <Euro className="w-4 h-4 text-brand-gold shrink-0" />
-                    Consultation rate: <span className="font-semibold text-foreground">€{professional.hourly_rate}/hr</span>
+                    <span>{selectedService.service_name}: </span>
+                    <span className="font-semibold text-foreground">{pricingLabel}</span>
                   </div>
                 )}
 
                 <div className="flex gap-2">
-                  <Button variant="outline" className="border-border" onClick={() => setStep(1)}>Back</Button>
-                  <Button
-                    className="flex-1 bg-gradient-primary border-0 text-primary-foreground"
-                    disabled={!selectedDate || !selectedTime}
-                    onClick={() => setStep(3)}
-                  >
+                  <Button variant="outline" className="border-border" onClick={() => setStep(2)}>Back</Button>
+                  <Button className="flex-1 bg-gradient-primary border-0 text-primary-foreground"
+                    disabled={availableDays.length > 0 && (!selectedDate || !selectedTime)}
+                    onClick={() => setStep(4)}>
                     Continue
                   </Button>
                 </div>
               </div>
             )}
 
-            {/* Step 3: Contact details */}
-            {step === 3 && (
+            {/* Step 4: Contact */}
+            {step === 4 && (
               <div className="space-y-4">
                 {!user && (
                   <div className="grid grid-cols-2 gap-3">
@@ -277,24 +378,28 @@ export default function BookConsultationModal({ open, onClose, professional }: B
                 <div>
                   <label className="text-xs font-medium text-muted-foreground block mb-1">Additional notes (optional)</label>
                   <textarea value={note} onChange={e => setNote(e.target.value)} rows={3}
-                    placeholder="Describe your project, property address, or any specific questions..."
+                    placeholder="Describe your project, address, or any specific questions..."
                     className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary resize-none transition-colors" />
                 </div>
 
                 {/* Summary */}
-                <div className="bg-secondary rounded-xl p-3 text-xs text-muted-foreground space-y-1">
-                  <div className="flex justify-between"><span>Service</span><span className="text-foreground font-medium">{service}</span></div>
-                  {selectedDayDisplay && <div className="flex justify-between"><span>When</span><span className="text-foreground font-medium">{selectedDayDisplay.display} at {selectedTime}</span></div>}
+                <div className="bg-secondary rounded-xl p-3 text-xs text-muted-foreground space-y-1.5">
+                  {selectedService && <div className="flex justify-between"><span>Service</span><span className="text-foreground font-medium">{selectedService.service_name}</span></div>}
+                  <div className="flex justify-between"><span>Type</span>
+                    <span className="text-foreground font-medium flex items-center gap-1">
+                      {bookingType === "video" ? <><Video className="w-3 h-3" /> Video</> : <><Users className="w-3 h-3" /> In-Person</>}
+                    </span>
+                  </div>
+                  {selectedDate && <div className="flex justify-between"><span>When</span><span className="text-foreground font-medium">{selectedDate} at {selectedTime}</span></div>}
+                  {pricingLabel && <div className="flex justify-between"><span>Rate</span><span className="text-foreground font-medium">{pricingLabel}</span></div>}
                   <div className="flex justify-between"><span>With</span><span className="text-foreground font-medium">{proName}</span></div>
                 </div>
 
                 <div className="flex gap-2">
-                  <Button variant="outline" className="border-border" onClick={() => setStep(2)}>Back</Button>
-                  <Button
-                    className="flex-1 bg-gradient-primary border-0 text-primary-foreground gap-2"
+                  <Button variant="outline" className="border-border" onClick={() => setStep(3)}>Back</Button>
+                  <Button className="flex-1 bg-gradient-primary border-0 text-primary-foreground gap-2"
                     onClick={handleConfirm}
-                    disabled={submitConsultation.isPending || (!user && (!name.trim() || !email.trim()))}
-                  >
+                    disabled={submitConsultation.isPending || (!user && (!name.trim() || !email.trim()))}>
                     {submitConsultation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
                     Confirm Booking
                   </Button>
