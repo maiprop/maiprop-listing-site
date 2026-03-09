@@ -21,3 +21,6 @@ verify_jwt = false
 [functions.pro-ai-tools]
 verify_jwt = false
 
+[functions.ai-service-match]
+verify_jwt = false
+
