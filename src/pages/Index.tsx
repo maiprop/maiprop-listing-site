@@ -490,8 +490,11 @@ export default function Index() {
       <section className="relative min-h-[100svh] sm:min-h-[92vh] flex items-center overflow-hidden pt-16">
         {/* Background */}
         <div className="absolute inset-0">
-          <img src={heroBg} alt="Athens skyline" className="w-full h-full object-cover opacity-55" />
-          <div className="absolute inset-0" style={{ background: "linear-gradient(120deg, hsl(222 47% 4% / 0.92) 0%, hsl(222 47% 6% / 0.72) 50%, hsl(222 47% 8% / 0.35) 100%)" }} />
+          <img src={heroBg} alt="Athens skyline" className="w-full h-full object-cover opacity-60 dark:opacity-55" />
+          {/* Light mode: warm cream overlay so headline stays readable */}
+          <div className="absolute inset-0 dark:hidden" style={{ background: "linear-gradient(120deg, hsl(30 20% 10% / 0.82) 0%, hsl(25 15% 12% / 0.62) 50%, hsl(30 10% 14% / 0.25) 100%)" }} />
+          {/* Dark mode: deep navy overlay */}
+          <div className="absolute inset-0 hidden dark:block" style={{ background: "linear-gradient(120deg, hsl(222 47% 4% / 0.92) 0%, hsl(222 47% 6% / 0.72) 50%, hsl(222 47% 8% / 0.35) 100%)" }} />
           <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
         </div>
         {/* Grid overlay */}
@@ -746,24 +749,23 @@ export default function Index() {
 
       {/* ══ PROFESSIONALS CTA ════════════════════════════════════════════════ */}
       <section className="py-20 container">
-        <div className="relative rounded-3xl overflow-hidden border border-accent/20"
-          style={{ background: "linear-gradient(135deg, hsl(265 80% 6%), hsl(265 40% 10%), hsl(183 100% 5%))" }}>
-          <div className="absolute top-0 left-0 w-80 h-80 rounded-full blur-3xl opacity-25"
+        <div className="relative rounded-3xl overflow-hidden border border-accent/20 bg-foreground dark:bg-[hsl(265_40%_7%)]">
+          <div className="absolute top-0 left-0 w-80 h-80 rounded-full blur-3xl opacity-20"
             style={{ background: "radial-gradient(hsl(265 80% 60%), transparent 70%)" }} />
-          <div className="absolute bottom-0 right-0 w-80 h-80 rounded-full blur-3xl opacity-20"
+          <div className="absolute bottom-0 right-0 w-80 h-80 rounded-full blur-3xl opacity-15"
             style={{ background: "radial-gradient(hsl(183 100% 42%), transparent 70%)" }} />
-          <div className="relative p-10 md:p-14 lg:p-16">
+          <div className="relative p-10 md:p-14 lg:p-16 text-background">
             <div className="grid lg:grid-cols-2 gap-12 items-center">
               <div>
                 <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-accent/20 border border-accent/40 mb-6">
                   <Users className="w-3.5 h-3.5 text-accent" />
                   <span className="text-xs font-bold text-accent uppercase tracking-widest">AI-Powered Pro Network</span>
                 </div>
-                <h2 className="font-display text-4xl lg:text-5xl font-bold leading-tight mb-4 text-foreground">
+                <h2 className="font-display text-4xl lg:text-5xl font-bold leading-tight mb-4 text-background">
                   The right expert,<br />
                   <span className="gradient-text-cyan">one click away</span>
                 </h2>
-                <p className="text-foreground/70 text-lg leading-relaxed mb-8">
+                <p className="text-background/70 text-lg leading-relaxed mb-8">
                   Architects, lawyers, notaries, engineers — all vetted, verified, and enhanced with AI tools that make every transaction faster and safer.
                 </p>
                 <Button size="lg" className="bg-gradient-accent border-0 text-accent-foreground font-semibold px-8 gap-2" asChild>
@@ -780,13 +782,13 @@ export default function Index() {
                   { emoji: "🏡", title: "Property Mgrs", count: "230+", color: "text-brand-sky", border: "border-brand-sky/30", bg: "bg-brand-sky/15" },
                 ].map(pro => (
                   <Link key={pro.title} to="/professionals">
-                    <div className={`group flex items-center gap-3 p-4 rounded-2xl bg-card/40 border ${pro.border} hover:bg-card/80 transition-all`}>
+                    <div className={`group flex items-center gap-3 p-4 rounded-2xl bg-background/10 border ${pro.border} hover:bg-background/20 transition-all`}>
                       <div className={`w-10 h-10 rounded-xl ${pro.bg} flex items-center justify-center text-xl shrink-0 group-hover:scale-110 transition-transform`}>
                         {pro.emoji}
                       </div>
                       <div>
                         <div className={`font-bold text-sm ${pro.color}`}>{pro.title}</div>
-                        <div className="text-xs text-foreground/60">{pro.count} verified</div>
+                        <div className="text-xs text-background/60">{pro.count} verified</div>
                       </div>
                     </div>
                   </Link>
