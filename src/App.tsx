@@ -18,6 +18,7 @@ import ProfessionalProfile from "./pages/ProfessionalProfile";
 import Dashboard from "./pages/Dashboard";
 import Signup from "./pages/Signup";
 import Login from "./pages/Login";
+import Onboarding from "./pages/Onboarding";
 import Messages from "./pages/Messages";
 import CreateListing from "./pages/CreateListing";
 import ResetPassword from "./pages/ResetPassword";
