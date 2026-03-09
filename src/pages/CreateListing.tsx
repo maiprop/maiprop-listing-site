@@ -601,10 +601,22 @@ export default function CreateListing() {
     <div className="min-h-screen bg-background">
       <Navbar />
       <div className="pt-16">
-        <div className="border-b border-border bg-card py-6">
+        <div className="border-b border-border bg-card py-5">
           <div className="container">
-            <h1 className="font-display text-2xl font-bold">Create New Listing</h1>
-            <p className="text-muted-foreground text-sm mt-1">Fill in your property details step by step</p>
+            <div className="flex items-center justify-between mb-1">
+              <h1 className="font-display text-2xl font-bold">Create New Listing</h1>
+              <span className="text-sm font-semibold tabular-nums text-primary">{completionPct}%</span>
+            </div>
+            <p className="text-muted-foreground text-xs mb-3">
+              Step {step} of {steps.length} — {steps[step - 1].label}
+            </p>
+            {/* Progress bar */}
+            <div className="w-full h-1.5 bg-secondary rounded-full overflow-hidden">
+              <div
+                className="h-full bg-primary rounded-full transition-all duration-500 ease-out"
+                style={{ width: `${completionPct}%` }}
+              />
+            </div>
           </div>
         </div>
 
