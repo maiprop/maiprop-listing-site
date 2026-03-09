@@ -3,7 +3,7 @@ import { useSearchParams, Link } from "react-router-dom";
 import {
   Search, SlidersHorizontal, MapPin, LayoutGrid, Map, ChevronDown,
   X, Gavel, ArrowUpDown, Loader2, Building2, Check, Bookmark, GitCompare,
-  Columns2, Sparkles
+  Columns2, Sparkles, Lock
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -17,6 +17,7 @@ import { AISearchBar } from "@/components/AISearchBar";
 import { mockProperties } from "@/data/mockProperties";
 import { useListings } from "@/hooks/useListings";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCookieConsent } from "@/hooks/useCookieConsent";
 import { PROPERTY_GROUPS, PROPERTY_TYPE_MAP, TYPE_STYLE_FILTERS, getTypeLabel, getSubtypeLabel, type PropertyTypeKey } from "@/lib/propertyTypes";
 import {
   ENERGY_CLASSES, HEATING_TYPES, CONSTRUCTION_STATUSES, ROAD_TYPES, SLOPE_TYPES,
