@@ -688,17 +688,22 @@ export default function Index() {
       <section className="relative min-h-[100svh] sm:min-h-[92vh] flex items-center overflow-hidden pt-16">
         {/* Background */}
         <div className="absolute inset-0">
-          {/* Light mode: show more of the actual photo — lower opacity overlay */}
-          <img src={heroBg} alt="Athens skyline" className="w-full h-full object-cover opacity-100 dark:opacity-70" />
-          {/* Both modes: strong dark-left gradient so white text is always readable */}
+          {/* Photo base */}
+          <img src={heroBg} alt="Athens skyline" className="w-full h-full object-cover opacity-80 dark:opacity-50" />
+          {/* Deep navy (#000059) gradient overlay — primary brand layer */}
           <div
             className="absolute inset-0"
             style={{
               background:
-              "linear-gradient(120deg, hsl(25 20% 6% / 0.82) 0%, hsl(25 15% 8% / 0.55) 55%, hsl(30 10% 10% / 0.12) 100%)"
+              "linear-gradient(120deg, hsl(238 100% 17% / 0.92) 0%, hsl(238 100% 17% / 0.70) 45%, hsl(238 100% 17% / 0.25) 100%)"
             }} />
-          
-          <div className="absolute inset-0 bg-gradient-to-t from-background/70 via-transparent to-transparent" />
+          {/* Secondary depth layer — blackout at bottom for section bleed */}
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+              "linear-gradient(to bottom, transparent 0%, transparent 55%, hsl(240 62% 11% / 0.85) 100%)"
+            }} />
         </div>
         {/* Grid overlay */}
         <div
