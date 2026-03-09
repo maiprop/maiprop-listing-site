@@ -2,6 +2,11 @@
  * maiProp – Property Types & Subtypes catalogue
  * Single source of truth used across Listings, CreateListing, PropertyDetail, Index.
  */
+import {
+  Building2, Home, Castle, Landmark, Store, Briefcase, type LucideIcon,
+  TreePine, Warehouse, Utensils, Hotel, Stethoscope, LayoutDashboard,
+  MonitorPlay, Layers, Wrench, Users2,
+} from "lucide-react";
 
 export type PropertyTypeKey = "apartment" | "house" | "villa" | "land" | "commercial" | "office";
 
@@ -9,6 +14,7 @@ export interface PropertySubtype {
   value: string;
   label: string;
   description: string;
+  icon?: LucideIcon;
 }
 
 export interface PropertyTypeConfig {
@@ -16,6 +22,7 @@ export interface PropertyTypeConfig {
   label: string;
   labelPlural: string;
   emoji: string;
+  icon: LucideIcon;
   description: string;
   keywords: string[];
   accentClass: string;
