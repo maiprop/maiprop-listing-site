@@ -490,8 +490,8 @@ export default function Index() {
       <section className="relative min-h-[100svh] sm:min-h-[92vh] flex items-center overflow-hidden pt-16">
         {/* Background */}
         <div className="absolute inset-0">
-          <img src={heroBg} alt="Athens skyline" className="w-full h-full object-cover opacity-30" />
-          <div className="absolute inset-0" style={{ background: "linear-gradient(120deg, hsl(222 47% 4%) 0%, hsl(222 47% 6% / 0.9) 50%, hsl(222 47% 8% / 0.5) 100%)" }} />
+          <img src={heroBg} alt="Athens skyline" className="w-full h-full object-cover opacity-55" />
+          <div className="absolute inset-0" style={{ background: "linear-gradient(120deg, hsl(222 47% 4% / 0.92) 0%, hsl(222 47% 6% / 0.72) 50%, hsl(222 47% 8% / 0.35) 100%)" }} />
           <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
         </div>
         {/* Grid overlay */}
