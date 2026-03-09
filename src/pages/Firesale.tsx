@@ -15,8 +15,8 @@ import { toast } from "sonner";
 const steps = [
 { step: "01", title: "Property Details", desc: "Address, type, size, condition — takes 2 minutes." },
 { step: "02", title: "AI Valuation Engine", desc: "100+ data points analyzed from mAI Prop OS." },
-{ step: "03", title: "Confidential Offer", desc: "Guaranteed cash offer within 48 hours." },
-{ step: "04", title: "Close in 48h", desc: "Accept and close. We handle title, notary, everything." }];
+{ step: "03", title: "Confidential Offer", desc: "Guaranteed cash offer within 96 hours." },
+{ step: "04", title: "Close in 96h", desc: "Accept and close. We handle title, notary, everything." }];
 
 
 const proofStats = [
