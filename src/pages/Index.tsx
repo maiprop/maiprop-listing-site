@@ -682,7 +682,7 @@ export default function Index() {
               <Link to="/auctions">All Auctions <ArrowRight className="w-3 h-3 ml-1" /></Link>
             </Button>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 reveal reveal-delay-1 ${auctionsInView ? "in-view" : ""}`}>
             {mockProperties.filter(p => p.listingType === "auction").map(property => (
               <PropertyCard key={property.id} property={property} />
             ))}
