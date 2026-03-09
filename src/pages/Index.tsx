@@ -802,10 +802,11 @@ export default function Index() {
             </div>
           </div>
         </div>
+        </div>
       </section>
 
       {/* ══ mAI PROP OS ═════════════════════════════════════════════════════ */}
-      <section className="py-20 bg-card/20 overflow-hidden border-y border-border">
+      <section className="py-20 bg-secondary overflow-hidden">
         <div className="container">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             {/* Copy */}
