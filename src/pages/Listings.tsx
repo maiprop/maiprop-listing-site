@@ -48,8 +48,8 @@ const rentPriceRanges = [
 
 const listingTypeOptions = [
   { label: "All", value: "", icon: "🏘️" },
-  { label: "For Sale", value: "sale", icon: "🏷️" },
-  { label: "For Rent", value: "rent", icon: "🔑" },
+  { label: "Buy", value: "sale", icon: "🏷️" },
+  { label: "Rent", value: "rent", icon: "🔑" },
   { label: "Auction", value: "auction", icon: "⚖️" },
 ];
 
