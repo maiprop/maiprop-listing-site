@@ -1,9 +1,9 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, forwardRef } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import {
   Search, SlidersHorizontal, MapPin, LayoutGrid, Map, ChevronDown,
   X, Gavel, ArrowUpDown, Loader2, Building2, Check, Bookmark, GitCompare,
-  Columns2, Sparkles
+  Columns2, Sparkles, Lock
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -17,6 +17,7 @@ import { AISearchBar } from "@/components/AISearchBar";
 import { mockProperties } from "@/data/mockProperties";
 import { useListings } from "@/hooks/useListings";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCookieConsent } from "@/hooks/useCookieConsent";
 import { PROPERTY_GROUPS, PROPERTY_TYPE_MAP, TYPE_STYLE_FILTERS, getTypeLabel, getSubtypeLabel, type PropertyTypeKey } from "@/lib/propertyTypes";
 import {
   ENERGY_CLASSES, HEATING_TYPES, CONSTRUCTION_STATUSES, ROAD_TYPES, SLOPE_TYPES,
@@ -137,11 +138,12 @@ function RangeSelector({
   );
 }
 
-function FilterChip({ active, onClick, children }: {
+const FilterChip = forwardRef<HTMLButtonElement, {
   active: boolean; onClick: () => void; children: React.ReactNode;
-}) {
+}>(function FilterChip({ active, onClick, children }, ref) {
   return (
     <button
+      ref={ref}
       onClick={onClick}
       className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all ${
         active
@@ -153,7 +155,7 @@ function FilterChip({ active, onClick, children }: {
       {children}
     </button>
   );
-}
+});
 
 // ─── ListingTypeButton ────────────────────────────────────────────────────────
 
@@ -312,6 +314,33 @@ function PropertyTypeButton({
   );
 }
 
+// ── MapGate — only renders map if user accepted mapping cookies ─────────────────
+function MapGate({ consent, accept, children, height }: {
+  consent: { mapping: boolean; accepted: boolean };
+  accept: (overrides?: any) => void;
+  children: React.ReactNode;
+  height?: string;
+}) {
+  if (!consent.mapping) {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-secondary rounded-xl min-h-[400px]" style={height ? { height } : undefined}>
+        <div className="text-center max-w-xs px-6">
+          <Lock className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+          <p className="font-display font-semibold mb-1">Map requires cookies</p>
+          <p className="text-sm text-muted-foreground mb-4">
+            Interactive maps use Mapbox which sets third-party cookies. Enable mapping cookies to continue.
+          </p>
+          <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground gap-2"
+            onClick={() => accept({ mapping: true })}>
+            Enable Map
+          </Button>
+        </div>
+      </div>
+    );
+  }
+  return <>{children}</>;
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function Listings() {
@@ -325,6 +354,7 @@ export default function Listings() {
   const [polygonFilterIds, setPolygonFilterIds] = useState<Set<string> | null>(null);
   const [mobileTab, setMobileTab] = useState<"list" | "map">("list");
   const { user } = useAuth();
+  const { consent, accept } = useCookieConsent();
 
   // AI search filter applier — maps AI-parsed filters back to URL params
   const applyAIFilters = useCallback((filters: Record<string, any>) => {
@@ -513,8 +543,8 @@ export default function Listings() {
                   <button onClick={() => setParam("city", "")}><X className="w-3.5 h-3.5 text-muted-foreground" /></button>
                 )}
               </div>
-
-
+              {/* Listing type button */}
+              <ListingTypeButton value={selectedListingType} onChange={v => setParam("listing_type", v)} />
 
               {/* Property type button */}
               <PropertyTypeButton
@@ -948,12 +978,14 @@ export default function Listings() {
 
                 {/* Right: map — hidden on mobile when list tab active */}
                 <div className={`flex-1 ${mobileTab === "list" ? "hidden md:block" : "block"} md:h-full h-[calc(100vh-12rem)]`}>
-                  <MapView
-                    listings={filtered}
-                    onVisibleListingsChange={setViewportIds}
-                    onPolygonFilter={ids => { setPolygonFilterIds(ids); }}
-                    height="100%"
-                  />
+                  <MapGate consent={consent} accept={accept} height="100%">
+                    <MapView
+                      listings={filtered}
+                      onVisibleListingsChange={setViewportIds}
+                      onPolygonFilter={ids => { setPolygonFilterIds(ids); }}
+                      height="100%"
+                    />
+                  </MapGate>
                 </div>
               </div>
             );
@@ -998,11 +1030,13 @@ export default function Listings() {
             )
           ) : (
             /* Full map view */
-            <MapView
-              listings={filtered}
-              onVisibleListingsChange={setViewportIds}
-              onPolygonFilter={setPolygonFilterIds}
-            />
+            <MapGate consent={consent} accept={accept}>
+              <MapView
+                listings={filtered}
+                onVisibleListingsChange={setViewportIds}
+                onPolygonFilter={setPolygonFilterIds}
+              />
+            </MapGate>
           )}
         </div>
       </div>
