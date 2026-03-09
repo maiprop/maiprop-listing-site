@@ -611,7 +611,7 @@ export default function Firesale() {
                   <div className="px-4 py-3 text-center text-muted-foreground/60">Traditional</div>
                 </div>
                 {[
-                  { label: "Time to offer", firesale: "48 hours", trad: "3–6 months", icon: "⚡" },
+                  { label: "Time to offer", firesale: "96 hours", trad: "3–6 months", icon: "⚡" },
                   { label: "Viewings", firesale: "Fast & private", trad: "10–30 open days", icon: "🔑" },
                   { label: "Negotiations", firesale: "None", trad: "Weeks of back-forth", icon: "🤝" },
                   { label: "Certainty of sale", firesale: "Guaranteed", trad: "~60% chance", icon: "🎯" },
