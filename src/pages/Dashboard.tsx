@@ -77,9 +77,14 @@ export default function Dashboard() {
               </div>
               <div className="min-w-0">
                 <div className="font-semibold text-sm truncate">{displayName}</div>
-                <div className="flex items-center gap-1 mt-0.5">
+                <div className="flex items-center gap-1 mt-0.5 flex-wrap">
                   <span className="text-xs px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium capitalize">{roleLabel}</span>
-                  {profile?.verified && <CheckCircle className="w-3 h-3 text-primary" />}
+                  {profile?.verified
+                    ? <CheckCircle className="w-3 h-3 text-primary" />
+                    : profile?.role === "professional"
+                      ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/20 font-semibold">⏳ Pending</span>
+                      : null
+                  }
                 </div>
               </div>
             </div>
