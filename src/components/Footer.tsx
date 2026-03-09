@@ -116,7 +116,7 @@ export function Footer() {
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary border border-border hover:border-brand-gold/40 hover:bg-brand-gold/5 transition-all group">
               <span className="text-base leading-none">🏛️</span>
               <div>
-                <div className="text-xs font-semibold text-foreground group-hover:text-brand-gold transition-colors leading-tight">mai Properties</div>
+                <div className="text-xs font-semibold text-foreground group-hover:text-brand-gold transition-colors leading-tight">mAI properties</div>
                 <div className="text-[10px] text-muted-foreground leading-tight">Investment &amp; Golden Visa</div>
               </div>
               <ExternalLink className="w-3 h-3 text-muted-foreground group-hover:text-brand-gold transition-colors ml-0.5" />
