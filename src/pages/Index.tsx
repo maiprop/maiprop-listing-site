@@ -417,50 +417,72 @@ export default function Index() {
             </p>
 
             {/* Search bar */}
-            <div className="bg-card border border-border rounded-2xl p-2 shadow-elevated animate-fade-in-up" style={{ animationDelay: "0.2s" }}>
-              {/* Type tabs */}
-              <div className="flex gap-1 p-1 mb-2">
-                {["Buy", "Rent", "Auctions", "Quick Sale"].map(type => (
+            <div className="animate-fade-in-up" style={{ animationDelay: "0.2s" }}>
+              {/* Frosted card */}
+              <div className="relative bg-card/80 backdrop-blur-xl border border-border/60 rounded-2xl shadow-elevated overflow-visible"
+                style={{ boxShadow: "0 8px 40px -8px hsl(var(--primary) / 0.15), 0 2px 0 0 hsl(var(--primary) / 0.08)" }}>
+
+                {/* Type tabs */}
+                <div className="flex gap-0.5 px-2 pt-2">
+                  {[
+                    { label: "Buy", emoji: "🏠" },
+                    { label: "Rent", emoji: "🔑" },
+                    { label: "Auctions", emoji: "⚖️" },
+                    { label: "Quick Sale", emoji: "⚡" },
+                  ].map(({ label, emoji }) => (
+                    <button
+                      key={label}
+                      onClick={() => setSearchType(label)}
+                      className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                        searchType === label
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground hover:bg-secondary/80"
+                      }`}
+                    >
+                      <span className="text-base leading-none">{emoji}</span>
+                      <span>{label}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Divider */}
+                <div className="mx-3 mt-2 h-px bg-border/60" />
+
+                {/* Search row */}
+                <div className="flex gap-0 p-2">
+                  {/* Location with recent searches */}
+                  <div className="flex-1 min-w-0">
+                    <LocationInput value={searchQuery} onChange={setSearchQuery} onSearch={handleSearch} />
+                  </div>
+
+                  {/* Vertical divider */}
+                  <div className="w-px bg-border/60 mx-1 self-stretch my-1" />
+
+                  {/* Property type */}
+                  <PropertyTypeDropdown value={selectedPropertyType} onChange={setSelectedPropertyType} />
+
+                  {/* Vertical divider */}
+                  <div className="w-px bg-border/60 mx-1 self-stretch my-1" />
+
+                  {/* AI Search */}
                   <button
-                    key={type}
-                    onClick={() => setSearchType(type)}
-                    className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-                      searchType === type
-                        ? "bg-primary text-primary-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground hover:bg-secondary"
-                    }`}
+                    onClick={() => setShowAI(true)}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all text-primary hover:bg-primary/10 shrink-0 whitespace-nowrap"
                   >
-                    {type}
+                    <Sparkles className="w-4 h-4" />
+                    <span className="hidden lg:inline">AI Search</span>
                   </button>
-                ))}
-              </div>
 
-              {/* Search row */}
-              <div className="flex gap-2 flex-wrap sm:flex-nowrap">
-                {/* Location with recent searches */}
-                <LocationInput value={searchQuery} onChange={setSearchQuery} onSearch={handleSearch} />
-
-                {/* Property type */}
-                <PropertyTypeDropdown value={selectedPropertyType} onChange={setSelectedPropertyType} />
-
-                {/* AI Search button */}
-                <button
-                  onClick={() => setShowAI(true)}
-                  className="flex items-center gap-2 bg-primary/10 border border-primary/30 text-primary rounded-xl px-4 py-3 text-sm font-semibold hover:bg-primary/20 transition-colors shrink-0 whitespace-nowrap"
-                >
-                  <Sparkles className="w-4 h-4" />
-                  <span className="hidden md:inline">AI Search</span>
-                </button>
-
-                {/* Search button */}
-                <Button
-                  size="lg"
-                  className="bg-primary hover:opacity-90 border-0 text-primary-foreground rounded-xl px-6 font-semibold shrink-0"
-                  onClick={handleSearch}
-                >
-                  <Search className="w-4 h-4 mr-2" />
-                  Search
-                </Button>
+                  {/* Search button */}
+                  <Button
+                    size="lg"
+                    className="bg-primary hover:opacity-90 border-0 text-primary-foreground rounded-xl px-6 font-semibold shrink-0 ml-1"
+                    onClick={handleSearch}
+                  >
+                    <Search className="w-4 h-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Search</span>
+                  </Button>
+                </div>
               </div>
             </div>
 
