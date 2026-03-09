@@ -193,7 +193,7 @@ export default function Firesale() {
                 Your property is matched instantly to our network of <strong className="text-foreground">private investors</strong>.
               </p>
               <div className="flex flex-wrap gap-3 mb-10">
-                {["Zero commission", "Guaranteed cash", "96h close", "Full legal support", "AI valuation"].map((f) =>
+                {["Guaranteed cash", "96h close", "Full legal support", "AI valuation"].map((f) =>
                 <div key={f} className="flex items-center gap-1.5 text-sm bg-muted border border-border rounded-full px-3 py-1.5">
                     <Check className="w-3.5 h-3.5 text-brand-emerald" />{f}
                   </div>
@@ -592,33 +592,41 @@ export default function Firesale() {
                 </div>
               </div>
 
-              {/* Speed advantage */}
-              <div className="glass-card rounded-2xl border border-border p-6">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <Clock className="w-3.5 h-3.5 text-primary" />
+              {/* Comparison table — redesigned */}
+              <div className="glass-card rounded-2xl border border-border overflow-hidden">
+                {/* Header */}
+                <div className="grid grid-cols-3 bg-muted/60 border-b border-border text-[10px] font-bold uppercase tracking-widest">
+                  <div className="px-4 py-3 text-muted-foreground"></div>
+                  <div className="px-4 py-3 flex items-center justify-center gap-1.5 text-destructive border-x border-border">
+                    <Flame className="w-3 h-3" /> Firesale™
                   </div>
-                  <h4 className="font-display font-semibold text-sm">Firesale™ vs Traditional</h4>
+                  <div className="px-4 py-3 text-center text-muted-foreground/60">Traditional</div>
                 </div>
-                <div className="space-y-3">
-                  {[
-                  { label: "Time to offer", firesale: "24h", trad: "3–6 months" },
-                  { label: "Agent commission", firesale: "0%", trad: "2–3%" },
-                  { label: "Viewings required", firesale: "None", trad: "10–30" },
-                  { label: "Certainty of sale", firesale: "Guaranteed", trad: "~60%" }].
-                  map((r) =>
-                  <div key={r.label} className="grid grid-cols-3 gap-2 text-xs items-center">
-                      <span className="text-muted-foreground">{r.label}</span>
-                      <span className="font-bold text-brand-emerald text-center">{r.firesale}</span>
-                      <span className="text-muted-foreground text-right line-through opacity-60">{r.trad}</span>
+                {[
+                  { label: "Time to offer", firesale: "48 hours", trad: "3–6 months", icon: "⚡" },
+                  { label: "Viewings", firesale: "Fast & private", trad: "10–30 open days", icon: "🔑" },
+                  { label: "Negotiations", firesale: "None", trad: "Weeks of back-forth", icon: "🤝" },
+                  { label: "Certainty of sale", firesale: "Guaranteed", trad: "~60% chance", icon: "🎯" },
+                  { label: "Legal & notary", firesale: "Fully managed", trad: "You arrange it", icon: "📋" },
+                ].map((r, i) =>
+                  <div key={r.label} className={`grid grid-cols-3 text-xs items-stretch ${i < 4 ? "border-b border-border" : ""}`}>
+                    <div className="px-4 py-3 flex items-center gap-2 text-muted-foreground">
+                      <span className="text-sm leading-none">{r.icon}</span>
+                      <span className="font-medium">{r.label}</span>
                     </div>
-                  )}
-                </div>
+                    <div className="px-4 py-3 flex items-center justify-center border-x border-border bg-destructive/3">
+                      <span className="font-bold text-foreground text-center leading-tight">{r.firesale}</span>
+                    </div>
+                    <div className="px-4 py-3 flex items-center justify-center">
+                      <span className="text-muted-foreground/60 line-through text-center leading-tight">{r.trad}</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Investor dashboard CTA */}
+              {/* Investor dashboard CTA — gated */}
               <div className="glass-card rounded-2xl border border-accent/20 p-6 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 rounded-bl-full bg-accent/5" />
+                <div className="absolute top-0 right-0 w-32 h-32 rounded-bl-full bg-accent/5 pointer-events-none" />
                 <div className="relative">
                   <div className="flex items-center gap-2 mb-3">
                     <Lock className="w-4 h-4 text-accent" />
@@ -626,7 +634,7 @@ export default function Firesale() {
                   </div>
                   <h4 className="font-display font-bold text-base mb-2">Access the Deal Flow</h4>
                   <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
-                    Off-market properties before they hit the market. Exclusive to institutional subscribers.
+                    Off-market properties before they hit the market. Exclusive to registered investors.
                   </p>
                   <div className="space-y-1.5 mb-4">
                     {["Live firesale deal feed", "AI valuation reports", "Seller contact details", "Portfolio analytics"].map((f) =>
@@ -635,14 +643,36 @@ export default function Firesale() {
                       </div>
                     )}
                   </div>
-                  <Button
-                    className="w-full bg-accent/10 border border-accent/30 text-accent hover:bg-accent/20 gap-2 text-xs"
-                    onClick={() => navigate("/investor-dashboard")}>
-                    
-                    <BarChart2 className="w-3.5 h-3.5" />
-                    View Investor Dashboard
-                    <ChevronRight className="w-3.5 h-3.5 ml-auto" />
-                  </Button>
+                  {user ? (
+                    <Button
+                      className="w-full bg-accent/10 border border-accent/30 text-accent hover:bg-accent/20 gap-2 text-xs"
+                      onClick={() => navigate("/investor-dashboard")}>
+                      <BarChart2 className="w-3.5 h-3.5" />
+                      View Investor Dashboard
+                      <ChevronRight className="w-3.5 h-3.5 ml-auto" />
+                    </Button>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="rounded-xl bg-accent/5 border border-accent/20 px-4 py-3 flex items-center gap-3">
+                        <Lock className="w-4 h-4 text-accent/60 shrink-0" />
+                        <p className="text-[11px] text-muted-foreground leading-snug">
+                          Sign in to access the exclusive investor deal flow.
+                        </p>
+                      </div>
+                      <Button
+                        className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2 text-xs h-10"
+                        onClick={() => navigate("/login", { state: { from: "/firesale" } })}>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                        Sign In to Access
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="w-full border-border text-xs h-9"
+                        onClick={() => navigate("/signup", { state: { from: "/firesale" } })}>
+                        Create a Free Account
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
