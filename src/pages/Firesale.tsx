@@ -809,7 +809,7 @@ export default function Firesale() {
                   </p>
                   <div className="space-y-1.5 mb-4">
                     {[
-                      "Live firesale deal feed",
+                      "Live quick sale deal feed",
                       "AI valuation reports",
                       "Seller contact details",
                       "Portfolio analytics",
