@@ -750,10 +750,10 @@ export default function Index() {
       {/* ══ PROFESSIONALS CTA ════════════════════════════════════════════════ */}
       <section className="py-20 container">
         <div className="relative rounded-3xl overflow-hidden border border-accent/20"
-          style={{ background: "linear-gradient(135deg, hsl(265 80% 6%), hsl(265 40% 10%), hsl(183 100% 5%))" }}>
-          <div className="absolute top-0 left-0 w-80 h-80 rounded-full blur-3xl opacity-25"
+          className="bg-foreground dark:bg-[hsl(265_80%_6%)]" style={{}}>
+          <div className="absolute top-0 left-0 w-80 h-80 rounded-full blur-3xl opacity-20"
             style={{ background: "radial-gradient(hsl(265 80% 60%), transparent 70%)" }} />
-          <div className="absolute bottom-0 right-0 w-80 h-80 rounded-full blur-3xl opacity-20"
+          <div className="absolute bottom-0 right-0 w-80 h-80 rounded-full blur-3xl opacity-15"
             style={{ background: "radial-gradient(hsl(183 100% 42%), transparent 70%)" }} />
           <div className="relative p-10 md:p-14 lg:p-16">
             <div className="grid lg:grid-cols-2 gap-12 items-center">
