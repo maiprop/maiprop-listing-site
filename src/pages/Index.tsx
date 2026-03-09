@@ -524,6 +524,7 @@ export default function Index() {
                     title="mAI Prop Properties — Greek Golden Visa & Investment Properties"
                     className="w-full h-full border-0"
                     loading="lazy"
+                    sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
                   />
                   {/* Overlay */}
                   <a
