@@ -50,16 +50,18 @@ export interface NeighbourhoodReportProps {
 
 // ── Micro-components ───────────────────────────────────────────────────────────
 
-function ScoreBar({ score, max = 100, colour }: { score: number; max?: number; colour: string }) {
-  return (
-    <div className="h-1.5 bg-border rounded-full overflow-hidden mt-1.5">
-      <div
-        className="h-full rounded-full transition-all duration-700"
-        style={{ width: `${(score / max) * 100}%`, background: colour }}
-      />
-    </div>
-  );
-}
+const ScoreBar = React.forwardRef<HTMLDivElement, { score: number; max?: number; colour: string }>(
+  function ScoreBar({ score, max = 100, colour }, ref) {
+    return (
+      <div ref={ref} className="h-1.5 bg-border rounded-full overflow-hidden mt-1.5">
+        <div
+          className="h-full rounded-full transition-all duration-700"
+          style={{ width: `${(score / max) * 100}%`, background: colour }}
+        />
+      </div>
+    );
+  }
+);
 
 function MiniChart({ trend }: { trend: PriceTrend }) {
   const points = [
