@@ -208,16 +208,14 @@ function ListingTypeButton({ value, onChange }: { value: string; onChange: (v: s
 // ─── PropertyTypeButton ───────────────────────────────────────────────────────
 
 function PropertyTypeButton({
-  value, subtype, onTypeChange, onSubtypeChange,
+  value, subtype, onChange,
 }: {
   value: string; subtype: string;
-  onTypeChange: (v: string) => void;
-  onSubtypeChange: (v: string) => void;
+  onChange: (type: string, subtype: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  // commercial type — flat subtypes listed directly under group header
   const commercialType = PROPERTY_TYPE_MAP["commercial"];
 
   useEffect(() => {
@@ -252,9 +250,8 @@ function PropertyTypeButton({
       </button>
       {open && (
         <div className="absolute top-full mt-1 left-0 z-50 bg-card border border-border rounded-xl shadow-lg min-w-[220px] max-h-[480px] overflow-y-auto">
-          {/* All types */}
           <button
-            onClick={() => { onTypeChange(""); onSubtypeChange(""); setOpen(false); }}
+            onClick={() => { onChange("", ""); setOpen(false); }}
             className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left transition-colors hover:bg-secondary ${
               !value ? "text-primary bg-primary/10" : "text-foreground"
             }`}
@@ -266,18 +263,16 @@ function PropertyTypeButton({
 
           {PROPERTY_GROUPS.map((group, gi) => (
             <div key={group.id}>
-              {/* Group header */}
               <div className="flex items-center gap-2 px-3 pt-2.5 pb-1">
                 <span className="text-xs">{group.emoji}</span>
                 <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{group.label}</span>
               </div>
 
               {group.id === "commercial" ? (
-                /* Commercial: flat list of all subtypes, no parent row */
                 commercialType.subtypes.map(st => (
                   <button
                     key={st.value}
-                    onClick={() => { onTypeChange("commercial"); onSubtypeChange(st.value); setOpen(false); }}
+                    onClick={() => { onChange("commercial", st.value); setOpen(false); }}
                     title={st.description}
                     className={`w-full flex items-center gap-2.5 pl-6 pr-3 py-2 text-sm text-left transition-colors hover:bg-secondary ${
                       value === "commercial" && subtype === st.value ? "text-primary bg-primary/10" : "text-foreground"
@@ -289,20 +284,19 @@ function PropertyTypeButton({
                   </button>
                 ))
               ) : (
-                /* Residence & Land: flat type items, direct select */
                 group.types.map(typeKey => {
                   const pt = PROPERTY_TYPE_MAP[typeKey];
                   return (
                     <button
                       key={pt.value}
-                      onClick={() => { onTypeChange(pt.value); onSubtypeChange(""); setOpen(false); }}
+                      onClick={() => { onChange(pt.value, ""); setOpen(false); }}
                       className={`w-full flex items-center gap-2.5 pl-6 pr-3 py-2 text-sm text-left transition-colors hover:bg-secondary ${
-                        value === pt.value ? "text-primary bg-primary/10" : "text-foreground"
+                        value === pt.value && !subtype ? "text-primary bg-primary/10" : "text-foreground"
                       }`}
                     >
                       <span>{pt.emoji}</span>
                       <span className="font-medium">{pt.label}</span>
-                      {value === pt.value && <Check className="w-3.5 h-3.5 ml-auto" />}
+                      {value === pt.value && !subtype && <Check className="w-3.5 h-3.5 ml-auto" />}
                     </button>
                   );
                 })
@@ -520,8 +514,14 @@ export default function Listings() {
               <PropertyTypeButton
                 value={selectedType}
                 subtype={selectedSubtype}
-                onTypeChange={v => { setParam("type", v); setParam("subtype", ""); }}
-                onSubtypeChange={v => setParam("subtype", v)}
+                onChange={(type, sub) => {
+                  setSearchParams(prev => {
+                    const next = new URLSearchParams(prev);
+                    if (type) next.set("type", type); else next.delete("type");
+                    if (sub) next.set("subtype", sub); else next.delete("subtype");
+                    return next;
+                  }, { replace: true });
+                }}
               />
 
               {/* Price */}
