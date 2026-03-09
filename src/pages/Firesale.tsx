@@ -207,9 +207,7 @@ export default function Firesale() {
                     <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
                     <div className="text-muted-foreground text-xs mt-1">{s.label}</div>
                   </div>
-                ))
-
-                )}
+                ))}
               </div>
             </div>
           </div>
