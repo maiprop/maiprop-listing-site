@@ -1045,6 +1045,7 @@ export default function Index() {
         </div>
       </section>
 
+      <NavyDivider fromDark={false} />
       {/* ══ POPULAR LOCATIONS ════════════════════════════════════════════════ */}
       <section className="py-16 bg-secondary">
         <div ref={locationsRef} className="container">
