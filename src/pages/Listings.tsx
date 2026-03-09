@@ -232,12 +232,13 @@ function PropertyTypeButton({
   const commercialType = PROPERTY_TYPE_MAP["commercial"];
 
   useEffect(() => {
+    if (!open) return;
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, []);
+  }, [open]);
 
   const currentType = value ? PROPERTY_TYPE_MAP[value as PropertyTypeKey] : null;
   const currentSubtype = currentType?.subtypes.find(s => s.value === subtype);
