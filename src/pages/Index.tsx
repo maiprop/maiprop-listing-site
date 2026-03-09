@@ -592,19 +592,19 @@ Residences, offices, stores, land, auctions, and investment properties — all i
               </div>
 
               {/* Stats — 2-col grid on mobile */}
-              <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-x-6 gap-y-3 mt-6 sm:mt-7 animate-fade-in-up" style={{ animationDelay: "0.3s" }}>
-                {[
-                { value: "47,000+", label: "Active Listings" },
-                { value: "€2.4B", label: "Properties Sold" },
-                { value: "12,500+", label: "Verified Agents" },
-                { value: "3,200+", label: "Monthly Auctions" }].
-                map((stat) =>
-                <div key={stat.label} className="flex items-baseline gap-1.5">
-                    <div className="font-display font-bold text-base sm:text-lg gradient-text-primary">{stat.value}</div>
-                    <div className="text-xs text-white/60">{stat.label}</div>
-                  </div>
-                )}
-              </div>
+              
+
+
+
+
+
+
+
+
+
+
+
+              
             </div>
 
             {/* ── RIGHT: Live Market Ticker Card ── */}
