@@ -892,7 +892,7 @@ export default function Index() {
 
               {/* Headline */}
               <h1
-                className="font-display font-black leading-[1.05] mb-4 sm:mb-6 animate-fade-in-up text-white text-4xl"
+                className="font-display font-black leading-[1.05] mb-4 sm:mb-6 animate-fade-in-up text-white text-3xl"
                 style={{ fontSize: "clamp(2rem, 8vw, 4.5rem)", animationDelay: "0.08s" }}>
                 
                 Find your perfect property in Greece
