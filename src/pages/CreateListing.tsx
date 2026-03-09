@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   ChevronLeft, ChevronRight, Check, Upload, X, Loader2,
   Home, Building2, Zap, MapPin, DollarSign, Image as ImageIcon,
-  Info, GripVertical, Star
+  Info, GripVertical, Star, Sparkles, TrendingUp, RefreshCw
 } from "lucide-react";
 import { PROPERTY_TYPES as PROP_TYPES, PROPERTY_TYPE_MAP, type PropertyTypeKey } from "@/lib/propertyTypes";
 import { Button } from "@/components/ui/button";
@@ -217,6 +217,11 @@ export default function CreateListing() {
   const [images, setImages] = useState<UploadedImage[]>([]);
   const [coverImageId, setCoverImageId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [aiDescLoading, setAiDescLoading] = useState(false);
+  const [aiPriceLoading, setAiPriceLoading] = useState(false);
+  const [aiPriceSuggestion, setAiPriceSuggestion] = useState<{
+    min: number; max: number; suggested: number; confidence: string; reasoning: string;
+  } | null>(null);
 
   const [form, setForm] = useState({
     listing_type: "sale" as ListingType,
@@ -340,7 +345,94 @@ export default function CreateListing() {
     setCoverImageId(prev => prev === id ? (images.find(img => img.id !== id)?.id ?? null) : prev);
   };
 
-  // ── Submit ────────────────────────────────────────────────────────────────
+  // ── AI helpers ────────────────────────────────────────────────────────────
+
+  const getActiveFeatures = () => {
+    const featureKeys = [
+      "has_elevator", "has_ac", "has_solar_water", "has_storage", "has_secure_door",
+      "has_parking", "has_balcony", "has_garden", "has_pool", "has_view",
+      "has_fireplace", "has_furnished", "has_smart_home", "has_disability_access",
+    ] as const;
+    return featureKeys.filter(k => (form as any)[k]).map(k =>
+      k.replace("has_", "").replace("is_", "").replace(/_/g, " ")
+    );
+  };
+
+  const handleAiDescription = async () => {
+    if (!form.property_type || !form.sqm) {
+      toast.error("Please fill in property type and area first");
+      return;
+    }
+    setAiDescLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("listing-ai-assist", {
+        body: {
+          type: "description",
+          property: {
+            property_type: form.property_type,
+            listing_type: form.listing_type,
+            city: form.city || "Greece",
+            address: form.address,
+            sqm: form.sqm,
+            bedrooms: form.bedrooms,
+            bathrooms: form.bathrooms,
+            floor: form.floor,
+            year_built: form.year_built,
+            energy_class: form.energy_class,
+            features: getActiveFeatures(),
+            condition: form.construction_status,
+          },
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      set("description", data.content);
+      toast.success("AI description generated!");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to generate description");
+    } finally {
+      setAiDescLoading(false);
+    }
+  };
+
+  const handleAiPrice = async () => {
+    if (!form.property_type || !form.sqm || !form.city) {
+      toast.error("Please fill in property type, area, and city first");
+      return;
+    }
+    setAiPriceLoading(true);
+    setAiPriceSuggestion(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("listing-ai-assist", {
+        body: {
+          type: "price",
+          property: {
+            property_type: form.property_type,
+            listing_type: form.listing_type,
+            city: form.city,
+            region: form.region,
+            sqm: form.sqm,
+            bedrooms: form.bedrooms,
+            floor: form.floor,
+            year_built: form.year_built,
+            energy_class: form.energy_class,
+            features: getActiveFeatures(),
+            condition: form.construction_status,
+          },
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      const parsed = JSON.parse(data.content);
+      setAiPriceSuggestion(parsed);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to get price estimate");
+    } finally {
+      setAiPriceLoading(false);
+    }
+  };
+
+
 
   const handleSubmit = async (asDraft = false) => {
     if (!form.title || !form.city || !form.price || !form.sqm) {
@@ -594,7 +686,30 @@ export default function CreateListing() {
                 </div>
                 <div>
                   <FieldLabel>Description</FieldLabel>
-                  <Textarea placeholder="Describe the property..." value={form.description} onChange={e => set("description", e.target.value)} rows={4} />
+                  <div className="relative">
+                    <Textarea
+                      placeholder="Describe the property in detail — highlights, condition, location perks, investment potential..."
+                      value={form.description}
+                      onChange={e => set("description", e.target.value)}
+                      rows={5}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAiDescription}
+                    disabled={aiDescLoading}
+                    className="mt-2 flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all disabled:opacity-50 border-primary/40 bg-primary/5 text-primary hover:bg-primary/10"
+                  >
+                    {aiDescLoading
+                      ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Generating...</>
+                      : <><Sparkles className="w-3.5 h-3.5" /> {form.description ? "Regenerate with AI" : "Write with AI"}</>
+                    }
+                  </button>
+                  {!form.sqm && (
+                    <p className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1">
+                      <Info className="w-3 h-3 shrink-0" /> Fill in Area (m²) below for better AI results
+                    </p>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div><FieldLabel required>Area (m²)</FieldLabel><Input type="number" placeholder="85" value={form.sqm} onChange={e => set("sqm", e.target.value)} /></div>
@@ -881,6 +996,75 @@ export default function CreateListing() {
             {step === 5 && (
               <div className="space-y-4">
                 <h2 className="font-display text-xl font-semibold">Pricing</h2>
+
+                {/* AI Price Suggestion Banner */}
+                <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <TrendingUp className="w-4 h-4 text-primary" />
+                      <span className="text-sm font-semibold">AI Market Estimate</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAiPrice}
+                      disabled={aiPriceLoading}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all disabled:opacity-50 border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
+                    >
+                      {aiPriceLoading
+                        ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Analysing...</>
+                        : aiPriceSuggestion
+                        ? <><RefreshCw className="w-3.5 h-3.5" /> Re-estimate</>
+                        : <><Sparkles className="w-3.5 h-3.5" /> Get AI Estimate</>
+                      }
+                    </button>
+                  </div>
+
+                  {!aiPriceSuggestion && !aiPriceLoading && (
+                    <p className="text-xs text-muted-foreground">
+                      Get an AI-powered price estimate based on your property details and current Greek market data.
+                    </p>
+                  )}
+
+                  {aiPriceLoading && (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground py-1">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
+                      Analysing Greek market data for {form.city || "your area"}...
+                    </div>
+                  )}
+
+                  {aiPriceSuggestion && (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-3 gap-3 text-center">
+                        <div className="rounded-lg bg-background/50 px-2 py-2">
+                          <div className="text-[10px] text-muted-foreground mb-0.5 uppercase tracking-wide">Min</div>
+                          <div className="text-sm font-bold text-foreground">€{aiPriceSuggestion.min.toLocaleString()}</div>
+                        </div>
+                        <div className="rounded-lg bg-primary/15 border border-primary/30 px-2 py-2 relative">
+                          <div className="text-[10px] text-primary mb-0.5 uppercase tracking-wide font-bold">Suggested</div>
+                          <div className="text-sm font-black text-primary">€{aiPriceSuggestion.suggested.toLocaleString()}</div>
+                        </div>
+                        <div className="rounded-lg bg-background/50 px-2 py-2">
+                          <div className="text-[10px] text-muted-foreground mb-0.5 uppercase tracking-wide">Max</div>
+                          <div className="text-sm font-bold text-foreground">€{aiPriceSuggestion.max.toLocaleString()}</div>
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground italic">{aiPriceSuggestion.reasoning}</p>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                          Confidence: <span className={`font-bold ${aiPriceSuggestion.confidence === "high" ? "text-green-500" : aiPriceSuggestion.confidence === "medium" ? "text-yellow-500" : "text-red-400"}`}>{aiPriceSuggestion.confidence}</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => { set("price", String(aiPriceSuggestion.suggested)); toast.success("Price applied!"); }}
+                          className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
+                        >
+                          <Check className="w-3 h-3" /> Use this price
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 <div>
                   <FieldLabel required>{lt === "rent" ? "Monthly Rent (€)" : "Asking Price (€)"}</FieldLabel>
                   <Input type="number" placeholder={lt === "rent" ? "800" : "250000"} value={form.price} onChange={e => set("price", e.target.value)} />

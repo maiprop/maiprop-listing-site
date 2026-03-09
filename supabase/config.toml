@@ -39,3 +39,6 @@ verify_jwt = false
 [functions.os-diagnose]
 verify_jwt = false
 
+[functions.listing-ai-assist]
+verify_jwt = false
+

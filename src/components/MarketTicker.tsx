@@ -1,6 +1,7 @@
 import { usePriceIndex } from "@/hooks/usePriceIndex";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useState, useEffect, useRef } from "react";
 
 // ── Sparkline paths – pre-generated organic waves per city ────────────────────
 const SPARKLINES: Record<string, string> = {
@@ -51,6 +52,32 @@ function Sparkline({ city, up }: { city: string; up: boolean }) {
   );
 }
 
+// ── Live flicker hook: randomly nudges one city price every 3 s ───────────────
+function useLiveFlicker(basePrices: Record<string, number>) {
+  const [prices, setPrices] = useState<Record<string, number>>(basePrices);
+  const [flickeringCity, setFlickeringCity] = useState<string | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const cities = Object.keys(basePrices);
+    const tick = () => {
+      const city = cities[Math.floor(Math.random() * cities.length)];
+      const base = basePrices[city];
+      // Nudge ±0.05–0.25 % 
+      const delta = base * (0.0005 + Math.random() * 0.002) * (Math.random() > 0.35 ? 1 : -1);
+      setPrices(prev => ({ ...prev, [city]: Math.round(prev[city] + delta) }));
+      setFlickeringCity(city);
+      // Clear highlight after 700 ms
+      setTimeout(() => setFlickeringCity(null), 700);
+      timerRef.current = setTimeout(tick, 2800 + Math.random() * 600);
+    };
+    timerRef.current = setTimeout(tick, 1500);
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return { prices, flickeringCity };
+}
+
 export function MarketTicker() {
   const { data: liveData, isLoading } = usePriceIndex();
 
@@ -85,13 +112,18 @@ export function MarketTicker() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const rows = DISPLAY_CITIES.map(city => {
+  const baseRows = DISPLAY_CITIES.map(city => {
     const live = liveData?.find(d => d.city === city);
     const price = live?.is_live ? live.avg_price_per_sqm : (STATIC_PRICES[city] ?? 0);
     const trend = CITY_CHANGES[city] ?? { change: 1.0, up: true };
     return { city, price, ...trend, isLive: live?.is_live ?? false };
   });
 
+  // Build base prices map for flicker hook
+  const basePriceMap = Object.fromEntries(baseRows.map(r => [r.city, r.price]));
+  const { prices: livePrices, flickeringCity } = useLiveFlicker(basePriceMap);
+
+  const rows = baseRows.map(r => ({ ...r, price: livePrices[r.city] ?? r.price }));
   const anyLive = rows.some(r => r.isLive);
 
   return (
@@ -134,39 +166,48 @@ export function MarketTicker() {
 
       {/* City rows */}
       <div className="divide-y" style={{ borderColor: "hsl(192 100% 50% / 0.07)" }}>
-        {rows.map((row, i) => (
-          <div
-            key={row.city}
-            className="flex items-center gap-3 px-5 py-2.5 transition-colors"
-            style={{ background: i % 2 === 0 ? "transparent" : "hsl(192 100% 50% / 0.015)" }}
-            onMouseEnter={e => (e.currentTarget.style.background = "hsl(192 100% 50% / 0.04)")}
-            onMouseLeave={e => (e.currentTarget.style.background = i % 2 === 0 ? "transparent" : "hsl(192 100% 50% / 0.015)")}
-          >
-            {/* City name */}
-            <span className="w-28 text-sm font-medium" style={{ color: "hsl(210 30% 72%)" }}>
-              {row.city}
-            </span>
-
-            {/* Sparkline */}
-            <Sparkline city={row.city} up={row.up} />
-
-            {/* Price */}
-            <span className="flex-1 text-right text-sm font-bold tabular-nums" style={{ color: "hsl(210 40% 96%)" }}>
-              €{row.price.toLocaleString()}
-            </span>
-
-            {/* Change badge */}
-            <span
-              className="w-16 text-right text-xs font-black tabular-nums px-1.5 py-0.5 rounded-md"
+        {rows.map((row, i) => {
+          const isFlickering = flickeringCity === row.city;
+          return (
+            <div
+              key={row.city}
+              className="flex items-center gap-3 px-5 py-2.5 transition-all duration-300"
               style={{
-                color: row.up ? "hsl(192 100% 55%)" : "hsl(0 72% 60%)",
-                background: row.up ? "hsl(192 100% 50% / 0.1)" : "hsl(0 72% 55% / 0.1)",
+                background: isFlickering
+                  ? "hsl(192 100% 50% / 0.08)"
+                  : i % 2 === 0 ? "transparent" : "hsl(192 100% 50% / 0.015)",
+                boxShadow: isFlickering ? "inset 0 0 0 1px hsl(192 100% 50% / 0.2)" : undefined,
               }}
             >
-              {row.up ? "▲" : "▼"} {Math.abs(row.change).toFixed(1)}%
-            </span>
-          </div>
-        ))}
+              {/* City name */}
+              <span className="w-28 text-sm font-medium transition-colors duration-300" style={{ color: isFlickering ? "hsl(192 100% 80%)" : "hsl(210 30% 72%)" }}>
+                {row.city}
+              </span>
+
+              {/* Sparkline */}
+              <Sparkline city={row.city} up={row.up} />
+
+              {/* Price — flickers bright when updated */}
+              <span
+                className="flex-1 text-right text-sm font-bold tabular-nums transition-colors duration-300"
+                style={{ color: isFlickering ? "hsl(192 100% 70%)" : "hsl(210 40% 96%)" }}
+              >
+                €{row.price.toLocaleString()}
+              </span>
+
+              {/* Change badge */}
+              <span
+                className="w-16 text-right text-xs font-black tabular-nums px-1.5 py-0.5 rounded-md"
+                style={{
+                  color: row.up ? "hsl(192 100% 55%)" : "hsl(0 72% 60%)",
+                  background: row.up ? "hsl(192 100% 50% / 0.1)" : "hsl(0 72% 55% / 0.1)",
+                }}
+              >
+                {row.up ? "▲" : "▼"} {Math.abs(row.change).toFixed(1)}%
+              </span>
+            </div>
+          );
+        })}
       </div>
 
       {/* Footer — auctions */}
