@@ -227,7 +227,7 @@ export default function ProfessionalServicesEditor() {
                       {isSelected && config && (
                         <div className="flex items-center gap-3 mt-1.5 text-xs">
                           <span className="text-brand-gold font-semibold">
-                            {config.rate ? `€${config.rate}` : "—"}{PRICING_LABELS[config.pricingModel]}
+                            {config.rate ? `€${config.rate}` : "—"}{PRICING_DISPLAY[config.pricingModel]}
                           </span>
                           <span className="text-muted-foreground capitalize">{config.pricingModel}</span>
                           {config.videoEnabled && <span className="text-primary flex items-center gap-1"><Video className="w-3 h-3" />Video on</span>}
