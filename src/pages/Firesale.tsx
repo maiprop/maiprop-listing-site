@@ -354,12 +354,17 @@ export default function Firesale() {
                                 onClick={() => upd("condition", opt.value)}
                                 className={`text-left p-3.5 rounded-xl border transition-all duration-200 ${
                                   form.condition === opt.value
-                                    ? "border-primary bg-primary/10 text-foreground"
+                                    ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary/30"
                                     : "border-border bg-muted hover:border-primary/40 text-muted-foreground"
                                 }`}
                               >
-                                <p className="text-xs font-semibold">{opt.label}</p>
-                                <p className="text-[10px] text-muted-foreground mt-0.5">Discount: {opt.disc}</p>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-base leading-none">{opt.emoji}</span>
+                                  <p className="text-xs font-bold">{opt.label}</p>
+                                  {form.condition === opt.value && <Check className="w-3 h-3 text-primary ml-auto" />}
+                                </div>
+                                <p className="text-[10px] text-muted-foreground">{opt.sublabel}</p>
+                                <p className="text-[10px] font-semibold text-destructive/80 mt-0.5">Discount: {opt.disc}</p>
                               </button>
                             ))}
                           </div>
@@ -378,11 +383,14 @@ export default function Firesale() {
 
                         <Button
                           className="w-full bg-gradient-primary border-0 text-primary-foreground h-11"
-                          disabled={!step1Valid}
-                          onClick={() => { generateEstimate(); setStep(2); }}
+                          disabled={!step1Valid || aiLoading}
+                          onClick={handleContinue}
                         >
-                          <Zap className="w-4 h-4 mr-2" />
-                          Continue to Contact Details
+                          {aiLoading ? (
+                            <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Calculating AI estimate...</>
+                          ) : (
+                            <><Sparkles className="w-4 h-4 mr-2" />Get AI Estimate & Continue</>
+                          )}
                         </Button>
                       </div>
                     )}
