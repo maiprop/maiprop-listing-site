@@ -1,16 +1,38 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Search, MapPin, ChevronDown, Users, ArrowRight, Gavel, Flame, ExternalLink, BarChart2, Globe, Maximize2, ListFilter, CalendarCheck, HandshakeIcon, Sparkles, Check, X, Loader2, Lightbulb } from "lucide-react";
+import { Search, MapPin, ChevronDown, Users, ArrowRight, Gavel, Flame, ExternalLink, BarChart2, Globe, Maximize2, ListFilter, CalendarCheck, HandshakeIcon, Sparkles, Check, X, Loader2, Lightbulb, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { MarketTicker } from "@/components/MarketTicker";
 import { PropertyCard } from "@/components/PropertyCard";
 import { Footer } from "@/components/Footer";
+import { CookieConsentBanner } from "@/components/CookieConsentBanner";
 import { mockProperties } from "@/data/mockProperties";
 import { PROPERTY_TYPES, PROPERTY_GROUPS, PROPERTY_TYPE_MAP, type PropertyTypeKey } from "@/lib/propertyTypes";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import heroBg from "@/assets/hero-bg.jpg";
+
+const RECENT_SEARCHES_KEY = "maiprop_recent_searches";
+const MAX_RECENT = 6;
+
+function getRecentSearches(): string[] {
+  try {
+    const raw = localStorage.getItem(RECENT_SEARCHES_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function addRecentSearch(query: string) {
+  if (!query.trim()) return;
+  const existing = getRecentSearches().filter(s => s !== query);
+  localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify([query, ...existing].slice(0, MAX_RECENT)));
+}
+
+function removeRecentSearch(query: string) {
+  const existing = getRecentSearches().filter(s => s !== query);
+  localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(existing));
+}
 
 const stats = [
   { value: "47,000+", label: "Active Listings" },
@@ -243,6 +265,76 @@ function AISearchModal({ onFiltersApplied, onClose }: {
   );
 }
 
+// ── Recent-search-aware location input ─────────────────────────────────────────
+function LocationInput({ value, onChange, onSearch }: {
+  value: string;
+  onChange: (v: string) => void;
+  onSearch: () => void;
+}) {
+  const [focused, setFocused] = useState(false);
+  const [recents, setRecents] = useState<string[]>([]);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  const refresh = useCallback(() => setRecents(getRecentSearches()), []);
+
+  useEffect(() => {
+    refresh();
+    const handler = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setFocused(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [refresh]);
+
+  const showDropdown = focused && recents.length > 0 && !value;
+
+  return (
+    <div ref={wrapRef} className="flex-1 min-w-0 relative">
+      <div className="flex items-center gap-2 bg-secondary rounded-xl px-4 py-3">
+        <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
+        <input
+          type="text"
+          placeholder="City, area, or neighbourhood..."
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          onFocus={() => { refresh(); setFocused(true); }}
+          onKeyDown={e => { if (e.key === "Enter") { setFocused(false); onSearch(); } if (e.key === "Escape") setFocused(false); }}
+          className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none min-w-0"
+        />
+        {value && (
+          <button onClick={() => onChange("")} className="text-muted-foreground hover:text-foreground transition-colors">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+
+      {showDropdown && (
+        <div className="absolute top-full mt-1 left-0 right-0 z-50 bg-card border border-border rounded-xl shadow-lg overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border">
+            <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Recent Searches</span>
+          </div>
+          {recents.map(r => (
+            <div key={r} className="flex items-center group px-4 py-2.5 hover:bg-secondary transition-colors cursor-pointer"
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => { onChange(r); setFocused(false); onSearch(); }}>
+              <Clock className="w-3.5 h-3.5 text-muted-foreground mr-3 shrink-0" />
+              <span className="flex-1 text-sm text-foreground truncate">{r}</span>
+              <button
+                onMouseDown={e => e.preventDefault()}
+                onClick={ev => { ev.stopPropagation(); removeRecentSearch(r); refresh(); }}
+                className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-border transition-all text-muted-foreground hover:text-foreground"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main ───────────────────────────────────────────────────────────────────────
 export default function Index() {
   const navigate = useNavigate();
@@ -259,13 +351,14 @@ export default function Index() {
   };
 
   const handleSearch = () => {
+    const lt = listingTypeMap[searchType];
+    if (lt === "firesale") { navigate("/firesale"); return; }
+    if (lt === "auction") { navigate("/auctions"); return; }
+    if (searchQuery.trim()) addRecentSearch(searchQuery.trim());
     const params = new URLSearchParams();
     if (searchQuery) params.set("city", searchQuery);
     if (selectedPropertyType) params.set("type", selectedPropertyType);
-    const lt = listingTypeMap[searchType];
-    if (lt && lt !== "firesale") params.set("listing_type", lt);
-    if (lt === "firesale") { navigate("/firesale"); return; }
-    if (lt === "auction") { navigate("/auctions"); return; }
+    if (lt) params.set("listing_type", lt);
     navigate(`/listings?${params.toString()}`);
   };
 
@@ -274,7 +367,7 @@ export default function Index() {
     if (filters.city) params.set("city", filters.city);
     if (filters.listing_type) params.set("listing_type", filters.listing_type);
     if (filters.property_type) params.set("type", filters.property_type);
-    if (filters.price_min || filters.price_max) params.set("price", `${filters.price_min ?? 0}-${filters.price_max ?? 9999999}`);
+    if (filters.price_min != null || filters.price_max != null) params.set("price", `${filters.price_min ?? 0}-${filters.price_max ?? 9999999}`);
     if (filters.beds_min) params.set("beds_min", String(filters.beds_min));
     if (filters.sqm_min) params.set("sqm_min", String(filters.sqm_min));
     if (filters.features?.length) params.set("features", filters.features.join(","));
@@ -287,6 +380,7 @@ export default function Index() {
       <MarketTicker />
 
       {showAI && <AISearchModal onFiltersApplied={handleAIFilters} onClose={() => setShowAI(false)} />}
+      <CookieConsentBanner />
 
       {/* Hero */}
       <section className="relative min-h-[88vh] flex items-center overflow-hidden pt-16">
@@ -343,18 +437,8 @@ export default function Index() {
 
               {/* Search row */}
               <div className="flex gap-2 flex-wrap sm:flex-nowrap">
-                {/* Location */}
-                <div className="flex-1 min-w-0 flex items-center gap-2 bg-secondary rounded-xl px-4 py-3">
-                  <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <input
-                    type="text"
-                    placeholder="City, area, or neighbourhood..."
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                    onKeyDown={e => e.key === "Enter" && handleSearch()}
-                    className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none min-w-0"
-                  />
-                </div>
+                {/* Location with recent searches */}
+                <LocationInput value={searchQuery} onChange={setSearchQuery} onSearch={handleSearch} />
 
                 {/* Property type */}
                 <PropertyTypeDropdown value={selectedPropertyType} onChange={setSelectedPropertyType} />
