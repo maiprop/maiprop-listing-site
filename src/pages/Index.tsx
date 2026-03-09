@@ -448,148 +448,152 @@ function OSDashboardMockup() {
       <div className="flex items-center justify-between px-4 py-2 border-b" style={{ borderColor: "rgba(255,255,255,0.08)", background: "hsl(220 30% 5%)" }}>
         <div className="flex items-center gap-3">
           <div className="text-[10px] font-black tracking-tight flex items-center gap-1" style={{ color: "hsl(183 100% 50%)" }}>
-            mAI Prop<span className="text-[7px] font-black ml-0.5 px-1 rounded-sm" style={{ background: "hsl(183 100% 50% / 0.15)", color: "hsl(183 100% 70%)" }}>OS</span>
+            mAI Prop
+            <span className="text-[7px] font-black ml-0.5 px-1 rounded-sm" style={{ background: "hsl(183 100% 50% / 0.15)", color: "hsl(183 100% 70%)" }}>OS</span>
           </div>
-        <div className="flex gap-1.5 ml-1">
-          {["Market", "Auctions", "Quick Sale", "Portfolio"].map((t, i) =>
-          <span key={t} className={`text-[8px] px-2 py-0.5 rounded-md ${i === 0 ? "bg-primary/20 text-primary border border-primary/30" : "text-white/40 hover:text-white/70"}`}>{t}</span>
-          )}
+          <div className="flex gap-1.5">
+            {["Modules", "Benefits", "Pricing", "Resources"].map((t) => (
+              <span key={t} className="text-[7px] px-1.5 py-0.5 rounded" style={{ color: "rgba(255,255,255,0.4)" }}>{t}</span>
+            ))}
+          </div>
         </div>
-        <div className="ml-auto flex gap-2 items-center">
-          <div className="w-16 h-5 bg-white/5 border border-white/10 rounded-md flex items-center px-2 gap-1">
-            <Search className="w-2 h-2 text-white/30" />
-            <span className="text-[7px] text-white/30">Search...</span>
-          </div>
-          <div className="w-5 h-5 rounded-full bg-primary/30 flex items-center justify-center text-[7px] font-bold text-primary">A</div>
+        <div className="flex items-center gap-2">
+          <div className="text-[7px] px-2 py-1 rounded-full font-bold" style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.5)" }}>START FOR FREE</div>
+          <div className="text-[7px] px-2 py-1 rounded-full font-bold" style={{ background: "hsl(183 100% 50% / 0.15)", color: "hsl(183 100% 50%)", border: "1px solid hsl(183 100% 50% / 0.3)" }}>SIGN IN</div>
         </div>
       </div>
-      {/* Body */}
-      <div className="flex h-full">
-        {/* Sidebar */}
-        <div className="w-8 shrink-0 bg-[hsl(220_20%_6%)] border-r border-white/8 flex flex-col items-center pt-3 gap-3">
-          {["📊", "⚖️", "⚡", "🗺️", "👤"].map((ic, i) =>
-          <div key={i} className={`w-5 h-5 rounded flex items-center justify-center text-[10px] ${i === 0 ? "bg-primary/20" : "opacity-40"}`}>{ic}</div>
-          )}
-        </div>
-        {/* Main content */}
-        <div className="flex-1 min-w-0 p-3 flex flex-col gap-2.5 overflow-hidden">
-          {/* KPIs */}
-          <div className="grid grid-cols-4 gap-2">
-            {[
-            { label: "Avg €/m²", value: "€2,380", delta: "+4.2%", up: true },
-            { label: "Active Deals", value: "312", delta: "+18", up: true },
-            { label: "Auctions/mo", value: "3,214", delta: "live", up: false },
-            { label: "AI Score", value: "8.7/10", delta: "Athens", up: true }].
-            map((k) =>
-            <div key={k.label} className="bg-white/4 border border-white/8 rounded-lg p-1.5">
-                <div className="text-[7px] text-white/40 mb-0.5">{k.label}</div>
-                <div className="text-[11px] font-bold text-white">{k.value}</div>
-                <div className={`text-[7px] font-semibold ${k.up ? "text-emerald-400" : "text-white/40"}`}>{k.delta}</div>
-              </div>
-            )}
+      {/* Hero + Market Widget */}
+      <div className="flex h-[calc(100%-36px)]">
+        {/* Left: Hero text */}
+        <div className="flex-1 px-5 pt-5 pb-3 flex flex-col justify-center">
+          <div className="text-[13px] font-black leading-snug mb-2" style={{ color: "rgba(255,255,255,0.9)" }}>
+            Real Estate<br />
+            <span style={{ color: "hsl(183 100% 50%)" }}>Investment Platform</span>
           </div>
-          {/* Chart */}
-          <div className="flex-1 bg-white/3 border border-white/8 rounded-lg p-2">
-            <div className="flex items-center justify-between mb-1.5">
-              <div className="text-[8px] font-semibold text-white/50">Price Index — Athens (€/m²)</div>
-              <div className="flex gap-1">
-                {["1M", "3M", "1Y"].map((l, i) => <span key={l} className={`text-[7px] px-1.5 py-0.5 rounded ${i === 2 ? "bg-primary/20 text-primary" : "text-white/30"}`}>{l}</span>)}
+          <p className="text-[7px] mb-2.5" style={{ color: "hsl(183 100% 70%)" }}>Gain The Edge In Greek Real Estate Market With:</p>
+          <div className="space-y-1.5 mb-4">
+            {["Data Accessibility", "Predictive Analytics", "Mapped Data & Automated Reports", "Portfolio & Asset Management", "Auctions Analysis & Automations"].map((f) => (
+              <div key={f} className="flex items-center gap-1.5 text-[7px]" style={{ color: "rgba(255,255,255,0.7)" }}>
+                <div className="w-2.5 h-2.5 rounded-full border flex items-center justify-center shrink-0" style={{ borderColor: "hsl(183 100% 50% / 0.5)" }}>
+                  <div className="w-1 h-1 rounded-full" style={{ background: "hsl(183 100% 50%)" }} />
+                </div>
+                {f}
               </div>
+            ))}
+          </div>
+          <div className="inline-flex items-center gap-1.5 text-[7px] font-bold px-3 py-1.5 rounded-full w-fit" style={{ background: "hsl(183 100% 50% / 0.12)", border: "1px solid hsl(183 100% 50% / 0.35)", color: "hsl(183 100% 60%)" }}>
+            <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "hsl(183 100% 50%)" }} />
+            SEE IT IN ACTION
+          </div>
+        </div>
+        {/* Right: Live Market widget */}
+        <div className="w-44 shrink-0 mr-4 mt-4 mb-4 rounded-xl overflow-hidden border flex flex-col" style={{ background: "hsl(220 30% 10%)", borderColor: "rgba(255,255,255,0.1)" }}>
+          <div className="flex items-center justify-between px-2.5 py-1.5 border-b" style={{ borderColor: "rgba(255,255,255,0.08)" }}>
+            <div className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: "hsl(183 100% 50%)" }} />
+              <span className="text-[7px] font-bold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.6)" }}>Live Market</span>
             </div>
-            <svg viewBox="0 0 200 45" className="w-full h-10" preserveAspectRatio="none">
-              <defs>
-                <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="hsl(192 100% 50%)" stopOpacity="0.25" />
-                  <stop offset="100%" stopColor="hsl(192 100% 50%)" stopOpacity="0" />
-                </linearGradient>
-              </defs>
-              <path d="M0,38 C20,35 40,30 60,26 C80,22 100,25 120,18 C140,11 160,14 180,8 L200,5 L200,45 L0,45Z" fill="url(#g1)" />
-              <path d="M0,38 C20,35 40,30 60,26 C80,22 100,25 120,18 C140,11 160,14 180,8 L200,5" fill="none" stroke="hsl(192 100% 50%)" strokeWidth="1.2" />
-              {/* Tooltip dot */}
-              <circle cx="160" cy="14" r="2" fill="hsl(192 100% 50%)" />
-              <rect x="148" y="6" width="26" height="11" rx="2" fill="hsl(220 20% 12%)" stroke="hsl(192 100% 50% / 0.4)" strokeWidth="0.5" />
-              <text x="161" y="13" textAnchor="middle" fontSize="4.5" fill="hsl(192 100% 70%)">€2,380</text>
-            </svg>
+            <div className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "hsl(183 100% 50%)" }} />
+              <span className="text-[6px] font-bold" style={{ color: "hsl(183 100% 60%)" }}>LIVE</span>
+            </div>
           </div>
-          {/* Recent activity */}
-          <div className="space-y-1">
-            {[
-            { type: "🏠", addr: "Kolonaki 48, Athens", price: "€420K", badge: "active", color: "text-emerald-400 bg-emerald-400/10" },
-            { type: "⚖️", addr: "Thessaloniki Court #14", price: "€185K", badge: "auction", color: "text-yellow-400 bg-yellow-400/10" },
-            { type: "⚡", addr: "Glyfada, Athens", price: "€310K", badge: "quick sale", color: "text-destructive bg-destructive/10" }].
-            map((item, i) =>
-            <div key={i} className="flex items-center gap-2 bg-white/3 border border-white/6 rounded px-2 py-1.5">
-                <span className="text-[10px]">{item.type}</span>
-                <span className="text-[8px] text-white/70 flex-1 truncate">{item.addr}</span>
-                <span className="text-[8px] font-bold text-primary">{item.price}</span>
-                <span className={`text-[7px] px-1.5 py-0.5 rounded-full font-semibold ${item.color}`}>{item.badge}</span>
+          <div className="flex-1 overflow-hidden">
+            {marketData.map((row, i) => (
+              <div key={row.city} className="flex items-center gap-1 px-2.5 py-[3px] border-b last:border-0" style={{ borderColor: "rgba(255,255,255,0.04)" }}>
+                <span className="text-[7px] w-16 truncate" style={{ color: "rgba(255,255,255,0.7)" }}>{row.city}</span>
+                <svg viewBox="0 0 30 12" className="w-7 h-2.5 shrink-0" preserveAspectRatio="none">
+                  <path d={sparklines[i]} fill="none" stroke="hsl(183 100% 50%)" strokeWidth="1.2" strokeLinecap="round" />
+                </svg>
+                <span className="text-[7px] font-bold ml-auto" style={{ color: "rgba(255,255,255,0.9)" }}>{row.value}</span>
+                <span className="text-[6px] font-bold w-8 text-right" style={{ color: "hsl(142 70% 55%)" }}>{row.delta}</span>
               </div>
-            )}
+            ))}
+          </div>
+          <div className="mx-2 my-1.5 rounded-lg px-2 py-1.5 border" style={{ background: "hsl(183 100% 50% / 0.06)", borderColor: "hsl(183 100% 50% / 0.15)" }}>
+            <div className="flex items-center justify-between mb-0.5">
+              <div className="flex items-center gap-1">
+                <span className="text-[8px]">⚡</span>
+                <span className="text-[6px] font-bold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.4)" }}>New Auctions Today</span>
+              </div>
+              <span className="text-[11px] font-black" style={{ color: "hsl(183 100% 60%)" }}>47</span>
+            </div>
+            <div className="text-[6px]" style={{ color: "rgba(255,255,255,0.35)" }}>Latest: <span style={{ color: "rgba(255,255,255,0.6)" }}>Apartment · Athens</span></div>
+            <div className="text-[7px] font-bold mt-0.5" style={{ color: "hsl(183 100% 50%)" }}>€128,000</div>
+          </div>
+          <div className="text-center pb-1.5">
+            <span className="text-[5.5px] uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.2)" }}>€/m² · Greek Real Estate Index</span>
           </div>
         </div>
       </div>
-    </div>);
-
+    </div>
+  );
 }
 
-// ── Properties Portal Mockup ──────────────────────────────────────────────────
+// ── Properties Portal Mockup (faithful to properties.maiprop.co) ──────────────
 function PropertiesMockup() {
+  const stats = [
+    { value: "€250K", label: "Minimum Investment" },
+    { value: "6-9 Months", label: "To Visa Approval" },
+    { value: "27 Countries", label: "Schengen Access" },
+  ];
   return (
-    <div className="w-full h-full bg-[hsl(36_25%_97%)] dark:bg-[hsl(36_15%_10%)] overflow-hidden select-none font-sans">
-      {/* Nav */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-black/8 dark:border-white/10 bg-white dark:bg-[hsl(36_15%_8%)]">
-        <div className="flex items-center gap-3">
-          <div className="text-[10px] font-black text-brand-gold tracking-tight">maiProp Properties</div>
-          <div className="flex gap-1.5">
-            {["Buy", "Rent", "New Dev", "Golden Visa"].map((t, i) =>
-            <span key={t} className={`text-[7px] px-1.5 py-0.5 rounded-md ${i === 3 ? "bg-brand-gold/20 text-brand-gold border border-brand-gold/30" : "text-black/40 dark:text-white/40"}`}>{t}</span>
-            )}
+    <div className="w-full h-full overflow-hidden select-none font-sans relative" style={{ background: "hsl(210 30% 8%)" }}>
+      {/* Hero bg: Acropolis */}
+      <div className="absolute inset-0">
+        <img
+          src="https://images.unsplash.com/photo-1555993539-1732b0258235?w=600&q=50&fm=webp"
+          alt=""
+          className="w-full h-full object-cover opacity-30"
+        />
+        <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, hsl(200 40% 12% / 0.75) 0%, hsl(200 40% 6% / 0.95) 100%)" }} />
+      </div>
+      {/* Navbar */}
+      <div className="relative z-10 flex items-center justify-between px-4 py-2">
+        <div className="flex items-center gap-1.5">
+          <div className="w-5 h-5 rounded overflow-hidden flex items-center justify-center" style={{ background: "rgba(255,255,255,0.08)" }}>
+            <span className="text-[6px] font-black" style={{ color: "hsl(183 100% 60%)" }}>mP</span>
           </div>
+          <span className="text-[9px] font-black text-white">mAI prop</span>
         </div>
-        <div className="flex items-center gap-1 bg-black/5 dark:bg-white/8 rounded-lg px-2 py-1">
-          <Search className="w-2.5 h-2.5 text-black/30 dark:text-white/30" />
-          <span className="text-[7px] text-black/40 dark:text-white/40">Athens, Greece...</span>
+        <div className="flex items-center gap-2">
+          {["Benefits", "Opportunities", "Track Record", "mAI Prop OS"].map((l) => (
+            <span key={l} className="text-[6px]" style={{ color: "rgba(255,255,255,0.5)" }}>{l}</span>
+          ))}
+        </div>
+        <div className="text-[7px] font-bold px-2.5 py-1 rounded-full" style={{ background: "hsl(183 100% 50%)", color: "hsl(220 30% 8%)" }}>
+          Get Started
         </div>
       </div>
-      {/* Hero banner */}
-      <div className="relative h-11 overflow-hidden" style={{ background: "linear-gradient(135deg, hsl(220 50% 8%) 0%, hsl(42 70% 18%) 100%)" }}>
-        <div className="absolute inset-0 flex items-center px-4 gap-2">
-          <div className="flex-1">
-            <div className="text-[9px] font-bold text-brand-gold">🏛️ Greek Golden Visa Properties — From €250K</div>
-            <div className="text-[7px] text-white/50">EU Residency · Fast Processing · Curated Portfolios</div>
+      {/* Hero content */}
+      <div className="relative z-10 px-5 pt-3">
+        <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full mb-3 border text-[5.5px] font-bold uppercase tracking-wider" style={{ borderColor: "rgba(255,255,255,0.2)", color: "rgba(255,255,255,0.55)", background: "rgba(255,255,255,0.06)" }}>
+          Greek Golden Visa Program | EU Residency Through Real Estate
+        </div>
+        <h2 className="text-[14px] font-black leading-snug mb-2">
+          <span className="text-white">Secure Your European</span><br />
+          <span style={{ color: "hsl(183 100% 60%)" }}>Golden </span>
+          <span style={{ color: "hsl(265 80% 72%)" }}>Visa in Greece</span>
+        </h2>
+        <p className="text-[7.5px] mb-1" style={{ color: "rgba(255,255,255,0.65)" }}>EU residency through €250K+ Greek real estate investments.</p>
+        <p className="text-[7px] italic mb-3.5" style={{ color: "rgba(255,255,255,0.4)" }}>Live freely, invest wisely, and protect your global future.</p>
+        <div className="flex items-center gap-2.5 mb-5">
+          <div className="inline-flex items-center gap-1 text-[7.5px] font-bold px-3 py-1.5 rounded-full" style={{ background: "hsl(183 100% 50%)", color: "hsl(220 30% 8%)" }}>
+            Start Your Golden Visa →
           </div>
-          <div className="text-[7px] bg-brand-gold/25 text-brand-gold border border-brand-gold/40 rounded px-1.5 py-0.5">Explore →</div>
+          <div className="text-[7px] font-semibold" style={{ color: "rgba(255,255,255,0.55)" }}>View Properties</div>
         </div>
-      </div>
-      {/* Search bar */}
-      <div className="px-3 py-2 flex items-center gap-2 bg-white dark:bg-[hsl(36_15%_9%)] border-b border-black/6 dark:border-white/6">
-        {["Apartment", "Villa", "House", "Commercial", "Land"].map((t, i) =>
-        <span key={t} className={`text-[7px] px-2 py-0.5 rounded-full border ${i === 0 ? "bg-primary/10 text-primary border-primary/30" : "border-black/10 dark:border-white/10 text-black/40 dark:text-white/40"}`}>{t}</span>
-        )}
-        <span className="ml-auto text-[7px] text-black/30 dark:text-white/30">4,820 results</span>
-      </div>
-      {/* Property grid */}
-      <div className="p-3 grid grid-cols-3 gap-2">
-        {[
-        { img: "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=200&q=60", price: "€380K", title: "Kolonaki, Athens", beds: "3bd · 120m²", badge: "Premium", badgeClass: "bg-primary text-white" },
-        { img: "https://images.unsplash.com/photo-1613490493576-7fde63acd811?w=200&q=60", price: "€1.2M", title: "Mykonos Villa", beds: "5bd · 280m²", badge: "Golden Visa", badgeClass: "bg-brand-gold text-background" },
-        { img: "https://images.unsplash.com/photo-1570077188670-e3a8d69ac5ff?w=200&q=60", price: "€750K", title: "Santorini View", beds: "4bd · 200m²", badge: "New Dev", badgeClass: "bg-brand-emerald text-background" }].
-        map((p, i) =>
-        <div key={i} className="rounded-xl overflow-hidden border border-black/8 dark:border-white/8 bg-white dark:bg-[hsl(36_15%_12%)] shadow-sm">
-            <div className="relative aspect-square overflow-hidden">
-              <img src={p.img} alt={p.title} className="w-full h-full object-cover" />
-              <span className={`absolute top-1 left-1 text-[6px] font-bold px-1.5 py-0.5 rounded-full ${p.badgeClass}`}>{p.badge}</span>
+        <div className="flex gap-6">
+          {stats.map((s) => (
+            <div key={s.value}>
+              <div className="text-[12px] font-black text-white">{s.value}</div>
+              <div className="text-[6px]" style={{ color: "rgba(255,255,255,0.4)" }}>{s.label}</div>
             </div>
-            <div className="p-1.5">
-              <div className="text-[9px] font-bold text-foreground">{p.price}</div>
-              <div className="text-[7px] text-muted-foreground truncate">{p.title}</div>
-              <div className="text-[7px] text-muted-foreground/60">{p.beds}</div>
-            </div>
-          </div>
-        )}
+          ))}
+        </div>
       </div>
-    </div>);
-
+    </div>
+  );
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────────
