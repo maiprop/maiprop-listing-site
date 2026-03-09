@@ -246,10 +246,15 @@ function AIServiceMatchModal({ onClose, onNavigate }: { onClose: () => void; onN
   );
 }
 
+const PRICING_LABELS: Record<string, string> = { hourly: "/hr", daily: "/day", fixed: " fixed" };
+const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
 export default function ProfessionalProfile() {
   const { id } = useParams<{ id: string }>();
   const { data: pro, isLoading } = useProfessional(id || "");
   const { data: allProfessionals = [] } = useProfessionals();
+  const { data: dbServices = [] } = useProfessionalServices(id || "");
+  const { data: dbAvailability = [] } = useProfessionalAvailability(id || "");
   const [activeTab, setActiveTab] = useState<"overview" | "services" | "reviews">("overview");
   const [msgOpen, setMsgOpen] = useState(false);
   const [consultOpen, setConsultOpen] = useState(false);
@@ -259,7 +264,8 @@ export default function ProfessionalProfile() {
   const navigate = useNavigate();
 
   const catInfo = pro ? categoryLabels[pro.category] || { label: pro.category, emoji: "👤", description: "" } : null;
-  const services = pro ? servicesByCategory[pro.category] || [] : [];
+  // Fallback static list if no DB services yet
+  const fallbackServices = pro ? servicesByCategory[pro.category] || [] : [];
 
   const displayName = pro?.display_name || "Professional";
 
