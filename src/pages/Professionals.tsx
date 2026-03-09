@@ -397,7 +397,7 @@ export default function Professionals() {
                   </div>
                 </div>
                 <div className="w-px bg-border/60 self-stretch hidden sm:block" />
-                <div className="flex items-center gap-1.5 flex-wrap">
+                <div className="flex items-center gap-1.5 flex-wrap flex-1">
                   <div className="flex items-center gap-1.5 mr-2">
                     <Sparkles className="w-3.5 h-3.5 text-primary" />
                     <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">AI Tools Available</span>
@@ -409,6 +409,14 @@ export default function Professionals() {
                     </div>
                   ))}
                 </div>
+                <Button
+                  size="sm"
+                  className="bg-gradient-primary border-0 text-primary-foreground gap-1.5 shrink-0"
+                  onClick={() => setAiModal({ groupId: activeGroup.id, groupLabel: activeGroup.label })}
+                >
+                  <Brain className="w-3.5 h-3.5" />
+                  Use AI Tools
+                </Button>
               </div>
             </div>
           )}
