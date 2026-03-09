@@ -166,39 +166,48 @@ export function MarketTicker() {
 
       {/* City rows */}
       <div className="divide-y" style={{ borderColor: "hsl(192 100% 50% / 0.07)" }}>
-        {rows.map((row, i) => (
-          <div
-            key={row.city}
-            className="flex items-center gap-3 px-5 py-2.5 transition-colors"
-            style={{ background: i % 2 === 0 ? "transparent" : "hsl(192 100% 50% / 0.015)" }}
-            onMouseEnter={e => (e.currentTarget.style.background = "hsl(192 100% 50% / 0.04)")}
-            onMouseLeave={e => (e.currentTarget.style.background = i % 2 === 0 ? "transparent" : "hsl(192 100% 50% / 0.015)")}
-          >
-            {/* City name */}
-            <span className="w-28 text-sm font-medium" style={{ color: "hsl(210 30% 72%)" }}>
-              {row.city}
-            </span>
-
-            {/* Sparkline */}
-            <Sparkline city={row.city} up={row.up} />
-
-            {/* Price */}
-            <span className="flex-1 text-right text-sm font-bold tabular-nums" style={{ color: "hsl(210 40% 96%)" }}>
-              €{row.price.toLocaleString()}
-            </span>
-
-            {/* Change badge */}
-            <span
-              className="w-16 text-right text-xs font-black tabular-nums px-1.5 py-0.5 rounded-md"
+        {rows.map((row, i) => {
+          const isFlickering = flickeringCity === row.city;
+          return (
+            <div
+              key={row.city}
+              className="flex items-center gap-3 px-5 py-2.5 transition-all duration-300"
               style={{
-                color: row.up ? "hsl(192 100% 55%)" : "hsl(0 72% 60%)",
-                background: row.up ? "hsl(192 100% 50% / 0.1)" : "hsl(0 72% 55% / 0.1)",
+                background: isFlickering
+                  ? "hsl(192 100% 50% / 0.08)"
+                  : i % 2 === 0 ? "transparent" : "hsl(192 100% 50% / 0.015)",
+                boxShadow: isFlickering ? "inset 0 0 0 1px hsl(192 100% 50% / 0.2)" : undefined,
               }}
             >
-              {row.up ? "▲" : "▼"} {Math.abs(row.change).toFixed(1)}%
-            </span>
-          </div>
-        ))}
+              {/* City name */}
+              <span className="w-28 text-sm font-medium transition-colors duration-300" style={{ color: isFlickering ? "hsl(192 100% 80%)" : "hsl(210 30% 72%)" }}>
+                {row.city}
+              </span>
+
+              {/* Sparkline */}
+              <Sparkline city={row.city} up={row.up} />
+
+              {/* Price — flickers bright when updated */}
+              <span
+                className="flex-1 text-right text-sm font-bold tabular-nums transition-colors duration-300"
+                style={{ color: isFlickering ? "hsl(192 100% 70%)" : "hsl(210 40% 96%)" }}
+              >
+                €{row.price.toLocaleString()}
+              </span>
+
+              {/* Change badge */}
+              <span
+                className="w-16 text-right text-xs font-black tabular-nums px-1.5 py-0.5 rounded-md"
+                style={{
+                  color: row.up ? "hsl(192 100% 55%)" : "hsl(0 72% 60%)",
+                  background: row.up ? "hsl(192 100% 50% / 0.1)" : "hsl(0 72% 55% / 0.1)",
+                }}
+              >
+                {row.up ? "▲" : "▼"} {Math.abs(row.change).toFixed(1)}%
+              </span>
+            </div>
+          );
+        })}
       </div>
 
       {/* Footer — auctions */}
