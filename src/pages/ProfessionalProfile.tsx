@@ -284,6 +284,12 @@ export default function ProfessionalProfile() {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
+      {aiMatchOpen && (
+        <AIServiceMatchModal
+          onClose={() => setAiMatchOpen(false)}
+          onNavigate={(cat) => navigate(`/professionals?category=${cat}`)}
+        />
+      )}
       <div className="pt-16">
 
         {/* ── Hero ── */}
