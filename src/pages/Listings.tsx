@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
-import { MarketTicker } from "@/components/MarketTicker";
+
 import { PropertyCard } from "@/components/PropertyCard";
 import { Footer } from "@/components/Footer";
 import { MapView } from "@/components/MapView";
@@ -539,12 +539,8 @@ export default function Listings() {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      {/* Market ticker — hidden on mobile, shown on md+ */}
-      <div className="hidden md:block">
-        <MarketTicker />
-      </div>
 
-      <div className="pt-16 md:pt-0">
+      <div className="pt-16">
         {/* Sticky search bar */}
         <div className="bg-card border-b border-border sticky top-16 z-40">
           <div className="container py-3 sm:py-4">
