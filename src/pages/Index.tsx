@@ -819,10 +819,10 @@ export default function Index() {
 
       {/* ══ mAI PROP OS ═════════════════════════════════════════════════════ */}
       <section className="py-20 bg-secondary overflow-hidden">
-        <div className="container">
+        <div ref={osRef} className="container">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             {/* Copy */}
-            <div>
+            <div className={`reveal ${osInView ? "in-view" : ""}`}>
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 mb-5">
                 <BarChart2 className="w-3.5 h-3.5 text-primary" />
                 <span className="text-xs font-semibold text-primary uppercase tracking-wide">Powered by mAI Prop OS</span>
