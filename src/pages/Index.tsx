@@ -876,7 +876,7 @@ export default function Index() {
       </section>
 
       {/* ══ PROPERTIES PORTAL / GOLDEN VISA ══════════════════════════════════ */}
-      <section className="py-20 overflow-hidden">
+      <section className="py-20 bg-background overflow-hidden">
         <div className="container">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             {/* App Mockup */}
