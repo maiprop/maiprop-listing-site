@@ -793,7 +793,7 @@ export default function CreateListing() {
                   )}
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div><FieldLabel required>Area (m²)</FieldLabel><Input type="number" placeholder="85" value={form.sqm} onChange={e => set("sqm", e.target.value)} /></div>
+                  <div ref={setFieldRef("sqm") as any}><FieldLabel required>Area (m²)</FieldLabel><Input type="number" placeholder="85" value={form.sqm} onChange={e => set("sqm", e.target.value)} hasError={!!errors.sqm} /><FieldError msg={errors.sqm} /></div>
                   <div><FieldLabel>Year Built</FieldLabel><Input type="number" placeholder="2010" value={form.year_built} onChange={e => set("year_built", e.target.value)} /></div>
                 </div>
 
