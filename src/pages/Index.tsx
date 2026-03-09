@@ -683,7 +683,6 @@ export default function Index() {
                   </span>
                 </div>
               </div>
-              </div>
 
               {/* Headline */}
               <h1
