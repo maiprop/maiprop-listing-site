@@ -30,3 +30,9 @@ verify_jwt = false
 [functions.receive-from-os]
 verify_jwt = false
 
+[functions.poll-os-auctions]
+verify_jwt = false
+
+[functions.sync-firesale-to-os]
+verify_jwt = false
+
