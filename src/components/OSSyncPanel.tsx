@@ -277,18 +277,61 @@ export function OSSyncPanel() {
             <ArrowDownLeft className="w-5 h-5 text-primary shrink-0" />
             <div>
               <h2 className="font-semibold text-sm">OS Auctions → Hub</h2>
-              <p className="text-xs text-muted-foreground">Pull new & updated auctions from OS into the Hub auction module.</p>
+              <p className="text-xs text-muted-foreground">Imports only <strong>future</strong> auctions (POSTED / READY_TO_CONDUCT / FINALIZED).</p>
             </div>
           </div>
+
+          {/* OS status counts info */}
           <div className="rounded-lg bg-secondary/50 p-3 text-xs space-y-1">
-            <p className="font-medium text-foreground">What gets synced:</p>
+            <p className="font-medium text-foreground">Future auction statuses (~9,765 total):</p>
             <ul className="text-muted-foreground space-y-0.5 list-disc list-inside">
-              <li>Auction date, court, starting bid</li>
-              <li>Property category, KAEK, location</li>
-              <li>Images, description, sqm</li>
-              <li>Deduped via <code className="bg-background px-1 rounded">os_auction:{"{id}"}</code> tag</li>
+              <li><span className="text-brand-emerald font-medium">POSTED</span> — 9,222 upcoming</li>
+              <li><span className="text-brand-emerald font-medium">READY_TO_CONDUCT</span> — 179</li>
+              <li><span className="text-brand-emerald font-medium">FINALIZED_LIST</span> — 364</li>
             </ul>
+            <p className="text-muted-foreground/70 pt-1">Past/cancelled records are skipped automatically.</p>
           </div>
+
+          {/* Page range controls */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-muted-foreground w-20 shrink-0">Start page</label>
+              <input
+                type="number"
+                min={0}
+                max={2954}
+                value={pollPage}
+                onChange={e => setPollPage(Math.max(0, Math.min(2954, Number(e.target.value))))}
+                className="w-full text-xs bg-secondary rounded px-2 py-1.5 border border-border focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-muted-foreground w-20 shrink-0">Pages to scan</label>
+              <input
+                type="number"
+                min={1}
+                max={10}
+                value={pollPages}
+                onChange={e => setPollPages(Math.max(1, Math.min(10, Number(e.target.value))))}
+                className="w-full text-xs bg-secondary rounded px-2 py-1.5 border border-border focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Scanning pages {pollPage}–{pollPage + pollPages - 1} · {pollPages * 100} records
+            </p>
+          </div>
+
+          {/* Last result */}
+          {pollResult && (
+            <div className="rounded-lg bg-secondary/50 p-2.5 text-xs space-y-0.5">
+              <p className="font-medium">Last scan result:</p>
+              <p className="text-muted-foreground">
+                ✅ {pollResult.imported} imported · {pollResult.updated} updated ·{" "}
+                🔍 {pollResult.scanned} scanned · ⏭ skipped past
+              </p>
+            </div>
+          )}
+
           <Button
             className="w-full gap-2"
             size="sm"
@@ -298,7 +341,7 @@ export function OSSyncPanel() {
             {pollAuctionsMutation.isPending
               ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
               : <Download className="w-3.5 h-3.5" />}
-            Pull Auctions Now
+            {pollAuctionsMutation.isPending ? "Scanning…" : "Pull Future Auctions"}
           </Button>
         </div>
 
