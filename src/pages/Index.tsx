@@ -422,103 +422,86 @@ function LocationInput({
   );
 }
 
-// ── OS Dashboard Mockup (replaces broken iframe) ───────────────────────────────
+// ── OS Dashboard Mockup ────────────────────────────────────────────────────────
 function OSDashboardMockup() {
   return (
-    <div className="w-full h-full bg-background overflow-hidden p-4 font-mono select-none">
-      {/* Sidebar + main */}
-      <div className="flex gap-3 h-full">
-        {/* Mini sidebar */}
-        <div className="w-10 flex flex-col gap-2 items-center pt-2">
-          {["🏠", "📊", "⚖️", "🔥", "👤"].map((ic, i) => (
-            <div
-              key={i}
-              className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm ${i === 1 ? "bg-primary/20 border border-primary/40" : "bg-secondary/60"}`}
-            >
-              {ic}
-            </div>
+    <div className="w-full h-full bg-[hsl(220_20%_8%)] overflow-hidden select-none font-sans">
+      {/* Top nav bar */}
+      <div className="flex items-center gap-3 px-4 py-2.5 border-b border-white/10 bg-[hsl(220_20%_6%)]">
+        <div className="text-[10px] font-black text-primary tracking-tight">mAI Prop OS</div>
+        <div className="flex gap-1.5 ml-1">
+          {["Market", "Auctions", "Quick Sale", "Portfolio"].map((t, i) => (
+            <span key={t} className={`text-[8px] px-2 py-0.5 rounded-md ${i === 0 ? "bg-primary/20 text-primary border border-primary/30" : "text-white/40 hover:text-white/70"}`}>{t}</span>
           ))}
         </div>
-        {/* Main */}
-        <div className="flex-1 min-w-0 flex flex-col gap-3">
-          {/* Top bar */}
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-[10px] font-bold text-foreground">mAI Prop OS</div>
-              <div className="text-[8px] text-muted-foreground">Greece Real Estate Intelligence</div>
-            </div>
-            <div className="flex gap-1.5">
-              {["Athens", "Thessaloniki", "Mykonos"].map((c) => (
-                <span
-                  key={c}
-                  className={`text-[8px] px-2 py-0.5 rounded-full border ${c === "Athens" ? "bg-primary/15 border-primary/40 text-primary" : "bg-secondary/60 border-border text-muted-foreground"}`}
-                >
-                  {c}
-                </span>
-              ))}
-            </div>
+        <div className="ml-auto flex gap-2 items-center">
+          <div className="w-16 h-5 bg-white/5 border border-white/10 rounded-md flex items-center px-2 gap-1">
+            <Search className="w-2 h-2 text-white/30" />
+            <span className="text-[7px] text-white/30">Search...</span>
           </div>
-          {/* KPI row */}
+          <div className="w-5 h-5 rounded-full bg-primary/30 flex items-center justify-center text-[7px] font-bold text-primary">A</div>
+        </div>
+      </div>
+      {/* Body */}
+      <div className="flex h-full">
+        {/* Sidebar */}
+        <div className="w-8 shrink-0 bg-[hsl(220_20%_6%)] border-r border-white/8 flex flex-col items-center pt-3 gap-3">
+          {["📊", "⚖️", "⚡", "🗺️", "👤"].map((ic, i) => (
+            <div key={i} className={`w-5 h-5 rounded flex items-center justify-center text-[10px] ${i === 0 ? "bg-primary/20" : "opacity-40"}`}>{ic}</div>
+          ))}
+        </div>
+        {/* Main content */}
+        <div className="flex-1 min-w-0 p-3 flex flex-col gap-2.5 overflow-hidden">
+          {/* KPIs */}
           <div className="grid grid-cols-4 gap-2">
             {[
-              { label: "Avg €/m²", value: "€2,180", up: true, change: "+4.2%" },
-              { label: "Listings", value: "47,240", up: true, change: "+312" },
-              { label: "Auctions", value: "3,214", up: false, change: "this mo." },
-              { label: "AI Score", value: "8.4/10", up: true, change: "Athens" },
+              { label: "Avg €/m²", value: "€2,380", delta: "+4.2%", up: true },
+              { label: "Active Deals", value: "312", delta: "+18", up: true },
+              { label: "Auctions/mo", value: "3,214", delta: "live", up: false },
+              { label: "AI Score", value: "8.7/10", delta: "Athens", up: true },
             ].map((k) => (
-              <div key={k.label} className="bg-card border border-border rounded-lg p-2">
-                <div className="text-[8px] text-muted-foreground mb-0.5">{k.label}</div>
-                <div className="text-[11px] font-bold text-foreground">{k.value}</div>
-                <div className={`text-[8px] font-semibold ${k.up ? "text-brand-emerald" : "text-muted-foreground"}`}>
-                  {k.change}
-                </div>
+              <div key={k.label} className="bg-white/4 border border-white/8 rounded-lg p-1.5">
+                <div className="text-[7px] text-white/40 mb-0.5">{k.label}</div>
+                <div className="text-[11px] font-bold text-white">{k.value}</div>
+                <div className={`text-[7px] font-semibold ${k.up ? "text-emerald-400" : "text-white/40"}`}>{k.delta}</div>
               </div>
             ))}
           </div>
-          {/* Chart area */}
-          <div className="flex-1 bg-card border border-border rounded-lg p-2 overflow-hidden">
-            <div className="text-[8px] font-semibold text-muted-foreground mb-1.5">Price Index — Athens (€/m²)</div>
-            <svg viewBox="0 0 200 50" className="w-full h-12" preserveAspectRatio="none">
+          {/* Chart */}
+          <div className="flex-1 bg-white/3 border border-white/8 rounded-lg p-2">
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="text-[8px] font-semibold text-white/50">Price Index — Athens (€/m²)</div>
+              <div className="flex gap-1">
+                {["1M","3M","1Y"].map((l, i) => <span key={l} className={`text-[7px] px-1.5 py-0.5 rounded ${i === 2 ? "bg-primary/20 text-primary" : "text-white/30"}`}>{l}</span>)}
+              </div>
+            </div>
+            <svg viewBox="0 0 200 45" className="w-full h-10" preserveAspectRatio="none">
               <defs>
-                <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="hsl(192 100% 50%)" stopOpacity="0.3" />
+                <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="hsl(192 100% 50%)" stopOpacity="0.25" />
                   <stop offset="100%" stopColor="hsl(192 100% 50%)" stopOpacity="0" />
                 </linearGradient>
               </defs>
-              <path
-                d="M0,40 C20,38 40,35 60,30 C80,25 100,28 120,22 C140,16 160,18 180,12 L200,8 L200,50 L0,50Z"
-                fill="url(#chartGrad)"
-              />
-              <path
-                d="M0,40 C20,38 40,35 60,30 C80,25 100,28 120,22 C140,16 160,18 180,12 L200,8"
-                fill="none"
-                stroke="hsl(192 100% 50%)"
-                strokeWidth="1.5"
-              />
+              <path d="M0,38 C20,35 40,30 60,26 C80,22 100,25 120,18 C140,11 160,14 180,8 L200,5 L200,45 L0,45Z" fill="url(#g1)" />
+              <path d="M0,38 C20,35 40,30 60,26 C80,22 100,25 120,18 C140,11 160,14 180,8 L200,5" fill="none" stroke="hsl(192 100% 50%)" strokeWidth="1.2" />
+              {/* Tooltip dot */}
+              <circle cx="160" cy="14" r="2" fill="hsl(192 100% 50%)" />
+              <rect x="148" y="6" width="26" height="11" rx="2" fill="hsl(220 20% 12%)" stroke="hsl(192 100% 50% / 0.4)" strokeWidth="0.5" />
+              <text x="161" y="13" textAnchor="middle" fontSize="4.5" fill="hsl(192 100% 70%)">€2,380</text>
             </svg>
           </div>
           {/* Recent activity */}
           <div className="space-y-1">
             {[
-              { type: "🏠", addr: "Kolonaki 48, Athens", price: "€420K", badge: "active" },
-              { type: "⚖️", addr: "Thessaloniki Court #14", price: "€185K", badge: "auction" },
-              { type: "🔥", addr: "Glyfada, Athens", price: "€310K", badge: "firesale" },
+              { type: "🏠", addr: "Kolonaki 48, Athens", price: "€420K", badge: "active", color: "text-emerald-400 bg-emerald-400/10" },
+              { type: "⚖️", addr: "Thessaloniki Court #14", price: "€185K", badge: "auction", color: "text-yellow-400 bg-yellow-400/10" },
+              { type: "⚡", addr: "Glyfada, Athens", price: "€310K", badge: "quick sale", color: "text-destructive bg-destructive/10" },
             ].map((item, i) => (
-              <div key={i} className="flex items-center gap-2 bg-secondary/40 rounded px-2 py-1.5">
-                <span className="text-xs">{item.type}</span>
-                <span className="text-[9px] text-foreground flex-1 truncate">{item.addr}</span>
-                <span className="text-[9px] font-bold text-primary">{item.price}</span>
-                <span
-                  className={`text-[7px] px-1.5 py-0.5 rounded-full font-semibold ${
-                    item.badge === "auction"
-                      ? "bg-brand-gold/20 text-brand-gold"
-                      : item.badge === "firesale"
-                        ? "bg-destructive/20 text-destructive"
-                        : "bg-brand-emerald/20 text-brand-emerald"
-                  }`}
-                >
-                  {item.badge}
-                </span>
+              <div key={i} className="flex items-center gap-2 bg-white/3 border border-white/6 rounded px-2 py-1.5">
+                <span className="text-[10px]">{item.type}</span>
+                <span className="text-[8px] text-white/70 flex-1 truncate">{item.addr}</span>
+                <span className="text-[8px] font-bold text-primary">{item.price}</span>
+                <span className={`text-[7px] px-1.5 py-0.5 rounded-full font-semibold ${item.color}`}>{item.badge}</span>
               </div>
             ))}
           </div>
@@ -531,86 +514,55 @@ function OSDashboardMockup() {
 // ── Properties Portal Mockup ──────────────────────────────────────────────────
 function PropertiesMockup() {
   return (
-    <div className="w-full h-full bg-background overflow-hidden select-none">
+    <div className="w-full h-full bg-[hsl(36_25%_97%)] dark:bg-[hsl(36_15%_10%)] overflow-hidden select-none font-sans">
       {/* Nav */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-card">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-black/8 dark:border-white/10 bg-white dark:bg-[hsl(36_15%_8%)]">
         <div className="flex items-center gap-3">
-          <div className="text-[10px] font-bold gradient-text-gold">maiProp Properties</div>
-          <div className="flex gap-2">
-            {["Buy", "Rent", "Visa"].map((t) => (
-              <span
-                key={t}
-                className={`text-[8px] px-2 py-0.5 rounded ${t === "Visa" ? "bg-brand-gold/20 text-brand-gold" : "text-muted-foreground"}`}
-              >
-                {t}
-              </span>
+          <div className="text-[10px] font-black text-brand-gold tracking-tight">maiProp Properties</div>
+          <div className="flex gap-1.5">
+            {["Buy", "Rent", "New Dev", "Golden Visa"].map((t, i) => (
+              <span key={t} className={`text-[7px] px-1.5 py-0.5 rounded-md ${i === 3 ? "bg-brand-gold/20 text-brand-gold border border-brand-gold/30" : "text-black/40 dark:text-white/40"}`}>{t}</span>
             ))}
           </div>
         </div>
-        <div className="flex items-center gap-1 bg-secondary/60 rounded-lg px-2 py-1">
-          <Search className="w-2.5 h-2.5 text-muted-foreground" />
-          <span className="text-[8px] text-muted-foreground">Athens, Greece...</span>
+        <div className="flex items-center gap-1 bg-black/5 dark:bg-white/8 rounded-lg px-2 py-1">
+          <Search className="w-2.5 h-2.5 text-black/30 dark:text-white/30" />
+          <span className="text-[7px] text-black/40 dark:text-white/40">Athens, Greece...</span>
         </div>
       </div>
       {/* Hero banner */}
-      <div
-        className="relative h-12 overflow-hidden"
-        style={{ background: "linear-gradient(135deg, hsl(220 50% 8%) 0%, hsl(42 70% 15%) 100%)" }}
-      >
+      <div className="relative h-11 overflow-hidden" style={{ background: "linear-gradient(135deg, hsl(220 50% 8%) 0%, hsl(42 70% 18%) 100%)" }}>
         <div className="absolute inset-0 flex items-center px-4 gap-2">
           <div className="flex-1">
-            <div className="text-[10px] font-bold text-brand-gold">🏛️ Greek Golden Visa Properties</div>
-            <div className="text-[8px] text-foreground/60">€250K+ · EU Residency · Curated Selection</div>
+            <div className="text-[9px] font-bold text-brand-gold">🏛️ Greek Golden Visa Properties — From €250K</div>
+            <div className="text-[7px] text-white/50">EU Residency · Fast Processing · Curated Portfolios</div>
           </div>
-          <div className="text-[8px] bg-brand-gold/20 text-brand-gold border border-brand-gold/40 rounded px-2 py-1">
-            Explore →
-          </div>
+          <div className="text-[7px] bg-brand-gold/25 text-brand-gold border border-brand-gold/40 rounded px-1.5 py-0.5">Explore →</div>
         </div>
+      </div>
+      {/* Search bar */}
+      <div className="px-3 py-2 flex items-center gap-2 bg-white dark:bg-[hsl(36_15%_9%)] border-b border-black/6 dark:border-white/6">
+        {["Apartment", "Villa", "House", "Commercial", "Land"].map((t, i) => (
+          <span key={t} className={`text-[7px] px-2 py-0.5 rounded-full border ${i === 0 ? "bg-primary/10 text-primary border-primary/30" : "border-black/10 dark:border-white/10 text-black/40 dark:text-white/40"}`}>{t}</span>
+        ))}
+        <span className="ml-auto text-[7px] text-black/30 dark:text-white/30">4,820 results</span>
       </div>
       {/* Property grid */}
       <div className="p-3 grid grid-cols-3 gap-2">
         {[
-          {
-            img: "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=200&q=60",
-            price: "€380K",
-            title: "Kolonaki, Athens",
-            beds: "3bd · 120m²",
-            badge: "Premium",
-          },
-          {
-            img: "https://images.unsplash.com/photo-1613490493576-7fde63acd811?w=200&q=60",
-            price: "€1.2M",
-            title: "Mykonos Villa",
-            beds: "5bd · 280m²",
-            badge: "Visa",
-          },
-          {
-            img: "https://images.unsplash.com/photo-1570077188670-e3a8d69ac5ff?w=200&q=60",
-            price: "€750K",
-            title: "Santorini",
-            beds: "4bd · 200m²",
-            badge: "New",
-          },
+          { img: "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=200&q=60", price: "€380K", title: "Kolonaki, Athens", beds: "3bd · 120m²", badge: "Premium", badgeClass: "bg-primary text-white" },
+          { img: "https://images.unsplash.com/photo-1613490493576-7fde63acd811?w=200&q=60", price: "€1.2M", title: "Mykonos Villa", beds: "5bd · 280m²", badge: "Golden Visa", badgeClass: "bg-brand-gold text-background" },
+          { img: "https://images.unsplash.com/photo-1570077188670-e3a8d69ac5ff?w=200&q=60", price: "€750K", title: "Santorini View", beds: "4bd · 200m²", badge: "New Dev", badgeClass: "bg-brand-emerald text-background" },
         ].map((p, i) => (
-          <div key={i} className="rounded-lg overflow-hidden border border-border bg-card">
+          <div key={i} className="rounded-xl overflow-hidden border border-black/8 dark:border-white/8 bg-white dark:bg-[hsl(36_15%_12%)] shadow-sm">
             <div className="relative aspect-square overflow-hidden">
               <img src={p.img} alt={p.title} className="w-full h-full object-cover" />
-              <span
-                className={`absolute top-1 left-1 text-[7px] font-bold px-1.5 py-0.5 rounded ${
-                  p.badge === "Visa"
-                    ? "bg-brand-gold text-background"
-                    : p.badge === "Premium"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-accent text-accent-foreground"
-                }`}
-              >
-                {p.badge}
-              </span>
+              <span className={`absolute top-1 left-1 text-[6px] font-bold px-1.5 py-0.5 rounded-full ${p.badgeClass}`}>{p.badge}</span>
             </div>
             <div className="p-1.5">
               <div className="text-[9px] font-bold text-foreground">{p.price}</div>
-              <div className="text-[8px] text-muted-foreground truncate">{p.title}</div>
-              <div className="text-[7px] text-muted-foreground/70">{p.beds}</div>
+              <div className="text-[7px] text-muted-foreground truncate">{p.title}</div>
+              <div className="text-[7px] text-muted-foreground/60">{p.beds}</div>
             </div>
           </div>
         ))}
