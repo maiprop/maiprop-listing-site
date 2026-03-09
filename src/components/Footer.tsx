@@ -134,7 +134,7 @@ export function Footer() {
         </div>
 
         <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-muted-foreground">
-          <span>© 2026 maiProp. All rights reserved. Powered by mAI Prop OS.</span>
+          <span>© 2026 maiProp. All rights reserved. Powered by mAI prop OS.</span>
           <div className="flex items-center gap-1">
             <span>Powered by</span>
             <a href="https://os.maiprop.co" target="_blank" rel="noreferrer" className="flex items-center gap-1 text-primary hover:underline">
