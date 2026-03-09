@@ -14,7 +14,9 @@ import {
   useUpdateProfessional,
   type ProfessionalService,
 } from "@/hooks/useProfessionalServices";
-import { getServicesForCategory, PRICING_LABELS, type ServiceTemplate, type PricingModel } from "@/lib/professionalServiceCatalog";
+import { getServicesForCategory, type ServiceTemplate, type PricingModel } from "@/lib/professionalServiceCatalog";
+
+const PRICING_DISPLAY: Record<string, string> = { hourly: "/hr", daily: "/day", fixed: " fixed" };
 import { cn } from "@/lib/utils";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
