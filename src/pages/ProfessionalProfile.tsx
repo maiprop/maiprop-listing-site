@@ -5,12 +5,13 @@ import {
   ChevronLeft, Clock, Users, Briefcase, MessageSquare,
   Calendar, Shield, Loader2, Languages, ChevronRight,
   Phone, Euro, FileText, ThumbsUp, Zap, Building2, Video,
-  Sparkles, Brain, ArrowRight, Send, X
+  Sparkles, Brain, ArrowRight, X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { useProfessionals, useProfessional } from "@/hooks/useProfessionals";
+import { useProfessionalServices, useProfessionalAvailability } from "@/hooks/useProfessionalServices";
 import { useNavigate } from "react-router-dom";
 import SendMessageModal from "@/components/SendMessageModal";
 import BookConsultationModal from "@/components/BookConsultationModal";
