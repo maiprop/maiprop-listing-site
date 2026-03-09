@@ -62,14 +62,7 @@ function removeRecentSearch(query: string) {
   localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(existing));
 }
 
-const PROPERTY_TYPE_COUNTS: Record<string, number> = {
-  apartment: 18420,
-  house: 9240,
-  villa: 3150,
-  commercial: 4180,
-  land: 6350,
-  office: 1820
-};
+// Live counts are fetched from DB in the Index component
 
 const AI_SUGGESTIONS = [
 "Quiet apartment near metro in Athens under 200k",
