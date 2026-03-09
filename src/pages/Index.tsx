@@ -39,15 +39,6 @@ function removeRecentSearch(query: string) {
   localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(existing));
 }
 
-const PRICE_INDEX = [
-  { city: "Athens", sale: 2180, trend: "+4.2%", up: true },
-  { city: "Thessaloniki", sale: 1640, trend: "+2.8%", up: true },
-  { city: "Mykonos", sale: 6200, trend: "+7.1%", up: true },
-  { city: "Santorini", sale: 5100, trend: "+5.3%", up: true },
-  { city: "Crete", sale: 1890, trend: "+1.4%", up: true },
-  { city: "Rhodes", sale: 2340, trend: "+3.6%", up: true },
-];
-
 const PROPERTY_TYPE_COUNTS: Record<string, number> = {
   apartment: 18420, house: 9240, villa: 3150, commercial: 4180, land: 6350, office: 1820,
 };
