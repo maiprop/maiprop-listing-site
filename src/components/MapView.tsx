@@ -485,12 +485,13 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
       >
         <NavigationControl position="bottom-right" />
 
-        {/* ── Main listings source ── */}
+        {/* ── Main listings source — GPU rendered, no DOM markers ── */}
         <Source id="listings" type="geojson" data={geoJSON} cluster clusterMaxZoom={13} clusterRadius={55}>
           {showHeatmap && <Layer {...heatmapLayer} />}
           <Layer {...clusterCircle} />
           <Layer {...clusterCount} />
           <Layer {...unclusteredHit} />
+          <Layer {...priceLabelLayer} />
         </Source>
 
         {/* ── Draw sources ── */}
@@ -504,37 +505,6 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
         <Source id="draw-dots" type="geojson" data={drawDotsGJ}>
           <Layer {...drawDotLyr} />
         </Source>
-
-        {/* ── HTML price markers ── */}
-        {mapped.map(listing => (
-          <Marker
-            key={listing.id}
-            longitude={Number(listing.longitude)}
-            latitude={Number(listing.latitude)}
-            anchor="bottom"
-            onClick={(e: any) => {
-              e.originalEvent?.stopPropagation();
-              if (stateRef.current.drawMode) return;
-              setPopupInfo(p =>
-                p?.listing.id === listing.id ? null
-                  : { listing, lng: Number(listing.longitude), lat: Number(listing.latitude) }
-              );
-            }}
-          >
-            <PricePin
-              listing={listing}
-              isActive={popupInfo?.listing.id === listing.id}
-              onClick={(e) => {
-                e.stopPropagation();
-                if (stateRef.current.drawMode) return;
-                setPopupInfo(p =>
-                  p?.listing.id === listing.id ? null
-                    : { listing, lng: Number(listing.longitude), lat: Number(listing.latitude) }
-                );
-              }}
-            />
-          </Marker>
-        ))}
 
         {/* ── Popup ── */}
         {popupInfo && (
