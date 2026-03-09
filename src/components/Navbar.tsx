@@ -27,15 +27,25 @@ export function Navbar() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  const isActive = (path: string) => location.pathname.startsWith(path) && path !== "/";
+  const isActive = (href: string) => {
+    const [path, qs] = href.split("?");
+    if (path !== "/" && !location.pathname.startsWith(path)) return false;
+    if (qs) {
+      const params = new URLSearchParams(qs);
+      const current = new URLSearchParams(location.search);
+      for (const [k, v] of params.entries()) {
+        if (current.get(k) !== v) return false;
+      }
+    }
+    return path !== "/" || location.pathname === "/";
+  };
 
   const navLinks = [
-    { label: "Buy", href: "/listings?type=buy" },
-    { label: "Rent", href: "/listings?type=rent" },
+    { label: "Buy", href: "/listings?listing_type=sale" },
+    { label: "Rent", href: "/listings?listing_type=rent" },
     { label: "Auctions", href: "/auctions", badge: "Live" },
-    { label: "Firesale™", href: "/firesale" },
-    { label: "Investors", href: "/investor-dashboard", badge: "INVESTORS", badgeStyle: "gold" },
-    { label: "Professionals", href: "/professionals" },
+    { label: "Firesale™", href: "/firesale", accent: "flame" },
+    { label: "Professionals", href: "/professionals", accent: "subtle" },
   ];
 
   const displayName = profile?.display_name || profile?.first_name || user?.email?.split("@")[0] || "Account";
