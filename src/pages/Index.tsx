@@ -655,7 +655,7 @@ export default function Index() {
       </section>
 
       {/* ══ AUCTIONS ════════════════════════════════════════════════════════ */}
-      <section className="py-16 bg-card/20 border-y border-border">
+      <section className="py-16 bg-secondary">
         <div className="container">
           <div className="flex items-center justify-between mb-8">
             <div>
