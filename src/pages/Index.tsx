@@ -846,21 +846,22 @@ export default function Index() {
               All listings <ArrowRight className="w-3 h-3" />
             </Link>
           </div>
-          {/* Residential types */}
-          {/* Animated type values */}
+          {/* Main type grid — Apartment, Land, Commercial get big icons; House & Villa get smaller icons */}
           {(() => {
             const ANIMATED_TYPES = new Set(["apartment", "house", "land"]);
+            const SMALL_ICON_TYPES = new Set(["house", "villa"]);
             return (
               <div className={`grid grid-cols-3 sm:grid-cols-6 gap-3 reveal reveal-delay-1 ${browseInView ? "in-view" : ""}`}>
                 {PROPERTY_TYPES.filter((t) => t.value !== "office").map((type) => {
                   const isAnimated = ANIMATED_TYPES.has(type.value);
+                  const isSmall = SMALL_ICON_TYPES.has(type.value);
                   return (
                     <Link key={type.value} to={`/listings?type=${type.value}`}>
                       <div className={`relative glass-card rounded-xl p-4 flex flex-col items-center text-center hover:border-primary/40 hover:bg-primary/5 transition-all group gap-2 cursor-pointer${isAnimated ? " overflow-hidden" : ""}`}>
                         {isAnimated && (
                           <span className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-primary/30 animate-pulse" />
                         )}
-                        <div className={`w-12 h-12 rounded-xl ${type.bgClass} flex items-center justify-center text-2xl group-hover:scale-110 transition-transform`}>
+                        <div className={`${isSmall ? "w-8 h-8 rounded-lg text-lg" : "w-12 h-12 rounded-xl text-2xl"} ${type.bgClass} flex items-center justify-center group-hover:scale-110 transition-transform`}>
                           {type.emoji}
                         </div>
                         <div className="font-display font-semibold text-xs group-hover:text-primary transition-colors">{type.label}</div>
@@ -872,29 +873,45 @@ export default function Index() {
               </div>
             );
           })()}
-          {/* Commercial subtypes */}
-          <div className={`mt-5 reveal reveal-delay-2 ${browseInView ? "in-view" : ""}`}>
-            <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Commercial & Offices</p>
+
+          {/* Featured commercial cards — Retail Shop, Office, Mixed-Use get big icons */}
+          <div className={`mt-5 grid grid-cols-3 gap-3 reveal reveal-delay-2 ${browseInView ? "in-view" : ""}`}>
+            {[
+              { label: "Retail Shop", emoji: "🛍️", sub: "shop", bg: "bg-accent/10", animated: true },
+              { label: "Office", emoji: "🏢", sub: "office_private", bg: "bg-brand-cyan/10", animated: false },
+              { label: "Mixed-Use", emoji: "🔀", sub: "mixed_use", bg: "bg-primary/10", animated: true },
+            ].map((item) => (
+              <Link key={item.sub} to={`/listings?type=commercial&subtype=${item.sub}`}>
+                <div className={`relative glass-card rounded-xl p-4 flex flex-col items-center text-center hover:border-accent/40 hover:bg-accent/5 transition-all group gap-2 cursor-pointer${item.animated ? " overflow-hidden" : ""}`}>
+                  {item.animated && (
+                    <span className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-accent/40 animate-pulse" />
+                  )}
+                  <div className={`w-12 h-12 rounded-xl ${item.bg} flex items-center justify-center text-2xl group-hover:scale-110 transition-transform`}>
+                    {item.emoji}
+                  </div>
+                  <div className="font-display font-semibold text-xs group-hover:text-accent transition-colors">{item.label}</div>
+                </div>
+              </Link>
+            ))}
+          </div>
+
+          {/* Other commercial subtypes as chips */}
+          <div className={`mt-4 reveal reveal-delay-2 ${browseInView ? "in-view" : ""}`}>
+            <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3">More Commercial</p>
             <div className="flex flex-wrap gap-2">
               {[
-              { label: "🛍️ Retail Shop", sub: "shop", animated: true },
-              { label: "🏢 Office", sub: "office_private", animated: false },
-              { label: "📦 Warehouse", sub: "warehouse", animated: false },
-              { label: "🍽️ Restaurant / Café", sub: "restaurant", animated: false },
-              { label: "🏨 Hotel / B&B", sub: "hotel", animated: false },
-              { label: "🔬 Clinic / Medical", sub: "clinic", animated: false },
-              { label: "🏗️ Industrial Space", sub: "industrial", animated: false },
-              { label: "🖼️ Showroom", sub: "showroom", animated: false },
-              { label: "🎪 Hall / Event Space", sub: "hall", animated: false },
-              { label: "🤝 Coworking", sub: "office_coworking", animated: false },
-              { label: "🏛️ Business Centre", sub: "office_business", animated: false },
-              { label: "🔀 Mixed-Use", sub: "mixed_use", animated: true }].
-              map((item) =>
+              { label: "📦 Warehouse", sub: "warehouse" },
+              { label: "🍽️ Restaurant / Café", sub: "restaurant" },
+              { label: "🏨 Hotel / B&B", sub: "hotel" },
+              { label: "🔬 Clinic / Medical", sub: "clinic" },
+              { label: "🏗️ Industrial Space", sub: "industrial" },
+              { label: "🖼️ Showroom", sub: "showroom" },
+              { label: "🎪 Hall / Event Space", sub: "hall" },
+              { label: "🤝 Coworking", sub: "office_coworking" },
+              { label: "🏛️ Business Centre", sub: "office_business" },
+              ].map((item) =>
               <Link key={item.sub} to={`/listings?type=commercial&subtype=${item.sub}`}>
-                  <div className={`relative glass-card rounded-xl px-3.5 py-2 text-xs font-medium hover:border-accent/40 hover:bg-accent/5 hover:text-accent transition-all cursor-pointer whitespace-nowrap${item.animated ? " overflow-hidden" : ""}`}>
-                    {item.animated && (
-                      <span className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-accent/40 animate-pulse" />
-                    )}
+                  <div className="glass-card rounded-xl px-3.5 py-2 text-xs font-medium hover:border-accent/40 hover:bg-accent/5 hover:text-accent transition-all cursor-pointer whitespace-nowrap">
                     {item.label}
                   </div>
                 </Link>
