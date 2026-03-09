@@ -117,19 +117,37 @@ export function OSSyncPanel() {
     onError: (err: any) => { setSyncingId(null); toast.error("Firesale sync failed: " + err.message); },
   });
 
+  // ── Poll config state ────────────────────────────────────────────────────────
+  const [pollPage, setPollPage]     = useState(0);
+  const [pollPages, setPollPages]   = useState(1); // how many pages to scan
+  const [pollResult, setPollResult] = useState<any>(null);
+
   // ── Mutation: poll OS auctions → Hub ────────────────────────────────────────
   const pollAuctionsMutation = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke("poll-os-auctions", {
-        body: { size: 100 },
-      });
-      if (error) throw error;
-      return data;
+      // Scan multiple pages and aggregate results
+      let totalImported = 0, totalUpdated = 0, totalErrors = 0, totalScanned = 0;
+      for (let p = pollPage; p < pollPage + pollPages; p++) {
+        const { data, error } = await supabase.functions.invoke("poll-os-auctions", {
+          body: { page: p, pageSize: 100 },
+        });
+        if (error) throw error;
+        totalImported += data?.imported ?? 0;
+        totalUpdated  += data?.updated  ?? 0;
+        totalErrors   += data?.errors   ?? 0;
+        totalScanned  += data?.total    ?? 0;
+      }
+      return { imported: totalImported, updated: totalUpdated, errors: totalErrors, scanned: totalScanned };
     },
     onSuccess: (result) => {
+      setPollResult(result);
       qc.invalidateQueries({ queryKey: ["sync_log"] });
-      if (result?.status === "skipped") {
+      if (!result) {
         toast.info("Poll queued — OS credentials pending.");
+      } else if (result.imported === 0 && result.updated === 0) {
+        toast.info(
+          `Scanned ${result.scanned} records — no future auctions on this page range. Try a different page.`,
+        );
       } else {
         toast.success(
           `Auctions synced: ${result.imported} new, ${result.updated} updated${result.errors ? `, ${result.errors} errors` : ""}.`,
@@ -259,18 +277,61 @@ export function OSSyncPanel() {
             <ArrowDownLeft className="w-5 h-5 text-primary shrink-0" />
             <div>
               <h2 className="font-semibold text-sm">OS Auctions → Hub</h2>
-              <p className="text-xs text-muted-foreground">Pull new & updated auctions from OS into the Hub auction module.</p>
+              <p className="text-xs text-muted-foreground">Imports only <strong>future</strong> auctions (POSTED / READY_TO_CONDUCT / FINALIZED).</p>
             </div>
           </div>
+
+          {/* OS status counts info */}
           <div className="rounded-lg bg-secondary/50 p-3 text-xs space-y-1">
-            <p className="font-medium text-foreground">What gets synced:</p>
+            <p className="font-medium text-foreground">Future auction statuses (~9,765 total):</p>
             <ul className="text-muted-foreground space-y-0.5 list-disc list-inside">
-              <li>Auction date, court, starting bid</li>
-              <li>Property category, KAEK, location</li>
-              <li>Images, description, sqm</li>
-              <li>Deduped via <code className="bg-background px-1 rounded">os_auction:{"{id}"}</code> tag</li>
+              <li><span className="text-brand-emerald font-medium">POSTED</span> — 9,222 upcoming</li>
+              <li><span className="text-brand-emerald font-medium">READY_TO_CONDUCT</span> — 179</li>
+              <li><span className="text-brand-emerald font-medium">FINALIZED_LIST</span> — 364</li>
             </ul>
+            <p className="text-muted-foreground/70 pt-1">Past/cancelled records are skipped automatically.</p>
           </div>
+
+          {/* Page range controls */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-muted-foreground w-20 shrink-0">Start page</label>
+              <input
+                type="number"
+                min={0}
+                max={2954}
+                value={pollPage}
+                onChange={e => setPollPage(Math.max(0, Math.min(2954, Number(e.target.value))))}
+                className="w-full text-xs bg-secondary rounded px-2 py-1.5 border border-border focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-muted-foreground w-20 shrink-0">Pages to scan</label>
+              <input
+                type="number"
+                min={1}
+                max={10}
+                value={pollPages}
+                onChange={e => setPollPages(Math.max(1, Math.min(10, Number(e.target.value))))}
+                className="w-full text-xs bg-secondary rounded px-2 py-1.5 border border-border focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Scanning pages {pollPage}–{pollPage + pollPages - 1} · {pollPages * 100} records
+            </p>
+          </div>
+
+          {/* Last result */}
+          {pollResult && (
+            <div className="rounded-lg bg-secondary/50 p-2.5 text-xs space-y-0.5">
+              <p className="font-medium">Last scan result:</p>
+              <p className="text-muted-foreground">
+                ✅ {pollResult.imported} imported · {pollResult.updated} updated ·{" "}
+                🔍 {pollResult.scanned} scanned · ⏭ skipped past
+              </p>
+            </div>
+          )}
+
           <Button
             className="w-full gap-2"
             size="sm"
@@ -280,7 +341,7 @@ export function OSSyncPanel() {
             {pollAuctionsMutation.isPending
               ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
               : <Download className="w-3.5 h-3.5" />}
-            Pull Auctions Now
+            {pollAuctionsMutation.isPending ? "Scanning…" : "Pull Future Auctions"}
           </Button>
         </div>
 
