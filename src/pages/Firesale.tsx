@@ -175,26 +175,34 @@ export default function Firesale() {
       <div className="pt-16">
 
         {/* Hero */}
-        <div className="relative py-24 overflow-hidden border-b border-border">
-          <div className="absolute inset-0" style={{
-            background: "radial-gradient(ellipse 80% 60% at 20% 50%, hsl(0 72% 55% / 0.08), transparent 70%), radial-gradient(ellipse 60% 80% at 80% 30%, hsl(183 100% 42% / 0.05), transparent 60%)"
-          }} />
+        <div className="relative py-28 overflow-hidden border-b border-border">
+          {/* Animated glow orbs */}
+          <div className="firesale-orb-1 absolute -left-24 top-1/4 w-[520px] h-[520px] rounded-full pointer-events-none"
+            style={{ background: "radial-gradient(circle, hsl(0 72% 55% / 0.13) 0%, transparent 70%)" }} />
+          <div className="firesale-orb-2 absolute right-0 bottom-0 w-[400px] h-[400px] rounded-full pointer-events-none"
+            style={{ background: "radial-gradient(circle, hsl(183 100% 42% / 0.08) 0%, transparent 70%)" }} />
+          <div className="firesale-orb-3 absolute left-1/2 top-0 w-[300px] h-[300px] rounded-full pointer-events-none"
+            style={{ background: "radial-gradient(circle, hsl(0 80% 55% / 0.06) 0%, transparent 70%)" }} />
+          {/* Subtle vignette overlay */}
+          <div className="absolute inset-0 pointer-events-none"
+            style={{ background: "radial-gradient(ellipse 100% 100% at 50% 50%, transparent 60%, hsl(var(--background) / 0.4) 100%)" }} />
+
           <div className="container relative">
             <div className="max-w-3xl">
-              <div className="inline-flex items-center gap-2 bg-destructive/10 border border-destructive/20 text-destructive px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest mb-6">
+              <div className="reveal in-view inline-flex items-center gap-2 bg-destructive/10 border border-destructive/20 text-destructive px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest mb-6">
                 <Flame className="w-3.5 h-3.5" /> Firesale™ — Instant Cash Offer
               </div>
-              <h1 className="font-display text-5xl md:text-6xl font-black mb-5 leading-tight">
+              <h1 className="reveal in-view reveal-delay-1 font-display text-5xl md:text-6xl font-black mb-5 leading-tight">
                 Sell Your Property<br />
                 <span className="gradient-text-primary">in 96 Hours.</span>
               </h1>
-              <p className="text-muted-foreground text-xl mb-8 leading-relaxed max-w-2xl">
+              <p className="reveal in-view reveal-delay-2 text-muted-foreground text-xl mb-8 leading-relaxed max-w-2xl">
                 AI-powered guaranteed cash offer. Fast viewings, no negotiations.
                 Your property is matched instantly to our network of <strong className="text-foreground">private investors</strong>.
               </p>
-              <div className="flex flex-wrap gap-3 mb-10">
+              <div className="reveal in-view reveal-delay-3 flex flex-wrap gap-3 mb-10">
                 {["Guaranteed cash", "96h close", "Full legal support", "AI valuation"].map((f) =>
-                <div key={f} className="flex items-center gap-1.5 text-sm bg-muted border border-border rounded-full px-3 py-1.5">
+                <div key={f} className="flex items-center gap-1.5 text-sm bg-muted border border-border rounded-full px-3 py-1.5 hover-scale">
                     <Check className="w-3.5 h-3.5 text-brand-emerald" />{f}
                   </div>
                 )}
