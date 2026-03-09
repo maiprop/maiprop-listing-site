@@ -339,15 +339,6 @@ function PropertyTypeButton({
     </div>
   );
 }
-  useEffect(() => {
-    if (!open || !ref.current) return;
-    const rect = ref.current.getBoundingClientRect();
-    setPos({ top: rect.bottom + window.scrollY + 4, left: rect.left + window.scrollX });
-  }, [open, ref]);
-  return pos;
-}
-
-function ListingTypeButton({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const pos = useDropdownPosition(ref, open);
