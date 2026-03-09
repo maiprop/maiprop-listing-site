@@ -151,8 +151,14 @@ Deno.serve(async (req) => {
     let updated  = 0;
     let errors   = 0;
 
-    // 4. Upsert each auction
+    // 4. Upsert each auction (skip past auctions as a safety net)
+    const nowMs = Date.now();
     for (const a of auctions) {
+      // Skip if auctionDate is in the past
+      if (a.auctionDate) {
+        const auctionMs = new Date(a.auctionDate).getTime();
+        if (!isNaN(auctionMs) && auctionMs < nowMs) continue;
+      }
       try {
         const osId   = String(a.auctionListingId ?? a.id ?? "unknown");
         const tagKey = `os_auction:${osId}`;
