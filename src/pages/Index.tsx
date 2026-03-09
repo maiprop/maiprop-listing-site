@@ -716,10 +716,12 @@ export default function Index() {
             </div>
           </div>
         </div>
+        </div>
       </section>
 
       {/* ══ POPULAR LOCATIONS ════════════════════════════════════════════════ */}
-      <section className="py-16 container">
+      <section className="py-16 bg-secondary">
+        <div className="container">
         <div className="flex items-center justify-between mb-8">
           <h2 className="font-display text-2xl font-bold">Popular Locations</h2>
           <Link to="/listings" className="text-sm text-primary hover:underline flex items-center gap-1">
