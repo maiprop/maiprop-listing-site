@@ -126,7 +126,7 @@ export function Footer() {
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20">
               <span className="text-base leading-none">🔍</span>
               <div>
-                <div className="text-xs font-semibold text-primary leading-tight">maiProp</div>
+                <div className="text-xs font-semibold text-primary leading-tight">mAI prop</div>
                 <div className="text-[10px] text-muted-foreground leading-tight">You are here</div>
               </div>
             </div>
