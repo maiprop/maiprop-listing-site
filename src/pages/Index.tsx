@@ -393,6 +393,7 @@ export default function Index() {
   const [searchType, setSearchType] = useState("Buy");
   const [selectedPropertyType, setSelectedPropertyType] = useState("");
   const [showAI, setShowAI] = useState(false);
+  const { data: priceIndex = [] } = usePriceIndex();
 
   const listingTypeMap: Record<string, string> = {
     "Buy": "sale", "Rent": "rent", "Auctions": "auction", "Quick Sale": "firesale",
