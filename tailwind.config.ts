@@ -62,19 +62,22 @@ export default {
           ring: "hsl(var(--sidebar-ring))",
         },
         brand: {
-          // Primary brand colours
+          // Primary brand colours — mAI Prop OS guidelines
           cyan: "hsl(var(--brand-cyan))",
+          "cyan-dark": "hsl(var(--brand-cyan-dark))",
           "cyan-glow": "hsl(var(--brand-cyan-glow))",
           purple: "hsl(var(--brand-purple))",
           "purple-dark": "hsl(var(--brand-purple-dark))",
+          navy: "hsl(var(--brand-navy))",
+          blackout: "hsl(var(--brand-blackout))",
           gold: "hsl(var(--brand-gold))",
           emerald: "hsl(var(--brand-emerald))",
           sky: "hsl(var(--brand-sky))",
           // Legacy aliases so existing usage doesn't break
-          amber: "hsl(var(--brand-cyan))",
-          "amber-glow": "hsl(var(--brand-cyan-glow))",
-          coral: "hsl(var(--brand-purple))",
-          "coral-dark": "hsl(var(--brand-purple-dark))",
+          amber: "hsl(var(--brand-amber))",
+          "amber-glow": "hsl(var(--brand-amber-glow))",
+          coral: "hsl(var(--brand-coral))",
+          "coral-dark": "hsl(var(--brand-coral-dark))",
           surface1: "hsl(var(--brand-surface-1))",
           surface2: "hsl(var(--brand-surface-2))",
           surface3: "hsl(var(--brand-surface-3))",
@@ -96,6 +99,7 @@ export default {
         "gradient-card": "var(--gradient-card)",
         "gradient-emerald": "var(--gradient-emerald)",
         "gradient-warm": "var(--gradient-warm)",
+        "gradient-navy": "var(--gradient-navy)",
       },
       boxShadow: {
         "glow-cyan": "var(--shadow-glow-amber)",
