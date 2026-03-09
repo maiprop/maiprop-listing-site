@@ -239,6 +239,94 @@ export default function CreateListing() {
   const fieldRefs = useRef<Record<string, HTMLElement | null>>({});
   const setFieldRef = (key: string) => (el: HTMLElement | null) => { fieldRefs.current[key] = el; };
 
+  const [form, setForm] = useState({
+    listing_type: "sale" as ListingType,
+    property_type: "apartment" as PropertyType,
+    title: "",
+    description: "",
+    sqm: "",
+    year_built: "",
+    energy_class: "",
+    bedrooms: "",
+    bathrooms: "",
+    wc_count: "",
+    kitchens: "",
+    living_rooms: "",
+    floor: "",
+    total_floors: "",
+    levels: "",
+    heating_system: "",
+    construction_status: "",
+    commercial_subtype: "",
+    plot_surface: "",
+    floor_height: "",
+    has_elevator: false, has_ac: false, has_solar_water: false, has_storage: false,
+    has_secure_door: false, has_alarm: false, has_cctv: false, has_security: false,
+    has_smart_home: false, has_fireplace: false, has_underfloor_heating: false,
+    has_furnished: false, has_internal_staircase: false, has_double_glazing: false,
+    has_window_screens: false, has_night_power: false, has_attic: false,
+    has_satellite: false, has_painted: false,
+    has_parking: false, has_balcony: false, has_garden: false, has_pool: false,
+    has_view: false, has_facade: false, has_awning: false, has_disability_access: false,
+    is_corner: false, is_penthouse: false, is_neoclassical: false, is_preserved: false,
+    has_virtual_tour: false, has_video_tour: false,
+    suitable_student: false, suitable_holiday: false, suitable_investment: false, suitable_commercial_use: false,
+    has_three_phase_power: false, has_loading_dock: false, has_structured_cabling: false, has_equipped: false,
+    is_buildable: false, within_city_plan: false, within_settlement: false,
+    has_water_supply: false, has_electricity_supply: false, has_land_concession: false,
+    coverage_ratio: "", building_allowance: "", facade_length: "", plot_depth: "",
+    slope: "", zone_type: "", road_type: "", land_use: "",
+    distance_from_sea: "", distance_from_city: "",
+    address: "", city: "", region: "", postal_code: "",
+    cadastre_number: "", enfia_zone: "",
+    price: "", auction_starting_bid: "", auction_date: "", auction_court: "",
+    deposit_months: "", monthly_expenses: "", agent_fee_included: false,
+    pets_allowed: false, short_term_rental: false, available_from: "", min_rental_months: "",
+  });
+
+  const set = (key: string, value: unknown) => {
+    setForm(f => ({ ...f, [key]: value }));
+    if (errors[key]) setErrors(e => { const n = { ...e }; delete n[key]; return n; });
+  };
+  const toggle = (key: string) => setForm(f => ({ ...f, [key]: !(f as any)[key] }));
+
+  const pt = form.property_type;
+  const lt = form.listing_type;
+
+  // ── Per-step validation with inline errors ────────────────────────────────
+  const scrollToField = (key: string) => {
+    const el = fieldRefs.current[key];
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
+
+  const validateStep = (s: number): boolean => {
+    const newErrors: Record<string, string> = {};
+    if (s === 2) {
+      if (!form.title.trim()) newErrors.title = "Title is required";
+      if (!form.sqm) newErrors.sqm = "Property area (m²) is required";
+    }
+    if (s === 4) {
+      if (!form.city.trim()) newErrors.city = "City is required";
+    }
+    if (s === 5) {
+      if (!form.price) newErrors.price = lt === "rent" ? "Monthly rent is required" : "Asking price is required";
+      if (lt === "auction" && !form.auction_starting_bid) newErrors.auction_starting_bid = "Starting bid is required";
+    }
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      const firstKey = Object.keys(newErrors)[0];
+      toast.error(newErrors[firstKey]);
+      setTimeout(() => scrollToField(firstKey), 50);
+      return false;
+    }
+    setErrors({});
+    return true;
+  };
+
+  const handleNext = () => {
+    if (validateStep(step)) setStep(s => s + 1);
+  };
+
   // ── Completion percentage ─────────────────────────────────────────────────
   const completionPct = (() => {
     let filled = 0;
