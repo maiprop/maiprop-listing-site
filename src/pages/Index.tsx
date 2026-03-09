@@ -692,8 +692,8 @@ export default function Index() {
 
       {/* ══ FIRESALE CTA ════════════════════════════════════════════════════ */}
       <section className="py-10 sm:py-16 bg-background">
-        <div className="container">
-        <div className="relative rounded-3xl overflow-hidden bg-card border border-border">
+        <div ref={firesaleRef} className="container">
+        <div className={`relative rounded-3xl overflow-hidden bg-card border border-border reveal ${firesaleInView ? "in-view" : ""}`}>
           <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 80% 50%, hsl(0 72% 55% / 0.12) 0%, transparent 60%)" }} />
           <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 20% 50%, hsl(192 100% 50% / 0.05) 0%, transparent 50%)" }} />
           <div className="relative p-6 sm:p-10 md:p-16 grid md:grid-cols-2 gap-6 sm:gap-8 items-center">
