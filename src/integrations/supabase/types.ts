@@ -661,10 +661,95 @@ export type Database = {
           },
         ]
       }
+      professional_availability: {
+        Row: {
+          created_at: string
+          day_of_week: number
+          end_time: string
+          id: string
+          is_active: boolean
+          professional_id: string
+          start_time: string
+        }
+        Insert: {
+          created_at?: string
+          day_of_week: number
+          end_time: string
+          id?: string
+          is_active?: boolean
+          professional_id: string
+          start_time: string
+        }
+        Update: {
+          created_at?: string
+          day_of_week?: number
+          end_time?: string
+          id?: string
+          is_active?: boolean
+          professional_id?: string
+          start_time?: string
+        }
+        Relationships: []
+      }
+      professional_services: {
+        Row: {
+          category: string
+          created_at: string
+          currency: string
+          description: string | null
+          estimated_hours: number | null
+          id: string
+          is_active: boolean
+          is_premium: boolean
+          pricing_model: string
+          professional_id: string
+          rate_amount: number | null
+          service_key: string
+          service_name: string
+          updated_at: string
+          video_enabled: boolean
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          currency?: string
+          description?: string | null
+          estimated_hours?: number | null
+          id?: string
+          is_active?: boolean
+          is_premium?: boolean
+          pricing_model?: string
+          professional_id: string
+          rate_amount?: number | null
+          service_key: string
+          service_name: string
+          updated_at?: string
+          video_enabled?: boolean
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          currency?: string
+          description?: string | null
+          estimated_hours?: number | null
+          id?: string
+          is_active?: boolean
+          is_premium?: boolean
+          pricing_model?: string
+          professional_id?: string
+          rate_amount?: number | null
+          service_key?: string
+          service_name?: string
+          updated_at?: string
+          video_enabled?: boolean
+        }
+        Relationships: []
+      }
       professionals: {
         Row: {
           avatar_url: string | null
           bio: string | null
+          calendar_notes: string | null
           category: Database["public"]["Enums"]["professional_category"]
           city: string | null
           created_at: string
@@ -678,15 +763,18 @@ export type Database = {
           rating: number | null
           reviews_count: number | null
           specialties: string[] | null
+          subscription_tier: string | null
           title: string
           updated_at: string
           user_id: string
           verified: boolean
+          video_link: string | null
           website_url: string | null
         }
         Insert: {
           avatar_url?: string | null
           bio?: string | null
+          calendar_notes?: string | null
           category: Database["public"]["Enums"]["professional_category"]
           city?: string | null
           created_at?: string
@@ -700,15 +788,18 @@ export type Database = {
           rating?: number | null
           reviews_count?: number | null
           specialties?: string[] | null
+          subscription_tier?: string | null
           title: string
           updated_at?: string
           user_id: string
           verified?: boolean
+          video_link?: string | null
           website_url?: string | null
         }
         Update: {
           avatar_url?: string | null
           bio?: string | null
+          calendar_notes?: string | null
           category?: Database["public"]["Enums"]["professional_category"]
           city?: string | null
           created_at?: string
@@ -722,10 +813,12 @@ export type Database = {
           rating?: number | null
           reviews_count?: number | null
           specialties?: string[] | null
+          subscription_tier?: string | null
           title?: string
           updated_at?: string
           user_id?: string
           verified?: boolean
+          video_link?: string | null
           website_url?: string | null
         }
         Relationships: []
