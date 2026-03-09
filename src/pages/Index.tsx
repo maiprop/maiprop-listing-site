@@ -1,16 +1,38 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Search, MapPin, ChevronDown, Users, ArrowRight, Gavel, Flame, ExternalLink, BarChart2, Globe, Maximize2, ListFilter, CalendarCheck, HandshakeIcon, Sparkles, Check, X, Loader2, Lightbulb } from "lucide-react";
+import { Search, MapPin, ChevronDown, Users, ArrowRight, Gavel, Flame, ExternalLink, BarChart2, Globe, Maximize2, ListFilter, CalendarCheck, HandshakeIcon, Sparkles, Check, X, Loader2, Lightbulb, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { MarketTicker } from "@/components/MarketTicker";
 import { PropertyCard } from "@/components/PropertyCard";
 import { Footer } from "@/components/Footer";
+import { CookieConsentBanner } from "@/components/CookieConsentBanner";
 import { mockProperties } from "@/data/mockProperties";
 import { PROPERTY_TYPES, PROPERTY_GROUPS, PROPERTY_TYPE_MAP, type PropertyTypeKey } from "@/lib/propertyTypes";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import heroBg from "@/assets/hero-bg.jpg";
+
+const RECENT_SEARCHES_KEY = "maiprop_recent_searches";
+const MAX_RECENT = 6;
+
+function getRecentSearches(): string[] {
+  try {
+    const raw = localStorage.getItem(RECENT_SEARCHES_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function addRecentSearch(query: string) {
+  if (!query.trim()) return;
+  const existing = getRecentSearches().filter(s => s !== query);
+  localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify([query, ...existing].slice(0, MAX_RECENT)));
+}
+
+function removeRecentSearch(query: string) {
+  const existing = getRecentSearches().filter(s => s !== query);
+  localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(existing));
+}
 
 const stats = [
   { value: "47,000+", label: "Active Listings" },
