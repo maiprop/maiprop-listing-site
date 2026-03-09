@@ -648,8 +648,8 @@ export default function Index() {
 
       {/* ══ FEATURED PROPERTIES ══════════════════════════════════════════════ */}
       <section className="py-16 bg-background">
-        <div className="container">
-          <div className="flex items-center justify-between mb-8">
+        <div ref={featuredRef} className="container">
+          <div className={`flex items-center justify-between mb-8 reveal ${featuredInView ? "in-view" : ""}`}>
             <div>
               <h2 className="font-display text-2xl font-bold">Featured Properties</h2>
               <p className="text-sm text-muted-foreground mt-1">Premium & verified listings</p>
@@ -658,7 +658,7 @@ export default function Index() {
               <Link to="/listings">View All</Link>
             </Button>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 reveal reveal-delay-1 ${featuredInView ? "in-view" : ""}`}>
             {mockProperties.filter(p => p.isFeatured || p.isPremium).slice(0, 4).map(property => (
               <PropertyCard key={property.id} property={property} />
             ))}
