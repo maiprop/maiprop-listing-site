@@ -193,7 +193,7 @@ export default function Firesale() {
                 Your property is matched instantly to our network of <strong className="text-foreground">private investors</strong>.
               </p>
               <div className="flex flex-wrap gap-3 mb-10">
-                {["Zero commission", "Guaranteed cash", "48h close", "Full legal support", "AI valuation"].map((f) =>
+                {["Zero commission", "Guaranteed cash", "96h close", "Full legal support", "AI valuation"].map((f) =>
                 <div key={f} className="flex items-center gap-1.5 text-sm bg-muted border border-border rounded-full px-3 py-1.5">
                     <Check className="w-3.5 h-3.5 text-brand-emerald" />{f}
                   </div>
