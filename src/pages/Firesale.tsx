@@ -1,27 +1,22 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Flame,
   ArrowRight,
   Check,
   MapPin,
-  Zap,
-  Clock,
   Shield,
-  Building2,
-  Home,
   BarChart2,
   Euro,
-  TrendingDown,
   ChevronRight,
   Star,
   Lock,
   Loader2,
-  Phone,
-  Mail,
-  Hash,
-  AlertCircle,
   Sparkles,
+  Hash,
+  Upload,
+  X,
+  ImageIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -31,24 +26,10 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
 const steps = [
-  { step: "01", title: "Property Details", desc: "Address, type, size, condition — takes 2 minutes." },
+  { step: "01", title: "Property Details", desc: "Address, KAEK, type, size — takes 2 minutes." },
   { step: "02", title: "AI Valuation Engine", desc: "100+ data points analyzed from mAI Prop OS." },
   { step: "03", title: "Confidential Offer", desc: "Guaranteed cash offer within 96 hours." },
   { step: "04", title: "Close in 96h", desc: "Accept and close. We handle title, notary, everything." },
-];
-
-const proofStats = [
-  { value: "€2.4B+", label: "Deal flow processed", color: "text-primary" },
-  { value: "Professional", label: "Active buyers", color: "text-brand-gold" },
-  { value: "94%", label: "AI confidence avg.", color: "text-brand-emerald" },
-  { value: "96h", label: "Average close time", color: "text-accent" },
-];
-
-const conditionOptions = [
-  { value: "excellent", label: "Excellent", sublabel: "Move-in ready", disc: "−3%", emoji: "✨" },
-  { value: "good", label: "Good", sublabel: "Minor works only", disc: "−7%", emoji: "👍" },
-  { value: "fair", label: "Fair", sublabel: "Needs renovation", disc: "−12%", emoji: "🔨" },
-  { value: "needs-work", label: "Major Reno", sublabel: "Full renovation req.", disc: "−20%", emoji: "⚠️" },
 ];
 
 const propertyTypeOptions = [
@@ -63,6 +44,7 @@ const propertyTypeOptions = [
 export default function Firesale() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
@@ -70,14 +52,15 @@ export default function Firesale() {
   const [aiEstimate, setAiEstimate] = useState<number | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [requestId, setRequestId] = useState<string | null>(null);
+  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
+  const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
 
   const [form, setForm] = useState({
     address: "",
-    city: "",
+    kaek: "",
     propertyType: "",
     sqm: "",
-    bedrooms: "",
-    condition: "",
     askingPrice: "",
     contactName: profile?.display_name || profile?.first_name || "",
     contactEmail: user?.email || "",
@@ -99,13 +82,44 @@ export default function Firesale() {
 
   const upd = (k: string, v: string) => setForm((prev) => ({ ...prev, [k]: v }));
 
+  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const valid = files.filter((f) => f.type.startsWith("image/") && f.size < 10 * 1024 * 1024);
+    if (valid.length < files.length) toast.warning("Some files were skipped (must be images under 10MB).");
+    const newFiles = [...photoFiles, ...valid].slice(0, 10);
+    setPhotoFiles(newFiles);
+    const previews = newFiles.map((f) => URL.createObjectURL(f));
+    setPhotoPreviews(previews);
+    // reset input so same file can be re-added
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const removePhoto = (idx: number) => {
+    const newFiles = photoFiles.filter((_, i) => i !== idx);
+    const newPreviews = photoPreviews.filter((_, i) => i !== idx);
+    setPhotoFiles(newFiles);
+    setPhotoPreviews(newPreviews);
+  };
+
+  const uploadPhotos = async (requestId: string): Promise<string[]> => {
+    const urls: string[] = [];
+    for (const file of photoFiles) {
+      const ext = file.name.split(".").pop();
+      const path = `${requestId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error } = await supabase.storage.from("firesale-photos").upload(path, file);
+      if (!error) {
+        const { data } = supabase.storage.from("firesale-photos").getPublicUrl(path);
+        urls.push(data.publicUrl);
+      }
+    }
+    return urls;
+  };
+
   const step1Valid = !!(
     form.address.trim() &&
-    form.city.trim() &&
     form.propertyType &&
     form.sqm &&
-    Number(form.sqm) > 0 &&
-    form.condition
+    Number(form.sqm) > 0
   );
   const step2Valid = !!(form.contactName.trim() && form.contactEmail.trim() && /\S+@\S+\.\S+/.test(form.contactEmail));
 
@@ -118,14 +132,8 @@ export default function Firesale() {
       office: 2600,
       land: 900,
     };
-    const condDiscount: Record<string, number> = {
-      excellent: 0.97,
-      good: 0.93,
-      fair: 0.87,
-      "needs-work": 0.8,
-    };
     const base = (basePerSqm[form.propertyType] || 2000) * Number(form.sqm);
-    const estimate = Math.round(base * (condDiscount[form.condition] || 0.9) * 0.95);
+    const estimate = Math.round(base * 0.92);
     setAiEstimate(estimate);
 
     // Try edge function for a better estimate (non-blocking)
@@ -133,11 +141,8 @@ export default function Firesale() {
     try {
       const { data } = await supabase.functions.invoke("property-valuation", {
         body: {
-          city: form.city,
           property_type: form.propertyType,
           sqm: Number(form.sqm),
-          bedrooms: form.bedrooms ? Number(form.bedrooms) : undefined,
-          condition: form.condition,
         },
       });
       if (data?.estimated_value) {
@@ -149,10 +154,12 @@ export default function Firesale() {
       setAiLoading(false);
     }
   };
+
   const handleContinue = async () => {
     await generateEstimate();
     setStep(2);
   };
+
   const handleSubmit = async () => {
     if (!step2Valid) {
       toast.error("Please fill in all required fields.");
@@ -162,19 +169,23 @@ export default function Firesale() {
     try {
       const estimate = aiEstimate || Math.round(Number(form.sqm) * 1900 * 0.92);
 
+      const notesWithKaek = [
+        form.kaek ? `KAEK: ${form.kaek.trim()}` : null,
+        form.notes.trim() || null,
+      ].filter(Boolean).join("\n");
+
       const { data, error } = await supabase
         .from("firesale_requests")
         .insert({
           address: form.address.trim(),
-          city: form.city.trim(),
+          city: "-",
           property_type: form.propertyType as any,
           sqm: Number(form.sqm),
-          bedrooms: form.bedrooms ? Number(form.bedrooms) : null,
-          condition: form.condition,
+          condition: null,
           asking_price: form.askingPrice ? Number(form.askingPrice) : null,
           contact_email: form.contactEmail.trim(),
           contact_phone: form.contactPhone.trim() || null,
-          notes: form.notes.trim() || null,
+          notes: notesWithKaek || null,
           ai_estimate: estimate,
           user_id: user?.id || null,
           status: "pending",
@@ -183,6 +194,18 @@ export default function Firesale() {
         .single();
 
       if (error) throw error;
+
+      // Upload photos in background
+      if (photoFiles.length > 0 && data?.id) {
+        setUploadingPhotos(true);
+        try {
+          await uploadPhotos(data.id);
+        } catch {
+          // non-blocking
+        } finally {
+          setUploadingPhotos(false);
+        }
+      }
 
       setAiEstimate(estimate);
       setRequestId(data?.id || null);
@@ -200,14 +223,14 @@ export default function Firesale() {
     setStep(1);
     setAiEstimate(null);
     setRequestId(null);
+    setPhotoFiles([]);
+    setPhotoPreviews([]);
     setForm((f) => ({
       ...f,
       address: "",
-      city: "",
+      kaek: "",
       propertyType: "",
       sqm: "",
-      bedrooms: "",
-      condition: "",
       askingPrice: "",
       notes: "",
     }));
