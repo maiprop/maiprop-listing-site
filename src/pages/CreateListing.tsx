@@ -274,6 +274,44 @@ export default function CreateListing() {
   const pt = form.property_type;
   const lt = form.listing_type;
 
+  // ── Per-step validation ───────────────────────────────────────────────────
+  const validateStep = (s: number): boolean => {
+    switch (s) {
+      case 2:
+        if (!form.title.trim()) { toast.error("Please add a title for your listing"); return false; }
+        if (!form.sqm) { toast.error("Property area (m²) is required"); return false; }
+        return true;
+      case 4:
+        if (!form.city.trim()) { toast.error("City is required to continue"); return false; }
+        return true;
+      case 5:
+        if (!form.price) { toast.error(`Please enter a ${lt === "rent" ? "monthly rent" : "asking price"}`); return false; }
+        if (lt === "auction" && !form.auction_starting_bid) { toast.error("Auction starting bid is required"); return false; }
+        return true;
+      default:
+        return true;
+    }
+  };
+
+  const handleNext = () => {
+    if (validateStep(step)) setStep(s => s + 1);
+  };
+
+  // ── Completion percentage ─────────────────────────────────────────────────
+  const completionPct = (() => {
+    let filled = 0;
+    const checks = [
+      true,
+      !!(form.title && form.sqm),
+      true,
+      !!form.city,
+      !!form.price,
+      images.length > 0,
+    ];
+    checks.forEach(c => { if (c) filled++; });
+    return Math.round((filled / checks.length) * 100);
+  })();
+
   // ── Image Upload ──────────────────────────────────────────────────────────
 
   const uploadImage = useCallback(async (file: File): Promise<UploadedImage> => {
