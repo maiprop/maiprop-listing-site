@@ -307,6 +307,7 @@ export default function Professionals() {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
+      {aiModal && <AIToolsModal groupId={aiModal.groupId} groupLabel={aiModal.groupLabel} onClose={() => setAiModal(null)} />}
       <div className="pt-16">
 
         {/* ── Hero ───────────────────────────────────────────────────── */}
