@@ -633,7 +633,7 @@ export default function Firesale() {
               </div>
 
               {/* Investor dashboard CTA — gated */}
-              <div className="glass-card rounded-2xl border border-accent/20 p-6 relative overflow-hidden">
+              <div className="reveal in-view reveal-delay-2 glass-card rounded-2xl border border-accent/20 p-6 relative overflow-hidden transition-all duration-300 hover:border-accent/40 hover:shadow-elevated">
                 <div className="absolute top-0 right-0 w-32 h-32 rounded-bl-full bg-accent/5 pointer-events-none" />
                 <div className="relative">
                   <div className="flex items-center gap-2 mb-3">
