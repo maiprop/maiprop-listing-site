@@ -53,14 +53,22 @@ const AI_SUGGESTIONS = [
 // ── Property Type Dropdown ─────────────────────────────────────────────────────
 function PropertyTypeDropdown({ value, onChange }: { value: string; onChange: (type: string) => void }) {
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
+  const [pos, setPos] = useState({ top: 0, left: 0, width: 0, openUp: false });
   const btnRef = useRef<HTMLButtonElement>(null);
 
-  // Position the portal dropdown under the button
   const openDropdown = () => {
     if (btnRef.current) {
       const r = btnRef.current.getBoundingClientRect();
-      setPos({ top: r.bottom + window.scrollY + 4, left: r.left + window.scrollX, width: r.width });
+      const spaceBelow = window.innerHeight - r.bottom;
+      const openUp = spaceBelow < 360; // if less than 360px below, open upward
+      setPos({
+        top: openUp
+          ? r.top + window.scrollY - 360 - 4  // above button
+          : r.bottom + window.scrollY + 4,     // below button
+        left: r.left + window.scrollX,
+        width: r.width,
+        openUp,
+      });
     }
     setOpen(o => !o);
   };
@@ -68,12 +76,10 @@ function PropertyTypeDropdown({ value, onChange }: { value: string; onChange: (t
   useEffect(() => {
     if (!open) return;
     const close = (e: MouseEvent) => {
-      if (btnRef.current && !btnRef.current.contains(e.target as Node)) {
-        // Check if click is inside the portal list
-        const portal = document.getElementById("type-dropdown-portal");
-        if (portal && portal.contains(e.target as Node)) return;
-        setOpen(false);
-      }
+      const portal = document.getElementById("type-dropdown-portal");
+      if (btnRef.current?.contains(e.target as Node)) return;
+      if (portal?.contains(e.target as Node)) return;
+      setOpen(false);
     };
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
@@ -85,7 +91,13 @@ function PropertyTypeDropdown({ value, onChange }: { value: string; onChange: (t
   const dropdownList = (
     <div
       id="type-dropdown-portal"
-      style={{ position: "absolute", top: pos.top, left: pos.left, minWidth: Math.max(pos.width, 220), zIndex: 9999 }}
+      style={{
+        position: "absolute",
+        top: pos.top,
+        left: pos.left,
+        minWidth: Math.max(pos.width, 230),
+        zIndex: 9999,
+      }}
       className="bg-card border border-border rounded-xl shadow-elevated max-h-[360px] overflow-y-auto pb-2"
     >
       <button
