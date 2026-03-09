@@ -267,13 +267,15 @@ Deno.serve(async (req) => {
     }
 
     const summary = {
-      total:           auctions.length,
+      total:              auctions.length,
+      skippedPast,
+      futureFound:        auctions.length - skippedPast,
       totalAvailableInOS: totalAvailable,
       imported,
       updated,
       errors,
-      page:            filterPayload.page,
-      pageSize:        filterPayload.pageSize,
+      page:               filterPayload.page,
+      pageSize:           filterPayload.pageSize,
     };
 
     await logSync(
