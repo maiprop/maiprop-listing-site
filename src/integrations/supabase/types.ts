@@ -179,7 +179,7 @@ export type Database = {
           asking_price: number | null
           bedrooms: number | null
           city: string
-          condition: string
+          condition: string | null
           contact_email: string
           contact_phone: string | null
           created_at: string
@@ -199,7 +199,7 @@ export type Database = {
           asking_price?: number | null
           bedrooms?: number | null
           city: string
-          condition: string
+          condition?: string | null
           contact_email: string
           contact_phone?: string | null
           created_at?: string
@@ -219,7 +219,7 @@ export type Database = {
           asking_price?: number | null
           bedrooms?: number | null
           city?: string
-          condition?: string
+          condition?: string | null
           contact_email?: string
           contact_phone?: string | null
           created_at?: string
