@@ -10,6 +10,8 @@ interface AuthContextType {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
+  /** True when a newly-signed-up user hasn't completed onboarding yet */
+  needsOnboarding: boolean;
   signUp: (email: string, password: string, meta: { full_name: string; role: string; business_name?: string; tax_id?: string; phone?: string; license_number?: string }) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -18,6 +20,15 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+/** A profile needs onboarding when:
+ *  - bio is null/empty (no __type: marker written by Onboarding page)
+ *  This lets us send both email-signup and Google-OAuth users through /onboarding.
+ */
+function profileNeedsOnboarding(p: Profile | null): boolean {
+  if (!p) return false;
+  return !p.bio || !p.bio.startsWith("__type:");
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -32,10 +43,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .eq("user_id", userId)
       .single();
     if (data) setProfile(data);
+    return data;
   };
 
   useEffect(() => {
-    // Listen BEFORE getting session to avoid missing events
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, sess) => {
         setSession(sess);
@@ -49,7 +60,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    // Get initial session
     supabase.auth.getSession().then(({ data: { session: sess } }) => {
       setSession(sess);
       setUser(sess?.user ?? null);
@@ -63,24 +73,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signUp = async (email: string, password: string, meta: { full_name: string; role: string; business_name?: string; tax_id?: string; phone?: string; license_number?: string }) => {
+  const signUp = async (
+    email: string,
+    password: string,
+    meta: { full_name: string; role: string; business_name?: string; tax_id?: string; phone?: string; license_number?: string }
+  ) => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: { full_name: meta.full_name },
-        emailRedirectTo: window.location.origin,
+        emailRedirectTo: `${window.location.origin}/onboarding`,
       },
     });
 
-    // After signup, update the role and professional fields in the profile
-    if (data.user && !error && meta.role) {
+    // Eagerly set profile display_name so the dashboard greets the user correctly
+    if (data.user && !error) {
       await supabase
         .from("profiles")
         .update({
-          role: meta.role as "individual" | "agent" | "professional",
           ...(meta.phone && { phone: meta.phone }),
-          ...(meta.business_name && { bio: `Business: ${meta.business_name}${meta.tax_id ? ` | AFM: ${meta.tax_id}` : ""}${meta.license_number ? ` | License: ${meta.license_number}` : ""}` }),
         })
         .eq("user_id", data.user.id);
     }
@@ -112,8 +124,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (user) await fetchProfile(user.id);
   };
 
+  const needsOnboarding = profileNeedsOnboarding(profile);
+
   return (
-    <AuthContext.Provider value={{ session, user, profile, loading, signUp, signIn, signOut, updateProfile, refreshProfile }}>
+    <AuthContext.Provider value={{ session, user, profile, loading, needsOnboarding, signUp, signIn, signOut, updateProfile, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );
