@@ -9,9 +9,218 @@
 
 @layer base {
   :root {
-    /* ── Core palette — dark navy default ── */
-    --background: 222 47% 6%;
-    --foreground: 210 40% 96%;
+    /* ── Core palette — Warm Neutral ── */
+    --background: 36 25% 97%;
+    --foreground: 25 20% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 25 20% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 25 20% 15%;
+
+    /* Primary: deep warm teal */
+    --primary: 192 65% 32%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Secondary: warm grey-beige surfaces */
+    --secondary: 36 20% 93%;
+    --secondary-foreground: 25 15% 30%;
+
+    /* Muted */
+    --muted: 36 15% 91%;
+    --muted-foreground: 25 12% 50%;
+
+    /* Accent: warm terracotta/amber */
+    --accent: 28 75% 52%;
+    --accent-foreground: 0 0% 100%;
+
+    /* Destructive */
+    --destructive: 0 70% 52%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 36 15% 87%;
+    --input: 36 20% 93%;
+    --ring: 192 65% 32%;
+
+    --radius: 0.875rem;
+
+    /* ── Brand tokens ── */
+    --brand-cyan: 192 65% 32%;
+    --brand-cyan-glow: 192 65% 44%;
+    --brand-purple: 270 60% 52%;
+    --brand-purple-dark: 270 55% 38%;
+    --brand-gold: 44 85% 48%;
+    --brand-emerald: 158 50% 36%;
+    --brand-sky: 200 65% 46%;
+    --brand-surface-1: 36 25% 97%;
+    --brand-surface-2: 36 20% 95%;
+    --brand-surface-3: 36 15% 91%;
+    --brand-surface-4: 36 12% 87%;
+
+    /* Legacy aliases */
+    --brand-amber: 192 65% 32%;
+    --brand-amber-glow: 192 65% 44%;
+    --brand-coral: 28 75% 52%;
+    --brand-coral-dark: 28 65% 40%;
+
+    /* Gradients */
+    --gradient-hero: linear-gradient(135deg, hsl(36 28% 95%) 0%, hsl(30 22% 93%) 50%, hsl(36 25% 97%) 100%);
+    --gradient-card: linear-gradient(145deg, hsl(0 0% 100%) 0%, hsl(36 20% 97%) 100%);
+    --gradient-primary: linear-gradient(135deg, hsl(var(--brand-cyan)) 0%, hsl(var(--brand-purple)) 100%);
+    --gradient-accent: linear-gradient(135deg, hsl(var(--brand-coral)) 0%, hsl(var(--brand-cyan)) 100%);
+    --gradient-gold: linear-gradient(135deg, hsl(44 85% 48%) 0%, hsl(34 80% 42%) 100%);
+    --gradient-emerald: linear-gradient(135deg, hsl(158 50% 36%) 0%, hsl(170 45% 32%) 100%);
+    --gradient-warm: linear-gradient(135deg, hsl(192 60% 36%) 0%, hsl(28 70% 48%) 100%);
+
+    /* Shadows */
+    --shadow-glow-amber: 0 0 24px -4px hsl(192 65% 32% / 0.25);
+    --shadow-glow-coral: 0 0 24px -4px hsl(28 75% 52% / 0.25);
+    --shadow-card: 0 4px 24px -8px hsl(25 20% 15% / 0.10);
+    --shadow-elevated: 0 8px 40px -12px hsl(25 20% 15% / 0.14);
+    --shadow-warm: 0 4px 20px -6px hsl(192 65% 32% / 0.18);
+
+    /* Sidebar */
+    --sidebar-background: 36 22% 95%;
+    --sidebar-foreground: 25 15% 30%;
+    --sidebar-primary: 192 65% 32%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 36 15% 91%;
+    --sidebar-accent-foreground: 25 15% 30%;
+    --sidebar-border: 36 15% 87%;
+    --sidebar-ring: 192 65% 32%;
+  }
+
+  /* ─── DARK MODE ─── */
+  .dark {
+    --background: 30 12% 10%;
+    --foreground: 36 20% 90%;
+
+    --card: 30 12% 13%;
+    --card-foreground: 36 20% 90%;
+
+    --popover: 30 12% 13%;
+    --popover-foreground: 36 20% 90%;
+
+    /* Primary: warm teal */
+    --primary: 192 65% 48%;
+    --primary-foreground: 30 12% 10%;
+
+    /* Secondary: warm dark surface */
+    --secondary: 30 10% 18%;
+    --secondary-foreground: 36 15% 70%;
+
+    --muted: 30 10% 16%;
+    --muted-foreground: 36 10% 48%;
+
+    /* Accent: warm amber */
+    --accent: 28 70% 55%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 68% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 30 10% 22%;
+    --input: 30 10% 18%;
+    --ring: 192 65% 48%;
+
+    --brand-cyan: 192 65% 48%;
+    --brand-cyan-glow: 192 65% 60%;
+    --brand-purple: 270 65% 60%;
+    --brand-purple-dark: 270 55% 44%;
+    --brand-gold: 44 85% 52%;
+    --brand-emerald: 158 55% 44%;
+    --brand-sky: 200 70% 52%;
+    --brand-surface-1: 30 12% 10%;
+    --brand-surface-2: 30 12% 13%;
+    --brand-surface-3: 30 10% 16%;
+    --brand-surface-4: 30 10% 20%;
+
+    --brand-amber: 192 65% 48%;
+    --brand-amber-glow: 192 65% 60%;
+    --brand-coral: 28 70% 55%;
+    --brand-coral-dark: 28 60% 42%;
+
+    --gradient-hero: linear-gradient(135deg, hsl(30 14% 9%) 0%, hsl(28 12% 11%) 50%, hsl(30 10% 13%) 100%);
+    --gradient-card: linear-gradient(145deg, hsl(30 12% 14%) 0%, hsl(30 12% 11%) 100%);
+    --gradient-primary: linear-gradient(135deg, hsl(var(--brand-cyan)) 0%, hsl(var(--brand-purple)) 100%);
+    --gradient-accent: linear-gradient(135deg, hsl(var(--brand-coral)) 0%, hsl(var(--brand-cyan)) 100%);
+    --gradient-gold: linear-gradient(135deg, hsl(44 85% 52%) 0%, hsl(34 80% 44%) 100%);
+    --gradient-emerald: linear-gradient(135deg, hsl(158 55% 44%) 0%, hsl(170 50% 38%) 100%);
+    --gradient-warm: linear-gradient(135deg, hsl(192 60% 44%) 0%, hsl(28 65% 50%) 100%);
+
+    --shadow-glow-amber: 0 0 28px -4px hsl(192 65% 48% / 0.35);
+    --shadow-glow-coral: 0 0 28px -4px hsl(28 70% 55% / 0.35);
+    --shadow-card: 0 4px 24px -8px hsl(0 0% 0% / 0.55);
+    --shadow-elevated: 0 8px 40px -12px hsl(0 0% 0% / 0.65);
+    --shadow-warm: 0 4px 20px -6px hsl(192 65% 48% / 0.22);
+
+    --sidebar-background: 30 14% 9%;
+    --sidebar-foreground: 36 15% 70%;
+    --sidebar-primary: 192 65% 48%;
+    --sidebar-primary-foreground: 30 12% 10%;
+    --sidebar-accent: 30 10% 16%;
+    --sidebar-accent-foreground: 36 15% 70%;
+    --sidebar-border: 30 10% 20%;
+    --sidebar-ring: 192 65% 48%;
+  }
+
+  /* ─── LIGHT (alias to default warm neutral) ─── */
+  .light {
+    --background: 36 25% 97%;
+    --foreground: 25 20% 15%;
+    --card: 0 0% 100%;
+    --card-foreground: 25 20% 15%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 25 20% 15%;
+    --primary: 192 65% 32%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 36 20% 93%;
+    --secondary-foreground: 25 15% 30%;
+    --muted: 36 15% 91%;
+    --muted-foreground: 25 12% 50%;
+    --accent: 28 75% 52%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 70% 52%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 36 15% 87%;
+    --input: 36 20% 93%;
+    --ring: 192 65% 32%;
+    --brand-cyan: 192 65% 32%;
+    --brand-cyan-glow: 192 65% 44%;
+    --brand-purple: 270 60% 52%;
+    --brand-purple-dark: 270 55% 38%;
+    --brand-gold: 44 85% 48%;
+    --brand-emerald: 158 50% 36%;
+    --brand-sky: 200 65% 46%;
+    --brand-surface-1: 36 25% 97%;
+    --brand-surface-2: 36 20% 95%;
+    --brand-surface-3: 36 15% 91%;
+    --brand-surface-4: 36 12% 87%;
+    --brand-amber: 192 65% 32%;
+    --brand-amber-glow: 192 65% 44%;
+    --brand-coral: 28 75% 52%;
+    --brand-coral-dark: 28 65% 40%;
+    --gradient-hero: linear-gradient(135deg, hsl(36 28% 95%) 0%, hsl(30 22% 93%) 50%, hsl(36 25% 97%) 100%);
+    --gradient-card: linear-gradient(145deg, hsl(0 0% 100%) 0%, hsl(36 20% 97%) 100%);
+    --gradient-primary: linear-gradient(135deg, hsl(var(--brand-cyan)) 0%, hsl(var(--brand-purple)) 100%);
+    --gradient-accent: linear-gradient(135deg, hsl(var(--brand-coral)) 0%, hsl(var(--brand-cyan)) 100%);
+    --gradient-gold: linear-gradient(135deg, hsl(44 85% 48%) 0%, hsl(34 80% 42%) 100%);
+    --gradient-emerald: linear-gradient(135deg, hsl(158 50% 36%) 0%, hsl(170 45% 32%) 100%);
+    --gradient-warm: linear-gradient(135deg, hsl(192 60% 36%) 0%, hsl(28 70% 48%) 100%);
+    --shadow-glow-amber: 0 0 24px -4px hsl(192 65% 32% / 0.25);
+    --shadow-glow-coral: 0 0 24px -4px hsl(28 75% 52% / 0.25);
+    --shadow-card: 0 4px 24px -8px hsl(25 20% 15% / 0.10);
+    --shadow-elevated: 0 8px 40px -12px hsl(25 20% 15% / 0.14);
+    --shadow-warm: 0 4px 20px -6px hsl(192 65% 32% / 0.18);
+    --sidebar-background: 36 22% 95%;
+    --sidebar-foreground: 25 15% 30%;
+    --sidebar-primary: 192 65% 32%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 36 15% 91%;
+    --sidebar-accent-foreground: 25 15% 30%;
+    --sidebar-border: 36 15% 87%;
+    --sidebar-ring: 192 65% 32%;
 
     --card: 220 40% 9%;
     --card-foreground: 210 40% 96%;
