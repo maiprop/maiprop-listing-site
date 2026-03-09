@@ -21,6 +21,9 @@ import Login from "./pages/Login";
 import Messages from "./pages/Messages";
 import CreateListing from "./pages/CreateListing";
 import NotFound from "./pages/NotFound";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import TermsOfService from "./pages/TermsOfService";
+import CookiePolicy from "./pages/CookiePolicy";
 
 const queryClient = new QueryClient();
 
