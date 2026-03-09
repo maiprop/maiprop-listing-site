@@ -833,8 +833,8 @@ export default function Index() {
                 Greece's Real Estate <br />
                 <span className="gradient-text-primary">Data Gateway</span>
               </h2>
-              <p className="text-muted-foreground leading-relaxed mb-6">
-                Every listing on maiProp is powered by mAI Prop OS — our proprietary data platform aggregating Greek cadastre records, judicial auctions, price indices, and predictive analytics into one live dashboard.
+              <p className="text-muted-foreground leading-relaxed mb-6">Every data on mAI prop is powered by mAI prop OS — our proprietary data platform aggregating Greek cadastre records, judicial auctions, price indices, and predictive analytics into one live dashboard.
+
               </p>
               <ul className="space-y-3 mb-8">
                 {[
