@@ -204,10 +204,13 @@ export function PropertyCard({ property, compact = false }: PropertyCardProps) {
               {property.title}
             </h3>
           </Link>
-          <div className="flex items-center gap-1 mt-1.5 text-muted-foreground text-xs">
-            <MapPin className="w-3 h-3 shrink-0 text-primary/70" />
-            <span className="truncate">{property.address}, {property.city}</span>
-          </div>
+          <Link
+            to={`/property/${property.id}`}
+            className="flex items-center gap-1 mt-1.5 text-muted-foreground text-xs group/addr hover:text-primary transition-colors w-fit max-w-full"
+          >
+            <MapPin className="w-3 h-3 shrink-0 text-primary/70 group-hover/addr:text-primary transition-colors" />
+            <span className="truncate underline-offset-2 group-hover/addr:underline">{property.address}, {property.city}</span>
+          </Link>
         </div>
 
         {/* Key specs */}
