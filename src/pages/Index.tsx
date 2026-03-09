@@ -424,14 +424,33 @@ function LocationInput({
 
 // ── OS Dashboard Mockup (faithful to os.maiprop.co) ──────────────────────────
 function OSDashboardMockup() {
+  const [flickeringIdx, setFlickeringIdx] = useState<number | null>(null);
+  const [prices, setPrices] = useState([2860, 1920, 6450, 3772, 2290, 5120, 4180]);
+
+  useEffect(() => {
+    const basePrices = [2860, 1920, 6450, 3772, 2290, 5120, 4180];
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = () => {
+      const idx = Math.floor(Math.random() * basePrices.length);
+      const base = basePrices[idx];
+      const delta = Math.round(base * (0.001 + Math.random() * 0.003) * (Math.random() > 0.35 ? 1 : -1));
+      setPrices(prev => prev.map((p, i) => i === idx ? p + delta : p));
+      setFlickeringIdx(idx);
+      setTimeout(() => setFlickeringIdx(null), 700);
+      timer = setTimeout(tick, 2800 + Math.random() * 600);
+    };
+    timer = setTimeout(tick, 1500);
+    return () => clearTimeout(timer);
+  }, []);
+
   const marketData = [
-    { city: "Athens", value: "2,860", delta: "▲1.3%" },
-    { city: "Thessaloniki", value: "1,920", delta: "▲0.8%" },
-    { city: "Mykonos", value: "6,450", delta: "▲2.3%" },
-    { city: "Glyfada", value: "3,772", delta: "▲1.7%" },
-    { city: "Rhodes", value: "2,290", delta: "▲3.1%" },
-    { city: "Santorini", value: "5,120", delta: "▲1.9%" },
-    { city: "Kifisia", value: "4,180", delta: "▲0.6%" },
+    { city: "Athens",       delta: "▲1.3%" },
+    { city: "Thessaloniki", delta: "▲0.8%" },
+    { city: "Mykonos",      delta: "▲2.3%" },
+    { city: "Glyfada",      delta: "▲1.7%" },
+    { city: "Rhodes",       delta: "▲3.1%" },
+    { city: "Santorini",    delta: "▲1.9%" },
+    { city: "Kifisia",      delta: "▲0.6%" },
   ];
   const sparklines = [
     "M0,10 C5,8 10,6 15,4 C20,2 25,5 30,2",
@@ -499,16 +518,22 @@ function OSDashboardMockup() {
             </div>
           </div>
           <div className="flex-1 overflow-hidden">
-            {marketData.map((row, i) => (
-              <div key={row.city} className="flex items-center gap-1 px-2.5 py-[3px] border-b last:border-0" style={{ borderColor: "rgba(255,255,255,0.04)" }}>
-                <span className="text-[7px] w-16 truncate" style={{ color: "rgba(255,255,255,0.7)" }}>{row.city}</span>
-                <svg viewBox="0 0 30 12" className="w-7 h-2.5 shrink-0" preserveAspectRatio="none">
-                  <path d={sparklines[i]} fill="none" stroke="hsl(183 100% 50%)" strokeWidth="1.2" strokeLinecap="round" />
-                </svg>
-                <span className="text-[7px] font-bold ml-auto" style={{ color: "rgba(255,255,255,0.9)" }}>{row.value}</span>
-                <span className="text-[6px] font-bold w-8 text-right" style={{ color: "hsl(142 70% 55%)" }}>{row.delta}</span>
-              </div>
-            ))}
+            {marketData.map((row, i) => {
+              const isFlick = flickeringIdx === i;
+              return (
+                <div key={row.city} className="flex items-center gap-1 px-2.5 py-[3px] border-b last:border-0 transition-all duration-300"
+                  style={{ borderColor: "rgba(255,255,255,0.04)", background: isFlick ? "rgba(0,255,240,0.07)" : "transparent" }}>
+                  <span className="text-[7px] w-16 truncate transition-colors duration-300" style={{ color: isFlick ? "hsl(183 100% 75%)" : "rgba(255,255,255,0.7)" }}>{row.city}</span>
+                  <svg viewBox="0 0 30 12" className="w-7 h-2.5 shrink-0" preserveAspectRatio="none">
+                    <path d={sparklines[i]} fill="none" stroke="hsl(183 100% 50%)" strokeWidth="1.2" strokeLinecap="round" />
+                  </svg>
+                  <span className="text-[7px] font-bold ml-auto transition-colors duration-300" style={{ color: isFlick ? "hsl(183 100% 70%)" : "rgba(255,255,255,0.9)" }}>
+                    {prices[i].toLocaleString()}
+                  </span>
+                  <span className="text-[6px] font-bold w-8 text-right" style={{ color: "hsl(142 70% 55%)" }}>{row.delta}</span>
+                </div>
+              );
+            })}
           </div>
           <div className="mx-2 my-1.5 rounded-lg px-2 py-1.5 border" style={{ background: "hsl(183 100% 50% / 0.06)", borderColor: "hsl(183 100% 50% / 0.15)" }}>
             <div className="flex items-center justify-between mb-0.5">
