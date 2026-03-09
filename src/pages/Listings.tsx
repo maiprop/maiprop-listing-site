@@ -339,72 +339,7 @@ function PropertyTypeButton({
     </div>
   );
 }
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const pos = useDropdownPosition(ref, open);
 
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
-
-  const current = listingTypeOptions.find(o => o.value === value) || listingTypeOptions[0];
-
-  return (
-    <div ref={ref} className="relative shrink-0">
-      <button
-        onClick={() => setOpen(o => !o)}
-        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-medium transition-all whitespace-nowrap ${
-          value
-            ? "border-primary bg-primary/10 text-primary"
-            : "border-border bg-secondary text-foreground hover:border-primary/40"
-        }`}
-      >
-        <span>{current.icon}</span>
-        <span>{current.label}</span>
-        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
-      {open && createPortal(
-        <div
-          style={{ position: "absolute", top: pos.top, left: pos.left, zIndex: 9999 }}
-          className="bg-card border border-border rounded-xl shadow-lg overflow-hidden min-w-[160px]"
-        >
-          {listingTypeOptions.map(o => (
-            <button
-              key={o.value}
-              onMouseDown={e => e.preventDefault()}
-              onClick={() => { onChange(o.value); setOpen(false); }}
-              className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left transition-colors hover:bg-secondary ${
-                value === o.value ? "text-primary bg-primary/10" : "text-foreground"
-              }`}
-            >
-              <span>{o.icon}</span>
-              <span>{o.label}</span>
-              {value === o.value && <Check className="w-3.5 h-3.5 ml-auto" />}
-            </button>
-          ))}
-        </div>,
-        document.body
-      )}
-    </div>
-  );
-}
-
-// ─── PropertyTypeButton ───────────────────────────────────────────────────────
-
-function PropertyTypeButton({
-  value, subtype, onChange,
-}: {
-  value: string; subtype: string;
-  onChange: (type: string, subtype: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const pos = useDropdownPosition(ref, open);
 
   const commercialType = PROPERTY_TYPE_MAP["commercial"];
 
