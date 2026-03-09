@@ -8,28 +8,28 @@ export function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8">
           {/* Brand */}
           <div className="lg:col-span-2">
-            <Link to="/" className="flex items-center gap-2 mb-4">
-              <div className="relative">
-                <div className="w-8 h-8 rounded-lg bg-gradient-primary flex items-center justify-center">
-                  <span className="font-display font-bold text-sm text-background">m</span>
-                </div>
-                <div className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-accent flex items-center justify-center">
-                  <span className="text-[6px] font-bold text-accent-foreground">AI</span>
-                </div>
-              </div>
-              <span className="font-display font-bold text-lg tracking-tight">
-                mai<span className="gradient-text-cyan">prop</span>
-              </span>
-            </Link>
+            
+
+
+
+
+
+
+
+
+
+
+
+            
             <p className="text-sm text-muted-foreground max-w-xs leading-relaxed mb-4">
               Greece's most advanced real estate platform. Data-driven listings, Greek auctions, instant offers, and AI-powered market insights.
             </p>
             <div className="flex items-center gap-2">
-              {[Facebook, Twitter, Instagram, Linkedin, Youtube].map((Icon, i) => (
-                <button key={i} className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
+              {[Facebook, Twitter, Instagram, Linkedin, Youtube].map((Icon, i) =>
+              <button key={i} className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
                   <Icon className="w-4 h-4" />
                 </button>
-              ))}
+              )}
             </div>
           </div>
 
@@ -38,18 +38,18 @@ export function Footer() {
             <h4 className="font-display font-semibold text-sm mb-3">Platform</h4>
             <ul className="space-y-2">
               {[
-                { label: "Buy Property", to: "/listings?listing_type=sale" },
-                { label: "Rent Property", to: "/listings?listing_type=rent" },
-                { label: "Sell Property", to: "/firesale" },
-                { label: "Greek Auctions", to: "/auctions" },
-                { label: "Firesale™", to: "/firesale" },
-                { label: "Professionals", to: "/professionals" },
-                { label: "AI Reports", to: "/listings" },
-              ].map(item => (
-                <li key={item.label}>
+              { label: "Buy Property", to: "/listings?listing_type=sale" },
+              { label: "Rent Property", to: "/listings?listing_type=rent" },
+              { label: "Sell Property", to: "/firesale" },
+              { label: "Greek Auctions", to: "/auctions" },
+              { label: "Firesale™", to: "/firesale" },
+              { label: "Professionals", to: "/professionals" },
+              { label: "AI Reports", to: "/listings" }].
+              map((item) =>
+              <li key={item.label}>
                   <Link to={item.to} className="text-sm text-muted-foreground hover:text-foreground transition-colors">{item.label}</Link>
                 </li>
-              ))}
+              )}
             </ul>
           </div>
 
@@ -58,18 +58,18 @@ export function Footer() {
             <h4 className="font-display font-semibold text-sm mb-3">Professionals</h4>
             <ul className="space-y-2">
               {[
-                { label: "Agent Directory", to: "/professionals" },
-                { label: "Legal Experts", to: "/professionals?category=lawyer" },
-                { label: "Architects", to: "/professionals?category=architect" },
-                { label: "Contractors", to: "/professionals?category=contractor" },
-                { label: "Property Managers", to: "/professionals?category=property_manager" },
-                { label: "Valuers", to: "/professionals?category=valuer" },
-                { label: "Join as Pro", to: "/signup" },
-              ].map(item => (
-                <li key={item.label}>
+              { label: "Agent Directory", to: "/professionals" },
+              { label: "Legal Experts", to: "/professionals?category=lawyer" },
+              { label: "Architects", to: "/professionals?category=architect" },
+              { label: "Contractors", to: "/professionals?category=contractor" },
+              { label: "Property Managers", to: "/professionals?category=property_manager" },
+              { label: "Valuers", to: "/professionals?category=valuer" },
+              { label: "Join as Pro", to: "/signup" }].
+              map((item) =>
+              <li key={item.label}>
                   <Link to={item.to} className="text-sm text-muted-foreground hover:text-foreground transition-colors">{item.label}</Link>
                 </li>
-              ))}
+              )}
             </ul>
           </div>
 
@@ -78,14 +78,14 @@ export function Footer() {
             <h4 className="font-display font-semibold text-sm mb-3">Legal</h4>
             <ul className="space-y-2">
               {[
-                { label: "Privacy Policy", to: "/privacy-policy" },
-                { label: "Terms of Service", to: "/terms-of-service" },
-                { label: "Cookie Policy", to: "/cookie-policy" },
-              ].map(item => (
-                <li key={item.label}>
+              { label: "Privacy Policy", to: "/privacy-policy" },
+              { label: "Terms of Service", to: "/terms-of-service" },
+              { label: "Cookie Policy", to: "/cookie-policy" }].
+              map((item) =>
+              <li key={item.label}>
                   <Link to={item.to} className="text-sm text-muted-foreground hover:text-foreground transition-colors">{item.label}</Link>
                 </li>
-              ))}
+              )}
             </ul>
             <div className="mt-4 space-y-1">
               <a href="mailto:hello@maiprop.co" className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors">
@@ -113,6 +113,6 @@ export function Footer() {
           </div>
         </div>
       </div>
-    </footer>
-  );
+    </footer>);
+
 }
