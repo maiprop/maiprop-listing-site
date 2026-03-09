@@ -1,10 +1,6 @@
 /**
- * os-diagnose
- * ─────────────────────────────────────────────────────────────────────────────
- * Diagnostic tool: probes maiProp OS auth endpoint variants and surfaces
- * exact responses so the correct auth path and credential format can be found.
- *
- * Returns a full diagnostic JSON with every attempt's status + body.
+ * os-diagnose — enhanced to also extract auction endpoints from live API docs
+ * and run a real auction fetch with the working token.
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -14,137 +10,92 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-async function probe(url: string, body: unknown): Promise<{ url: string; status: number; body: string; token?: string }> {
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const text = await res.text();
-    let token: string | undefined;
-    try {
-      const j = JSON.parse(text);
-      token = j.token ?? j.accessToken ?? j.access_token ?? j.jwt ?? j.bearerToken;
-    } catch { /* ignore */ }
-    return { url, status: res.status, body: text.slice(0, 800), token };
-  } catch (err: any) {
-    return { url, status: -1, body: err.message };
-  }
-}
-
-async function probeGet(url: string): Promise<{ url: string; status: number; body: string }> {
-  try {
-    const res = await fetch(url, { method: "GET" });
-    const text = await res.text();
-    return { url, status: res.status, body: text.slice(0, 400) };
-  } catch (err: any) {
-    return { url, status: -1, body: err.message };
-  }
+async function getOsToken(baseUrl: string, email: string, password: string): Promise<string> {
+  const res = await fetch(`${baseUrl}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  const data = await res.json();
+  // OS wraps token under data.token
+  const token = data?.data?.token ?? data.token ?? data.accessToken ?? data.access_token;
+  if (!token) throw new Error(`Auth failed (${res.status}): ${JSON.stringify(data).slice(0, 300)}`);
+  return token;
 }
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-  const OS_URL   = Deno.env.get("MAIPROP_OS_URL") ?? "";
+  const body = await req.json().catch(() => ({}));
+  const OS_URL   = Deno.env.get("MAIPROP_OS_URL")?.replace(/\/$/, "") ?? "";
   const OS_EMAIL = Deno.env.get("MAIPROP_OS_EMAIL") ?? "";
   const OS_PASS  = Deno.env.get("MAIPROP_OS_PASSWORD") ?? "";
 
-  if (!OS_URL) {
-    return new Response(JSON.stringify({ error: "MAIPROP_OS_URL not set" }), {
-      status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+  try {
+    // 1. Auth
+    const token = await getOsToken(OS_URL, OS_EMAIL, OS_PASS);
+
+    // 2. Fetch api-docs to extract endpoint list
+    const docsRes = await fetch(`${OS_URL}/v3/api-docs`);
+    const docs = await docsRes.json();
+    const paths = Object.keys(docs.paths ?? {});
+    const auctionPaths = paths.filter(p => p.toLowerCase().includes("auction"));
+    const listingPaths = paths.filter(p => p.toLowerCase().includes("listing") || p.toLowerCase().includes("property"));
+    const firesalePaths = paths.filter(p => p.toLowerCase().includes("firesale") || p.toLowerCase().includes("opportunity") || p.toLowerCase().includes("instant"));
+    const allRelevant = [...auctionPaths, ...listingPaths, ...firesalePaths];
+
+    // 3. Try the auction filter endpoint
+    const probeEndpoint = body.endpoint ?? "/api/v1/auctions/filter/details";
+    const probeBody = body.probeBody ?? { page: 0, size: 5 };
+
+    const auctRes = await fetch(`${OS_URL}${probeEndpoint}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`,
+      },
+      body: JSON.stringify(probeBody),
+    });
+    const auctText = await auctRes.text();
+    let auctParsed: any = null;
+    try { auctParsed = JSON.parse(auctText); } catch { /* ignore */ }
+
+    // 4. Also surface the schema for AuctionOutputDto if present
+    const schemas = docs.components?.schemas ?? {};
+    const auctionSchema = schemas["AuctionOutputDto"] ?? schemas["AuctionDto"] ?? schemas["AuctionResponse"] ?? null;
+    const listingSchema = schemas["ListingDto"] ?? schemas["PropertyDto"] ?? schemas["ListingOutputDto"] ?? null;
+
+    return new Response(JSON.stringify({
+      auth: "✅ OK",
+      tokenPreview: token.slice(0, 40) + "...",
+      relevantEndpoints: {
+        auction: auctionPaths,
+        listing: listingPaths,
+        firesale: firesalePaths,
+        allRelevant,
+      },
+      auctionProbe: {
+        endpoint: probeEndpoint,
+        status: auctRes.status,
+        body: auctText.slice(0, 2000),
+        parsed: auctParsed ? {
+          type: Array.isArray(auctParsed) ? "array" : typeof auctParsed,
+          topKeys: Array.isArray(auctParsed) ? Object.keys(auctParsed[0] ?? {}) : Object.keys(auctParsed),
+          contentKeys: auctParsed?.content ? Object.keys(auctParsed.content[0] ?? {}) : null,
+          totalElements: auctParsed?.totalElements ?? null,
+          size: Array.isArray(auctParsed) ? auctParsed.length : auctParsed?.content?.length ?? null,
+        } : null,
+      },
+      schemas: {
+        auctionSchema: auctionSchema ? Object.keys(auctionSchema?.properties ?? {}) : "not found",
+        listingSchema: listingSchema ? Object.keys(listingSchema?.properties ?? {}) : "not found",
+      },
+    }, null, 2), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (err: any) {
+    return new Response(JSON.stringify({ error: err.message }), {
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-
-  // Strip trailing slash
-  const base = OS_URL.replace(/\/$/, "");
-
-  // Body variants to try
-  const bodies = [
-    { email: OS_EMAIL, password: OS_PASS },
-    { username: OS_EMAIL, password: OS_PASS },
-    { login: OS_EMAIL, password: OS_PASS },
-    { email: OS_EMAIL, pass: OS_PASS },
-  ];
-
-  // Auth endpoint paths to probe
-  const authPaths = [
-    "/auth/login",
-    "/api/auth/login",
-    "/api/v1/auth/login",
-    "/auth/authenticate",
-    "/api/authenticate",
-    "/api/v1/authenticate",
-    "/login",
-    "/api/login",
-  ];
-
-  const results: any[] = [];
-  let successToken: string | undefined;
-
-  for (const path of authPaths) {
-    // Try first body shape — if it looks promising try others
-    const r = await probe(`${base}${path}`, bodies[0]);
-    results.push({ ...r, bodyUsed: "email+password" });
-
-    if (r.token) {
-      successToken = r.token;
-      break; // Found a working endpoint
-    }
-
-    // If 400/422 (likely wrong field names), try username variant
-    if (r.status === 400 || r.status === 422 || r.status === 415) {
-      for (const b of bodies.slice(1)) {
-        const r2 = await probe(`${base}${path}`, b);
-        results.push({ ...r2, bodyUsed: JSON.stringify(b).replace(OS_PASS, "***") });
-        if (r2.token) { successToken = r2.token; break; }
-      }
-      if (successToken) break;
-    }
-  }
-
-  // Also probe some GET endpoints to check if OS is reachable
-  const reachabilityProbes = await Promise.all([
-    probeGet(`${base}/`),
-    probeGet(`${base}/api/v1/`),
-    probeGet(`${base}/swagger-ui.html`),
-    probeGet(`${base}/v3/api-docs`),
-    probeGet(`${base}/swagger-ui/index.html`),
-  ]);
-
-  // If we have a token, try to list auctions
-  let auctionProbe: any = null;
-  if (successToken) {
-    try {
-      const ar = await fetch(`${base}/api/v1/auctions/filter/details`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${successToken}` },
-        body: JSON.stringify({ page: 0, size: 2 }),
-      });
-      const at = await ar.text();
-      auctionProbe = { status: ar.status, body: at.slice(0, 1000) };
-    } catch (e: any) {
-      auctionProbe = { error: e.message };
-    }
-  }
-
-  const diagnostic = {
-    configuredUrl: base,
-    emailConfigured: OS_EMAIL.length > 0,
-    passwordConfigured: OS_PASS.length > 0,
-    successToken: successToken ? "✅ found" : "❌ not found",
-    authAttempts: results.map(r => ({
-      ...r,
-      // mask password in body
-      body: r.body.replace(OS_PASS, "***"),
-    })),
-    reachability: reachabilityProbes,
-    auctionProbe,
-  };
-
-  console.log("OS Diagnostic result:", JSON.stringify(diagnostic, null, 2));
-
-  return new Response(JSON.stringify(diagnostic, null, 2), {
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
 });
