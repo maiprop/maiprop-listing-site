@@ -1364,7 +1364,7 @@ export default function Index() {
                         </div>
                         <div>
                           <div className={`font-bold text-sm ${pro.color}`}>{pro.title}</div>
-                          <div className="text-xs text-background/60">{pro.count} verified</div>
+                          
                         </div>
                       </div>
                     </Link>
