@@ -166,7 +166,7 @@ export default function Auctions() {
                 {auctions.map(a => (
                   <Link
                     key={a.id}
-                    to={`/listings/${a.id}`}
+                    to={`/property/${a.id}`}
                     className="glass-card rounded-xl overflow-hidden border border-border hover:border-brand-gold/40 transition-all group"
                   >
                     {/* Image / placeholder */}
