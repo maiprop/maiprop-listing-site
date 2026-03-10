@@ -1,9 +1,8 @@
 /**
  * os-diagnose — probes the OS API to understand data shape, filters, and
  * how many PENDING (future) auctions are available.
+ * Also probes the new GET /api/auctions/future endpoint directly.
  */
-
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -25,7 +24,6 @@ async function getOsToken(baseUrl: string, email: string, password: string): Pro
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-  const body = await req.json().catch(() => ({}));
   const OS_URL   = Deno.env.get("MAIPROP_OS_URL")?.replace(/\/$/, "") ?? "";
   const OS_EMAIL = Deno.env.get("MAIPROP_OS_EMAIL") ?? "";
   const OS_PASS  = Deno.env.get("MAIPROP_OS_PASSWORD") ?? "";
@@ -38,7 +36,23 @@ Deno.serve(async (req) => {
       "Authorization": `Bearer ${token}`,
     };
 
-    // Probe 1: count with no filter (all auctions)
+    // ── Probe 1: GET /api/auctions/future (new endpoint) ──────────────────────
+    const futureUrl = `${OS_URL}/api/auctions/future?limit=5`;
+    const futureRes = await fetch(futureUrl, { headers: authHeaders });
+    const futureJson = await futureRes.json().catch(() => null);
+    const futureTotal: number = futureJson?.total ?? futureJson?.data?.length ?? 0;
+    const futureSample = (futureJson?.data ?? []).slice(0, 3).map((a: any) => ({
+      id: a.id,
+      title: a.title,
+      city: a.city,
+      auction_date: a.auction_date,
+      starting_price: a.starting_price,
+      status: a.status,
+      has_lat: a.lat != null,
+      has_lng: a.lng != null,
+    }));
+
+    // ── Probe 2: count all via /api/v1/auctions/filter/count ──────────────────
     const countAllRes = await fetch(`${OS_URL}/api/v1/auctions/filter/count`, {
       method: "POST",
       headers: authHeaders,
@@ -46,7 +60,7 @@ Deno.serve(async (req) => {
     });
     const countAll = await countAllRes.json().catch(() => null);
 
-    // Probe 2: count with auctionStatus=PENDING
+    // ── Probe 3: count PENDING auctions ───────────────────────────────────────
     const countPendingRes = await fetch(`${OS_URL}/api/v1/auctions/filter/count`, {
       method: "POST",
       headers: authHeaders,
@@ -54,7 +68,7 @@ Deno.serve(async (req) => {
     });
     const countPending = await countPendingRes.json().catch(() => null);
 
-    // Probe 3: count with auctionStatus=COMPLETED
+    // ── Probe 4: count COMPLETED auctions ─────────────────────────────────────
     const countCompletedRes = await fetch(`${OS_URL}/api/v1/auctions/filter/count`, {
       method: "POST",
       headers: authHeaders,
@@ -62,36 +76,7 @@ Deno.serve(async (req) => {
     });
     const countCompleted = await countCompletedRes.json().catch(() => null);
 
-    // Probe 4: try dateFrom filter on /filter/details
-    const today = new Date().toISOString().split("T")[0];
-    const futureFilterRes = await fetch(`${OS_URL}/api/v1/auctions/filter/details`, {
-      method: "POST",
-      headers: authHeaders,
-      body: JSON.stringify({ page: 0, pageSize: 5, dateFrom: today }),
-    });
-    const futureFilter = await futureFilterRes.json().catch(() => null);
-    const futureFilterItems: any[] = futureFilter?.data ?? [];
-    const futureSample = futureFilterItems.slice(0, 3).map((a: any) => ({
-      id: a.auctionListingId,
-      date: a.auctionDate,
-      status: a.auctionStatus,
-    }));
-
-    // Probe 5: PENDING filter on /filter/details
-    const pendingFilterRes = await fetch(`${OS_URL}/api/v1/auctions/filter/details`, {
-      method: "POST",
-      headers: authHeaders,
-      body: JSON.stringify({ page: 0, pageSize: 5, auctionStatus: "PENDING" }),
-    });
-    const pendingFilter = await pendingFilterRes.json().catch(() => null);
-    const pendingItems: any[] = pendingFilter?.data ?? [];
-    const pendingSample = pendingItems.slice(0, 3).map((a: any) => ({
-      id: a.auctionListingId,
-      date: a.auctionDate,
-      status: a.auctionStatus,
-    }));
-
-    // Probe 6: count-comparison endpoint (shows PENDING vs COMPLETED split)
+    // ── Probe 5: count-comparison endpoint ────────────────────────────────────
     const compRes = await fetch(`${OS_URL}/api/v1/auctions/filter/count-comparison`, {
       method: "POST",
       headers: authHeaders,
@@ -99,34 +84,42 @@ Deno.serve(async (req) => {
     });
     const comp = await compRes.json().catch(() => null);
 
-    // Fetch api-docs for endpoint listing
-    const docsRes = await fetch(`${OS_URL}/v3/api-docs`);
-    const docs = await docsRes.json().catch(() => ({}));
-    const paths = Object.keys(docs.paths ?? {});
-    const auctionPaths = paths.filter(p => p.toLowerCase().includes("auction"));
+    // ── Probe 6: full future count via /api/auctions/future?limit=9999 ────────
+    let futureFullTotal = futureTotal;
+    try {
+      const fullRes = await fetch(`${OS_URL}/api/auctions/future?limit=9999`, { headers: authHeaders });
+      const fullJson = await fullRes.json().catch(() => null);
+      futureFullTotal = fullJson?.total ?? fullJson?.data?.length ?? futureTotal;
+    } catch (_) { /* non-critical */ }
 
     return new Response(JSON.stringify({
       auth: "✅ OK",
+      osReachable: true,
+      // ── New endpoint probe ──────────────────────────────────────────────────
+      futureAuctionsEndpoint: {
+        url: "/api/auctions/future",
+        status: futureRes.status,
+        available: futureFullTotal,
+        sample: futureSample,
+        hasCoordinates: futureSample.filter((a: any) => a.has_lat).length,
+      },
+      // ── Legacy endpoint probes ──────────────────────────────────────────────
       counts: {
         all:       countAll,
         pending:   countPending,
         completed: countCompleted,
         comparison: comp,
       },
-      filters: {
-        dateFromWorks:   futureFilter?.responseMetadata?.pagination?.totalElements !== countAll?.responseMetadata?.pagination?.totalElements,
-        dateFromTotal:   futureFilter?.responseMetadata?.pagination?.totalElements,
-        dateFromSample:  futureSample,
-        pendingFilter:   pendingFilter?.responseMetadata?.pagination?.totalElements,
-        pendingFilterWorks: pendingFilter?.responseMetadata?.pagination?.totalElements !== countAll?.responseMetadata?.pagination?.totalElements,
-        pendingSample:   pendingSample,
-      },
-      auctionEndpoints: auctionPaths,
+      detail: `${futureFullTotal} future auctions available at /api/auctions/future`,
     }, null, 2), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err: any) {
-    return new Response(JSON.stringify({ error: err.message }), {
+    return new Response(JSON.stringify({
+      error: err.message,
+      osReachable: false,
+      detail: err.message,
+    }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
