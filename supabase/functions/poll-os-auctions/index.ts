@@ -209,9 +209,11 @@ Deno.serve(async (req) => {
     if (body.auctionAmountFrom != null) filterRequest.auctionAmountFrom = body.auctionAmountFrom;
     if (body.auctionAmountTo != null) filterRequest.auctionAmountTo = body.auctionAmountTo;
 
-    // Sorting: newest auctions first
-    filterRequest.sortBy = body.sortBy ?? "auctionDate";
-    filterRequest.order = body.order ?? "ASC";
+    // Sorting: newest auctions first — use sortField object format
+    if (body.sortBy) {
+      filterRequest.sortBy = body.sortBy;
+      filterRequest.order = body.order ?? "ASC";
+    }
 
     // Pagination
     const page = Number(body.page ?? 0);
