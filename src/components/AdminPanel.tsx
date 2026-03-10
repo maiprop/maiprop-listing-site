@@ -123,9 +123,6 @@ export default function AdminPanel() {
   const [logFilter, setLogFilter] = useState<"all" | "os_to_hub" | "hub_to_os">("all");
   const [expandedLog, setExpandedLog] = useState<string | null>(null);
   const [fnTestResult, setFnTestResult] = useState<Record<string, { status: "idle" | "running" | "ok" | "error"; detail: string }>>({});
-  const [pollPage, setPollPage] = useState(0);
-  const [pollPages, setPollPages] = useState(1);
-
   // ── Run API checks ──────────────────────────────────────────────────────────
   const runApiChecks = async () => {
     setApiChecks([
@@ -197,24 +194,33 @@ export default function AdminPanel() {
     }
   };
 
-  // ── Mutation: poll auctions ─────────────────────────────────────────────────
+  // ── Mutation: poll auctions — now uses GET /api/auctions/future ────────────
+  const [pollCity, setPollCity] = useState("");
+  const [pollLimit, setPollLimit] = useState(1000);
+
   const pollMutation = useMutation({
     mutationFn: async () => {
-      let totalImported = 0, totalUpdated = 0, totalErrors = 0, totalScanned = 0, aiGenerated = 0;
-      for (let p = pollPage; p < pollPage + pollPages; p++) {
-        const { data, error } = await supabase.functions.invoke("poll-os-auctions", { body: { page: p, pageSize: 100 } });
-        if (error) throw error;
-        totalImported += data?.imported ?? 0;
-        totalUpdated  += data?.updated ?? 0;
-        totalErrors   += data?.errors ?? 0;
-        totalScanned  += data?.total ?? 0;
-        aiGenerated   += data?.aiGenerated ?? 0;
-      }
-      return { imported: totalImported, updated: totalUpdated, errors: totalErrors, scanned: totalScanned, aiGenerated };
+      const body: Record<string, unknown> = { limit: pollLimit };
+      if (pollCity.trim()) body.city = pollCity.trim();
+      const { data, error } = await supabase.functions.invoke("poll-os-auctions", { body });
+      if (error) throw error;
+      return {
+        imported:     data?.imported     ?? 0,
+        updated:      data?.updated      ?? 0,
+        errors:       data?.errors       ?? 0,
+        scanned:      data?.total        ?? 0,
+        aiGenerated:  data?.aiGenerated  ?? 0,
+        endpoint:     data?.endpoint     ?? "/api/auctions/future",
+        totalInOS:    data?.totalAvailableInOS ?? 0,
+        rawResponse:  JSON.stringify(data).slice(0, 400),
+      };
     },
     onSuccess: (r) => {
-      qc.invalidateQueries({ queryKey: ["admin-sync-log"] });
-      toast.success(`✅ ${r.imported} new · ${r.updated} updated · 🤖 ${r.aiGenerated} AI · scanned ${r.scanned}`);
+      qc.invalidateQueries({ queryKey: ["admin-sync-log", "admin-db-stats"] });
+      toast.success(
+        `✅ ${r.endpoint} · ${r.imported} new · ${r.updated} updated · 🤖 ${r.aiGenerated} AI · ${r.scanned}/${r.totalInOS} scanned`,
+        { duration: 8000 }
+      );
     },
     onError: (e: any) => toast.error("Poll failed: " + e.message),
   });
@@ -298,22 +304,35 @@ export default function AdminPanel() {
           {/* Manual poll */}
           <div className="glass-card rounded-xl p-5 space-y-4">
             <div>
-              <p className="font-semibold text-sm mb-1">Manual Trigger</p>
-              <p className="text-xs text-muted-foreground">Fetch future auctions (POSTED · READY_TO_CONDUCT · FINALIZED) from maiProp OS and upsert to Hub listings.</p>
+              <p className="font-semibold text-sm mb-1">Manual Trigger — <code className="text-[11px] bg-secondary px-1 rounded">GET /api/auctions/future</code></p>
+              <p className="text-xs text-muted-foreground">Fetches all upcoming auctions (auction_date ≥ now, status: scheduled/upcoming/active) and upserts to Hub listings.</p>
             </div>
             <div className="flex gap-3">
               <div className="flex-1">
-                <label className="text-[11px] text-muted-foreground block mb-1">Start page</label>
-                <input type="number" min={0} value={pollPage} onChange={e => setPollPage(Math.max(0, Number(e.target.value)))}
-                  className="w-full bg-secondary border border-border rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:border-primary" />
+                <label className="text-[11px] text-muted-foreground block mb-1">City filter (optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Athens"
+                  value={pollCity}
+                  onChange={e => setPollCity(e.target.value)}
+                  className="w-full bg-secondary border border-border rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:border-primary"
+                />
               </div>
               <div className="flex-1">
-                <label className="text-[11px] text-muted-foreground block mb-1">Pages to scan</label>
-                <input type="number" min={1} max={10} value={pollPages} onChange={e => setPollPages(Math.max(1, Math.min(10, Number(e.target.value))))}
-                  className="w-full bg-secondary border border-border rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:border-primary" />
+                <label className="text-[11px] text-muted-foreground block mb-1">Limit (max rows)</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={5000}
+                  value={pollLimit}
+                  onChange={e => setPollLimit(Math.max(1, Math.min(5000, Number(e.target.value))))}
+                  className="w-full bg-secondary border border-border rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:border-primary"
+                />
               </div>
             </div>
-            <p className="text-[11px] text-muted-foreground">Scanning pages {pollPage}–{pollPage + pollPages - 1} · {pollPages * 100} records max</p>
+            <p className="text-[11px] text-muted-foreground">
+              Will call <span className="font-mono">?limit={pollLimit}{pollCity.trim() ? `&city=${pollCity.trim()}` : ""}</span>
+            </p>
             <Button className="w-full gap-2" size="sm" disabled={pollMutation.isPending} onClick={() => pollMutation.mutate()}>
               {pollMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
               {pollMutation.isPending ? "Polling…" : "Pull Future Auctions"}
