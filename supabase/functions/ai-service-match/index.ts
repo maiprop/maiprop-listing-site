@@ -24,7 +24,7 @@ const SYSTEM_PROMPT = `You are a Greek real estate professional matchmaker. A us
 
 Respond using the match_professional tool ONLY.`;
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
