@@ -2,7 +2,7 @@
  * poll-os-auctions
  * ─────────────────────────────────────────────────────────────────────────────
  * Pulls FUTURE auctions from maiProp OS via GET /api/auctions/future and
- * upserts them as Hub listings (listing_type='auction', status='active').
+ * bulk-upserts them as Hub listings (listing_type='auction', status='active').
  *
  * Endpoint: GET /api/auctions/future?city=...&limit=1000
  * Response:  { data: [...], total: N }
@@ -11,8 +11,8 @@
  *   id, title, address, city, lat, lng,
  *   auction_date, starting_price, category, status
  *
- * AI Enhancement: For each NEW auction, Lovable AI generates a rich Greek
- * listing title and description based on the property metadata.
+ * AI Enhancement: only for single-item calls (ai=true in body).
+ * Bulk runs use structured Greek titles for speed.
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -44,14 +44,23 @@ const CATEGORY_GR: Record<string, string> = {
   apartment:  "Διαμέρισμα",
   house:      "Κατοικία",
   villa:      "Βίλα",
-  land:       "Γη",
-  commercial: "Επαγγελματικός χώρος",
+  land:       "Γη / Οικόπεδο",
+  commercial: "Επαγγελματικός Χώρος",
   office:     "Γραφείο",
 };
 
 function mapCategory(cat?: string): string {
   if (!cat) return "apartment";
   return CATEGORY_MAP[cat.toUpperCase()] ?? "apartment";
+}
+
+function buildTitle(a: any): string {
+  const catKey = mapCategory(a.category);
+  const catGr  = CATEGORY_GR[catKey] ?? "Ακίνητο";
+  const city   = a.city ?? "Ελλάδα";
+  const price  = Number(a.starting_price ?? 0);
+  const priceStr = price > 0 ? ` – €${price.toLocaleString("el-GR")}` : "";
+  return `Πλειστηριασμός ${catGr} | ${city}${priceStr}`;
 }
 
 // ── Auth helper ───────────────────────────────────────────────────────────────
@@ -67,71 +76,6 @@ async function getOsToken(baseUrl: string, email: string, password: string): Pro
   return token;
 }
 
-// ── AI listing generator ──────────────────────────────────────────────────────
-async function generateAiListing(
-  a: any,
-  lovableKey: string,
-): Promise<{ title: string; description: string }> {
-  const catKey = mapCategory(a.category);
-  const catGr  = CATEGORY_GR[catKey] ?? "Ακίνητο";
-  const city   = a.city ?? "Ελλάδα";
-  const price  = Number(a.starting_price ?? 0);
-  const date   = a.auction_date ?? "προσεχώς";
-
-  const prompt = `Είσαι ειδικός σύντακτης αγγελιών ακινήτων για την ελληνική αγορά.
-
-Δημιούργησε έναν επαγγελματικό τίτλο και μια πλήρη περιγραφή αγγελίας για τον παρακάτω πλειστηριασμό ακινήτου:
-
-- Τύπος: ${catGr}
-- Πόλη: ${city}
-- Διεύθυνση: ${a.address ?? ""}
-- Τιμή εκκίνησης: €${price.toLocaleString("el-GR")}
-- Ημερομηνία πλειστηριασμού: ${date}
-- Κατάσταση: ${a.status ?? "scheduled"}
-
-ΟΔΗΓΙΕΣ:
-1. Τίτλος: Σύντομος, περιεκτικός, επαγγελματικός τίτλος (max 80 χαρακτήρες). ΜΗΝ χρησιμοποιήσεις αγκύλες [].
-2. Περιγραφή: 3-4 παράγραφοι στα ελληνικά. Ξεκίνα με τα βασικά χαρακτηριστικά, συνέχισε με τη θέση και τις επενδυτικές δυνατότητες, τέλειωσε με τις λεπτομέρειες του πλειστηριασμού. Γράψε επαγγελματικά, σαν μεγάλο μεσιτικό γραφείο.
-
-Επέστρεψε ΜΟΝΟ έγκυρο JSON χωρίς markdown:
-{"title": "string", "description": "string"}`;
-
-  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${lovableKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.4,
-    }),
-  });
-
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`AI gateway error ${res.status}: ${errText.slice(0, 200)}`);
-  }
-
-  const json  = await res.json();
-  const raw   = json?.choices?.[0]?.message?.content ?? "";
-  const clean = raw.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
-
-  try {
-    const parsed = JSON.parse(clean);
-    return {
-      title:       String(parsed.title       ?? "").slice(0, 200),
-      description: String(parsed.description ?? ""),
-    };
-  } catch {
-    return {
-      title:       `Πλειστηριασμός ${catGr} – ${city}`,
-      description: clean.slice(0, 2000),
-    };
-  }
-}
-
 // ── Sync logger ───────────────────────────────────────────────────────────────
 async function logSync(
   sb: any,
@@ -140,15 +84,19 @@ async function logSync(
   payload?: any,
   records_affected = 0,
 ) {
-  await sb.from("sync_log").insert({
-    direction:        "os_to_hub",
-    entity_type:      "auction",
-    entity_id:        "poll-batch",
-    status,
-    error_message:    error_message ?? null,
-    payload:          payload ?? null,
-    records_affected,
-  });
+  try {
+    await sb.from("sync_log").insert({
+      direction:     "os_to_hub",
+      entity_type:   "auction",
+      entity_id:     "poll-batch",
+      status,
+      error_message: error_message ?? null,
+      payload:       payload ?? null,
+      records_affected,
+    });
+  } catch (e) {
+    console.warn("logSync failed:", e);
+  }
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
@@ -160,14 +108,13 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
-  const OS_URL      = Deno.env.get("MAIPROP_OS_URL")?.replace(/\/$/, "");
-  const OS_EMAIL    = Deno.env.get("MAIPROP_OS_EMAIL");
-  const OS_PASS     = Deno.env.get("MAIPROP_OS_PASSWORD");
-  const LOVABLE_KEY = Deno.env.get("LOVABLE_API_KEY");
+  const OS_URL   = Deno.env.get("MAIPROP_OS_URL")?.replace(/\/$/, "");
+  const OS_EMAIL = Deno.env.get("MAIPROP_OS_EMAIL");
+  const OS_PASS  = Deno.env.get("MAIPROP_OS_PASSWORD");
 
   if (!OS_URL || !OS_EMAIL || !OS_PASS) {
     await logSync(sb, "skipped", "OS credentials not configured");
-    return new Response(JSON.stringify({ ok: true, status: "skipped" }), {
+    return new Response(JSON.stringify({ ok: true, status: "skipped", reason: "OS credentials not configured" }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
@@ -184,7 +131,10 @@ Deno.serve(async (req) => {
     const params = new URLSearchParams({ limit: String(limit) });
     if (city) params.set("city", city);
 
-    const auctRes = await fetch(`${OS_URL}/api/auctions/future?${params.toString()}`, {
+    const endpoint = `/api/auctions/future?${params.toString()}`;
+    console.log(`Fetching: ${OS_URL}${endpoint}`);
+
+    const auctRes = await fetch(`${OS_URL}${endpoint}`, {
       method: "GET",
       headers: {
         "Authorization": `Bearer ${token}`,
@@ -194,109 +144,124 @@ Deno.serve(async (req) => {
 
     if (!auctRes.ok) {
       const errText = await auctRes.text();
-      await logSync(sb, "error", `OS auction fetch failed (${auctRes.status}): ${errText}`);
-      return new Response(JSON.stringify({ error: `OS returned ${auctRes.status}` }), {
+      await logSync(sb, "error", `OS auction fetch failed (${auctRes.status}): ${errText.slice(0, 500)}`);
+      return new Response(JSON.stringify({ error: `OS returned ${auctRes.status}`, detail: errText.slice(0, 300) }), {
         status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const auctJson: any = await auctRes.json();
-    // Expected shape: { data: [...], total: N }
-    const auctions: any[]    = Array.isArray(auctJson) ? auctJson : (auctJson.data ?? []);
-    const totalAvailable: number = auctJson?.total ?? auctions.length;
+    const auctJson: any       = await auctRes.json();
+    const auctions: any[]     = Array.isArray(auctJson) ? auctJson : (auctJson.data ?? []);
+    const totalAvailable      = auctJson?.total ?? auctions.length;
 
-    let imported    = 0;
-    let updated     = 0;
-    let errors      = 0;
-    let aiGenerated = 0;
+    if (auctions.length === 0) {
+      await logSync(sb, "success", null, { endpoint, total: 0, city: city ?? "all" }, 0);
+      return new Response(JSON.stringify({ ok: true, endpoint, total: 0, imported: 0, updated: 0 }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
-    // 3. Upsert each auction
+    // 3. Fetch existing OS auction IDs in one query
+    const osIds = auctions.map((a: any) => `os_auction:${a.id}`);
+    const { data: existingRows } = await sb
+      .from("listings")
+      .select("id, tags")
+      .overlaps("tags", osIds);
+
+    // Build a lookup: tag → listing id
+    const existingMap: Record<string, string> = {};
+    for (const row of (existingRows ?? [])) {
+      for (const tag of (row.tags ?? [])) {
+        if (tag.startsWith("os_auction:")) existingMap[tag] = row.id;
+      }
+    }
+
+    // 4. Build insert/update batches
+    const toInsert: any[] = [];
+    const toUpdate: { id: string; price: number; auction_starting_bid: number; auction_date: string | null; auction_court: string | null }[] = [];
+
     for (const a of auctions) {
-      try {
-        const osId   = String(a.id ?? "unknown");
-        const tagKey = `os_auction:${osId}`;
+      const osId   = String(a.id ?? "unknown");
+      const tagKey = `os_auction:${osId}`;
 
-        // Dedup check — avoid re-generating AI title for existing records
-        const { data: existing } = await sb
-          .from("listings")
-          .select("id, title")
-          .contains("tags", [tagKey])
-          .maybeSingle();
+      const price   = Number(a.starting_price ?? 0);
+      const catKey  = mapCategory(a.category);
 
-        let aiTitle       = existing?.title ?? null;
-        let aiDescription: string | null = null;
-
-        if (!existing && LOVABLE_KEY) {
-          try {
-            const ai  = await generateAiListing(a, LOVABLE_KEY);
-            aiTitle       = ai.title;
-            aiDescription = ai.description;
-            aiGenerated++;
-          } catch (aiErr: any) {
-            console.warn(`AI generation failed for ${osId}:`, aiErr.message);
-            const catGr = CATEGORY_GR[mapCategory(a.category)] ?? "Ακίνητο";
-            aiTitle = `Πλειστηριασμός ${catGr} – ${a.city ?? "Ελλάδα"}`;
-          }
-        }
-
-        // Map /api/auctions/future fields → Hub listings row
-        const mapped: Record<string, unknown> = {
-          title:                aiTitle ?? a.title ?? `Πλειστηριασμός – ${a.city ?? "Ελλάδα"}`,
-          description:          aiDescription ?? null,
-          price:                Number(a.starting_price ?? 0),
-          auction_starting_bid: Number(a.starting_price ?? 0),
+      if (existingMap[tagKey]) {
+        toUpdate.push({
+          id:                   existingMap[tagKey],
+          price,
+          auction_starting_bid: price,
           auction_date:         a.auction_date ?? null,
           auction_court:        a.status ?? null,
-          property_type:        mapCategory(a.category),
+        });
+      } else {
+        toInsert.push({
+          title:                buildTitle(a),
+          description:          null,
+          price,
+          auction_starting_bid: price,
+          auction_date:         a.auction_date ?? null,
+          auction_court:        a.status ?? null,
+          property_type:        catKey,
           listing_type:         "auction",
           status:               "active",
-          city:                 a.city ?? "Άγνωστο",
+          city:                 a.city ?? "Ελλάδα",
           address:              a.address ?? null,
-          latitude:             a.lat != null ? Number(a.lat) : null,
-          longitude:            a.lng != null ? Number(a.lng) : null,
-          sqm:                  1, // not returned by this endpoint
+          latitude:             a.lat   != null ? Number(a.lat)  : null,
+          longitude:            a.lng   != null ? Number(a.lng)  : null,
+          sqm:                  1,
           cover_image_url:      null,
           owner_id:             null,
-          ai_score:             85,
-        };
+          ai_score:             80,
+          tags:                 [tagKey, "source:maiprop-os", `auction_status:${a.status ?? "scheduled"}`],
+        });
+      }
+    }
 
-        const extraTags: string[] = [
-          tagKey,
-          "source:maiprop-os",
-          "ai:generated",
-          `auction_status:${a.status ?? "scheduled"}`,
-        ];
+    let imported = 0;
+    let updated  = 0;
+    let errors   = 0;
 
-        if (existing) {
-          const { error } = await sb.from("listings").update({
-            price:                mapped.price,
-            auction_starting_bid: mapped.auction_starting_bid,
-            auction_date:         mapped.auction_date,
-            auction_court:        mapped.auction_court,
-            status:               "active",
-            updated_at:           new Date().toISOString(),
-          }).eq("id", existing.id);
-          if (error) throw error;
-          updated++;
-        } else {
-          const { error } = await sb.from("listings").insert({ ...mapped, tags: extraTags });
-          if (error) throw error;
-          imported++;
-        }
-      } catch (itemErr: any) {
-        console.error("Upsert error:", itemErr.message, JSON.stringify(a).slice(0, 200));
+    // 5a. Bulk insert new auctions in chunks of 50
+    const CHUNK = 50;
+    for (let i = 0; i < toInsert.length; i += CHUNK) {
+      const chunk = toInsert.slice(i, i + CHUNK);
+      const { error } = await sb.from("listings").insert(chunk);
+      if (error) {
+        console.error("Bulk insert error:", error.message);
+        errors += chunk.length;
+      } else {
+        imported += chunk.length;
+      }
+    }
+
+    // 5b. Bulk update existing auctions (individual updates — Supabase doesn't support true bulk update)
+    for (const u of toUpdate) {
+      const { error } = await sb.from("listings").update({
+        price:                u.price,
+        auction_starting_bid: u.auction_starting_bid,
+        auction_date:         u.auction_date,
+        auction_court:        u.auction_court,
+        status:               "active",
+        updated_at:           new Date().toISOString(),
+      }).eq("id", u.id);
+      if (error) {
+        console.error("Update error:", error.message);
         errors++;
+      } else {
+        updated++;
       }
     }
 
     const summary = {
-      endpoint:           "/api/auctions/future",
+      endpoint,
       total:              auctions.length,
       totalAvailableInOS: totalAvailable,
       imported,
       updated,
       errors,
-      aiGenerated,
+      aiGenerated:        0,
       city:               city ?? "all",
       limit,
     };
@@ -309,7 +274,7 @@ Deno.serve(async (req) => {
       imported + updated,
     );
 
-    console.log("poll-os-auctions summary:", summary);
+    console.log("poll-os-auctions summary:", JSON.stringify(summary));
 
     return new Response(JSON.stringify({ ok: true, ...summary }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
