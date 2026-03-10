@@ -123,8 +123,6 @@ export default function AdminPanel() {
   const [logFilter, setLogFilter] = useState<"all" | "os_to_hub" | "hub_to_os">("all");
   const [expandedLog, setExpandedLog] = useState<string | null>(null);
   const [fnTestResult, setFnTestResult] = useState<Record<string, { status: "idle" | "running" | "ok" | "error"; detail: string }>>({});
-  // pollCity/pollLimit are now declared inside pollMutation block above
-
   // ── Run API checks ──────────────────────────────────────────────────────────
   const runApiChecks = async () => {
     setApiChecks([
