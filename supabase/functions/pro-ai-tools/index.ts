@@ -11,7 +11,7 @@ const systemPrompts: Record<string, string> = {
   management: "You are a Greek property management AI assistant. Help with tenant screening, rental contract advice under Greek law, maintenance scheduling, and occupancy optimisation.",
 };
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
