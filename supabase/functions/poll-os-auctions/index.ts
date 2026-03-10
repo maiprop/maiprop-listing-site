@@ -71,7 +71,7 @@ async function getOsToken(baseUrl: string, email: string, password: string): Pro
   const res = await fetchWithTimeout(
     `${baseUrl}/auth/login`,
     { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password }) },
-    10_000,
+    45_000,  // OS server can be slow — allow up to 45s for auth
   );
   const json = await res.json();
   const token = json?.data?.token ?? json?.token ?? json?.accessToken;
