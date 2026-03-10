@@ -115,6 +115,7 @@ export default function AdminPanel() {
 
   const [apiChecks, setApiChecks] = useState<ApiCheckResult[]>([
     { name: "maiProp OS API", status: "pending" },
+    { name: "/api/auctions/future", status: "pending" },
     { name: "Lovable AI Gateway", status: "pending" },
     { name: "Supabase DB", status: "pending" },
   ]);
