@@ -273,7 +273,7 @@ export default function AdminPanel() {
         <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2">
           <Wifi className="w-3.5 h-3.5" /> API Connections
         </h2>
-        <div className="grid sm:grid-cols-3 gap-3">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {apiChecks.map((check) => (
             <div key={check.name} className={`glass-card rounded-xl p-4 border transition-colors ${
               check.status === "ok" ? "border-brand-emerald/30" :
