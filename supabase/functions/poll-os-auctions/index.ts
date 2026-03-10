@@ -4,8 +4,9 @@
  * Pulls FUTURE auctions from maiProp OS via GET /api/auctions/future and
  * bulk-upserts them as Hub listings (listing_type='auction', status='active').
  *
- * Uses EdgeRuntime.waitUntil() to process in the background so the HTTP
- * response returns immediately and avoids gateway timeouts.
+ * Runs synchronously with a 25s AbortController timeout on external fetch
+ * to stay well within the edge-runtime gateway limit.
+ * For large syncs, call with smaller limit values or paginate via startPage/endPage.
  */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -47,41 +48,46 @@ function mapCategory(cat?: string): string {
 }
 
 function buildTitle(a: any): string {
-  const catKey  = mapCategory(a.category);
-  const catGr   = CATEGORY_GR[catKey] ?? "Ακίνητο";
-  const city    = a.city ?? "Ελλάδα";
-  const price   = Number(a.starting_price ?? 0);
+  const catKey   = mapCategory(a.category);
+  const catGr    = CATEGORY_GR[catKey] ?? "Ακίνητο";
+  const city     = a.city ?? "Ελλάδα";
+  const price    = Number(a.starting_price ?? 0);
   const priceStr = price > 0 ? ` – €${price.toLocaleString("el-GR")}` : "";
   return `Πλειστηριασμός ${catGr} | ${city}${priceStr}`;
 }
 
+/** Fetch with a timeout; throws on timeout. */
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function getOsToken(baseUrl: string, email: string, password: string): Promise<string> {
-  const res = await fetch(`${baseUrl}/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
-  });
+  const res = await fetchWithTimeout(
+    `${baseUrl}/auth/login`,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password }) },
+    10_000,
+  );
   const json = await res.json();
   const token = json?.data?.token ?? json?.token ?? json?.accessToken;
   if (!token) throw new Error(`OS auth failed (${res.status}): ${JSON.stringify(json).slice(0, 300)}`);
   return token;
 }
 
-async function logSync(
-  sb: any,
-  status: string,
-  error_message?: string | null,
-  payload?: any,
-  records_affected = 0,
-) {
+async function logSync(sb: any, status: string, error_message?: string | null, payload?: any, records_affected = 0) {
   try {
     await sb.from("sync_log").insert({
-      direction:     "os_to_hub",
-      entity_type:   "auction",
-      entity_id:     "poll-batch",
+      direction: "os_to_hub",
+      entity_type: "auction",
+      entity_id: "poll-batch",
       status,
       error_message: error_message ?? null,
-      payload:       payload ?? null,
+      payload: payload ?? null,
       records_affected,
     });
   } catch (e) {
@@ -89,18 +95,32 @@ async function logSync(
   }
 }
 
-async function runPoll(sb: any, city: string | null, limit: number) {
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  const sb = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+
   const OS_URL   = Deno.env.get("MAIPROP_OS_URL")?.replace(/\/$/, "");
   const OS_EMAIL = Deno.env.get("MAIPROP_OS_EMAIL");
   const OS_PASS  = Deno.env.get("MAIPROP_OS_PASSWORD");
 
   if (!OS_URL || !OS_EMAIL || !OS_PASS) {
     await logSync(sb, "skipped", "OS credentials not configured");
-    return;
+    return new Response(JSON.stringify({ ok: true, status: "skipped", reason: "OS credentials not configured" }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 
   try {
-    console.log("poll-os-auctions: authenticating...");
+    const body  = await req.json().catch(() => ({}));
+    const city  = body.city  ?? null;
+    // Keep limit small to stay within the 25s fetch window; default 100
+    const limit = Math.min(Number(body.limit ?? 100), 500);
+
+    console.log(`poll-os-auctions: authenticating (limit=${limit}, city=${city ?? "all"})...`);
     const token = await getOsToken(OS_URL, OS_EMAIL, OS_PASS);
 
     const params = new URLSearchParams({ limit: String(limit) });
@@ -108,34 +128,36 @@ async function runPoll(sb: any, city: string | null, limit: number) {
     const endpoint = `/api/auctions/future?${params.toString()}`;
     console.log(`poll-os-auctions: fetching ${OS_URL}${endpoint}`);
 
-    const auctRes = await fetch(`${OS_URL}${endpoint}`, {
-      method: "GET",
-      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-    });
+    const auctRes = await fetchWithTimeout(
+      `${OS_URL}${endpoint}`,
+      { method: "GET", headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" } },
+      25_000,
+    );
 
     if (!auctRes.ok) {
       const errText = await auctRes.text();
       await logSync(sb, "error", `OS auction fetch failed (${auctRes.status}): ${errText.slice(0, 500)}`);
-      return;
+      return new Response(JSON.stringify({ error: `OS returned ${auctRes.status}`, detail: errText.slice(0, 300) }), {
+        status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const auctJson: any   = await auctRes.json();
     const auctions: any[] = Array.isArray(auctJson) ? auctJson : (auctJson.data ?? []);
     const totalAvailable  = auctJson?.total ?? auctions.length;
 
-    console.log(`poll-os-auctions: got ${auctions.length} auctions (total in OS: ${totalAvailable})`);
+    console.log(`poll-os-auctions: received ${auctions.length} auctions (OS total: ${totalAvailable})`);
 
     if (auctions.length === 0) {
       await logSync(sb, "success", null, { endpoint, total: 0, city: city ?? "all" }, 0);
-      return;
+      return new Response(JSON.stringify({ ok: true, endpoint, total: 0, imported: 0, updated: 0 }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    // Fetch existing tags in one query
+    // Fetch existing OS auction IDs in one query
     const osIds = auctions.map((a: any) => `os_auction:${a.id}`);
-    const { data: existingRows } = await sb
-      .from("listings")
-      .select("id, tags")
-      .overlaps("tags", osIds);
+    const { data: existingRows } = await sb.from("listings").select("id, tags").overlaps("tags", osIds);
 
     const existingMap: Record<string, string> = {};
     for (const row of (existingRows ?? [])) {
@@ -155,11 +177,10 @@ async function runPoll(sb: any, city: string | null, limit: number) {
 
       if (existingMap[tagKey]) {
         toUpdate.push({
-          id:                   existingMap[tagKey],
-          price,
+          id: existingMap[tagKey], price,
           auction_starting_bid: price,
-          auction_date:         a.auction_date ?? null,
-          auction_court:        a.status ?? null,
+          auction_date:  a.auction_date ?? null,
+          auction_court: a.status ?? null,
         });
       } else {
         toInsert.push({
@@ -191,18 +212,15 @@ async function runPoll(sb: any, city: string | null, limit: number) {
     for (let i = 0; i < toInsert.length; i += CHUNK) {
       const chunk = toInsert.slice(i, i + CHUNK);
       const { error } = await sb.from("listings").insert(chunk);
-      if (error) { console.error("Bulk insert error:", error.message); errors += chunk.length; }
+      if (error) { console.error("Insert error:", error.message); errors += chunk.length; }
       else imported += chunk.length;
     }
 
     for (const u of toUpdate) {
       const { error } = await sb.from("listings").update({
-        price:                u.price,
-        auction_starting_bid: u.auction_starting_bid,
-        auction_date:         u.auction_date,
-        auction_court:        u.auction_court,
-        status:               "active",
-        updated_at:           new Date().toISOString(),
+        price: u.price, auction_starting_bid: u.auction_starting_bid,
+        auction_date: u.auction_date, auction_court: u.auction_court,
+        status: "active", updated_at: new Date().toISOString(),
       }).eq("id", u.id);
       if (error) { console.error("Update error:", error.message); errors++; }
       else updated++;
@@ -212,33 +230,15 @@ async function runPoll(sb: any, city: string | null, limit: number) {
     await logSync(sb, errors > 0 && (imported + updated) === 0 ? "error" : "success", errors > 0 ? `${errors} item(s) failed` : null, summary, imported + updated);
     console.log("poll-os-auctions done:", JSON.stringify(summary));
 
+    return new Response(JSON.stringify({ ok: true, ...summary }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+
   } catch (err: any) {
     console.error("poll-os-auctions error:", err.message);
     await logSync(sb, "error", err.message);
+    return new Response(JSON.stringify({ error: err.message }), {
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
-}
-
-Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-
-  const sb = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-  );
-
-  const body  = await req.json().catch(() => ({}));
-  const city  = body.city  ?? null;
-  const limit = body.limit ?? 1000;
-
-  // Return immediately — process in background to avoid gateway timeout
-  const jobId = crypto.randomUUID();
-  console.log(`poll-os-auctions: queued job ${jobId}`);
-
-  // @ts-ignore — EdgeRuntime.waitUntil keeps the function alive after response
-  EdgeRuntime.waitUntil(runPoll(sb, city, limit));
-
-  return new Response(
-    JSON.stringify({ ok: true, status: "queued", jobId, message: "Auction poll started in background. Check sync_log for results." }),
-    { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-  );
 });
