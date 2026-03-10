@@ -208,6 +208,7 @@ Deno.serve(async (req) => {
     if (body.auctionStatuses) filterRequest.auctionStatuses = body.auctionStatuses;
     if (body.auctionAmountFrom != null) filterRequest.auctionAmountFrom = body.auctionAmountFrom;
     if (body.auctionAmountTo != null) filterRequest.auctionAmountTo = body.auctionAmountTo;
+    if (body.boundingBox) filterRequest.boundingBox = body.boundingBox;
 
     // Sorting: newest auctions first — use sortField object format
     if (body.sortBy) {
