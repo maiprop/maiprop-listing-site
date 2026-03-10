@@ -8,7 +8,7 @@ import Map, {
 } from "react-map-gl";
 import type { LayerProps } from "react-map-gl";
 import {
-  MapPin, Bed, Bath, Ruler, Maximize2, PenLine,
+  MapPin, Ruler, Maximize2, PenLine,
   X, Flame, CheckCircle2,
 } from "lucide-react";
 import { Link } from "react-router-dom";
