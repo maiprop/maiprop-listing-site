@@ -145,11 +145,12 @@ export default function Auctions() {
 
           {!isLoading && !error && auctions.length === 0 && (
             <div className="text-center py-20">
-              <Gavel className="w-10 h-10 text-muted-foreground/40 mx-auto mb-3" />
-              <p className="font-semibold mb-1">No upcoming auctions found</p>
-              <p className="text-sm text-muted-foreground">
-                {selectedCity !== "All Cities" ? `No auctions in ${selectedCity}. ` : ""}
-                Run the OS auction poll from the Admin Panel to import listings.
+              <Gavel className="w-12 h-12 text-brand-gold/30 mx-auto mb-4" />
+              <p className="font-display font-semibold text-lg mb-2">No upcoming auctions yet</p>
+              <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+                {selectedCity !== "All Cities"
+                  ? `No auctions found in ${selectedCity}. Try "All Cities" or ask an admin to sync from mAI Prop OS.`
+                  : "Auction listings will appear here once synced from mAI Prop OS. Ask an admin to run the auction poll from the Dashboard."}
               </p>
             </div>
           )}
