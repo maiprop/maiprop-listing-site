@@ -126,6 +126,7 @@ export default function AdminPanel() {
   const runApiChecks = async () => {
     setApiChecks([
       { name: "maiProp OS API", status: "pending" },
+      { name: "/api/auctions/future", status: "pending" },
       { name: "Lovable AI Gateway", status: "pending" },
       { name: "Supabase DB", status: "pending" },
     ]);
@@ -142,21 +143,39 @@ export default function AdminPanel() {
       setApiChecks(prev => prev.map(c => c.name === "Supabase DB" ? { ...c, status: "error", detail: e.message } : c));
     }
 
-    // 2. OS API check via os-diagnose function
+    // 2. OS API + /api/auctions/future probe via os-diagnose function
     const t1 = Date.now();
     try {
       const { data, error } = await supabase.functions.invoke("os-diagnose", { body: {} });
       const latency = Date.now() - t1;
       if (error) throw new Error(error.message);
       const isOk = data?.osReachable === true || data?.status === "ok";
+
+      // Main OS API card
       setApiChecks(prev => prev.map(c => c.name === "maiProp OS API"
         ? { ...c, status: isOk ? "ok" : data?.osReachable === false ? "error" : "unconfigured", latency, detail: data?.detail ?? JSON.stringify(data).slice(0, 120) }
         : c));
+
+      // Future auctions endpoint card
+      const fae = data?.futureAuctionsEndpoint;
+      const faeOk = fae && fae.status >= 200 && fae.status < 300;
+      setApiChecks(prev => prev.map(c => c.name === "/api/auctions/future"
+        ? {
+            ...c,
+            status: faeOk ? "ok" : isOk ? "error" : "unconfigured",
+            latency,
+            detail: faeOk
+              ? `${fae.available.toLocaleString()} future auctions available · ${fae.hasCoordinates}/${Math.min(fae.available, 3)} sample w/ coords`
+              : fae ? `HTTP ${fae.status}` : "Endpoint unreachable",
+          }
+        : c));
     } catch (e: any) {
       const latency = Date.now() - t1;
-      setApiChecks(prev => prev.map(c => c.name === "maiProp OS API"
-        ? { ...c, status: "unconfigured", latency, detail: e.message }
-        : c));
+      setApiChecks(prev => prev.map(c =>
+        (c.name === "maiProp OS API" || c.name === "/api/auctions/future")
+          ? { ...c, status: "unconfigured" as const, latency, detail: e.message }
+          : c
+      ));
     }
 
     // 3. AI Gateway check via a lightweight function
