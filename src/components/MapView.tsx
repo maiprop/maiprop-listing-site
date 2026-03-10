@@ -220,12 +220,30 @@ const drawDotLyr: LayerProps = {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
+function streetViewUrl(lat?: number | null, lng?: number | null) {
+  if (!lat || !lng) return null;
+  return `https://maps.googleapis.com/maps/api/streetview?size=400x200&location=${lat},${lng}&fov=90&pitch=0&key=AIzaSyD-placeholder`;
+}
+
+function getAuctionImage(listing: MapListing): string {
+  const raw = listing._raw ?? listing;
+  if (listing.images?.[0]) return listing.images[0];
+  if (raw.cover_image_url) return raw.cover_image_url;
+  // Google Street View Static API using coordinates
+  if (listing.latitude && listing.longitude) {
+    return `https://maps.googleapis.com/maps/api/streetview?size=400x200&location=${listing.latitude},${listing.longitude}&fov=90&pitch=5`;
+  }
+  return "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400&q=60";
+}
+
 function PropertyPopup({ listing, onClose }: { listing: MapListing; onClose: () => void }) {
   const raw = listing._raw ?? listing;
-  const image =
-    listing.images?.[0] ||
-    raw.cover_image_url ||
-    "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400&q=60";
+  const image = getAuctionImage(listing);
+  const auctionDate = raw.auction_date ? new Date(raw.auction_date) : null;
+  const daysLeft = auctionDate
+    ? Math.ceil((auctionDate.getTime() - Date.now()) / 86_400_000)
+    : null;
+
   return (
     <div className="bg-card border border-border rounded-xl overflow-hidden shadow-elevated w-56">
       <img src={image} alt={listing.title} className="w-full h-28 object-cover" />
@@ -235,9 +253,12 @@ function PropertyPopup({ listing, onClose }: { listing: MapListing; onClose: () 
         </p>
         <p className="text-primary font-bold text-sm mt-1">€{Number(listing.price).toLocaleString()}</p>
         <div className="flex items-center gap-2 mt-1.5 text-xs text-muted-foreground">
-          {listing.bedrooms != null && <span className="flex items-center gap-0.5"><Bed className="w-3 h-3" />{listing.bedrooms}</span>}
-          {listing.bathrooms != null && <span className="flex items-center gap-0.5"><Bath className="w-3 h-3" />{listing.bathrooms}</span>}
           <span className="flex items-center gap-0.5"><Ruler className="w-3 h-3" />{listing.sqm}m²</span>
+          {daysLeft !== null && (
+            <span className={`flex items-center gap-0.5 font-semibold ${daysLeft <= 3 ? "text-destructive" : "text-brand-gold"}`}>
+              {daysLeft === 0 ? "Today!" : daysLeft === 1 ? "Tomorrow" : `${daysLeft}d left`}
+            </span>
+          )}
         </div>
         <Link
           to={`/property/${listing.id}`}
