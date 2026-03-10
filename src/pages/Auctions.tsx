@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Gavel, TrendingUp, Bell, ExternalLink, AlertCircle, Loader2, MapPin, Calendar, Euro, Map, List } from "lucide-react";
+import { Gavel, TrendingUp, Bell, ExternalLink, AlertCircle, Loader2, MapPin, Calendar, Euro, Map, List, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
@@ -47,6 +47,29 @@ const PROPERTY_TYPE_GR: Record<string, string> = {
 
 type ViewMode = "list" | "map";
 
+/** Days remaining until auction date (0 = today, negative = past) */
+function daysUntil(dateStr?: string | null): number | null {
+  if (!dateStr) return null;
+  const diff = new Date(dateStr).getTime() - Date.now();
+  return Math.ceil(diff / 86_400_000);
+}
+
+/** Countdown badge label + colour class */
+function countdownBadge(days: number | null): { label: string; cls: string } | null {
+  if (days === null) return null;
+  if (days === 0) return { label: "Today!", cls: "bg-destructive text-white" };
+  if (days === 1) return { label: "Tomorrow", cls: "bg-destructive/80 text-white" };
+  if (days <= 3) return { label: `${days} days left`, cls: "bg-destructive/70 text-white" };
+  if (days <= 7) return { label: `${days} days left`, cls: "bg-brand-gold text-background" };
+  return { label: `${days} days left`, cls: "bg-secondary text-muted-foreground border border-border" };
+}
+
+/** Google Street View Static URL (no API key needed for basic usage) */
+function streetViewImg(lat?: number | null, lng?: number | null): string | null {
+  if (!lat || !lng) return null;
+  return `https://maps.googleapis.com/maps/api/streetview?size=600x300&location=${lat},${lng}&fov=90&pitch=5`;
+}
+
 export default function Auctions() {
   const [selectedCity, setSelectedCity] = useState("All Cities");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
@@ -80,11 +103,13 @@ export default function Auctions() {
       title: a.title,
       price: a.auction_starting_bid ?? a.price ?? 0,
       sqm: a.sqm ?? 0,
-      bedrooms: a.bedrooms ?? undefined,
-      bathrooms: a.bathrooms ?? undefined,
       latitude: a.latitude,
       longitude: a.longitude,
-      images: a.cover_image_url ? [a.cover_image_url] : [],
+      images: a.cover_image_url
+        ? [a.cover_image_url]
+        : streetViewImg(a.latitude, a.longitude)
+        ? [streetViewImg(a.latitude, a.longitude)!]
+        : [],
       listingType: "auction",
       city: a.city,
       _raw: a,
@@ -243,64 +268,77 @@ export default function Auctions() {
                   {" · "}ordered by auction date
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {auctions.map(a => (
-                    <Link
-                      key={a.id}
-                      to={`/property/${a.id}`}
-                      className="glass-card rounded-xl overflow-hidden border border-border hover:border-brand-gold/40 transition-all group"
-                    >
-                      {/* Image / placeholder */}
-                      <div className="relative h-44 bg-secondary overflow-hidden">
-                        {a.cover_image_url ? (
-                          <img
-                            src={a.cover_image_url}
-                            alt={a.title}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <Gavel className="w-10 h-10 text-muted-foreground/20" />
+                  {auctions.map(a => {
+                    const days = daysUntil(a.auction_date);
+                    const badge = countdownBadge(days);
+                    const imgSrc = a.cover_image_url ?? streetViewImg(a.latitude, a.longitude);
+                    return (
+                      <Link
+                        key={a.id}
+                        to={`/property/${a.id}`}
+                        className="glass-card rounded-xl overflow-hidden border border-border hover:border-brand-gold/40 transition-all group"
+                      >
+                        {/* Image */}
+                        <div className="relative h-44 bg-secondary overflow-hidden">
+                          {imgSrc ? (
+                            <img
+                              src={imgSrc}
+                              alt={a.title}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <Gavel className="w-10 h-10 text-muted-foreground/20" />
+                            </div>
+                          )}
+                          {/* Auction date badge */}
+                          {a.auction_date && (
+                            <div className="absolute top-2 left-2 flex items-center gap-1 bg-background/90 backdrop-blur-sm border border-border rounded-full px-2 py-0.5 text-[10px] font-semibold">
+                              <Calendar className="w-3 h-3 text-brand-gold" />
+                              {format(new Date(a.auction_date), "dd MMM yyyy")}
+                            </div>
+                          )}
+                          {/* Property type badge */}
+                          <div className="absolute top-2 right-2 bg-brand-gold/90 text-background text-[10px] font-bold px-2 py-0.5 rounded-full">
+                            {PROPERTY_TYPE_GR[a.property_type] ?? a.property_type}
                           </div>
-                        )}
-                        {/* Auction date badge */}
-                        {a.auction_date && (
-                          <div className="absolute top-2 left-2 flex items-center gap-1 bg-background/90 backdrop-blur-sm border border-border rounded-full px-2 py-0.5 text-[10px] font-semibold">
-                            <Calendar className="w-3 h-3 text-brand-gold" />
-                            {format(new Date(a.auction_date), "dd MMM yyyy")}
-                          </div>
-                        )}
-                        {/* Property type badge */}
-                        <div className="absolute top-2 right-2 bg-brand-gold/90 text-background text-[10px] font-bold px-2 py-0.5 rounded-full">
-                          {PROPERTY_TYPE_GR[a.property_type] ?? a.property_type}
-                        </div>
-                      </div>
-
-                      {/* Info */}
-                      <div className="p-4 space-y-2">
-                        <h3 className="font-semibold text-sm line-clamp-2 group-hover:text-brand-gold transition-colors">
-                          {a.title}
-                        </h3>
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <MapPin className="w-3 h-3 shrink-0" />
-                          <span className="truncate">{a.address ? `${a.address}, ` : ""}{a.city}</span>
-                        </div>
-                        <div className="flex items-center justify-between pt-1">
-                          <div className="flex items-center gap-1 font-display font-bold text-brand-gold">
-                            <Euro className="w-3.5 h-3.5" />
-                            {(a.auction_starting_bid ?? a.price ?? 0).toLocaleString("el-GR")}
-                          </div>
-                          {a.sqm && a.sqm > 1 && (
-                            <span className="text-xs text-muted-foreground">{a.sqm} τ.μ.</span>
+                          {/* Countdown badge */}
+                          {badge && (
+                            <div className={`absolute bottom-2 right-2 flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${badge.cls}`}>
+                              <Clock className="w-3 h-3" />
+                              {badge.label}
+                            </div>
                           )}
                         </div>
-                        {a.auction_court && (
-                          <p className="text-[10px] text-muted-foreground truncate">
-                            {a.auction_court}
-                          </p>
-                        )}
-                      </div>
-                    </Link>
-                  ))}
+
+                        {/* Info */}
+                        <div className="p-4 space-y-2">
+                          <h3 className="font-semibold text-sm line-clamp-2 group-hover:text-brand-gold transition-colors">
+                            {a.title}
+                          </h3>
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <MapPin className="w-3 h-3 shrink-0" />
+                            <span className="truncate">{a.address ? `${a.address}, ` : ""}{a.city}</span>
+                          </div>
+                          <div className="flex items-center justify-between pt-1">
+                            <div className="flex items-center gap-1 font-display font-bold text-brand-gold">
+                              <Euro className="w-3.5 h-3.5" />
+                              {(a.auction_starting_bid ?? a.price ?? 0).toLocaleString("el-GR")}
+                            </div>
+                            {a.sqm && a.sqm > 1 && (
+                              <span className="text-xs text-muted-foreground">{a.sqm} τ.μ.</span>
+                            )}
+                          </div>
+                          {a.auction_court && (
+                            <p className="text-[10px] text-muted-foreground truncate">
+                              {a.auction_court}
+                            </p>
+                          )}
+                        </div>
+                      </Link>
+                    );
+                  })}
                 </div>
               </>
             )}
