@@ -104,9 +104,7 @@ const EDGE_FUNCTIONS = [
 
 // ── Cron schedule info ────────────────────────────────────────────────────────
 const CRON_JOBS = [
-  { name: "poll-os-auctions-00", schedule: "0 3 * * *", fn: "poll-os-auctions", body: '{"page":0,"pageSize":100}', description: "Nightly 03:00 UTC – page 0" },
-  { name: "poll-os-auctions-15", schedule: "15 3 * * *", fn: "poll-os-auctions", body: '{"page":1,"pageSize":100}', description: "Nightly 03:15 UTC – page 1" },
-  { name: "poll-os-auctions-30", schedule: "30 3 * * *", fn: "poll-os-auctions", body: '{"page":2,"pageSize":100}', description: "Nightly 03:30 UTC – page 2" },
+  { name: "poll-os-auctions-nightly", schedule: "0 3 * * *", fn: "poll-os-auctions", body: '{"limit":1000}', description: "Nightly 03:00 UTC · GET /api/auctions/future?limit=1000" },
 ];
 
 // ── Main Component ────────────────────────────────────────────────────────────
