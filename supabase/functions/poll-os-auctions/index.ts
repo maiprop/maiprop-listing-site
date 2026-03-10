@@ -146,8 +146,8 @@ function mapAuctionToListing(a: any) {
       latitude: a.propertyLatitude != null ? Number(a.propertyLatitude) : null,
       longitude: a.propertyLongitude != null ? Number(a.propertyLongitude) : null,
       sqm: a.propertySquareMeters != null ? Number(a.propertySquareMeters) : 1,
-      floor: a.propertyFloor != null ? Number(a.propertyFloor) : null,
-      total_floors: a.numberOfFloors != null ? Number(a.numberOfFloors) : null,
+      floor: a.propertyFloor != null ? Math.round(Number(a.propertyFloor)) : null,
+      total_floors: a.numberOfFloors != null ? Math.round(Number(a.numberOfFloors)) : null,
       year_built: a.constructionYear != null ? Number(a.constructionYear) : null,
       cadastre_number: a.propertyFullKaek ?? null,
       cover_image_url: null,
@@ -209,9 +209,11 @@ Deno.serve(async (req) => {
     if (body.auctionAmountFrom != null) filterRequest.auctionAmountFrom = body.auctionAmountFrom;
     if (body.auctionAmountTo != null) filterRequest.auctionAmountTo = body.auctionAmountTo;
 
-    // Sorting: newest auctions first
-    filterRequest.sortBy = body.sortBy ?? "auctionDate";
-    filterRequest.order = body.order ?? "ASC";
+    // Sorting: newest auctions first — use sortField object format
+    if (body.sortBy) {
+      filterRequest.sortBy = body.sortBy;
+      filterRequest.order = body.order ?? "ASC";
+    }
 
     // Pagination
     const page = Number(body.page ?? 0);
