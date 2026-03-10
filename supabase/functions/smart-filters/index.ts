@@ -52,7 +52,7 @@ const AVAILABLE_SECTIONS = [
   "land_details", "rental_extras", "commercial_details",
 ];
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
