@@ -197,24 +197,33 @@ export default function AdminPanel() {
     }
   };
 
-  // ── Mutation: poll auctions ─────────────────────────────────────────────────
+  // ── Mutation: poll auctions — now uses GET /api/auctions/future ────────────
+  const [pollCity, setPollCity] = useState("");
+  const [pollLimit, setPollLimit] = useState(1000);
+
   const pollMutation = useMutation({
     mutationFn: async () => {
-      let totalImported = 0, totalUpdated = 0, totalErrors = 0, totalScanned = 0, aiGenerated = 0;
-      for (let p = pollPage; p < pollPage + pollPages; p++) {
-        const { data, error } = await supabase.functions.invoke("poll-os-auctions", { body: { page: p, pageSize: 100 } });
-        if (error) throw error;
-        totalImported += data?.imported ?? 0;
-        totalUpdated  += data?.updated ?? 0;
-        totalErrors   += data?.errors ?? 0;
-        totalScanned  += data?.total ?? 0;
-        aiGenerated   += data?.aiGenerated ?? 0;
-      }
-      return { imported: totalImported, updated: totalUpdated, errors: totalErrors, scanned: totalScanned, aiGenerated };
+      const body: Record<string, unknown> = { limit: pollLimit };
+      if (pollCity.trim()) body.city = pollCity.trim();
+      const { data, error } = await supabase.functions.invoke("poll-os-auctions", { body });
+      if (error) throw error;
+      return {
+        imported:     data?.imported     ?? 0,
+        updated:      data?.updated      ?? 0,
+        errors:       data?.errors       ?? 0,
+        scanned:      data?.total        ?? 0,
+        aiGenerated:  data?.aiGenerated  ?? 0,
+        endpoint:     data?.endpoint     ?? "/api/auctions/future",
+        totalInOS:    data?.totalAvailableInOS ?? 0,
+        rawResponse:  JSON.stringify(data).slice(0, 400),
+      };
     },
     onSuccess: (r) => {
-      qc.invalidateQueries({ queryKey: ["admin-sync-log"] });
-      toast.success(`✅ ${r.imported} new · ${r.updated} updated · 🤖 ${r.aiGenerated} AI · scanned ${r.scanned}`);
+      qc.invalidateQueries({ queryKey: ["admin-sync-log", "admin-db-stats"] });
+      toast.success(
+        `✅ ${r.endpoint} · ${r.imported} new · ${r.updated} updated · 🤖 ${r.aiGenerated} AI · ${r.scanned}/${r.totalInOS} scanned`,
+        { duration: 8000 }
+      );
     },
     onError: (e: any) => toast.error("Poll failed: " + e.message),
   });
