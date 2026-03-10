@@ -220,10 +220,6 @@ const drawDotLyr: LayerProps = {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function streetViewUrl(lat?: number | null, lng?: number | null) {
-  if (!lat || !lng) return null;
-  return `https://maps.googleapis.com/maps/api/streetview?size=400x200&location=${lat},${lng}&fov=90&pitch=0&key=AIzaSyD-placeholder`;
-}
 
 function getAuctionImage(listing: MapListing): string {
   const raw = listing._raw ?? listing;
