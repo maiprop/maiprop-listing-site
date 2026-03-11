@@ -14,6 +14,8 @@ import { useMyListings, useUpdateListing, useDeleteListing } from "@/hooks/useLi
 import { useFavorites } from "@/hooks/useFavorites";
 import { useViewings } from "@/hooks/useViewings";
 import { useSavedSearches, useDeleteSavedSearch, useToggleSavedSearchAlert } from "@/hooks/useSavedSearches";
+import { useAuctionAlerts, useDeleteAuctionAlert, useUpdateAuctionAlert } from "@/hooks/useAuctionAlerts";
+import { AuctionAlertModal } from "@/components/AuctionAlertModal";
 import { PropertyCard } from "@/components/PropertyCard";
 import ProfessionalServicesEditor from "@/components/ProfessionalServicesEditor";
 import { toast } from "sonner";
