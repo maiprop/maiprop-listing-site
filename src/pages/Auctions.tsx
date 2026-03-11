@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Gavel, TrendingUp, Bell, ExternalLink, AlertCircle, Loader2, MapPin, Calendar, Euro, Map, List, Clock } from "lucide-react";
+import { useState, useMemo } from "react";
+import { Gavel, TrendingUp, Bell, ExternalLink, AlertCircle, Loader2, MapPin, Calendar, Euro, Map, List, Clock, SlidersHorizontal, X, Lock, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
@@ -8,26 +8,22 @@ import { supabase } from "@/integrations/supabase/client";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
 import { MapView, MapListing } from "@/components/MapView";
+import { AuctionAlertModal } from "@/components/AuctionAlertModal";
+import { useAuth } from "@/contexts/AuthContext";
 
 // ── Fetch all future auctions from DB ─────────────────────────────────────────
-function useAuctionListings(city?: string) {
+function useAuctionListings() {
   return useQuery({
-    queryKey: ["auction-listings", city],
+    queryKey: ["auction-listings-all"],
     queryFn: async () => {
-      let query = supabase
+      const { data, error } = await supabase
         .from("listings")
-        .select("id, title, city, address, price, auction_starting_bid, auction_date, auction_court, property_type, cover_image_url, sqm, bedrooms, bathrooms, latitude, longitude, tags")
+        .select("id, title, city, address, price, auction_starting_bid, auction_date, auction_court, property_type, cover_image_url, sqm, bedrooms, bathrooms, latitude, longitude, tags, year_built, construction_status")
         .eq("listing_type", "auction")
         .eq("status", "active")
         .gte("auction_date", new Date().toISOString())
         .order("auction_date", { ascending: true })
         .limit(500);
-
-      if (city && city !== "All Cities") {
-        query = query.ilike("city", `%${city}%`);
-      }
-
-      const { data, error } = await query;
       if (error) throw error;
       return data ?? [];
     },
@@ -35,6 +31,16 @@ function useAuctionListings(city?: string) {
 }
 
 const CITY_FILTERS = ["All Cities", "Αθήνα", "Θεσσαλονίκη", "Πειραιάς", "Πάτρα", "Ηράκλειο", "Λάρισα", "Βόλος"];
+
+const PROPERTY_TYPES = [
+  { value: "", label: "All Types" },
+  { value: "apartment", label: "Apartment" },
+  { value: "house", label: "House" },
+  { value: "villa", label: "Villa" },
+  { value: "land", label: "Land" },
+  { value: "commercial", label: "Commercial" },
+  { value: "office", label: "Office" },
+];
 
 const PROPERTY_TYPE_GR: Record<string, string> = {
   apartment: "Διαμέρισμα",
@@ -45,16 +51,33 @@ const PROPERTY_TYPE_GR: Record<string, string> = {
   office: "Γραφείο",
 };
 
+const BID_RANGES = [
+  { label: "Any Price", value: "" },
+  { label: "Under €20k", value: "0-20000" },
+  { label: "€20k – €50k", value: "20000-50000" },
+  { label: "€50k – €100k", value: "50000-100000" },
+  { label: "€100k – €200k", value: "100000-200000" },
+  { label: "€200k – €500k", value: "200000-500000" },
+  { label: "€500k+", value: "500000-9999999" },
+];
+
+const YEAR_RANGES = [
+  { label: "Any Year", value: "" },
+  { label: "Pre-1980", value: "0-1979" },
+  { label: "1980–2000", value: "1980-2000" },
+  { label: "2000–2010", value: "2000-2010" },
+  { label: "2010–2020", value: "2010-2020" },
+  { label: "Post-2020", value: "2020-2100" },
+];
+
 type ViewMode = "list" | "map";
 
-/** Days remaining until auction date (0 = today, negative = past) */
 function daysUntil(dateStr?: string | null): number | null {
   if (!dateStr) return null;
   const diff = new Date(dateStr).getTime() - Date.now();
   return Math.ceil(diff / 86_400_000);
 }
 
-/** Countdown badge label + colour class */
 function countdownBadge(days: number | null): { label: string; cls: string } | null {
   if (days === null) return null;
   if (days === 0) return { label: "Today!", cls: "bg-destructive text-white" };
@@ -64,39 +87,88 @@ function countdownBadge(days: number | null): { label: string; cls: string } | n
   return { label: `${days} days left`, cls: "bg-secondary text-muted-foreground border border-border" };
 }
 
-/** Google Street View Static URL (no API key needed for basic usage) */
 function streetViewImg(lat?: number | null, lng?: number | null): string | null {
   if (!lat || !lng) return null;
   return `https://maps.googleapis.com/maps/api/streetview?size=600x300&location=${lat},${lng}&fov=90&pitch=5`;
 }
 
+// Premium lock badge
+function PremiumBadge() {
+  return (
+    <span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold border border-brand-gold/30">
+      <Lock className="w-2.5 h-2.5" /> PRO
+    </span>
+  );
+}
+
 export default function Auctions() {
+  const { user } = useAuth();
   const [selectedCity, setSelectedCity] = useState("All Cities");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
-  const { data: auctions = [], isLoading, error } = useAuctionListings(selectedCity);
+  const [showFilters, setShowFilters] = useState(false);
+  const [alertModalOpen, setAlertModalOpen] = useState(false);
 
-  // Dynamic stats from real data
+  // Standard filters
+  const [filterType, setFilterType] = useState("");
+  const [filterBidRange, setFilterBidRange] = useState("");
+  const [filterYearRange, setFilterYearRange] = useState("");
+
+  // Premium filters (UI only — locked for non-pro, visually available)
+  const [filterRound, setFilterRound] = useState(""); // 1st, 2nd, 3rd+ auction
+  const [filterYield, setFilterYield] = useState(""); // expected rental yield band
+  const [filterOwnership, setFilterOwnership] = useState(""); // free / encumbered
+
+  const { data: auctions = [], isLoading, error } = useAuctionListings();
+
+  // Apply all filters client-side
+  const filtered = useMemo(() => {
+    return auctions.filter(a => {
+      if (selectedCity !== "All Cities" && !a.city?.toLowerCase().includes(selectedCity.toLowerCase())) return false;
+      if (filterType && a.property_type !== filterType) return false;
+      if (filterBidRange) {
+        const [min, max] = filterBidRange.split("-").map(Number);
+        const bid = a.auction_starting_bid ?? a.price ?? 0;
+        if (bid < min || bid > max) return false;
+      }
+      if (filterYearRange && a.year_built) {
+        const [min, max] = filterYearRange.split("-").map(Number);
+        if (a.year_built < min || a.year_built > max) return false;
+      }
+      return true;
+    });
+  }, [auctions, selectedCity, filterType, filterBidRange, filterYearRange]);
+
+  const activeFilterCount = [filterType, filterBidRange, filterYearRange, filterRound, filterYield, filterOwnership].filter(Boolean).length;
+
+  const clearFilters = () => {
+    setFilterType("");
+    setFilterBidRange("");
+    setFilterYearRange("");
+    setFilterRound("");
+    setFilterYield("");
+    setFilterOwnership("");
+  };
+
   const now = new Date();
-  const thisWeek = auctions.filter(a => {
+  const thisWeek = filtered.filter(a => {
     if (!a.auction_date) return false;
     const d = new Date(a.auction_date);
     const diff = (d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
     return diff >= 0 && diff <= 7;
   }).length;
 
-  const avgBid = auctions.length
-    ? Math.round(auctions.reduce((sum, a) => sum + (a.auction_starting_bid ?? a.price ?? 0), 0) / auctions.length)
+  const avgBid = filtered.length
+    ? Math.round(filtered.reduce((sum, a) => sum + (a.auction_starting_bid ?? a.price ?? 0), 0) / filtered.length)
     : 0;
 
   const auctionStats = [
     { value: isLoading ? "—" : String(thisWeek), label: "This Week", icon: Gavel },
-    { value: isLoading ? "—" : auctions.length.toLocaleString(), label: "Total Listed", icon: TrendingUp },
+    { value: isLoading ? "—" : filtered.length.toLocaleString(), label: "Total Listed", icon: TrendingUp },
     { value: isLoading ? "—" : avgBid > 0 ? `€${(avgBid / 1000).toFixed(0)}k` : "—", label: "Avg Starting Bid", icon: TrendingUp },
     { value: "-38%", label: "Below Market Avg", icon: AlertCircle },
   ];
 
-  // Map listings shape
-  const mapListings: MapListing[] = auctions
+  const mapListings: MapListing[] = filtered
     .filter(a => a.latitude != null && a.longitude != null)
     .map(a => ({
       id: a.id,
@@ -151,15 +223,19 @@ export default function Auctions() {
               <p className="text-sm font-medium">Get notified of new auctions matching your criteria</p>
               <p className="text-xs text-muted-foreground mt-0.5">Set custom alerts for location, price range, and property type</p>
             </div>
-            <Button className="bg-gradient-gold border-0 text-background font-semibold shrink-0">
-              Set Alert
+            <Button
+              className="bg-gradient-gold border-0 text-background font-semibold shrink-0"
+              onClick={() => user ? setAlertModalOpen(true) : (window.location.href = "/login")}
+            >
+              {user ? "Set Alert" : "Sign in to Alert"}
             </Button>
           </div>
         </div>
 
-        {/* Toolbar: city filters + view toggle */}
+        {/* Toolbar: city filters + filters + view toggle */}
         <div className="container pb-4">
           <div className="flex items-center justify-between gap-3 flex-wrap">
+            {/* City pills */}
             <div className="flex gap-2 flex-wrap">
               {CITY_FILTERS.map(city => (
                 <button
@@ -176,31 +252,206 @@ export default function Auctions() {
               ))}
             </div>
 
-            {/* View mode toggle */}
-            <div className="flex items-center gap-1 bg-secondary rounded-lg p-1 border border-border shrink-0">
-              <button
-                onClick={() => setViewMode("list")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                  viewMode === "list" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                }`}
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Filters toggle */}
+              <Button
+                variant="outline"
+                size="sm"
+                className={`border-border gap-1.5 ${showFilters ? "bg-primary/10 border-primary/30 text-primary" : ""}`}
+                onClick={() => setShowFilters(v => !v)}
               >
-                <List className="w-3.5 h-3.5" /> List
-              </button>
-              <button
-                onClick={() => setViewMode("map")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                  viewMode === "map" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <Map className="w-3.5 h-3.5" /> Map
-                {!isLoading && mappableCount > 0 && (
-                  <span className="ml-0.5 text-[10px] bg-brand-gold/20 text-brand-gold px-1.5 py-0.5 rounded-full font-bold">
-                    {mappableCount}
-                  </span>
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+                Filters
+                {activeFilterCount > 0 && (
+                  <span className="w-4 h-4 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center font-bold">{activeFilterCount}</span>
                 )}
-              </button>
+              </Button>
+
+              {/* View mode toggle */}
+              <div className="flex items-center gap-1 bg-secondary rounded-lg p-1 border border-border">
+                <button
+                  onClick={() => setViewMode("list")}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                    viewMode === "list" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <List className="w-3.5 h-3.5" /> List
+                </button>
+                <button
+                  onClick={() => setViewMode("map")}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                    viewMode === "map" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Map className="w-3.5 h-3.5" /> Map
+                  {!isLoading && mappableCount > 0 && (
+                    <span className="ml-0.5 text-[10px] bg-brand-gold/20 text-brand-gold px-1.5 py-0.5 rounded-full font-bold">
+                      {mappableCount}
+                    </span>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
+
+          {/* Advanced Filters Panel */}
+          {showFilters && (
+            <div className="mt-4 p-5 bg-card/95 border border-border rounded-2xl space-y-5 backdrop-blur-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold flex items-center gap-2">
+                  <SlidersHorizontal className="w-4 h-4 text-primary" /> Auction Filters
+                </span>
+                {activeFilterCount > 0 && (
+                  <button onClick={clearFilters} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+                    <X className="w-3 h-3" /> Clear all
+                  </button>
+                )}
+              </div>
+
+              {/* Standard filters */}
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Standard Filters</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {/* Typology */}
+                  <div>
+                    <label className="text-xs text-muted-foreground font-medium block mb-1.5">Property Type</label>
+                    <select
+                      value={filterType}
+                      onChange={e => setFilterType(e.target.value)}
+                      className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none"
+                    >
+                      {PROPERTY_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Starting bid */}
+                  <div>
+                    <label className="text-xs text-muted-foreground font-medium block mb-1.5">Starting Bid</label>
+                    <select
+                      value={filterBidRange}
+                      onChange={e => setFilterBidRange(e.target.value)}
+                      className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none"
+                    >
+                      {BID_RANGES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Construction year */}
+                  <div>
+                    <label className="text-xs text-muted-foreground font-medium block mb-1.5">Construction Year</label>
+                    <select
+                      value={filterYearRange}
+                      onChange={e => setFilterYearRange(e.target.value)}
+                      className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none"
+                    >
+                      {YEAR_RANGES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Premium filters */}
+              <div className="pt-1 border-t border-border">
+                <div className="flex items-center gap-2 mb-3">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Premium Filters</p>
+                  <PremiumBadge />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {/* Auction round */}
+                  <div className="relative">
+                    <label className="text-xs text-muted-foreground font-medium block mb-1.5 flex items-center gap-1.5">
+                      Auction Round <PremiumBadge />
+                    </label>
+                    <select
+                      value={filterRound}
+                      onChange={() => {}}
+                      disabled
+                      className="w-full bg-secondary/50 border border-border/50 rounded-xl px-3 py-2.5 text-sm text-muted-foreground outline-none cursor-not-allowed appearance-none opacity-60"
+                    >
+                      <option value="">Any Round</option>
+                      <option value="1">1st Auction</option>
+                      <option value="2">2nd Auction</option>
+                      <option value="3">3rd+ Auction</option>
+                    </select>
+                    <div className="absolute inset-0 rounded-xl flex items-center justify-center bg-card/60 backdrop-blur-[1px] cursor-not-allowed">
+                      <span className="flex items-center gap-1.5 text-xs font-semibold text-brand-gold">
+                        <Lock className="w-3.5 h-3.5" /> Upgrade to Pro
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Expected rental yield */}
+                  <div className="relative">
+                    <label className="text-xs text-muted-foreground font-medium block mb-1.5 flex items-center gap-1.5">
+                      Expected Rental Yield <PremiumBadge />
+                    </label>
+                    <select
+                      value={filterYield}
+                      onChange={() => {}}
+                      disabled
+                      className="w-full bg-secondary/50 border border-border/50 rounded-xl px-3 py-2.5 text-sm text-muted-foreground outline-none cursor-not-allowed appearance-none opacity-60"
+                    >
+                      <option value="">Any Yield</option>
+                      <option value="low">Under 3%</option>
+                      <option value="medium">3% – 6%</option>
+                      <option value="high">6% – 9%</option>
+                      <option value="very_high">9%+</option>
+                    </select>
+                    <div className="absolute inset-0 rounded-xl flex items-center justify-center bg-card/60 backdrop-blur-[1px] cursor-not-allowed">
+                      <span className="flex items-center gap-1.5 text-xs font-semibold text-brand-gold">
+                        <Lock className="w-3.5 h-3.5" /> Upgrade to Pro
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Ownership status */}
+                  <div className="relative">
+                    <label className="text-xs text-muted-foreground font-medium block mb-1.5 flex items-center gap-1.5">
+                      Ownership Status <PremiumBadge />
+                    </label>
+                    <select
+                      value={filterOwnership}
+                      onChange={() => {}}
+                      disabled
+                      className="w-full bg-secondary/50 border border-border/50 rounded-xl px-3 py-2.5 text-sm text-muted-foreground outline-none cursor-not-allowed appearance-none opacity-60"
+                    >
+                      <option value="">Any Status</option>
+                      <option value="free">Free of Encumbrances</option>
+                      <option value="mortgaged">With Mortgage</option>
+                      <option value="occupied">Occupied</option>
+                    </select>
+                    <div className="absolute inset-0 rounded-xl flex items-center justify-center bg-card/60 backdrop-blur-[1px] cursor-not-allowed">
+                      <span className="flex items-center gap-1.5 text-xs font-semibold text-brand-gold">
+                        <Lock className="w-3.5 h-3.5" /> Upgrade to Pro
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Upsell */}
+                <div className="mt-4 flex items-center justify-between p-3 rounded-xl bg-brand-gold/5 border border-brand-gold/20">
+                  <div className="flex items-center gap-2">
+                    <Star className="w-4 h-4 text-brand-gold" />
+                    <span className="text-xs font-medium">Unlock premium filters with mAI Prop OS Pro</span>
+                  </div>
+                  <Button size="sm" className="bg-gradient-gold border-0 text-background font-semibold text-xs" asChild>
+                    <a href="https://os.maiprop.co" target="_blank" rel="noreferrer">Upgrade</a>
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Active filter chips */}
+          {activeFilterCount > 0 && !showFilters && (
+            <div className="flex items-center gap-2 mt-3 flex-wrap">
+              <span className="text-xs text-muted-foreground">Active:</span>
+              {filterType && <button onClick={() => setFilterType("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors capitalize">{filterType} <X className="w-3 h-3" /></button>}
+              {filterBidRange && <button onClick={() => setFilterBidRange("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{BID_RANGES.find(r => r.value === filterBidRange)?.label} <X className="w-3 h-3" /></button>}
+              {filterYearRange && <button onClick={() => setFilterYearRange("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{YEAR_RANGES.find(r => r.value === filterYearRange)?.label} <X className="w-3 h-3" /></button>}
+              <button onClick={clearFilters} className="text-xs text-muted-foreground hover:text-foreground ml-1">Clear all</button>
+            </div>
+          )}
         </div>
 
         {/* ── MAP VIEW ── */}
@@ -214,16 +465,16 @@ export default function Auctions() {
               <div className="flex flex-col items-center justify-center h-[560px] rounded-2xl bg-card border border-border gap-3">
                 <MapPin className="w-10 h-10 text-muted-foreground/30" />
                 <p className="text-sm text-muted-foreground">
-                  {auctions.length === 0
-                    ? "No auctions yet — sync from Admin Panel first."
-                    : `${auctions.length} auction(s) found but none have coordinates. Sync from OS to get lat/lng data.`}
+                  {filtered.length === 0
+                    ? "No auctions match the current filters."
+                    : `${filtered.length} auction(s) found but none have coordinates.`}
                 </p>
               </div>
             ) : (
               <div>
                 <p className="text-xs text-muted-foreground mb-3">
                   Showing <span className="font-semibold text-foreground">{mappableCount}</span> pinned auction{mappableCount !== 1 ? "s" : ""} on map
-                  {auctions.length > mappableCount && ` (${auctions.length - mappableCount} without coordinates hidden)`}
+                  {filtered.length > mappableCount && ` (${filtered.length - mappableCount} without coordinates hidden)`}
                 </p>
                 <MapView listings={mapListings} height="560px" />
               </div>
@@ -248,27 +499,28 @@ export default function Auctions() {
               </div>
             )}
 
-            {!isLoading && !error && auctions.length === 0 && (
+            {!isLoading && !error && filtered.length === 0 && (
               <div className="text-center py-20">
                 <Gavel className="w-12 h-12 text-brand-gold/30 mx-auto mb-4" />
-                <p className="font-display font-semibold text-lg mb-2">No upcoming auctions yet</p>
+                <p className="font-display font-semibold text-lg mb-2">No auctions match your filters</p>
                 <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-                  {selectedCity !== "All Cities"
-                    ? `No auctions found in ${selectedCity}. Try "All Cities" or ask an admin to sync from mAI Prop OS.`
-                    : "Auction listings will appear here once synced from mAI Prop OS. Ask an admin to run the auction poll from the Dashboard."}
+                  Try adjusting your filters or selecting "All Cities".
                 </p>
+                {activeFilterCount > 0 && (
+                  <Button variant="outline" className="border-border mt-4" onClick={clearFilters}>Clear Filters</Button>
+                )}
               </div>
             )}
 
-            {!isLoading && auctions.length > 0 && (
+            {!isLoading && filtered.length > 0 && (
               <>
                 <p className="text-xs text-muted-foreground mb-4">
-                  Showing <span className="font-semibold text-foreground">{auctions.length}</span> upcoming auctions
+                  Showing <span className="font-semibold text-foreground">{filtered.length}</span> upcoming auctions
                   {selectedCity !== "All Cities" ? ` in ${selectedCity}` : ""}
                   {" · "}ordered by auction date
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {auctions.map(a => {
+                  {filtered.map(a => {
                     const days = daysUntil(a.auction_date);
                     const badge = countdownBadge(days);
                     const imgSrc = a.cover_image_url ?? streetViewImg(a.latitude, a.longitude);
@@ -292,18 +544,15 @@ export default function Auctions() {
                               <Gavel className="w-10 h-10 text-muted-foreground/20" />
                             </div>
                           )}
-                          {/* Auction date badge */}
                           {a.auction_date && (
                             <div className="absolute top-2 left-2 flex items-center gap-1 bg-background/90 backdrop-blur-sm border border-border rounded-full px-2 py-0.5 text-[10px] font-semibold">
                               <Calendar className="w-3 h-3 text-brand-gold" />
                               {format(new Date(a.auction_date), "dd MMM yyyy")}
                             </div>
                           )}
-                          {/* Property type badge */}
                           <div className="absolute top-2 right-2 bg-brand-gold/90 text-background text-[10px] font-bold px-2 py-0.5 rounded-full">
                             {PROPERTY_TYPE_GR[a.property_type] ?? a.property_type}
                           </div>
-                          {/* Countdown badge */}
                           {badge && (
                             <div className={`absolute bottom-2 right-2 flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${badge.cls}`}>
                               <Clock className="w-3 h-3" />
@@ -321,6 +570,9 @@ export default function Auctions() {
                             <MapPin className="w-3 h-3 shrink-0" />
                             <span className="truncate">{a.address ? `${a.address}, ` : ""}{a.city}</span>
                           </div>
+                          {a.year_built && (
+                            <div className="text-xs text-muted-foreground">Built {a.year_built}</div>
+                          )}
                           <div className="flex items-center justify-between pt-1">
                             <div className="flex items-center gap-1 font-display font-bold text-brand-gold">
                               <Euro className="w-3.5 h-3.5" />
@@ -360,6 +612,12 @@ export default function Auctions() {
         )}
       </div>
       <Footer />
+
+      {/* Auction alert modal */}
+      <AuctionAlertModal
+        open={alertModalOpen}
+        onClose={() => setAlertModalOpen(false)}
+      />
     </div>
   );
 }
