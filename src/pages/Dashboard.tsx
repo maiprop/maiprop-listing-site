@@ -41,16 +41,21 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { profile, user, signOut, updateProfile } = useAuth();
   const [activeSection, setActiveSection] = useState(section || "overview");
+  const [alertModalOpen, setAlertModalOpen] = useState(false);
+  const [editingAlert, setEditingAlert] = useState<any>(null);
 
   const { data: myListings = [], isLoading: listingsLoading } = useMyListings();
   const { data: favorites = [], isLoading: favLoading } = useFavorites();
   const { data: viewings = [], isLoading: viewingsLoading } = useViewings("requester");
   const { data: ownViewings = [] } = useViewings("owner");
   const { data: savedSearches = [], isLoading: savedSearchesLoading } = useSavedSearches();
+  const { data: auctionAlerts = [], isLoading: alertsLoading } = useAuctionAlerts();
   const updateListing = useUpdateListing();
   const deleteListing = useDeleteListing();
   const deleteSavedSearch = useDeleteSavedSearch();
   const toggleAlert = useToggleSavedSearchAlert();
+  const deleteAuctionAlert = useDeleteAuctionAlert();
+  const toggleAuctionAlert = useUpdateAuctionAlert();
 
   const handleSignOut = async () => {
     await signOut();
