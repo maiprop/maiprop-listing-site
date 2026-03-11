@@ -3,7 +3,7 @@ import { Link, useParams, useNavigate } from "react-router-dom";
 import {
   Home, Plus, BarChart2, MessageSquare, Heart, Settings, User,
   Eye, Bell, BellOff, LogOut, Building2, Gavel, CheckCircle,
-  Loader2, Calendar, Trash2, ToggleLeft, ToggleRight, Bookmark, Search, Activity, Wrench, Shield
+  Loader2, Calendar, Trash2, ToggleLeft, ToggleRight, Bookmark, Search, Activity, Wrench, Shield, MapPin, Euro, Edit2
 } from "lucide-react";
 import { OSSyncPanel } from "@/components/OSSyncPanel";
 import AdminPanel from "@/components/AdminPanel";
@@ -14,6 +14,8 @@ import { useMyListings, useUpdateListing, useDeleteListing } from "@/hooks/useLi
 import { useFavorites } from "@/hooks/useFavorites";
 import { useViewings } from "@/hooks/useViewings";
 import { useSavedSearches, useDeleteSavedSearch, useToggleSavedSearchAlert } from "@/hooks/useSavedSearches";
+import { useAuctionAlerts, useDeleteAuctionAlert, useUpdateAuctionAlert } from "@/hooks/useAuctionAlerts";
+import { AuctionAlertModal } from "@/components/AuctionAlertModal";
 import { PropertyCard } from "@/components/PropertyCard";
 import ProfessionalServicesEditor from "@/components/ProfessionalServicesEditor";
 import { toast } from "sonner";
@@ -39,16 +41,21 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { profile, user, signOut, updateProfile } = useAuth();
   const [activeSection, setActiveSection] = useState(section || "overview");
+  const [alertModalOpen, setAlertModalOpen] = useState(false);
+  const [editingAlert, setEditingAlert] = useState<any>(null);
 
   const { data: myListings = [], isLoading: listingsLoading } = useMyListings();
   const { data: favorites = [], isLoading: favLoading } = useFavorites();
   const { data: viewings = [], isLoading: viewingsLoading } = useViewings("requester");
   const { data: ownViewings = [] } = useViewings("owner");
   const { data: savedSearches = [], isLoading: savedSearchesLoading } = useSavedSearches();
+  const { data: auctionAlerts = [], isLoading: alertsLoading } = useAuctionAlerts();
   const updateListing = useUpdateListing();
   const deleteListing = useDeleteListing();
   const deleteSavedSearch = useDeleteSavedSearch();
   const toggleAlert = useToggleSavedSearchAlert();
+  const deleteAuctionAlert = useDeleteAuctionAlert();
+  const toggleAuctionAlert = useUpdateAuctionAlert();
 
   const handleSignOut = async () => {
     await signOut();
@@ -385,7 +392,101 @@ export default function Dashboard() {
           {/* ADMIN */}
           {activeSection === "admin" && <AdminPanel />}
 
-          {(activeSection === "analytics" || activeSection === "auctions" || activeSection === "settings") && (
+          {/* AUCTION ALERTS */}
+          {activeSection === "auctions" && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="font-display text-2xl font-bold">Auction Alerts</h1>
+                  <p className="text-sm text-muted-foreground mt-1">Get notified when new auctions match your criteria.</p>
+                </div>
+                <Button className="bg-gradient-gold border-0 text-background font-semibold gap-2"
+                  onClick={() => { setEditingAlert(null); setAlertModalOpen(true); }}>
+                  <Bell className="w-4 h-4" /> New Alert
+                </Button>
+              </div>
+              {alertsLoading ? (
+                <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-brand-gold" /></div>
+              ) : auctionAlerts.length === 0 ? (
+                <div className="glass-card rounded-xl p-12 text-center">
+                  <Bell className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+                  <p className="font-semibold">No auction alerts yet</p>
+                  <p className="text-sm text-muted-foreground mt-1 mb-4">Create an alert to get notified of matching auctions</p>
+                  <Button className="bg-gradient-gold border-0 text-background font-semibold gap-2"
+                    onClick={() => { setEditingAlert(null); setAlertModalOpen(true); }}>
+                    <Bell className="w-4 h-4" /> Create First Alert
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {auctionAlerts.map((a: any) => (
+                    <div key={a.id} className="glass-card rounded-xl p-4 flex items-center gap-4">
+                      <div className={`w-2 h-10 rounded-full shrink-0 ${a.active ? "bg-brand-gold" : "bg-muted-foreground/30"}`} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          {a.city && (
+                            <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-secondary border border-border text-foreground">
+                              <MapPin className="w-3 h-3" />{a.city}
+                            </span>
+                          )}
+                          {a.property_type && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-brand-gold/15 text-brand-gold border border-brand-gold/20 capitalize">{a.property_type}</span>
+                          )}
+                          {(a.min_price || a.max_price) && (
+                            <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-secondary border border-border text-foreground">
+                              <Euro className="w-3 h-3" />
+                              {a.min_price ? `€${Number(a.min_price).toLocaleString()}` : "Any"} – {a.max_price ? `€${Number(a.max_price).toLocaleString()}` : "Any"}
+                            </span>
+                          )}
+                          {!a.city && !a.property_type && !a.min_price && !a.max_price && (
+                            <span className="text-xs text-muted-foreground">All auctions</span>
+                          )}
+                        </div>
+                        {a.court_name && <p className="text-xs text-muted-foreground truncate">{a.court_name}</p>}
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${a.active ? "bg-brand-emerald/20 text-brand-emerald" : "bg-secondary text-muted-foreground"}`}>
+                            {a.active ? "Active" : "Paused"}
+                          </span>
+                          {a.email_notify && <span className="text-xs text-muted-foreground">📧 Email on</span>}
+                          <span className="text-xs text-muted-foreground">Created {new Date(a.created_at).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {/* Toggle active */}
+                        <button
+                          onClick={() => toggleAuctionAlert.mutate({ id: a.id, updates: { active: !a.active } })}
+                          title={a.active ? "Pause alert" : "Activate alert"}
+                          className={`p-2 rounded-lg border transition-colors ${
+                            a.active
+                              ? "border-brand-gold/30 bg-brand-gold/10 text-brand-gold hover:bg-brand-gold/20"
+                              : "border-border bg-secondary text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          {a.active ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
+                        </button>
+                        {/* Edit */}
+                        <button
+                          onClick={() => { setEditingAlert(a); setAlertModalOpen(true); }}
+                          className="p-2 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        {/* Delete */}
+                        <button
+                          onClick={() => { if (confirm("Delete this alert?")) deleteAuctionAlert.mutate(a.id); }}
+                          className="p-2 rounded-lg hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {(activeSection === "analytics" || activeSection === "settings") && (
             <div className="glass-card rounded-xl p-12 flex items-center justify-center">
               <div className="text-center">
                 <Settings className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
@@ -396,6 +497,13 @@ export default function Dashboard() {
           )}
         </main>
       </div>
+
+      {/* Auction alert modal */}
+      <AuctionAlertModal
+        open={alertModalOpen}
+        onClose={() => { setAlertModalOpen(false); setEditingAlert(null); }}
+        editAlert={editingAlert}
+      />
     </div>
   );
 }
