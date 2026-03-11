@@ -173,6 +173,11 @@ export default function Firesale() {
       toast.error("Please fill in all required fields.");
       return;
     }
+    if (!user) {
+      toast.error("You must be logged in to submit a Quick Sale™ request.");
+      navigate("/login");
+      return;
+    }
     setSubmitting(true);
     try {
       const estimate = aiEstimate || Math.round(Number(form.sqm) * 1900 * 0.92);
@@ -195,7 +200,7 @@ export default function Firesale() {
           contact_phone: form.contactPhone.trim() || null,
           notes: notesWithKaek || null,
           ai_estimate: estimate,
-          user_id: user?.id || null,
+          user_id: user.id,
           status: "pending",
         })
         .select("id")
