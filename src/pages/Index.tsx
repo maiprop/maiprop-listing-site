@@ -1147,11 +1147,19 @@ export default function Index() {
           <div
             className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 reveal reveal-delay-1 ${auctionsInView ? "in-view" : ""}`}>
             
-            {mockProperties.
-            filter((p) => p.listingType === "auction").
-            map((property) =>
-            <PropertyCard key={property.id} property={property} />
-            )}
+            {auctionListings.map((l: any) => (
+              <PropertyCard key={l.id} property={{
+                id: l.id, title: l.title, address: l.address || l.city, city: l.city,
+                price: Number(l.price), pricePerSqm: l.price_per_sqm ? Number(l.price_per_sqm) : undefined,
+                bedrooms: l.bedrooms, bathrooms: l.bathrooms, sqm: Number(l.sqm),
+                floor: l.floor, totalFloors: l.total_floors, yearBuilt: l.year_built,
+                energyClass: l.energy_class, images: l.cover_image_url ? [l.cover_image_url] : [],
+                type: l.property_type, listingType: l.listing_type,
+                auctionDate: l.auction_date ? new Date(l.auction_date).toLocaleDateString("en-GB") : undefined,
+                auctionStartingBid: l.auction_starting_bid ? Number(l.auction_starting_bid) : undefined,
+                aiScore: l.ai_score, views: l.views_count, tags: l.tags || [],
+              }} />
+            ))}
           </div>
         </div>
       </section>
