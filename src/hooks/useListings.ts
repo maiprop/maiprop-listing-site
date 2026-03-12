@@ -9,6 +9,8 @@ export function useListings(filters?: {
   property_type?: string;
   status?: string;
   owner_id?: string;
+  includeAuctions?: boolean;
+  limit?: number;
 }) {
   return useQuery({
     queryKey: ["listings", filters],
@@ -19,10 +21,16 @@ export function useListings(filters?: {
           *,
           listing_images(url, sort_order)
         `)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(filters?.limit ?? 500);
 
       if (filters?.city) query = query.ilike("city", `%${filters.city}%`);
-      if (filters?.listing_type) query = query.eq("listing_type", filters.listing_type as any);
+      if (filters?.listing_type) {
+        query = query.eq("listing_type", filters.listing_type as any);
+      } else if (!filters?.includeAuctions) {
+        // Exclude auctions by default — they have a dedicated page and are too numerous
+        query = query.in("listing_type", ["sale", "rent", "firesale"] as any);
+      }
       if (filters?.property_type) query = query.eq("property_type", filters.property_type as any);
       if (filters?.owner_id) query = query.eq("owner_id", filters.owner_id);
       if (!filters?.owner_id) query = query.eq("status", (filters?.status || "active") as any);
