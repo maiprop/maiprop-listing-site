@@ -99,6 +99,28 @@ const OWNERSHIP_BADGE: Record<string, { label: string; cls: string }> = {
   vacated:  { label: "Κενό", cls: "bg-blue-500/15 text-blue-400 border-blue-500/25" },
 };
 
+type ViewMode = "list" | "map";
+
+function streetViewImg(lat?: number | null, lng?: number | null): string | null {
+  if (!lat || !lng) return null;
+  const key = "AIzaSyD42TB3L5KeQfvqOu6NfelXL5EOVNzz_cY";
+  return `https://maps.googleapis.com/maps/api/streetview?size=800x450&location=${lat},${lng}&fov=90&pitch=10&key=${key}`;
+}
+
+function daysUntil(dateStr?: string | null): number {
+  if (!dateStr) return 999;
+  const now = new Date();
+  const d = new Date(dateStr);
+  return Math.max(0, Math.ceil((d.getTime() - now.getTime()) / 86_400_000));
+}
+
+function countdownBadge(days: number): { label: string; cls: string } | null {
+  if (days <= 0) return { label: "Today!", cls: "bg-destructive text-destructive-foreground" };
+  if (days === 1) return { label: "Tomorrow", cls: "bg-amber-500 text-white" };
+  if (days <= 7) return { label: `${days} days left`, cls: "bg-primary/80 text-primary-foreground" };
+  return null;
+}
+
 // Premium lock badge
 function PremiumBadge() {
   return (
