@@ -658,15 +658,20 @@ export default function PropertyDetail() {
                   <SectionHeader icon={Zap} title="AI Market Insights" badge={
                     <span className="text-[10px] text-muted-foreground">Powered by mAI Prop OS</span>
                   } />
-                  <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-y divide-border">
+                  <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {aiInsights.map(insight => (
-                      <div key={insight.label} className="p-5 space-y-1">
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{insight.label}</p>
-                        <div className="flex items-baseline gap-1">
-                          <span className={`font-display font-black text-2xl ${insight.color}`}>{insight.value}</span>
-                          <span className="text-xs text-muted-foreground">{insight.unit}</span>
+                      <div key={insight.label} className="rounded-xl border border-border bg-secondary/50 p-4 flex items-center gap-4 w-full">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">{insight.label}</p>
+                          <div className="flex items-baseline gap-1">
+                            <span className={`font-display font-black text-3xl ${insight.color}`}>{insight.value}</span>
+                            <span className="text-sm text-muted-foreground">{insight.unit}</span>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground mt-1">{insight.trend}</p>
                         </div>
-                        <p className="text-[10px] text-muted-foreground">{insight.trend}</p>
+                        <div className={`w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0`}>
+                          <Zap className="w-6 h-6 text-primary" />
+                        </div>
                       </div>
                     ))}
                   </div>

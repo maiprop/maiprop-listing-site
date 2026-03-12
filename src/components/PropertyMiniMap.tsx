@@ -139,13 +139,13 @@ export default function PropertyMiniMap({
     ? (["all", ...Array.from(new Set(pois.map(p => p.category)))] as Array<"all" | POI["category"]>)
     : [];
 
-  // Street view URL
+  // Street view URL — using direct embed format that works without JS API
   const streetViewUrl = lat && lng
-    ? `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lng}`
+    ? `https://www.google.com/maps/@${lat},${lng},3a,75y,0h,90t/data=!3m6!1e1`
     : `https://www.google.com/maps/search/${encodeURIComponent(address + ", " + city)}`;
 
   const googleMapsUrl = lat && lng
-    ? `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`
+    ? `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`
     : `https://www.google.com/maps/search/${encodeURIComponent(address + ", " + city)}`;
 
   if (!lat || !lng) {
