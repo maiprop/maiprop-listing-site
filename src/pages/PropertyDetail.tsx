@@ -1052,7 +1052,9 @@ export default function PropertyDetail() {
             {/* ──── RIGHT SIDEBAR ──── */}
             <div className="space-y-4 lg:sticky lg:top-24 self-start">
 
-              {/* Walk Score — derived from actual POIs loaded in PropertyMiniMap */}
+              {/* Contact / Buy card — FIRST, always visible */}
+              <div className="glass-card rounded-2xl overflow-hidden border border-primary/10 shadow-elevated">
+
               {walkScore !== null && (() => {
                 const colour = walkScoreColour(walkScore);
                 const label = walkScoreLabel(walkScore);
