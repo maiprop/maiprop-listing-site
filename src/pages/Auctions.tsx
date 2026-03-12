@@ -21,7 +21,7 @@ function useAuctionListings() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("listings")
-        .select("id, title, city, address, price, auction_starting_bid, auction_date, auction_court, property_type, cover_image_url, sqm, bedrooms, bathrooms, latitude, longitude, tags, year_built, construction_status, website_url, region")
+        .select("id, title, city, address, price, auction_starting_bid, auction_date, auction_court, property_type, cover_image_url, sqm, bedrooms, bathrooms, latitude, longitude, tags, year_built, construction_status, website_url, region, listing_images(url, sort_order)")
         .eq("listing_type", "auction")
         .eq("status", "active")
         .gte("auction_date", new Date().toISOString())
@@ -478,11 +478,18 @@ export default function Auctions() {
       sqm: a.sqm ?? 0,
       latitude: a.latitude,
       longitude: a.longitude,
-      images: a.cover_image_url
-        ? [a.cover_image_url]
-        : streetViewImg(a.latitude, a.longitude)
-        ? [streetViewImg(a.latitude, a.longitude)!]
-        : [],
+      images: (() => {
+          const imgs: string[] = a.cover_image_url ? [a.cover_image_url] : [];
+          if (!imgs.length && a.listing_images?.length) {
+            const sorted = [...a.listing_images].sort((x: any, y: any) => x.sort_order - y.sort_order);
+            sorted.forEach((img: any) => imgs.push(img.url));
+          }
+          if (!imgs.length) {
+            const sv = streetViewImg(a.latitude, a.longitude);
+            if (sv) imgs.push(sv);
+          }
+          return imgs;
+        })(),
       listingType: "auction",
       city: a.city,
       _raw: a,
