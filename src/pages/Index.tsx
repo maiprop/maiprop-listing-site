@@ -791,6 +791,11 @@ export default function Index() {
   const { ref: goldenRef, inView: goldenInView } = useInView();
   const { ref: trustRef, inView: trustInView } = useInView();
 
+  // DB listings for homepage sections
+  const { data: featuredDbListings = [] } = useListings({ status: "active" });
+  const featuredListings = featuredDbListings.slice(0, 4);
+  const auctionListings = featuredDbListings.filter((l: any) => l.listing_type === "auction").slice(0, 3);
+
   const listingTypeMap: Record<string, string> = {
     Buy: "sale",
     Rent: "rent",
