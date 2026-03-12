@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import logoImg from "@/assets/logo.png";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Bell, MessageSquare, User, Menu, X, ChevronDown, Search, Plus, LogOut, LayoutDashboard, Building2, Sun, Moon, Home, List, Gavel, Flame, Users } from "lucide-react";
+import { Bell, MessageSquare, User, Menu, X, ChevronDown, Plus, LogOut, LayoutDashboard, Building2, Sun, Moon, Home, List, Gavel, Flame, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useTheme } from "next-themes";
