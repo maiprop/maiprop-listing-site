@@ -293,6 +293,7 @@ function AuctionCard({ a, favoritedIds, onToggleFav }: {
 
 export default function Auctions() {
   const { user } = useAuth();
+  const { isPro } = useSubscription();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [selectedCity, setSelectedCity] = useState(() => searchParams.get("city") || "All Cities");
