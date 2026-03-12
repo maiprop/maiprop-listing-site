@@ -93,6 +93,69 @@ function getOwnershipPct(tags?: string[] | null): number | null {
   return tag ? Number(tag.replace("ownership_pct:", "")) : null;
 }
 
+/**
+ * Estimate gross annual rental yield for an auction property.
+ * Uses city-level median rent-per-sqm benchmarks (€/sqm/month) sourced
+ * from REMAX/Spitogatos 2024 data for Greece.
+ * Formula: (monthlyRent × 12) / startingBid × 100
+ */
+const CITY_RENT_PER_SQM: Record<string, number> = {
+  // Athens area
+  "αθήνα": 9.5,  "athens": 9.5,
+  "κολωνάκι": 13,
+  "γλυφάδα": 11,
+  "μαρούσι": 8.5,
+  "περιστέρι": 7,
+  "πειραιάς": 7.5, "piraeus": 7.5,
+  "κηφισιά": 10,
+  "χαλάνδρι": 8.5,
+  // Thessaloniki area
+  "θεσσαλονίκη": 8, "thessaloniki": 8,
+  "καλαμαριά": 7.5,
+  "πολίχνη": 6,
+  // Islands / tourist
+  "μύκονος": 18, "mykonos": 18,
+  "σαντορίνη": 16, "santorini": 16,
+  "ρόδος": 10, "rhodes": 10,
+  "κέρκυρα": 9, "corfu": 9,
+  "ηράκλειο": 8, "heraklion": 8,
+  "χανιά": 8.5,
+  // Other major cities
+  "πάτρα": 6.5, "patras": 6.5,
+  "ιωάννινα": 6,
+  "λάρισα": 6,
+  "βόλος": 6.5,
+  "καβάλα": 5.5,
+  "χαλκίδα": 6,
+  "λαμία": 5.5,
+  "σέρρες": 5,
+};
+const DEFAULT_RENT_PER_SQM = 6; // conservative fallback
+
+function estimateYield(a: { price?: number | null; auction_starting_bid?: number | null; sqm?: number | null; city?: string | null }): number | null {
+  const bid = Number(a.auction_starting_bid ?? a.price ?? 0);
+  const sqm = Number(a.sqm ?? 0);
+  if (bid <= 0 || sqm <= 0) return null;
+  const cityKey = (a.city ?? "").toLowerCase().trim();
+  // Try exact match, then prefix match
+  const rentPerSqm = CITY_RENT_PER_SQM[cityKey]
+    ?? Object.entries(CITY_RENT_PER_SQM).find(([k]) => cityKey.includes(k) || k.includes(cityKey))?.[1]
+    ?? DEFAULT_RENT_PER_SQM;
+  const annualRent = rentPerSqm * sqm * 12;
+  return (annualRent / bid) * 100;
+}
+
+/** Map filterYield bucket to [min, max] percent range */
+function yieldRange(bucket: string): [number, number] | null {
+  switch (bucket) {
+    case "low":       return [0, 3];
+    case "medium":    return [3, 6];
+    case "high":      return [6, 9];
+    case "very_high": return [9, Infinity];
+    default:          return null;
+  }
+}
+
 const OWNERSHIP_BADGE: Record<string, { label: string; cls: string }> = {
   full:     { label: "Πλήρης κυριότητα", cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/25" },
   partial:  { label: "Μερική κυριότητα", cls: "bg-amber-500/15 text-amber-400 border-amber-500/25" },
