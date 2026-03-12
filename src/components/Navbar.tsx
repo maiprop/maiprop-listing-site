@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSubscription } from "@/hooks/useSubscription";
 
 // Pages that have a full-width dark hero image at the top
 const DARK_HERO_ROUTES = ["/"];
@@ -23,6 +24,7 @@ export function Navbar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, profile, signOut } = useAuth();
+  const { isPro } = useSubscription();
   const { theme, setTheme } = useTheme();
 
   const hasDarkHero = DARK_HERO_ROUTES.includes(location.pathname);
@@ -207,17 +209,30 @@ export function Navbar() {
               <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground hover:opacity-90 gap-1.5" asChild>
                 <Link to="/listings/new"><Plus className="w-3.5 h-3.5" /> List Property</Link>
               </Button>
-              {/* Pro CTA */}
-              <Link
-                to="/pro"
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all hover:scale-105 ${
-                  forceLight
-                    ? "bg-brand-gold/20 border-brand-gold/40 text-yellow-200 hover:bg-brand-gold/30"
-                    : "bg-brand-gold/10 border-brand-gold/30 text-brand-gold hover:bg-brand-gold/20"
-                }`}
-              >
-                <Zap className="w-3 h-3" /> Pro
-              </Link>
+              {/* Pro badge / CTA */}
+              {isPro ? (
+                <Link
+                  to="/pro"
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                    forceLight
+                      ? "bg-brand-gold/30 border-brand-gold/50 text-yellow-200"
+                      : "bg-brand-gold/15 border-brand-gold/40 text-brand-gold"
+                  }`}
+                >
+                  <Zap className="w-3 h-3" /> Pro ✓
+                </Link>
+              ) : (
+                <Link
+                  to="/pro"
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all hover:scale-105 ${
+                    forceLight
+                      ? "bg-brand-gold/20 border-brand-gold/40 text-yellow-200 hover:bg-brand-gold/30"
+                      : "bg-brand-gold/10 border-brand-gold/30 text-brand-gold hover:bg-brand-gold/20"
+                  }`}
+                >
+                  <Zap className="w-3 h-3" /> Pro
+                </Link>
+              )}
             </>
           ) : (
             <>
