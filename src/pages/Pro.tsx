@@ -45,11 +45,12 @@ export default function Pro() {
   const cancelledParam = searchParams.get("cancelled");
 
   // Trigger subscription refresh on return from checkout
-  useState(() => {
+  useEffect(() => {
     if (successParam === "1") {
       refreshSubscription();
     }
-  });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [successParam]);
 
   const isPro = subscription.subscribed && subscription.productId === PRO_PRODUCT_ID;
 
