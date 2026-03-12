@@ -73,6 +73,7 @@ const YEAR_RANGES = [
 const OWNERSHIP_STATUSES = [
   { value: "", label: "Any Status" },
   { value: "full", label: "Full Ownership (100%)" },
+  { value: "common", label: "Common / Shared" },
   { value: "partial", label: "Partial Ownership" },
   { value: "none", label: "No Ownership" },
 ];
