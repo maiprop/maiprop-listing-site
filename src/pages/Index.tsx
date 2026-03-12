@@ -815,11 +815,12 @@ export default function Index() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("listings")
-        .select("id, title, address, city, price, price_per_sqm, bedrooms, bathrooms, sqm, floor, total_floors, year_built, energy_class, cover_image_url, property_type, listing_type, ai_score, views_count, tags, auction_date, auction_starting_bid, listing_images(url, sort_order)")
+        .select("id, title, address, city, price, price_per_sqm, bedrooms, bathrooms, sqm, floor, total_floors, year_built, energy_class, cover_image_url, property_type, listing_type, ai_score, views_count, tags, auction_date, auction_starting_bid, latitude, longitude, listing_images(url, sort_order)")
         .eq("status", "active")
         .eq("listing_type", "auction")
-        .order("created_at", { ascending: false })
-        .limit(3);
+        .gte("auction_date", new Date().toISOString())
+        .order("auction_date", { ascending: true })
+        .limit(6);
       if (error) throw error;
       return data || [];
     },
