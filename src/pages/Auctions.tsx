@@ -805,9 +805,25 @@ export default function Auctions() {
         {viewMode === "list" && (
           <div className="container pb-16">
             {isLoading && (
-              <div className="flex items-center justify-center py-20 gap-3 text-muted-foreground">
-                <Loader2 className="w-5 h-5 animate-spin" />
-                <span className="text-sm">Loading auctions from OS…</span>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="glass-card rounded-xl border border-border overflow-hidden flex flex-col">
+                    <div className="h-44 bg-muted animate-pulse" />
+                    <div className="p-4 space-y-3 flex-1">
+                      <div className="h-4 bg-muted animate-pulse rounded-md w-4/5" />
+                      <div className="h-3 bg-muted animate-pulse rounded-md w-2/5" />
+                      <div className="flex items-center gap-2 pt-1">
+                        <div className="h-6 bg-muted animate-pulse rounded-full w-24" />
+                        <div className="h-6 bg-muted animate-pulse rounded-full w-16" />
+                      </div>
+                      <div className="h-5 bg-muted animate-pulse rounded-md w-1/3 pt-1" />
+                      <div className="flex gap-2 mt-auto pt-3 border-t border-border">
+                        <div className="h-8 bg-muted animate-pulse rounded-lg w-20" />
+                        <div className="h-8 bg-muted animate-pulse rounded-lg w-16" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
 
@@ -839,13 +855,18 @@ export default function Auctions() {
                   {" · "}ordered by auction date
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {filtered.map(a => (
-                    <AuctionCard
+                  {filtered.map((a, i) => (
+                    <div
                       key={a.id}
-                      a={a}
-                      favoritedIds={favoritedIds}
-                      onToggleFav={handleToggleFav}
-                    />
+                      className="animate-fade-in"
+                      style={{ animationDelay: `${Math.min(i, 8) * 0.05}s`, animationFillMode: "both" }}
+                    >
+                      <AuctionCard
+                        a={a}
+                        favoritedIds={favoritedIds}
+                        onToggleFav={handleToggleFav}
+                      />
+                    </div>
                   ))}
                 </div>
               </>
