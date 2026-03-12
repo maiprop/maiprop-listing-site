@@ -253,25 +253,40 @@ export default function AdminPanel() {
     onError: (e: any) => toast.error("Poll failed: " + e.message),
   });
 
+  // Batched full sync — runs multiple smaller syncs sequentially to avoid timeouts
+  const [syncProgress, setSyncProgress] = useState<string | null>(null);
   const fullSyncMutation = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke("full-sync-from-os", {
-        body: { pageSize: auctionPageSize, maxPages: auctionMaxPages },
-      });
-      if (error) throw error;
-      return data;
+      const batchSize = 10; // pages per batch
+      const totalPages = auctionMaxPages;
+      let totalImported = 0, totalUpdated = 0, totalErrors = 0, totalPagesDone = 0;
+
+      for (let startPage = 0; startPage < totalPages; startPage += batchSize) {
+        const endPage = Math.min(startPage + batchSize, totalPages);
+        setSyncProgress(`Syncing pages ${startPage}–${endPage - 1} of ${totalPages}…`);
+        const { data, error } = await supabase.functions.invoke("full-sync-from-os", {
+          body: { pageSize: auctionPageSize, startPage, maxPages: batchSize },
+        });
+        if (error) throw new Error(`Batch ${startPage}-${endPage} failed: ${error.message}`);
+        const a = data?.sync?.auctions ?? {};
+        totalImported += a.imported ?? 0;
+        totalUpdated += a.updated ?? 0;
+        totalErrors += a.errors ?? 0;
+        totalPagesDone += a.pages ?? 0;
+        // Stop early if OS returned fewer pages than requested (end of data)
+        if ((a.pages ?? 0) < batchSize) break;
+      }
+      setSyncProgress(null);
+      return { imported: totalImported, updated: totalUpdated, errors: totalErrors, pages: totalPagesDone };
     },
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ["admin-sync-log", "admin-db-stats"] });
-      const a = r?.sync?.auctions;
       toast.success(
-        a
-          ? `Full sync: ${a.imported ?? 0} new · ${a.updated ?? 0} updated (${a.pages ?? 0} pages)`
-          : "Full sync completed",
-        { duration: 6000 }
+        `Full sync: ${r.imported} new · ${r.updated} updated · ${r.errors} errors (${r.pages} pages)`,
+        { duration: 8000 }
       );
     },
-    onError: (e: any) => toast.error("Full sync failed: " + e.message),
+    onError: (e: any) => { setSyncProgress(null); toast.error("Full sync failed: " + e.message); },
   });
 
   // ── Derived ─────────────────────────────────────────────────────────────────
