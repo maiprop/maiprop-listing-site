@@ -439,55 +439,6 @@ export default function PropertyDetail() {
     })
     .slice(0, 4);
 
-  // AI Market Insights — dynamically loaded from property-valuation edge function
-  const [aiInsightsData, setAiInsightsData] = useState<{
-    vsMarket: number;
-    rentalYield: number;
-    estimatedValue: number;
-    marketComparison: string;
-    confidenceLabel: string;
-  } | null>(null);
-  const [aiInsightsLoading, setAiInsightsLoading] = useState(false);
-  const [aiInsightsLoaded, setAiInsightsLoaded] = useState(false);
-
-  useEffect(() => {
-    if (!db || aiInsightsLoaded) return;
-    setAiInsightsLoaded(true);
-    setAiInsightsLoading(true);
-    supabase.functions.invoke("property-valuation", {
-      body: {
-        title: db.title,
-        city: db.city,
-        address: db.address,
-        price: Number(db.price),
-        sqm: Number(db.sqm),
-        bedrooms: db.bedrooms,
-        bathrooms: db.bathrooms,
-        propertyType: db.property_type,
-        listingType: db.listing_type,
-        floor: db.floor,
-        yearBuilt: db.year_built,
-        energyClass: db.energy_class,
-        pricePerSqm: db.price_per_sqm ? Number(db.price_per_sqm) : undefined,
-        hasParking: db.has_parking,
-        hasPool: db.has_pool,
-        hasElevator: db.has_elevator,
-        region: db.region,
-      },
-    }).then(({ data }) => {
-      if (data && !data.error) {
-        setAiInsightsData({
-          vsMarket: data.marketComparisonPct ?? 0,
-          rentalYield: data.rentalYieldEstimate ?? 0,
-          estimatedValue: data.estimatedValue ?? Number(db.price),
-          marketComparison: data.marketComparison ?? "at_market",
-          confidenceLabel: data.confidenceLabel ?? "Medium",
-        });
-      }
-    }).catch(() => {}).finally(() => setAiInsightsLoading(false));
-  }, [db, aiInsightsLoaded]);
-
-
   // Build property details rows grouped
   const detailRows: { label: string; value: string }[] = [
     { label: "Price", value: `€${price.toLocaleString()}` },
