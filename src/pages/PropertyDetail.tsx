@@ -7,7 +7,7 @@ import {
   Shield, FileText, Zap, ExternalLink, Lock, BarChart2, Eye,
   Home, Clock, Check, Gavel, Download, Loader2, CheckCircle,
   Thermometer, Wrench, TreePine, Flame, Wifi, Car, Building2,
-  Info, ChevronDown, ChevronUp, Euro, Tag, Layers, LayoutGrid, Bell, Globe
+  Info, ChevronDown, ChevronUp, Euro, Tag, Layers, LayoutGrid, Bell
 } from "lucide-react";
 import { getSubtypeLabel, PROPERTY_TYPE_MAP, type PropertyTypeKey } from "@/lib/propertyTypes";
 import { Button } from "@/components/ui/button";
@@ -980,31 +980,6 @@ export default function PropertyDetail() {
                 </Section>
               )}
 
-              {/* ── Website Link (distinctive section) ── */}
-              {websiteUrl && (
-                <Section>
-                  <SectionHeader icon={Globe} title="Official Website" />
-                  <div className="p-5">
-                    <a
-                      href={websiteUrl.startsWith("http") ? websiteUrl : `https://${websiteUrl}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-3 group rounded-xl border border-border bg-secondary hover:border-primary/40 hover:bg-primary/5 transition-all px-4 py-3.5"
-                    >
-                      <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors">
-                        <Globe className="w-4 h-4 text-primary" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold truncate text-foreground group-hover:text-primary transition-colors">
-                          {websiteUrl.replace(/^https?:\/\//, "").replace(/\/$/, "")}
-                        </p>
-                        <p className="text-[10px] text-muted-foreground mt-0.5">Visit official website</p>
-                      </div>
-                      <ExternalLink className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
-                    </a>
-                  </div>
-                </Section>
-              )}
 
               {/* ── Mini map ── */}
               <div className="rounded-2xl overflow-hidden">
