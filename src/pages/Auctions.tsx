@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { Gavel, TrendingUp, Bell, ExternalLink, AlertCircle, Loader2, MapPin, Calendar, Euro, Map, List, Clock, SlidersHorizontal, X, Lock, Star, Heart, Share2, Flag, Building2, ChevronDown } from "lucide-react";
+import { Gavel, TrendingUp, Bell, ExternalLink, AlertCircle, Loader2, MapPin, Calendar, Euro, Map, List, Clock, SlidersHorizontal, X, Lock, Star, Heart, Share2, Flag, Building2, ChevronDown, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
