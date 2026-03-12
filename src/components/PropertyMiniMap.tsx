@@ -139,14 +139,15 @@ export default function PropertyMiniMap({
     ? (["all", ...Array.from(new Set(pois.map(p => p.category)))] as Array<"all" | POI["category"]>)
     : [];
 
-  // Street view URL — using direct embed format that works without JS API
+  // Street view URL — opens Google Maps street view mode
+  const locationQuery = lat && lng ? `${lat},${lng}` : encodeURIComponent(`${address}, ${city}, Greece`);
   const streetViewUrl = lat && lng
-    ? `https://www.google.com/maps/@${lat},${lng},3a,75y,0h,90t/data=!3m6!1e1`
-    : `https://www.google.com/maps/search/${encodeURIComponent(address + ", " + city)}`;
+    ? `https://www.google.com/maps?q=${lat},${lng}&layer=c&cbll=${lat},${lng}&cbp=12,0,,0,0`
+    : `https://www.google.com/maps/search/${encodeURIComponent(address + ", " + city + ", Greece")}`;
 
   const googleMapsUrl = lat && lng
-    ? `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`
-    : `https://www.google.com/maps/search/${encodeURIComponent(address + ", " + city)}`;
+    ? `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`
+    : `https://www.google.com/maps/search/${encodeURIComponent(address + ", " + city + ", Greece")}`;
 
   if (!lat || !lng) {
     // Fallback: Google Maps embed when no lat/lng
