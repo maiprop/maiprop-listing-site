@@ -722,7 +722,7 @@ export default function PropertyDetail() {
                 <SectionHeader icon={Zap} title="AI Market Insights" badge={
                   <span className="text-[10px] text-muted-foreground">Powered by mAI Prop OS</span>
                 } />
-                <div className="p-5">
+                <div className="p-5 space-y-4">
                   {aiInsightsLoading && (
                     <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground">
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -772,6 +772,16 @@ export default function PropertyDetail() {
                   {!aiInsightsLoading && !aiInsightsData && (
                     <p className="text-xs text-muted-foreground text-center py-4">Market analysis unavailable</p>
                   )}
+                  {/* Pro upsell */}
+                  <div className="flex items-start gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
+                    <Lock className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-xs font-semibold text-foreground">Want the full picture?</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
+                        Upgrade to <span className="text-primary font-bold">Pro</span> to unlock the complete <span className="font-medium">AI Property Valuation</span> — price range, confidence score, key factors, renovation potential &amp; more.
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </Section>
 
