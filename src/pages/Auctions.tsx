@@ -660,63 +660,7 @@ export default function Auctions() {
                 </div>{/* end grid */}
               </div>{/* end standard filters */}
 
-              <div className="pt-1 border-t border-border">
-                <div className="flex items-center gap-2 mb-3">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Pro Filters</p>
-                  {!isPro && <PremiumBadge />}
-                  {isPro && (
-                    <span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/25">
-                      ✓ Unlocked
-                    </span>
-                  )}
-                </div>
 
-              {/* Premium filters — Auction Round + Rental Yield */}
-              <div className="pt-1 border-t border-border">
-                <div className="flex items-center gap-2 mb-3">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Pro Filters</p>
-                  {!isPro && <PremiumBadge />}
-                  {isPro && (
-                    <span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/25">
-                      ✓ Unlocked
-                    </span>
-                  )}
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
-                  {/* Auction round */}
-                  {isPro ? (
-                    <div>
-                      <label className="text-xs text-muted-foreground font-medium block mb-1.5">Auction Round</label>
-                      <select
-                        value={filterRound}
-                        onChange={e => setFilterRound(e.target.value)}
-                        className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none"
-                      >
-                        <option value="">Any Round</option>
-                        <option value="1">1st Auction — First attempt, starting price = valuation</option>
-                        <option value="2">2nd Auction — 20% below valuation</option>
-                        <option value="3">3rd+ Auction — 30–50% below, high opportunity</option>
-                      </select>
-                    </div>
-                  ) : (
-                    <div className="relative cursor-pointer group/pf" onClick={() => navigate("/pro")}>
-                      <label className="text-xs text-muted-foreground font-medium flex items-center gap-1.5 mb-1.5 pointer-events-none">
-                        Auction Round <PremiumBadge />
-                      </label>
-                      <select disabled className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-muted-foreground outline-none appearance-none opacity-60 pointer-events-none">
-                        <option>Any Round</option>
-                        <option>1st Auction</option>
-                        <option>2nd Auction</option>
-                        <option>3rd+ Auction</option>
-                      </select>
-                      <Lock className="absolute right-3 top-8 w-3.5 h-3.5 text-brand-gold pointer-events-none" />
-                      <div className="absolute -top-1 left-1/2 -translate-x-1/2 -translate-y-full opacity-0 group-hover/pf:opacity-100 transition-opacity z-20 pointer-events-none">
-                        <div className="bg-card border border-brand-gold/30 rounded-xl px-3 py-2 shadow-elevated text-center whitespace-nowrap">
-                          <p className="text-[10px] font-bold text-brand-gold flex items-center gap-1 justify-center"><Zap className="w-2.5 h-2.5" /> Upgrade to Pro</p>
-                          <p className="text-[10px] text-muted-foreground">Filter by auction round</p>
-                        </div>
-                      </div>
                     </div>
                   )}
 
