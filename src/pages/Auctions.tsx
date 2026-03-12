@@ -514,9 +514,9 @@ export default function Auctions() {
             </p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
               {auctionStats.map(s => (
-                <div key={s.label} className="glass-card rounded-xl p-4 text-center">
-                  <div className="font-display text-2xl font-bold gradient-text-gold">{s.value}</div>
-                  <div className="text-xs text-muted-foreground mt-1">{s.label}</div>
+                <div key={s.label} className="glass-card rounded-xl p-5 text-center flex flex-col items-center justify-center flex-1">
+                  <div className="font-display text-3xl font-bold gradient-text-gold">{s.value}</div>
+                  <div className="text-xs text-muted-foreground mt-1.5 font-medium">{s.label}</div>
                 </div>
               ))}
             </div>
