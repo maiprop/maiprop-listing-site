@@ -307,10 +307,10 @@ export default function Auctions() {
   const [filterBidRange, setFilterBidRange] = useState("");
   const [filterYearRange, setFilterYearRange] = useState("");
 
-  // Premium filters (visible but locked)
-  const [filterOwnership] = useState("");
-  const [filterRound] = useState("");
-  const [filterYield] = useState("");
+  // Premium filters (functional for Pro, locked/redirect for free users)
+  const [filterOwnership, setFilterOwnership] = useState("");
+  const [filterRound, setFilterRound] = useState("");
+  const [filterYield, setFilterYield] = useState("");
 
   // Prefill city from URL when data loads
   useEffect(() => {
