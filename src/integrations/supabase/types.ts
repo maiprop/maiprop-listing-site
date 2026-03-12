@@ -403,6 +403,7 @@ export type Database = {
           updated_at: string
           views_count: number
           wc_count: number | null
+          website_url: string | null
           within_city_plan: boolean | null
           within_settlement: boolean | null
           year_built: number | null
@@ -511,6 +512,7 @@ export type Database = {
           updated_at?: string
           views_count?: number
           wc_count?: number | null
+          website_url?: string | null
           within_city_plan?: boolean | null
           within_settlement?: boolean | null
           year_built?: number | null
@@ -619,6 +621,7 @@ export type Database = {
           updated_at?: string
           views_count?: number
           wc_count?: number | null
+          website_url?: string | null
           within_city_plan?: boolean | null
           within_settlement?: boolean | null
           year_built?: number | null

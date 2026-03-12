@@ -262,12 +262,22 @@ export default function PropertyDetail() {
     ...(db.cover_image_url ? [db.cover_image_url] : []),
     ...((dbListing as any).listing_images?.map((img: any) => img.url) || []),
   ];
-  // For auctions, never fall back to stock photos — only show real images
+
+  // Mapbox Static Street-level fallback — uses lat/lng coordinates when available
+  const mapboxFallback = (() => {
+    const token = "pk.eyJ1Ijoia3JlbmlvczkyIiwiYSI6ImNtbWh0MjlxYjBza3YydXBqcThqeXBoYmcifQ.BElf3IJI7DGBjj2o2dTDqw";
+    if (db.latitude && db.longitude) {
+      // Satellite + streets style centred on the property
+      return `https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/static/${db.longitude},${db.latitude},17,0/800x450@2x?access_token=${token}`;
+    }
+    return null;
+  })();
+
   const images = dbImages.length
     ? dbImages
-    : isAuction
-      ? []
-      : ["https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&q=60"];
+    : mapboxFallback
+      ? [mapboxFallback]
+      : [];
 
   // ── Feature groups ──────────────────────────────────────────────────────────
   const internalFeatures: { icon?: any; label: string }[] = [];
