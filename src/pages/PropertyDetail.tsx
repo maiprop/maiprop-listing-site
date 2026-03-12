@@ -427,7 +427,6 @@ export default function PropertyDetail() {
     { label: "System Code", value: db.id.slice(0, 8).toUpperCase() },
     { label: "Published", value: new Date(db.created_at).toLocaleDateString("en-GB") },
     { label: "Last Updated", value: new Date(db.updated_at).toLocaleDateString("en-GB") },
-    { label: "Availability", value: (db as any)?.available_from ? `From ${new Date((db as any).available_from).toLocaleDateString("en-GB")}` : "Available now" },
   ];
 
   return (
