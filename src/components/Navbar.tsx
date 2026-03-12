@@ -24,6 +24,7 @@ export function Navbar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, profile, signOut } = useAuth();
+  const { isPro } = useSubscription();
   const { theme, setTheme } = useTheme();
 
   const hasDarkHero = DARK_HERO_ROUTES.includes(location.pathname);
