@@ -594,7 +594,7 @@ export default function Auctions() {
               {/* Standard filters */}
               <div>
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Standard Filters</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                   {/* City */}
                   <div>
                     <label className="text-xs text-muted-foreground font-medium block mb-1.5">City</label>
@@ -647,8 +647,6 @@ export default function Auctions() {
                       {YEAR_RANGES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                     </select>
                   </div>
-                </div>
-              </div>
 
               {/* Premium filters */}
               <div className="pt-1 border-t border-border">
