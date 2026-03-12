@@ -235,6 +235,7 @@ Deno.serve(async (req) => {
       500
     );
     const maxPages = Math.min(Number(body.maxPages ?? MAX_PAGES), 500);
+    const startPage = Math.max(0, Number(body.startPage ?? 0));
 
     const today = new Date().toISOString().split("T")[0];
     const baseFilter: Record<string, any> = {
