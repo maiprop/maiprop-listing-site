@@ -185,11 +185,6 @@ export function PropertyCard({ property, compact = false }: PropertyCardProps) {
               {getSubtypeLabel(property.type, property.subtype)}
             </span>
           )}
-          {property.aiScore && property.aiScore >= 80 && (
-            <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-primary/90 text-primary-foreground flex items-center gap-1 shadow-sm">
-              <Zap className="w-2.5 h-2.5" /> AI {property.aiScore}
-            </span>
-          )}
           {discountPct && discountPct > 0 && (
             <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-destructive/90 text-white shadow-sm">
               -{discountPct}% off
