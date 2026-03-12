@@ -356,10 +356,17 @@ export function PropertyCard({ property, compact = false }: PropertyCardProps) {
           );
           if (!visibleTags.length) return null;
           return (
-          <div className="flex gap-1.5 flex-wrap">
-            {visibleTags.slice(0, 3).map(tag => (
-              <span key={tag} className="px-2.5 py-0.5 rounded-full bg-primary/10 border border-primary/20 text-[10px] text-primary font-medium">
-                {tag}
+            <div className="flex gap-1.5 flex-wrap">
+              {visibleTags.slice(0, 3).map(tag => (
+                <span key={tag} className="px-2.5 py-0.5 rounded-full bg-primary/10 border border-primary/20 text-[10px] text-primary font-medium">
+                  {tag}
+                </span>
+              ))}
+            </div>
+          );
+        })()}
+
+
               </span>
             ))}
           </div>
