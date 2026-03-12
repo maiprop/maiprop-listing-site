@@ -113,7 +113,7 @@ export function PropertyCard({ property, compact = false }: PropertyCardProps) {
 
   if (compact) {
     return (
-      <Link to={`/property/${property.id}`} className="glass-card rounded-xl overflow-hidden flex gap-3 p-3 property-card group">
+      <Link to={detailPath} className="glass-card rounded-xl overflow-hidden flex gap-3 p-3 property-card group">
         <div className="relative w-24 h-20 rounded-lg overflow-hidden shrink-0">
           <img src={property.images[0]} alt={property.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
           {badge && (
