@@ -126,11 +126,16 @@ function mapAuctionToListing(a: any) {
   const catKey = mapCategory(a.propertyCategory);
   const price = Number(a.firstPriceOffer ?? 0);
 
+  // Extract the auction URL — OS may return it as `url`, `auctionUrl`, or `listingUrl`
+  const auctionUrl: string | null =
+    a.url ?? a.auctionUrl ?? a.listingUrl ?? a.eAuctionUrl ?? null;
+
   return {
     tagKey,
     row: {
       title: buildTitle(a),
-      description: a.url ? `Πηγή: ${a.url}` : null,
+      description: null,
+      website_url: auctionUrl,
       price,
       price_per_sqm: a.pricePerSquareMeter != null ? Number(a.pricePerSquareMeter) : null,
       auction_starting_bid: price,
@@ -327,6 +332,7 @@ Deno.serve(async (req) => {
             postal_code: row.postal_code,
             region: row.region,
             tags: row.tags,
+            website_url: row.website_url,
             status: "active",
             updated_at: new Date().toISOString(),
           },

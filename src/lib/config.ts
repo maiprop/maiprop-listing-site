@@ -5,3 +5,8 @@
 export const MAPBOX_TOKEN =
   (import.meta as any).env?.VITE_MAPBOX_TOKEN ??
   "pk.eyJ1Ijoia3JlbmlvczkyIiwiYSI6ImNtbWh0MjlxYjBza3YydXBqcThqeXBoYmcifQ.BElf3IJI7DGBjj2o2dTDqw";
+
+// Google Maps API key — restrict to HTTP referrers in Google Cloud Console
+// Used for Street View Static image fallbacks on PropertyDetail
+export const GOOGLE_MAPS_API_KEY =
+  (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY ?? "";
