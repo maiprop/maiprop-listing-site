@@ -1220,14 +1220,14 @@ export default function PropertyDetail() {
                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold font-bold">PREMIUM</span>
                       </div>
                       <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
-                        Deep-dive: cadastre verification, price history, comparable sales, investment projections, ENFIA calculation, and legal status.
+                        Deep-dive: Area trends, comparable sales, property specifics analysis, and charts.
                       </p>
                       <div className="grid grid-cols-2 gap-2 mb-4">
-                        {["Cadastre Verification", "5-Year Price History", "Comparable Sales", "Investment Projection", "Legal Status Check", "Neighborhood Score"].map((item) =>
-                        <div key={item} className={`flex items-center gap-1.5 text-xs ${reportPurchased ? "text-primary" : "text-muted-foreground"}`}>
-                            {reportPurchased ? <Check className="w-3 h-3 text-primary" /> : <Lock className="w-3 h-3" />}
-                            {item}
-                          </div>
+                        {["Cadastre Verification", "5-Year Price History", "Comparable Sales", "Investment Projection", "Legal Status Check", "Neighborhood Score"].map((item) => {}
+
+
+
+
                         )}
                       </div>
                       {!reportPurchased ?
