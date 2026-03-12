@@ -298,18 +298,19 @@ export function PropertyCard({ property, compact = false }: PropertyCardProps) {
               {property.energyClass}
             </span>
           )}
-          {/* Ownership status pill — auction-specific */}
-          {property.ownershipStatus && property.ownershipStatus !== "full" && (() => {
+          {/* Ownership status pill — shown for all statuses when present */}
+          {property.ownershipStatus && (() => {
             const ownershipMap: Record<string, { label: string; cls: string }> = {
-              partial: { label: "Μερική", cls: "bg-amber-500/15 text-amber-700 border border-amber-400/30" },
-              common: { label: "Εξ αδιαιρέτου", cls: "bg-sky-500/15 text-sky-700 border border-sky-400/30" },
-              none: { label: "Χωρίς κυριότητα", cls: "bg-destructive/15 text-destructive border border-destructive/30" },
+              full:    { label: "Πλήρης κυριότητα", cls: "bg-emerald-500/15 text-emerald-700 border border-emerald-400/30" },
+              partial: { label: "Μερική κυριότητα", cls: "bg-amber-500/15 text-amber-700 border border-amber-400/30" },
+              common:  { label: "Εξ αδιαιρέτου", cls: "bg-sky-500/15 text-sky-700 border border-sky-400/30" },
+              none:    { label: "Χωρίς κυριότητα", cls: "bg-destructive/15 text-destructive border border-destructive/30" },
             };
             const ow = ownershipMap[property.ownershipStatus] || { label: property.ownershipStatus, cls: "bg-secondary border border-border" };
             return (
               <span className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium text-[10px] ${ow.cls}`}>
                 {ow.label}
-                {property.ownershipPercentage != null && ` ${property.ownershipPercentage}%`}
+                {property.ownershipPercentage != null && property.ownershipStatus !== "full" && ` ${property.ownershipPercentage}%`}
               </span>
             );
           })()}
