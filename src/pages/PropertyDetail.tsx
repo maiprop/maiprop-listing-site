@@ -1201,6 +1201,17 @@ export default function PropertyDetail() {
                   tags={db?.tags}
                   auctionCourt={db?.auction_court}
                   plotSurface={db?.plot_surface}
+                  isNeoclassical={db?.is_neoclassical}
+                  isPreserved={db?.is_preserved}
+                  distanceFromSea={db?.distance_from_sea}
+                  withinCityPlan={db?.within_city_plan}
+                  withinSettlement={db?.within_settlement}
+                  buildingAllowance={db?.building_allowance}
+                  coverageRatio={db?.coverage_ratio}
+                  isBuildable={db?.is_buildable}
+                  cadastreNumber={db?.cadastre_number}
+                  hasLandConcession={db?.has_land_concession}
+                  landUse={db?.land_use}
                 />
               ) : (
                 <div className="relative">
