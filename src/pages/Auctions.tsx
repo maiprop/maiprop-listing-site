@@ -26,7 +26,7 @@ function useAuctionListings() {
         .eq("status", "active")
         .gte("auction_date", new Date().toISOString())
         .order("auction_date", { ascending: true })
-        .limit(500);
+        .limit(2000);
       if (error) throw error;
       return data ?? [];
     },
