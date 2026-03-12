@@ -46,6 +46,8 @@ export interface Property {
   totalFloors?: number;
   yearBuilt?: number;
   energyClass?: string;
+  ownershipStatus?: string;
+  ownershipPercentage?: number;
 }
 
 interface PropertyCardProps {
