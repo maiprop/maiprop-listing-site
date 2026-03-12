@@ -46,6 +46,8 @@ export interface Property {
   totalFloors?: number;
   yearBuilt?: number;
   energyClass?: string;
+  ownershipStatus?: string;
+  ownershipPercentage?: number;
 }
 
 interface PropertyCardProps {
@@ -277,7 +279,9 @@ export function PropertyCard({ property, compact = false }: PropertyCardProps) {
           </span>
           {property.floor != null && (
             <span className="flex items-center gap-1 bg-secondary px-2.5 py-1 rounded-lg font-medium">
-              <Layers className="w-3.5 h-3.5" /> Floor {property.floor}
+              <Layers className="w-3.5 h-3.5" />
+              {property.floor === 0 ? "Ground" : property.floor === -1 ? "Basement" : `${property.floor}F`}
+              {property.totalFloors != null && `/${property.totalFloors}`}
             </span>
           )}
           {property.energyClass && (
@@ -285,6 +289,21 @@ export function PropertyCard({ property, compact = false }: PropertyCardProps) {
               {property.energyClass}
             </span>
           )}
+          {/* Ownership status pill — auction-specific */}
+          {property.ownershipStatus && property.ownershipStatus !== "full" && (() => {
+            const ownershipMap: Record<string, { label: string; cls: string }> = {
+              partial: { label: "Μερική", cls: "bg-amber-500/15 text-amber-700 border border-amber-400/30" },
+              common: { label: "Εξ αδιαιρέτου", cls: "bg-sky-500/15 text-sky-700 border border-sky-400/30" },
+              none: { label: "Χωρίς κυριότητα", cls: "bg-destructive/15 text-destructive border border-destructive/30" },
+            };
+            const ow = ownershipMap[property.ownershipStatus] || { label: property.ownershipStatus, cls: "bg-secondary border border-border" };
+            return (
+              <span className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium text-[10px] ${ow.cls}`}>
+                {ow.label}
+                {property.ownershipPercentage != null && ` ${property.ownershipPercentage}%`}
+              </span>
+            );
+          })()}
         </div>
 
         {/* Auction banner */}
