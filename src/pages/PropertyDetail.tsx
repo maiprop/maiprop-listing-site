@@ -778,7 +778,7 @@ export default function PropertyDetail() {
                     <div>
                       <p className="text-xs font-semibold text-foreground">Want the full picture?</p>
                       <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
-                        Upgrade to <span className="text-primary font-bold">Pro</span> to unlock the complete <span className="font-medium">AI Property Valuation</span> — price range, confidence score, key factors, renovation potential &amp; more.
+                        Upgrade to <Link to="/pro" className="text-primary font-bold hover:underline">Pro</Link> to unlock the complete <span className="font-medium">AI Property Valuation</span> — price range, confidence score, key factors, renovation potential &amp; more.
                       </p>
                     </div>
                   </div>
