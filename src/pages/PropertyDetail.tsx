@@ -1225,9 +1225,6 @@ export default function PropertyDetail() {
                   </div>
                 </div>
               )}
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      Unlock the full <span className="font-semibold text-foreground">AI Property Valuation</span> — price range, confidence score, key factors &amp; renovation potential.
-              )}
 
               {/* ④ Full AI Property Report */}
               <Section className={reportPurchased ? "border-primary/30" : ""}>
