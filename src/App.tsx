@@ -23,6 +23,7 @@ import Messages from "./pages/Messages";
 import CreateListing from "./pages/CreateListing";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
+import Pro from "./pages/Pro";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
 import CookiePolicy from "./pages/CookiePolicy";
