@@ -263,18 +263,21 @@ export default function PropertyDetail() {
     ...((dbListing as any).listing_images?.map((img: any) => img.url) || []),
   ];
 
-  // Google Street View Static fallback — uses lat/lng when available, address otherwise
-  const streetViewFallback = (() => {
-    const key = "AIzaSyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY"; // Google Maps static API (publishable)
-    const size = "800x450";
+  // Mapbox Static Street-level fallback — uses lat/lng coordinates when available
+  const mapboxFallback = (() => {
+    const token = "pk.eyJ1Ijoia3JlbmlvczkyIiwiYSI6ImNtbWh0MjlxYjBza3YydXBqcThqeXBoYmcifQ.BElf3IJI7DGBjj2o2dTDqw";
     if (db.latitude && db.longitude) {
-      return `https://maps.googleapis.com/maps/api/streetview?size=${size}&location=${db.latitude},${db.longitude}&fov=90&pitch=0&key=${key}`;
+      // Satellite + streets style centred on the property
+      return `https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/static/${db.longitude},${db.latitude},17,0/800x450@2x?access_token=${token}`;
     }
-    const q = encodeURIComponent(`${db.address || ""} ${db.city} Greece`.trim());
-    return `https://maps.googleapis.com/maps/api/streetview?size=${size}&location=${q}&fov=90&pitch=0&key=${key}`;
+    return null;
   })();
 
-  const images = dbImages.length ? dbImages : [streetViewFallback];
+  const images = dbImages.length
+    ? dbImages
+    : mapboxFallback
+      ? [mapboxFallback]
+      : [];
 
   // ── Feature groups ──────────────────────────────────────────────────────────
   const internalFeatures: { icon?: any; label: string }[] = [];
