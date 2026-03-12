@@ -846,8 +846,8 @@ export default function PropertyDetail() {
                 </div>
               </Section>
 
-              {/* ── Similar properties ── */}
-              {similarListings.length > 0 && (
+              {/* ── Similar properties — only when ≥ 2 ── */}
+              {similarListings.length >= 2 && (
                 <div className="space-y-4">
                   <h3 className="font-display font-semibold flex items-center gap-2">
                     Similar{subtype ? ` ${getSubtypeLabel(propertyType, subtype)}` : ""} in {city}
