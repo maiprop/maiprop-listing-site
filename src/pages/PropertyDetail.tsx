@@ -262,7 +262,12 @@ export default function PropertyDetail() {
     ...(db.cover_image_url ? [db.cover_image_url] : []),
     ...((dbListing as any).listing_images?.map((img: any) => img.url) || []),
   ];
-  const images = dbImages.length ? dbImages : ["https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&q=60"];
+  // For auctions, never fall back to stock photos — only show real images
+  const images = dbImages.length
+    ? dbImages
+    : isAuction
+      ? []
+      : ["https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&q=60"];
 
   // ── Feature groups ──────────────────────────────────────────────────────────
   const internalFeatures: { icon?: any; label: string }[] = [];
