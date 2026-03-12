@@ -1171,19 +1171,26 @@ export default function Index() {
           <div
             className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 reveal reveal-delay-1 ${auctionsInView ? "in-view" : ""}`}>
             
-            {auctionListings.map((l: any) => (
+            {auctionListings.map((l: any) => {
+              const imgs: string[] = l.cover_image_url ? [l.cover_image_url] : [];
+              if (!imgs.length && l.listing_images?.length) {
+                const sorted = [...l.listing_images].sort((a: any, b: any) => a.sort_order - b.sort_order);
+                sorted.forEach((img: any) => imgs.push(img.url));
+              }
+              return (
               <PropertyCard key={l.id} property={{
                 id: l.id, title: l.title, address: l.address || l.city, city: l.city,
                 price: Number(l.price), pricePerSqm: l.price_per_sqm ? Number(l.price_per_sqm) : undefined,
                 bedrooms: l.bedrooms, bathrooms: l.bathrooms, sqm: Number(l.sqm),
                 floor: l.floor, totalFloors: l.total_floors, yearBuilt: l.year_built,
-                energyClass: l.energy_class, images: l.cover_image_url ? [l.cover_image_url] : [],
+                energyClass: l.energy_class, images: imgs,
                 type: l.property_type, listingType: l.listing_type,
                 auctionDate: l.auction_date ? new Date(l.auction_date).toLocaleDateString("en-GB") : undefined,
                 auctionStartingBid: l.auction_starting_bid ? Number(l.auction_starting_bid) : undefined,
                 aiScore: l.ai_score, views: l.views_count, tags: l.tags || [],
               }} />
-            ))}
+              );
+            })}
           </div>
         </div>
       </section>
