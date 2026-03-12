@@ -185,10 +185,18 @@ function DetailRow({ label, value }: { label: string; value: string | number }) 
 export default function PropertyDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
 
   const { data: dbListing, isLoading } = useListing(id || "");
   const { data: dbSimilar = [] } = useListings({ city: dbListing?.city, property_type: dbListing?.property_type });
+
+  // Redirect: if auction opened via /property/:id, send to /auction/:id
+  useEffect(() => {
+    if (dbListing && dbListing.listing_type === "auction" && location.pathname.startsWith("/property/")) {
+      navigate(`/auction/${id}`, { replace: true });
+    }
+  }, [dbListing, location.pathname, id, navigate]);
 
   const [currentImage, setCurrentImage] = useState(0);
   const [viewingOpen, setViewingOpen] = useState(false);
