@@ -352,11 +352,21 @@ export default function PropertyDetail() {
 
   const handleShare = async () => {
     const url = window.location.href;
-    if (navigator.share) {
-      try { await navigator.share({ title, url }); } catch {}
-    } else {
-      await navigator.clipboard.writeText(url);
-      toast.success("Link copied to clipboard");
+    try {
+      if (navigator.share) {
+        await navigator.share({ title, url });
+      } else {
+        await navigator.clipboard.writeText(url);
+        toast.success("Link copied to clipboard!");
+      }
+    } catch {
+      // navigator.share was cancelled or not available — fallback to clipboard
+      try {
+        await navigator.clipboard.writeText(url);
+        toast.success("Link copied to clipboard!");
+      } catch {
+        toast.error("Could not copy link");
+      }
     }
   };
 
@@ -467,10 +477,12 @@ export default function PropertyDetail() {
     ...((db as any)?.heating_system ? [{ label: "Heating", value: (db as any).heating_system.replace("_", " ") }] : []),
     ...(db.energy_class ? [{ label: "Energy Class", value: db.energy_class }] : []),
     ...((db as any)?.construction_status ? [{ label: "Construction", value: (db as any).construction_status.replace("_", " ") }] : []),
-    ...(db.cadastre_number ? [{ label: "Cadastre No.", value: db.cadastre_number }] : []),
     ...(db.enfia_zone ? [{ label: "ENFIA Zone", value: db.enfia_zone }] : []),
     ...(db.postal_code ? [{ label: "Postal Code", value: db.postal_code }] : []),
     ...(db.region ? [{ label: "Region", value: db.region }] : []),
+    // Ownership (for all listing types when present)
+    ...(ownershipStatus ? [{ label: "Ownership Status", value: ownershipDisplay?.label ?? ownershipStatus }] : []),
+    ...(ownershipPct != null && ownershipStatus !== "full" ? [{ label: "Ownership %", value: `${ownershipPct}%` }] : []),
     // Land
     ...(isLandType && (db as any)?.coverage_ratio ? [{ label: "Coverage Ratio", value: `${(db as any).coverage_ratio}%` }] : []),
     ...(isLandType && (db as any)?.building_allowance ? [{ label: "Build Allowance", value: `${(db as any).building_allowance} m²` }] : []),
@@ -485,10 +497,8 @@ export default function PropertyDetail() {
     ...((db as any)?.commercial_subtype ? [{ label: "Subtype", value: (db as any).commercial_subtype }] : []),
     ...((db as any)?.plot_surface ? [{ label: "Plot Surface", value: `${(db as any).plot_surface} m²` }] : []),
     ...((db as any)?.floor_height ? [{ label: "Floor Height", value: `${(db as any).floor_height} m` }] : []),
-    // Meta
+    // Meta — only system code, no dates
     { label: "System Code", value: db.id.slice(0, 8).toUpperCase() },
-    { label: "Published", value: new Date(db.created_at).toLocaleDateString("en-GB") },
-    { label: "Last Updated", value: new Date(db.updated_at).toLocaleDateString("en-GB") },
   ];
 
   return (
@@ -695,11 +705,9 @@ export default function PropertyDetail() {
                     <div className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border ${ownershipDisplay.cls}`}>
                       <Building2 className="w-3.5 h-3.5 shrink-0" />
                       {ownershipDisplay.label}
-                    </div>
-                  )}
-                  {ownershipPct != null && ownershipStatus !== "full" && (
-                    <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium">
-                      <Tag className="w-3.5 h-3.5 text-primary" />{ownershipPct}%
+                      {ownershipPct != null && ownershipStatus !== "full" && (
+                        <span className="ml-1 font-black">{ownershipPct}%</span>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1038,8 +1046,8 @@ export default function PropertyDetail() {
                         €{(isAuction && db.auction_starting_bid ? Number(db.auction_starting_bid) : price).toLocaleString()}
                         {listingType === "rent" && <span className="text-sm font-normal text-muted-foreground">/mo</span>}
                       </p>
-                      {isAuction && db.auction_starting_bid && (
-                        <p className="text-xs text-muted-foreground mt-0.5">Market value: €{price.toLocaleString()}</p>
+                  {isAuction && db.auction_starting_bid && (
+                        <p className="text-xs text-muted-foreground mt-0.5">Full value: €{price.toLocaleString()}</p>
                       )}
                       {!isAuction && pricePerSqm && <p className="text-xs text-muted-foreground mt-0.5">€{Number(pricePerSqm).toLocaleString()}/m²</p>}
                     </div>
