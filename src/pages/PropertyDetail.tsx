@@ -695,11 +695,9 @@ export default function PropertyDetail() {
                     <div className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border ${ownershipDisplay.cls}`}>
                       <Building2 className="w-3.5 h-3.5 shrink-0" />
                       {ownershipDisplay.label}
-                    </div>
-                  )}
-                  {ownershipPct != null && ownershipStatus !== "full" && (
-                    <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium">
-                      <Tag className="w-3.5 h-3.5 text-primary" />{ownershipPct}%
+                      {ownershipPct != null && ownershipStatus !== "full" && (
+                        <span className="ml-1 font-black">{ownershipPct}%</span>
+                      )}
                     </div>
                   )}
                 </div>
