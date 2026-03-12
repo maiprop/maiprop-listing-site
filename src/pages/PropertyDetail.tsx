@@ -808,8 +808,23 @@ export default function PropertyDetail() {
                     <div className="rounded-xl bg-brand-gold/8 border border-brand-gold/20 p-3 text-xs text-muted-foreground leading-relaxed">
                       ⚡ Judicial auction — buyer conducts own due diligence. maiProp provides AI-powered pre-auction analysis.
                     </div>
+
+                    {/* eAuction.gr CTA — prominent when website_url is present */}
+                    {websiteUrl && (
+                      <a href={websiteUrl} target="_blank" rel="noreferrer noopener" className="block">
+                        <Button className="w-full bg-gradient-gold border-0 text-background font-bold gap-2 h-12 text-base shadow-lg hover:shadow-brand-gold/30 hover:scale-[1.01] transition-all">
+                          <ExternalLink className="w-5 h-5" />
+                          View on eAuction.gr
+                        </Button>
+                      </a>
+                    )}
+
                     <Button
-                      className="w-full bg-gradient-gold border-0 text-background font-semibold gap-2"
+                      variant={websiteUrl ? "outline" : "default"}
+                      className={websiteUrl
+                        ? "w-full border-brand-gold/30 text-brand-gold hover:bg-brand-gold/10 gap-2"
+                        : "w-full bg-gradient-gold border-0 text-background font-semibold gap-2"
+                      }
                       onClick={() => {
                         if (!user) { toast.error("Sign in to set auction alerts"); navigate("/login"); return; }
                         setAuctionAlertOpen(true);
