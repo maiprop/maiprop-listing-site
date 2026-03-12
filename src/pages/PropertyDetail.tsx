@@ -1254,13 +1254,13 @@ export default function PropertyDetail() {
                           <p className="text-xs text-muted-foreground mt-1 font-mono">€███,███ — €███,███</p>
                         </div>
                         <div className="flex gap-3 shrink-0">
-                          <div className="w-14 h-14 rounded-full bg-muted border-4 border-emerald-500/40" />
+                          <div className="w-14 h-14 rounded-full bg-muted border-4 border-brand-emerald/40" />
                           <div className="w-14 h-14 rounded-full bg-muted border-4 border-primary/30" />
                         </div>
                       </div>
                       <div className="bg-secondary/60 border border-border rounded-xl px-3 py-2 text-xs flex items-center justify-between">
                         <span className="text-muted-foreground">Pricing position</span>
-                        <span className="font-bold text-emerald-400">Underpriced</span>
+                        <span className="font-bold text-brand-emerald">Underpriced</span>
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div className="bg-secondary/50 rounded-lg px-2.5 py-2 h-9" />
