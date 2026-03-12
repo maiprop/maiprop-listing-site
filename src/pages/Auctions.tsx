@@ -514,9 +514,9 @@ export default function Auctions() {
             </p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
               {auctionStats.map(s => (
-                <div key={s.label} className="glass-card rounded-xl p-4 text-center">
-                  <div className="font-display text-2xl font-bold gradient-text-gold">{s.value}</div>
-                  <div className="text-xs text-muted-foreground mt-1">{s.label}</div>
+                <div key={s.label} className="glass-card rounded-xl p-5 text-center flex flex-col items-center justify-center flex-1">
+                  <div className="font-display text-3xl font-bold gradient-text-gold">{s.value}</div>
+                  <div className="text-xs text-muted-foreground mt-1.5 font-medium">{s.label}</div>
                 </div>
               ))}
             </div>
@@ -657,7 +657,7 @@ export default function Auctions() {
               </div>{/* end standard filters */}
 
               {/* Pro filters */}
-              <div className="pt-1 border-t border-border">
+              <div className="pt-4 border-t border-brand-gold/30 bg-brand-gold/5 -mx-5 px-5 pb-1 rounded-b-2xl">
                 <div className="flex items-center gap-2 mb-3">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Pro Filters</p>
                   {!isPro && <PremiumBadge />}
@@ -732,7 +732,6 @@ export default function Auctions() {
                         <option>6% – 9%</option>
                         <option>9%+</option>
                       </select>
-                      <Lock className="absolute right-3 top-8 w-3.5 h-3.5 text-brand-gold pointer-events-none" />
                       <div className="absolute -top-1 left-1/2 -translate-x-1/2 -translate-y-full opacity-0 group-hover/pf:opacity-100 transition-opacity z-20 pointer-events-none">
                         <div className="bg-card border border-brand-gold/30 rounded-xl px-3 py-2 shadow-elevated text-center whitespace-nowrap">
                           <p className="text-[10px] font-bold text-brand-gold flex items-center gap-1 justify-center"><Zap className="w-2.5 h-2.5" /> Upgrade to Pro</p>
