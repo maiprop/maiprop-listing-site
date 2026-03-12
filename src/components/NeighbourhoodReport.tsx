@@ -79,8 +79,7 @@ function MiniChart({ trend }: { trend: PriceTrend }) {
   const w = 600, h = 130, padX = 28, padTop = 32, padBottom = 24;
   const innerW = w - padX * 2;
   const innerH = h - padTop - padBottom;
-  const innerW = w - padX * 2;
-  const innerH = h - padTop - padBottom;
+
 
   const xs = points.map((_, i) => padX + (i / (points.length - 1)) * innerW);
   const ys = points.map(p => padTop + innerH - ((p.val - minVal) / range) * innerH);
