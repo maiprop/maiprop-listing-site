@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import logoImg from "@/assets/logo.png";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Bell, MessageSquare, User, Menu, X, ChevronDown, Search, Plus, LogOut, LayoutDashboard, Building2, Sun, Moon, Home, List, Gavel, Flame, Users } from "lucide-react";
+import { Bell, MessageSquare, User, Menu, X, ChevronDown, Plus, LogOut, LayoutDashboard, Building2, Sun, Moon, Home, List, Gavel, Flame, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useTheme } from "next-themes";
@@ -207,6 +207,17 @@ export function Navbar() {
               <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground hover:opacity-90 gap-1.5" asChild>
                 <Link to="/listings/new"><Plus className="w-3.5 h-3.5" /> List Property</Link>
               </Button>
+              {/* Pro CTA */}
+              <Link
+                to="/pro"
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all hover:scale-105 ${
+                  forceLight
+                    ? "bg-brand-gold/20 border-brand-gold/40 text-yellow-200 hover:bg-brand-gold/30"
+                    : "bg-brand-gold/10 border-brand-gold/30 text-brand-gold hover:bg-brand-gold/20"
+                }`}
+              >
+                <Zap className="w-3 h-3" /> Pro
+              </Link>
             </>
           ) : (
             <>
