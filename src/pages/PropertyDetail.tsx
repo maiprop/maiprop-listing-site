@@ -407,11 +407,18 @@ export default function PropertyDetail() {
 
               {/* ── Gallery ── */}
               <div className="relative rounded-2xl overflow-hidden aspect-[16/9] bg-secondary group shadow-elevated">
-                <img
-                  src={images[currentImage] || images[0]}
-                  alt={title}
-                  className="w-full h-full object-cover transition-opacity duration-300"
-                />
+                {images.length > 0 ? (
+                  <img
+                    src={images[currentImage] || images[0]}
+                    alt={title}
+                    className="w-full h-full object-cover transition-opacity duration-300"
+                  />
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-secondary">
+                    <Gavel className="w-12 h-12 text-muted-foreground/30" />
+                    <p className="text-xs text-muted-foreground">No photos available for this auction</p>
+                  </div>
+                )}
 
                 {/* Badges */}
                 <div className="absolute top-4 left-4 flex gap-2">
@@ -448,15 +455,19 @@ export default function PropertyDetail() {
                   </button>
                 </div>
 
-                {/* Counter + views */}
-                <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-background/60 to-transparent pointer-events-none" />
-                <div className="absolute bottom-3 right-4 bg-background/70 backdrop-blur-md px-2.5 py-1 rounded-full text-xs font-medium">
-                  {currentImage + 1} / {images.length}
-                </div>
-                <div className="absolute bottom-3 left-4 flex items-center gap-1.5 bg-background/70 backdrop-blur-md px-2.5 py-1 rounded-full text-xs">
-                  <Eye className="w-3 h-3 text-muted-foreground" />
-                  <span>{db.views_count || 0} views</span>
-                </div>
+                {/* Counter + views — only when photos exist */}
+                {images.length > 0 && (
+                  <>
+                    <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-background/60 to-transparent pointer-events-none" />
+                    <div className="absolute bottom-3 right-4 bg-background/70 backdrop-blur-md px-2.5 py-1 rounded-full text-xs font-medium">
+                      {currentImage + 1} / {images.length}
+                    </div>
+                    <div className="absolute bottom-3 left-4 flex items-center gap-1.5 bg-background/70 backdrop-blur-md px-2.5 py-1 rounded-full text-xs">
+                      <Eye className="w-3 h-3 text-muted-foreground" />
+                      <span>{db.views_count || 0} views</span>
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Thumbnails */}
