@@ -515,8 +515,9 @@ export default function Listings() {
       const ec = p.energyClass ?? raw.energy_class;
       if (!ec || !selectedEnergyClasses.includes(ec)) return false;
     }
+    // Only filter by feature keys that exist on the listing (avoids over-filtering when AI returns non-DB keys)
     for (const feat of selectedFeatures) {
-      if (!raw[feat]) return false;
+      if (Object.prototype.hasOwnProperty.call(raw, feat) && !raw[feat]) return false;
     }
     if (selectedHeating && raw.heating_system !== selectedHeating) return false;
     if (selectedConstruction && raw.construction_status !== selectedConstruction) return false;

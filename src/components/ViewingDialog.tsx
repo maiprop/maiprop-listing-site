@@ -8,6 +8,8 @@ interface ViewingDialogProps {
   open: boolean;
   onClose: () => void;
   property: Property;
+  /** If false, video viewing is disabled (Pro or retailers only). */
+  canVideoView?: boolean;
 }
 
 const timeSlots = [
@@ -23,7 +25,7 @@ const days = [
   { label: "Sat", date: "Mar 15" },
 ];
 
-export default function ViewingDialog({ open, onClose, property }: ViewingDialogProps) {
+export default function ViewingDialog({ open, onClose, property, canVideoView = true }: ViewingDialogProps) {
   const [viewType, setViewType] = useState<"in-person" | "video">("in-person");
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
@@ -95,15 +97,16 @@ export default function ViewingDialog({ open, onClose, property }: ViewingDialog
                   In-Person
                 </button>
                 <button
-                  onClick={() => setViewType("video")}
+                  onClick={() => canVideoView && setViewType("video")}
+                  disabled={!canVideoView}
                   className={`p-3 rounded-xl border text-sm font-medium flex items-center gap-2 transition-all ${
-                    viewType === "video"
+                    !canVideoView ? "opacity-60 cursor-not-allowed border-border" : viewType === "video"
                       ? "border-primary bg-primary/10 text-primary"
                       : "border-border text-muted-foreground hover:border-border/80"
                   }`}
                 >
                   <Video className="w-4 h-4" />
-                  Video Call
+                  Video Call{!canVideoView && " (Pro or retailers)"}
                 </button>
               </div>
             </div>

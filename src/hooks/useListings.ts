@@ -47,9 +47,20 @@ export function useListing(id: string) {
         .eq("id", id)
         .single();
       if (error) throw error;
-      // Increment view count
+      // Increment view count (fire-and-forget)
       supabase.from("listings").update({ views_count: (data?.views_count || 0) + 1 }).eq("id", id);
-      return data;
+      // Fetch owner profile and Pro status (Pro owners can receive messages and calendar)
+      let profiles = null;
+      let ownerIsPro = false;
+      if (data?.owner_id) {
+        const [{ data: profile }, { data: sub }] = await Promise.all([
+          supabase.from("profiles").select("*").eq("user_id", data.owner_id).maybeSingle(),
+          supabase.from("investor_subscriptions").select("tier, status").eq("user_id", data.owner_id).order("started_at", { ascending: false }).limit(1).maybeSingle(),
+        ]);
+        profiles = profile ?? null;
+        ownerIsPro = !!(sub?.status === "active" && (sub?.tier || "").toLowerCase() === "pro");
+      }
+      return { ...data, profiles, ownerIsPro };
     },
     enabled: !!id,
   });

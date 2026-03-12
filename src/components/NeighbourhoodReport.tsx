@@ -46,6 +46,8 @@ export interface NeighbourhoodReportProps {
   propertyType?: string;
   lat?: number | null;
   lng?: number | null;
+  /** If provided, fetch report from OS API first; fall back to AI if none. */
+  listingId?: string | null;
 }
 
 // ── Micro-components ───────────────────────────────────────────────────────────
@@ -171,7 +173,12 @@ const OUTLOOK_COLOUR: Record<string, string> = {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-export default function NeighbourhoodReport({ city, address, region, propertyType, lat, lng }: NeighbourhoodReportProps) {
+function isOsNeighbourhoodReport(r: unknown): r is NeighbourhoodData {
+  const o = r as Record<string, unknown>;
+  return !!o && typeof o.areaName === "string" && o.pricePerSqmTrend != null;
+}
+
+export default function NeighbourhoodReport({ city, address, region, propertyType, lat, lng, listingId }: NeighbourhoodReportProps) {
   const [data, setData] = useState<NeighbourhoodData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -180,6 +187,16 @@ export default function NeighbourhoodReport({ city, address, region, propertyTyp
     setLoading(true);
     setError(null);
     try {
+      if (listingId) {
+        const { data: osRes, error: osErr } = await supabase.functions.invoke("fetch-report-from-os", {
+          body: { listing_id: listingId, report_type: "neighbourhood" },
+        });
+        if (!osErr && osRes?.ok && osRes.report && isOsNeighbourhoodReport(osRes.report)) {
+          setData(osRes.report as NeighbourhoodData);
+          setLoading(false);
+          return;
+        }
+      }
       const { data: result, error: fnErr } = await supabase.functions.invoke("neighbourhood-report", {
         body: { city, address, region, propertyType, lat, lng },
       });

@@ -298,14 +298,15 @@ ${typeInstructions}
 
 === OUTPUT REQUIREMENTS ===
 CRITICAL RULES:
-1. DO NOT echo the listed price as your estimate. Cross-reference against benchmarks.
+1. DO NOT echo the listed price as your estimate. Cross-reference against benchmarks only; do not invent comparable sales or addresses.
 2. Output a RANGE, not false precision. Range width must reflect data quality.
 3. Apply TYPE-SPECIFIC logic — one formula for all types is wrong.
-4. Missing legal data = UNKNOWN, never assume clean title.
+4. Missing legal data = UNKNOWN; never assume clean title or invent document status.
 5. Produce all four legal/tax scores using the scoring model above.
 6. execution_value = market_value minus transaction_friction minus legal_uncertainty_discount.
 7. Price growth is DECELERATING in 2026 — do not extrapolate past rates.
 8. Commercial behavior is DISTINCT from residential.
+9. All figures must be supportable from the benchmarks and methodology above; do not hallucinate local comps or unsourced premiums.
 
 Return ONLY valid JSON, no markdown, no explanation outside the JSON:
 

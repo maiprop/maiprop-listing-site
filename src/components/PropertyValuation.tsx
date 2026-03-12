@@ -83,6 +83,8 @@ export interface PropertyValuationProps {
   cadastreNumber?: string | null;
   hasLandConcession?: boolean | null;
   landUse?: string | null;
+  /** If provided, fetch valuation report from OS API first; fall back to AI if none. */
+  listingId?: string | null;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -178,10 +180,23 @@ export default function PropertyValuation(props: PropertyValuationProps) {
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
+  const { listingId, ...valuationProps } = props;
+
   const runValuation = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("property-valuation", { body: props });
+      if (listingId) {
+        const { data: osRes, error: osErr } = await supabase.functions.invoke("fetch-report-from-os", {
+          body: { listing_id: listingId, report_type: "valuation" },
+        });
+        if (!osErr && osRes?.ok && osRes.report && typeof (osRes.report as ValuationResult).estimatedValue === "number") {
+          setResult(osRes.report as ValuationResult);
+          setExpanded(true);
+          setLoading(false);
+          return;
+        }
+      }
+      const { data, error } = await supabase.functions.invoke("property-valuation", { body: valuationProps });
       if (error) throw new Error(error.message);
       if (data?.error) throw new Error(data.error);
       setResult(data as ValuationResult);
