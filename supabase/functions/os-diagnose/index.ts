@@ -77,11 +77,11 @@ Deno.serve(async (req) => {
     const countCompleted = await countCompletedRes.json().catch(() => null);
 
     // ── Probe 5: count-comparison endpoint ────────────────────────────────────
-    // Requires sortBy using the OS enum value AUCTION_DATE
-    const compRes = await fetch(`${OS_URL}/api/v1/auctions/filter/count-comparison`, {
+    // OS API requires sortBy as a query param (body sortBy is ignored due to server bug)
+    const compRes = await fetch(`${OS_URL}/api/v1/auctions/filter/count-comparison?sortBy=AUCTION_DATE&sortOrder=ASC`, {
       method: "POST",
       headers: authHeaders,
-      body: JSON.stringify({ sortBy: "AUCTION_DATE", sortOrder: "ASC" }),
+      body: JSON.stringify({}),
     });
     const comp = await compRes.json().catch(() => null);
 
