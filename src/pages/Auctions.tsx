@@ -21,7 +21,7 @@ function useAuctionListings() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("listings")
-        .select("id, title, city, address, price, auction_starting_bid, auction_date, auction_court, property_type, cover_image_url, sqm, bedrooms, bathrooms, latitude, longitude, tags, year_built, construction_status, website_url, region")
+        .select("id, title, city, address, price, auction_starting_bid, auction_date, auction_court, property_type, cover_image_url, sqm, bedrooms, bathrooms, latitude, longitude, tags, year_built, construction_status, website_url, region, listing_images(url, sort_order)")
         .eq("listing_type", "auction")
         .eq("status", "active")
         .gte("auction_date", new Date().toISOString())
