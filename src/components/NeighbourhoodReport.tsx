@@ -76,8 +76,8 @@ function MiniChart({ trend }: { trend: PriceTrend }) {
   const maxVal = Math.max(...vals);
   const range = (maxVal - minVal) || 1;
 
-  // Generous padding: extra top space so price labels never clip
-  const w = 260, h = 90, padX = 14, padTop = 22, padBottom = 10;
+  // padBottom must be big enough for year labels (fontSize 7.5 ≈ 8px + 2px gap)
+  const w = 260, h = 100, padX = 18, padTop = 24, padBottom = 18;
   const innerW = w - padX * 2;
   const innerH = h - padTop - padBottom;
 
@@ -87,8 +87,8 @@ function MiniChart({ trend }: { trend: PriceTrend }) {
   const path = xs.map((x, i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${ys[i].toFixed(1)}`).join(" ");
   const fill = [
     ...xs.map((x, i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${ys[i].toFixed(1)}`),
-    `L${(padX + innerW).toFixed(1)},${(h - padBottom)}`,
-    `L${padX},${(h - padBottom)}`,
+    `L${(padX + innerW).toFixed(1)},${(padTop + innerH)}`,
+    `L${padX},${(padTop + innerH)}`,
     "Z",
   ].join(" ");
 
@@ -104,7 +104,7 @@ function MiniChart({ trend }: { trend: PriceTrend }) {
 
   return (
     <div className="space-y-0">
-      <svg width={w} height={h} className="w-full" viewBox={`0 0 ${w} ${h}`}>
+      <svg width={w} height={h} className="w-full overflow-visible" viewBox={`0 0 ${w} ${h}`}>
         <defs>
           <linearGradient id="chartFillGrad" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={lineColour} stopOpacity="0.2" />
