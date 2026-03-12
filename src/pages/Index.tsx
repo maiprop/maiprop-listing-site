@@ -792,37 +792,65 @@ export default function Index() {
   const { ref: goldenRef, inView: goldenInView } = useInView();
   const { ref: trustRef, inView: trustInView } = useInView();
 
+  // Timeout so listing queries never hang forever (e.g. Supabase unreachable)
+  const queryTimeout = <T,>(p: Promise<T>, ms: number): Promise<T> =>
+    Promise.race([p, new Promise<T>((_, rej) => setTimeout(() => rej(new Error("Request timeout")), ms))]);
+
   // DB listings for homepage sections — use separate lightweight queries with limits
+  const featuredSelect = "id, title, address, city, price, price_per_sqm, bedrooms, bathrooms, sqm, floor, total_floors, year_built, energy_class, cover_image_url, property_type, listing_type, ai_score, views_count, tags";
   const { data: featuredListings = [], isLoading: featuredLoading, isError: featuredError } = useQuery({
     queryKey: ["homepage-featured"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("listings")
-        .select("id, title, address, city, price, price_per_sqm, bedrooms, bathrooms, sqm, floor, total_floors, year_built, energy_class, cover_image_url, property_type, listing_type, ai_score, views_count, tags, listing_images(url, sort_order)")
-        .eq("status", "active")
-        .eq("listing_type", "sale")
-        .order("created_at", { ascending: false })
-        .limit(4);
-      if (error) throw error;
-      return data || [];
+      const run = async () => {
+        const { data, error } = await supabase
+          .from("listings")
+          .select(`${featuredSelect}, listing_images(url, sort_order)`)
+          .eq("status", "active")
+          .eq("listing_type", "sale")
+          .order("created_at", { ascending: false })
+          .limit(4);
+        if (error) {
+          const fallback = await supabase.from("listings").select(featuredSelect).eq("status", "active").eq("listing_type", "sale").order("created_at", { ascending: false }).limit(4);
+          if (fallback.error) throw fallback.error;
+          return fallback.data || [];
+        }
+        return data || [];
+      };
+      return queryTimeout(run(), 12_000);
     },
     staleTime: 5 * 60 * 1000,
     retry: 1,
   });
 
+  const auctionSelect = "id, title, address, city, price, price_per_sqm, bedrooms, bathrooms, sqm, floor, total_floors, year_built, energy_class, cover_image_url, property_type, listing_type, ai_score, views_count, tags, auction_date, auction_starting_bid, latitude, longitude";
+  const today = new Date().toISOString().split("T")[0];
   const { data: auctionListings = [], isLoading: auctionsLoading, isError: auctionsError } = useQuery({
     queryKey: ["homepage-auctions"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("listings")
-        .select("id, title, address, city, price, price_per_sqm, bedrooms, bathrooms, sqm, floor, total_floors, year_built, energy_class, cover_image_url, property_type, listing_type, ai_score, views_count, tags, auction_date, auction_starting_bid, latitude, longitude, listing_images(url, sort_order)")
-        .eq("status", "active")
-        .eq("listing_type", "auction")
-        .gte("auction_date", new Date().toISOString())
-        .order("auction_date", { ascending: true })
-        .limit(6);
-      if (error) throw error;
-      return data || [];
+      const run = async () => {
+        const { data, error } = await supabase
+          .from("listings")
+          .select(`${auctionSelect}, listing_images(url, sort_order)`)
+          .eq("status", "active")
+          .eq("listing_type", "auction")
+          .or(`auction_date.gte.${today},auction_date.is.null`)
+          .order("auction_date", { ascending: true, nullsFirst: false })
+          .limit(6);
+        if (error) {
+          const fallback = await supabase
+            .from("listings")
+            .select(auctionSelect)
+            .eq("status", "active")
+            .eq("listing_type", "auction")
+            .or(`auction_date.gte.${today},auction_date.is.null`)
+            .order("auction_date", { ascending: true, nullsFirst: false })
+            .limit(6);
+          if (fallback.error) throw fallback.error;
+          return fallback.data || [];
+        }
+        return data || [];
+      };
+      return queryTimeout(run(), 12_000);
     },
     staleTime: 5 * 60 * 1000,
     retry: 1,

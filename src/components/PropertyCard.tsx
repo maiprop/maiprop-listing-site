@@ -128,10 +128,15 @@ export function PropertyCard({ property, compact = false }: PropertyCardProps) {
     : null;
 
   if (compact) {
+    const thumb = property.images?.[0];
     return (
       <Link to={detailPath} className="glass-card rounded-xl overflow-hidden flex gap-3 p-3 property-card group">
-        <div className="relative w-24 h-20 rounded-lg overflow-hidden shrink-0">
-          <img src={property.images[0]} alt={property.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+        <div className="relative w-24 h-20 rounded-lg overflow-hidden shrink-0 bg-muted">
+          {thumb ? (
+            <img src={thumb} alt={property.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center"><Home className="w-6 h-6 text-muted-foreground/30" /></div>
+          )}
           {badge && (
             <span className={`absolute top-1 left-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full ${badge.cls}`}>{badge.label}</span>
           )}

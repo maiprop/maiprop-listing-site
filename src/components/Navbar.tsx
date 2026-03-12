@@ -179,7 +179,9 @@ export function Navbar() {
                 <DropdownMenuContent align="end" className="w-52 bg-card border-border">
                   <div className="px-3 py-2 border-b border-border">
                     <p className="text-xs font-semibold truncate">{displayName}</p>
-                    <p className="text-xs text-muted-foreground capitalize">{profile?.role || "individual"}</p>
+                    <p className="text-xs text-muted-foreground capitalize">
+                    {profile?.role === "seller_landlord" ? "Seller / Landlord" : (profile?.role || "individual")}
+                  </p>
                   </div>
                   <DropdownMenuItem asChild>
                     <Link to="/dashboard" className="flex items-center gap-2 cursor-pointer">

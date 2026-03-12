@@ -21,7 +21,7 @@ import {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type RoleKey = "individual" | "agent" | "professional";
+type RoleKey = "individual" | "seller_landlord" | "agent" | "professional";
 type OnboardingStep =
   | "pick-type"
   | "pro-category"
@@ -41,6 +41,8 @@ interface ParticipantType {
   color: string;
   features: string[];
   isPro?: boolean;
+  /** Section heading so Real estate agents are one category by themselves */
+  section?: string;
 }
 
 interface SelectedService {
@@ -64,30 +66,35 @@ const participants: ParticipantType[] = [
     label: "Home Buyer / Renter", tagline: "Find your perfect property",
     desc: "Searching to buy or rent a home for personal use",
     features: ["Save listings & searches", "Request viewings", "AI property match", "Price alerts"],
+    section: "Private",
   },
   {
-    id: "seller", role: "individual", icon: User, color: "violet",
+    id: "seller", role: "seller_landlord", icon: User, color: "violet",
     label: "Private Seller / Landlord", tagline: "List & manage your property",
     desc: "Sell or rent out your own property directly",
-    features: ["List up to 5 properties", "Manage viewings", "AI listing assist", "Direct messaging"],
+    features: ["List your properties", "Manage viewings", "AI listing assist", "Pro selling addons when you upgrade"],
+    section: "Private",
   },
   {
     id: "investor", role: "individual", icon: TrendingUp, color: "emerald",
     label: "Private Investor", tagline: "Grow your portfolio",
     desc: "Buying to invest, flip, or generate rental yield",
     features: ["ROI analytics", "Auction access", "Firesale deals", "Market intelligence"],
+    section: "Private",
   },
   {
     id: "agent", role: "agent", icon: Building2, color: "cyan",
     label: "Real Estate Agent / Agency", tagline: "Scale your business",
     desc: "Licensed professional listing properties for clients",
     features: ["Unlimited listings", "CRM tools", "OS sync", "Lead management"],
+    section: "Real estate agents",
   },
   {
     id: "institutional", role: "agent", icon: Globe2, color: "amber",
     label: "Institutional / Fund", tagline: "Portfolio at scale",
     desc: "Investment fund, REIT, or institutional buyer",
     features: ["Bulk portfolio tools", "Off-market access", "Due diligence hub", "Dedicated support"],
+    section: "Institutional & development",
   },
   {
     id: "professional", role: "professional", icon: Wrench, color: "rose",
@@ -95,12 +102,14 @@ const participants: ParticipantType[] = [
     desc: "Architect, lawyer, notary, contractor & more",
     features: ["Professional directory", "AI tools", "Client leads", "Verified badge"],
     isPro: true,
+    section: "Services",
   },
   {
     id: "developer", role: "agent", icon: Briefcase, color: "orange",
     label: "Developer / Builder", tagline: "Showcase new projects",
     desc: "Real estate developer launching projects",
     features: ["Project showcase pages", "Pre-sale listings", "Bulk inquiry management"],
+    section: "Institutional & development",
   },
 ];
 
@@ -338,42 +347,53 @@ export default function Onboarding() {
             Choose your profile. You can always update it in settings.
           </p>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {participants.map(p => {
-            const c = colorMap[p.color];
+        <div className="space-y-6">
+          {(["Private", "Real estate agents", "Institutional & development", "Services"] as const).map(section => {
+            const sectionParticipants = participants.filter(p => p.section === section);
+            if (sectionParticipants.length === 0) return null;
             return (
-              <button
-                key={p.id}
-                onClick={() => handleSelectNonPro(p)}
-                disabled={loading}
-                className={cn(
-                  "group relative text-left rounded-2xl border p-4 transition-all duration-200",
-                  "hover:scale-[1.02] hover:shadow-lg hover:shadow-black/10",
-                  "bg-secondary/60 border-border hover:border-primary/40 hover:bg-secondary",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                )}
-              >
-                <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center mb-3", c.iconBg)}>
-                  <p.icon className={cn("w-5 h-5", c.text)} />
+              <div key={section}>
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">{section}</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {sectionParticipants.map(p => {
+                    const c = colorMap[p.color];
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => handleSelectNonPro(p)}
+                        disabled={loading}
+                        className={cn(
+                          "group relative text-left rounded-2xl border p-4 transition-all duration-200",
+                          "hover:scale-[1.02] hover:shadow-lg hover:shadow-black/10",
+                          "bg-secondary/60 border-border hover:border-primary/40 hover:bg-secondary",
+                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                        )}
+                      >
+                        <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center mb-3", c.iconBg)}>
+                          <p.icon className={cn("w-5 h-5", c.text)} />
+                        </div>
+                        <div className="font-semibold text-sm text-foreground leading-tight">{p.label}</div>
+                        <div className={cn("text-xs font-medium mt-0.5 mb-2", c.text)}>{p.tagline}</div>
+                        <div className="text-xs text-muted-foreground leading-relaxed mb-3">{p.desc}</div>
+                        <div className="space-y-1">
+                          {p.features.slice(0, 3).map(f => (
+                            <div key={f} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                              <Check className={cn("w-3 h-3 shrink-0", c.text)} /> {f}
+                            </div>
+                          ))}
+                        </div>
+                        {p.isPro && (
+                          <div className="absolute top-3 right-3 flex items-center gap-1 bg-amber-500/15 border border-amber-500/30 rounded-full px-2 py-0.5">
+                            <Shield className="w-3 h-3 text-amber-400" />
+                            <span className="text-[10px] text-amber-400 font-medium">Verify</span>
+                          </div>
+                        )}
+                        <ChevronRight className="absolute bottom-4 right-4 w-4 h-4 text-muted-foreground/40 group-hover:text-primary transition-colors" />
+                      </button>
+                    );
+                  })}
                 </div>
-                <div className="font-semibold text-sm text-foreground leading-tight">{p.label}</div>
-                <div className={cn("text-xs font-medium mt-0.5 mb-2", c.text)}>{p.tagline}</div>
-                <div className="text-xs text-muted-foreground leading-relaxed mb-3">{p.desc}</div>
-                <div className="space-y-1">
-                  {p.features.slice(0, 3).map(f => (
-                    <div key={f} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                      <Check className={cn("w-3 h-3 shrink-0", c.text)} /> {f}
-                    </div>
-                  ))}
-                </div>
-                {p.isPro && (
-                  <div className="absolute top-3 right-3 flex items-center gap-1 bg-amber-500/15 border border-amber-500/30 rounded-full px-2 py-0.5">
-                    <Shield className="w-3 h-3 text-amber-400" />
-                    <span className="text-[10px] text-amber-400 font-medium">Verify</span>
-                  </div>
-                )}
-                <ChevronRight className="absolute bottom-4 right-4 w-4 h-4 text-muted-foreground/40 group-hover:text-primary transition-colors" />
-              </button>
+              </div>
             );
           })}
         </div>
