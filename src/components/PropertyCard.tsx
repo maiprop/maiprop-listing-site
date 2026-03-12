@@ -2,8 +2,8 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   MapPin, Bed, Bath, Square, Heart, Gavel, Flame,
-  Eye, TrendingUp, Star, Video, Zap, CheckCircle,
-  Home, ArrowRight, Calendar, Layers, Phone, MessageCircle,
+  Eye, TrendingUp, Video, Zap, CheckCircle,
+  Home, Calendar, Layers, MessageCircle,
   Share2, Flag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
