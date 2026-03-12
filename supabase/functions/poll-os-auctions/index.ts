@@ -139,22 +139,29 @@ function mapAuctionToListing(a: any) {
       ? `https://maps.googleapis.com/maps/api/streetview?size=800x450&location=${lat},${lng}&fov=90&pitch=10&key=${googleMapsKey}`
       : null;
 
-  // Map occupation/ownership status from OS API
-  // Possible OS field names: propertyOccupationStatus, occupationStatus, ownershipStatus, propertyStatus
-  const rawOccupation: string | undefined =
-    a.propertyOccupationStatus ?? a.occupationStatus ?? a.ownershipStatus ?? a.propertyStatus;
+  // Map ownershipStatus from OS API
+  // Confirmed field: ownershipStatus (values: FULL, PARTIAL, NONE, etc.)
+  // ownershipPercentage: number (e.g. 100 = full, 50 = partial)
+  const rawOwnership: string | undefined = a.ownershipStatus;
+  const ownershipPct: number | undefined = a.ownershipPercentage != null ? Number(a.ownershipPercentage) : undefined;
   let ownershipTag: string | null = null;
-  if (rawOccupation) {
-    const occ = rawOccupation.toUpperCase();
-    if (occ.includes("FREE") || occ.includes("VACANT") || occ.includes("ΕΛΕΥΘΕΡ") || occ.includes("ΧΩΡΙΣ")) {
-      ownershipTag = "ownership:free";
-    } else if (occ.includes("MORTGAGE") || occ.includes("ΥΠΟΘΗΚ") || occ.includes("ΒΑΡΗ") || occ.includes("ENCUMBR")) {
-      ownershipTag = "ownership:mortgaged";
-    } else if (occ.includes("OCCUPI") || occ.includes("ΚΑΤΕΙΛΗΜ") || occ.includes("TENANT") || occ.includes("RENTED")) {
-      ownershipTag = "ownership:occupied";
-    } else if (occ.includes("VACATED") || occ.includes("ΑΠΟΔΕΣΜ") || occ.includes("EMPTY")) {
-      ownershipTag = "ownership:vacated";
+  if (rawOwnership) {
+    const occ = rawOwnership.toUpperCase();
+    if (occ === "FULL" || occ === "COMPLETE") {
+      ownershipTag = "ownership:full";
+    } else if (occ === "PARTIAL" || occ === "FRACTIONAL") {
+      ownershipTag = "ownership:partial";
+    } else if (occ === "NONE" || occ === "NO_OWNERSHIP" || occ === "ZERO") {
+      ownershipTag = "ownership:none";
+    } else {
+      // Store raw value for any other status
+      ownershipTag = `ownership:${occ.toLowerCase()}`;
     }
+  } else if (ownershipPct != null) {
+    // Fallback: derive from percentage
+    if (ownershipPct >= 100) ownershipTag = "ownership:full";
+    else if (ownershipPct > 0) ownershipTag = "ownership:partial";
+    else ownershipTag = "ownership:none";
   }
 
   return {
