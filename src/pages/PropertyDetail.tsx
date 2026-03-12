@@ -220,7 +220,7 @@ export default function PropertyDetail() {
   const [aiInsightsLoaded, setAiInsightsLoaded] = useState(false);
 
   useEffect(() => {
-    if (!dbListing || aiInsightsLoaded) return;
+    if (!dbListing || aiInsightsLoaded || !isPro) return;
     setAiInsightsLoaded(true);
     setAiInsightsLoading(true);
     const invokeValuation = async () => {
@@ -736,66 +736,85 @@ export default function PropertyDetail() {
                 <span className="text-[10px] text-muted-foreground">Powered by mAI Prop OS</span>
                 } />
                 <div className="p-5 space-y-4">
-                  {aiInsightsLoading &&
-                  <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span className="text-xs">Analysing market data…</span>
+                  {/* Pro: show live data | Non-pro: blurred placeholder + upgrade CTA */}
+                  {isPro ? (
+                    <>
+                      {aiInsightsLoading &&
+                      <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span className="text-xs">Analysing market data…</span>
+                        </div>
+                      }
+                      {!aiInsightsLoading && aiInsightsData && (() => {
+                        const cmpCfg: Record<string, {label: string;color: string;bg: string;}> = {
+                          below_market: { label: "Below Market", color: "text-emerald-400", bg: "bg-emerald-400/10 border-emerald-400/20" },
+                          at_market: { label: "At Market", color: "text-yellow-400", bg: "bg-yellow-400/10  border-yellow-400/20" },
+                          above_market: { label: "Above Market", color: "text-destructive", bg: "bg-destructive/10 border-destructive/20" }
+                        };
+                        const cmp = cmpCfg[aiInsightsData.marketComparison] ?? cmpCfg.at_market;
+                        return (
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div className={`rounded-xl border p-4 flex flex-col gap-1 ${cmp.bg}`}>
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-widest">vs Market</p>
+                              <div className="flex items-baseline gap-1">
+                                <span className={`font-display font-black text-3xl ${cmp.color}`}>
+                                  {aiInsightsData.vsMarket > 0 ? "+" : ""}{aiInsightsData.vsMarket}%
+                                </span>
+                              </div>
+                              <p className={`text-[10px] font-semibold ${cmp.color}`}>{cmp.label}</p>
+                            </div>
+                            <div className="rounded-xl border border-border bg-secondary/50 p-4 flex flex-col gap-1">
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Rental Yield</p>
+                              <div className="flex items-baseline gap-1">
+                                <span className="font-display font-black text-3xl text-primary">{aiInsightsData.rentalYield}%</span>
+                              </div>
+                              <p className="text-[10px] text-muted-foreground">Est. gross annual yield</p>
+                            </div>
+                            <div className="rounded-xl border border-border bg-secondary/50 p-4 flex flex-col gap-1">
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-widest">AI Estimate</p>
+                              <div className="flex items-baseline gap-1">
+                                <span className="font-display font-black text-3xl text-foreground">
+                                  €{(aiInsightsData.estimatedValue / 1000).toFixed(0)}k
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-muted-foreground">Confidence: {aiInsightsData.confidenceLabel}</p>
+                            </div>
+                          </div>);
+                      })()}
+                      {!aiInsightsLoading && !aiInsightsData &&
+                      <p className="text-xs text-muted-foreground text-center py-4">Market analysis unavailable</p>
+                      }
+                    </>
+                  ) : (
+                    /* Non-pro: blurred metric cards + upgrade CTA */
+                    <div className="relative">
+                      <div className="pointer-events-none select-none blur-[4px] opacity-60">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div className="rounded-xl border border-brand-emerald/20 bg-brand-emerald/10 p-4 flex flex-col gap-1">
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-widest">vs Market</p>
+                            <span className="font-display font-black text-3xl text-brand-emerald">−8%</span>
+                            <p className="text-[10px] font-semibold text-brand-emerald">Below Market</p>
+                          </div>
+                          <div className="rounded-xl border border-border bg-secondary/50 p-4 flex flex-col gap-1">
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Rental Yield</p>
+                            <span className="font-display font-black text-3xl text-primary">4.2%</span>
+                            <p className="text-[10px] text-muted-foreground">Est. gross annual yield</p>
+                          </div>
+                          <div className="rounded-xl border border-border bg-secondary/50 p-4 flex flex-col gap-1">
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-widest">AI Estimate</p>
+                            <span className="font-display font-black text-3xl text-foreground">€###k</span>
+                            <p className="text-[10px] text-muted-foreground">Confidence: High</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2.5 text-center bg-background/50 backdrop-blur-sm rounded-xl">
+                        <Lock className="w-4 h-4 text-primary" />
+                        <p className="text-xs font-semibold text-foreground">Pro Feature</p>
+                        <p className="text-[11px] text-muted-foreground leading-relaxed max-w-[220px]">
+                          Upgrade to <Link to="/pro" className="text-primary font-bold hover:underline">Pro</Link> to unlock AI market insights — price position, rental yield &amp; AI value estimate.
+                        </p>
+                      </div>
                     </div>
-                  }
-                  {!aiInsightsLoading && aiInsightsData && (() => {
-                    const cmpCfg: Record<string, {label: string;color: string;bg: string;}> = {
-                      below_market: { label: "Below Market", color: "text-emerald-400", bg: "bg-emerald-400/10 border-emerald-400/20" },
-                      at_market: { label: "At Market", color: "text-yellow-400", bg: "bg-yellow-400/10  border-yellow-400/20" },
-                      above_market: { label: "Above Market", color: "text-destructive", bg: "bg-destructive/10 border-destructive/20" }
-                    };
-                    const cmp = cmpCfg[aiInsightsData.marketComparison] ?? cmpCfg.at_market;
-                    return (
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        {/* vs Market */}
-                        <div className={`rounded-xl border p-4 flex flex-col gap-1 ${cmp.bg}`}>
-                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest">vs Market</p>
-                          <div className="flex items-baseline gap-1">
-                            <span className={`font-display font-black text-3xl ${cmp.color}`}>
-                              {aiInsightsData.vsMarket > 0 ? "+" : ""}{aiInsightsData.vsMarket}%
-                            </span>
-                          </div>
-                          <p className={`text-[10px] font-semibold ${cmp.color}`}>{cmp.label}</p>
-                        </div>
-                        {/* Rental Yield */}
-                        <div className="rounded-xl border border-border bg-secondary/50 p-4 flex flex-col gap-1">
-                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Rental Yield</p>
-                          <div className="flex items-baseline gap-1">
-                            <span className="font-display font-black text-3xl text-primary">{aiInsightsData.rentalYield}%</span>
-                          </div>
-                          <p className="text-[10px] text-muted-foreground">Est. gross annual yield</p>
-                        </div>
-                        {/* AI Value Estimate */}
-                        <div className="rounded-xl border border-border bg-secondary/50 p-4 flex flex-col gap-1">
-                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest">AI Estimate</p>
-                          <div className="flex items-baseline gap-1">
-                            <span className="font-display font-black text-3xl text-foreground">
-                              €{(aiInsightsData.estimatedValue / 1000).toFixed(0)}k
-                            </span>
-                          </div>
-                          <p className="text-[10px] text-muted-foreground">Confidence: {aiInsightsData.confidenceLabel}</p>
-                        </div>
-                      </div>);
-
-                  })()}
-                  {!aiInsightsLoading && !aiInsightsData &&
-                  <p className="text-xs text-muted-foreground text-center py-4">Market analysis unavailable</p>
-                  }
-                  {/* Pro upsell — hidden for Pro subscribers */}
-                  {!isPro && (
-                  <div className="flex items-start gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
-                    <Lock className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-xs font-semibold text-foreground">Want the full picture?</p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
-                        Upgrade to <Link to="/pro" className="text-primary font-bold hover:underline">Pro</Link> to unlock the complete <span className="font-medium">AI Property Valuation</span> — price range, confidence score, key factors, renovation potential &amp; more.
-                      </p>
-                    </div>
-                  </div>
                   )}
                 </div>
               </Section>
@@ -1218,31 +1237,44 @@ export default function PropertyDetail() {
                   landUse={db?.land_use}
                 />
               ) : (
-                <div className="relative">
-                  <div className="pointer-events-none select-none opacity-40 blur-[2px]">
-                    <PropertyValuation
-                      title={title} city={city} address={address} price={price} sqm={sqm}
-                      bedrooms={bedrooms} bathrooms={bathrooms} propertyType={propertyType}
-                      listingType={db?.listing_type} floor={db?.floor} yearBuilt={db?.year_built}
-                      energyClass={energyClass} pricePerSqm={pricePerSqm ? Number(pricePerSqm) : undefined}
-                      hasParking={db?.has_parking} hasPool={db?.has_pool}
-                      hasElevator={db?.has_elevator} region={db?.region}
-                      isNeoclassical={db?.is_neoclassical} isPreserved={db?.is_preserved}
-                      distanceFromSea={db?.distance_from_sea} withinCityPlan={db?.within_city_plan}
-                      withinSettlement={db?.within_settlement} buildingAllowance={db?.building_allowance}
-                      coverageRatio={db?.coverage_ratio} isBuildable={db?.is_buildable}
-                      cadastreNumber={db?.cadastre_number} hasLandConcession={db?.has_land_concession}
-                      landUse={db?.land_use}
-                      ownershipStatus={ownershipStatus ?? undefined}
-                      ownershipPercentage={ownershipPct ?? undefined} />
+                /* Non-pro: static locked card — no edge function calls */
+                <div className="glass-card rounded-2xl overflow-hidden border border-primary/20">
+                  <div className="flex items-center gap-2 px-5 py-3.5 bg-primary/5 border-b border-primary/20">
+                    <Zap className="w-4 h-4 text-primary" />
+                    <h4 className="font-display font-semibold text-sm flex-1">AI Property Valuation</h4>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/15 text-primary font-semibold">Pro</span>
                   </div>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl bg-background/60 backdrop-blur-sm border border-primary/20 gap-3 px-5 text-center">
-                    <Lock className="w-5 h-5 text-primary" />
-                    <p className="font-display font-bold text-sm">Pro Feature</p>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      Unlock the full <span className="font-semibold text-foreground">AI Property Valuation</span> — price range, confidence score, key factors &amp; renovation potential.
-                    </p>
-                    <Link to="/pro" className="flex items-center gap-1.5 text-xs font-semibold bg-primary text-primary-foreground px-3 py-1.5 rounded-lg hover:bg-primary/90 transition-colors">
+                  <div className="p-6 flex flex-col items-center gap-4 text-center">
+                    {/* Blurred mock data */}
+                    <div className="w-full pointer-events-none select-none blur-[5px] opacity-50 space-y-3">
+                      <div className="flex items-start gap-4">
+                        <div className="flex-1">
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">AI Estimated Value</p>
+                          <p className="font-display font-black text-2xl text-foreground">€███,███</p>
+                          <p className="text-xs text-muted-foreground mt-1 font-mono">€███,███ — €███,███</p>
+                        </div>
+                        <div className="flex gap-3 shrink-0">
+                          <div className="w-14 h-14 rounded-full bg-muted border-4 border-brand-emerald/40" />
+                          <div className="w-14 h-14 rounded-full bg-muted border-4 border-primary/30" />
+                        </div>
+                      </div>
+                      <div className="bg-secondary/60 border border-border rounded-xl px-3 py-2 text-xs flex items-center justify-between">
+                        <span className="text-muted-foreground">Pricing position</span>
+                        <span className="font-bold text-brand-emerald">Underpriced</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="bg-secondary/50 rounded-lg px-2.5 py-2 h-9" />
+                        <div className="bg-secondary/50 rounded-lg px-2.5 py-2 h-9" />
+                      </div>
+                    </div>
+                    <Lock className="w-6 h-6 text-primary" />
+                    <div>
+                      <p className="font-display font-bold text-sm">Pro Feature</p>
+                      <p className="text-xs text-muted-foreground mt-1 leading-relaxed max-w-[200px]">
+                        Full AI valuation — price range, confidence, legal &amp; tax overlay, key factors.
+                      </p>
+                    </div>
+                    <Link to="/pro" className="flex items-center gap-1.5 text-xs font-semibold bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors">
                       <Zap className="w-3.5 h-3.5" /> Upgrade to Pro
                     </Link>
                   </div>
