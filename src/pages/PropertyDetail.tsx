@@ -20,6 +20,7 @@ import { useListing, useListings } from "@/hooks/useListings";
 import { useFavorites, useToggleFavorite } from "@/hooks/useFavorites";
 import { useStartConversation } from "@/hooks/useMessages";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSubscription } from "@/hooks/useSubscription";
 import { toast } from "sonner";
 import PropertyMiniMap from "@/components/PropertyMiniMap";
 import PropertyValuation from "@/components/PropertyValuation";
