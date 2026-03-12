@@ -72,47 +72,54 @@ const YEAR_RANGES = [
 
 const OWNERSHIP_STATUSES = [
   { value: "", label: "Any Status" },
-  { value: "free", label: "Free of Encumbrances" },
-  { value: "mortgaged", label: "With Mortgage" },
-  { value: "occupied", label: "Occupied" },
-  { value: "vacated", label: "Vacated" },
+  { value: "full", label: "Full Ownership (100%)" },
+  { value: "partial", label: "Partial Ownership" },
+  { value: "none", label: "No Ownership" },
 ];
-
-type ViewMode = "list" | "map";
-
-function daysUntil(dateStr?: string | null): number | null {
-  if (!dateStr) return null;
-  const diff = new Date(dateStr).getTime() - Date.now();
-  return Math.ceil(diff / 86_400_000);
-}
-
-function countdownBadge(days: number | null): { label: string; cls: string } | null {
-  if (days === null) return null;
-  if (days === 0) return { label: "Today!", cls: "bg-destructive text-white" };
-  if (days === 1) return { label: "Tomorrow", cls: "bg-destructive/80 text-white" };
-  if (days <= 3) return { label: `${days} days left`, cls: "bg-destructive/70 text-white" };
-  if (days <= 7) return { label: `${days} days left`, cls: "bg-brand-gold text-background" };
-  return { label: `${days} days left`, cls: "bg-secondary text-muted-foreground border border-border" };
-}
-
-function streetViewImg(lat?: number | null, lng?: number | null): string | null {
-  if (!lat || !lng) return null;
-  return `https://maps.googleapis.com/maps/api/streetview?size=600x300&location=${lat},${lng}&fov=90&pitch=5`;
-}
 
 /** Extract ownership status tag from tags array */
 function getOwnershipStatus(tags?: string[] | null): string | null {
   if (!tags) return null;
-  const tag = tags.find(t => t.startsWith("ownership:"));
+  const tag = tags.find(t => t.startsWith("ownership:") && !t.startsWith("ownership_pct:"));
   return tag ? tag.replace("ownership:", "") : null;
 }
 
+/** Extract ownership percentage from tags array */
+function getOwnershipPct(tags?: string[] | null): number | null {
+  if (!tags) return null;
+  const tag = tags.find(t => t.startsWith("ownership_pct:"));
+  return tag ? Number(tag.replace("ownership_pct:", "")) : null;
+}
+
 const OWNERSHIP_BADGE: Record<string, { label: string; cls: string }> = {
-  free:     { label: "Χωρίς βάρη", cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/25" },
-  mortgaged:{ label: "Με υποθήκη", cls: "bg-amber-500/15 text-amber-400 border-amber-500/25" },
+  full:     { label: "Πλήρης κυριότητα", cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/25" },
+  partial:  { label: "Μερική κυριότητα", cls: "bg-amber-500/15 text-amber-400 border-amber-500/25" },
+  none:     { label: "Χωρίς κυριότητα", cls: "bg-red-500/15 text-red-400 border-red-500/25" },
   occupied: { label: "Κατειλημμένο", cls: "bg-destructive/15 text-destructive border-destructive/25" },
   vacated:  { label: "Κενό", cls: "bg-blue-500/15 text-blue-400 border-blue-500/25" },
 };
+
+type ViewMode = "list" | "map";
+
+function streetViewImg(lat?: number | null, lng?: number | null): string | null {
+  if (!lat || !lng) return null;
+  const key = "AIzaSyD42TB3L5KeQfvqOu6NfelXL5EOVNzz_cY";
+  return `https://maps.googleapis.com/maps/api/streetview?size=800x450&location=${lat},${lng}&fov=90&pitch=10&key=${key}`;
+}
+
+function daysUntil(dateStr?: string | null): number {
+  if (!dateStr) return 999;
+  const now = new Date();
+  const d = new Date(dateStr);
+  return Math.max(0, Math.ceil((d.getTime() - now.getTime()) / 86_400_000));
+}
+
+function countdownBadge(days: number): { label: string; cls: string } | null {
+  if (days <= 0) return { label: "Today!", cls: "bg-destructive text-destructive-foreground" };
+  if (days === 1) return { label: "Tomorrow", cls: "bg-amber-500 text-white" };
+  if (days <= 7) return { label: `${days} days left`, cls: "bg-primary/80 text-primary-foreground" };
+  return null;
+}
 
 // Premium lock badge
 function PremiumBadge() {
@@ -134,6 +141,7 @@ function AuctionCard({ a, favoritedIds, onToggleFav }: {
   const imgSrc = a.cover_image_url ?? streetViewImg(a.latitude, a.longitude);
   const isFav = favoritedIds.has(a.id);
   const ownershipStatus = getOwnershipStatus(a.tags);
+  const ownershipPct = getOwnershipPct(a.tags);
   const ownershipBadge = ownershipStatus ? OWNERSHIP_BADGE[ownershipStatus] : null;
 
   const handleShare = async (e: React.MouseEvent) => {
@@ -202,6 +210,9 @@ function AuctionCard({ a, favoritedIds, onToggleFav }: {
           <div className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border w-fit ${ownershipBadge.cls}`}>
             <Building2 className="w-2.5 h-2.5" />
             {ownershipBadge.label}
+            {ownershipPct != null && ownershipPct < 100 && (
+              <span className="opacity-80">({ownershipPct}%)</span>
+            )}
           </div>
         )}
 
