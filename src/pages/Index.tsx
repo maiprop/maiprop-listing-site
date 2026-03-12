@@ -1139,7 +1139,7 @@ export default function Index() {
           <div
             className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 reveal reveal-delay-1 ${featuredInView ? "in-view" : ""}`}>
             
-            {featuredLoading
+            {featuredLoading && !featuredError
               ? Array.from({ length: 4 }).map((_, i) => (
                   <div key={i} className="glass-card rounded-2xl border border-border overflow-hidden animate-pulse">
                     <div className="bg-muted h-52 w-full" />
