@@ -451,7 +451,7 @@ export default function AdminPanel() {
               </Button>
               <Button className="flex-1 gap-2" size="sm" variant="secondary" disabled={fullSyncMutation.isPending} onClick={() => fullSyncMutation.mutate()}>
                 {fullSyncMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                {fullSyncMutation.isPending ? "Syncing…" : "Full sync (OS → Hub)"}
+                {fullSyncMutation.isPending ? (syncProgress ?? "Syncing…") : "Full sync (OS → Hub)"}
               </Button>
             </div>
           </div>
