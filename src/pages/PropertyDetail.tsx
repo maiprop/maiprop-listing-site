@@ -20,6 +20,7 @@ import { useListing, useListings } from "@/hooks/useListings";
 import { useFavorites, useToggleFavorite } from "@/hooks/useFavorites";
 import { useStartConversation } from "@/hooks/useMessages";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSubscription } from "@/hooks/useSubscription";
 import { toast } from "sonner";
 import PropertyMiniMap from "@/components/PropertyMiniMap";
 import PropertyValuation from "@/components/PropertyValuation";
@@ -188,6 +189,7 @@ export default function PropertyDetail() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
+  const { isPro } = useSubscription();
 
   const { data: dbListing, isLoading } = useListing(id || "");
   const { data: dbSimilar = [] } = useListings({ city: dbListing?.city, property_type: dbListing?.property_type });
@@ -1169,43 +1171,52 @@ export default function PropertyDetail() {
 
               })()}
 
-              {/* ③ AI Property Valuation — Pro-locked */}
-              <div className="relative">
-                <div className="pointer-events-none select-none opacity-40 blur-[2px]">
-                  <PropertyValuation
-                    title={title}
-                    city={city}
-                    address={address}
-                    price={price}
-                    sqm={sqm}
-                    bedrooms={bedrooms}
-                    bathrooms={bathrooms}
-                    propertyType={propertyType}
-                    listingType={listingType}
-                    floor={db?.floor}
-                    yearBuilt={db?.year_built}
-                    energyClass={energyClass}
-                    pricePerSqm={pricePerSqm ? Number(pricePerSqm) : undefined}
-                    hasParking={db?.has_parking}
-                    hasPool={db?.has_pool}
-                    hasElevator={db?.has_elevator}
-                    region={db?.region} />
-                  
-                </div>
-                {/* Lock overlay */}
-                <div className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl bg-background/60 backdrop-blur-sm border border-primary/20 gap-3 px-5 text-center">
-                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Lock className="w-5 h-5 text-primary" />
+              {/* ③ AI Property Valuation — unlocked for Pro users */}
+              {isPro ? (
+                <PropertyValuation
+                  title={title}
+                  city={city}
+                  address={address}
+                  price={price}
+                  sqm={sqm}
+                  bedrooms={bedrooms}
+                  bathrooms={bathrooms}
+                  propertyType={propertyType}
+                  listingType={listingType}
+                  floor={db?.floor}
+                  yearBuilt={db?.year_built}
+                  energyClass={energyClass}
+                  pricePerSqm={pricePerSqm ? Number(pricePerSqm) : undefined}
+                  hasParking={db?.has_parking}
+                  hasPool={db?.has_pool}
+                  hasElevator={db?.has_elevator}
+                  region={db?.region}
+                />
+              ) : (
+                <div className="relative">
+                  <div className="pointer-events-none select-none opacity-40 blur-[2px]">
+                    <PropertyValuation
+                      title={title} city={city} address={address} price={price} sqm={sqm}
+                      bedrooms={bedrooms} bathrooms={bathrooms} propertyType={propertyType}
+                      listingType={listingType} floor={db?.floor} yearBuilt={db?.year_built}
+                      energyClass={energyClass} pricePerSqm={pricePerSqm ? Number(pricePerSqm) : undefined}
+                      hasParking={db?.has_parking} hasPool={db?.has_pool}
+                      hasElevator={db?.has_elevator} region={db?.region} />
                   </div>
-                  <p className="font-display font-bold text-sm">Pro Feature</p>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    Unlock the full <span className="font-semibold text-foreground">AI Property Valuation</span> — price range, confidence score, key factors &amp; renovation potential.
-                  </p>
-                  <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground gap-1.5 mt-1" asChild>
-                    <Link to="/pro"><Zap className="w-3.5 h-3.5" /> Upgrade to Pro</Link>
-                  </Button>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl bg-background/60 backdrop-blur-sm border border-primary/20 gap-3 px-5 text-center">
+                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                      <Lock className="w-5 h-5 text-primary" />
+                    </div>
+                    <p className="font-display font-bold text-sm">Pro Feature</p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Unlock the full <span className="font-semibold text-foreground">AI Property Valuation</span> — price range, confidence score, key factors &amp; renovation potential.
+                    </p>
+                    <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground gap-1.5 mt-1" asChild>
+                      <Link to="/pro"><Zap className="w-3.5 h-3.5" /> Upgrade to Pro</Link>
+                    </Button>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* ④ Full AI Property Report */}
               <Section className={reportPurchased ? "border-primary/30" : ""}>

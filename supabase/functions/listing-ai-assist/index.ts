@@ -7,7 +7,8 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { type, property } = await req.json();
+    const body = await req.json();
+    const { type, property } = body;
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
@@ -41,7 +42,10 @@ ${property.condition ? `Condition: ${property.condition}` : ""}
 ${property.features?.length ? `Key features: ${property.features.join(", ")}` : ""}
 ${property.listing_type === "rent" ? "Provide monthly rent estimate in EUR." : "Provide sale price estimate in EUR."}`;
     } else {
-      throw new Error("Invalid type");
+      return new Response(
+        JSON.stringify({ error: `Unsupported type: "${type}". Use "description" or "price".` }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
