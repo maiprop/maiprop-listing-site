@@ -134,6 +134,7 @@ Analyse this property:
 - Size: ${sqm} m²${bedrooms != null ? ` · ${bedrooms} bed` : ""}${bathrooms != null ? ` · ${bathrooms} bath` : ""}
 - Listed price: €${Number(price).toLocaleString()} (€${pricePerSqm ? Math.round(Number(pricePerSqm)) : Math.round(Number(price)/Number(sqm))}/m²)
 - Additional details: ${features || "standard specification"}
+${ownershipStatus && ownershipStatus !== "full" ? `- OWNERSHIP NOTE: This is a ${ownershipStatus} ownership auction property${ownershipPercentage ? ` (only ${ownershipPercentage}% share being auctioned)` : ""}. Adjust estimated value and market comparison accordingly — partial/shared ownership properties typically trade at a 20-40% discount to full ownership equivalent.\n` : ""}
 
 ${typeSpecificInstructions}
 
