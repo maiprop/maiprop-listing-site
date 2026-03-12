@@ -615,13 +615,25 @@ export default function PropertyDetail() {
                   {db.floor != null && (
                     <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium">
                       <Layers className="w-3.5 h-3.5 text-primary" />
-                      {db.floor === 0 ? "Ground" : `${db.floor}${["st","nd","rd"][db.floor-1] || "th"}`} floor
+                      {db.floor === -1 ? "Basement" : db.floor === 0 ? "Ground floor" : `${db.floor}${["st","nd","rd"][db.floor-1] || "th"} floor`}
                       {db.total_floors ? ` / ${db.total_floors}` : ""}
                     </div>
                   )}
                   {(db as any)?.heating_system && (
                     <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium capitalize">
                       <Thermometer className="w-3.5 h-3.5 text-primary" />{(db as any).heating_system}
+                    </div>
+                  )}
+                  {/* Ownership pills — shown for all listing types when present in tags */}
+                  {ownershipDisplay && (
+                    <div className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border ${ownershipDisplay.cls}`}>
+                      <Building2 className="w-3.5 h-3.5 shrink-0" />
+                      {ownershipDisplay.label}
+                    </div>
+                  )}
+                  {ownershipPct != null && ownershipStatus !== "full" && (
+                    <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium">
+                      <Tag className="w-3.5 h-3.5 text-primary" />{ownershipPct}%
                     </div>
                   )}
                 </div>
