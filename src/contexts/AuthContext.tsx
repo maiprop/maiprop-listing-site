@@ -5,11 +5,19 @@ import type { Tables } from "@/integrations/supabase/types";
 
 type Profile = Tables<"profiles">;
 
+export interface SubscriptionState {
+  subscribed: boolean;
+  productId: string | null;
+  subscriptionEnd: string | null;
+  loading: boolean;
+}
+
 interface AuthContextType {
   session: Session | null;
   user: User | null;
   profile: Profile | null;
   loading: boolean;
+  subscription: SubscriptionState;
   /** True when a newly-signed-up user hasn't completed onboarding yet */
   needsOnboarding: boolean;
   signUp: (email: string, password: string, meta: { full_name: string; role: string; business_name?: string; tax_id?: string; phone?: string; license_number?: string }) => Promise<{ error: Error | null }>;
@@ -17,14 +25,11 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: Error | null }>;
   refreshProfile: () => Promise<void>;
+  refreshSubscription: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-/** A profile needs onboarding when:
- *  - bio is null/empty (no __type: marker written by Onboarding page)
- *  This lets us send both email-signup and Google-OAuth users through /onboarding.
- */
 function profileNeedsOnboarding(p: Profile | null): boolean {
   if (!p) return false;
   return !p.bio || !p.bio.startsWith("__type:");
@@ -35,6 +40,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [subscription, setSubscription] = useState<SubscriptionState>({
+    subscribed: false,
+    productId: null,
+    subscriptionEnd: null,
+    loading: false,
+  });
 
   const fetchProfile = async (userId: string) => {
     const { data } = await supabase
@@ -46,15 +57,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return data;
   };
 
+  const checkSubscription = async (currentSession: Session | null) => {
+    if (!currentSession) {
+      setSubscription({ subscribed: false, productId: null, subscriptionEnd: null, loading: false });
+      return;
+    }
+    setSubscription(prev => ({ ...prev, loading: true }));
+    try {
+      const { data, error } = await supabase.functions.invoke("check-subscription", {});
+      if (!error && data) {
+        setSubscription({
+          subscribed: data.subscribed ?? false,
+          productId: data.product_id ?? null,
+          subscriptionEnd: data.subscription_end ?? null,
+          loading: false,
+        });
+      } else {
+        setSubscription(prev => ({ ...prev, loading: false }));
+      }
+    } catch {
+      setSubscription(prev => ({ ...prev, loading: false }));
+    }
+  };
+
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+    const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange(
       async (event, sess) => {
         setSession(sess);
         setUser(sess?.user ?? null);
         if (sess?.user) {
           await fetchProfile(sess.user.id);
+          // Defer to avoid race condition
+          setTimeout(() => checkSubscription(sess), 0);
         } else {
           setProfile(null);
+          setSubscription({ subscribed: false, productId: null, subscriptionEnd: null, loading: false });
         }
         setLoading(false);
       }
@@ -65,12 +102,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(sess?.user ?? null);
       if (sess?.user) {
         fetchProfile(sess.user.id).finally(() => setLoading(false));
+        checkSubscription(sess);
       } else {
         setLoading(false);
       }
     });
 
-    return () => subscription.unsubscribe();
+    // Refresh subscription every 5 minutes
+    const interval = setInterval(() => {
+      supabase.auth.getSession().then(({ data: { session: sess } }) => {
+        if (sess) checkSubscription(sess);
+      });
+    }, 5 * 60 * 1000);
+
+    return () => {
+      authSub.unsubscribe();
+      clearInterval(interval);
+    };
   }, []);
 
   const signUp = async (
@@ -86,17 +134,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         emailRedirectTo: `${window.location.origin}/onboarding`,
       },
     });
-
-    // Eagerly set profile display_name so the dashboard greets the user correctly
     if (data.user && !error) {
       await supabase
         .from("profiles")
-        .update({
-          ...(meta.phone && { phone: meta.phone }),
-        })
+        .update({ ...(meta.phone && { phone: meta.phone }) })
         .eq("user_id", data.user.id);
     }
-
     return { error: error as Error | null };
   };
 
@@ -108,14 +151,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     await supabase.auth.signOut();
     setProfile(null);
+    setSubscription({ subscribed: false, productId: null, subscriptionEnd: null, loading: false });
   };
 
   const updateProfile = async (updates: Partial<Profile>) => {
     if (!user) return { error: new Error("Not authenticated") };
-    const { error } = await supabase
-      .from("profiles")
-      .update(updates)
-      .eq("user_id", user.id);
+    const { error } = await supabase.from("profiles").update(updates).eq("user_id", user.id);
     if (!error) await fetchProfile(user.id);
     return { error: error as Error | null };
   };
@@ -124,10 +165,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (user) await fetchProfile(user.id);
   };
 
+  const refreshSubscription = async () => {
+    const { data: { session: sess } } = await supabase.auth.getSession();
+    await checkSubscription(sess);
+  };
+
   const needsOnboarding = profileNeedsOnboarding(profile);
 
   return (
-    <AuthContext.Provider value={{ session, user, profile, loading, needsOnboarding, signUp, signIn, signOut, updateProfile, refreshProfile }}>
+    <AuthContext.Provider value={{
+      session, user, profile, loading, subscription, needsOnboarding,
+      signUp, signIn, signOut, updateProfile, refreshProfile, refreshSubscription,
+    }}>
       {children}
     </AuthContext.Provider>
   );
