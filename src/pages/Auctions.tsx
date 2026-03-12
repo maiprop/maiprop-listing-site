@@ -148,7 +148,7 @@ function AuctionCard({ a, favoritedIds, onToggleFav }: {
 
   const handleShare = async (e: React.MouseEvent) => {
     e.preventDefault();
-    const url = `${window.location.origin}/property/${a.id}`;
+    const url = `${window.location.origin}/auction/${a.id}`;
     if (navigator.share) {
       try { await navigator.share({ title: a.title, url }); } catch {}
     } else {
@@ -165,7 +165,7 @@ function AuctionCard({ a, favoritedIds, onToggleFav }: {
   return (
     <div className="glass-card rounded-xl overflow-hidden border border-border hover:border-brand-gold/40 transition-all group flex flex-col">
       {/* Image */}
-      <Link to={`/property/${a.id}`} className="relative h-44 bg-secondary overflow-hidden block">
+      <Link to={`/auction/${a.id}`} className="relative h-44 bg-secondary overflow-hidden block">
         {imgSrc ? (
           <img
             src={imgSrc}
@@ -197,7 +197,7 @@ function AuctionCard({ a, favoritedIds, onToggleFav }: {
 
       {/* Info */}
       <div className="p-4 space-y-2 flex-1 flex flex-col">
-        <Link to={`/property/${a.id}`}>
+        <Link to={`/auction/${a.id}`}>
           <h3 className="font-semibold text-sm line-clamp-2 group-hover:text-brand-gold transition-colors">
             {a.title}
           </h3>
@@ -524,7 +524,7 @@ export default function Auctions() {
               {/* Standard filters */}
               <div>
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Standard Filters</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {/* Typology */}
                   <div>
                     <label className="text-xs text-muted-foreground font-medium block mb-1.5">Property Type</label>
@@ -560,18 +560,6 @@ export default function Auctions() {
                       {YEAR_RANGES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                     </select>
                   </div>
-
-                  {/* Ownership status — now a real filter */}
-                  <div>
-                    <label className="text-xs text-muted-foreground font-medium block mb-1.5">Ownership Status</label>
-                    <select
-                      value={filterOwnership}
-                      onChange={e => setFilterOwnership(e.target.value)}
-                      className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none"
-                    >
-                      {OWNERSHIP_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                    </select>
-                  </div>
                 </div>
               </div>
 
@@ -581,7 +569,27 @@ export default function Auctions() {
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Premium Filters</p>
                   <PremiumBadge />
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {/* Ownership status — pro filter */}
+                  <div className="relative">
+                    <label className="text-xs text-muted-foreground font-medium block mb-1.5 flex items-center gap-1.5">
+                      Ownership Status <PremiumBadge />
+                    </label>
+                    <select
+                      value={filterOwnership}
+                      onChange={() => {}}
+                      disabled
+                      className="w-full bg-secondary/50 border border-border/50 rounded-xl px-3 py-2.5 text-sm text-muted-foreground outline-none cursor-not-allowed appearance-none opacity-60"
+                    >
+                      {OWNERSHIP_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                    </select>
+                    <div className="absolute inset-0 rounded-xl flex items-center justify-center bg-card/60 backdrop-blur-[1px] cursor-not-allowed">
+                      <span className="flex items-center gap-1.5 text-xs font-semibold text-brand-gold">
+                        <Lock className="w-3.5 h-3.5" /> Upgrade to Pro
+                      </span>
+                    </div>
+                  </div>
+
                   {/* Auction round */}
                   <div className="relative">
                     <label className="text-xs text-muted-foreground font-medium block mb-1.5 flex items-center gap-1.5">
