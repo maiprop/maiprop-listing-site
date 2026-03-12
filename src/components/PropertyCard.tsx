@@ -2,8 +2,8 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   MapPin, Bed, Bath, Square, Heart, Gavel, Flame,
-  Eye, TrendingUp, Star, Video, Zap, CheckCircle,
-  Home, ArrowRight, Calendar, Layers, Phone, MessageCircle,
+  Eye, TrendingUp, Video, Zap, CheckCircle,
+  Home, Calendar, Layers, MessageCircle,
   Share2, Flag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -209,14 +209,6 @@ export function PropertyCard({ property, compact = false }: PropertyCardProps) {
           >
             <Heart className={`w-4 h-4 transition-all ${isFavorited ? "fill-current" : ""}`} />
           </button>
-          {/* Share button */}
-          <button
-            className="w-9 h-9 rounded-full flex items-center justify-center shadow-lg bg-white/90 backdrop-blur-sm text-foreground hover:bg-white hover:scale-105 transition-all duration-200 active:scale-90"
-            onClick={handleShare}
-            aria-label="Share property"
-          >
-            <Share2 className="w-4 h-4" />
-          </button>
         </div>
 
         {/* Price block — bottom-left overlay */}
@@ -384,14 +376,24 @@ export function PropertyCard({ property, compact = false }: PropertyCardProps) {
               )}
             </div>
           )}
-          {/* Action row: Contact + Share + Report */}
+          {/* Action row: Contact (non-auction only) + Share + Report */}
           <div className="flex items-center gap-2">
-            <Link to={detailPath} className="flex-1">
-              <button className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-primary text-primary-foreground font-semibold text-sm transition-all hover:opacity-90 hover:shadow-md active:scale-[0.98]">
-                <MessageCircle className="w-4 h-4" />
-                Contact Agent
-              </button>
-            </Link>
+            {property.listingType !== "auction" && (
+              <Link to={detailPath} className="flex-1">
+                <button className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-primary text-primary-foreground font-semibold text-sm transition-all hover:opacity-90 hover:shadow-md active:scale-[0.98]">
+                  <MessageCircle className="w-4 h-4" />
+                  Contact Agent
+                </button>
+              </Link>
+            )}
+            {property.listingType === "auction" && (
+              <Link to={detailPath} className="flex-1">
+                <button className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-brand-gold text-black font-semibold text-sm transition-all hover:opacity-90 hover:shadow-md active:scale-[0.98]">
+                  <Gavel className="w-4 h-4" />
+                  View Auction
+                </button>
+              </Link>
+            )}
             <button
               onClick={handleShare}
               className="p-2.5 rounded-xl border border-border bg-secondary text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-all"
