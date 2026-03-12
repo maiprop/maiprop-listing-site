@@ -491,7 +491,7 @@ export default function PropertyDetail() {
                     onClick={handleFavorite}>
                     <Heart className={`w-4 h-4 ${isFavorited ? "fill-white" : ""}`} />
                   </button>
-                  <button className="p-2.5 rounded-full bg-background/70 backdrop-blur-md hover:bg-background/90 shadow transition-all">
+                  <button onClick={handleShare} className="p-2.5 rounded-full bg-background/70 backdrop-blur-md hover:bg-background/90 shadow transition-all" aria-label="Share property">
                     <Share2 className="w-4 h-4" />
                   </button>
                 </div>
