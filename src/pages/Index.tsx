@@ -1308,7 +1308,7 @@ export default function Index() {
               name: "Thessaloniki",
               listings: 8240,
               trend: "+0.8%",
-              image: "https://images.unsplash.com/photo-1570939274717-7eda259b50ed?w=600&q=80"
+              image: "https://images.unsplash.com/photo-1586796676474-a72c3b85c2d2?w=600&q=80"
             },
             {
               name: "Mykonos",
