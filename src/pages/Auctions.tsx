@@ -293,21 +293,28 @@ function AuctionCard({ a, favoritedIds, onToggleFav }: {
 export default function Auctions() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [selectedCity, setSelectedCity] = useState("All Cities");
+  const [searchParams] = useSearchParams();
+  const [selectedCity, setSelectedCity] = useState(() => searchParams.get("city") || "All Cities");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [showFilters, setShowFilters] = useState(false);
   const [alertModalOpen, setAlertModalOpen] = useState(false);
   const [favoritedIds, setFavoritedIds] = useState<Set<string>>(new Set());
 
   // Standard filters
-  const [filterType, setFilterType] = useState("");
+  const [filterType, setFilterType] = useState(searchParams.get("type") || "");
   const [filterBidRange, setFilterBidRange] = useState("");
   const [filterYearRange, setFilterYearRange] = useState("");
-  const [filterOwnership, setFilterOwnership] = useState("");
 
-  // Premium filters
-  const [filterRound, setFilterRound] = useState("");
-  const [filterYield, setFilterYield] = useState("");
+  // Premium filters (visible but locked)
+  const [filterOwnership] = useState("");
+  const [filterRound] = useState("");
+  const [filterYield] = useState("");
+
+  // Prefill city from URL when data loads
+  useEffect(() => {
+    const cityParam = searchParams.get("city");
+    if (cityParam) setSelectedCity(cityParam);
+  }, [searchParams]);
 
   const { data: auctions = [], isLoading, error } = useAuctionListings();
   const toggleFav = useToggleFavorite();
