@@ -129,15 +129,25 @@ export function PropertyCard({ property, compact = false }: PropertyCardProps) {
     );
   }
 
+  const mainImage = property.images?.[0];
+
   return (
     <div className="property-card rounded-2xl overflow-hidden group flex flex-col bg-card border border-border">
       {/* Image — taller ratio */}
-      <div className="relative overflow-hidden" style={{ aspectRatio: "3/2" }}>
-        <img
-          src={property.images[0]}
-          alt={property.title}
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-        />
+      <div className="relative overflow-hidden bg-secondary" style={{ aspectRatio: "3/2" }}>
+        {mainImage ? (
+          <img
+            src={mainImage}
+            alt={property.title}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+          />
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center gap-2">
+            <Home className="w-10 h-10 text-muted-foreground/20" />
+            <span className="text-xs text-muted-foreground/40">No photo</span>
+          </div>
+        )}
         {/* Soft gradient overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-transparent" />
 

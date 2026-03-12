@@ -259,6 +259,31 @@ export default function PropertyDetail() {
   const isAuction = listingType === "auction";
   const websiteUrl = (db as any)?.website_url as string | null;
 
+  // Extract ownership info from tags (for auction listings)
+  const tags: string[] = (db as any)?.tags ?? [];
+  const ownershipTag = tags.find((t: string) => t.startsWith("ownership:") && !t.startsWith("ownership_pct:"));
+  const ownershipStatus = ownershipTag ? ownershipTag.replace("ownership:", "") : null;
+  const ownershipPctTag = tags.find((t: string) => t.startsWith("ownership_pct:"));
+  const ownershipPct = ownershipPctTag ? Number(ownershipPctTag.replace("ownership_pct:", "")) : null;
+
+  const OWNERSHIP_LABEL: Record<string, { label: string; cls: string }> = {
+    full:    { label: "Πλήρης κυριότητα (100%)", cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" },
+    partial: { label: "Μερική κυριότητα", cls: "bg-amber-500/15 text-amber-400 border-amber-500/30" },
+    common:  { label: "Εξ αδιαιρέτου", cls: "bg-sky-500/15 text-sky-400 border-sky-500/30" },
+    none:    { label: "Χωρίς κυριότητα", cls: "bg-destructive/15 text-destructive border-destructive/30" },
+  };
+  const ownershipDisplay = ownershipStatus ? (OWNERSHIP_LABEL[ownershipStatus] ?? { label: ownershipStatus, cls: "bg-muted text-muted-foreground border-border" }) : null;
+
+  const handleShare = async () => {
+    const url = window.location.href;
+    if (navigator.share) {
+      try { await navigator.share({ title, url }); } catch {}
+    } else {
+      await navigator.clipboard.writeText(url);
+      toast.success("Link copied to clipboard");
+    }
+  };
+
   const dbImages = [
     ...(db.cover_image_url ? [db.cover_image_url] : []),
     ...((dbListing as any).listing_images?.map((img: any) => img.url) || []),
@@ -466,7 +491,7 @@ export default function PropertyDetail() {
                     onClick={handleFavorite}>
                     <Heart className={`w-4 h-4 ${isFavorited ? "fill-white" : ""}`} />
                   </button>
-                  <button className="p-2.5 rounded-full bg-background/70 backdrop-blur-md hover:bg-background/90 shadow transition-all">
+                  <button onClick={handleShare} className="p-2.5 rounded-full bg-background/70 backdrop-blur-md hover:bg-background/90 shadow transition-all" aria-label="Share property">
                     <Share2 className="w-4 h-4" />
                   </button>
                 </div>
@@ -799,6 +824,27 @@ export default function PropertyDetail() {
                         <p className="font-display font-bold text-sm">€{price.toLocaleString()}</p>
                       </div>
                     </div>
+
+                    {/* Ownership status row */}
+                    {ownershipDisplay && (
+                      <div className="flex items-center justify-between rounded-xl bg-secondary border border-border px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <Building2 className="w-4 h-4 text-muted-foreground" />
+                          <span className="text-xs text-muted-foreground font-medium">Ownership Status</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${ownershipDisplay.cls}`}>
+                            {ownershipDisplay.label}
+                          </span>
+                          {ownershipPct != null && ownershipStatus !== "full" && (
+                            <span className="text-xs font-bold text-muted-foreground bg-muted px-2 py-1 rounded-full border border-border">
+                              {ownershipPct}%
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
                     {db.auction_court && (
                       <div>
                         <p className="text-xs text-muted-foreground mb-1">Court / Platform</p>
