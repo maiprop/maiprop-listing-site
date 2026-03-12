@@ -94,14 +94,38 @@ RESIDENTIAL APARTMENT ANALYSIS:
       }
     })();
 
-    const prompt = `You are a senior Greek real estate valuation expert (RICS-equivalent) with 20+ years of experience in the Greek property market. You have deep knowledge of:
-- Regional price indices from spitogatos.gr, xe.gr, property.gr
-- Greek property law (N.3741/1929, N.4495/2017), planning legislation, and ENFIA taxation
-- Post-2010 distressed market recovery trajectory and current 2024–2025 market conditions
-- Construction costs, developer economics, and investment yields by city/area
-- Tourism real estate, Golden Visa program, and foreign investment dynamics
+    const prompt = `You are a senior Greek real estate valuation expert (RICS-equivalent) with 20+ years of experience. You have access to the latest 2025 Greek property market data:
 
-Analyse this property and provide an accurate AI valuation:
+CURRENT 2025 MARKET BENCHMARKS (use these as your primary reference):
+- Athens overall: average €2,800–3,400/m² (Q1 2025), up ~18% from 2022 lows
+- Athens premium (Kolonaki, Psychiko, Kifissia): €4,500–8,000+/m²
+- Athens central (Pagkrati, Mets, Koukaki, Ampelokipoi): €2,800–4,500/m²
+- Athens south suburbs (Glyfada, Voula, Vouliagmeni): €3,500–7,000/m²
+- Athens north suburbs (Marousi, Halandri, Nea Erythraia): €2,500–4,200/m²
+- Piraeus: €1,800–3,000/m²
+- Thessaloniki city center: €2,200–3,500/m²; suburbs: €1,400–2,500/m²
+- Mykonos: €7,000–20,000+/m² (villas), €5,000–9,000/m² (apartments)
+- Santorini: €6,000–15,000/m²; Caldera villas €10,000–25,000/m²
+- Rhodes: €2,000–5,000/m² (tourist areas), €1,200–2,500/m² (residential)
+- Crete (Heraklion/Chania): €1,800–4,000/m²
+- Corfu: €2,500–6,000/m² (sea-view premium)
+- Paros/Naxos: €3,000–8,000/m²
+- Peloponnese/Halkidiki: €1,500–3,500/m²
+- Regional cities (Patras, Larissa, Ioannina): €800–1,800/m²
+- New builds command 25–40% premium over resale stock of same area
+- Market trend 2025: Athens +6–9% YoY; islands +8–14% YoY; regional cities +3–5% YoY
+
+RENTAL YIELDS 2025:
+- Athens center short-term (Airbnb-zone): 6–9% gross
+- Athens center long-term: 4–5.5% gross
+- Glyfada/suburbs: 3.5–4.5% gross
+- Thessaloniki: 4.5–6% gross
+- Tourist islands (seasonal): 7–12% gross
+- Commercial prime Athens: 6–8% net; secondary: 8–11% net
+
+CRITICAL: Do NOT simply echo the listed price. Cross-reference against the area benchmarks above. If the listed price deviates by more than 15% from area benchmarks, flag it clearly.
+
+Analyse this property:
 - Title: ${title || "Property"}
 - Location: ${address || city}, ${city}${region ? `, ${region}` : ""}, Greece
 - Type: ${propertyType || "apartment"} (${listingType || "sale"})
@@ -113,26 +137,25 @@ ${typeSpecificInstructions}
 
 Return ONLY valid JSON, no markdown, no explanation:
 {
-  "estimatedValue": number (realistic market value in EUR — do NOT simply echo the listed price; justify deviation),
+  "estimatedValue": number (realistic 2025 market value in EUR — cross-referenced against the benchmarks above),
   "rangeLow": number (lower bound, typically 5-12% below estimated),
   "rangeHigh": number (upper bound, typically 5-12% above estimated),
   "confidence": number (0-100, reflect data completeness — more details = higher confidence),
   "confidenceLabel": "High" | "Medium" | "Low",
-  "pricePerSqmEstimate": number (your own €/m² benchmark for comparable properties in this area),
+  "pricePerSqmEstimate": number (your 2025 €/m² benchmark for this specific area/submarket),
   "marketComparison": "below_market" | "at_market" | "above_market",
   "marketComparisonPct": number (e.g. -8 means 8% below market, +5 means 5% above),
-  "summary": "string (3–4 sentences: valuation rationale, local market context, key value drivers or risks — mention specific ${city} market dynamics and current trends)",
+  "summary": "string (3–4 sentences: cite the specific €/m² benchmark you used, local 2025 market trend, and any premium/discount drivers for this property)",
   "keyFactors": [
-    { "factor": "string", "impact": "positive" | "negative" | "neutral", "note": "string (specific data point or benchmark)" }
+    { "factor": "string", "impact": "positive" | "negative" | "neutral", "note": "string (cite specific 2025 data point or benchmark range)" }
   ],
-  "renovationPotential": "string (quantified estimate where possible, e.g. '€300–450/m² refurb could add 15–20% to value')",
-  "rentalYieldEstimate": number (annual gross %, e.g. 4.5 — must be realistic for the specific city/area)
+  "renovationPotential": "string (quantified 2025 estimate where applicable, e.g. '€400–600/m² refurb could add 15–20% to value based on current Athens refurb costs')",
+  "rentalYieldEstimate": number (2025 gross yield %, realistic for this specific city/submarket and listing type)
 }
 
 Rules:
-- keyFactors must have 4–6 items; include at least one tax/cost factor and one market trend factor
-- estimatedValue must reflect genuine market analysis, not just echo the list price
-- For land: include buildability and development potential in keyFactors
+- keyFactors: 4–6 items; always include a 2025 market trend factor and a transaction cost factor
+- estimatedValue: must use area benchmarks above as anchor, not the list price
 - confidenceLabel: High = 80+, Medium = 50–79, Low = <50
 - Only return the JSON object`;
 
@@ -157,12 +180,33 @@ Rules:
     }
 
     const aiData = await response.json();
-    const content = (aiData.choices?.[0]?.message?.content ?? "")
-      .replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
+    const raw = (aiData.choices?.[0]?.message?.content ?? "").trim();
+
+    // Strip markdown code fences globally
+    let jsonStr = raw.replace(/```json\s*/gi, "").replace(/```\s*/gi, "").trim();
+
+    // Extract outermost { ... }
+    const start = jsonStr.indexOf("{");
+    const end = jsonStr.lastIndexOf("}");
+    if (start !== -1 && end !== -1) jsonStr = jsonStr.slice(start, end + 1);
 
     let parsed: any;
-    try { parsed = JSON.parse(content); }
-    catch { throw new Error("AI returned invalid JSON"); }
+    try {
+      parsed = JSON.parse(jsonStr);
+    } catch {
+      // Repair common AI formatting glitches
+      const repaired = jsonStr
+        .replace(/,\s*}/g, "}")          // trailing commas in objects
+        .replace(/,\s*]/g, "]")          // trailing commas in arrays
+        .replace(/\)\s*}/g, "}")         // stray ) before closing brace
+        .replace(/\)\s*,/g, ",")         // stray ) before commas
+        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ""); // control chars
+      try {
+        parsed = JSON.parse(repaired);
+      } catch {
+        throw new Error("AI returned invalid JSON");
+      }
+    }
 
     // Sanitise
     const result = {
