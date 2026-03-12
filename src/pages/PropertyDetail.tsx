@@ -790,10 +790,10 @@ export default function PropertyDetail() {
                     <div className="relative">
                       <div className="pointer-events-none select-none blur-[4px] opacity-60">
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                          <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 p-4 flex flex-col gap-1">
+                          <div className="rounded-xl border border-brand-emerald/20 bg-brand-emerald/10 p-4 flex flex-col gap-1">
                             <p className="text-[10px] text-muted-foreground uppercase tracking-widest">vs Market</p>
-                            <span className="font-display font-black text-3xl text-emerald-400">−8%</span>
-                            <p className="text-[10px] font-semibold text-emerald-400">Below Market</p>
+                            <span className="font-display font-black text-3xl text-brand-emerald">−8%</span>
+                            <p className="text-[10px] font-semibold text-brand-emerald">Below Market</p>
                           </div>
                           <div className="rounded-xl border border-border bg-secondary/50 p-4 flex flex-col gap-1">
                             <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Rental Yield</p>
