@@ -7,8 +7,8 @@ import {
   Shield, FileText, Zap, ExternalLink, Lock, BarChart2, Eye,
   Home, Clock, Check, Gavel, Download, Loader2, CheckCircle,
   Thermometer, Wrench, TreePine, Flame, Wifi, Car, Building2,
-  Info, ChevronDown, ChevronUp, Euro, Tag, Layers, LayoutGrid, Bell
-} from "lucide-react";
+  Info, ChevronDown, ChevronUp, Euro, Tag, Layers, LayoutGrid, Bell, Globe } from
+"lucide-react";
 import { getSubtypeLabel, PROPERTY_TYPE_MAP, type PropertyTypeKey } from "@/lib/propertyTypes";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -20,7 +20,6 @@ import { useListing, useListings } from "@/hooks/useListings";
 import { useFavorites, useToggleFavorite } from "@/hooks/useFavorites";
 import { useStartConversation } from "@/hooks/useMessages";
 import { useAuth } from "@/contexts/AuthContext";
-import { useSubscription } from "@/hooks/useSubscription";
 import { toast } from "sonner";
 import PropertyMiniMap from "@/components/PropertyMiniMap";
 import PropertyValuation from "@/components/PropertyValuation";
@@ -32,40 +31,40 @@ import { GOOGLE_MAPS_API_KEY } from "@/lib/config";
 
 // ─── Energy class data ──────────────────────────────────────────────────────
 const ENERGY_SCALE = [
-  { cls: "A+", hex: "#1a9e4f", pct: 8,  desc: "< 33 kWh/m²·yr — Excellent" },
-  { cls: "A",  hex: "#2db84e", pct: 17, desc: "33–50 kWh/m²·yr — Very Good" },
-  { cls: "B+", hex: "#7dc73a", pct: 26, desc: "50–75 kWh/m²·yr — Good" },
-  { cls: "B",  hex: "#b5d934", pct: 35, desc: "75–100 kWh/m²·yr — Above Average" },
-  { cls: "C",  hex: "#f5d31b", pct: 50, desc: "100–125 kWh/m²·yr — Average" },
-  { cls: "D",  hex: "#f5a623", pct: 62, desc: "125–160 kWh/m²·yr — Below Average" },
-  { cls: "E",  hex: "#f07320", pct: 74, desc: "160–200 kWh/m²·yr — Poor" },
-  { cls: "F",  hex: "#e84020", pct: 86, desc: "200–250 kWh/m²·yr — Very Poor" },
-  { cls: "G",  hex: "#cc1414", pct: 100, desc: "> 250 kWh/m²·yr — Extremely Poor" },
-];
+{ cls: "A+", hex: "#1a9e4f", pct: 8, desc: "< 33 kWh/m²·yr — Excellent" },
+{ cls: "A", hex: "#2db84e", pct: 17, desc: "33–50 kWh/m²·yr — Very Good" },
+{ cls: "B+", hex: "#7dc73a", pct: 26, desc: "50–75 kWh/m²·yr — Good" },
+{ cls: "B", hex: "#b5d934", pct: 35, desc: "75–100 kWh/m²·yr — Above Average" },
+{ cls: "C", hex: "#f5d31b", pct: 50, desc: "100–125 kWh/m²·yr — Average" },
+{ cls: "D", hex: "#f5a623", pct: 62, desc: "125–160 kWh/m²·yr — Below Average" },
+{ cls: "E", hex: "#f07320", pct: 74, desc: "160–200 kWh/m²·yr — Poor" },
+{ cls: "F", hex: "#e84020", pct: 86, desc: "200–250 kWh/m²·yr — Very Poor" },
+{ cls: "G", hex: "#cc1414", pct: 100, desc: "> 250 kWh/m²·yr — Extremely Poor" }];
+
 const ENERGY_COLORS: Record<string, string> = {
   "A+": "bg-[#1a9e4f] text-white",
-  "A":  "bg-[#2db84e] text-white",
+  "A": "bg-[#2db84e] text-white",
   "B+": "bg-[#7dc73a] text-white",
-  "B":  "bg-[#b5d934] text-black",
-  "C":  "bg-[#f5d31b] text-black",
-  "D":  "bg-[#f5a623] text-black",
-  "E":  "bg-[#f07320] text-white",
-  "F":  "bg-[#e84020] text-white",
-  "G":  "bg-[#cc1414] text-white",
+  "B": "bg-[#b5d934] text-black",
+  "C": "bg-[#f5d31b] text-black",
+  "D": "bg-[#f5a623] text-black",
+  "E": "bg-[#f07320] text-white",
+  "F": "bg-[#e84020] text-white",
+  "G": "bg-[#cc1414] text-white"
 };
 
 // ─── Mortgage calculator ──────────────────────────────────────────────────────
-function MortgageCalculator({ price }: { price: number }) {
+function MortgageCalculator({ price }: {price: number;}) {
   const [downPct, setDownPct] = useState(20);
-  const [rate, setRate]       = useState(3.8);
-  const [years, setYears]     = useState(20);
+  const [rate, setRate] = useState(3.8);
+  const [years, setYears] = useState(20);
 
-  const down    = Math.round(price * (downPct / 100));
-  const loan    = price - down;
-  const monthly = loan > 0
-    ? Math.round(loan * (rate / 1200) / (1 - Math.pow(1 + rate / 1200, -years * 12)))
-    : 0;
-  const totalPaid     = monthly * years * 12;
+  const down = Math.round(price * (downPct / 100));
+  const loan = price - down;
+  const monthly = loan > 0 ?
+  Math.round(loan * (rate / 1200) / (1 - Math.pow(1 + rate / 1200, -years * 12))) :
+  0;
+  const totalPaid = monthly * years * 12;
   const totalInterest = totalPaid - loan;
 
   return (
@@ -80,11 +79,11 @@ function MortgageCalculator({ price }: { price: number }) {
 
       <div className="p-5 space-y-5">
         {[
-          { label: "Down Payment", value: `${downPct}%`, sub: `€${down.toLocaleString()}`, min: 10, max: 50, step: 5, val: downPct, set: setDownPct },
-          { label: "Interest Rate", value: `${rate.toFixed(1)}%`, sub: "p.a.", min: 2, max: 8, step: 0.1, val: rate, set: setRate },
-          { label: "Loan Term", value: `${years} yrs`, sub: `${years * 12} payments`, min: 5, max: 30, step: 5, val: years, set: setYears },
-        ].map(s => (
-          <div key={s.label} className="space-y-2">
+        { label: "Down Payment", value: `${downPct}%`, sub: `€${down.toLocaleString()}`, min: 10, max: 50, step: 5, val: downPct, set: setDownPct },
+        { label: "Interest Rate", value: `${rate.toFixed(1)}%`, sub: "p.a.", min: 2, max: 8, step: 0.1, val: rate, set: setRate },
+        { label: "Loan Term", value: `${years} yrs`, sub: `${years * 12} payments`, min: 5, max: 30, step: 5, val: years, set: setYears }].
+        map((s) =>
+        <div key={s.label} className="space-y-2">
             <div className="flex justify-between items-center">
               <span className="text-xs text-muted-foreground">{s.label}</span>
               <div className="flex items-baseline gap-1.5">
@@ -93,10 +92,10 @@ function MortgageCalculator({ price }: { price: number }) {
               </div>
             </div>
             <input type="range" min={s.min} max={s.max} step={s.step} value={s.val}
-              onChange={e => s.set(Number(e.target.value))}
-              className="w-full h-1 rounded-full appearance-none cursor-pointer accent-primary bg-border" />
+          onChange={(e) => s.set(Number(e.target.value))}
+          className="w-full h-1 rounded-full appearance-none cursor-pointer accent-primary bg-border" />
           </div>
-        ))}
+        )}
 
         <div className="rounded-xl bg-primary/8 border border-primary/15 p-4 text-center">
           <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1.5">Est. Monthly Payment</p>
@@ -117,23 +116,23 @@ function MortgageCalculator({ price }: { price: number }) {
           Indicative only. Final rate subject to credit assessment. Includes 0.12% annual levy (Law 128/75).
         </p>
       </div>
-    </div>
-  );
+    </div>);
+
 }
 
 // ─── Feature chip ────────────────────────────────────────────────────────────
-function FeatureChip({ icon: Icon, label }: { icon?: any; label: string }) {
+function FeatureChip({ icon: Icon, label }: {icon?: any;label: string;}) {
   return (
     <div className="flex items-center gap-2 text-xs bg-muted border border-border rounded-lg px-3 py-2 text-foreground hover:border-primary/30 hover:bg-secondary transition-all duration-200">
       <Check className="w-3 h-3 text-primary shrink-0" />
       {Icon && <Icon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
       <span className="font-medium">{label}</span>
-    </div>
-  );
+    </div>);
+
 }
 
 // ─── Feature section ─────────────────────────────────────────────────────────
-function FeatureSection({ title, features, accent }: { title: string; features: { icon?: any; label: string }[]; accent: string }) {
+function FeatureSection({ title, features, accent }: {title: string;features: {icon?: any;label: string;}[];accent: string;}) {
   if (features.length === 0) return null;
   return (
     <div className="space-y-3">
@@ -144,52 +143,51 @@ function FeatureSection({ title, features, accent }: { title: string; features: 
         <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full border border-border">{features.length}</span>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-        {features.map(f => <FeatureChip key={f.label} icon={f.icon} label={f.label} />)}
+        {features.map((f) => <FeatureChip key={f.label} icon={f.icon} label={f.label} />)}
       </div>
-    </div>
-  );
+    </div>);
+
 }
 
 // ─── Section wrapper ─────────────────────────────────────────────────────────
-function Section({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+function Section({ children, className = "" }: {children: React.ReactNode;className?: string;}) {
   return (
     <div className={`glass-card rounded-2xl border border-border overflow-hidden ${className}`}>
       {children}
-    </div>
-  );
+    </div>);
+
 }
 
-function SectionHeader({ icon: Icon, title, badge }: { icon?: any; title: string; badge?: React.ReactNode }) {
+function SectionHeader({ icon: Icon, title, badge }: {icon?: any;title: string;badge?: React.ReactNode;}) {
   return (
     <div className="flex items-center gap-3 px-6 py-4 border-b border-border bg-card/50">
-      {Icon && (
-        <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+      {Icon &&
+      <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
           <Icon className="w-3.5 h-3.5 text-primary" />
         </div>
-      )}
+      }
       <h3 className="font-display font-semibold text-sm">{title}</h3>
       {badge && <div className="ml-auto">{badge}</div>}
-    </div>
-  );
+    </div>);
+
 }
 
 // ─── Detail row ───────────────────────────────────────────────────────────────
-function DetailRow({ label, value }: { label: string; value: string | number }) {
+function DetailRow({ label, value }: {label: string;value: string | number;}) {
   return (
     <div className="flex items-start justify-between py-2.5 border-b border-border/50 last:border-0 gap-4">
       <span className="text-xs text-muted-foreground shrink-0">{label}</span>
       <span className="text-xs font-semibold text-right capitalize">{value}</span>
-    </div>
-  );
+    </div>);
+
 }
 
 // ─── Main component ──────────────────────────────────────────────────────────
 export default function PropertyDetail() {
-  const { id } = useParams<{ id: string }>();
+  const { id } = useParams<{id: string;}>();
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
-  const { isPro } = useSubscription();
 
   const { data: dbListing, isLoading } = useListing(id || "");
   const { data: dbSimilar = [] } = useListings({ city: dbListing?.city, property_type: dbListing?.property_type });
@@ -254,8 +252,8 @@ export default function PropertyDetail() {
               const t: string[] = (dbListing as any)?.tags ?? [];
               const tag = t.find((x: string) => x.startsWith("ownership_pct:"));
               return tag ? Number(tag.replace("ownership_pct:", "")) : undefined;
-            })(),
-          },
+            })()
+          }
         });
         if (data && !data.error) {
           setAiInsightsData({
@@ -263,10 +261,10 @@ export default function PropertyDetail() {
             rentalYield: data.rentalYieldEstimate ?? 0,
             estimatedValue: data.estimatedValue ?? Number(dbListing.price),
             marketComparison: data.marketComparison ?? "at_market",
-            confidenceLabel: data.confidenceLabel ?? "Medium",
+            confidenceLabel: data.confidenceLabel ?? "Medium"
           });
         }
-      } catch { /* silently fail */ } finally {
+      } catch {/* silently fail */} finally {
         setAiInsightsLoading(false);
       }
     };
@@ -280,26 +278,26 @@ export default function PropertyDetail() {
   const isFavorited = favorites.some((f: any) => f.listing_id === id);
 
   const handleFavorite = () => {
-    if (!user) { toast.error("Sign in to save properties"); return; }
+    if (!user) {toast.error("Sign in to save properties");return;}
     if (id) toggleFav.mutate({ listing_id: id, isFavorited });
   };
 
   const handleContact = async () => {
-    if (!user) { toast.error("Sign in to contact the owner"); navigate("/login"); return; }
+    if (!user) {toast.error("Sign in to contact the owner");navigate("/login");return;}
     const ownerId = dbListing ? (dbListing as any).profiles?.user_id : undefined;
-    if (!ownerId) { toast.info("Contact details not available"); return; }
+    if (!ownerId) {toast.info("Contact details not available");return;}
     try {
       await startConversation.mutateAsync({ other_user_id: ownerId, listing_id: id });
       navigate("/messages");
-    } catch { toast.error("Could not start conversation"); }
+    } catch {toast.error("Could not start conversation");}
   };
 
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
+      </div>);
+
   }
 
   if (!dbListing) {
@@ -311,8 +309,8 @@ export default function PropertyDetail() {
           <Button className="mt-4" onClick={() => navigate("/listings")}>Back to Listings</Button>
         </div>
         <Footer />
-      </div>
-    );
+      </div>);
+
   }
 
   const db = dbListing;
@@ -342,38 +340,28 @@ export default function PropertyDetail() {
   const ownershipPctTag = tags.find((t: string) => t.startsWith("ownership_pct:"));
   const ownershipPct = ownershipPctTag ? Number(ownershipPctTag.replace("ownership_pct:", "")) : null;
 
-  const OWNERSHIP_LABEL: Record<string, { label: string; cls: string }> = {
-    full:    { label: "Πλήρης κυριότητα (100%)", cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" },
+  const OWNERSHIP_LABEL: Record<string, {label: string;cls: string;}> = {
+    full: { label: "Πλήρης κυριότητα (100%)", cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" },
     partial: { label: "Μερική κυριότητα", cls: "bg-amber-500/15 text-amber-400 border-amber-500/30" },
-    common:  { label: "Εξ αδιαιρέτου", cls: "bg-sky-500/15 text-sky-400 border-sky-500/30" },
-    none:    { label: "Χωρίς κυριότητα", cls: "bg-destructive/15 text-destructive border-destructive/30" },
+    common: { label: "Εξ αδιαιρέτου", cls: "bg-sky-500/15 text-sky-400 border-sky-500/30" },
+    none: { label: "Χωρίς κυριότητα", cls: "bg-destructive/15 text-destructive border-destructive/30" }
   };
-  const ownershipDisplay = ownershipStatus ? (OWNERSHIP_LABEL[ownershipStatus] ?? { label: ownershipStatus, cls: "bg-muted text-muted-foreground border-border" }) : null;
+  const ownershipDisplay = ownershipStatus ? OWNERSHIP_LABEL[ownershipStatus] ?? { label: ownershipStatus, cls: "bg-muted text-muted-foreground border-border" } : null;
 
   const handleShare = async () => {
     const url = window.location.href;
-    try {
-      if (navigator.share) {
-        await navigator.share({ title, url });
-      } else {
-        await navigator.clipboard.writeText(url);
-        toast.success("Link copied to clipboard!");
-      }
-    } catch {
-      // navigator.share was cancelled or not available — fallback to clipboard
-      try {
-        await navigator.clipboard.writeText(url);
-        toast.success("Link copied to clipboard!");
-      } catch {
-        toast.error("Could not copy link");
-      }
+    if (navigator.share) {
+      try {await navigator.share({ title, url });} catch {}
+    } else {
+      await navigator.clipboard.writeText(url);
+      toast.success("Link copied to clipboard");
     }
   };
 
   const dbImages = [
-    ...(db.cover_image_url ? [db.cover_image_url] : []),
-    ...((dbListing as any).listing_images?.map((img: any) => img.url) || []),
-  ];
+  ...(db.cover_image_url ? [db.cover_image_url] : []),
+  ...((dbListing as any).listing_images?.map((img: any) => img.url) || [])];
+
 
   // Google Street View Static API fallback — shows real street-level photo when no listing images
   const streetViewFallback = (() => {
@@ -390,17 +378,17 @@ export default function PropertyDetail() {
   })();
 
   // Final fallback chain: DB images → Street View → nothing
-  const images = dbImages.length
-    ? dbImages
-    : streetViewFallback
-      ? [streetViewFallback]
-      : [];
+  const images = dbImages.length ?
+  dbImages :
+  streetViewFallback ?
+  [streetViewFallback] :
+  [];
 
   // ── Feature groups ──────────────────────────────────────────────────────────
-  const internalFeatures: { icon?: any; label: string }[] = [];
-  const externalFeatures: { icon?: any; label: string }[] = [];
-  const constructionFeatures: { icon?: any; label: string }[] = [];
-  const suitabilityFeatures: { icon?: any; label: string }[] = [];
+  const internalFeatures: {icon?: any;label: string;}[] = [];
+  const externalFeatures: {icon?: any;label: string;}[] = [];
+  const constructionFeatures: {icon?: any;label: string;}[] = [];
+  const suitabilityFeatures: {icon?: any;label: string;}[] = [];
 
   if (db.has_elevator) internalFeatures.push({ icon: Building2, label: "Elevator" });
   if ((db as any).has_ac) internalFeatures.push({ icon: Thermometer, label: "Air Conditioning" });
@@ -454,52 +442,52 @@ export default function PropertyDetail() {
 
   const hasAnyFeatures = internalFeatures.length + externalFeatures.length + constructionFeatures.length + suitabilityFeatures.length > 0;
 
-  const similarListings = (dbSimilar as any[])
-    .filter((l: any) => l.id !== id && (isAuction ? l.listing_type === "auction" : l.listing_type !== "auction"))
-    .sort((a, b) => {
-      const aMatch = subtype && (a.commercial_subtype === subtype) ? 1 : 0;
-      const bMatch = subtype && (b.commercial_subtype === subtype) ? 1 : 0;
-      return bMatch - aMatch;
-    })
-    .slice(0, 4);
+  const similarListings = (dbSimilar as any[]).
+  filter((l: any) => l.id !== id && (isAuction ? l.listing_type === "auction" : l.listing_type !== "auction")).
+  sort((a, b) => {
+    const aMatch = subtype && a.commercial_subtype === subtype ? 1 : 0;
+    const bMatch = subtype && b.commercial_subtype === subtype ? 1 : 0;
+    return bMatch - aMatch;
+  }).
+  slice(0, 4);
 
   // Build property details rows grouped
-  const detailRows: { label: string; value: string }[] = [
-    { label: "Price", value: `€${price.toLocaleString()}` },
-    { label: "Price / m²", value: pricePerSqm ? `€${Number(pricePerSqm).toLocaleString()}` : "—" },
-    { label: "Surface", value: `${sqm} m²` },
-    ...(db.year_built ? [{ label: "Year Built", value: String(db.year_built) }] : []),
-    ...(db.floor != null ? [{ label: "Floor", value: db.floor === 0 ? "Ground" : `${db.floor}${db.total_floors ? ` of ${db.total_floors}` : ""}` }] : []),
-    ...((db as any)?.levels ? [{ label: "Levels", value: String((db as any).levels) }] : []),
-    ...((db as any)?.kitchens ? [{ label: "Kitchens", value: String((db as any).kitchens) }] : []),
-    ...((db as any)?.living_rooms ? [{ label: "Living Rooms", value: String((db as any).living_rooms) }] : []),
-    ...((db as any)?.wc_count ? [{ label: "WC", value: String((db as any).wc_count) }] : []),
-    ...((db as any)?.heating_system ? [{ label: "Heating", value: (db as any).heating_system.replace("_", " ") }] : []),
-    ...(db.energy_class ? [{ label: "Energy Class", value: db.energy_class }] : []),
-    ...((db as any)?.construction_status ? [{ label: "Construction", value: (db as any).construction_status.replace("_", " ") }] : []),
-    ...(db.enfia_zone ? [{ label: "ENFIA Zone", value: db.enfia_zone }] : []),
-    ...(db.postal_code ? [{ label: "Postal Code", value: db.postal_code }] : []),
-    ...(db.region ? [{ label: "Region", value: db.region }] : []),
-    // Ownership (for all listing types when present)
-    ...(ownershipStatus ? [{ label: "Ownership Status", value: ownershipDisplay?.label ?? ownershipStatus }] : []),
-    ...(ownershipPct != null && ownershipStatus !== "full" ? [{ label: "Ownership %", value: `${ownershipPct}%` }] : []),
-    // Land
-    ...(isLandType && (db as any)?.coverage_ratio ? [{ label: "Coverage Ratio", value: `${(db as any).coverage_ratio}%` }] : []),
-    ...(isLandType && (db as any)?.building_allowance ? [{ label: "Build Allowance", value: `${(db as any).building_allowance} m²` }] : []),
-    ...(isLandType && (db as any)?.facade_length ? [{ label: "Facade Length", value: `${(db as any).facade_length} m` }] : []),
-    ...(isLandType && (db as any)?.plot_depth ? [{ label: "Plot Depth", value: `${(db as any).plot_depth} m` }] : []),
-    ...(isLandType && (db as any)?.slope ? [{ label: "Slope", value: (db as any).slope }] : []),
-    ...(isLandType && (db as any)?.zone_type ? [{ label: "Zone", value: (db as any).zone_type }] : []),
-    ...(isLandType && (db as any)?.road_type ? [{ label: "Road Type", value: (db as any).road_type }] : []),
-    ...(isLandType && (db as any)?.distance_from_sea ? [{ label: "From Sea", value: `${(db as any).distance_from_sea} m` }] : []),
-    ...(isLandType && (db as any)?.distance_from_city ? [{ label: "From City", value: `${(db as any).distance_from_city} m` }] : []),
-    // Commercial
-    ...((db as any)?.commercial_subtype ? [{ label: "Subtype", value: (db as any).commercial_subtype }] : []),
-    ...((db as any)?.plot_surface ? [{ label: "Plot Surface", value: `${(db as any).plot_surface} m²` }] : []),
-    ...((db as any)?.floor_height ? [{ label: "Floor Height", value: `${(db as any).floor_height} m` }] : []),
-    // Meta — only system code, no dates
-    { label: "System Code", value: db.id.slice(0, 8).toUpperCase() },
-  ];
+  const detailRows: {label: string;value: string;}[] = [
+  { label: "Price", value: `€${price.toLocaleString()}` },
+  { label: "Price / m²", value: pricePerSqm ? `€${Number(pricePerSqm).toLocaleString()}` : "—" },
+  { label: "Surface", value: `${sqm} m²` },
+  ...(db.year_built ? [{ label: "Year Built", value: String(db.year_built) }] : []),
+  ...(db.floor != null ? [{ label: "Floor", value: db.floor === 0 ? "Ground" : `${db.floor}${db.total_floors ? ` of ${db.total_floors}` : ""}` }] : []),
+  ...((db as any)?.levels ? [{ label: "Levels", value: String((db as any).levels) }] : []),
+  ...((db as any)?.kitchens ? [{ label: "Kitchens", value: String((db as any).kitchens) }] : []),
+  ...((db as any)?.living_rooms ? [{ label: "Living Rooms", value: String((db as any).living_rooms) }] : []),
+  ...((db as any)?.wc_count ? [{ label: "WC", value: String((db as any).wc_count) }] : []),
+  ...((db as any)?.heating_system ? [{ label: "Heating", value: (db as any).heating_system.replace("_", " ") }] : []),
+  ...(db.energy_class ? [{ label: "Energy Class", value: db.energy_class }] : []),
+  ...((db as any)?.construction_status ? [{ label: "Construction", value: (db as any).construction_status.replace("_", " ") }] : []),
+  ...(db.cadastre_number ? [{ label: "Cadastre No.", value: db.cadastre_number }] : []),
+  ...(db.enfia_zone ? [{ label: "ENFIA Zone", value: db.enfia_zone }] : []),
+  ...(db.postal_code ? [{ label: "Postal Code", value: db.postal_code }] : []),
+  ...(db.region ? [{ label: "Region", value: db.region }] : []),
+  // Land
+  ...(isLandType && (db as any)?.coverage_ratio ? [{ label: "Coverage Ratio", value: `${(db as any).coverage_ratio}%` }] : []),
+  ...(isLandType && (db as any)?.building_allowance ? [{ label: "Build Allowance", value: `${(db as any).building_allowance} m²` }] : []),
+  ...(isLandType && (db as any)?.facade_length ? [{ label: "Facade Length", value: `${(db as any).facade_length} m` }] : []),
+  ...(isLandType && (db as any)?.plot_depth ? [{ label: "Plot Depth", value: `${(db as any).plot_depth} m` }] : []),
+  ...(isLandType && (db as any)?.slope ? [{ label: "Slope", value: (db as any).slope }] : []),
+  ...(isLandType && (db as any)?.zone_type ? [{ label: "Zone", value: (db as any).zone_type }] : []),
+  ...(isLandType && (db as any)?.road_type ? [{ label: "Road Type", value: (db as any).road_type }] : []),
+  ...(isLandType && (db as any)?.distance_from_sea ? [{ label: "From Sea", value: `${(db as any).distance_from_sea} m` }] : []),
+  ...(isLandType && (db as any)?.distance_from_city ? [{ label: "From City", value: `${(db as any).distance_from_city} m` }] : []),
+  // Commercial
+  ...((db as any)?.commercial_subtype ? [{ label: "Subtype", value: (db as any).commercial_subtype }] : []),
+  ...((db as any)?.plot_surface ? [{ label: "Plot Surface", value: `${(db as any).plot_surface} m²` }] : []),
+  ...((db as any)?.floor_height ? [{ label: "Floor Height", value: `${(db as any).floor_height} m` }] : []),
+  // Meta
+  { label: "System Code", value: db.id.slice(0, 8).toUpperCase() },
+  { label: "Published", value: new Date(db.created_at).toLocaleDateString("en-GB") },
+  { label: "Last Updated", value: new Date(db.updated_at).toLocaleDateString("en-GB") }];
+
 
   return (
     <div className="min-h-screen bg-background">
@@ -511,17 +499,17 @@ export default function PropertyDetail() {
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Link to="/" className="hover:text-foreground transition-colors">Home</Link>
             <ChevronRight className="w-3 h-3" />
-            {isAuction ? (
-              <Link to="/auctions" className="hover:text-foreground transition-colors">Auctions</Link>
-            ) : (
-              <Link to="/listings" className="hover:text-foreground transition-colors">Listings</Link>
-            )}
+            {isAuction ?
+            <Link to="/auctions" className="hover:text-foreground transition-colors">Auctions</Link> :
+
+            <Link to="/listings" className="hover:text-foreground transition-colors">Listings</Link>
+            }
             <ChevronRight className="w-3 h-3" />
-            {isAuction ? (
-              <Link to={`/auctions?city=${city}`} className="hover:text-foreground transition-colors">{city}</Link>
-            ) : (
-              <Link to={`/listings?city=${city}`} className="hover:text-foreground transition-colors">{city}</Link>
-            )}
+            {isAuction ?
+            <Link to={`/auctions?city=${city}`} className="hover:text-foreground transition-colors">{city}</Link> :
+
+            <Link to={`/listings?city=${city}`} className="hover:text-foreground transition-colors">{city}</Link>
+            }
             <ChevronRight className="w-3 h-3" />
             <span className="text-foreground truncate max-w-[240px] font-medium">{title}</span>
           </div>
@@ -535,18 +523,18 @@ export default function PropertyDetail() {
 
               {/* ── Gallery ── */}
               <div className="relative rounded-2xl overflow-hidden aspect-[16/9] bg-secondary group shadow-elevated">
-                {images.length > 0 ? (
-                  <img
-                    src={images[currentImage] || images[0]}
-                    alt={title}
-                    className="w-full h-full object-cover transition-opacity duration-300"
-                  />
-                ) : (
-                  <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-secondary">
+                {images.length > 0 ?
+                <img
+                  src={images[currentImage] || images[0]}
+                  alt={title}
+                  className="w-full h-full object-cover transition-opacity duration-300" /> :
+
+
+                <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-secondary">
                     <Gavel className="w-12 h-12 text-muted-foreground/30" />
                     <p className="text-xs text-muted-foreground">No photos available for this auction</p>
                   </div>
-                )}
+                }
 
                 {/* Badges */}
                 <div className="absolute top-4 left-4 flex gap-2">
@@ -556,20 +544,20 @@ export default function PropertyDetail() {
                 </div>
 
                 {/* Nav arrows */}
-                {images.length > 1 && (
-                  <>
+                {images.length > 1 &&
+                <>
                     <button
-                      className="absolute left-3 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-background/70 backdrop-blur-md hover:bg-background/90 transition-all shadow-lg opacity-0 group-hover:opacity-100"
-                      onClick={() => setCurrentImage((currentImage - 1 + images.length) % images.length)}>
+                    className="absolute left-3 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-background/70 backdrop-blur-md hover:bg-background/90 transition-all shadow-lg opacity-0 group-hover:opacity-100"
+                    onClick={() => setCurrentImage((currentImage - 1 + images.length) % images.length)}>
                       <ChevronLeft className="w-4 h-4" />
                     </button>
                     <button
-                      className="absolute right-3 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-background/70 backdrop-blur-md hover:bg-background/90 transition-all shadow-lg opacity-0 group-hover:opacity-100"
-                      onClick={() => setCurrentImage((currentImage + 1) % images.length)}>
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-background/70 backdrop-blur-md hover:bg-background/90 transition-all shadow-lg opacity-0 group-hover:opacity-100"
+                    onClick={() => setCurrentImage((currentImage + 1) % images.length)}>
                       <ChevronRight className="w-4 h-4" />
                     </button>
                   </>
-                )}
+                }
 
                 {/* Top right actions */}
                 <div className="absolute top-4 right-4 flex gap-2">
@@ -584,8 +572,8 @@ export default function PropertyDetail() {
                 </div>
 
                 {/* Counter + views — only when photos exist */}
-                {images.length > 0 && (
-                  <>
+                {images.length > 0 &&
+                <>
                     <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-background/60 to-transparent pointer-events-none" />
                     <div className="absolute bottom-3 right-4 bg-background/70 backdrop-blur-md px-2.5 py-1 rounded-full text-xs font-medium">
                       {currentImage + 1} / {images.length}
@@ -595,24 +583,24 @@ export default function PropertyDetail() {
                       <span>{db.views_count || 0} views</span>
                     </div>
                   </>
-                )}
+                }
               </div>
 
               {/* Thumbnails */}
-              {images.length > 1 && (
-                <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-0.5">
-                  {images.map((img, i) => (
-                    <button key={i} onClick={() => setCurrentImage(i)}
-                      className={`shrink-0 w-16 h-11 rounded-lg overflow-hidden transition-all duration-200 ${
-                        currentImage === i
-                          ? "ring-2 ring-primary ring-offset-2 ring-offset-background opacity-100"
-                          : "opacity-50 hover:opacity-80"
-                      }`}>
+              {images.length > 1 &&
+              <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-0.5">
+                  {images.map((img, i) =>
+                <button key={i} onClick={() => setCurrentImage(i)}
+                className={`shrink-0 w-16 h-11 rounded-lg overflow-hidden transition-all duration-200 ${
+                currentImage === i ?
+                "ring-2 ring-primary ring-offset-2 ring-offset-background opacity-100" :
+                "opacity-50 hover:opacity-80"}`
+                }>
                       <img src={img} alt="" className="w-full h-full object-cover" />
                     </button>
-                  ))}
+                )}
                 </div>
-              )}
+              }
 
               {/* ── Title + Price hero ── */}
               <div className="space-y-4">
@@ -622,22 +610,22 @@ export default function PropertyDetail() {
                       <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground bg-muted px-2 py-0.5 rounded-full border border-border capitalize">
                         {propertyType}
                       </span>
-                      {subtype && (
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-accent bg-accent/10 px-2 py-0.5 rounded-full border border-accent/30 capitalize flex items-center gap-1">
+                      {subtype &&
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-accent bg-accent/10 px-2 py-0.5 rounded-full border border-accent/30 capitalize flex items-center gap-1">
                           <LayoutGrid className="w-2.5 h-2.5" />
                           {getSubtypeLabel(propertyType, subtype)}
                         </span>
-                      )}
-                      {listingType && (
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20 capitalize">
+                      }
+                      {listingType &&
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20 capitalize">
                           For {listingType}
                         </span>
-                      )}
-                      {energyClass && energyClass !== "Exempt" && (
-                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${ENERGY_COLORS[energyClass] || "bg-secondary"}`}>
+                      }
+                      {energyClass && energyClass !== "Exempt" &&
+                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${ENERGY_COLORS[energyClass] || "bg-secondary"}`}>
                           <Zap className="w-2.5 h-2.5 inline mr-0.5" />{energyClass}
                         </span>
-                      )}
+                      }
                     </div>
                     <h1 className="font-display text-2xl md:text-3xl font-bold leading-tight">{title}</h1>
                     <div className="flex items-center gap-1.5 mt-2 text-sm text-muted-foreground">
@@ -655,106 +643,108 @@ export default function PropertyDetail() {
                       €{price.toLocaleString()}
                       {listingType === "rent" && <span className="text-base font-normal text-muted-foreground">/mo</span>}
                     </div>
-                    {pricePerSqm && (
-                      <div className="text-xs text-muted-foreground mt-0.5">
+                    {pricePerSqm &&
+                    <div className="text-xs text-muted-foreground mt-0.5">
                         €{Number(pricePerSqm).toLocaleString()} per m²
                       </div>
-                    )}
+                    }
                   </div>
                 </div>
 
                 {/* Key stats bar */}
                 <div className="flex items-center gap-2 flex-wrap">
-                  {bedrooms != null && (
-                    <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium">
+                  {bedrooms != null &&
+                  <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium">
                       <Bed className="w-3.5 h-3.5 text-primary" />{bedrooms} bed
                     </div>
-                  )}
-                  {bathrooms != null && (
-                    <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium">
+                  }
+                  {bathrooms != null &&
+                  <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium">
                       <Bath className="w-3.5 h-3.5 text-primary" />{bathrooms} bath
                     </div>
-                  )}
-                  {(db as any)?.wc_count != null && (
-                    <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium">
+                  }
+                  {(db as any)?.wc_count != null &&
+                  <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium">
                       <Home className="w-3.5 h-3.5 text-primary" />{(db as any).wc_count} WC
                     </div>
-                  )}
+                  }
                   <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium">
                     <Square className="w-3.5 h-3.5 text-primary" />{sqm} m²
                   </div>
-                  {db.floor != null && (
-                    <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium">
+                  {db.floor != null &&
+                  <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium">
                       <Layers className="w-3.5 h-3.5 text-primary" />
-                      {db.floor === -1 ? "Basement" : db.floor === 0 ? "Ground floor" : `${db.floor}${["st","nd","rd"][db.floor-1] || "th"} floor`}
+                      {db.floor === -1 ? "Basement" : db.floor === 0 ? "Ground floor" : `${db.floor}${["st", "nd", "rd"][db.floor - 1] || "th"} floor`}
                       {db.total_floors ? ` / ${db.total_floors}` : ""}
                     </div>
-                  )}
-                  {db.year_built != null && (
-                    <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium">
+                  }
+                  {db.year_built != null &&
+                  <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium">
                       <Calendar className="w-3.5 h-3.5 text-primary" />Built {db.year_built}
                     </div>
-                  )}
-                  {(db as any)?.heating_system && (
-                    <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium capitalize">
+                  }
+                  {(db as any)?.heating_system &&
+                  <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium capitalize">
                       <Thermometer className="w-3.5 h-3.5 text-primary" />{(db as any).heating_system}
                     </div>
-                  )}
+                  }
                   {/* Ownership pills — shown for all listing types when present in tags */}
-                  {ownershipDisplay && (
-                    <div className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border ${ownershipDisplay.cls}`}>
+                  {ownershipDisplay &&
+                  <div className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border ${ownershipDisplay.cls}`}>
                       <Building2 className="w-3.5 h-3.5 shrink-0" />
                       {ownershipDisplay.label}
-                      {ownershipPct != null && ownershipStatus !== "full" && (
-                        <span className="ml-1 font-black">{ownershipPct}%</span>
-                      )}
                     </div>
-                  )}
+                  }
+                  {ownershipPct != null && ownershipStatus !== "full" &&
+                  <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium">
+                      <Tag className="w-3.5 h-3.5 text-primary" />{ownershipPct}%
+                    </div>
+                  }
                 </div>
 
                 {/* Rent extras */}
-                {listingType === "rent" && (
-                  <div className="flex flex-wrap gap-2">
-                    {(db as any)?.deposit_months && (
-                      <span className="px-2.5 py-1 rounded-full bg-secondary border border-border text-xs font-medium">
+                {listingType === "rent" &&
+                <div className="flex flex-wrap gap-2">
+                    {(db as any)?.deposit_months &&
+                  <span className="px-2.5 py-1 rounded-full bg-secondary border border-border text-xs font-medium">
                         🔐 {(db as any).deposit_months}mo deposit
                       </span>
-                    )}
-                    {(db as any)?.monthly_expenses && (
-                      <span className="px-2.5 py-1 rounded-full bg-secondary border border-border text-xs font-medium">
+                  }
+                    {(db as any)?.monthly_expenses &&
+                  <span className="px-2.5 py-1 rounded-full bg-secondary border border-border text-xs font-medium">
                         💡 €{(db as any).monthly_expenses}/mo expenses
                       </span>
-                    )}
-                    {(db as any)?.pets_allowed && (
-                      <span className="px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs font-medium text-primary">🐾 Pets OK</span>
-                    )}
-                    {(db as any)?.agent_fee_included && (
-                      <span className="px-2.5 py-1 rounded-full bg-brand-emerald/10 border border-brand-emerald/20 text-xs font-medium text-brand-emerald">✓ No Agent Fee</span>
-                    )}
-                    {(db as any)?.short_term_rental && (
-                      <span className="px-2.5 py-1 rounded-full bg-brand-gold/10 border border-brand-gold/20 text-xs font-medium text-brand-gold">📅 Short-term OK</span>
-                    )}
+                  }
+                    {(db as any)?.pets_allowed &&
+                  <span className="px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs font-medium text-primary">🐾 Pets OK</span>
+                  }
+                    {(db as any)?.agent_fee_included &&
+                  <span className="px-2.5 py-1 rounded-full bg-brand-emerald/10 border border-brand-emerald/20 text-xs font-medium text-brand-emerald">✓ No Agent Fee</span>
+                  }
+                    {(db as any)?.short_term_rental &&
+                  <span className="px-2.5 py-1 rounded-full bg-brand-gold/10 border border-brand-gold/20 text-xs font-medium text-brand-gold">📅 Short-term OK</span>
+                  }
                   </div>
-                )}
+                }
               </div>
 
               {/* ── AI Market Insights — dynamic from property-valuation ── */}
               <Section>
                 <SectionHeader icon={Zap} title="AI Market Insights" badge={
-                  <span className="text-[10px] text-muted-foreground">Powered by mAI Prop OS</span>
+                <span className="text-[10px] text-muted-foreground">Powered by mAI Prop OS</span>
                 } />
                 <div className="p-5 space-y-4">
-                  {aiInsightsLoading && (
-                    <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground">
+                  {aiInsightsLoading &&
+                  <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground">
                       <Loader2 className="w-4 h-4 animate-spin" />
                       <span className="text-xs">Analysing market data…</span>
                     </div>
-                  )}
+                  }
                   {!aiInsightsLoading && aiInsightsData && (() => {
-                    const cmpCfg: Record<string, { label: string; color: string; bg: string }> = {
+                    const cmpCfg: Record<string, {label: string;color: string;bg: string;}> = {
                       below_market: { label: "Below Market", color: "text-emerald-400", bg: "bg-emerald-400/10 border-emerald-400/20" },
-                      at_market:    { label: "At Market",    color: "text-yellow-400",  bg: "bg-yellow-400/10  border-yellow-400/20" },
-                      above_market: { label: "Above Market", color: "text-destructive",  bg: "bg-destructive/10 border-destructive/20" },
+                      at_market: { label: "At Market", color: "text-yellow-400", bg: "bg-yellow-400/10  border-yellow-400/20" },
+                      above_market: { label: "Above Market", color: "text-destructive", bg: "bg-destructive/10 border-destructive/20" }
                     };
                     const cmp = cmpCfg[aiInsightsData.marketComparison] ?? cmpCfg.at_market;
                     return (
@@ -787,12 +777,12 @@ export default function PropertyDetail() {
                           </div>
                           <p className="text-[10px] text-muted-foreground">Confidence: {aiInsightsData.confidenceLabel}</p>
                         </div>
-                      </div>
-                    );
+                      </div>);
+
                   })()}
-                  {!aiInsightsLoading && !aiInsightsData && (
-                    <p className="text-xs text-muted-foreground text-center py-4">Market analysis unavailable</p>
-                  )}
+                  {!aiInsightsLoading && !aiInsightsData &&
+                  <p className="text-xs text-muted-foreground text-center py-4">Market analysis unavailable</p>
+                  }
                   {/* Pro upsell */}
                   <div className="flex items-start gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
                     <Lock className="w-4 h-4 text-primary shrink-0 mt-0.5" />
@@ -807,37 +797,37 @@ export default function PropertyDetail() {
               </Section>
 
               {/* ── Description (hidden for auctions) ── */}
-              {!isAuction && description && (
-                <Section>
+              {!isAuction && description &&
+              <Section>
                   <SectionHeader icon={FileText} title="Description" />
                   <div className="p-6">
                     <div className={`text-sm text-muted-foreground leading-relaxed ${!descExpanded ? "line-clamp-4" : ""}`}>
                       {description}
                     </div>
-                    {description.length > 200 && (
-                      <button onClick={() => setDescExpanded(!descExpanded)}
-                        className="flex items-center gap-1 text-xs text-primary mt-3 hover:underline font-medium">
+                    {description.length > 200 &&
+                  <button onClick={() => setDescExpanded(!descExpanded)}
+                  className="flex items-center gap-1 text-xs text-primary mt-3 hover:underline font-medium">
                         {descExpanded ? <><ChevronUp className="w-3 h-3" />Show less</> : <><ChevronDown className="w-3 h-3" />Read more</>}
                       </button>
-                    )}
+                  }
                   </div>
                 </Section>
-              )}
+              }
 
               {/* ── Auction Details (shown first for auction listings) ── */}
-              {isAuction && (
-                <Section>
+              {isAuction &&
+              <Section>
                   <SectionHeader icon={Gavel} title="Auction Details" badge={
-                    <span className="text-[10px] bg-brand-gold/20 text-brand-gold px-2 py-0.5 rounded-full font-bold">LIVE</span>
-                  } />
+                <span className="text-[10px] bg-brand-gold/20 text-brand-gold px-2 py-0.5 rounded-full font-bold">LIVE</span>
+                } />
                   <div className="p-6 space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div className="glass-card rounded-xl p-4 border border-border text-center">
                         <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Auction Date</p>
                         <p className="font-display font-bold text-sm">
-                          {db.auction_date
-                            ? new Date(db.auction_date).toLocaleDateString("en-GB")
-                            : "TBC"}
+                          {db.auction_date ?
+                        new Date(db.auction_date).toLocaleDateString("en-GB") :
+                        "TBC"}
                         </p>
                       </div>
                       <div className="glass-card rounded-xl p-4 border border-brand-gold/20 text-center">
@@ -849,8 +839,8 @@ export default function PropertyDetail() {
                     </div>
 
                     {/* Ownership status row */}
-                    {ownershipDisplay && (
-                      <div className="flex items-center justify-between rounded-xl bg-secondary border border-border px-4 py-3">
+                    {ownershipDisplay &&
+                  <div className="flex items-center justify-between rounded-xl bg-secondary border border-border px-4 py-3">
                         <div className="flex items-center gap-2">
                           <Building2 className="w-4 h-4 text-muted-foreground" />
                           <span className="text-xs text-muted-foreground font-medium">Ownership Status</span>
@@ -859,66 +849,66 @@ export default function PropertyDetail() {
                           <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${ownershipDisplay.cls}`}>
                             {ownershipDisplay.label}
                           </span>
-                          {ownershipPct != null && ownershipStatus !== "full" && (
-                            <span className="text-xs font-bold text-muted-foreground bg-muted px-2 py-1 rounded-full border border-border">
+                          {ownershipPct != null && ownershipStatus !== "full" &&
+                      <span className="text-xs font-bold text-muted-foreground bg-muted px-2 py-1 rounded-full border border-border">
                               {ownershipPct}%
                             </span>
-                          )}
+                      }
                         </div>
                       </div>
-                    )}
+                  }
 
-                    {db.auction_court && (
-                      <div>
+                    {db.auction_court &&
+                  <div>
                         <p className="text-xs text-muted-foreground mb-1">Court / Platform</p>
                         <p className="text-sm font-semibold">{db.auction_court}</p>
                       </div>
-                    )}
+                  }
                     <div className="rounded-xl bg-brand-gold/8 border border-brand-gold/20 p-3 text-xs text-muted-foreground leading-relaxed">
                       ⚡ Judicial auction — buyer conducts own due diligence. maiProp provides AI-powered pre-auction analysis.
                     </div>
 
                     {/* eAuction.gr CTA — prominent when website_url is present */}
-                    {websiteUrl && (
-                      <a href={websiteUrl} target="_blank" rel="noreferrer noopener" className="block">
+                    {websiteUrl &&
+                  <a href={websiteUrl} target="_blank" rel="noreferrer noopener" className="block">
                         <Button className="w-full bg-gradient-gold border-0 text-background font-bold gap-2 h-12 text-base shadow-lg hover:shadow-brand-gold/30 hover:scale-[1.01] transition-all">
                           <ExternalLink className="w-5 h-5" />
                           View on eAuction.gr
                         </Button>
                       </a>
-                    )}
+                  }
 
                     <Button
-                      variant={websiteUrl ? "outline" : "default"}
-                      className={websiteUrl
-                        ? "w-full border-brand-gold/30 text-brand-gold hover:bg-brand-gold/10 gap-2"
-                        : "w-full bg-gradient-gold border-0 text-background font-semibold gap-2"
-                      }
-                      onClick={() => {
-                        if (!user) { toast.error("Sign in to set auction alerts"); navigate("/login"); return; }
-                        setAuctionAlertOpen(true);
-                      }}
-                    >
+                    variant={websiteUrl ? "outline" : "default"}
+                    className={websiteUrl ?
+                    "w-full border-brand-gold/30 text-brand-gold hover:bg-brand-gold/10 gap-2" :
+                    "w-full bg-gradient-gold border-0 text-background font-semibold gap-2"
+                    }
+                    onClick={() => {
+                      if (!user) {toast.error("Sign in to set auction alerts");navigate("/login");return;}
+                      setAuctionAlertOpen(true);
+                    }}>
+                    
                       <Bell className="w-4 h-4" />
                       Set Auction Alert
                     </Button>
                   </div>
                 </Section>
-              )}
+              }
 
               {/* ── Property Details ── */}
               <Section>
                 <SectionHeader icon={Home} title="Property Details" />
                 <div className="p-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10">
-                    {detailRows.map((row) => (
-                      <DetailRow key={row.label} label={row.label} value={row.value} />
-                    ))}
+                    {detailRows.map((row) =>
+                    <DetailRow key={row.label} label={row.label} value={row.value} />
+                    )}
                   </div>
 
                   {/* Energy certificate */}
                   {energyClass && energyClass !== "Exempt" && ENERGY_COLORS[energyClass] && (() => {
-                    const energyData = ENERGY_SCALE.find(e => e.cls === energyClass);
+                    const energyData = ENERGY_SCALE.find((e) => e.cls === energyClass);
                     return (
                       <div className="mt-6 pt-6 border-t border-border">
                         <div className="flex items-center gap-2 mb-4">
@@ -934,43 +924,43 @@ export default function PropertyDetail() {
                                 {isActive && <div className="text-[8px] font-black text-foreground">▼</div>}
                                 <div
                                   style={{ backgroundColor: e.hex, height: `${barH}px`, opacity: isActive ? 1 : 0.4 }}
-                                  className={`w-full rounded-sm flex items-end justify-center pb-0.5 transition-all ${isActive ? "ring-2 ring-white/30 ring-offset-1 ring-offset-card" : ""}`}
-                                >
+                                  className={`w-full rounded-sm flex items-end justify-center pb-0.5 transition-all ${isActive ? "ring-2 ring-white/30 ring-offset-1 ring-offset-card" : ""}`}>
+                                  
                                   <span className="text-[8px] font-black leading-none"
-                                    style={{ color: ["B","C","D"].includes(e.cls) ? "#000" : "#fff" }}>
+                                  style={{ color: ["B", "C", "D"].includes(e.cls) ? "#000" : "#fff" }}>
                                     {e.cls}
                                   </span>
                                 </div>
-                              </div>
-                            );
+                              </div>);
+
                           })}
                         </div>
-                        {energyData && (
-                          <div className="flex items-center gap-2 mt-3">
+                        {energyData &&
+                        <div className="flex items-center gap-2 mt-3">
                             <div className={`px-2 py-0.5 rounded text-xs font-black ${ENERGY_COLORS[energyClass]}`}>
                               {energyClass}
                             </div>
                             <span className="text-xs text-muted-foreground">{energyData.desc}</span>
                           </div>
-                        )}
-                      </div>
-                    );
+                        }
+                      </div>);
+
                   })()}
                 </div>
               </Section>
 
               {/* ── Features & Amenities ── */}
-              {hasAnyFeatures && (
-                <Section>
+              {hasAnyFeatures &&
+              <Section>
                   <SectionHeader
-                    icon={Check}
-                    title="Features & Amenities"
-                    badge={
-                      <span className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full border border-border">
+                  icon={Check}
+                  title="Features & Amenities"
+                  badge={
+                  <span className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full border border-border">
                         {internalFeatures.length + externalFeatures.length + constructionFeatures.length + suitabilityFeatures.length} features
                       </span>
-                    }
-                  />
+                  } />
+                
                   <div className="p-6 space-y-6">
                     <FeatureSection title="Internal" features={internalFeatures} accent="bg-primary" />
                     <FeatureSection title="External" features={externalFeatures} accent="bg-brand-emerald" />
@@ -978,8 +968,33 @@ export default function PropertyDetail() {
                     <FeatureSection title="Suitable For" features={suitabilityFeatures} accent="bg-brand-gold" />
                   </div>
                 </Section>
-              )}
+              }
 
+              {/* ── Website Link (distinctive section) ── */}
+              {websiteUrl &&
+              <Section>
+                  <SectionHeader icon={Globe} title="Official Website" />
+                  <div className="p-5">
+                    <a
+                    href={websiteUrl.startsWith("http") ? websiteUrl : `https://${websiteUrl}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-3 group rounded-xl border border-border bg-secondary hover:border-primary/40 hover:bg-primary/5 transition-all px-4 py-3.5">
+                    
+                      <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors">
+                        <Globe className="w-4 h-4 text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold truncate text-foreground group-hover:text-primary transition-colors">
+                          {websiteUrl.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">Visit official website</p>
+                      </div>
+                      <ExternalLink className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
+                    </a>
+                  </div>
+                </Section>
+              }
 
               {/* ── Mini map ── */}
               <div className="rounded-2xl overflow-hidden">
@@ -989,8 +1004,8 @@ export default function PropertyDetail() {
                   address={address}
                   city={city}
                   title={title}
-                  onWalkScoreChange={setWalkScore}
-                />
+                  onWalkScoreChange={setWalkScore} />
+                
               </div>
 
               {/* ── Neighbourhood Report ── */}
@@ -1000,8 +1015,8 @@ export default function PropertyDetail() {
                 region={db?.region}
                 propertyType={propertyType}
                 lat={db?.latitude ? Number(db.latitude) : undefined}
-                lng={db?.longitude ? Number(db.longitude) : undefined}
-              />
+                lng={db?.longitude ? Number(db.longitude) : undefined} />
+              
 
             </div>
 
@@ -1021,9 +1036,9 @@ export default function PropertyDetail() {
                         €{(isAuction && db.auction_starting_bid ? Number(db.auction_starting_bid) : price).toLocaleString()}
                         {listingType === "rent" && <span className="text-sm font-normal text-muted-foreground">/mo</span>}
                       </p>
-                  {isAuction && db.auction_starting_bid && (
-                        <p className="text-xs text-muted-foreground mt-0.5">Full value: €{price.toLocaleString()}</p>
-                      )}
+                      {isAuction && db.auction_starting_bid &&
+                      <p className="text-xs text-muted-foreground mt-0.5">Market value: €{price.toLocaleString()}</p>
+                      }
                       {!isAuction && pricePerSqm && <p className="text-xs text-muted-foreground mt-0.5">€{Number(pricePerSqm).toLocaleString()}/m²</p>}
                     </div>
                     <div className="text-right">
@@ -1036,28 +1051,28 @@ export default function PropertyDetail() {
                 </div>
 
                 {/* Agent info — hidden for auctions */}
-                {!isAuction && (
-                  <div className="px-5 py-4 border-b border-border">
-                    {ownerProfile ? (
-                      <div className="flex items-center gap-3">
+                {!isAuction &&
+                <div className="px-5 py-4 border-b border-border">
+                    {ownerProfile ?
+                  <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-gradient-primary flex items-center justify-center text-sm font-bold text-primary-foreground overflow-hidden shrink-0">
-                          {ownerProfile.avatar_url
-                            ? <img src={ownerProfile.avatar_url} alt="" className="w-full h-full object-cover" />
-                            : (ownerProfile.display_name?.[0] || "O")}
+                          {ownerProfile.avatar_url ?
+                      <img src={ownerProfile.avatar_url} alt="" className="w-full h-full object-cover" /> :
+                      ownerProfile.display_name?.[0] || "O"}
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="font-semibold text-sm truncate">{ownerProfile.display_name || "Owner"}</p>
                           <p className="text-xs text-muted-foreground">Listing Owner</p>
                         </div>
-                        {ownerProfile.verified && (
-                          <div className="flex items-center gap-1 text-xs text-primary shrink-0">
+                        {ownerProfile.verified &&
+                    <div className="flex items-center gap-1 text-xs text-primary shrink-0">
                             <CheckCircle className="w-3.5 h-3.5" />
                             <span>Verified</span>
                           </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-3">
+                    }
+                      </div> :
+
+                  <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-gradient-primary flex items-center justify-center text-sm font-bold text-primary-foreground shrink-0">A</div>
                         <div>
                           <p className="font-semibold text-sm">Licensed Agent</p>
@@ -1066,40 +1081,40 @@ export default function PropertyDetail() {
                           </div>
                         </div>
                       </div>
-                    )}
+                  }
                   </div>
-                )}
+                }
 
                 {/* Actions */}
                 <div className="p-5 space-y-2.5">
-                  {isAuction ? (
-                    <>
+                  {isAuction ?
+                  <>
                       <Button
-                        className="w-full bg-gradient-gold border-0 text-background font-semibold gap-2 h-10"
-                        onClick={() => {
-                          if (!user) { toast.error("Sign in to set auction alerts"); navigate("/login"); return; }
-                          setAuctionAlertOpen(true);
-                        }}
-                      >
+                      className="w-full bg-gradient-gold border-0 text-background font-semibold gap-2 h-10"
+                      onClick={() => {
+                        if (!user) {toast.error("Sign in to set auction alerts");navigate("/login");return;}
+                        setAuctionAlertOpen(true);
+                      }}>
+                      
                         <Bell className="w-4 h-4" />
                         Set Auction Alert
                       </Button>
-                      {websiteUrl && (
-                        <a
-                          href={websiteUrl.startsWith("http") ? websiteUrl : `https://${websiteUrl}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
+                      {websiteUrl &&
+                    <a
+                      href={websiteUrl.startsWith("http") ? websiteUrl : `https://${websiteUrl}`}
+                      target="_blank"
+                      rel="noopener noreferrer">
+                      
                           <Button variant="outline" className="w-full border-border gap-2 h-9 text-xs">
                             <ExternalLink className="w-3.5 h-3.5" />View on eAuction.gr
                           </Button>
                         </a>
-                      )}
-                    </>
-                  ) : (
-                    <>
+                    }
+                    </> :
+
+                  <>
                       <Button className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2 h-10"
-                        onClick={handleContact} disabled={startConversation.isPending}>
+                    onClick={handleContact} disabled={startConversation.isPending}>
                         {startConversation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
                         Send Message
                       </Button>
@@ -1115,34 +1130,34 @@ export default function PropertyDetail() {
                         <Video className="w-3.5 h-3.5" />Video Viewing
                       </Button>
                     </>
-                  )}
+                  }
                 </div>
 
                 {/* Response time — only non-auction */}
-                {!isAuction && (
-                  <div className="px-5 pb-4 text-center">
+                {!isAuction &&
+                <div className="px-5 pb-4 text-center">
                     <p className="text-[10px] text-muted-foreground flex items-center justify-center gap-1">
                       <Clock className="w-3 h-3" />Usually responds within 2 hours
                     </p>
                   </div>
-                )}
+                }
               </div>
 
               {/* ② Walk Score — derived from actual POIs loaded in PropertyMiniMap */}
               {walkScore !== null && (() => {
                 const colour = walkScoreColour(walkScore);
                 const label = walkScoreLabel(walkScore);
-                const r = 20, c = 2 * Math.PI * r;
+                const r = 20,c = 2 * Math.PI * r;
                 return (
                   <div className="glass-card rounded-2xl p-4 border border-border flex items-center gap-4">
                     <svg width="52" height="52" viewBox="0 0 56 56" className="shrink-0">
                       <circle cx="28" cy="28" r={r} fill="none" stroke="hsl(var(--border))" strokeWidth="4" />
                       <circle cx="28" cy="28" r={r} fill="none"
-                        stroke={colour} strokeWidth="4"
-                        strokeDasharray={`${c * walkScore / 100} ${c * (1 - walkScore / 100)}`}
-                        strokeLinecap="round"
-                        transform="rotate(-90 28 28)"
-                      />
+                      stroke={colour} strokeWidth="4"
+                      strokeDasharray={`${c * walkScore / 100} ${c * (1 - walkScore / 100)}`}
+                      strokeLinecap="round"
+                      transform="rotate(-90 28 28)" />
+                      
                       <text x="28" y="33" textAnchor="middle" fontSize="13" fontWeight="900" fill={colour}>{walkScore}</text>
                     </svg>
                     <div>
@@ -1150,69 +1165,47 @@ export default function PropertyDetail() {
                       <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Walk Score</p>
                       <p className="text-[10px] text-muted-foreground mt-0.5">Based on actual nearby amenities</p>
                     </div>
-                  </div>
-                );
+                  </div>);
+
               })()}
 
-              {/* ③ AI Property Valuation — unlocked for Pro, locked otherwise */}
-              {isPro ? (
-                <PropertyValuation
-                  title={title}
-                  city={city}
-                  address={address}
-                  price={price}
-                  sqm={sqm}
-                  bedrooms={bedrooms}
-                  bathrooms={bathrooms}
-                  propertyType={propertyType}
-                  listingType={listingType}
-                  floor={db?.floor}
-                  yearBuilt={db?.year_built}
-                  energyClass={energyClass}
-                  pricePerSqm={pricePerSqm ? Number(pricePerSqm) : undefined}
-                  hasParking={db?.has_parking}
-                  hasPool={db?.has_pool}
-                  hasElevator={db?.has_elevator}
-                  region={db?.region}
-                />
-              ) : (
-                <div className="relative">
-                  <div className="pointer-events-none select-none opacity-40 blur-[2px]">
-                    <PropertyValuation
-                      title={title}
-                      city={city}
-                      address={address}
-                      price={price}
-                      sqm={sqm}
-                      bedrooms={bedrooms}
-                      bathrooms={bathrooms}
-                      propertyType={propertyType}
-                      listingType={listingType}
-                      floor={db?.floor}
-                      yearBuilt={db?.year_built}
-                      energyClass={energyClass}
-                      pricePerSqm={pricePerSqm ? Number(pricePerSqm) : undefined}
-                      hasParking={db?.has_parking}
-                      hasPool={db?.has_pool}
-                      hasElevator={db?.has_elevator}
-                      region={db?.region}
-                    />
-                  </div>
-                  {/* Lock overlay */}
-                  <div className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl bg-background/60 backdrop-blur-sm border border-primary/20 gap-3 px-5 text-center">
-                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Lock className="w-5 h-5 text-primary" />
-                    </div>
-                    <p className="font-display font-bold text-sm">Pro Feature</p>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      Unlock the full <span className="font-semibold text-foreground">AI Property Valuation</span> — price range, confidence score, key factors &amp; renovation potential.
-                    </p>
-                    <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground gap-1.5 mt-1" asChild>
-                      <Link to="/pro"><Zap className="w-3.5 h-3.5" /> Upgrade to Pro</Link>
-                    </Button>
-                  </div>
+              {/* ③ AI Property Valuation — Pro-locked */}
+              <div className="relative">
+                <div className="pointer-events-none select-none opacity-40 blur-[2px]">
+                  <PropertyValuation
+                    title={title}
+                    city={city}
+                    address={address}
+                    price={price}
+                    sqm={sqm}
+                    bedrooms={bedrooms}
+                    bathrooms={bathrooms}
+                    propertyType={propertyType}
+                    listingType={listingType}
+                    floor={db?.floor}
+                    yearBuilt={db?.year_built}
+                    energyClass={energyClass}
+                    pricePerSqm={pricePerSqm ? Number(pricePerSqm) : undefined}
+                    hasParking={db?.has_parking}
+                    hasPool={db?.has_pool}
+                    hasElevator={db?.has_elevator}
+                    region={db?.region} />
+                  
                 </div>
-              )}
+                {/* Lock overlay */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl bg-background/60 backdrop-blur-sm border border-primary/20 gap-3 px-5 text-center">
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Lock className="w-5 h-5 text-primary" />
+                  </div>
+                  <p className="font-display font-bold text-sm">Pro Feature</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Unlock the full <span className="font-semibold text-foreground">AI Property Valuation</span> — price range, confidence score, key factors &amp; renovation potential.
+                  </p>
+                  <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground gap-1.5 mt-1" asChild>
+                    <Link to="/pro"><Zap className="w-3.5 h-3.5" /> Upgrade to Pro</Link>
+                  </Button>
+                </div>
+              </div>
 
               {/* ④ Full AI Property Report */}
               <Section className={reportPurchased ? "border-primary/30" : ""}>
@@ -1230,33 +1223,33 @@ export default function PropertyDetail() {
                         Deep-dive: cadastre verification, price history, comparable sales, investment projections, ENFIA calculation, and legal status.
                       </p>
                       <div className="grid grid-cols-2 gap-2 mb-4">
-                        {["Cadastre Verification", "5-Year Price History", "Comparable Sales", "Investment Projection", "Legal Status Check", "Neighborhood Score"].map(item => (
-                          <div key={item} className={`flex items-center gap-1.5 text-xs ${reportPurchased ? "text-primary" : "text-muted-foreground"}`}>
+                        {["Cadastre Verification", "5-Year Price History", "Comparable Sales", "Investment Projection", "Legal Status Check", "Neighborhood Score"].map((item) =>
+                        <div key={item} className={`flex items-center gap-1.5 text-xs ${reportPurchased ? "text-primary" : "text-muted-foreground"}`}>
                             {reportPurchased ? <Check className="w-3 h-3 text-primary" /> : <Lock className="w-3 h-3" />}
                             {item}
                           </div>
-                        ))}
+                        )}
                       </div>
-                      {!reportPurchased ? (
-                        <div className="flex items-center gap-3 flex-wrap">
+                      {!reportPurchased ?
+                      <div className="flex items-center gap-3 flex-wrap">
                           <Button className="bg-gradient-primary border-0 text-primary-foreground text-sm" onClick={() => setReportPurchased(true)}>
                             Unlock Report — €29
                           </Button>
                           <span className="text-xs text-muted-foreground">One-time · instant access</span>
-                        </div>
-                      ) : (
-                        <Button variant="outline" className="border-primary/30 text-primary gap-2 text-sm">
+                        </div> :
+
+                      <Button variant="outline" className="border-primary/30 text-primary gap-2 text-sm">
                           <Download className="w-4 h-4" /> Download PDF
                         </Button>
-                      )}
+                      }
                     </div>
                   </div>
                 </div>
               </Section>
 
               {/* ⑤ Verified listing badge — hidden for auctions */}
-              {!isAuction && (
-                <div className="glass-card rounded-2xl p-4 border border-brand-emerald/20">
+              {!isAuction &&
+              <div className="glass-card rounded-2xl p-4 border border-brand-emerald/20">
                   <div className="flex items-center gap-2 mb-3">
                     <div className="w-6 h-6 rounded-lg bg-brand-emerald/10 flex items-center justify-center">
                       <Shield className="w-3.5 h-3.5 text-brand-emerald" />
@@ -1264,24 +1257,24 @@ export default function PropertyDetail() {
                     <span className="font-display font-semibold text-sm">Verified Listing</span>
                   </div>
                   <div className="space-y-2">
-                    {["Cadastre verified", "Agent ID checked", "No encumbrances found"].map(item => (
-                      <div key={item} className="flex items-center gap-2 text-xs text-muted-foreground">
+                    {["Cadastre verified", "Agent ID checked", "No encumbrances found"].map((item) =>
+                  <div key={item} className="flex items-center gap-2 text-xs text-muted-foreground">
                         <Check className="w-3 h-3 text-brand-emerald shrink-0" />{item}
                       </div>
-                    ))}
+                  )}
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <Clock className="w-3 h-3 shrink-0" />Last verified: today
                     </div>
                   </div>
                 </div>
-              )}
+              }
 
               {/* ⑥ Mortgage Calculator — hidden for auctions and rentals */}
               {!isAuction && listingType !== "rent" && <MortgageCalculator price={price} />}
 
               {/* Rental Summary */}
-              {listingType === "rent" && (
-                <div className="glass-card rounded-2xl border border-border overflow-hidden">
+              {listingType === "rent" &&
+              <div className="glass-card rounded-2xl border border-border overflow-hidden">
                   <div className="flex items-center gap-2.5 px-5 py-4 border-b border-border">
                     <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
                       <Euro className="w-3.5 h-3.5 text-primary" />
@@ -1293,25 +1286,25 @@ export default function PropertyDetail() {
                       <span className="text-muted-foreground text-xs">Monthly Rent</span>
                       <span className="font-semibold text-sm">€{price.toLocaleString()}</span>
                     </div>
-                    {(db as any)?.monthly_expenses && (
-                      <div className="flex justify-between">
+                    {(db as any)?.monthly_expenses &&
+                  <div className="flex justify-between">
                         <span className="text-muted-foreground text-xs">Shared Expenses</span>
                         <span className="text-sm">€{(db as any).monthly_expenses}</span>
                       </div>
-                    )}
-                    {(db as any)?.deposit_months && (
-                      <div className="flex justify-between">
+                  }
+                    {(db as any)?.deposit_months &&
+                  <div className="flex justify-between">
                         <span className="text-muted-foreground text-xs">Deposit</span>
                         <span className="text-sm">{(db as any).deposit_months}mo · €{(price * (db as any).deposit_months).toLocaleString()}</span>
                       </div>
-                    )}
+                  }
                     <div className="pt-2.5 border-t border-border flex justify-between font-semibold">
                       <span className="text-xs text-muted-foreground">Total Move-in Cost</span>
                       <span className="text-primary">€{(price * (1 + ((db as any)?.deposit_months || 0))).toLocaleString()}</span>
                     </div>
                   </div>
                 </div>
-              )}
+              }
 
               {/* Report error */}
               <div className="text-center pt-1">
@@ -1336,8 +1329,8 @@ export default function PropertyDetail() {
           type: db.property_type as any, listingType: db.listing_type as any,
           images: images, address: db.address || db.city,
           tags: []
-        }}
-      />
+        }} />
+      
 
       <AIAssistantWidget
         propertyContext={{
@@ -1369,15 +1362,15 @@ export default function PropertyDetail() {
           hasView: (db as any).has_view,
           latitude: db.latitude,
           longitude: db.longitude,
-          region: db.region,
-        }}
-      />
+          region: db.region
+        }} />
+      
 
       {/* Auction Alert Modal */}
       <AuctionAlertModal
         open={auctionAlertOpen}
-        onClose={() => setAuctionAlertOpen(false)}
-      />
-    </div>
-  );
+        onClose={() => setAuctionAlertOpen(false)} />
+      
+    </div>);
+
 }
