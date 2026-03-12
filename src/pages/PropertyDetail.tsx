@@ -467,10 +467,12 @@ export default function PropertyDetail() {
     ...((db as any)?.heating_system ? [{ label: "Heating", value: (db as any).heating_system.replace("_", " ") }] : []),
     ...(db.energy_class ? [{ label: "Energy Class", value: db.energy_class }] : []),
     ...((db as any)?.construction_status ? [{ label: "Construction", value: (db as any).construction_status.replace("_", " ") }] : []),
-    ...(db.cadastre_number ? [{ label: "Cadastre No.", value: db.cadastre_number }] : []),
     ...(db.enfia_zone ? [{ label: "ENFIA Zone", value: db.enfia_zone }] : []),
     ...(db.postal_code ? [{ label: "Postal Code", value: db.postal_code }] : []),
     ...(db.region ? [{ label: "Region", value: db.region }] : []),
+    // Ownership (for all listing types when present)
+    ...(ownershipStatus ? [{ label: "Ownership Status", value: ownershipDisplay?.label ?? ownershipStatus }] : []),
+    ...(ownershipPct != null && ownershipStatus !== "full" ? [{ label: "Ownership %", value: `${ownershipPct}%` }] : []),
     // Land
     ...(isLandType && (db as any)?.coverage_ratio ? [{ label: "Coverage Ratio", value: `${(db as any).coverage_ratio}%` }] : []),
     ...(isLandType && (db as any)?.building_allowance ? [{ label: "Build Allowance", value: `${(db as any).building_allowance} m²` }] : []),
@@ -485,10 +487,8 @@ export default function PropertyDetail() {
     ...((db as any)?.commercial_subtype ? [{ label: "Subtype", value: (db as any).commercial_subtype }] : []),
     ...((db as any)?.plot_surface ? [{ label: "Plot Surface", value: `${(db as any).plot_surface} m²` }] : []),
     ...((db as any)?.floor_height ? [{ label: "Floor Height", value: `${(db as any).floor_height} m` }] : []),
-    // Meta
+    // Meta — only system code, no dates
     { label: "System Code", value: db.id.slice(0, 8).toUpperCase() },
-    { label: "Published", value: new Date(db.created_at).toLocaleDateString("en-GB") },
-    { label: "Last Updated", value: new Date(db.updated_at).toLocaleDateString("en-GB") },
   ];
 
   return (
