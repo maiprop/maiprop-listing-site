@@ -169,7 +169,8 @@ type ViewMode = "list" | "map";
 
 function streetViewImg(lat?: number | null, lng?: number | null): string | null {
   if (!lat || !lng) return null;
-  const key = "AIzaSyD42TB3L5KeQfvqOu6NfelXL5EOVNzz_cY";
+  const key = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || import.meta.env.VITE_GOOGLE_STREETVIEW_KEY;
+  if (!key) return null;
   return `https://maps.googleapis.com/maps/api/streetview?size=800x450&location=${lat},${lng}&fov=90&pitch=10&key=${key}`;
 }
 

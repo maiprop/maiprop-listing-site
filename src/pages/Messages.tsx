@@ -3,7 +3,7 @@ import { Search, Send, Phone, Video, MoreVertical, Paperclip, Loader2, MessageSq
 import { Navbar } from "@/components/Navbar";
 import { useConversations, useMessages, useSendMessage } from "@/hooks/useMessages";
 import { useAuth } from "@/contexts/AuthContext";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 
 function getOtherProfile(conv: any, userId: string) {
@@ -18,6 +18,8 @@ function getInitials(name: string) {
 
 export default function Messages() {
   const { user } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const { data: conversations = [], isLoading: convsLoading } = useConversations();
   const [activeConvId, setActiveConvId] = useState<string>("");
   const [input, setInput] = useState("");
@@ -30,7 +32,16 @@ export default function Messages() {
   const activeConv = conversations.find((c: any) => c.id === activeConvId);
   const otherProfile = getOtherProfile(activeConv, user?.id || "");
 
-  // Auto-select first conversation
+  // Open conversation passed from property/detail (e.g. after "Contact")
+  useEffect(() => {
+    const openId = (location.state as any)?.openConversationId;
+    if (openId && typeof openId === "string") {
+      setActiveConvId(openId);
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state, location.pathname, navigate]);
+
+  // Auto-select first conversation when none selected
   useEffect(() => {
     if (conversations.length > 0 && !activeConvId) {
       setActiveConvId(conversations[0].id);

@@ -122,7 +122,7 @@ export function OSSyncPanel() {
   const [pollPages, setPollPages]   = useState(1); // how many pages to scan
   const [pollResult, setPollResult] = useState<any>(null);
 
-  // ── Mutation: poll OS auctions → Hub ────────────────────────────────────────
+  // ── Mutation: poll OS auctions → Hub (single page range) ──────────────────────
   const pollAuctionsMutation = useMutation({
     mutationFn: async () => {
       let totalImported = 0, totalUpdated = 0, totalErrors = 0, totalScanned = 0, totalAi = 0;
@@ -153,6 +153,35 @@ export function OSSyncPanel() {
       }
     },
     onError: (err: any) => toast.error("Auction poll failed: " + err.message),
+  });
+
+  // ── Mutation: full sync from OS (all relevant APIs: auctions + extensible) ───
+  const fullSyncMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke("full-sync-from-os", {
+        body: { pageSize: 100, maxPages: 200 },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (result) => {
+      setSyncingId(null);
+      qc.invalidateQueries({ queryKey: ["sync_log"] });
+      if (result?.status === "skipped") {
+        toast.info("Full sync skipped — OS credentials pending.");
+      } else if (result?.sync?.auctions) {
+        const a = result.sync.auctions;
+        toast.success(
+          `Full sync: ${a.imported ?? 0} new · ${a.updated ?? 0} updated (${a.pages ?? 0} pages)`,
+        );
+      } else {
+        toast.success("Full sync from OS completed.");
+      }
+    },
+    onError: (err: any) => {
+      setSyncingId(null);
+      toast.error("Full sync failed: " + err.message);
+    },
   });
 
   // ── Derived stats ────────────────────────────────────────────────────────────
@@ -186,14 +215,30 @@ export function OSSyncPanel() {
             OS Sync Dashboard
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Bidirectional sync: OS Auctions → Hub · Hub Listings → OS · Firesale → OS
+            Full sync OS → Hub (auctions, extensible). Firesale → OS unchanged.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          {/* Poll OS Auctions button */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Full sync from OS (all pages of auctions + extensible) */}
           <Button
             size="sm"
-            className="gap-2 bg-primary/90 hover:bg-primary"
+            className="gap-2 bg-primary hover:bg-primary/90"
+            disabled={fullSyncMutation.isPending}
+            onClick={() => {
+              setSyncingId("full-sync");
+              fullSyncMutation.mutate();
+            }}
+          >
+            {fullSyncMutation.isPending
+              ? <Loader2 className="w-4 h-4 animate-spin" />
+              : <RefreshCw className="w-4 h-4" />}
+            Full sync (OS → Hub)
+          </Button>
+          {/* Single-page-range poll */}
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-2 border-border"
             disabled={pollAuctionsMutation.isPending}
             onClick={() => pollAuctionsMutation.mutate()}
           >

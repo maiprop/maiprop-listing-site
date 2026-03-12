@@ -151,7 +151,7 @@ export function Navbar() {
                   forceLight
                     ? "text-white/80 hover:text-white hover:bg-white/10"
                     : "text-muted-foreground hover:text-foreground hover:bg-secondary"
-                }`}>
+                }`} title="Messages">
                   <MessageSquare className="w-4 h-4" />
                   <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-primary" />
                 </button>

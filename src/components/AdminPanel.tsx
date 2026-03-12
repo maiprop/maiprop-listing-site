@@ -6,7 +6,7 @@ import {
   Shield, Wifi, WifiOff, RefreshCw, Loader2, CheckCircle2, AlertCircle,
   Clock, Activity, Download, Send, ChevronDown, ChevronRight, ArrowDownLeft,
   ArrowUpRight, Zap, Database, Server, Globe, Play, TerminalSquare, Calendar,
-  FlaskConical, Bot
+  FlaskConical, Bot, SlidersHorizontal
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -92,9 +92,10 @@ function useDbStats() {
 
 // ── Edge functions list ───────────────────────────────────────────────────────
 const EDGE_FUNCTIONS = [
-  { name: "poll-os-auctions", label: "Poll OS Auctions", icon: ArrowDownLeft, description: "Imports future auctions from maiProp OS" },
+  { name: "full-sync-from-os", label: "Full sync (OS → Hub)", icon: ArrowDownLeft, description: "Syncs all relevant data from OS: auctions (all pages), extensible for reports/ML" },
+  { name: "poll-os-auctions", label: "Poll OS Auctions", icon: ArrowDownLeft, description: "Imports one page range of future auctions from maiProp OS" },
   { name: "sync-to-os", label: "Sync to OS", icon: ArrowUpRight, description: "Pushes Hub listings to OS backoffice" },
-  { name: "sync-firesale-to-os", label: "Sync Firesale → OS", icon: Zap, description: "Pushes Quick Sale™ requests to OS" },
+  { name: "sync-firesale-to-os", label: "Sync Firesale → OS", icon: Zap, description: "Pushes Quick Sale™ requests to OS (unchanged)" },
   { name: "ai-search", label: "AI Search", icon: Bot, description: "Natural-language listing search" },
   { name: "listing-ai-assist", label: "Listing AI Assist", icon: Bot, description: "AI description & price suggestion" },
   { name: "neighbourhood-report", label: "Neighbourhood Report", icon: Globe, description: "Area analysis & POI report" },
@@ -104,7 +105,8 @@ const EDGE_FUNCTIONS = [
 
 // ── Cron schedule info ────────────────────────────────────────────────────────
 const CRON_JOBS = [
-  { name: "poll-os-auctions-nightly", schedule: "0 3 * * *", fn: "poll-os-auctions", body: '{"limit":1000}', description: "Nightly 03:00 UTC · GET /api/auctions/future?limit=1000" },
+  { name: "full-sync-from-os-nightly", schedule: "0 3 * * *", fn: "full-sync-from-os", body: '{"pageSize":100,"maxPages":200}', description: "Nightly 03:00 UTC · Full sync auctions from OS" },
+  { name: "poll-os-auctions-nightly", schedule: "0 3 * * *", fn: "poll-os-auctions", body: '{"page":0,"pageSize":100}', description: "Alternative: single page poll" },
 ];
 
 // ── Main Component ────────────────────────────────────────────────────────────
@@ -214,11 +216,19 @@ export default function AdminPanel() {
 
   // ── Mutation: poll auctions — now uses GET /api/auctions/future ────────────
   const [pollCity, setPollCity] = useState("");
-  const [pollLimit, setPollLimit] = useState(1000);
+
+  // ── Auction page limits (used by poll + full sync) ─────────────────────────────
+  const [auctionPageSize, setAuctionPageSize] = useState(100);
+  const [auctionMaxPages, setAuctionMaxPages] = useState(200);
+  const [auctionStartPage, setAuctionStartPage] = useState(0);
 
   const pollMutation = useMutation({
     mutationFn: async () => {
-      const body: Record<string, unknown> = { limit: pollLimit };
+      const body: Record<string, unknown> = {
+        page: auctionStartPage,
+        pageSize: auctionPageSize,
+        size: auctionPageSize,
+      };
       if (pollCity.trim()) body.city = pollCity.trim();
       const { data, error } = await supabase.functions.invoke("poll-os-auctions", { body });
       if (error) throw error;
@@ -241,6 +251,27 @@ export default function AdminPanel() {
       );
     },
     onError: (e: any) => toast.error("Poll failed: " + e.message),
+  });
+
+  const fullSyncMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke("full-sync-from-os", {
+        body: { pageSize: auctionPageSize, maxPages: auctionMaxPages },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ["admin-sync-log", "admin-db-stats"] });
+      const a = r?.sync?.auctions;
+      toast.success(
+        a
+          ? `Full sync: ${a.imported ?? 0} new · ${a.updated ?? 0} updated (${a.pages ?? 0} pages)`
+          : "Full sync completed",
+        { duration: 6000 }
+      );
+    },
+    onError: (e: any) => toast.error("Full sync failed: " + e.message),
   });
 
   // ── Derived ─────────────────────────────────────────────────────────────────
@@ -313,17 +344,75 @@ export default function AdminPanel() {
         </div>
       </section>
 
-      {/* ── Row 3: Auction Polling ────────────────────────────────────────────── */}
+      {/* ── Row 3: Limit auction pages ──────────────────────────────────────────── */}
+      <section>
+        <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2">
+          <SlidersHorizontal className="w-3.5 h-3.5" /> Limit auction pages
+        </h2>
+        <div className="glass-card rounded-xl p-5 border border-border space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Control how many auction pages are requested from OS when polling or running a full sync. Lower values reduce load and run time; higher values import more auctions in one go.
+          </p>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+              <label className="text-[11px] font-medium text-muted-foreground block mb-1.5">Page size</label>
+              <input
+                type="number"
+                min={1}
+                max={500}
+                value={auctionPageSize}
+                onChange={e => setAuctionPageSize(Math.max(1, Math.min(500, Number(e.target.value) || 1)))}
+                className="w-full bg-secondary border border-border rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:border-primary"
+              />
+              <p className="text-[10px] text-muted-foreground mt-0.5">Rows per page (1–500). Used by Poll and Full sync.</p>
+            </div>
+            <div>
+              <label className="text-[11px] font-medium text-muted-foreground block mb-1.5">Max pages (full sync)</label>
+              <input
+                type="number"
+                min={1}
+                max={500}
+                value={auctionMaxPages}
+                onChange={e => setAuctionMaxPages(Math.max(1, Math.min(500, Number(e.target.value) || 1)))}
+                className="w-full bg-secondary border border-border rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:border-primary"
+              />
+              <p className="text-[10px] text-muted-foreground mt-0.5">Full sync stops after this many pages (max ~{auctionPageSize * auctionMaxPages} rows).</p>
+            </div>
+            <div>
+              <label className="text-[11px] font-medium text-muted-foreground block mb-1.5">Start page (poll)</label>
+              <input
+                type="number"
+                min={0}
+                value={auctionStartPage}
+                onChange={e => setAuctionStartPage(Math.max(0, Number(e.target.value) || 0))}
+                className="w-full bg-secondary border border-border rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:border-primary"
+              />
+              <p className="text-[10px] text-muted-foreground mt-0.5">Page index for &quot;Pull Future Auctions&quot; (0-based).</p>
+            </div>
+            <div className="flex flex-col justify-end">
+              <div className="text-[11px] text-muted-foreground">
+                <span className="font-medium text-foreground">Summary</span>
+                <ul className="mt-1 space-y-0.5 list-disc list-inside">
+                  <li>Poll: 1 page of {auctionPageSize} from page {auctionStartPage}</li>
+                  <li>Full sync: up to {auctionMaxPages} pages × {auctionPageSize} = ~{(auctionMaxPages * auctionPageSize).toLocaleString()} rows</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Row 4: Auction Polling ─────────────────────────────────────────────── */}
       <section>
         <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2">
           <ArrowDownLeft className="w-3.5 h-3.5" /> Auction Polling — OS → Hub
         </h2>
         <div className="grid md:grid-cols-2 gap-4">
-          {/* Manual poll */}
+          {/* Manual poll — uses Limit auction pages settings */}
           <div className="glass-card rounded-xl p-5 space-y-4">
             <div>
-              <p className="font-semibold text-sm mb-1">Manual Trigger — <code className="text-[11px] bg-secondary px-1 rounded">GET /api/auctions/future</code></p>
-              <p className="text-xs text-muted-foreground">Fetches all upcoming auctions (auction_date ≥ now, status: scheduled/upcoming/active) and upserts to Hub listings.</p>
+              <p className="font-semibold text-sm mb-1">Poll one page — <code className="text-[11px] bg-secondary px-1 rounded">POST /api/v1/auctions/filter/details</code></p>
+              <p className="text-xs text-muted-foreground">Fetches one page of future auctions using <strong>Page size</strong> and <strong>Start page</strong> from the section above.</p>
             </div>
             <div className="flex gap-3">
               <div className="flex-1">
@@ -336,25 +425,20 @@ export default function AdminPanel() {
                   className="w-full bg-secondary border border-border rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:border-primary"
                 />
               </div>
-              <div className="flex-1">
-                <label className="text-[11px] text-muted-foreground block mb-1">Limit (max rows)</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={5000}
-                  value={pollLimit}
-                  onChange={e => setPollLimit(Math.max(1, Math.min(5000, Number(e.target.value))))}
-                  className="w-full bg-secondary border border-border rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:border-primary"
-                />
-              </div>
             </div>
             <p className="text-[11px] text-muted-foreground">
-              Will call <span className="font-mono">?limit={pollLimit}{pollCity.trim() ? `&city=${pollCity.trim()}` : ""}</span>
+              Request: page={auctionStartPage}, size={auctionPageSize}{pollCity.trim() ? `, city=${pollCity.trim()}` : ""}
             </p>
-            <Button className="w-full gap-2" size="sm" disabled={pollMutation.isPending} onClick={() => pollMutation.mutate()}>
-              {pollMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-              {pollMutation.isPending ? "Polling…" : "Pull Future Auctions"}
-            </Button>
+            <div className="flex gap-2">
+              <Button className="flex-1 gap-2" size="sm" disabled={pollMutation.isPending} onClick={() => pollMutation.mutate()}>
+                {pollMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                {pollMutation.isPending ? "Polling…" : "Pull Future Auctions"}
+              </Button>
+              <Button className="flex-1 gap-2" size="sm" variant="secondary" disabled={fullSyncMutation.isPending} onClick={() => fullSyncMutation.mutate()}>
+                {fullSyncMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                {fullSyncMutation.isPending ? "Syncing…" : "Full sync (OS → Hub)"}
+              </Button>
+            </div>
           </div>
 
           {/* Cron schedule */}

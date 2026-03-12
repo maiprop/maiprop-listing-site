@@ -5,7 +5,7 @@ import {
   ChevronLeft, Clock, Users, Briefcase, MessageSquare,
   Calendar, Shield, Loader2, Languages, ChevronRight,
   Phone, Euro, FileText, ThumbsUp, Zap, Building2, Video,
-  Sparkles, Brain, ArrowRight, X
+  Sparkles, Brain, ArrowRight, X, Lock
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -263,6 +263,9 @@ export default function ProfessionalProfile() {
   const [aiMatchOpen, setAiMatchOpen] = useState(false);
   const navigate = useNavigate();
 
+  // Only Pro professionals can receive in-app messages and calendar bookings
+  const professionalIsPro = (pro?.subscription_tier || "").toLowerCase() === "pro";
+
   const catInfo = pro ? categoryLabels[pro.category] || { label: pro.category, emoji: "👤", description: "" } : null;
   // Fallback static list if no DB services yet
   const fallbackServices = pro ? servicesByCategory[pro.category] || [] : [];
@@ -363,14 +366,20 @@ export default function ProfessionalProfile() {
                     </div>
                   </div>
 
-                  {/* CTA buttons */}
+                  {/* CTA buttons — messaging & calendar only for Pro professionals */}
                   <div className="flex flex-col gap-2 shrink-0 min-w-[160px]">
-                    <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" onClick={() => setMsgOpen(true)}>
-                      <MessageSquare className="w-4 h-4" /> Send Message
-                    </Button>
-                    <Button variant="outline" className="border-border gap-2" onClick={() => setConsultOpen(true)}>
-                      <Calendar className="w-4 h-4" /> Book Consultation
-                    </Button>
+                    {professionalIsPro ? (
+                      <>
+                        <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" onClick={() => setMsgOpen(true)}>
+                          <MessageSquare className="w-4 h-4" /> Send Message
+                        </Button>
+                        <Button variant="outline" className="border-border gap-2" onClick={() => setConsultOpen(true)}>
+                          <Calendar className="w-4 h-4" /> Book Consultation
+                        </Button>
+                      </>
+                    ) : (
+                      <p className="text-xs text-muted-foreground py-1">In-app messaging and booking available for Pro professionals.</p>
+                    )}
                     <Button variant="outline" className="border-border gap-2 text-muted-foreground" onClick={() => setVideoOpen(true)}>
                       <Video className="w-4 h-4" /> Video Meeting
                     </Button>
@@ -611,10 +620,13 @@ export default function ProfessionalProfile() {
                       </div>
                     )}
 
-                    <Button className="w-full mt-4 bg-gradient-primary border-0 text-primary-foreground gap-2"
-                      onClick={() => setConsultOpen(true)}>
-                      <Calendar className="w-4 h-4" /> Book a Consultation
-                    </Button>
+                    {professionalIsPro ? (
+                      <Button className="w-full mt-4 bg-gradient-primary border-0 text-primary-foreground gap-2" onClick={() => setConsultOpen(true)}>
+                        <Calendar className="w-4 h-4" /> Book a Consultation
+                      </Button>
+                    ) : (
+                      <p className="text-xs text-muted-foreground mt-4">Booking available for Pro professionals. Use callback or website to contact.</p>
+                    )}
                   </div>
 
                   {/* Availability Grid */}
@@ -663,6 +675,11 @@ export default function ProfessionalProfile() {
                     <p className="text-xs text-muted-foreground mt-3">
                       {dbAvailability.length > 0 ? "Times shown in local time (EET/EEST)." : "Typical availability Mon–Fri. Contact to confirm exact times."}
                     </p>
+                    {!professionalIsPro && (
+                      <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
+                        <Lock className="w-3 h-3 text-brand-gold" /> Booking and calendar sync available for Pro professionals.
+                      </p>
+                    )}
                   </div>
                 </div>
               )}
@@ -736,13 +753,18 @@ export default function ProfessionalProfile() {
               <div className="glass-card rounded-xl p-5 border border-primary/20 sticky top-24">
                 <h3 className="font-display font-semibold mb-4">Contact {displayName.split(" ")[0]}</h3>
                 <div className="space-y-2.5">
-                  <Button className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2" onClick={() => setMsgOpen(true)}>
-                    <MessageSquare className="w-4 h-4" />
-                    Send Message
-                  </Button>
-                  <Button variant="outline" className="w-full border-border gap-2" onClick={() => setConsultOpen(true)}>
-                    <Calendar className="w-4 h-4" /> Book Consultation
-                  </Button>
+                  {professionalIsPro ? (
+                    <>
+                      <Button className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2" onClick={() => setMsgOpen(true)}>
+                        <MessageSquare className="w-4 h-4" /> Send Message
+                      </Button>
+                      <Button variant="outline" className="w-full border-border gap-2" onClick={() => setConsultOpen(true)}>
+                        <Calendar className="w-4 h-4" /> Book Consultation
+                      </Button>
+                    </>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">In-app messaging and calendar booking are for Pro professionals. Use callback or website below.</p>
+                  )}
                   <Button variant="outline" className="w-full border-border gap-2 text-muted-foreground" onClick={() => setCallbackOpen(true)}>
                     <Phone className="w-4 h-4" /> Request Callback
                   </Button>

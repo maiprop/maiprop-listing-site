@@ -188,10 +188,14 @@ export default function PropertyDetail() {
   const { id } = useParams<{id: string;}>();
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { isPro } = useSubscription();
 
   const { data: dbListing, isLoading } = useListing(id || "");
+  const ownerIsPro = !!(dbListing as any)?.ownerIsPro;
+  // Video viewing: Pro users or retailers (individuals) get access; others must upgrade
+  const isRetailer = profile?.role === "individual";
+  const canVideoView = isPro || isRetailer;
   const { data: dbSimilar = [] } = useListings({ city: dbListing?.city, property_type: dbListing?.property_type });
 
   // Redirect: if auction opened via /property/:id, send to /auction/:id
@@ -223,8 +227,27 @@ export default function PropertyDetail() {
     if (!dbListing || aiInsightsLoaded || !isPro) return;
     setAiInsightsLoaded(true);
     setAiInsightsLoading(true);
+    const listingId = id ?? dbListing.id;
     const invokeValuation = async () => {
       try {
+        // Try OS report API first when we have a listing id
+        if (listingId) {
+          const { data: osRes } = await supabaseClient.functions.invoke("fetch-report-from-os", {
+            body: { listing_id: listingId, report_type: "valuation" },
+          });
+          if (osRes?.ok && osRes.report && typeof (osRes.report as any).estimatedValue === "number") {
+            const r = osRes.report as any;
+            setAiInsightsData({
+              vsMarket: r.marketComparisonPct ?? 0,
+              rentalYield: r.rentalYieldEstimate ?? 0,
+              estimatedValue: r.estimatedValue ?? 0,
+              marketComparison: r.marketComparison ?? "at_market",
+              confidenceLabel: r.confidenceLabel ?? "Medium",
+            });
+            setAiInsightsLoading(false);
+            return;
+          }
+        }
         const { data } = await supabaseClient.functions.invoke("property-valuation", {
           body: {
             title: dbListing.title,
@@ -286,11 +309,13 @@ export default function PropertyDetail() {
 
   const handleContact = async () => {
     if (!user) {toast.error("Sign in to contact the owner");navigate("/login");return;}
-    const ownerId = dbListing ? (dbListing as any).profiles?.user_id : undefined;
+    const ownerId = dbListing
+      ? (dbListing as any).profiles?.user_id ?? (dbListing as any).owner_id
+      : undefined;
     if (!ownerId) {toast.info("Contact details not available");return;}
     try {
-      await startConversation.mutateAsync({ other_user_id: ownerId, listing_id: id });
-      navigate("/messages");
+      const convId = await startConversation.mutateAsync({ other_user_id: ownerId, listing_id: id });
+      navigate("/messages", { state: { openConversationId: convId } });
     } catch {toast.error("Could not start conversation");}
   };
 
@@ -1038,7 +1063,8 @@ export default function PropertyDetail() {
                 region={db?.region}
                 propertyType={propertyType}
                 lat={db?.latitude ? Number(db.latitude) : undefined}
-                lng={db?.longitude ? Number(db.longitude) : undefined} />
+                lng={db?.longitude ? Number(db.longitude) : undefined}
+                listingId={id ?? undefined} />
               
 
             </div>
@@ -1135,9 +1161,10 @@ export default function PropertyDetail() {
                     }
                     </> :
 
-                  <>
+                  ownerIsPro ? (
+                    <>
                       <Button className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2 h-10"
-                    onClick={handleContact} disabled={startConversation.isPending}>
+                        onClick={handleContact} disabled={startConversation.isPending}>
                         {startConversation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
                         Send Message
                       </Button>
@@ -1149,10 +1176,17 @@ export default function PropertyDetail() {
                           <Calendar className="w-3.5 h-3.5" />Viewing
                         </Button>
                       </div>
-                      <Button variant="outline" className="w-full border-border gap-2 h-9 text-xs" onClick={() => setViewingOpen(true)}>
-                        <Video className="w-3.5 h-3.5" />Video Viewing
+                      <Button
+                        variant="outline"
+                        className="w-full border-border gap-2 h-9 text-xs"
+                        onClick={() => canVideoView ? setViewingOpen(true) : (toast.info("Video viewing is available for Pro users, or free for retailers."), navigate("/pro"))}
+                      >
+                        <Video className="w-3.5 h-3.5" />Video Viewing{!canVideoView && <Lock className="w-3 h-3 ml-0.5 opacity-60" />}
                       </Button>
                     </>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">Messaging and calendar sync available for Pro property owners.</p>
+                  )
                   }
                 </div>
 
@@ -1235,6 +1269,7 @@ export default function PropertyDetail() {
                   cadastreNumber={db?.cadastre_number}
                   hasLandConcession={db?.has_land_concession}
                   landUse={db?.land_use}
+                  listingId={id ?? undefined}
                 />
               ) : (
                 /* Non-pro: static locked card — no edge function calls */
@@ -1397,6 +1432,7 @@ export default function PropertyDetail() {
       <ViewingDialog
         open={viewingOpen}
         onClose={() => setViewingOpen(false)}
+        canVideoView={canVideoView}
         property={{
           id: db.id, title: db.title, city: db.city,
           price: Number(db.price), sqm: Number(db.sqm),

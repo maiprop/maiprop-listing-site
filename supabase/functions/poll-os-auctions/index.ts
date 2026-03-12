@@ -260,9 +260,9 @@ Deno.serve(async (req) => {
       filterRequest.order = body.order ?? "ASC";
     }
 
-    // Pagination
+    // Pagination (accept pageSize from UI or size from API)
     const page = Number(body.page ?? 0);
-    const size = Math.min(Number(body.size ?? 100), 500);
+    const size = Math.min(Number(body.size ?? body.pageSize ?? 100), 500);
 
     console.log(
       `poll-os-auctions: authenticating against ${OS_URL}...`

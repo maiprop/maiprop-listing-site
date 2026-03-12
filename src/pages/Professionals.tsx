@@ -541,13 +541,13 @@ export default function Professionals() {
                         </div>
                     }
 
-                      {/* Actions */}
+                      {/* Actions — message links to profile; only Pro professionals show Send Message there */}
                       <div className="flex gap-2 mt-auto">
                         <Button size="sm" className="flex-1 bg-gradient-primary border-0 text-primary-foreground text-xs gap-1.5" asChild>
                           <Link to={`/professionals/${pro.id}`}>View Profile <ArrowRight className="w-3 h-3" /></Link>
                         </Button>
-                        <Button size="sm" variant="outline" className="border-border px-3">
-                          <MessageSquare className="w-3.5 h-3.5" />
+                        <Button size="sm" variant="outline" className="border-border px-3" asChild title="Message">
+                          <Link to={`/professionals/${pro.id}`}><MessageSquare className="w-3.5 h-3.5" /></Link>
                         </Button>
                       </div>
                     </div>);

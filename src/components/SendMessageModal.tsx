@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useStartConversation, useSendMessage } from "@/hooks/useMessages";
 import { useSubmitConsultation } from "@/hooks/useConsultations";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { toast } from "sonner";
 
 interface SendMessageModalProps {
@@ -39,7 +39,6 @@ export default function SendMessageModal({ open, onClose, professional }: SendMe
     if (!message.trim()) { toast.error("Please write a message"); return; }
 
     if (user) {
-      // Logged in: create real conversation + send first message
       try {
         const convId = await startConversation.mutateAsync({ other_user_id: professional.user_id });
         await sendMessage.mutateAsync({ conversation_id: convId, content: message });
