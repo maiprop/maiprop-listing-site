@@ -270,29 +270,29 @@ export function PropertyCard({ property, compact = false }: PropertyCardProps) {
         </div>
 
         {/* Key specs */}
-        <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+        <div className="flex items-center gap-1.5 text-xs flex-wrap">
           {property.bedrooms != null && (
-            <span className="flex items-center gap-1 bg-secondary px-2.5 py-1 rounded-lg font-medium">
+            <span className="flex items-center gap-1 bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-400/20 px-2.5 py-1 rounded-lg font-medium">
               <Bed className="w-3.5 h-3.5" /> {property.bedrooms} bed
             </span>
           )}
           {property.bathrooms != null && (
-            <span className="flex items-center gap-1 bg-secondary px-2.5 py-1 rounded-lg font-medium">
+            <span className="flex items-center gap-1 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border border-cyan-400/20 px-2.5 py-1 rounded-lg font-medium">
               <Bath className="w-3.5 h-3.5" /> {property.bathrooms} bath
             </span>
           )}
-          <span className="flex items-center gap-1 bg-secondary px-2.5 py-1 rounded-lg font-medium">
+          <span className="flex items-center gap-1 bg-violet-500/10 text-violet-700 dark:text-violet-300 border border-violet-400/20 px-2.5 py-1 rounded-lg font-medium">
             <Square className="w-3.5 h-3.5" /> {property.sqm} m²
           </span>
           {property.floor != null && (
-            <span className="flex items-center gap-1 bg-secondary px-2.5 py-1 rounded-lg font-medium">
+            <span className="flex items-center gap-1 bg-slate-500/10 text-slate-600 dark:text-slate-300 border border-slate-400/20 px-2.5 py-1 rounded-lg font-medium">
               <Layers className="w-3.5 h-3.5" />
               {property.floor === -1 ? "Basement" : property.floor === 0 ? "Ground" : `${property.floor}F`}
               {property.totalFloors != null && `/${property.totalFloors}`}
             </span>
           )}
           {property.yearBuilt != null && (
-            <span className="flex items-center gap-1 bg-secondary px-2.5 py-1 rounded-lg font-medium">
+            <span className="flex items-center gap-1 bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-400/20 px-2.5 py-1 rounded-lg font-medium">
               <Calendar className="w-3.5 h-3.5" /> {property.yearBuilt}
             </span>
           )}
@@ -301,12 +301,12 @@ export function PropertyCard({ property, compact = false }: PropertyCardProps) {
               {property.energyClass}
             </span>
           )}
-          {/* Ownership status pill — shown for all statuses when present */}
+          {/* Ownership status pill */}
           {property.ownershipStatus && (() => {
             const ownershipMap: Record<string, { label: string; cls: string }> = {
-              full:    { label: "Πλήρης κυριότητα", cls: "bg-emerald-500/15 text-emerald-700 border border-emerald-400/30" },
-              partial: { label: "Μερική κυριότητα", cls: "bg-amber-500/15 text-amber-700 border border-amber-400/30" },
-              common:  { label: "Εξ αδιαιρέτου", cls: "bg-sky-500/15 text-sky-700 border border-sky-400/30" },
+              full:    { label: "Πλήρης κυριότητα", cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-400/30" },
+              partial: { label: "Μερική κυριότητα", cls: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-400/30" },
+              common:  { label: "Εξ αδιαιρέτου", cls: "bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-400/30" },
               none:    { label: "Χωρίς κυριότητα", cls: "bg-destructive/15 text-destructive border border-destructive/30" },
             };
             const ow = ownershipMap[property.ownershipStatus] || { label: property.ownershipStatus, cls: "bg-secondary border border-border" };
