@@ -647,14 +647,16 @@ export default function Auctions() {
                       {YEAR_RANGES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                     </select>
                   </div>
+                </div>{/* end grid */}
+              </div>{/* end standard filters */}
 
-              {/* Premium filters */}
+              {/* Pro filters */}
               <div className="pt-1 border-t border-border">
                 <div className="flex items-center gap-2 mb-3">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Premium Filters</p>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Pro Filters</p>
                   {!isPro && <PremiumBadge />}
                   {isPro && (
-                    <span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
+                    <span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/25">
                       ✓ Unlocked
                     </span>
                   )}
