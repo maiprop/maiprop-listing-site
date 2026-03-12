@@ -257,7 +257,7 @@ Deno.serve(async (req) => {
     let pagesDone = 0;
     let totalAvailableInOS = 0;
 
-    for (let page = 0; page < maxPages; page++) {
+    for (let page = startPage; page < startPage + maxPages; page++) {
       const filterRequest = { ...baseFilter };
       const endpoint = `/api/v1/auctions/filter/details?page=${page}&size=${pageSize}`;
       const auctRes = await fetchWithTimeout(
