@@ -24,16 +24,16 @@ async function getOsToken(baseUrl: string, email: string, password: string): Pro
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-  const OS_URL   = Deno.env.get("MAIPROP_OS_URL")?.replace(/\/$/, "") ?? "";
-  const OS_EMAIL = Deno.env.get("MAIPROP_OS_EMAIL") ?? "";
-  const OS_PASS  = Deno.env.get("MAIPROP_OS_PASSWORD") ?? "";
+  const OS_URL = Deno.env.get("https://app.os.maiprop.co:8080/swagger-ui/")?.replace(/\/$/, "") ?? "";
+  const OS_EMAIL = Deno.env.get("kr@maiprop.co") ?? "";
+  const OS_PASS = Deno.env.get("kr090692") ?? "";
 
   try {
     const token = await getOsToken(OS_URL, OS_EMAIL, OS_PASS);
 
     const authHeaders = {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${token}`,
+      Authorization: `Bearer ${token}`,
     };
 
     // ── Probe 1: GET /api/auctions/future (new endpoint) ──────────────────────
@@ -90,37 +90,50 @@ Deno.serve(async (req) => {
       const fullRes = await fetch(`${OS_URL}/api/auctions/future?limit=9999`, { headers: authHeaders });
       const fullJson = await fullRes.json().catch(() => null);
       futureFullTotal = fullJson?.total ?? fullJson?.data?.length ?? futureTotal;
-    } catch (_) { /* non-critical */ }
+    } catch (_) {
+      /* non-critical */
+    }
 
-    return new Response(JSON.stringify({
-      auth: "✅ OK",
-      osReachable: true,
-      // ── New endpoint probe ──────────────────────────────────────────────────
-      futureAuctionsEndpoint: {
-        url: "/api/auctions/future",
-        status: futureRes.status,
-        available: futureFullTotal,
-        sample: futureSample,
-        hasCoordinates: futureSample.filter((a: any) => a.has_lat).length,
+    return new Response(
+      JSON.stringify(
+        {
+          auth: "✅ OK",
+          osReachable: true,
+          // ── New endpoint probe ──────────────────────────────────────────────────
+          futureAuctionsEndpoint: {
+            url: "/api/auctions/future",
+            status: futureRes.status,
+            available: futureFullTotal,
+            sample: futureSample,
+            hasCoordinates: futureSample.filter((a: any) => a.has_lat).length,
+          },
+          // ── Legacy endpoint probes ──────────────────────────────────────────────
+          counts: {
+            all: countAll,
+            pending: countPending,
+            completed: countCompleted,
+            comparison: comp,
+          },
+          detail: `${futureFullTotal} future auctions available at /api/auctions/future`,
+        },
+        null,
+        2,
+      ),
+      {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       },
-      // ── Legacy endpoint probes ──────────────────────────────────────────────
-      counts: {
-        all:       countAll,
-        pending:   countPending,
-        completed: countCompleted,
-        comparison: comp,
-      },
-      detail: `${futureFullTotal} future auctions available at /api/auctions/future`,
-    }, null, 2), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    );
   } catch (err: any) {
-    return new Response(JSON.stringify({
-      error: err.message,
-      osReachable: false,
-      detail: err.message,
-    }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({
+        error: err.message,
+        osReachable: false,
+        detail: err.message,
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   }
 });
