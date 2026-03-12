@@ -61,6 +61,12 @@ const energyColors: Record<string, string> = {
   E: "bg-orange-500", F: "bg-red-500", G: "bg-red-600",
 };
 
+// Internal/system tag prefixes that should never be shown to users
+const SYSTEM_TAG_PREFIXES = [
+  "os_auction:", "source:", "auction_status:", "ownership:", "ownership_pct:",
+  "round:", "status:", "posted", "sync:",
+];
+
 export function PropertyCard({ property, compact = false }: PropertyCardProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
