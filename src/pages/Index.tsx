@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useInView } from "@/hooks/useInView";
 import ReactDOM from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
@@ -33,7 +34,7 @@ import { MarketTicker } from "@/components/MarketTicker";
 import { PropertyCard } from "@/components/PropertyCard";
 import { Footer } from "@/components/Footer";
 import { CookieConsentBanner } from "@/components/CookieConsentBanner";
-import { useListings } from "@/hooks/useListings";
+
 import { PROPERTY_TYPES, PROPERTY_GROUPS, PROPERTY_TYPE_MAP, type PropertyTypeKey } from "@/lib/propertyTypes";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -791,10 +792,38 @@ export default function Index() {
   const { ref: goldenRef, inView: goldenInView } = useInView();
   const { ref: trustRef, inView: trustInView } = useInView();
 
-  // DB listings for homepage sections
-  const { data: featuredDbListings = [], isLoading: featuredLoading } = useListings({ status: "active" });
-  const featuredListings = featuredDbListings.slice(0, 4);
-  const auctionListings = featuredDbListings.filter((l: any) => l.listing_type === "auction").slice(0, 3);
+  // DB listings for homepage sections — use separate lightweight queries with limits
+  const { data: featuredListings = [], isLoading: featuredLoading } = useQuery({
+    queryKey: ["homepage-featured"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("listings")
+        .select("id, title, address, city, price, price_per_sqm, bedrooms, bathrooms, sqm, floor, total_floors, year_built, energy_class, cover_image_url, property_type, listing_type, ai_score, views_count, tags, listing_images(url, sort_order)")
+        .eq("status", "active")
+        .eq("listing_type", "sale")
+        .order("created_at", { ascending: false })
+        .limit(4);
+      if (error) throw error;
+      return data || [];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: auctionListings = [], isLoading: auctionsLoading } = useQuery({
+    queryKey: ["homepage-auctions"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("listings")
+        .select("id, title, address, city, price, price_per_sqm, bedrooms, bathrooms, sqm, floor, total_floors, year_built, energy_class, cover_image_url, property_type, listing_type, ai_score, views_count, tags, auction_date, auction_starting_bid, listing_images(url, sort_order)")
+        .eq("status", "active")
+        .eq("listing_type", "auction")
+        .order("created_at", { ascending: false })
+        .limit(3);
+      if (error) throw error;
+      return data || [];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
 
   const listingTypeMap: Record<string, string> = {
     Buy: "sale",
@@ -1279,7 +1308,7 @@ export default function Index() {
               name: "Thessaloniki",
               listings: 8240,
               trend: "+0.8%",
-              image: "https://images.unsplash.com/photo-1570939274717-7eda259b50ed?w=600&q=80"
+              image: "https://images.unsplash.com/photo-1586796676474-a72c3b85c2d2?w=600&q=80"
             },
             {
               name: "Mykonos",
