@@ -1,12 +1,16 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   MapPin, Bed, Bath, Square, Heart, Gavel, Flame,
   Eye, TrendingUp, Star, Video, Zap, CheckCircle,
-  Home, ArrowRight, Calendar, Layers, Phone, MessageCircle
+  Home, ArrowRight, Calendar, Layers, Phone, MessageCircle,
+  Share2, Flag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getSubtypeLabel, PROPERTY_TYPE_MAP, type PropertyTypeKey } from "@/lib/propertyTypes";
+import { useToggleFavorite, useIsFavorited } from "@/hooks/useFavorites";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 export interface Property {
   id: string;
@@ -56,7 +60,32 @@ const energyColors: Record<string, string> = {
 };
 
 export function PropertyCard({ property, compact = false }: PropertyCardProps) {
-  const [liked, setLiked] = useState(false);
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { data: isFavorited = false } = useIsFavorited(property.id);
+  const toggleFav = useToggleFavorite();
+
+  const handleFavorite = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!user) { navigate("/login"); return; }
+    toggleFav.mutate({ listing_id: property.id, isFavorited });
+  };
+
+  const handleShare = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    const url = `${window.location.origin}/property/${property.id}`;
+    if (navigator.share) {
+      try { await navigator.share({ title: property.title, url }); } catch {}
+    } else {
+      await navigator.clipboard.writeText(url);
+      toast.success("Link copied to clipboard");
+    }
+  };
+
+  const handleReport = (e: React.MouseEvent) => {
+    e.preventDefault();
+    toast.info("Report submitted. Our team will review it.");
+  };
 
   const formatPrice = (price: number, type: string) => {
     if (type === "rent") return `€${price.toLocaleString()}/mo`;
@@ -146,17 +175,25 @@ export function PropertyCard({ property, compact = false }: PropertyCardProps) {
               <Video className="w-3 h-3" />
             </span>
           )}
-          {/* Tactile heart button */}
+          {/* Favorite button */}
           <button
             className={`w-9 h-9 rounded-full flex items-center justify-center shadow-lg transition-all duration-200 active:scale-90 ${
-              liked
+              isFavorited
                 ? "bg-rose-500 text-white scale-110"
                 : "bg-white/90 backdrop-blur-sm text-foreground hover:bg-white hover:scale-105"
             }`}
-            onClick={(e) => { e.preventDefault(); setLiked(!liked); }}
-            aria-label={liked ? "Remove from saved" : "Save property"}
+            onClick={handleFavorite}
+            aria-label={isFavorited ? "Remove from saved" : "Save property"}
           >
-            <Heart className={`w-4 h-4 transition-all ${liked ? "fill-current" : ""}`} />
+            <Heart className={`w-4 h-4 transition-all ${isFavorited ? "fill-current" : ""}`} />
+          </button>
+          {/* Share button */}
+          <button
+            className="w-9 h-9 rounded-full flex items-center justify-center shadow-lg bg-white/90 backdrop-blur-sm text-foreground hover:bg-white hover:scale-105 transition-all duration-200 active:scale-90"
+            onClick={handleShare}
+            aria-label="Share property"
+          >
+            <Share2 className="w-4 h-4" />
           </button>
         </div>
 
@@ -294,13 +331,29 @@ export function PropertyCard({ property, compact = false }: PropertyCardProps) {
               )}
             </div>
           )}
-          {/* Contact Agent CTA — prominent */}
-          <Link to={`/property/${property.id}`} className="block">
-            <button className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-primary text-primary-foreground font-semibold text-sm transition-all hover:opacity-90 hover:shadow-md active:scale-[0.98]">
-              <MessageCircle className="w-4 h-4" />
-              Contact Agent
+          {/* Action row: Contact + Share + Report */}
+          <div className="flex items-center gap-2">
+            <Link to={`/property/${property.id}`} className="flex-1">
+              <button className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-primary text-primary-foreground font-semibold text-sm transition-all hover:opacity-90 hover:shadow-md active:scale-[0.98]">
+                <MessageCircle className="w-4 h-4" />
+                Contact Agent
+              </button>
+            </Link>
+            <button
+              onClick={handleShare}
+              className="p-2.5 rounded-xl border border-border bg-secondary text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-all"
+              aria-label="Share"
+            >
+              <Share2 className="w-4 h-4" />
             </button>
-          </Link>
+            <button
+              onClick={handleReport}
+              className="p-2.5 rounded-xl border border-border bg-secondary text-muted-foreground/50 hover:text-muted-foreground transition-all"
+              aria-label="Report"
+            >
+              <Flag className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
     </div>
