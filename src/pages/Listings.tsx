@@ -74,9 +74,11 @@ function dbListingToCard(l: any) {
   const ownershipStatus = ownershipTag ? ownershipTag.split(":")[1] : undefined;
   const ownershipPercentage = ownershipPctTag ? Number(ownershipPctTag.split(":")[1]) : undefined;
 
-  // Non-ownership tags for display
-  const displayTags = tags.filter((t: string) => !t.startsWith("ownership")).filter(Boolean).length > 0
-    ? tags.filter((t: string) => !t.startsWith("ownership"))
+  // Filter out internal/system tags — only show human-readable feature tags
+  const SYSTEM_TAG_PREFIXES = ["ownership:", "ownership_pct:", "round:", "posted", "status:", "source:"];
+  const cleanTags = tags.filter((t: string) => !SYSTEM_TAG_PREFIXES.some(p => t.startsWith(p)) && !t.toLowerCase().startsWith("posted"));
+  const displayTags = cleanTags.filter(Boolean).length > 0
+    ? cleanTags
     : [
         l.has_parking && "Parking",
         l.has_pool && "Pool",
