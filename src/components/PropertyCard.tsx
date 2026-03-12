@@ -85,12 +85,22 @@ export function PropertyCard({ property, compact = false }: PropertyCardProps) {
 
   const handleShare = async (e: React.MouseEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     const url = `${window.location.origin}${detailPath}`;
-    if (navigator.share) {
-      try { await navigator.share({ title: property.title, url }); } catch {}
-    } else {
-      await navigator.clipboard.writeText(url);
-      toast.success("Link copied to clipboard");
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: property.title, url });
+      } else {
+        await navigator.clipboard.writeText(url);
+        toast.success("Link copied!");
+      }
+    } catch {
+      try {
+        await navigator.clipboard.writeText(url);
+        toast.success("Link copied!");
+      } catch {
+        toast.error("Could not copy link");
+      }
     }
   };
 
