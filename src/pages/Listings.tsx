@@ -15,7 +15,7 @@ import { MapView } from "@/components/MapView";
 import { CompareDrawer } from "@/components/CompareDrawer";
 import { SaveSearchModal } from "@/components/SaveSearchModal";
 import { AISearchBar } from "@/components/AISearchBar";
-import { mockProperties } from "@/data/mockProperties";
+
 import { useListings } from "@/hooks/useListings";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCookieConsent } from "@/hooks/useCookieConsent";
@@ -473,13 +473,8 @@ export default function Listings() {
     property_type: selectedType || undefined,
   });
 
-  // Only fall back to mock data when: not loading, no filters active, and DB returned nothing
   const hasActiveFilters = !!(searchQuery || selectedListingType || selectedType);
-  const sourceListings = (dbListings.length > 0)
-    ? dbListings.map(dbListingToCard)
-    : (!isLoading && !hasActiveFilters)
-      ? mockProperties.map(p => ({ ...p, _raw: p }))
-      : [];
+  const sourceListings = dbListings.map(dbListingToCard);
 
   // Client-side filtering
   let filtered = sourceListings.filter((p: any) => {
