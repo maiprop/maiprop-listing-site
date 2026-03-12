@@ -722,7 +722,7 @@ export default function PropertyDetail() {
                 <SectionHeader icon={Zap} title="AI Market Insights" badge={
                   <span className="text-[10px] text-muted-foreground">Powered by mAI Prop OS</span>
                 } />
-                <div className="p-5">
+                <div className="p-5 space-y-4">
                   {aiInsightsLoading && (
                     <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground">
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -772,6 +772,16 @@ export default function PropertyDetail() {
                   {!aiInsightsLoading && !aiInsightsData && (
                     <p className="text-xs text-muted-foreground text-center py-4">Market analysis unavailable</p>
                   )}
+                  {/* Pro upsell */}
+                  <div className="flex items-start gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
+                    <Lock className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-xs font-semibold text-foreground">Want the full picture?</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
+                        Upgrade to <span className="text-primary font-bold">Pro</span> to unlock the complete <span className="font-medium">AI Property Valuation</span> — price range, confidence score, key factors, renovation potential &amp; more.
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </Section>
 
@@ -1037,49 +1047,76 @@ export default function PropertyDetail() {
                 </div>
               </Section>
 
-              {/* ── Similar properties — only when ≥ 2 ── */}
-              {similarListings.length >= 2 && (
-                <div className="space-y-4">
-                  <h3 className="font-display font-semibold flex items-center gap-2">
-                    Similar{subtype ? ` ${getSubtypeLabel(propertyType, subtype)}` : ""} in {city}
-                    <div className="flex-1 h-px bg-border ml-1" />
-                    {subtype && (
-                      <span className="text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full border border-border normal-case font-normal">
-                        same type &amp; subtype first
-                      </span>
-                    )}
-                  </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {(similarListings as any[]).map((l: any) => (
-                      <Link key={l.id} to={`/property/${l.id}`}
-                        className="glass-card rounded-xl overflow-hidden block hover:border-primary/40 transition-all duration-200 border border-border group">
-                        <div className="aspect-[3/2] overflow-hidden relative">
-                          <img
-                            src={l.cover_image_url || "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400&q=60"}
-                            alt={l.title}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          />
-                          {l.commercial_subtype && (
-                            <span className="absolute top-2 left-2 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-accent/90 text-accent-foreground shadow-sm capitalize">
-                              {getSubtypeLabel(l.property_type, l.commercial_subtype)}
-                            </span>
-                          )}
-                        </div>
-                        <div className="p-3.5">
-                          <p className="font-semibold text-sm truncate">{l.title}</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">{l.city} · €{Number(l.price).toLocaleString()} · {l.sqm}m²</p>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* ──── RIGHT SIDEBAR ──── */}
             <div className="space-y-4 lg:sticky lg:top-24 self-start">
 
-              {/* Contact card */}
+              {/* Walk Score — derived from actual POIs loaded in PropertyMiniMap */}
+              {walkScore !== null && (() => {
+                const colour = walkScoreColour(walkScore);
+                const label = walkScoreLabel(walkScore);
+                const r = 20, c = 2 * Math.PI * r;
+                return (
+                  <div className="glass-card rounded-2xl p-4 border border-border flex items-center gap-4">
+                    <svg width="52" height="52" viewBox="0 0 56 56" className="shrink-0">
+                      <circle cx="28" cy="28" r={r} fill="none" stroke="hsl(var(--border))" strokeWidth="4" />
+                      <circle cx="28" cy="28" r={r} fill="none"
+                        stroke={colour} strokeWidth="4"
+                        strokeDasharray={`${c * walkScore / 100} ${c * (1 - walkScore / 100)}`}
+                        strokeLinecap="round"
+                        transform="rotate(-90 28 28)"
+                      />
+                      <text x="28" y="33" textAnchor="middle" fontSize="13" fontWeight="900" fill={colour}>{walkScore}</text>
+                    </svg>
+                    <div>
+                      <p className="text-sm font-bold" style={{ color: colour }}>{label}</p>
+                      <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Walk Score</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">Based on actual nearby amenities</p>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* AI Property Valuation — Pro-locked */}
+              <div className="relative">
+                <div className="pointer-events-none select-none opacity-40 blur-[2px]">
+                  <PropertyValuation
+                    title={title}
+                    city={city}
+                    address={address}
+                    price={price}
+                    sqm={sqm}
+                    bedrooms={bedrooms}
+                    bathrooms={bathrooms}
+                    propertyType={propertyType}
+                    listingType={listingType}
+                    floor={db?.floor}
+                    yearBuilt={db?.year_built}
+                    energyClass={energyClass}
+                    pricePerSqm={pricePerSqm ? Number(pricePerSqm) : undefined}
+                    hasParking={db?.has_parking}
+                    hasPool={db?.has_pool}
+                    hasElevator={db?.has_elevator}
+                    region={db?.region}
+                  />
+                </div>
+                {/* Lock overlay */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl bg-background/60 backdrop-blur-sm border border-primary/20 gap-3 px-5 text-center">
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Lock className="w-5 h-5 text-primary" />
+                  </div>
+                  <p className="font-display font-bold text-sm">Pro Feature</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Unlock the full <span className="font-semibold text-foreground">AI Property Valuation</span> — price range, confidence score, key factors &amp; renovation potential.
+                  </p>
+                  <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground gap-1.5 mt-1">
+                    <Zap className="w-3.5 h-3.5" /> Upgrade to Pro
+                  </Button>
+                </div>
+              </div>
+
+              {/* Contact / Buy card */}
               <div className="glass-card rounded-2xl overflow-hidden border border-primary/10 shadow-elevated">
                 {/* Price header */}
                 <div className="bg-gradient-to-br from-primary/10 to-accent/5 border-b border-border px-5 py-4">
@@ -1220,53 +1257,6 @@ export default function PropertyDetail() {
                   </div>
                 </div>
               )}
-
-              {/* Walk Score — derived from actual POIs loaded in PropertyMiniMap */}
-              {walkScore !== null && (() => {
-                const colour = walkScoreColour(walkScore);
-                const label = walkScoreLabel(walkScore);
-                const r = 20, c = 2 * Math.PI * r;
-                return (
-                  <div className="glass-card rounded-2xl p-4 border border-border flex items-center gap-4">
-                    <svg width="52" height="52" viewBox="0 0 56 56" className="shrink-0">
-                      <circle cx="28" cy="28" r={r} fill="none" stroke="hsl(var(--border))" strokeWidth="4" />
-                      <circle cx="28" cy="28" r={r} fill="none"
-                        stroke={colour} strokeWidth="4"
-                        strokeDasharray={`${c * walkScore / 100} ${c * (1 - walkScore / 100)}`}
-                        strokeLinecap="round"
-                        transform="rotate(-90 28 28)"
-                      />
-                      <text x="28" y="33" textAnchor="middle" fontSize="13" fontWeight="900" fill={colour}>{walkScore}</text>
-                    </svg>
-                    <div>
-                      <p className="text-sm font-bold" style={{ color: colour }}>{label}</p>
-                      <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Walk Score</p>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">Based on actual nearby amenities</p>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* AI Property Valuation */}
-              <PropertyValuation
-                title={title}
-                city={city}
-                address={address}
-                price={price}
-                sqm={sqm}
-                bedrooms={bedrooms}
-                bathrooms={bathrooms}
-                propertyType={propertyType}
-                listingType={listingType}
-                floor={db?.floor}
-                yearBuilt={db?.year_built}
-                energyClass={energyClass}
-                pricePerSqm={pricePerSqm ? Number(pricePerSqm) : undefined}
-                hasParking={db?.has_parking}
-                hasPool={db?.has_pool}
-                hasElevator={db?.has_elevator}
-                region={db?.region}
-              />
 
               {/* Mortgage Calculator — hidden for auctions and rentals */}
               {!isAuction && listingType !== "rent" && <MortgageCalculator price={price} />}
