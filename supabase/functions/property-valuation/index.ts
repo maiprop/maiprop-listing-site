@@ -157,12 +157,33 @@ Rules:
     }
 
     const aiData = await response.json();
-    const content = (aiData.choices?.[0]?.message?.content ?? "")
-      .replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
+    const raw = (aiData.choices?.[0]?.message?.content ?? "").trim();
+
+    // Strip markdown code fences globally
+    let jsonStr = raw.replace(/```json\s*/gi, "").replace(/```\s*/gi, "").trim();
+
+    // Extract outermost { ... }
+    const start = jsonStr.indexOf("{");
+    const end = jsonStr.lastIndexOf("}");
+    if (start !== -1 && end !== -1) jsonStr = jsonStr.slice(start, end + 1);
 
     let parsed: any;
-    try { parsed = JSON.parse(content); }
-    catch { throw new Error("AI returned invalid JSON"); }
+    try {
+      parsed = JSON.parse(jsonStr);
+    } catch {
+      // Repair common AI formatting glitches
+      const repaired = jsonStr
+        .replace(/,\s*}/g, "}")          // trailing commas in objects
+        .replace(/,\s*]/g, "]")          // trailing commas in arrays
+        .replace(/\)\s*}/g, "}")         // stray ) before closing brace
+        .replace(/\)\s*,/g, ",")         // stray ) before commas
+        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ""); // control chars
+      try {
+        parsed = JSON.parse(repaired);
+      } catch {
+        throw new Error("AI returned invalid JSON");
+      }
+    }
 
     // Sanitise
     const result = {
