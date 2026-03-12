@@ -377,7 +377,7 @@ export default function PropertyDetail() {
   const hasAnyFeatures = internalFeatures.length + externalFeatures.length + constructionFeatures.length + suitabilityFeatures.length > 0;
 
   const similarListings = (dbSimilar as any[])
-    .filter((l: any) => l.id !== id)
+    .filter((l: any) => l.id !== id && (isAuction ? l.listing_type === "auction" : l.listing_type !== "auction"))
     .sort((a, b) => {
       const aMatch = subtype && (a.commercial_subtype === subtype) ? 1 : 0;
       const bMatch = subtype && (b.commercial_subtype === subtype) ? 1 : 0;
