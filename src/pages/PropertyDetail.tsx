@@ -427,7 +427,6 @@ export default function PropertyDetail() {
     { label: "System Code", value: db.id.slice(0, 8).toUpperCase() },
     { label: "Published", value: new Date(db.created_at).toLocaleDateString("en-GB") },
     { label: "Last Updated", value: new Date(db.updated_at).toLocaleDateString("en-GB") },
-    { label: "Availability", value: (db as any)?.available_from ? `From ${new Date((db as any).available_from).toLocaleDateString("en-GB")}` : "Available now" },
   ];
 
   return (
@@ -615,13 +614,25 @@ export default function PropertyDetail() {
                   {db.floor != null && (
                     <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium">
                       <Layers className="w-3.5 h-3.5 text-primary" />
-                      {db.floor === 0 ? "Ground" : `${db.floor}${["st","nd","rd"][db.floor-1] || "th"}`} floor
+                      {db.floor === -1 ? "Basement" : db.floor === 0 ? "Ground floor" : `${db.floor}${["st","nd","rd"][db.floor-1] || "th"} floor`}
                       {db.total_floors ? ` / ${db.total_floors}` : ""}
                     </div>
                   )}
                   {(db as any)?.heating_system && (
                     <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium capitalize">
                       <Thermometer className="w-3.5 h-3.5 text-primary" />{(db as any).heating_system}
+                    </div>
+                  )}
+                  {/* Ownership pills — shown for all listing types when present in tags */}
+                  {ownershipDisplay && (
+                    <div className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border ${ownershipDisplay.cls}`}>
+                      <Building2 className="w-3.5 h-3.5 shrink-0" />
+                      {ownershipDisplay.label}
+                    </div>
+                  )}
+                  {ownershipPct != null && ownershipStatus !== "full" && (
+                    <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium">
+                      <Tag className="w-3.5 h-3.5 text-primary" />{ownershipPct}%
                     </div>
                   )}
                 </div>
@@ -658,15 +669,20 @@ export default function PropertyDetail() {
                   <SectionHeader icon={Zap} title="AI Market Insights" badge={
                     <span className="text-[10px] text-muted-foreground">Powered by mAI Prop OS</span>
                   } />
-                  <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-y divide-border">
+                  <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {aiInsights.map(insight => (
-                      <div key={insight.label} className="p-5 space-y-1">
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{insight.label}</p>
-                        <div className="flex items-baseline gap-1">
-                          <span className={`font-display font-black text-2xl ${insight.color}`}>{insight.value}</span>
-                          <span className="text-xs text-muted-foreground">{insight.unit}</span>
+                      <div key={insight.label} className="rounded-xl border border-border bg-secondary/50 p-4 flex items-center gap-4 w-full">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">{insight.label}</p>
+                          <div className="flex items-baseline gap-1">
+                            <span className={`font-display font-black text-3xl ${insight.color}`}>{insight.value}</span>
+                            <span className="text-sm text-muted-foreground">{insight.unit}</span>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground mt-1">{insight.trend}</p>
                         </div>
-                        <p className="text-[10px] text-muted-foreground">{insight.trend}</p>
+                        <div className={`w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0`}>
+                          <Zap className="w-6 h-6 text-primary" />
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -687,6 +703,88 @@ export default function PropertyDetail() {
                         {descExpanded ? <><ChevronUp className="w-3 h-3" />Show less</> : <><ChevronDown className="w-3 h-3" />Read more</>}
                       </button>
                     )}
+                  </div>
+                </Section>
+              )}
+
+              {/* ── Auction Details (shown first for auction listings) ── */}
+              {isAuction && (
+                <Section>
+                  <SectionHeader icon={Gavel} title="Auction Details" badge={
+                    <span className="text-[10px] bg-brand-gold/20 text-brand-gold px-2 py-0.5 rounded-full font-bold">LIVE</span>
+                  } />
+                  <div className="p-6 space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="glass-card rounded-xl p-4 border border-border text-center">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Auction Date</p>
+                        <p className="font-display font-bold text-sm">
+                          {db.auction_date
+                            ? new Date(db.auction_date).toLocaleDateString("en-GB")
+                            : "TBC"}
+                        </p>
+                      </div>
+                      <div className="glass-card rounded-xl p-4 border border-brand-gold/20 text-center">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Starting Bid</p>
+                        <p className="font-display font-bold text-sm text-brand-gold">
+                          €{(Number(db.auction_starting_bid) || 0).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Ownership status row */}
+                    {ownershipDisplay && (
+                      <div className="flex items-center justify-between rounded-xl bg-secondary border border-border px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <Building2 className="w-4 h-4 text-muted-foreground" />
+                          <span className="text-xs text-muted-foreground font-medium">Ownership Status</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${ownershipDisplay.cls}`}>
+                            {ownershipDisplay.label}
+                          </span>
+                          {ownershipPct != null && ownershipStatus !== "full" && (
+                            <span className="text-xs font-bold text-muted-foreground bg-muted px-2 py-1 rounded-full border border-border">
+                              {ownershipPct}%
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {db.auction_court && (
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Court / Platform</p>
+                        <p className="text-sm font-semibold">{db.auction_court}</p>
+                      </div>
+                    )}
+                    <div className="rounded-xl bg-brand-gold/8 border border-brand-gold/20 p-3 text-xs text-muted-foreground leading-relaxed">
+                      ⚡ Judicial auction — buyer conducts own due diligence. maiProp provides AI-powered pre-auction analysis.
+                    </div>
+
+                    {/* eAuction.gr CTA — prominent when website_url is present */}
+                    {websiteUrl && (
+                      <a href={websiteUrl} target="_blank" rel="noreferrer noopener" className="block">
+                        <Button className="w-full bg-gradient-gold border-0 text-background font-bold gap-2 h-12 text-base shadow-lg hover:shadow-brand-gold/30 hover:scale-[1.01] transition-all">
+                          <ExternalLink className="w-5 h-5" />
+                          View on eAuction.gr
+                        </Button>
+                      </a>
+                    )}
+
+                    <Button
+                      variant={websiteUrl ? "outline" : "default"}
+                      className={websiteUrl
+                        ? "w-full border-brand-gold/30 text-brand-gold hover:bg-brand-gold/10 gap-2"
+                        : "w-full bg-gradient-gold border-0 text-background font-semibold gap-2"
+                      }
+                      onClick={() => {
+                        if (!user) { toast.error("Sign in to set auction alerts"); navigate("/login"); return; }
+                        setAuctionAlertOpen(true);
+                      }}
+                    >
+                      <Bell className="w-4 h-4" />
+                      Set Auction Alert
+                    </Button>
                   </div>
                 </Section>
               )}
@@ -812,92 +910,6 @@ export default function PropertyDetail() {
                 lat={db?.latitude ? Number(db.latitude) : undefined}
                 lng={db?.longitude ? Number(db.longitude) : undefined}
               />
-
-              {/* ── Auction Details ── */}
-              {isAuction && (
-                <Section>
-                  <SectionHeader icon={Gavel} title="Auction Details" badge={
-                    <span className="text-[10px] bg-brand-gold/20 text-brand-gold px-2 py-0.5 rounded-full font-bold">LIVE</span>
-                  } />
-                  <div className="p-6 space-y-4">
-                    <div className="grid grid-cols-3 gap-4">
-                      <div className="glass-card rounded-xl p-4 border border-border text-center">
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Auction Date</p>
-                        <p className="font-display font-bold text-sm">
-                          {db.auction_date
-                            ? new Date(db.auction_date).toLocaleDateString("en-GB")
-                            : "TBC"}
-                        </p>
-                      </div>
-                      <div className="glass-card rounded-xl p-4 border border-brand-gold/20 text-center">
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Starting Bid</p>
-                        <p className="font-display font-bold text-sm text-brand-gold">
-                          €{(Number(db.auction_starting_bid) || 0).toLocaleString()}
-                        </p>
-                      </div>
-                      <div className="glass-card rounded-xl p-4 border border-border text-center">
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Market Value</p>
-                        <p className="font-display font-bold text-sm">€{price.toLocaleString()}</p>
-                      </div>
-                    </div>
-
-                    {/* Ownership status row */}
-                    {ownershipDisplay && (
-                      <div className="flex items-center justify-between rounded-xl bg-secondary border border-border px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <Building2 className="w-4 h-4 text-muted-foreground" />
-                          <span className="text-xs text-muted-foreground font-medium">Ownership Status</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${ownershipDisplay.cls}`}>
-                            {ownershipDisplay.label}
-                          </span>
-                          {ownershipPct != null && ownershipStatus !== "full" && (
-                            <span className="text-xs font-bold text-muted-foreground bg-muted px-2 py-1 rounded-full border border-border">
-                              {ownershipPct}%
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {db.auction_court && (
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-1">Court / Platform</p>
-                        <p className="text-sm font-semibold">{db.auction_court}</p>
-                      </div>
-                    )}
-                    <div className="rounded-xl bg-brand-gold/8 border border-brand-gold/20 p-3 text-xs text-muted-foreground leading-relaxed">
-                      ⚡ Judicial auction — buyer conducts own due diligence. maiProp provides AI-powered pre-auction analysis.
-                    </div>
-
-                    {/* eAuction.gr CTA — prominent when website_url is present */}
-                    {websiteUrl && (
-                      <a href={websiteUrl} target="_blank" rel="noreferrer noopener" className="block">
-                        <Button className="w-full bg-gradient-gold border-0 text-background font-bold gap-2 h-12 text-base shadow-lg hover:shadow-brand-gold/30 hover:scale-[1.01] transition-all">
-                          <ExternalLink className="w-5 h-5" />
-                          View on eAuction.gr
-                        </Button>
-                      </a>
-                    )}
-
-                    <Button
-                      variant={websiteUrl ? "outline" : "default"}
-                      className={websiteUrl
-                        ? "w-full border-brand-gold/30 text-brand-gold hover:bg-brand-gold/10 gap-2"
-                        : "w-full bg-gradient-gold border-0 text-background font-semibold gap-2"
-                      }
-                      onClick={() => {
-                        if (!user) { toast.error("Sign in to set auction alerts"); navigate("/login"); return; }
-                        setAuctionAlertOpen(true);
-                      }}
-                    >
-                      <Bell className="w-4 h-4" />
-                      Set Auction Alert
-                    </Button>
-                  </div>
-                </Section>
-              )}
 
               {/* ── Premium AI Report ── */}
               <Section className={reportPurchased ? "border-primary/30" : ""}>
