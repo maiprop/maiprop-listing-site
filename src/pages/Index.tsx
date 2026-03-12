@@ -793,7 +793,7 @@ export default function Index() {
   const { ref: trustRef, inView: trustInView } = useInView();
 
   // DB listings for homepage sections — use separate lightweight queries with limits
-  const { data: featuredListings = [], isLoading: featuredLoading } = useQuery({
+  const { data: featuredListings = [], isLoading: featuredLoading, isError: featuredError } = useQuery({
     queryKey: ["homepage-featured"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -807,6 +807,7 @@ export default function Index() {
       return data || [];
     },
     staleTime: 5 * 60 * 1000,
+    retry: 1,
   });
 
   const { data: auctionListings = [], isLoading: auctionsLoading } = useQuery({
