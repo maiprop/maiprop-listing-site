@@ -10,6 +10,7 @@ import { format } from "date-fns";
 import { MapView, MapListing } from "@/components/MapView";
 import { AuctionAlertModal } from "@/components/AuctionAlertModal";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSubscription } from "@/hooks/useSubscription";
 import { useToggleFavorite } from "@/hooks/useFavorites";
 import { toast } from "sonner";
 
