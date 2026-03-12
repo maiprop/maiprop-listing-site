@@ -327,20 +327,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    // DEBUG: log all keys from the first auction to discover field names
-    const sampleKeys = Object.keys(auctions[0] ?? {});
-    console.log("SAMPLE AUCTION KEYS:", JSON.stringify(sampleKeys));
-    // Log occupation-related fields specifically
-    const sample = auctions[0];
-    const occupationFields: Record<string, any> = {};
-    for (const k of sampleKeys) {
-      if (/occup|owner|status|occupy|posses|tenant|vacant|free|encumbr/i.test(k)) {
-        occupationFields[k] = sample[k];
-      }
-    }
-    console.log("OCCUPATION FIELDS:", JSON.stringify(occupationFields));
-    console.log("FULL SAMPLE:", JSON.stringify(sample));
-
     // Map all auctions
     const mapped = auctions.map(mapAuctionToListing);
 
