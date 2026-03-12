@@ -376,14 +376,24 @@ export function PropertyCard({ property, compact = false }: PropertyCardProps) {
               )}
             </div>
           )}
-          {/* Action row: Contact + Share + Report */}
+          {/* Action row: Contact (non-auction only) + Share + Report */}
           <div className="flex items-center gap-2">
-            <Link to={detailPath} className="flex-1">
-              <button className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-primary text-primary-foreground font-semibold text-sm transition-all hover:opacity-90 hover:shadow-md active:scale-[0.98]">
-                <MessageCircle className="w-4 h-4" />
-                Contact Agent
-              </button>
-            </Link>
+            {property.listingType !== "auction" && (
+              <Link to={detailPath} className="flex-1">
+                <button className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-primary text-primary-foreground font-semibold text-sm transition-all hover:opacity-90 hover:shadow-md active:scale-[0.98]">
+                  <MessageCircle className="w-4 h-4" />
+                  Contact Agent
+                </button>
+              </Link>
+            )}
+            {property.listingType === "auction" && (
+              <Link to={detailPath} className="flex-1">
+                <button className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-brand-gold text-black font-semibold text-sm transition-all hover:opacity-90 hover:shadow-md active:scale-[0.98]">
+                  <Gavel className="w-4 h-4" />
+                  View Auction
+                </button>
+              </Link>
+            )}
             <button
               onClick={handleShare}
               className="p-2.5 rounded-xl border border-border bg-secondary text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-all"
