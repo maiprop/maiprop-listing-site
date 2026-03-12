@@ -717,31 +717,63 @@ export default function PropertyDetail() {
                 )}
               </div>
 
-              {/* ── AI Market Insights (only when ai_score is available) ── */}
-              {aiInsights && (
-                <Section>
-                  <SectionHeader icon={Zap} title="AI Market Insights" badge={
-                    <span className="text-[10px] text-muted-foreground">Powered by mAI Prop OS</span>
-                  } />
-                  <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {aiInsights.map(insight => (
-                      <div key={insight.label} className="rounded-xl border border-border bg-secondary/50 p-4 flex items-center gap-4 w-full">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">{insight.label}</p>
+              {/* ── AI Market Insights — dynamic from property-valuation ── */}
+              <Section>
+                <SectionHeader icon={Zap} title="AI Market Insights" badge={
+                  <span className="text-[10px] text-muted-foreground">Powered by mAI Prop OS</span>
+                } />
+                <div className="p-5">
+                  {aiInsightsLoading && (
+                    <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span className="text-xs">Analysing market data…</span>
+                    </div>
+                  )}
+                  {!aiInsightsLoading && aiInsightsData && (() => {
+                    const cmpCfg: Record<string, { label: string; color: string; bg: string }> = {
+                      below_market: { label: "Below Market", color: "text-emerald-400", bg: "bg-emerald-400/10 border-emerald-400/20" },
+                      at_market:    { label: "At Market",    color: "text-yellow-400",  bg: "bg-yellow-400/10  border-yellow-400/20" },
+                      above_market: { label: "Above Market", color: "text-destructive",  bg: "bg-destructive/10 border-destructive/20" },
+                    };
+                    const cmp = cmpCfg[aiInsightsData.marketComparison] ?? cmpCfg.at_market;
+                    return (
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {/* vs Market */}
+                        <div className={`rounded-xl border p-4 flex flex-col gap-1 ${cmp.bg}`}>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest">vs Market</p>
                           <div className="flex items-baseline gap-1">
-                            <span className={`font-display font-black text-3xl ${insight.color}`}>{insight.value}</span>
-                            <span className="text-sm text-muted-foreground">{insight.unit}</span>
+                            <span className={`font-display font-black text-3xl ${cmp.color}`}>
+                              {aiInsightsData.vsMarket > 0 ? "+" : ""}{aiInsightsData.vsMarket}%
+                            </span>
                           </div>
-                          <p className="text-[10px] text-muted-foreground mt-1">{insight.trend}</p>
+                          <p className={`text-[10px] font-semibold ${cmp.color}`}>{cmp.label}</p>
                         </div>
-                        <div className={`w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0`}>
-                          <Zap className="w-6 h-6 text-primary" />
+                        {/* Rental Yield */}
+                        <div className="rounded-xl border border-border bg-secondary/50 p-4 flex flex-col gap-1">
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Rental Yield</p>
+                          <div className="flex items-baseline gap-1">
+                            <span className="font-display font-black text-3xl text-primary">{aiInsightsData.rentalYield}%</span>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground">Est. gross annual yield</p>
+                        </div>
+                        {/* AI Value Estimate */}
+                        <div className="rounded-xl border border-border bg-secondary/50 p-4 flex flex-col gap-1">
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest">AI Estimate</p>
+                          <div className="flex items-baseline gap-1">
+                            <span className="font-display font-black text-3xl text-foreground">
+                              €{(aiInsightsData.estimatedValue / 1000).toFixed(0)}k
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground">Confidence: {aiInsightsData.confidenceLabel}</p>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </Section>
-              )}
+                    );
+                  })()}
+                  {!aiInsightsLoading && !aiInsightsData && (
+                    <p className="text-xs text-muted-foreground text-center py-4">Market analysis unavailable</p>
+                  )}
+                </div>
+              </Section>
 
               {/* ── Description (hidden for auctions) ── */}
               {!isAuction && description && (
