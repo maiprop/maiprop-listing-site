@@ -1100,7 +1100,6 @@ export default function Index() {
           <div className={`flex items-center justify-between mb-8 reveal ${featuredInView ? "in-view" : ""}`}>
             <div>
               <h2 className="font-display text-2xl font-bold">Featured Properties</h2>
-              
             </div>
             <Button variant="outline" className="border-border" asChild>
               <Link to="/listings">View All</Link>
@@ -1109,17 +1108,34 @@ export default function Index() {
           <div
             className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 reveal reveal-delay-1 ${featuredInView ? "in-view" : ""}`}>
             
-            {featuredListings.map((l: any) => (
-              <PropertyCard key={l.id} property={{
-                id: l.id, title: l.title, address: l.address || l.city, city: l.city,
-                price: Number(l.price), pricePerSqm: l.price_per_sqm ? Number(l.price_per_sqm) : undefined,
-                bedrooms: l.bedrooms, bathrooms: l.bathrooms, sqm: Number(l.sqm),
-                floor: l.floor, totalFloors: l.total_floors, yearBuilt: l.year_built,
-                energyClass: l.energy_class, images: l.cover_image_url ? [l.cover_image_url] : [],
-                type: l.property_type, listingType: l.listing_type, aiScore: l.ai_score,
-                views: l.views_count, tags: l.tags || [],
-              }} />
-            ))}
+            {featuredLoading
+              ? Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="glass-card rounded-2xl border border-border overflow-hidden animate-pulse">
+                    <div className="bg-muted h-52 w-full" />
+                    <div className="p-4 space-y-3">
+                      <div className="h-4 bg-muted rounded-md w-3/4" />
+                      <div className="h-3 bg-muted rounded-md w-1/2" />
+                      <div className="h-5 bg-muted rounded-md w-1/3" />
+                      <div className="flex gap-2 pt-1">
+                        <div className="h-3 bg-muted rounded-md w-10" />
+                        <div className="h-3 bg-muted rounded-md w-10" />
+                        <div className="h-3 bg-muted rounded-md w-10" />
+                      </div>
+                    </div>
+                  </div>
+                ))
+              : featuredListings.map((l: any) => (
+                  <PropertyCard key={l.id} property={{
+                    id: l.id, title: l.title, address: l.address || l.city, city: l.city,
+                    price: Number(l.price), pricePerSqm: l.price_per_sqm ? Number(l.price_per_sqm) : undefined,
+                    bedrooms: l.bedrooms, bathrooms: l.bathrooms, sqm: Number(l.sqm),
+                    floor: l.floor, totalFloors: l.total_floors, yearBuilt: l.year_built,
+                    energyClass: l.energy_class, images: l.cover_image_url ? [l.cover_image_url] : [],
+                    type: l.property_type, listingType: l.listing_type, aiScore: l.ai_score,
+                    views: l.views_count, tags: l.tags || [],
+                  }} />
+                ))
+            }
           </div>
         </div>
       </section>
