@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { supabase as supabaseClient } from "@/integrations/supabase/client";
 import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import {
   MapPin, Bed, Bath, Square, Heart, Share2, Phone, MessageSquare,
