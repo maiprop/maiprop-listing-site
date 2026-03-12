@@ -1225,7 +1225,6 @@ export default function PropertyDetail() {
                   </div>
                 </div>
               )}
-                      energyClass={energyClass} pricePerSqm={pricePerSqm ? Number(pricePerSqm) : undefined}
                       hasParking={db?.has_parking} hasPool={db?.has_pool}
                       hasElevator={db?.has_elevator} region={db?.region} />
                   </div>
