@@ -242,6 +242,17 @@ export default function PropertyDetail() {
             hasPool: dbListing.has_pool,
             hasElevator: dbListing.has_elevator,
             region: dbListing.region,
+            // Ownership info affects valuation for auction properties
+            ownershipStatus: (() => {
+              const t: string[] = (dbListing as any)?.tags ?? [];
+              const tag = t.find((x: string) => x.startsWith("ownership:") && !x.startsWith("ownership_pct:"));
+              return tag ? tag.replace("ownership:", "") : undefined;
+            })(),
+            ownershipPercentage: (() => {
+              const t: string[] = (dbListing as any)?.tags ?? [];
+              const tag = t.find((x: string) => x.startsWith("ownership_pct:"));
+              return tag ? Number(tag.replace("ownership_pct:", "")) : undefined;
+            })(),
           },
         });
         if (data && !data.error) {
