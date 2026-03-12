@@ -662,41 +662,32 @@ export default function Auctions() {
                   )}
                 </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {/* Ownership status */}
-                  {isPro ? (
-                    <div>
-                      <label className="text-xs text-muted-foreground font-medium block mb-1.5">Ownership Status</label>
-                      <select
-                        value={filterOwnership}
-                        onChange={e => setFilterOwnership(e.target.value)}
-                        className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none"
-                      >
-                        {OWNERSHIP_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                      </select>
-                    </div>
-                  ) : (
-                    <div className="relative cursor-pointer group/pf" onClick={() => navigate("/pro")}>
-                      <label className="text-xs text-muted-foreground font-medium block mb-1.5 flex items-center gap-1.5 pointer-events-none">
-                        Ownership Status <PremiumBadge />
-                      </label>
-                      <select
-                        value={filterOwnership}
-                        disabled
-                        className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-muted-foreground outline-none appearance-none opacity-70 pointer-events-none"
-                      >
-                        {OWNERSHIP_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                      </select>
-                      <div className="absolute bottom-0 right-0 top-6 left-0 rounded-b-xl flex items-center justify-end pr-3 pointer-events-none">
-                        <Lock className="w-3.5 h-3.5 text-brand-gold" />
-                      </div>
-                      <div className="absolute -top-1 left-1/2 -translate-x-1/2 -translate-y-full opacity-0 group-hover/pf:opacity-100 transition-opacity z-20 pointer-events-none">
-                        <div className="bg-card border border-brand-gold/30 rounded-xl px-3 py-2 shadow-elevated text-center whitespace-nowrap">
-                          <p className="text-[10px] font-bold text-brand-gold flex items-center gap-1 justify-center"><Zap className="w-2.5 h-2.5" /> Upgrade to Pro</p>
-                          <p className="text-[10px] text-muted-foreground">Click to unlock premium filters</p>
-                        </div>
-                      </div>
-                    </div>
+                  {/* Ownership status — standard filter, available to all */}
+                  <div>
+                    <label className="text-xs text-muted-foreground font-medium block mb-1.5">Ownership Status</label>
+                    <select
+                      value={filterOwnership}
+                      onChange={e => setFilterOwnership(e.target.value)}
+                      className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none"
+                    >
+                      {OWNERSHIP_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Premium filters — Auction Round + Rental Yield */}
+              <div className="pt-1 border-t border-border">
+                <div className="flex items-center gap-2 mb-3">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Pro Filters</p>
+                  {!isPro && <PremiumBadge />}
+                  {isPro && (
+                    <span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/25">
+                      ✓ Unlocked
+                    </span>
                   )}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
                   {/* Auction round */}
                   {isPro ? (
@@ -708,33 +699,27 @@ export default function Auctions() {
                         className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none"
                       >
                         <option value="">Any Round</option>
-                        <option value="1">1st Auction</option>
-                        <option value="2">2nd Auction</option>
-                        <option value="3">3rd+ Auction</option>
+                        <option value="1">1st Auction — First attempt, starting price = valuation</option>
+                        <option value="2">2nd Auction — 20% below valuation</option>
+                        <option value="3">3rd+ Auction — 30–50% below, high opportunity</option>
                       </select>
                     </div>
                   ) : (
                     <div className="relative cursor-pointer group/pf" onClick={() => navigate("/pro")}>
-                      <label className="text-xs text-muted-foreground font-medium block mb-1.5 flex items-center gap-1.5 pointer-events-none">
+                      <label className="text-xs text-muted-foreground font-medium flex items-center gap-1.5 mb-1.5 pointer-events-none">
                         Auction Round <PremiumBadge />
                       </label>
-                      <select
-                        value={filterRound}
-                        disabled
-                        className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-muted-foreground outline-none appearance-none opacity-70 pointer-events-none"
-                      >
-                        <option value="">Any Round</option>
-                        <option value="1">1st Auction</option>
-                        <option value="2">2nd Auction</option>
-                        <option value="3">3rd+ Auction</option>
+                      <select disabled className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-muted-foreground outline-none appearance-none opacity-60 pointer-events-none">
+                        <option>Any Round</option>
+                        <option>1st Auction</option>
+                        <option>2nd Auction</option>
+                        <option>3rd+ Auction</option>
                       </select>
-                      <div className="absolute bottom-0 right-0 top-6 left-0 rounded-b-xl flex items-center justify-end pr-3 pointer-events-none">
-                        <Lock className="w-3.5 h-3.5 text-brand-gold" />
-                      </div>
+                      <Lock className="absolute right-3 top-8 w-3.5 h-3.5 text-brand-gold pointer-events-none" />
                       <div className="absolute -top-1 left-1/2 -translate-x-1/2 -translate-y-full opacity-0 group-hover/pf:opacity-100 transition-opacity z-20 pointer-events-none">
                         <div className="bg-card border border-brand-gold/30 rounded-xl px-3 py-2 shadow-elevated text-center whitespace-nowrap">
                           <p className="text-[10px] font-bold text-brand-gold flex items-center gap-1 justify-center"><Zap className="w-2.5 h-2.5" /> Upgrade to Pro</p>
-                          <p className="text-[10px] text-muted-foreground">Click to unlock premium filters</p>
+                          <p className="text-[10px] text-muted-foreground">Filter by auction round</p>
                         </div>
                       </div>
                     </div>
@@ -743,42 +728,39 @@ export default function Auctions() {
                   {/* Expected rental yield */}
                   {isPro ? (
                     <div>
-                      <label className="text-xs text-muted-foreground font-medium block mb-1.5">Expected Rental Yield</label>
+                      <label className="text-xs text-muted-foreground font-medium block mb-1.5">
+                        Est. Rental Yield
+                        <span className="ml-1.5 text-[10px] text-muted-foreground/60">(city benchmark × sqm / bid)</span>
+                      </label>
                       <select
                         value={filterYield}
                         onChange={e => setFilterYield(e.target.value)}
                         className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none"
                       >
                         <option value="">Any Yield</option>
-                        <option value="low">Under 3%</option>
-                        <option value="medium">3% – 6%</option>
-                        <option value="high">6% – 9%</option>
-                        <option value="very_high">9%+</option>
+                        <option value="low">Under 3% — Low yield</option>
+                        <option value="medium">3% – 6% — Average</option>
+                        <option value="high">6% – 9% — Good</option>
+                        <option value="very_high">9%+ — High yield opportunity</option>
                       </select>
                     </div>
                   ) : (
                     <div className="relative cursor-pointer group/pf" onClick={() => navigate("/pro")}>
-                      <label className="text-xs text-muted-foreground font-medium block mb-1.5 flex items-center gap-1.5 pointer-events-none">
-                        Expected Rental Yield <PremiumBadge />
+                      <label className="text-xs text-muted-foreground font-medium flex items-center gap-1.5 mb-1.5 pointer-events-none">
+                        Est. Rental Yield <PremiumBadge />
                       </label>
-                      <select
-                        value={filterYield}
-                        disabled
-                        className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-muted-foreground outline-none appearance-none opacity-70 pointer-events-none"
-                      >
-                        <option value="">Any Yield</option>
-                        <option value="low">Under 3%</option>
-                        <option value="medium">3% – 6%</option>
-                        <option value="high">6% – 9%</option>
-                        <option value="very_high">9%+</option>
+                      <select disabled className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-muted-foreground outline-none appearance-none opacity-60 pointer-events-none">
+                        <option>Any Yield</option>
+                        <option>Under 3%</option>
+                        <option>3% – 6%</option>
+                        <option>6% – 9%</option>
+                        <option>9%+</option>
                       </select>
-                      <div className="absolute bottom-0 right-0 top-6 left-0 rounded-b-xl flex items-center justify-end pr-3 pointer-events-none">
-                        <Lock className="w-3.5 h-3.5 text-brand-gold" />
-                      </div>
+                      <Lock className="absolute right-3 top-8 w-3.5 h-3.5 text-brand-gold pointer-events-none" />
                       <div className="absolute -top-1 left-1/2 -translate-x-1/2 -translate-y-full opacity-0 group-hover/pf:opacity-100 transition-opacity z-20 pointer-events-none">
                         <div className="bg-card border border-brand-gold/30 rounded-xl px-3 py-2 shadow-elevated text-center whitespace-nowrap">
                           <p className="text-[10px] font-bold text-brand-gold flex items-center gap-1 justify-center"><Zap className="w-2.5 h-2.5" /> Upgrade to Pro</p>
-                          <p className="text-[10px] text-muted-foreground">Click to unlock premium filters</p>
+                          <p className="text-[10px] text-muted-foreground">Filter by estimated rental yield</p>
                         </div>
                       </div>
                     </div>
@@ -790,7 +772,7 @@ export default function Auctions() {
                   <div className="mt-4 flex items-center justify-between p-3 rounded-xl bg-brand-gold/5 border border-brand-gold/20">
                     <div className="flex items-center gap-2">
                       <Star className="w-4 h-4 text-brand-gold" />
-                      <span className="text-xs font-medium">Unlock premium filters with mAI Prop Pro</span>
+                      <span className="text-xs font-medium">Unlock Pro filters — Auction Round &amp; Rental Yield</span>
                     </div>
                     <Button size="sm" className="bg-gradient-gold border-0 text-background font-semibold text-xs" asChild>
                       <Link to="/pro">Upgrade to Pro</Link>
