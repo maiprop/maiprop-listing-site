@@ -785,8 +785,7 @@ export default function PropertyDetail() {
                   {!aiInsightsLoading && !aiInsightsData &&
                   <p className="text-xs text-muted-foreground text-center py-4">Market analysis unavailable</p>
                   }
-                  {/* Pro upsell — hidden for Pro subscribers */}
-                  {!isPro && (
+                  {/* Pro upsell */}
                   <div className="flex items-start gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
                     <Lock className="w-4 h-4 text-primary shrink-0 mt-0.5" />
                     <div>
@@ -796,7 +795,6 @@ export default function PropertyDetail() {
                       </p>
                     </div>
                   </div>
-                  )}
                 </div>
               </Section>
 
