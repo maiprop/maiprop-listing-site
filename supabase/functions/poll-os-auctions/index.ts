@@ -332,6 +332,7 @@ Deno.serve(async (req) => {
             postal_code: row.postal_code,
             region: row.region,
             tags: row.tags,
+            website_url: row.website_url,
             status: "active",
             updated_at: new Date().toISOString(),
           },
