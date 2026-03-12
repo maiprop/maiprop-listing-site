@@ -646,6 +646,17 @@ export default function Auctions() {
                       {YEAR_RANGES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                     </select>
                   </div>
+                  {/* Ownership Status — moved to standard filters */}
+                  <div>
+                    <label className="text-xs text-muted-foreground font-medium block mb-1.5">Ownership Status</label>
+                    <select
+                      value={filterOwnership}
+                      onChange={e => setFilterOwnership(e.target.value)}
+                      className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none"
+                    >
+                      {OWNERSHIP_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                    </select>
+                  </div>
                 </div>{/* end grid */}
               </div>{/* end standard filters */}
 
