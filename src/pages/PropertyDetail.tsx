@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import {
   MapPin, Bed, Bath, Square, Heart, Share2, Phone, MessageSquare,
   Calendar, Video, ChevronLeft, ChevronRight, Star, TrendingUp,
