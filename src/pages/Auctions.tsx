@@ -95,6 +95,7 @@ function getOwnershipPct(tags?: string[] | null): number | null {
 const OWNERSHIP_BADGE: Record<string, { label: string; cls: string }> = {
   full:     { label: "Πλήρης κυριότητα", cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/25" },
   partial:  { label: "Μερική κυριότητα", cls: "bg-amber-500/15 text-amber-400 border-amber-500/25" },
+  common:   { label: "Εξ αδιαιρέτου", cls: "bg-sky-500/15 text-sky-400 border-sky-500/25" },
   none:     { label: "Χωρίς κυριότητα", cls: "bg-red-500/15 text-red-400 border-red-500/25" },
   occupied: { label: "Κατειλημμένο", cls: "bg-destructive/15 text-destructive border-destructive/25" },
   vacated:  { label: "Κενό", cls: "bg-blue-500/15 text-blue-400 border-blue-500/25" },
