@@ -83,18 +83,36 @@ Rules:
     const content = aiData.choices?.[0]?.message?.content ?? "";
 
     // Strip markdown code fences if present
-    const jsonStr = content
-      .replace(/^```json\s*/i, "")
-      .replace(/^```\s*/i, "")
-      .replace(/\s*```$/i, "")
+    let jsonStr = content
+      .replace(/```json\s*/gi, "")
+      .replace(/```\s*/g, "")
       .trim();
+
+    // Find outermost JSON object boundaries
+    const jsonStart = jsonStr.search(/\{/);
+    const jsonEnd = jsonStr.lastIndexOf("}");
+    if (jsonStart !== -1 && jsonEnd !== -1) {
+      jsonStr = jsonStr.substring(jsonStart, jsonEnd + 1);
+    }
 
     let parsed: { pois: any[] };
     try {
       parsed = JSON.parse(jsonStr);
     } catch {
-      console.error("Failed to parse AI response:", jsonStr);
-      throw new Error("AI returned invalid JSON");
+      // Attempt to repair common AI JSON glitches
+      const repaired = jsonStr
+        .replace(/,\s*}/g, "}")          // trailing commas in objects
+        .replace(/,\s*]/g, "]")          // trailing commas in arrays
+        .replace(/\)\s*\}/g, "}")        // stray ) before closing brace  ← fixes this specific bug
+        .replace(/\)\s*,/g, ",")         // stray ) before commas
+        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ""); // control chars
+
+      try {
+        parsed = JSON.parse(repaired);
+      } catch (repairError) {
+        console.error("Failed to parse AI response:", jsonStr);
+        throw new Error("AI returned invalid JSON");
+      }
     }
 
     if (!Array.isArray(parsed.pois)) throw new Error("Invalid AI response shape");
