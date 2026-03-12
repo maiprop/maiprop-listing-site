@@ -252,13 +252,13 @@ export function PropertyCard({ property, compact = false }: PropertyCardProps) {
       <div className="p-4 flex flex-col flex-1 gap-3">
         {/* Title + location */}
         <div>
-          <Link to={`/property/${property.id}`}>
+          <Link to={detailPath}>
             <h3 className="font-display font-semibold text-base text-foreground hover:text-primary transition-colors line-clamp-2 leading-snug">
               {property.title}
             </h3>
           </Link>
           <Link
-            to={`/property/${property.id}`}
+            to={detailPath}
             className="flex items-center gap-1 mt-1.5 text-muted-foreground text-xs group/addr hover:text-primary transition-colors w-fit max-w-full"
           >
             <MapPin className="w-3 h-3 shrink-0 text-primary/70 group-hover/addr:text-primary transition-colors" />
