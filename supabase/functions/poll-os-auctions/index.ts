@@ -130,12 +130,22 @@ function mapAuctionToListing(a: any) {
   const auctionUrl: string | null =
     a.url ?? a.auctionUrl ?? a.listingUrl ?? a.eAuctionUrl ?? null;
 
+  // Build Google Street View cover photo when coordinates are available
+  const googleMapsKey = Deno.env.get("GOOGLE_MAPS_API_KEY");
+  const lat = a.propertyLatitude != null ? Number(a.propertyLatitude) : null;
+  const lng = a.propertyLongitude != null ? Number(a.propertyLongitude) : null;
+  const streetViewUrl =
+    googleMapsKey && lat && lng
+      ? `https://maps.googleapis.com/maps/api/streetview?size=800x450&location=${lat},${lng}&fov=90&pitch=10&key=${googleMapsKey}`
+      : null;
+
   return {
     tagKey,
     row: {
       title: buildTitle(a),
       description: null,
       website_url: auctionUrl,
+      cover_image_url: streetViewUrl,
       price,
       price_per_sqm: a.pricePerSquareMeter != null ? Number(a.pricePerSquareMeter) : null,
       auction_starting_bid: price,
