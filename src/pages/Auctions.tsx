@@ -148,7 +148,7 @@ function AuctionCard({ a, favoritedIds, onToggleFav }: {
 
   const handleShare = async (e: React.MouseEvent) => {
     e.preventDefault();
-    const url = `${window.location.origin}/property/${a.id}`;
+    const url = `${window.location.origin}/auction/${a.id}`;
     if (navigator.share) {
       try { await navigator.share({ title: a.title, url }); } catch {}
     } else {
@@ -165,7 +165,7 @@ function AuctionCard({ a, favoritedIds, onToggleFav }: {
   return (
     <div className="glass-card rounded-xl overflow-hidden border border-border hover:border-brand-gold/40 transition-all group flex flex-col">
       {/* Image */}
-      <Link to={`/property/${a.id}`} className="relative h-44 bg-secondary overflow-hidden block">
+      <Link to={`/auction/${a.id}`} className="relative h-44 bg-secondary overflow-hidden block">
         {imgSrc ? (
           <img
             src={imgSrc}
