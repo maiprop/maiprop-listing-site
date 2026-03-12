@@ -73,9 +73,13 @@ export function PropertyCard({ property, compact = false }: PropertyCardProps) {
     toggleFav.mutate({ listing_id: property.id, isFavorited });
   };
 
+  const detailPath = property.listingType === "auction"
+    ? `/auction/${property.id}`
+    : `/property/${property.id}`;
+
   const handleShare = async (e: React.MouseEvent) => {
     e.preventDefault();
-    const url = `${window.location.origin}/property/${property.id}`;
+    const url = `${window.location.origin}${detailPath}`;
     if (navigator.share) {
       try { await navigator.share({ title: property.title, url }); } catch {}
     } else {
