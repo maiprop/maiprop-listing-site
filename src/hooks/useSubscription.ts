@@ -14,11 +14,14 @@ const PRO_PRODUCT_ID = "prod_U8SJbk3fZQ3xgD";
  *   loading     — true while the subscription status is being fetched
  *   refreshSubscription — force-refresh from Stripe
  */
-export function useSubscription() {
-  const { subscription, refreshSubscription } = useAuth();
+// Owner emails always have Pro access
+const OWNER_EMAILS = ["kr@maiprop.co", "kostisrenios@gmail.com"];
 
-  const isPro =
-    subscription.subscribed && subscription.productId === PRO_PRODUCT_ID;
+export function useSubscription() {
+  const { subscription, refreshSubscription, user } = useAuth();
+
+  const isOwner = !!user?.email && OWNER_EMAILS.includes(user.email.toLowerCase());
+  const isPro = isOwner || (subscription.subscribed && subscription.productId === PRO_PRODUCT_ID);
 
   return {
     isPro,
