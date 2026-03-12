@@ -964,15 +964,17 @@ export default function PropertyDetail() {
                         <Bell className="w-4 h-4" />
                         Set Auction Alert
                       </Button>
-                      <a
-                        href={db.auction_court ? `https://www.eauction.gr` : "#"}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        <Button variant="outline" className="w-full border-border gap-2 h-9 text-xs">
-                          <ExternalLink className="w-3.5 h-3.5" />View on eAuction.gr
-                        </Button>
-                      </a>
+                      {websiteUrl && (
+                        <a
+                          href={websiteUrl.startsWith("http") ? websiteUrl : `https://${websiteUrl}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <Button variant="outline" className="w-full border-border gap-2 h-9 text-xs">
+                            <ExternalLink className="w-3.5 h-3.5" />View on eAuction.gr
+                          </Button>
+                        </a>
+                      )}
                     </>
                   ) : (
                     <>

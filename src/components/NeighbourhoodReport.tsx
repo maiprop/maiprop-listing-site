@@ -76,8 +76,8 @@ function MiniChart({ trend }: { trend: PriceTrend }) {
   const maxVal = Math.max(...vals);
   const range = (maxVal - minVal) || 1;
 
-  // Chart dimensions with generous padding so dots never clip
-  const w = 260, h = 72, padX = 10, padTop = 10, padBottom = 14;
+  // Generous padding: extra top space so price labels never clip
+  const w = 260, h = 90, padX = 14, padTop = 22, padBottom = 10;
   const innerW = w - padX * 2;
   const innerH = h - padTop - padBottom;
 
@@ -87,49 +87,62 @@ function MiniChart({ trend }: { trend: PriceTrend }) {
   const path = xs.map((x, i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${ys[i].toFixed(1)}`).join(" ");
   const fill = [
     ...xs.map((x, i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${ys[i].toFixed(1)}`),
-    `L${(padX + innerW).toFixed(1)},${h}`,
-    `L${padX},${h}`,
+    `L${(padX + innerW).toFixed(1)},${(h - padBottom)}`,
+    `L${padX},${(h - padBottom)}`,
     "Z",
   ].join(" ");
 
   const rising = trend.current >= trend.oneYearAgo;
   const lineColour = rising ? "#22c55e" : "#ef4444";
 
+  // Clamp label x so first/last labels don't overflow edges
+  const clampX = (x: number, i: number) => {
+    if (i === 0) return Math.max(x, 20);
+    if (i === points.length - 1) return Math.min(x, w - 20);
+    return x;
+  };
+
   return (
     <div className="space-y-0">
-      <svg width={w} height={h} className="w-full overflow-visible" viewBox={`0 0 ${w} ${h}`}>
+      <svg width={w} height={h} className="w-full" viewBox={`0 0 ${w} ${h}`}>
         <defs>
           <linearGradient id="chartFillGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={lineColour} stopOpacity="0.22" />
+            <stop offset="0%" stopColor={lineColour} stopOpacity="0.2" />
             <stop offset="100%" stopColor={lineColour} stopOpacity="0" />
           </linearGradient>
         </defs>
         <path d={fill} fill="url(#chartFillGrad)" />
-        <path d={path} fill="none" stroke={lineColour} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        <path d={path} fill="none" stroke={lineColour} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         {points.map((p, i) => (
           <g key={i}>
-            <circle cx={xs[i]} cy={ys[i]} r="3.5" fill={lineColour} />
-            {/* Price label above each dot */}
+            <circle cx={xs[i]} cy={ys[i]} r="3" fill={lineColour} />
+            {/* Price label above each dot — clamped so it never clips */}
             <text
-              x={xs[i]}
-              y={ys[i] - 7}
+              x={clampX(xs[i], i)}
+              y={ys[i] - 8}
               textAnchor="middle"
-              fontSize="8"
-              fontWeight="600"
+              fontSize="7.5"
+              fontWeight="700"
               fill={lineColour}
-              opacity={i === points.length - 1 ? 1 : 0.7}
+              opacity={i === points.length - 1 ? 1 : 0.65}
             >
               €{p.val >= 1000 ? `${(p.val / 1000).toFixed(1)}k` : p.val}
+            </text>
+            {/* Year label directly under each dot */}
+            <text
+              x={clampX(xs[i], i)}
+              y={h - 0}
+              textAnchor="middle"
+              fontSize="7.5"
+              fontWeight={p.year === String(currentYear) ? "700" : "400"}
+              fill={p.year === String(currentYear) ? lineColour : "currentColor"}
+              opacity={p.year === String(currentYear) ? 1 : 0.5}
+            >
+              {p.year}
             </text>
           </g>
         ))}
       </svg>
-      {/* Year labels underneath */}
-      <div className="flex justify-between text-[10px] text-muted-foreground px-[10px] -mt-1">
-        {points.map(p => (
-          <span key={p.year} className={p.year === String(currentYear) ? "font-bold text-foreground" : ""}>{p.year}</span>
-        ))}
-      </div>
     </div>
   );
 }
