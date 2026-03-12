@@ -266,15 +266,14 @@ export default function PropertyDetail() {
 
   // Google Street View Static API fallback — shows real street-level photo when no listing images
   const streetViewFallback = (() => {
-    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-    if (!apiKey) return null;
+    if (!GOOGLE_MAPS_API_KEY) return null;
     // Prefer coordinate-based lookup (more accurate); fall back to address string
     if (db.latitude && db.longitude) {
-      return `https://maps.googleapis.com/maps/api/streetview?size=800x450&location=${db.latitude},${db.longitude}&fov=90&pitch=10&key=${apiKey}`;
+      return `https://maps.googleapis.com/maps/api/streetview?size=800x450&location=${db.latitude},${db.longitude}&fov=90&pitch=10&key=${GOOGLE_MAPS_API_KEY}`;
     }
     if (db.address || db.city) {
       const loc = encodeURIComponent(`${db.address ?? ""} ${db.city ?? ""}`.trim());
-      return `https://maps.googleapis.com/maps/api/streetview?size=800x450&location=${loc}&fov=90&pitch=10&key=${apiKey}`;
+      return `https://maps.googleapis.com/maps/api/streetview?size=800x450&location=${loc}&fov=90&pitch=10&key=${GOOGLE_MAPS_API_KEY}`;
     }
     return null;
   })();
