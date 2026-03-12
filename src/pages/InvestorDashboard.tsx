@@ -656,11 +656,20 @@ export default function InvestorDashboard() {
     setShowGate(false);
   };
 
+  // Deal types — inferred from real DB data
+  type LiveDeal = {
+    id: string; address: string; city: string; property_type: string;
+    sqm: number; bedrooms: number | null; condition: string | null;
+    ai_estimate: number; asking_price: number; discount_pct: number;
+    status: string; created_at: string; urgency: "HIGH" | "MEDIUM" | "LOW";
+    reason: string; roi_est: number;
+  };
+
   // Deal feed state
   const [filterCity, setFilterCity] = useState("all");
   const [filterType, setFilterType] = useState("all");
   const [filterUrgency, setFilterUrgency] = useState("all");
-  const [liveDeals, setLiveDeals] = useState<typeof MOCK_DEALS>([]);
+  const [liveDeals, setLiveDeals] = useState<LiveDeal[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Admin state
@@ -668,7 +677,7 @@ export default function InvestorDashboard() {
   const [adminLoading, setAdminLoading] = useState(false);
   const [adminFilter, setAdminFilter] = useState("all");
 
-  // Load investor feed (own + mock)
+  // Load investor feed — real DB data only
   useEffect(() => {
     const loadDeals = async () => {
       setLoading(true);
@@ -679,7 +688,7 @@ export default function InvestorDashboard() {
           .order("created_at", { ascending: false })
           .limit(50);
 
-        const realDeals = (data || []).map(d => ({
+        const realDeals: LiveDeal[] = (data || []).map(d => ({
           id: d.id,
           address: d.address,
           city: d.city,
@@ -699,9 +708,9 @@ export default function InvestorDashboard() {
           roi_est: 8.5,
         }));
 
-        setLiveDeals([...realDeals, ...MOCK_DEALS]);
+        setLiveDeals(realDeals);
       } catch {
-        setLiveDeals(MOCK_DEALS);
+        setLiveDeals([]);
       } finally {
         setLoading(false);
       }
