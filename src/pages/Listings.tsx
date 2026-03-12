@@ -67,6 +67,24 @@ const sortOptions = [
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function dbListingToCard(l: any) {
+  // Parse ownership from tags array (e.g. "ownership:full", "ownership_pct:50")
+  const tags: string[] = l.tags || [];
+  const ownershipTag = tags.find((t: string) => t.startsWith("ownership:") && !t.startsWith("ownership_pct:"));
+  const ownershipPctTag = tags.find((t: string) => t.startsWith("ownership_pct:"));
+  const ownershipStatus = ownershipTag ? ownershipTag.split(":")[1] : undefined;
+  const ownershipPercentage = ownershipPctTag ? Number(ownershipPctTag.split(":")[1]) : undefined;
+
+  // Non-ownership tags for display
+  const displayTags = tags.filter((t: string) => !t.startsWith("ownership")).filter(Boolean).length > 0
+    ? tags.filter((t: string) => !t.startsWith("ownership"))
+    : [
+        l.has_parking && "Parking",
+        l.has_pool && "Pool",
+        l.has_elevator && "Elevator",
+        l.has_garden && "Garden",
+        l.has_smart_home && "Smart Home",
+      ].filter(Boolean) as string[];
+
   return {
     id: l.id,
     title: l.title,
@@ -77,16 +95,17 @@ function dbListingToCard(l: any) {
     bedrooms: l.bedrooms ?? undefined,
     bathrooms: l.bathrooms ?? undefined,
     sqm: Number(l.sqm),
-    floor: l.floor ?? undefined,
-    totalFloors: l.total_floors ?? undefined,
+    floor: l.floor != null ? Number(l.floor) : undefined,
+    totalFloors: l.total_floors != null ? Number(l.total_floors) : undefined,
     yearBuilt: l.year_built ?? undefined,
     energyClass: l.energy_class ?? undefined,
+    ownershipStatus,
+    ownershipPercentage,
     latitude: l.latitude,
     longitude: l.longitude,
     images: [
       ...(l.cover_image_url ? [l.cover_image_url] : []),
       ...(l.listing_images?.map((img: any) => img.url) || []),
-      "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&q=60",
     ].filter(Boolean).slice(0, 3),
     type: l.property_type as any,
     listingType: l.listing_type as any,
@@ -99,13 +118,7 @@ function dbListingToCard(l: any) {
       verified: l.profiles.verified || false,
       avatar: l.profiles.avatar_url,
     } : undefined,
-    tags: l.tags || [
-      l.has_parking && "Parking",
-      l.has_pool && "Pool",
-      l.has_elevator && "Elevator",
-      l.has_garden && "Garden",
-      l.has_smart_home && "Smart Home",
-    ].filter(Boolean) as string[],
+    tags: displayTags,
     hasVideo: l.has_video_tour,
     hasVirtualTour: l.has_virtual_tour,
     _raw: l,
@@ -479,6 +492,8 @@ export default function Listings() {
   // Client-side filtering
   let filtered = sourceListings.filter((p: any) => {
     const raw = p._raw || p;
+    // Exclude auctions from the standard buy/rent listings page — auctions have their own dedicated page
+    if (!selectedListingType && p.listingType === "auction") return false;
     if (selectedPrice) {
       const [min, max] = selectedPrice.split("-").map(Number);
       if (p.price < min || p.price > max) return false;
@@ -503,7 +518,7 @@ export default function Listings() {
     }
     if (selectedHeating && raw.heating_system !== selectedHeating) return false;
     if (selectedConstruction && raw.construction_status !== selectedConstruction) return false;
-    // Subtype filter (stored in commercial_subtype for DB listings, or matched via tags/type for mock)
+    // Subtype filter
     if (selectedSubtype && raw.commercial_subtype && raw.commercial_subtype !== selectedSubtype) return false;
     return true;
   });
