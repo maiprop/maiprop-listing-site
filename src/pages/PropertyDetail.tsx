@@ -26,6 +26,7 @@ import NeighbourhoodReport from "@/components/NeighbourhoodReport";
 import { walkScoreLabel, walkScoreColour } from "@/lib/walkScore";
 import AIAssistantWidget from "@/components/AIAssistantWidget";
 import { AuctionAlertModal } from "@/components/AuctionAlertModal";
+import { GOOGLE_MAPS_API_KEY } from "@/lib/config";
 
 // ─── Energy class data ──────────────────────────────────────────────────────
 const ENERGY_SCALE = [
