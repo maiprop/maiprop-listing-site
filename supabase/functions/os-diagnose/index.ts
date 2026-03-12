@@ -77,13 +77,18 @@ Deno.serve(async (req) => {
     const countCompleted = await countCompletedRes.json().catch(() => null);
 
     // ── Probe 5: count-comparison endpoint ────────────────────────────────────
-    // OS API requires sortBy as a query param (body sortBy is ignored due to server bug)
-    const compRes = await fetch(`${OS_URL}/api/v1/auctions/filter/count-comparison?sortBy=AUCTION_DATE&sortOrder=ASC`, {
-      method: "POST",
-      headers: authHeaders,
-      body: JSON.stringify({}),
-    });
-    const comp = await compRes.json().catch(() => null);
+    // This endpoint has a server-side NullPointerException bug in the OS API — captured for awareness
+    let comp: any = null;
+    try {
+      const compRes = await fetch(`${OS_URL}/api/v1/auctions/filter/count-comparison`, {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify({ sortBy: "AUCTION_DATE" }),
+      });
+      comp = await compRes.json().catch(() => null);
+    } catch (_) {
+      comp = { note: "count-comparison endpoint unavailable on OS API (server-side bug)" };
+    }
 
     // ── Probe 6: full future count via /api/auctions/future?limit=9999 ────────
     let futureFullTotal = futureTotal;
