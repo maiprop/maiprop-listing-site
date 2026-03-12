@@ -657,7 +657,7 @@ export default function Auctions() {
               </div>{/* end standard filters */}
 
               {/* Pro filters */}
-              <div className="pt-1 border-t border-border">
+              <div className="pt-4 border-t border-brand-gold/30 bg-brand-gold/5 -mx-5 px-5 pb-1 rounded-b-2xl">
                 <div className="flex items-center gap-2 mb-3">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Pro Filters</p>
                   {!isPro && <PremiumBadge />}
