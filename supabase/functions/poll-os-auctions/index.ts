@@ -151,10 +151,13 @@ function mapAuctionToListing(a: any) {
       ownershipTag = "ownership:full";
     } else if (occ === "PARTIAL" || occ === "FRACTIONAL") {
       ownershipTag = "ownership:partial";
+    } else if (occ === "COMMON" || occ === "JOINT" || occ === "SHARED" || occ === "CO_OWNERSHIP") {
+      // Εξ αδιαιρέτου — fractional undivided shared ownership
+      ownershipTag = "ownership:common";
     } else if (occ === "NONE" || occ === "NO_OWNERSHIP" || occ === "ZERO") {
       ownershipTag = "ownership:none";
     } else {
-      // Store raw value for any other status
+      // Store raw lowercase value for any other status
       ownershipTag = `ownership:${occ.toLowerCase()}`;
     }
   } else if (ownershipPct != null) {
