@@ -104,8 +104,9 @@ function MiniChart({ trend }: { trend: PriceTrend }) {
   };
 
   return (
-    <div className="space-y-0">
-      <svg width={w} height={h} className="w-full overflow-visible" viewBox={`0 0 ${w} ${h}`}>
+    <div className="space-y-0 w-full">
+      <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="xMidYMid meet" className="overflow-visible block">
+
         <defs>
           <linearGradient id="chartFillGrad" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={lineColour} stopOpacity="0.2" />
