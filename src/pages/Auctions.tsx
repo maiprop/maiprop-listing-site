@@ -363,9 +363,6 @@ export default function Auctions() {
     setFilterType("");
     setFilterBidRange("");
     setFilterYearRange("");
-    setFilterOwnership("");
-    setFilterRound("");
-    setFilterYield("");
   };
 
   const now = new Date();
