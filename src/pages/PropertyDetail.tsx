@@ -1201,6 +1201,17 @@ export default function PropertyDetail() {
                   tags={db?.tags}
                   auctionCourt={db?.auction_court}
                   plotSurface={db?.plot_surface}
+                  isNeoclassical={db?.is_neoclassical}
+                  isPreserved={db?.is_preserved}
+                  distanceFromSea={db?.distance_from_sea}
+                  withinCityPlan={db?.within_city_plan}
+                  withinSettlement={db?.within_settlement}
+                  buildingAllowance={db?.building_allowance}
+                  coverageRatio={db?.coverage_ratio}
+                  isBuildable={db?.is_buildable}
+                  cadastreNumber={db?.cadastre_number}
+                  hasLandConcession={db?.has_land_concession}
+                  landUse={db?.land_use}
                 />
               ) : (
                 <div className="relative">
@@ -1211,7 +1222,13 @@ export default function PropertyDetail() {
                       listingType={db?.listing_type} floor={db?.floor} yearBuilt={db?.year_built}
                       energyClass={energyClass} pricePerSqm={pricePerSqm ? Number(pricePerSqm) : undefined}
                       hasParking={db?.has_parking} hasPool={db?.has_pool}
-                      hasElevator={db?.has_elevator} region={db?.region} />
+                      hasElevator={db?.has_elevator} region={db?.region}
+                      isNeoclassical={db?.is_neoclassical} isPreserved={db?.is_preserved}
+                      distanceFromSea={db?.distance_from_sea} withinCityPlan={db?.within_city_plan}
+                      withinSettlement={db?.within_settlement} buildingAllowance={db?.building_allowance}
+                      coverageRatio={db?.coverage_ratio} isBuildable={db?.is_buildable}
+                      cadastreNumber={db?.cadastre_number} hasLandConcession={db?.has_land_concession}
+                      landUse={db?.land_use} />
                   </div>
                   <div className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl bg-background/60 backdrop-blur-sm border border-primary/20 gap-3 px-5 text-center">
                     <Lock className="w-5 h-5 text-primary" />

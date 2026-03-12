@@ -4,7 +4,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// ── Greece 2026 market benchmarks (Bank of Greece / REDS data) ─────────────────
+// ── Greece 2026 market benchmarks ─────────────────────────────────────────────
 const MARKET_BENCHMARKS = `
 GREECE 2026 — PROPERTY MARKET BENCHMARKS (Bank of Greece, REDS, AADE data):
 
@@ -19,205 +19,187 @@ RESIDENTIAL (€/sqm asking prices, Q1 2026):
 - Thessaloniki center: €2,400–3,800/sqm; suburbs: €1,500–2,600/sqm
 - Heraklion Crete: €1,800–3,200/sqm; Chania: €2,200–4,200/sqm
 - Patras: €900–1,900/sqm; Larissa: €900–1,800/sqm; Ioannina: €1,000–1,900/sqm
-- Volos: €1,100–2,000/sqm; Kavala: €800–1,600/sqm; Alexandroupoli: €900–1,700/sqm
 
 ISLANDS — RESIDENTIAL (€/sqm, Q1 2026):
 - Mykonos (town/beach): €9,000–25,000+/sqm
 - Santorini (Caldera rim): €12,000–30,000+/sqm; other areas €5,000–10,000/sqm
-- Paros/Antiparos: €3,500–9,000/sqm
-- Naxos: €2,500–6,000/sqm
-- Rhodes (tourist/coastal): €2,500–6,000/sqm; town: €1,800–3,500/sqm
+- Paros/Antiparos: €3,500–9,000/sqm; Rhodes: €2,500–6,000/sqm
 - Corfu (sea view): €3,000–7,000/sqm; inland: €1,500–3,000/sqm
-- Cephalonia/Zakynthos: €2,000–5,000/sqm
-- Lefkada: €2,000–4,500/sqm
-- Skiathos/Skopelos: €2,500–5,500/sqm
-- Thassos: €1,500–3,500/sqm
-- Lesvos/Chios: €1,000–2,800/sqm
+- Cephalonia/Zakynthos: €2,000–5,000/sqm; Lefkada: €2,000–4,500/sqm
 
 VILLAS — PREMIUM LOCATIONS (€/sqm, Q1 2026):
-- Attica (Kifissia/Ekali): €4,000–10,000/sqm; major premiuim for plot size
-- South Attica (Saronida/Anavissos): €3,000–7,000/sqm
+- Attica (Kifissia/Ekali): €4,000–10,000/sqm; South Attica (Saronida): €3,000–7,000/sqm
 - Halkidiki (Kassandra/Sithonia): €2,000–5,500/sqm
-- Peloponnese (coastal): €2,000–5,000/sqm
 - Luxury island villas (Mykonos/Santorini): €8,000–35,000/sqm for turnkey
 
 COMMERCIAL (€/sqm, yield bands, Q1 2026):
 - Prime Athens retail (Ermou/Kolonaki): €4,000–9,000/sqm; yield 4.5–6.5%
 - Secondary Athens retail: €1,500–3,500/sqm; yield 7–10%
 - Athens CBD Grade-A office: €2,500–5,000/sqm; yield 5.5–7.5%
-- Athens suburban office: €1,200–2,500/sqm; yield 7–10%
 - Thessaloniki prime retail: €2,500–5,500/sqm; yield 5.5–8%
-- Regional city retail: €600–2,000/sqm; yield 8–12%
 
 INDUSTRIAL / WAREHOUSE (€/sqm, Q1 2026):
 - Attica industrial zone (Aspropyrgos/Elefsina): €400–900/sqm; yield 7–9%
-- Modern logistics (BREEAM/spec-built): €600–1,200/sqm; yield 6–8%
 - Secondary industrial: €200–500/sqm; yield 9–13%
-- Cold storage/specialised: €800–1,500/sqm; yield 7–10%
 
 LAND / PLOTS (€/sqm):
 - Athens urban buildable plot: €500–3,000+/sqm depending on SD and location
-- Athens suburb buildable plot: €200–1,500/sqm
-- Agricultural land: €1–15/sqm depending on region/access
-- Tourist coastal (Greece): €5–120/sqm depending on sea distance/island
-- Outside plan rural (Attica): €15–80/sqm
+- Agricultural land: €1–15/sqm; Tourist coastal: €5–120/sqm
 
 MARKET DYNAMICS 2026 (Bank of Greece):
 - Residential price trend: Athens +5–8% YoY; islands +7–12% YoY; regional +2–5% YoY
-- PACE IS DECELERATING from 2022–2024 peaks — do not extrapolate past rates
-- Commercial market behaves DIFFERENTLY from residential — separate logic required
-- Auction properties represent a distinct execution channel; significant discount to clean market
-- New builds: 25–40% premium over resale of same area/floor
-- Renovation discount: poor condition -15 to -35%; luxury finish +10–25%
+- PACE IS DECELERATING from 2022–2024 peaks
+- Commercial market behaves DIFFERENTLY from residential
 - Transaction costs buyer: ~8–11% total (FMA 3%, notary 1–1.5%, legal 0.5–1%, agent 2–3%)
-- Capital gains tax: 15% on profit (currently suspended — monitor policy)
-- Golden Visa threshold 2026: €800k Athens/Thess/islands >3,100 residents; €400k elsewhere
+- Transfer tax: 3% on objective/taxable value + municipal levy (~0.3%)
+- New builds: 25–40% premium over resale same area/floor
 
 RENTAL YIELDS 2026 (gross, asking):
 - Athens center long-term: 3.5–5.5% gross
 - Athens center short-term (Airbnb zones): 6–9% gross
-- South suburbs: 3–4.5% gross
-- Thessaloniki: 4–6% gross
 - Tourist islands seasonal: 7–14% gross
 - Regional cities: 4.5–7% gross
 `;
 
-// ── Property-type specific methodology instructions ────────────────────────────
+// ── Greek legal/tax overlay framework ─────────────────────────────────────────
+const LEGAL_TAX_FRAMEWORK = `
+GREEK LEGAL & TAX OVERLAY — GREECE 2026 (AADE, Cadastre, e-Πολεοδομία):
+
+SCORING MODEL (produce all four scores 0–100):
+
+1. LEGAL_CLEANLINESS_SCORE (0–100):
+   Inputs: cadastre clarity, title chain, permit status, building identity, ownership complexity, restriction risk.
+   - No data on any legal field = start at 40; each unknown field costs -5
+   - Co-ownership or partial ownership = -10 to -25
+   - Auction property with no title info = -30
+   - Signs of illegal enclosures/extensions from photos/description = -15 to -25
+   - Coastal/island/neoclassical/forest proximity = -10 to -20 (protection risk)
+   - Standard urban apartment, no red flags mentioned = 65–80
+   - Fully documented unit (permit cited, no issues) = 85–95
+
+2. PLANNING_CERTAINTY_SCORE (0–100):
+   Inputs: inside/outside plan certainty, SD/coverage/height data, land use, change-of-use feasibility.
+   - Apartment/house in established urban area = 70–85 (assumed inside plan)
+   - Plot with SD stated explicitly = 75–90
+   - Plot with SD unknown = 30–50
+   - Land outside settlement, no buildability data = 20–40
+   - Hotel/commercial conversion claimed without use permit = 30–55
+   - Standard apartment, no land complexity = 70–80
+
+3. TAX_FRICTION_SCORE (0–100, higher = MORE friction):
+   Inputs: transfer tax burden, objective value divergence, transfer complexity, doc readiness.
+   - Standard transfer: ~3% FMA + notary + legal + agent = total buyer cost ~8–11%
+   - Auction: add eviction/legal uncertainty friction
+   - Foreign buyer Golden Visa property: add process complexity
+   - Inheritance/donation path: higher friction
+   - Commercial/industrial: higher complexity = higher friction
+   - Scale: 10–25 = normal residential transfer; 30–50 = commercial/complex; 50–70 = auction/foreign/inheritance; 70–90 = very complex
+
+4. TRANSFER_READINESS_SCORE (0–100):
+   Inputs: building identity completeness, E9 consistency, digital transfer readiness, doc completeness, auction burden.
+   - Digital transfer via myPROPERTY with all docs: 85–95
+   - Standard apartment with likely complete docs: 65–80
+   - Auction with unknown occupancy: 20–40
+   - Missing building identity / permit issues: 30–55
+   - Island property with multiple ownership unknowns: 25–50
+
+PROPERTY-TYPE LEGAL RULES:
+- RESIDENCE: Check horizontal property status, building identity, illegal enclosure risk, ENFIA/objective cross-check
+- COMMERCIAL: Check allowed commercial use, lease tax completeness, change-of-use feasibility
+- LAND: Check inside/outside plan, forest/coastal/archaeology protection, road access legality
+- PLOT: Check SD/coverage/height/frontage, demolition obligations, planning constraint consistency
+- VILLA/VACATION/ISLAND: Coastal restrictions, pool/extension legality, traditional settlement restrictions, tourism-use feasibility
+- HOTEL: Hospitality-use legality, room count confidence, conversion feasibility
+- MIXED-USE: Legality of use split, horizontal division, change-of-use, vacant-possession difficulty
+- INDUSTRIAL: Industrial use legality, fire/operational compliance, environmental constraints
+- AUCTION: Title burden, occupancy, eviction risk, document completeness, inspection access
+
+VALUATION MODES (infer from available data):
+- MODE 1 (LISTING ONLY): No legal data available — use conservative defaults, note as UNKNOWN
+- MODE 2 (PUBLIC-ENRICHED): Objective value proxy, planning zone clues, auction flags — use where inferable
+- MODE 3 (DOC-VERIFIED): Not applicable for listing sites — do not claim
+
+OBJECTIVE VALUE:
+- Use only as cross-check / tax reference, NOT as commercial AVM answer
+- If objective value >> AVM estimate: flag transfer/tax mismatch risk
+- If objective value << asking price: note tax/market divergence (do not reduce market value)
+
+EXECUTION VALUE:
+execution_value = market_value MINUS transaction_friction MINUS legal_uncertainty_discount
+- legal_uncertainty_discount = 0–15% of market value based on legal_cleanliness_score
+- transaction_friction = 8–11% for normal; 15–25% for auction; 20–35% for complex structures
+`;
+
+// ── Property-type specific methodology ────────────────────────────────────────
 function getTypeInstructions(propertyType: string, listingType: string): string {
   const isAuction = listingType === "auction";
 
   const base: Record<string, string> = {
     apartment: `
-METHODOLOGY: RESIDENTIAL APARTMENT — Comparable hedonic model (primary) + rental yield sense-check (secondary).
-
-VALUATION STEPS:
-1. Extract micro-location from district/address clues. Locate on the benchmark table above.
-2. Compute baseline €/sqm from nearest comparable band.
-3. Apply adjustments:
-   - Floor: ground floor -8 to -15% (semi-basement -20 to -35%), floors 2-4 neutral, floors 5+ +3-8% with elevator
-   - Elevator: absence above floor 2 = -5 to -10%
-   - Year built pre-1980 without renovation = -10 to -25%; post-2010 = +5 to +15%; new build = +25-40%
-   - Condition: poor -20 to -30%; fair -10 to -15%; good ±0; very good +5 to +10%; luxury +15 to +30%
-   - Parking: +4-8% in urban, +2-5% in suburbs
-   - Storage: +1-3%
-   - Balcony/terrace: +2-6% depending on size
-   - Sea view: +10-40% depending on clarity and distance
-   - Open horizon: +5-15%
-   - Noisy main road: -5 to -12%
-4. Run rental yield sanity check: if implied yield deviates >2pp from local benchmark, flag.
-5. Output range: narrow (±6-10%) for urban with strong comps; wider (±12-20%) for atypical/sparse.
-
-CONFIDENCE BOOST: exact floor, condition, year built, multiple comps, clear photos.
-CONFIDENCE PENALTY: missing floor, unclear location, no year built, no condition data.`,
+METHODOLOGY: RESIDENTIAL APARTMENT — Comparable hedonic model (primary) + rental yield sense-check.
+1. Extract micro-location → baseline €/sqm from benchmark table.
+2. Adjustments: floor (ground -8 to -15%, semi-basement -20 to -35%, 5+ with elevator +3-8%), elevator absence above floor 2 = -5 to -10%, year built pre-1980 without reno = -10 to -25%, post-2010 = +5 to +15%, new build = +25-40%, condition poor -20 to -30% / luxury +15 to +30%, parking +4-8%, storage +1-3%, balcony +2-6%, sea view +10-40%, noisy road -5 to -12%.
+3. Rental yield sanity check vs benchmark.
+4. Range: ±6-10% urban with strong comps; ±12-20% for atypical/sparse.
+Legal check: horizontal property, building identity, illegal enclosure risk, ENFIA cross-check.`,
 
     house: `
-METHODOLOGY: DETACHED/SEMI-DETACHED HOUSE — Comparable model + cost support check.
-
-VALUATION STEPS:
-1. Separate building value from land value contribution.
-2. Building: comparable €/sqm for house subtype in same municipality.
-3. Land: garden size — small garden (<200sqm) low premium; large garden (+500sqm) significant premium especially suburban.
-4. Apply condition, year built, parking, view, and access adjustments (same as apartment).
-5. For semi-basement/split-level: apply floor distribution adjustments.
-6. Corner, double frontage: +3-8% premium.
-7. Cost support: estimate replacement cost (€900-1,600/sqm depending on spec) as floor check.
-8. Range: ±8-14% typical; wider for unusual properties.`,
+METHODOLOGY: DETACHED HOUSE — Comparable + cost support.
+1. Separate building from land value contribution.
+2. Building €/sqm for house subtype + garden premium (small <200sqm low; >500sqm significant).
+3. Apply condition, year, view, corner adjustments. Cost floor: €900-1,600/sqm replacement cost.
+4. Range: ±8-14% typical.
+Legal check: building identity, extension legality, horizontal property if divided.`,
 
     villa: `
-METHODOLOGY: VILLA — Premium feature nearest-neighbor model (primary) + STR support (secondary if tourism area).
-
-DO NOT rely only on €/sqm for villas. Villas are highly heterogeneous.
-
-VALUATION STEPS:
-1. Build feature premium score:
-   - Sea view (direct): +20-60%
-   - Pool: +8-25% depending on size/quality
-   - Private land >1,000sqm: +10-30%
-   - Luxury finish inferred from photos/description: +15-35%
-   - Privacy/gate/compound: +5-15%
-   - Sunset/caldera/horizon view: +20-50% (island only)
-   - Guesthouse/annexe: +5-20%
-   - Architecture quality: premium for notable design
-2. Use nearest-neighbor comps with high feature matching, NOT area averages.
-3. If tourism area: estimate STR gross yield (Mykonos/Santorini €120-500k/year; Crete/Rhodes €40-150k/year). Cross-check capitalization.
-4. Range: ±12-25% for villas — they are illiquid and heterogeneous.
-5. Liquidity: typically 0.3-0.6 for non-prime; 0.6-0.8 for prime island with international buyers.`,
+METHODOLOGY: VILLA — Premium feature nearest-neighbor (primary) + STR support (secondary in tourism).
+DO NOT rely only on €/sqm.
+1. Feature premium score: sea view direct +20-60%, pool +8-25%, land >1k sqm +10-30%, luxury finish +15-35%, privacy +5-15%, caldera/horizon +20-50%, guesthouse +5-20%.
+2. Nearest-neighbor comps with high feature matching.
+3. STR support: Mykonos/Santorini €120-500k/year; Crete/Rhodes €40-150k/year.
+4. Range: ±12-25%. Liquidity: 0.3-0.6 non-prime; 0.6-0.8 prime island.
+Legal check: coastal restrictions, pool/extension legality, traditional settlement, tourism-use feasibility.`,
 
     land: `
-METHODOLOGY: AGRICULTURAL/NON-URBAN LAND — Conservative comparable model with optional development scenario.
-
-CRITICAL: DO NOT assume buildability from seller language alone.
-
-VALUATION STEPS:
-1. Classify: agricultural | speculative | coastal/tourism | forest/mountain | non-buildable rural.
-2. If outside settlement (εκτός σχεδίου): assume max 200sqm buildable unless SD clearly stated.
-3. Comparable land €/sqm from similar land in same municipality/region.
-4. Premiums: sea/lake proximity, access, flat terrain, panoramic view, utilities connected.
-5. If tourism positioning: require map/access/view evidence before applying premium.
-6. If buildability uncertain: use conservative scenario, lower confidence.
-7. Range: WIDE (±20-40%) for land — planning uncertainty is high.
-8. Liquidity: low (0.2-0.4) unless prime coastal or urban-fringe.
-
-NEVER estimate development value from asking price or seller description alone.`,
+METHODOLOGY: AGRICULTURAL/NON-URBAN LAND — Conservative comparable + optional development scenario.
+CRITICAL: DO NOT assume buildability from seller language.
+1. Classify: agricultural | speculative | coastal/tourism | non-buildable rural.
+2. Outside settlement: assume max 200sqm buildable unless SD clearly stated.
+3. Comparable land €/sqm + premiums (sea proximity, access, flat, utilities).
+4. Range: ±20-40%. Liquidity: 0.2-0.4 unless prime coastal.
+Legal check: inside/outside plan, forest/coastal/archaeology, road access legality.`,
 
     commercial: `
-METHODOLOGY: COMMERCIAL — Income-capitalization-informed comparable model.
-
-VALUATION STEPS:
-1. Classify subtype: retail | office | mixed small commercial | service unit.
-2. RETAIL:
-   - Estimate market rent/sqm/month from location (prime Athens €20-50/sqm; secondary €8-18/sqm; regional €4-12/sqm).
-   - Stabilized annual ERV = area sqm × monthly rent × 12.
-   - Apply cap rate: prime 4.5-6.5%; secondary 7-10%; regional 9-13%.
-   - Cross-check vs comparable retail €/sqm asking prices.
-   - Frontage premium: +10-30% for high-footfall corner frontage.
-   - Basement dependence: -15 to -30%.
-3. OFFICE:
-   - Grade A: €18-28/sqm/month Athens CBD; Grade B: €10-18/sqm/month.
-   - Cap rate: Grade A 5.5-7.5%; Grade B 7-10%.
-   - Modern condition/natural light premium; obsolete layout penalty.
-4. Cross-check with sales comps.
-5. Commercial NOTE 2026: commercial behaves differently from residential (Bank of Greece). Do not apply residential growth assumptions.
-6. Range: ±10-18% typical; wider for income-producing with unknown lease terms.`,
+METHODOLOGY: COMMERCIAL — Income-capitalization-informed comparable.
+1. Subtype: retail | office | mixed small commercial.
+2. RETAIL: market rent/sqm/month (prime Athens €20-50; secondary €8-18; regional €4-12), annual ERV × cap rate (prime 4.5-6.5%, secondary 7-10%, regional 9-13%), frontage +10-30%, basement dependence -15 to -30%.
+3. OFFICE: Grade A €18-28/sqm/month Athens CBD; cap rate 5.5-7.5%; vacancy ~10-14% (hybrid work effect).
+4. Cross-check sales comps. Range: ±10-18%.
+NOTE: commercial ≠ residential momentum (Bank of Greece).
+Legal check: allowed use, lease tax completeness, change-of-use feasibility.`,
 
     office: `
-METHODOLOGY: OFFICE — Yield-informed comparable model (Grade-based).
-
-VALUATION STEPS:
-1. Grade inference: modern/renovated = likely Grade B+; old/obsolete = Grade C.
-2. Estimate market rent: Athens CBD Grade A €18-28/sqm/month; Grade B €10-18/sqm/month; peripheral €7-12/sqm/month; Thessaloniki €8-15/sqm/month.
-3. Cap rate: Grade A Athens 5.5-7%; Grade B 7-9.5%; Grade C / secondary 9-13%.
-4. ESG / energy efficiency increasingly valued by institutional buyers.
-5. Cross-check sales comps.
-6. Vacancy risk: Athens CBD ~10-14% (2026 hybrid-work effect).
-7. Range: ±10-15% for clear grade; wider for ambiguous.`,
-
-    villa: `
-METHODOLOGY: VILLA — see above (same as villa case)`,
-
+METHODOLOGY: OFFICE — Yield-informed comparable (Grade-based).
+1. Grade inference from condition/description.
+2. Market rent: Athens CBD Grade A €18-28; Grade B €10-18; peripheral €7-12/sqm/month.
+3. Cap rate: Grade A 5.5-7%; Grade B 7-9.5%; Grade C 9-13%.
+4. Vacancy Athens CBD ~10-14% (2026 hybrid-work). Range: ±10-15%.
+Legal check: allowed use, building identity.`,
   };
-
-  const fallback = `
-METHODOLOGY: GENERAL PROPERTY — Comparable model with type-specific adjustments.
-Use the benchmark table above. Apply condition, location, and feature adjustments.
-Output wide range (±15-25%) given limited type-specific data. Liquidity: moderate (0.3-0.5).`;
 
   const auctionSuffix = isAuction ? `
 
-AUCTION OVERLAY — This is an AUCTION property. Apply auction-specific logic AFTER estimating clean market value:
+AUCTION OVERLAY — Apply AFTER estimating clean market value:
 - Estimate clean market value first (as if normal sale).
-- Then apply total auction discount = sum of:
-  * Liquidity discount: 5-15% (thin market = higher)
-  * Due diligence limitation: 3-8%
-  * Inspection uncertainty (no access): 3-10%
-  * Occupancy/eviction risk (if unclear): 5-20%
-  * Legal uncertainty (if data sparse): 3-12%
-  * Repair unknown discount: 2-8%
-- Total auction discount typically 15-45% from clean market value.
+- Total auction discount = sum of: liquidity 5-15%, due diligence 3-8%, inspection uncertainty 3-10%, occupancy/eviction risk 5-20%, legal uncertainty 3-12%, repair unknown 2-8%.
+- Typical total: 15-45% from clean market value.
 - Smaller discount: standard urban apartment, vacant, good photos, many comps.
-- Larger discount: occupied, no photos, special asset, island, commercial/industrial complexity.
-- Output both: estimated_market_value_if_clean AND auction_adjusted_value.
-- auction_adjusted_value = your primary output (estimatedValue).` : "";
+- Larger discount: occupied, no photos, special asset, island, industrial complexity.
+- Output: estimated_market_value_if_clean (= auctionAdjustedValue) AND auction-adjusted value (= estimatedValue).` : "";
+
+  const fallback = `
+METHODOLOGY: GENERAL PROPERTY — Comparable model with type-specific adjustments.
+Use benchmark table. Apply condition, location, feature adjustments. Range: ±15-25%. Liquidity: moderate 0.3-0.5.`;
 
   return (base[propertyType] || fallback) + auctionSuffix;
 }
@@ -236,6 +218,9 @@ Deno.serve(async (req) => {
       region, description, tags,
       ownershipStatus, ownershipPercentage,
       auctionCourt, plotSurface, condition,
+      isNeoclassical, isPreserved, distanceFromSea, withinCityPlan,
+      withinSettlement, buildingAllowance, coverageRatio, isBuildable,
+      cadastreNumber, hasLandConcession, landUse,
     } = body;
 
     if (!city || !sqm || !price) {
@@ -270,15 +255,33 @@ Deno.serve(async (req) => {
       tags?.length && `Tags: ${tags.join(", ")}`,
     ].filter(Boolean).join(" | ") || "standard specification";
 
+    // ── Legal/planning signals from listing data ────────────────────────────────
+    const legalSignals = [
+      cadastreNumber ? `Cadastre number: ${cadastreNumber} (KNOWN)` : "Cadastre: UNKNOWN",
+      withinCityPlan != null ? `Within city plan: ${withinCityPlan ? "YES" : "NO"}` : "City plan status: UNKNOWN",
+      withinSettlement != null ? `Within settlement: ${withinSettlement ? "YES" : "NO"}` : null,
+      isBuildable != null ? `Buildable: ${isBuildable ? "YES" : "NO"}` : "Buildability: UNKNOWN",
+      buildingAllowance ? `Building allowance (SD): ${buildingAllowance}` : "SD: UNKNOWN",
+      coverageRatio ? `Coverage ratio: ${coverageRatio}` : null,
+      isNeoclassical ? "Neoclassical (preservation risk)" : null,
+      isPreserved ? "Preserved building (protection constraint)" : null,
+      distanceFromSea != null ? `Distance from sea: ${distanceFromSea}m (coastal zone risk if <100m)` : null,
+      hasLandConcession ? "Has land concession" : null,
+      landUse ? `Land use: ${landUse}` : null,
+      ownershipStatus && ownershipStatus !== "full" ? `Partial/complex ownership: ${ownershipStatus}` : null,
+    ].filter(Boolean).join(" | ") || "No legal/planning fields available — use MODE 1 defaults";
+
     const listingDesc = description
       ? `Description excerpt: "${String(description).slice(0, 500)}"`
       : "";
 
     const typeInstructions = getTypeInstructions(propertyType || "apartment", listingType || "sale");
 
-    const prompt = `You are a senior Greek real estate valuation expert with RICS-equivalent credentials and deep knowledge of the 2026 Greek market. Your task is to produce a RIGOROUS, EVIDENCE-BASED valuation using the framework below.
+    const prompt = `You are a senior Greek real estate valuation expert (RICS-equivalent) specialising in the 2026 Greek market. Produce a RIGOROUS, EVIDENCE-BASED valuation including a legal/tax overlay layer.
 
 ${MARKET_BENCHMARKS}
+
+${LEGAL_TAX_FRAMEWORK}
 
 === PROPERTY TO VALUE ===
 Title: ${title || "Property"}
@@ -287,6 +290,7 @@ Type: ${propertyType || "apartment"} | Transaction: ${listingType || "sale"}
 Size: ${sqm} sqm
 Listed price: €${Number(price).toLocaleString()} (€${pricePerSqm ? Math.round(Number(pricePerSqm)) : Math.round(Number(price) / Number(sqm))}/sqm)
 Observed features: ${observedFeatures}
+Legal/planning signals: ${legalSignals}
 ${listingDesc}
 
 === METHODOLOGY TO APPLY ===
@@ -297,46 +301,53 @@ CRITICAL RULES:
 1. DO NOT echo the listed price as your estimate. Cross-reference against benchmarks.
 2. Output a RANGE, not false precision. Range width must reflect data quality.
 3. Apply TYPE-SPECIFIC logic — one formula for all types is wrong.
-4. Confidence must decrease with missing data, few comps, unclear location, special assets.
-5. Price growth is DECELERATING in 2026 — do not extrapolate past growth rates.
-6. Commercial behavior is DISTINCT from residential — do not conflate.
+4. Missing legal data = UNKNOWN, never assume clean title.
+5. Produce all four legal/tax scores using the scoring model above.
+6. execution_value = market_value minus transaction_friction minus legal_uncertainty_discount.
+7. Price growth is DECELERATING in 2026 — do not extrapolate past rates.
+8. Commercial behavior is DISTINCT from residential.
 
 Return ONLY valid JSON, no markdown, no explanation outside the JSON:
 
 {
-  "estimatedValue": number (primary valuation in EUR — auction-adjusted if auction, clean market if normal sale),
+  "estimatedValue": number (market value in EUR — auction-adjusted if auction),
   "rangeLow": number (conservative execution value),
   "rangeHigh": number (optimistic but supportable value),
-  "pricePerSqmEstimate": number (your 2026 benchmark €/sqm for this specific submarket),
-  "confidence": number (0–100 reflecting data completeness and comp quality),
+  "executionValue": number (market_value minus transaction friction and legal uncertainty discount),
+  "pricePerSqmEstimate": number (your 2026 benchmark €/sqm for this submarket),
+  "confidence": number (0–100),
   "confidenceLabel": "High" | "Medium" | "Low",
-  "liquidityScore": number (0–100; how executable is this asset: 90=central small apt; 20=remote island/obsolete industrial),
+  "liquidityScore": number (0–100),
   "marketComparison": "below_market" | "at_market" | "above_market",
   "marketComparisonPct": number (e.g. -12 = 12% below market; +8 = 8% above),
   "pricingPosition": "underpriced" | "fair" | "overpriced",
-  "methodUsed": "string (e.g. 'Comparable hedonic model — residential Athens center')",
-  "summary": "string (3–5 sentences: cite the specific €/sqm benchmark used, local 2026 trend, key premium/discount drivers, and what moves the needle most for this asset)",
+  "methodUsed": "string",
+  "valuationMode": "MODE_1_LISTING_ONLY" | "MODE_2_PUBLIC_ENRICHED",
+  "summary": "string (3–5 sentences: cite specific €/sqm benchmark, local 2026 trend, key drivers)",
   "keyFactors": [
-    {
-      "factor": "string (concise label)",
-      "impact": "positive" | "negative" | "neutral",
-      "note": "string (cite 2026 data point or reasoning — max 100 chars)"
-    }
+    { "factor": "string", "impact": "positive" | "negative" | "neutral", "note": "string (max 100 chars)" }
   ],
-  "renovationPotential": "string (quantified 2026 estimate or null if not applicable)",
-  "rentalYieldEstimate": number (2026 gross yield %, realistic for this submarket and type),
-  "highestBestUseHint": "string or null (only where genuinely relevant: e.g. 'Plot viable for 3-floor residential dev at SD 1.6' or 'Hotel conversion viable' — null if standard residential)",
-  "redFlags": ["string"] (array of red flags — empty array [] if none; trigger for: extreme ±30% from market, missing critical data for type, auction with no inspection, land marketed as buildable without evidence, etc.),
-  "auctionAdjustedValue": number | null (clean market value before auction discounts — only populated if listingType is auction, else null),
-  "listingQualityScore": number (0–100; data richness of this listing for valuation purposes: 100=all fields present; 40=basic fields only)
+  "legalCleanliness": number (0–100 — legal cleanliness score per framework above),
+  "planningCertainty": number (0–100 — planning certainty score per framework above),
+  "taxFriction": number (0–100 — tax/transfer friction score — higher = more friction),
+  "transferReadiness": number (0–100 — transfer readiness score per framework above),
+  "legalSummary": "string (2–3 sentences: key legal/planning signals observed, what is unknown, any red flags)",
+  "taxSummary": "string (1–2 sentences: estimated transfer tax burden and key friction factors)",
+  "objectiveValueProxy": number | null (rough ENFIA/objective value proxy in EUR — use for cross-check only; null if cannot estimate),
+  "renovationPotential": "string or null",
+  "rentalYieldEstimate": number (2026 gross yield %),
+  "highestBestUseHint": "string or null",
+  "redFlags": ["string"],
+  "auctionAdjustedValue": number | null (clean market value before auction discounts — only if auction, else null),
+  "listingQualityScore": number (0–100)
 }
 
-Rules for output:
-- keyFactors: 4–7 items; always include a 2026 market trend factor, a transaction cost factor, and a confidence/data factor
+Rules:
+- keyFactors: 4–7 items; always include a 2026 trend factor, transaction cost factor, and a legal/planning factor
 - confidenceLabel: High = 75+, Medium = 50–74, Low = <50
-- Range width: ±6-10% for urban apartment with strong data; ±15-25% for villa/land; ±20-40% for island/hotel/plot
-- liquidityScore: 80-100 = standard urban apartment; 60-80 = suburban/commercial; 40-60 = villa/vacation; 20-40 = island/land/industrial; 0-20 = hotel/special assets
-- Only return the JSON object. No other text.`;
+- legalCleanliness: reflects ONLY data available in the listing — do not fabricate certainty
+- Range width: ±6-10% urban apartment strong data; ±15-25% villa/land; ±20-40% island/hotel/plot
+- liquidityScore: 80-100 = standard urban apartment; 60-80 = suburban/commercial; 40-60 = villa/vacation; 20-40 = island/land/industrial; 0-20 = hotel/special`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -347,72 +358,55 @@ Rules for output:
       body: JSON.stringify({
         model: "google/gemini-2.5-pro",
         messages: [{ role: "user", content: prompt }],
-        temperature: 0.25,
+        temperature: 0.15,
+        max_tokens: 2000,
       }),
     });
 
     if (!response.ok) {
-      const status = response.status;
-      if (status === 429) return new Response(JSON.stringify({ error: "Rate limit exceeded. Try again later." }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      if (status === 402) return new Response(JSON.stringify({ error: "Usage limit reached." }), { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      throw new Error(`AI gateway error: ${status}`);
+      const txt = await response.text();
+      console.error("AI gateway error:", response.status, txt);
+      throw new Error(`AI gateway error: ${response.status}`);
     }
 
     const aiData = await response.json();
-    const raw = (aiData.choices?.[0]?.message?.content ?? "").trim();
+    let raw = aiData.choices?.[0]?.message?.content || "";
 
-    // ── JSON extraction and repair ─────────────────────────────────────────────
-    let jsonStr = raw.replace(/```json\s*/gi, "").replace(/```\s*/gi, "").trim();
-    const start = jsonStr.indexOf("{");
-    const end = jsonStr.lastIndexOf("}");
-    if (start !== -1 && end !== -1) jsonStr = jsonStr.slice(start, end + 1);
+    // JSON extraction + repair
+    const jsonMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/) || raw.match(/(\{[\s\S]*\})/);
+    if (jsonMatch) raw = jsonMatch[1] || jsonMatch[0];
+    raw = raw
+      .replace(/,\s*([}\]])/g, "$1")
+      .replace(/\)\s*}/g, "}")
+      .replace(/([{,]\s*)(\w+)\s*:/g, '$1"$2":')
+      .trim();
 
-    let parsed: any;
+    let result;
     try {
-      parsed = JSON.parse(jsonStr);
+      result = JSON.parse(raw);
     } catch {
-      const repaired = jsonStr
-        .replace(/,\s*}/g, "}").replace(/,\s*]/g, "]")
-        .replace(/\)\s*}/g, "}").replace(/\)\s*,/g, ",")
-        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
-      try { parsed = JSON.parse(repaired); }
-      catch { throw new Error("AI returned invalid JSON"); }
+      console.error("JSON parse failed:", raw.slice(0, 300));
+      throw new Error("Failed to parse AI response");
     }
 
-    // ── Sanitise output ───────────────────────────────────────────────────────
-    const result = {
-      estimatedValue: Math.round(Number(parsed.estimatedValue) || price),
-      rangeLow: Math.round(Number(parsed.rangeLow) || price * 0.88),
-      rangeHigh: Math.round(Number(parsed.rangeHigh) || price * 1.12),
-      pricePerSqmEstimate: Math.round(Number(parsed.pricePerSqmEstimate) || price / sqm),
-      confidence: Math.min(100, Math.max(0, Number(parsed.confidence) || 55)),
-      confidenceLabel: (["High","Medium","Low"].includes(parsed.confidenceLabel) ? parsed.confidenceLabel : "Medium") as "High"|"Medium"|"Low",
-      liquidityScore: Math.min(100, Math.max(0, Number(parsed.liquidityScore) || 50)),
-      marketComparison: (["below_market","at_market","above_market"].includes(parsed.marketComparison) ? parsed.marketComparison : "at_market") as string,
-      marketComparisonPct: Number(parsed.marketComparisonPct) || 0,
-      pricingPosition: (["underpriced","fair","overpriced"].includes(parsed.pricingPosition) ? parsed.pricingPosition : "fair") as string,
-      methodUsed: String(parsed.methodUsed || "").slice(0, 120),
-      summary: String(parsed.summary || "").slice(0, 600),
-      keyFactors: Array.isArray(parsed.keyFactors) ? parsed.keyFactors.slice(0, 7).map((f: any) => ({
-        factor: String(f.factor || "").slice(0, 60),
-        impact: (["positive","negative","neutral"].includes(f.impact) ? f.impact : "neutral") as "positive"|"negative"|"neutral",
-        note: String(f.note || "").slice(0, 120),
-      })) : [],
-      renovationPotential: parsed.renovationPotential ? String(parsed.renovationPotential).slice(0, 300) : null,
-      rentalYieldEstimate: Math.round((Number(parsed.rentalYieldEstimate) || 4.5) * 10) / 10,
-      highestBestUseHint: parsed.highestBestUseHint ? String(parsed.highestBestUseHint).slice(0, 250) : null,
-      redFlags: Array.isArray(parsed.redFlags) ? parsed.redFlags.slice(0, 5).map((s: any) => String(s).slice(0, 120)) : [],
-      auctionAdjustedValue: parsed.auctionAdjustedValue ? Math.round(Number(parsed.auctionAdjustedValue)) : null,
-      listingQualityScore: Math.min(100, Math.max(0, Number(parsed.listingQualityScore) || 50)),
-    };
+    // Ensure backwards-compatible fields
+    if (!result.executionValue) {
+      const discount = (100 - (result.legalCleanliness || 70)) / 100 * 0.1;
+      result.executionValue = Math.round(result.estimatedValue * (1 - 0.09 - discount));
+    }
+    if (!result.legalCleanliness) result.legalCleanliness = 50;
+    if (!result.planningCertainty) result.planningCertainty = 60;
+    if (!result.taxFriction) result.taxFriction = 30;
+    if (!result.transferReadiness) result.transferReadiness = 55;
+    if (!result.valuationMode) result.valuationMode = "MODE_1_LISTING_ONLY";
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (e) {
-    console.error("property-valuation error:", e);
+  } catch (err) {
+    console.error("property-valuation error:", err);
     return new Response(
-      JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
+      JSON.stringify({ error: err instanceof Error ? err.message : "Unknown error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
