@@ -228,33 +228,7 @@ export default function Dashboard() {
 
           {/* SAVED */}
           {activeSection === "saved" && (
-            <div className="space-y-6">
-              <h1 className="font-display text-2xl font-bold">Saved Properties</h1>
-              {favLoading ? (
-                <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
-              ) : favorites.length === 0 ? (
-                <div className="glass-card rounded-xl p-12 text-center">
-                  <Heart className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-                  <p className="font-semibold">No saved properties</p>
-                  <p className="text-sm text-muted-foreground mt-1">Browse listings and save your favorites</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {favorites.map((f: any) => f.listings && (
-                    <div key={f.id} className="glass-card rounded-xl overflow-hidden">
-                      <img src={f.listings.cover_image_url || "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400&q=60"} alt="" className="w-full h-40 object-cover" />
-                      <div className="p-4">
-                        <p className="font-semibold text-sm">{f.listings.title}</p>
-                        <p className="text-xs text-muted-foreground">{f.listings.city} · €{Number(f.listings.price).toLocaleString()}</p>
-                        <Button size="sm" variant="outline" className="border-border mt-3 w-full text-xs" asChild>
-                          <Link to={`/property/${f.listing_id}`}>View Property</Link>
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <SavedPropertiesSection favorites={favorites} favLoading={favLoading} />
           )}
 
           {/* MESSAGES */}
