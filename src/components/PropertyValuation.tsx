@@ -2,7 +2,7 @@ import { useState } from "react";
 import {
   Zap, TrendingUp, TrendingDown, Minus, Loader2,
   ChevronDown, ChevronUp, Info, AlertTriangle, Lightbulb,
-  BarChart3, Droplets,
+  BarChart3, Droplets, Scale, MapPin, Receipt, FileCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -14,6 +14,7 @@ interface ValuationResult {
   estimatedValue: number;
   rangeLow: number;
   rangeHigh: number;
+  executionValue: number;
   pricePerSqmEstimate: number;
   confidence: number;
   confidenceLabel: "High" | "Medium" | "Low";
@@ -22,8 +23,16 @@ interface ValuationResult {
   marketComparisonPct: number;
   pricingPosition: "underpriced" | "fair" | "overpriced";
   methodUsed: string;
+  valuationMode: "MODE_1_LISTING_ONLY" | "MODE_2_PUBLIC_ENRICHED";
   summary: string;
   keyFactors: { factor: string; impact: "positive" | "negative" | "neutral"; note: string }[];
+  legalCleanliness: number;
+  planningCertainty: number;
+  taxFriction: number;
+  transferReadiness: number;
+  legalSummary: string;
+  taxSummary: string;
+  objectiveValueProxy: number | null;
   renovationPotential: string | null;
   rentalYieldEstimate: number;
   highestBestUseHint: string | null;
@@ -63,20 +72,25 @@ export interface PropertyValuationProps {
   auctionCourt?: string | null;
   plotSurface?: number | null;
   condition?: string | null;
+  isNeoclassical?: boolean | null;
+  isPreserved?: boolean | null;
+  distanceFromSea?: number | null;
+  withinCityPlan?: boolean | null;
+  withinSettlement?: boolean | null;
+  buildingAllowance?: number | null;
+  coverageRatio?: number | null;
+  isBuildable?: boolean | null;
+  cadastreNumber?: string | null;
+  hasLandConcession?: boolean | null;
+  landUse?: string | null;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 function ScoreRing({
-  score,
-  label,
-  colour,
-  size = 56,
+  score, label, colour, size = 56,
 }: {
-  score: number;
-  label: string;
-  colour: string;
-  size?: number;
+  score: number; label: string; colour: string; size?: number;
 }) {
   const r = size / 2 - 5;
   const c = 2 * Math.PI * r;
@@ -104,7 +118,12 @@ function scoreColour(score: number) {
   if (score >= 45) return "#eab308";
   return "#ef4444";
 }
-
+function frictionColour(score: number) {
+  // for taxFriction: lower = better (green), higher = worse (red)
+  if (score <= 25) return "#22c55e";
+  if (score <= 50) return "#eab308";
+  return "#ef4444";
+}
 function liquidityColour(score: number) {
   if (score >= 65) return "#22c55e";
   if (score >= 35) return "#f97316";
@@ -123,7 +142,34 @@ const PRICING_CONFIG = {
   overpriced:  { label: "Overpriced",   colour: "text-red-400",     bg: "bg-red-400/10 border-red-400/25" },
 };
 
+const MODE_LABEL: Record<string, string> = {
+  MODE_1_LISTING_ONLY: "Listing-only",
+  MODE_2_PUBLIC_ENRICHED: "Public-enriched",
+};
+
 function fmt(n: number) { return n.toLocaleString("el-GR"); }
+
+// ── Mini score bar ─────────────────────────────────────────────────────────────
+function ScoreBar({ label, score, invert = false, icon }: { label: string; score: number; invert?: boolean; icon: React.ReactNode }) {
+  const colour = invert ? frictionColour(score) : scoreColour(score);
+  const pct = invert ? Math.max(0, 100 - score) : score; // bar fill opposite for friction
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between">
+        <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-medium">
+          {icon}{label}
+        </span>
+        <span className="text-[10px] font-bold" style={{ color: colour }}>{score}/100</span>
+      </div>
+      <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
+        <div
+          className="h-full rounded-full transition-all"
+          style={{ width: `${pct}%`, backgroundColor: colour }}
+        />
+      </div>
+    </div>
+  );
+}
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
@@ -167,7 +213,7 @@ export default function PropertyValuation(props: PropertyValuationProps) {
         {!result && (
           <div className="text-center space-y-3">
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Type-specific AI valuation using 2026 Greek market benchmarks — price range, confidence score, liquidity rating, and key value drivers.
+              Type-specific AI valuation — price range, confidence, liquidity, and Greek legal/tax overlay (legal cleanliness, planning certainty, transfer readiness).
             </p>
             <Button
               className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2"
@@ -204,19 +250,27 @@ export default function PropertyValuation(props: PropertyValuationProps) {
               </div>
               <div className="flex gap-3 shrink-0">
                 <ScoreRing score={result.confidence} label="Confidence" colour={scoreColour(result.confidence)} />
-                <ScoreRing score={result.liquidityScore} label="Liquidity" colour={liquidityColour(result.liquidityScore)} size={56} />
+                <ScoreRing score={result.liquidityScore} label="Liquidity" colour={liquidityColour(result.liquidityScore)} />
               </div>
             </div>
 
-            {/* Auction clean market value (if auction) */}
+            {/* Execution value */}
+            {result.executionValue && result.executionValue !== result.estimatedValue && (
+              <div className="bg-secondary/60 border border-border rounded-xl px-3 py-2 text-xs flex items-center justify-between">
+                <span className="text-muted-foreground">Execution value (after costs & legal)</span>
+                <span className="font-bold text-foreground">€{fmt(result.executionValue)}</span>
+              </div>
+            )}
+
+            {/* Auction clean market value */}
             {result.auctionAdjustedValue && (
-              <div className="bg-amber-500/8 border border-amber-500/20 rounded-xl px-3 py-2 text-xs">
-                <span className="text-muted-foreground">Clean market value (pre-auction): </span>
+              <div className="bg-amber-500/8 border border-amber-500/20 rounded-xl px-3 py-2 text-xs flex items-center justify-between">
+                <span className="text-muted-foreground">Clean market value (pre-auction)</span>
                 <span className="font-bold text-amber-400">€{fmt(result.auctionAdjustedValue)}</span>
               </div>
             )}
 
-            {/* Pricing position badge */}
+            {/* Pricing position */}
             {pricing && (
               <div className={`flex items-center justify-between px-3 py-2 rounded-xl border ${pricing.bg}`}>
                 <span className={`text-xs font-semibold ${pricing.colour}`}>{pricing.label}</span>
@@ -234,6 +288,55 @@ export default function PropertyValuation(props: PropertyValuationProps) {
               </span>
             </div>
 
+            {/* ── LEGAL/TAX OVERLAY ── */}
+            <div className="bg-secondary/40 border border-border rounded-xl p-3.5 space-y-3">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Scale className="w-3 h-3" /> Legal &amp; Tax Overlay
+                {result.valuationMode && (
+                  <span className="ml-auto font-normal text-muted-foreground/60 normal-case tracking-normal">
+                    {MODE_LABEL[result.valuationMode] || result.valuationMode}
+                  </span>
+                )}
+              </p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                <ScoreBar
+                  label="Legal Cleanliness"
+                  score={result.legalCleanliness}
+                  icon={<Scale className="w-3 h-3" />}
+                />
+                <ScoreBar
+                  label="Planning Certainty"
+                  score={result.planningCertainty}
+                  icon={<MapPin className="w-3 h-3" />}
+                />
+                <ScoreBar
+                  label="Tax Friction"
+                  score={result.taxFriction}
+                  invert
+                  icon={<Receipt className="w-3 h-3" />}
+                />
+                <ScoreBar
+                  label="Transfer Readiness"
+                  score={result.transferReadiness}
+                  icon={<FileCheck className="w-3 h-3" />}
+                />
+              </div>
+              {result.legalSummary && (
+                <p className="text-[10px] text-muted-foreground leading-relaxed border-t border-border pt-2.5">
+                  {result.legalSummary}
+                </p>
+              )}
+              {result.taxSummary && (
+                <p className="text-[10px] text-muted-foreground leading-relaxed">{result.taxSummary}</p>
+              )}
+              {result.objectiveValueProxy && (
+                <div className="flex items-center justify-between text-[10px] border-t border-border pt-2.5">
+                  <span className="text-muted-foreground">Objective value proxy (ENFIA/tax ref)</span>
+                  <span className="font-semibold text-muted-foreground">≈ €{fmt(result.objectiveValueProxy)}</span>
+                </div>
+              )}
+            </div>
+
             {/* Rental yield + listing quality */}
             <div className="grid grid-cols-2 gap-2">
               <div className="flex items-center justify-between text-xs bg-secondary/50 rounded-lg px-2.5 py-2">
@@ -248,7 +351,7 @@ export default function PropertyValuation(props: PropertyValuationProps) {
               </div>
             </div>
 
-            {/* Red flags (if any) */}
+            {/* Red flags */}
             {result.redFlags.length > 0 && (
               <div className="bg-red-500/8 border border-red-500/20 rounded-xl p-3 space-y-1.5">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-red-400 flex items-center gap-1.5">
@@ -276,7 +379,6 @@ export default function PropertyValuation(props: PropertyValuationProps) {
             {expanded && (
               <div className="space-y-4 border-t border-border pt-4">
 
-                {/* Method used */}
                 {result.methodUsed && (
                   <div className="flex items-center gap-1.5">
                     <BarChart3 className="w-3 h-3 text-muted-foreground shrink-0" />
@@ -284,10 +386,8 @@ export default function PropertyValuation(props: PropertyValuationProps) {
                   </div>
                 )}
 
-                {/* Summary */}
                 <p className="text-xs text-muted-foreground leading-relaxed">{result.summary}</p>
 
-                {/* Key factors */}
                 {result.keyFactors.length > 0 && (
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Key Value Drivers</p>
@@ -307,7 +407,6 @@ export default function PropertyValuation(props: PropertyValuationProps) {
                   </div>
                 )}
 
-                {/* Renovation potential */}
                 {result.renovationPotential && (
                   <div className="flex items-start gap-2 bg-secondary rounded-xl p-3">
                     <Droplets className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
@@ -318,7 +417,6 @@ export default function PropertyValuation(props: PropertyValuationProps) {
                   </div>
                 )}
 
-                {/* Highest & best use hint */}
                 {result.highestBestUseHint && (
                   <div className="flex items-start gap-2 bg-primary/5 border border-primary/20 rounded-xl p-3">
                     <Lightbulb className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
@@ -329,7 +427,6 @@ export default function PropertyValuation(props: PropertyValuationProps) {
                   </div>
                 )}
 
-                {/* Confidence interpretation */}
                 <div className="flex items-start gap-2 bg-secondary/60 rounded-xl p-3">
                   <Info className="w-3.5 h-3.5 text-muted-foreground shrink-0 mt-0.5" />
                   <p className="text-[10px] text-muted-foreground leading-relaxed">
@@ -339,10 +436,10 @@ export default function PropertyValuation(props: PropertyValuationProps) {
                       ? "Usable estimate — some missing fields reduce precision. Range reflects uncertainty."
                       : "Low-confidence estimate — limited data. Treat range as indicative only."}
                     {" "}Liquidity: {result.liquidityScore >= 65 ? "high" : result.liquidityScore >= 35 ? "moderate" : "low"} for this asset type.
+                    {" "}Legal data: {result.legalCleanliness >= 70 ? "appears clean" : result.legalCleanliness >= 45 ? "some unknowns" : "significant unknowns — verify before proceeding"}.
                   </p>
                 </div>
 
-                {/* Rerun */}
                 <button
                   onClick={runValuation}
                   disabled={loading}
@@ -355,7 +452,7 @@ export default function PropertyValuation(props: PropertyValuationProps) {
             )}
 
             <p className="text-[10px] text-muted-foreground text-center leading-relaxed">
-              AI estimate only · Not a formal appraisal · 2026 Greek market model
+              AI estimate only · Not a formal appraisal · 2026 Greek market + legal overlay model
             </p>
           </div>
         )}
