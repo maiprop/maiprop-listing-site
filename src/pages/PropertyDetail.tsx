@@ -1199,6 +1199,8 @@ export default function PropertyDetail() {
                   region={db?.region}
                   description={db?.description}
                   tags={db?.tags}
+                  ownershipStatus={ownershipStatus ?? undefined}
+                  ownershipPercentage={ownershipPct ?? undefined}
                   auctionCourt={db?.auction_court}
                   plotSurface={db?.plot_surface}
                   isNeoclassical={db?.is_neoclassical}
