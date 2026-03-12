@@ -660,7 +660,6 @@ export default function Auctions() {
                 </div>{/* end grid */}
               </div>{/* end standard filters */}
 
-              {/* Pro filters */}
               <div className="pt-1 border-t border-border">
                 <div className="flex items-center gap-2 mb-3">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Pro Filters</p>
