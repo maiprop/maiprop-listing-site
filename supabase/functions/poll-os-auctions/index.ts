@@ -165,7 +165,6 @@ function mapAuctionToListing(a: any) {
       total_floors: a.numberOfFloors != null ? Math.round(Number(a.numberOfFloors)) : null,
       year_built: a.constructionYear != null ? Number(a.constructionYear) : null,
       cadastre_number: a.propertyFullKaek ?? null,
-      cover_image_url: null,
       owner_id: null,
       ai_score: 80,
       tags: [
