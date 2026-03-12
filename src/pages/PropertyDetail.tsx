@@ -220,7 +220,7 @@ export default function PropertyDetail() {
   const [aiInsightsLoaded, setAiInsightsLoaded] = useState(false);
 
   useEffect(() => {
-    if (!dbListing || aiInsightsLoaded) return;
+    if (!dbListing || aiInsightsLoaded || !isPro) return;
     setAiInsightsLoaded(true);
     setAiInsightsLoading(true);
     const invokeValuation = async () => {
