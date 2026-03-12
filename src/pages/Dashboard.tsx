@@ -20,6 +20,116 @@ import { PropertyCard } from "@/components/PropertyCard";
 import ProfessionalServicesEditor from "@/components/ProfessionalServicesEditor";
 import { toast } from "sonner";
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function dbListingToCard(l: any) {
+  return {
+    id: l.id,
+    title: l.title,
+    address: l.address || l.city,
+    city: l.city,
+    price: Number(l.price),
+    pricePerSqm: l.price_per_sqm ? Number(l.price_per_sqm) : undefined,
+    bedrooms: l.bedrooms ?? undefined,
+    bathrooms: l.bathrooms ?? undefined,
+    sqm: Number(l.sqm),
+    floor: l.floor ?? undefined,
+    totalFloors: l.total_floors ?? undefined,
+    yearBuilt: l.year_built ?? undefined,
+    energyClass: l.energy_class ?? undefined,
+    images: [
+      ...(l.cover_image_url ? [l.cover_image_url] : []),
+      ...(l.listing_images?.map((img: any) => img.url) || []),
+    ].filter(Boolean),
+    type: l.property_type as any,
+    listingType: l.listing_type as any,
+    auctionDate: l.auction_date ? new Date(l.auction_date).toLocaleDateString("en-GB") : undefined,
+    auctionStartingBid: l.auction_starting_bid ? Number(l.auction_starting_bid) : undefined,
+    aiScore: l.ai_score ?? undefined,
+    views: l.views_count ?? undefined,
+    tags: (l.tags || []).filter(Boolean) as string[],
+    hasVideo: l.has_video_tour,
+    hasVirtualTour: l.has_virtual_tour,
+  };
+}
+
+const SAVED_TABS = [
+  { label: "All", value: "" },
+  { label: "Sale", value: "sale" },
+  { label: "Rent", value: "rent" },
+  { label: "Auction", value: "auction" },
+  { label: "Quick Sale", value: "firesale" },
+] as const;
+
+function SavedPropertiesSection({ favorites, favLoading }: { favorites: any[]; favLoading: boolean }) {
+  const [tab, setTab] = useState<string>("");
+
+  const filtered = favorites.filter((f: any) => {
+    if (!f.listings) return false;
+    if (!tab) return true;
+    return f.listings.listing_type === tab;
+  });
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="font-display text-2xl font-bold">Saved Properties</h1>
+          <p className="text-sm text-muted-foreground mt-1">{favorites.length} saved</p>
+        </div>
+        <Button variant="outline" className="border-border gap-2 text-sm" asChild>
+          <Link to="/listings"><Search className="w-4 h-4" /> Browse More</Link>
+        </Button>
+      </div>
+
+      {/* Filter tabs */}
+      <div className="flex gap-2 flex-wrap">
+        {SAVED_TABS.map(t => (
+          <button
+            key={t.value}
+            onClick={() => setTab(t.value)}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+              tab === t.value
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-secondary text-muted-foreground border-border hover:border-primary/40 hover:text-foreground"
+            }`}
+          >
+            {t.label}
+            {t.value && (
+              <span className="ml-1.5 text-xs opacity-60">
+                {favorites.filter(f => f.listings?.listing_type === t.value).length}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {favLoading ? (
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-6 h-6 animate-spin text-primary" />
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="glass-card rounded-xl p-12 text-center">
+          <Heart className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+          <p className="font-semibold">
+            {tab ? `No saved ${tab} properties` : "No saved properties yet"}
+          </p>
+          <p className="text-sm text-muted-foreground mt-1">Browse listings and tap the heart to save</p>
+          <Button variant="outline" className="border-border mt-4" asChild>
+            <Link to="/listings">Browse Listings</Link>
+          </Button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {filtered.map((f: any) => (
+            <PropertyCard key={f.id} property={dbListingToCard(f.listings)} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const navItems = [
   { icon: Home, label: "Overview", key: "overview" },
   { icon: Building2, label: "My Listings", key: "listings" },
@@ -228,33 +338,7 @@ export default function Dashboard() {
 
           {/* SAVED */}
           {activeSection === "saved" && (
-            <div className="space-y-6">
-              <h1 className="font-display text-2xl font-bold">Saved Properties</h1>
-              {favLoading ? (
-                <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
-              ) : favorites.length === 0 ? (
-                <div className="glass-card rounded-xl p-12 text-center">
-                  <Heart className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-                  <p className="font-semibold">No saved properties</p>
-                  <p className="text-sm text-muted-foreground mt-1">Browse listings and save your favorites</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {favorites.map((f: any) => f.listings && (
-                    <div key={f.id} className="glass-card rounded-xl overflow-hidden">
-                      <img src={f.listings.cover_image_url || "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400&q=60"} alt="" className="w-full h-40 object-cover" />
-                      <div className="p-4">
-                        <p className="font-semibold text-sm">{f.listings.title}</p>
-                        <p className="text-xs text-muted-foreground">{f.listings.city} · €{Number(f.listings.price).toLocaleString()}</p>
-                        <Button size="sm" variant="outline" className="border-border mt-3 w-full text-xs" asChild>
-                          <Link to={`/property/${f.listing_id}`}>View Property</Link>
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <SavedPropertiesSection favorites={favorites} favLoading={favLoading} />
           )}
 
           {/* MESSAGES */}
