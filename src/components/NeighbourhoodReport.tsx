@@ -128,10 +128,10 @@ function MiniChart({ trend }: { trend: PriceTrend }) {
             >
               €{p.val >= 1000 ? `${(p.val / 1000).toFixed(1)}k` : p.val}
             </text>
-            {/* Year label directly under each dot */}
+            {/* Year label — placed inside padBottom zone, fully visible */}
             <text
               x={clampX(xs[i], i)}
-              y={h - 0}
+              y={h - 4}
               textAnchor="middle"
               fontSize="7.5"
               fontWeight={p.year === String(currentYear) ? "700" : "400"}
