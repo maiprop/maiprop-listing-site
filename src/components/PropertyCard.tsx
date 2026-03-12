@@ -209,14 +209,6 @@ export function PropertyCard({ property, compact = false }: PropertyCardProps) {
           >
             <Heart className={`w-4 h-4 transition-all ${isFavorited ? "fill-current" : ""}`} />
           </button>
-          {/* Share button */}
-          <button
-            className="w-9 h-9 rounded-full flex items-center justify-center shadow-lg bg-white/90 backdrop-blur-sm text-foreground hover:bg-white hover:scale-105 transition-all duration-200 active:scale-90"
-            onClick={handleShare}
-            aria-label="Share property"
-          >
-            <Share2 className="w-4 h-4" />
-          </button>
         </div>
 
         {/* Price block — bottom-left overlay */}
