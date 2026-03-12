@@ -22,51 +22,44 @@ function isElementInViewport(el: Element): boolean {
 export function useInView<T extends Element = HTMLDivElement>(
   options: UseInViewOptions = {}
 ) {
-  const { threshold = 0.01, rootMargin = "0px 0px 400px 0px", once = true } = options;
+  const { threshold = 0.01, rootMargin = "0px 0px 600px 0px", once = true } = options;
   const ref = useRef<T>(null);
-  const [inView, setInView] = useState(false);
+  // Default to true — elements start visible, then we only hide if they're truly off-screen
+  const [inView, setInView] = useState(true);
 
   useEffect(() => {
-    // Use rAF so elements have real dimensions after first browser paint
-    const raf = requestAnimationFrame(() => {
-      const el = ref.current;
-      if (!el) return;
+    const el = ref.current;
+    if (!el) return;
 
-      if (isElementInViewport(el)) {
-        setInView(true);
-        return;
-      }
+    // If already in viewport (or close to it), stay visible immediately
+    if (isElementInViewport(el)) {
+      setInView(true);
+      return;
+    }
 
-      const observer = new IntersectionObserver(
-        ([entry]) => {
-          if (entry.isIntersecting) {
-            setInView(true);
-            if (once) observer.unobserve(entry.target);
-          } else if (!once) {
-            setInView(false);
-          }
-        },
-        { threshold, rootMargin }
-      );
+    // Element is genuinely below the fold — hide it and observe
+    setInView(false);
 
-      observer.observe(el);
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setInView(true);
+          if (once) observer.unobserve(entry.target);
+        } else if (!once) {
+          setInView(false);
+        }
+      },
+      { threshold, rootMargin }
+    );
 
-      // Hard fallback: reveal after 500ms regardless
-      const fallback = setTimeout(() => setInView(true), 500);
+    observer.observe(el);
 
-      // Note: cleanup for observer/fallback runs on component unmount via the outer effect
-      // We store them on the element to clean up
-      (el as any).__inViewObserver = observer;
-      (el as any).__inViewFallback = fallback;
-    });
+    // Hard fallback: reveal after 800ms regardless
+    const fallback = setTimeout(() => setInView(true), 800);
 
     return () => {
-      cancelAnimationFrame(raf);
-      const el = ref.current;
-      if (el) {
-        (el as any).__inViewObserver?.disconnect();
-        clearTimeout((el as any).__inViewFallback);
-      }
+      observer.disconnect();
+      clearTimeout(fallback);
     };
   }, [threshold, rootMargin, once]);
 
