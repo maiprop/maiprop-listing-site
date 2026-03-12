@@ -262,7 +262,12 @@ export default function PropertyDetail() {
     ...(db.cover_image_url ? [db.cover_image_url] : []),
     ...((dbListing as any).listing_images?.map((img: any) => img.url) || []),
   ];
-  const images = dbImages.length ? dbImages : ["https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&q=60"];
+  // For auctions, never fall back to stock photos — only show real images
+  const images = dbImages.length
+    ? dbImages
+    : isAuction
+      ? []
+      : ["https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&q=60"];
 
   // ── Feature groups ──────────────────────────────────────────────────────────
   const internalFeatures: { icon?: any; label: string }[] = [];
@@ -332,13 +337,10 @@ export default function PropertyDetail() {
     .slice(0, 4);
 
   // AI Market Insights — only show if db has an ai_score
-  const hasAIScore = db.ai_score != null;
-  const aiInsights = hasAIScore ? [
-    { label: "Investment Score", value: `${db.ai_score}`, unit: "/100", trend: "AI-assessed", color: "text-primary" },
-    { label: "vs Market", value: "-8%", unit: "below avg", trend: "Good deal", color: "text-brand-emerald" },
-    { label: "Rental Yield", value: "4.8%", unit: "p.a. est.", trend: "Stable", color: "text-brand-gold" },
-    { label: "Capital Growth", value: "+12%", unit: "5yr", trend: "Athens avg +9%", color: "text-accent" },
-  ] : null;
+  const hasAIScore = db.ai_score != null && db.ai_score > 0;
+  const aiInsights = hasAIScore
+    ? [{ label: "Investment Score", value: `${db.ai_score}`, unit: "/100", trend: "AI-assessed", color: "text-primary" }]
+    : null;
 
   // Build property details rows grouped
   const detailRows: { label: string; value: string }[] = [
@@ -405,11 +407,18 @@ export default function PropertyDetail() {
 
               {/* ── Gallery ── */}
               <div className="relative rounded-2xl overflow-hidden aspect-[16/9] bg-secondary group shadow-elevated">
-                <img
-                  src={images[currentImage] || images[0]}
-                  alt={title}
-                  className="w-full h-full object-cover transition-opacity duration-300"
-                />
+                {images.length > 0 ? (
+                  <img
+                    src={images[currentImage] || images[0]}
+                    alt={title}
+                    className="w-full h-full object-cover transition-opacity duration-300"
+                  />
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-secondary">
+                    <Gavel className="w-12 h-12 text-muted-foreground/30" />
+                    <p className="text-xs text-muted-foreground">No photos available for this auction</p>
+                  </div>
+                )}
 
                 {/* Badges */}
                 <div className="absolute top-4 left-4 flex gap-2">
@@ -446,15 +455,19 @@ export default function PropertyDetail() {
                   </button>
                 </div>
 
-                {/* Counter + views */}
-                <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-background/60 to-transparent pointer-events-none" />
-                <div className="absolute bottom-3 right-4 bg-background/70 backdrop-blur-md px-2.5 py-1 rounded-full text-xs font-medium">
-                  {currentImage + 1} / {images.length}
-                </div>
-                <div className="absolute bottom-3 left-4 flex items-center gap-1.5 bg-background/70 backdrop-blur-md px-2.5 py-1 rounded-full text-xs">
-                  <Eye className="w-3 h-3 text-muted-foreground" />
-                  <span>{db.views_count || 0} views</span>
-                </div>
+                {/* Counter + views — only when photos exist */}
+                {images.length > 0 && (
+                  <>
+                    <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-background/60 to-transparent pointer-events-none" />
+                    <div className="absolute bottom-3 right-4 bg-background/70 backdrop-blur-md px-2.5 py-1 rounded-full text-xs font-medium">
+                      {currentImage + 1} / {images.length}
+                    </div>
+                    <div className="absolute bottom-3 left-4 flex items-center gap-1.5 bg-background/70 backdrop-blur-md px-2.5 py-1 rounded-full text-xs">
+                      <Eye className="w-3 h-3 text-muted-foreground" />
+                      <span>{db.views_count || 0} views</span>
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Thumbnails */}
@@ -833,8 +846,8 @@ export default function PropertyDetail() {
                 </div>
               </Section>
 
-              {/* ── Similar properties ── */}
-              {similarListings.length > 0 && (
+              {/* ── Similar properties — only when ≥ 2 ── */}
+              {similarListings.length >= 2 && (
                 <div className="space-y-4">
                   <h3 className="font-display font-semibold flex items-center gap-2">
                     Similar{subtype ? ` ${getSubtypeLabel(propertyType, subtype)}` : ""} in {city}
@@ -951,15 +964,17 @@ export default function PropertyDetail() {
                         <Bell className="w-4 h-4" />
                         Set Auction Alert
                       </Button>
-                      <a
-                        href={db.auction_court ? `https://www.eauction.gr` : "#"}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        <Button variant="outline" className="w-full border-border gap-2 h-9 text-xs">
-                          <ExternalLink className="w-3.5 h-3.5" />View on eAuction.gr
-                        </Button>
-                      </a>
+                      {websiteUrl && (
+                        <a
+                          href={websiteUrl.startsWith("http") ? websiteUrl : `https://${websiteUrl}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <Button variant="outline" className="w-full border-border gap-2 h-9 text-xs">
+                            <ExternalLink className="w-3.5 h-3.5" />View on eAuction.gr
+                          </Button>
+                        </a>
+                      )}
                     </>
                   ) : (
                     <>
