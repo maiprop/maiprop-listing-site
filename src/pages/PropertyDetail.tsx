@@ -824,6 +824,27 @@ export default function PropertyDetail() {
                         <p className="font-display font-bold text-sm">€{price.toLocaleString()}</p>
                       </div>
                     </div>
+
+                    {/* Ownership status row */}
+                    {ownershipDisplay && (
+                      <div className="flex items-center justify-between rounded-xl bg-secondary border border-border px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <Building2 className="w-4 h-4 text-muted-foreground" />
+                          <span className="text-xs text-muted-foreground font-medium">Ownership Status</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${ownershipDisplay.cls}`}>
+                            {ownershipDisplay.label}
+                          </span>
+                          {ownershipPct != null && ownershipStatus !== "full" && (
+                            <span className="text-xs font-bold text-muted-foreground bg-muted px-2 py-1 rounded-full border border-border">
+                              {ownershipPct}%
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
                     {db.auction_court && (
                       <div>
                         <p className="text-xs text-muted-foreground mb-1">Court / Platform</p>
