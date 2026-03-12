@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import {
   MapPin, Bed, Bath, Square, Heart, Share2, Phone, MessageSquare,
   Calendar, Video, ChevronLeft, ChevronRight, Star, TrendingUp,
@@ -185,10 +185,18 @@ function DetailRow({ label, value }: { label: string; value: string | number }) 
 export default function PropertyDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
 
   const { data: dbListing, isLoading } = useListing(id || "");
   const { data: dbSimilar = [] } = useListings({ city: dbListing?.city, property_type: dbListing?.property_type });
+
+  // Redirect: if auction opened via /property/:id, send to /auction/:id
+  useEffect(() => {
+    if (dbListing && dbListing.listing_type === "auction" && location.pathname.startsWith("/property/")) {
+      navigate(`/auction/${id}`, { replace: true });
+    }
+  }, [dbListing, location.pathname, id, navigate]);
 
   const [currentImage, setCurrentImage] = useState(0);
   const [viewingOpen, setViewingOpen] = useState(false);
@@ -369,7 +377,7 @@ export default function PropertyDetail() {
   const hasAnyFeatures = internalFeatures.length + externalFeatures.length + constructionFeatures.length + suitabilityFeatures.length > 0;
 
   const similarListings = (dbSimilar as any[])
-    .filter((l: any) => l.id !== id)
+    .filter((l: any) => l.id !== id && (isAuction ? l.listing_type === "auction" : l.listing_type !== "auction"))
     .sort((a, b) => {
       const aMatch = subtype && (a.commercial_subtype === subtype) ? 1 : 0;
       const bMatch = subtype && (b.commercial_subtype === subtype) ? 1 : 0;
@@ -432,9 +440,17 @@ export default function PropertyDetail() {
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Link to="/" className="hover:text-foreground transition-colors">Home</Link>
             <ChevronRight className="w-3 h-3" />
-            <Link to="/listings" className="hover:text-foreground transition-colors">Listings</Link>
+            {isAuction ? (
+              <Link to="/auctions" className="hover:text-foreground transition-colors">Auctions</Link>
+            ) : (
+              <Link to="/listings" className="hover:text-foreground transition-colors">Listings</Link>
+            )}
             <ChevronRight className="w-3 h-3" />
-            <Link to={`/listings?city=${city}`} className="hover:text-foreground transition-colors">{city}</Link>
+            {isAuction ? (
+              <Link to={`/auctions?city=${city}`} className="hover:text-foreground transition-colors">{city}</Link>
+            ) : (
+              <Link to={`/listings?city=${city}`} className="hover:text-foreground transition-colors">{city}</Link>
+            )}
             <ChevronRight className="w-3 h-3" />
             <span className="text-foreground truncate max-w-[240px] font-medium">{title}</span>
           </div>

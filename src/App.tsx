@@ -51,6 +51,7 @@ const App = () => (
               <Route path="/listings/new" element={<ProtectedRoute><CreateListing /></ProtectedRoute>} />
               <Route path="/listings" element={<Listings />} />
               <Route path="/property/:id" element={<PropertyDetail />} />
+              <Route path="/auction/:id" element={<PropertyDetail />} />
               <Route path="/auctions" element={<Auctions />} />
               <Route path="/firesale" element={<Firesale />} />
               <Route path="/investor-dashboard" element={<InvestorDashboard />} />
