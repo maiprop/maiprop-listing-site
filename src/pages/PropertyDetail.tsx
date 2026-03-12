@@ -1223,12 +1223,12 @@ export default function PropertyDetail() {
                         Deep-dive: Area trends, comparable sales, property specifics analysis, and charts.
                       </p>
                       <div className="grid grid-cols-2 gap-2 mb-4">
-                        {["Cadastre Verification", "5-Year Price History", "Comparable Sales", "Investment Projection", "Legal Status Check", "Neighborhood Score"].map((item) => {}
-
-
-
-
-                        )}
+                        {["Cadastre Verification", "5-Year Price History", "Comparable Sales", "Investment Projection", "Legal Status Check", "Neighborhood Score"].map((item) => (
+                          <div key={item} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <span className="w-1.5 h-1.5 rounded-full bg-brand-gold shrink-0" />
+                            {item}
+                          </div>
+                        ))}
                       </div>
                       {!reportPurchased ?
                       <div className="flex items-center gap-3 flex-wrap">
