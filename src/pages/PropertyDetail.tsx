@@ -1183,9 +1183,9 @@ export default function PropertyDetail() {
                   bathrooms={bathrooms}
                   propertyType={propertyType}
                   listingType={db?.listing_type}
-                  floor={floor}
+                  floor={db?.floor}
                   totalFloors={db?.total_floors}
-                  yearBuilt={yearBuilt}
+                  yearBuilt={db?.year_built}
                   energyClass={energyClass}
                   pricePerSqm={pricePerSqm ? Number(pricePerSqm) : undefined}
                   hasParking={db?.has_parking}
