@@ -356,7 +356,7 @@ export default function Auctions() {
         if (!a.tags?.includes(ownershipTag)) return false;
       }
       // Pro-only filter: auction round (stored in tags as "round:1", "round:2", "round:3")
-      if (filterRound && isPro) {
+      if (filterRound) {
         const roundTag = `round:${filterRound}`;
         if (!a.tags?.includes(roundTag)) return false;
       }
