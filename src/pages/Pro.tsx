@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { CheckCircle, Lock, Zap, TrendingUp, BarChart2, Filter, Bell, Star, ArrowRight, Shield, Loader2, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
