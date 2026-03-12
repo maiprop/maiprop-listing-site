@@ -9,7 +9,7 @@ import Map, {
 import type { LayerProps } from "react-map-gl";
 import {
   MapPin, Ruler, Maximize2, PenLine,
-  X, Flame, CheckCircle2,
+  X, Flame, CheckCircle2, Building2, Calendar, Layers, Square,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import "mapbox-gl/dist/mapbox-gl.css";
@@ -49,6 +49,19 @@ function priceLabel(p: number) {
   return `€${p}`;
 }
 
+/** Extract ownership status tag */
+function getOwnershipStatus(tags?: string[] | null): string | null {
+  if (!tags) return null;
+  const tag = tags.find((t: string) => t.startsWith("ownership:") && !t.startsWith("ownership_pct:"));
+  return tag ? tag.replace("ownership:", "") : null;
+}
+
+function getOwnershipPct(tags?: string[] | null): number | null {
+  if (!tags) return null;
+  const tag = tags.find((t: string) => t.startsWith("ownership_pct:"));
+  return tag ? Number(tag.replace("ownership_pct:", "")) : null;
+}
+
 /** Ray-casting point-in-polygon (lng/lat coords) */
 function pointInPolygon(point: [number, number], ring: [number, number][]) {
   const [x, y] = point;
@@ -80,7 +93,6 @@ function buildGeoJSON(listings: MapListing[]) {
         listingType: l.listingType || "sale",
         colour: typeColour(l.listingType),
         label: priceLabel(l.price),
-        // Store full data for popup lookup by id
         title: l.title,
         sqm: l.sqm,
         bedrooms: l.bedrooms ?? null,
@@ -133,7 +145,7 @@ const unclusteredHit: LayerProps = {
   paint: { "circle-radius": 0, "circle-opacity": 0 },
 };
 
-// GPU-rendered price label pins (replaces DOM Marker components entirely)
+// GPU-rendered price label pins
 const priceLabelLayer: LayerProps = {
   id: "price-labels",
   type: "symbol",
@@ -218,14 +230,21 @@ const drawDotLyr: LayerProps = {
   },
 };
 
-// ── Sub-components ────────────────────────────────────────────────────────────
+// ── Ownership badge config ────────────────────────────────────────────────────
 
+const OWNERSHIP_BADGE: Record<string, { label: string; bg: string; color: string }> = {
+  full:     { label: "Πλήρης",         bg: "rgba(16,185,129,0.15)",  color: "#10b981" },
+  partial:  { label: "Μερική",         bg: "rgba(245,158,11,0.15)",  color: "#f59e0b" },
+  common:   { label: "Εξ αδιαιρέτου", bg: "rgba(14,165,233,0.15)",  color: "#0ea5e9" },
+  none:     { label: "Χωρίς κυριότητα", bg: "rgba(239,68,68,0.15)", color: "#ef4444" },
+};
+
+// ── PropertyPopup ─────────────────────────────────────────────────────────────
 
 function getAuctionImage(listing: MapListing): string {
   const raw = listing._raw ?? listing;
   if (listing.images?.[0]) return listing.images[0];
   if (raw.cover_image_url) return raw.cover_image_url;
-  // Google Street View Static API using coordinates
   if (listing.latitude && listing.longitude) {
     return `https://maps.googleapis.com/maps/api/streetview?size=400x200&location=${listing.latitude},${listing.longitude}&fov=90&pitch=5`;
   }
@@ -235,33 +254,121 @@ function getAuctionImage(listing: MapListing): string {
 function PropertyPopup({ listing, onClose }: { listing: MapListing; onClose: () => void }) {
   const raw = listing._raw ?? listing;
   const image = getAuctionImage(listing);
+  const isAuction = listing.listingType === "auction";
+
   const auctionDate = raw.auction_date ? new Date(raw.auction_date) : null;
   const daysLeft = auctionDate
     ? Math.ceil((auctionDate.getTime() - Date.now()) / 86_400_000)
     : null;
 
+  // Ownership from tags
+  const tags: string[] = raw.tags ?? [];
+  const ownershipStatus = getOwnershipStatus(tags);
+  const ownershipPct = getOwnershipPct(tags);
+  const ownershipBadge = ownershipStatus ? OWNERSHIP_BADGE[ownershipStatus] : null;
+
+  // Floor label
+  const floor = raw.floor != null ? Number(raw.floor) : null;
+  const floorLabel = floor === null ? null
+    : floor === -1 ? "Basement"
+    : floor === 0 ? "Ground"
+    : `${floor}${["st", "nd", "rd"][floor - 1] || "th"} fl.`;
+
+  const detailLink = isAuction ? `/auction/${listing.id}` : `/property/${listing.id}`;
+
+  // Pills to show
+  const pills: { icon: React.ReactNode; text: string; color?: string; bg?: string }[] = [];
+
+  if (listing.sqm && listing.sqm > 1) {
+    pills.push({ icon: <Square style={{ width: 10, height: 10 }} />, text: `${listing.sqm} m²` });
+  }
+  if (floorLabel) {
+    pills.push({ icon: <Layers style={{ width: 10, height: 10 }} />, text: floorLabel });
+  }
+  if (raw.year_built) {
+    pills.push({ icon: <Calendar style={{ width: 10, height: 10 }} />, text: String(raw.year_built) });
+  }
+
   return (
-    <div className="bg-card border border-border rounded-xl overflow-hidden shadow-elevated w-56">
-      <img src={image} alt={listing.title} className="w-full h-28 object-cover" />
-      <div className="p-3">
-        <p className="font-display font-semibold text-xs leading-tight line-clamp-2 text-foreground">
+    <div className="bg-card border border-border rounded-xl overflow-hidden shadow-elevated" style={{ width: 220 }}>
+      {/* Image */}
+      <div className="relative w-full h-28 overflow-hidden">
+        <img
+          src={image}
+          alt={listing.title}
+          className="w-full h-full object-cover"
+          onError={e => { (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400&q=60"; }}
+        />
+        {/* Countdown badge */}
+        {daysLeft !== null && (
+          <div
+            className="absolute top-2 right-2 rounded-full px-2 py-0.5 text-[10px] font-bold"
+            style={{ background: daysLeft <= 3 ? "rgba(239,68,68,0.9)" : "rgba(245,197,24,0.9)", color: "#0a0f1a" }}
+          >
+            {daysLeft === 0 ? "Today!" : daysLeft === 1 ? "Tomorrow" : `${daysLeft}d left`}
+          </div>
+        )}
+      </div>
+
+      <div className="p-3 space-y-2">
+        {/* Title */}
+        <p className="font-semibold text-[11px] leading-tight line-clamp-2 text-foreground">
           {listing.title}
         </p>
-        <p className="text-primary font-bold text-sm mt-1">€{Number(listing.price).toLocaleString()}</p>
-        <div className="flex items-center gap-2 mt-1.5 text-xs text-muted-foreground">
-          <span className="flex items-center gap-0.5"><Ruler className="w-3 h-3" />{listing.sqm}m²</span>
-          {daysLeft !== null && (
-            <span className={`flex items-center gap-0.5 font-semibold ${daysLeft <= 3 ? "text-destructive" : "text-brand-gold"}`}>
-              {daysLeft === 0 ? "Today!" : daysLeft === 1 ? "Tomorrow" : `${daysLeft}d left`}
+
+        {/* Price */}
+        <p style={{ color: typeColour(listing.listingType) }} className="font-bold text-sm">
+          €{Number(isAuction && raw.auction_starting_bid ? raw.auction_starting_bid : listing.price).toLocaleString()}
+          {isAuction && raw.auction_starting_bid && raw.price && (
+            <span className="text-[10px] font-normal text-muted-foreground ml-1">
+              (val. €{Number(raw.price / 1000).toFixed(0)}k)
             </span>
           )}
-        </div>
+        </p>
+
+        {/* Detail pills: sqm, floor, year built */}
+        {pills.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {pills.map((p, i) => (
+              <span
+                key={i}
+                className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-medium text-muted-foreground"
+                style={{ background: "hsl(var(--secondary))", border: "1px solid hsl(var(--border))" }}
+              >
+                {p.icon}
+                {p.text}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Ownership status pill */}
+        {ownershipBadge && (
+          <div className="flex items-center gap-1 w-fit">
+            <span
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold"
+              style={{ background: ownershipBadge.bg, color: ownershipBadge.color, border: `1px solid ${ownershipBadge.color}44` }}
+            >
+              <Building2 style={{ width: 10, height: 10 }} />
+              {ownershipBadge.label}
+              {ownershipPct != null && ownershipStatus !== "full" && ` ${ownershipPct}%`}
+            </span>
+          </div>
+        )}
+
+        {/* City */}
+        <p className="flex items-center gap-1 text-[10px] text-muted-foreground">
+          <MapPin style={{ width: 10, height: 10 }} />
+          {listing.city}
+        </p>
+
+        {/* CTA */}
         <Link
-          to={`/property/${listing.id}`}
-          className="mt-2.5 w-full block text-center px-3 py-1.5 rounded-lg text-xs font-semibold"
+          to={detailLink}
+          className="block text-center px-3 py-1.5 rounded-lg text-[11px] font-bold mt-1 transition-opacity hover:opacity-90"
           style={{ background: typeColour(listing.listingType), color: "#0a0f1a" }}
         >
-          View Property →
+          {isAuction ? "View Auction →" : "View Property →"}
         </Link>
       </div>
     </div>
@@ -610,8 +717,6 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
             <div className="flex items-center gap-1.5">
               <div className="w-24 h-3 rounded-full"
                 style={{ background: "linear-gradient(to right, rgba(0,128,255,0.8), rgba(0,220,150,0.9), rgba(255,220,0,0.9), rgba(255,100,0,1), rgba(255,30,30,1))" }} />
-              <div className="flex justify-between w-24 absolute ml-0">
-              </div>
             </div>
             <div className="flex justify-between text-xs text-muted-foreground mt-0.5 w-24">
               <span>Low</span><span>High</span>
