@@ -141,6 +141,7 @@ function AuctionCard({ a, favoritedIds, onToggleFav }: {
   const imgSrc = a.cover_image_url ?? streetViewImg(a.latitude, a.longitude);
   const isFav = favoritedIds.has(a.id);
   const ownershipStatus = getOwnershipStatus(a.tags);
+  const ownershipPct = getOwnershipPct(a.tags);
   const ownershipBadge = ownershipStatus ? OWNERSHIP_BADGE[ownershipStatus] : null;
 
   const handleShare = async (e: React.MouseEvent) => {
