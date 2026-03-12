@@ -139,6 +139,24 @@ function mapAuctionToListing(a: any) {
       ? `https://maps.googleapis.com/maps/api/streetview?size=800x450&location=${lat},${lng}&fov=90&pitch=10&key=${googleMapsKey}`
       : null;
 
+  // Map occupation/ownership status from OS API
+  // Possible OS field names: propertyOccupationStatus, occupationStatus, ownershipStatus, propertyStatus
+  const rawOccupation: string | undefined =
+    a.propertyOccupationStatus ?? a.occupationStatus ?? a.ownershipStatus ?? a.propertyStatus;
+  let ownershipTag: string | null = null;
+  if (rawOccupation) {
+    const occ = rawOccupation.toUpperCase();
+    if (occ.includes("FREE") || occ.includes("VACANT") || occ.includes("ΕΛΕΥΘΕΡ") || occ.includes("ΧΩΡΙΣ")) {
+      ownershipTag = "ownership:free";
+    } else if (occ.includes("MORTGAGE") || occ.includes("ΥΠΟΘΗΚ") || occ.includes("ΒΑΡΗ") || occ.includes("ENCUMBR")) {
+      ownershipTag = "ownership:mortgaged";
+    } else if (occ.includes("OCCUPI") || occ.includes("ΚΑΤΕΙΛΗΜ") || occ.includes("TENANT") || occ.includes("RENTED")) {
+      ownershipTag = "ownership:occupied";
+    } else if (occ.includes("VACATED") || occ.includes("ΑΠΟΔΕΣΜ") || occ.includes("EMPTY")) {
+      ownershipTag = "ownership:vacated";
+    }
+  }
+
   return {
     tagKey,
     row: {
@@ -172,6 +190,7 @@ function mapAuctionToListing(a: any) {
         "source:maiprop-os",
         `auction_status:${a.auctionStatus ?? "scheduled"}`,
         ...(a.currentRound != null ? [`round:${a.currentRound}`] : []),
+        ...(ownershipTag ? [ownershipTag] : []),
       ],
     },
   };
