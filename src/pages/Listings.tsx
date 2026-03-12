@@ -494,8 +494,6 @@ export default function Listings() {
   // Client-side filtering
   let filtered = sourceListings.filter((p: any) => {
     const raw = p._raw || p;
-    // Exclude auctions from the standard buy/rent listings page — auctions have their own dedicated page
-    if (!selectedListingType && p.listingType === "auction") return false;
     if (selectedPrice) {
       const [min, max] = selectedPrice.split("-").map(Number);
       if (p.price < min || p.price > max) return false;
