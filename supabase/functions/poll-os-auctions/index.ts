@@ -198,6 +198,7 @@ function mapAuctionToListing(a: any) {
         `auction_status:${a.auctionStatus ?? "scheduled"}`,
         ...(a.currentRound != null ? [`round:${a.currentRound}`] : []),
         ...(ownershipTag ? [ownershipTag] : []),
+        ...(ownershipPct != null ? [`ownership_pct:${ownershipPct}`] : []),
       ],
     },
   };
