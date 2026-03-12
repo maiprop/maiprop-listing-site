@@ -1225,8 +1225,6 @@ export default function PropertyDetail() {
                   </div>
                 </div>
               )}
-                    </div>
-                    <p className="font-display font-bold text-sm">Pro Feature</p>
                     <p className="text-xs text-muted-foreground leading-relaxed">
                       Unlock the full <span className="font-semibold text-foreground">AI Property Valuation</span> — price range, confidence score, key factors &amp; renovation potential.
                     </p>
