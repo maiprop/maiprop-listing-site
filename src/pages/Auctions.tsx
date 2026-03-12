@@ -467,7 +467,6 @@ export default function Auctions() {
     { value: isLoading ? "—" : String(thisWeek), label: "This Week", icon: Gavel },
     { value: isLoading ? "—" : filtered.length.toLocaleString(), label: "Total Listed", icon: TrendingUp },
     { value: isLoading ? "—" : avgBid > 0 ? `€${(avgBid / 1000).toFixed(0)}k` : "—", label: "Avg Starting Bid", icon: TrendingUp },
-    { value: isLoading ? "—" : `${discountPct}%`, label: "Below Listed Price", icon: AlertCircle },
   ];
 
   const mapListings: MapListing[] = filtered
