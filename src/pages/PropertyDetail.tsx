@@ -259,6 +259,31 @@ export default function PropertyDetail() {
   const isAuction = listingType === "auction";
   const websiteUrl = (db as any)?.website_url as string | null;
 
+  // Extract ownership info from tags (for auction listings)
+  const tags: string[] = (db as any)?.tags ?? [];
+  const ownershipTag = tags.find((t: string) => t.startsWith("ownership:") && !t.startsWith("ownership_pct:"));
+  const ownershipStatus = ownershipTag ? ownershipTag.replace("ownership:", "") : null;
+  const ownershipPctTag = tags.find((t: string) => t.startsWith("ownership_pct:"));
+  const ownershipPct = ownershipPctTag ? Number(ownershipPctTag.replace("ownership_pct:", "")) : null;
+
+  const OWNERSHIP_LABEL: Record<string, { label: string; cls: string }> = {
+    full:    { label: "Πλήρης κυριότητα (100%)", cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" },
+    partial: { label: "Μερική κυριότητα", cls: "bg-amber-500/15 text-amber-400 border-amber-500/30" },
+    common:  { label: "Εξ αδιαιρέτου", cls: "bg-sky-500/15 text-sky-400 border-sky-500/30" },
+    none:    { label: "Χωρίς κυριότητα", cls: "bg-destructive/15 text-destructive border-destructive/30" },
+  };
+  const ownershipDisplay = ownershipStatus ? (OWNERSHIP_LABEL[ownershipStatus] ?? { label: ownershipStatus, cls: "bg-muted text-muted-foreground border-border" }) : null;
+
+  const handleShare = async () => {
+    const url = window.location.href;
+    if (navigator.share) {
+      try { await navigator.share({ title, url }); } catch {}
+    } else {
+      await navigator.clipboard.writeText(url);
+      toast.success("Link copied to clipboard");
+    }
+  };
+
   const dbImages = [
     ...(db.cover_image_url ? [db.cover_image_url] : []),
     ...((dbListing as any).listing_images?.map((img: any) => img.url) || []),
