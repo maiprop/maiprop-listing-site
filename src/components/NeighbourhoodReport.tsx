@@ -64,48 +64,70 @@ const ScoreBar = React.forwardRef<HTMLDivElement, { score: number; max?: number;
 );
 
 function MiniChart({ trend }: { trend: PriceTrend }) {
+  const currentYear = new Date().getFullYear();
   const points = [
-    { year: "5yr", val: trend.fiveYearsAgo },
-    { year: "3yr", val: trend.threeYearsAgo },
-    { year: "1yr", val: trend.oneYearAgo },
-    { year: "Now", val: trend.current },
+    { year: String(currentYear - 5), val: trend.fiveYearsAgo },
+    { year: String(currentYear - 3), val: trend.threeYearsAgo },
+    { year: String(currentYear - 1), val: trend.oneYearAgo },
+    { year: String(currentYear),     val: trend.current },
   ];
-  const min = Math.min(...points.map(p => p.val)) * 0.95;
-  const max = Math.max(...points.map(p => p.val)) * 1.05;
-  const range = max - min || 1;
-  const w = 220, h = 56, pad = 6;
-  const xs = points.map((_, i) => pad + (i / (points.length - 1)) * (w - pad * 2));
-  const ys = points.map(p => h - pad - ((p.val - min) / range) * (h - pad * 2));
+  const vals = points.map(p => p.val);
+  const minVal = Math.min(...vals);
+  const maxVal = Math.max(...vals);
+  const range = (maxVal - minVal) || 1;
+
+  // Chart dimensions with generous padding so dots never clip
+  const w = 260, h = 72, padX = 10, padTop = 10, padBottom = 14;
+  const innerW = w - padX * 2;
+  const innerH = h - padTop - padBottom;
+
+  const xs = points.map((_, i) => padX + (i / (points.length - 1)) * innerW);
+  const ys = points.map(p => padTop + innerH - ((p.val - minVal) / range) * innerH);
 
   const path = xs.map((x, i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${ys[i].toFixed(1)}`).join(" ");
-  const fill = [...xs.map((x, i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${ys[i].toFixed(1)}`), `L${(w - pad).toFixed(1)},${h}`, `L${pad},${h}`, "Z"].join(" ");
+  const fill = [
+    ...xs.map((x, i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${ys[i].toFixed(1)}`),
+    `L${(padX + innerW).toFixed(1)},${h}`,
+    `L${padX},${h}`,
+    "Z",
+  ].join(" ");
 
   const rising = trend.current >= trend.oneYearAgo;
   const lineColour = rising ? "#22c55e" : "#ef4444";
 
   return (
-    <div>
+    <div className="space-y-0">
       <svg width={w} height={h} className="w-full overflow-visible" viewBox={`0 0 ${w} ${h}`}>
         <defs>
-          <linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={lineColour} stopOpacity="0.25" />
+          <linearGradient id="chartFillGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={lineColour} stopOpacity="0.22" />
             <stop offset="100%" stopColor={lineColour} stopOpacity="0" />
           </linearGradient>
         </defs>
-        <path d={fill} fill="url(#chartFill)" />
-        <path d={path} fill="none" stroke={lineColour} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <path d={fill} fill="url(#chartFillGrad)" />
+        <path d={path} fill="none" stroke={lineColour} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
         {points.map((p, i) => (
-          <circle key={i} cx={xs[i]} cy={ys[i]} r="3" fill={lineColour} />
+          <g key={i}>
+            <circle cx={xs[i]} cy={ys[i]} r="3.5" fill={lineColour} />
+            {/* Price label above each dot */}
+            <text
+              x={xs[i]}
+              y={ys[i] - 7}
+              textAnchor="middle"
+              fontSize="8"
+              fontWeight="600"
+              fill={lineColour}
+              opacity={i === points.length - 1 ? 1 : 0.7}
+            >
+              €{p.val >= 1000 ? `${(p.val / 1000).toFixed(1)}k` : p.val}
+            </text>
+          </g>
         ))}
       </svg>
-      <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
-        {points.map(p => <span key={p.year}>{p.year}</span>)}
-      </div>
-      <div className="flex justify-between text-[10px] font-medium mt-0.5">
+      {/* Year labels underneath */}
+      <div className="flex justify-between text-[10px] text-muted-foreground px-[10px] -mt-1">
         {points.map(p => (
-          <span key={p.year} style={{ color: p.year === "Now" ? lineColour : undefined }}>
-            €{p.val.toLocaleString()}
-          </span>
+          <span key={p.year} className={p.year === String(currentYear) ? "font-bold text-foreground" : ""}>{p.year}</span>
         ))}
       </div>
     </div>
