@@ -1227,12 +1227,6 @@ export default function PropertyDetail() {
               )}
                     <p className="text-xs text-muted-foreground leading-relaxed">
                       Unlock the full <span className="font-semibold text-foreground">AI Property Valuation</span> — price range, confidence score, key factors &amp; renovation potential.
-                    </p>
-                    <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground gap-1.5 mt-1" asChild>
-                      <Link to="/pro"><Zap className="w-3.5 h-3.5" /> Upgrade to Pro</Link>
-                    </Button>
-                  </div>
-                </div>
               )}
 
               {/* ④ Full AI Property Report */}
