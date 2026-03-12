@@ -1202,7 +1202,29 @@ export default function PropertyDetail() {
                   auctionCourt={db?.auction_court}
                   plotSurface={db?.plot_surface}
                 />
+              ) : (
+                <div className="relative">
+                  <div className="pointer-events-none select-none opacity-40 blur-[2px]">
+                    <PropertyValuation
                       title={title} city={city} address={address} price={price} sqm={sqm}
+                      bedrooms={bedrooms} bathrooms={bathrooms} propertyType={propertyType}
+                      listingType={db?.listing_type} floor={floor} yearBuilt={yearBuilt}
+                      energyClass={energyClass} pricePerSqm={pricePerSqm ? Number(pricePerSqm) : undefined}
+                      hasParking={db?.has_parking} hasPool={db?.has_pool}
+                      hasElevator={db?.has_elevator} region={db?.region} />
+                  </div>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl bg-background/60 backdrop-blur-sm border border-primary/20 gap-3 px-5 text-center">
+                    <Lock className="w-5 h-5 text-primary" />
+                    <p className="font-display font-bold text-sm">Pro Feature</p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Unlock the full <span className="font-semibold text-foreground">AI Property Valuation</span> — price range, confidence score, key factors &amp; renovation potential.
+                    </p>
+                    <Link to="/pro" className="flex items-center gap-1.5 text-xs font-semibold bg-primary text-primary-foreground px-3 py-1.5 rounded-lg hover:bg-primary/90 transition-colors">
+                      <Zap className="w-3.5 h-3.5" /> Upgrade to Pro
+                    </Link>
+                  </div>
+                </div>
+              )}
                       bedrooms={bedrooms} bathrooms={bathrooms} propertyType={propertyType}
                       listingType={listingType} floor={db?.floor} yearBuilt={db?.year_built}
                       energyClass={energyClass} pricePerSqm={pricePerSqm ? Number(pricePerSqm) : undefined}
