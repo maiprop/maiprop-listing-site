@@ -792,7 +792,7 @@ export default function Index() {
   const { ref: trustRef, inView: trustInView } = useInView();
 
   // DB listings for homepage sections
-  const { data: featuredDbListings = [] } = useListings({ status: "active" });
+  const { data: featuredDbListings = [], isLoading: featuredLoading } = useListings({ status: "active" });
   const featuredListings = featuredDbListings.slice(0, 4);
   const auctionListings = featuredDbListings.filter((l: any) => l.listing_type === "auction").slice(0, 3);
 
