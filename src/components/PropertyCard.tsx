@@ -367,10 +367,6 @@ export function PropertyCard({ property, compact = false }: PropertyCardProps) {
         })()}
 
 
-              </span>
-            ))}
-          </div>
-        )}
 
         {/* Agent row + CTA */}
         <div className="mt-auto pt-3 border-t border-border space-y-2.5">
