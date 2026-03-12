@@ -671,20 +671,6 @@ export default function Auctions() {
                     </span>
                   )}
                 </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {/* Ownership status — standard filter, available to all */}
-                  <div>
-                    <label className="text-xs text-muted-foreground font-medium block mb-1.5">Ownership Status</label>
-                    <select
-                      value={filterOwnership}
-                      onChange={e => setFilterOwnership(e.target.value)}
-                      className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none"
-                    >
-                      {OWNERSHIP_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                    </select>
-                  </div>
-                </div>
-              </div>
 
               {/* Premium filters — Auction Round + Rental Yield */}
               <div className="pt-1 border-t border-border">
