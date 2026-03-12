@@ -618,6 +618,11 @@ export default function PropertyDetail() {
                       {db.total_floors ? ` / ${db.total_floors}` : ""}
                     </div>
                   )}
+                  {db.year_built != null && (
+                    <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium">
+                      <Calendar className="w-3.5 h-3.5 text-primary" />Built {db.year_built}
+                    </div>
+                  )}
                   {(db as any)?.heating_system && (
                     <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium capitalize">
                       <Thermometer className="w-3.5 h-3.5 text-primary" />{(db as any).heating_system}
