@@ -61,6 +61,12 @@ const energyColors: Record<string, string> = {
   E: "bg-orange-500", F: "bg-red-500", G: "bg-red-600",
 };
 
+// Internal/system tag prefixes that should never be shown to users
+const SYSTEM_TAG_PREFIXES = [
+  "os_auction:", "source:", "auction_status:", "ownership:", "ownership_pct:",
+  "round:", "status:", "posted", "sync:",
+];
+
 export function PropertyCard({ property, compact = false }: PropertyCardProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -343,16 +349,24 @@ export function PropertyCard({ property, compact = false }: PropertyCardProps) {
           </div>
         )}
 
-        {/* Tags */}
-        {property.tags && property.tags.length > 0 && (
-          <div className="flex gap-1.5 flex-wrap">
-            {property.tags.slice(0, 3).map(tag => (
-              <span key={tag} className="px-2.5 py-0.5 rounded-full bg-primary/10 border border-primary/20 text-[10px] text-primary font-medium">
-                {tag}
-              </span>
-            ))}
-          </div>
-        )}
+        {/* Tags — system/internal tags are filtered out */}
+        {(() => {
+          const visibleTags = (property.tags || []).filter(
+            (t: string) => !SYSTEM_TAG_PREFIXES.some(p => t.toLowerCase().startsWith(p.toLowerCase()))
+          );
+          if (!visibleTags.length) return null;
+          return (
+            <div className="flex gap-1.5 flex-wrap">
+              {visibleTags.slice(0, 3).map(tag => (
+                <span key={tag} className="px-2.5 py-0.5 rounded-full bg-primary/10 border border-primary/20 text-[10px] text-primary font-medium">
+                  {tag}
+                </span>
+              ))}
+            </div>
+          );
+        })()}
+
+
 
         {/* Agent row + CTA */}
         <div className="mt-auto pt-3 border-t border-border space-y-2.5">
