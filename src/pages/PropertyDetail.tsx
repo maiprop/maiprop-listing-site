@@ -1208,7 +1208,7 @@ export default function PropertyDetail() {
                     <PropertyValuation
                       title={title} city={city} address={address} price={price} sqm={sqm}
                       bedrooms={bedrooms} bathrooms={bathrooms} propertyType={propertyType}
-                      listingType={db?.listing_type} floor={floor} yearBuilt={yearBuilt}
+                      listingType={db?.listing_type} floor={db?.floor} yearBuilt={db?.year_built}
                       energyClass={energyClass} pricePerSqm={pricePerSqm ? Number(pricePerSqm) : undefined}
                       hasParking={db?.has_parking} hasPool={db?.has_pool}
                       hasElevator={db?.has_elevator} region={db?.region} />
