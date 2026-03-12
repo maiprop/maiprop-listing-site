@@ -1052,73 +1052,7 @@ export default function PropertyDetail() {
             {/* ──── RIGHT SIDEBAR ──── */}
             <div className="space-y-4 lg:sticky lg:top-24 self-start">
 
-              {/* Contact / Buy card — FIRST, always visible */}
-              <div className="glass-card rounded-2xl overflow-hidden border border-primary/10 shadow-elevated">
-
-              {walkScore !== null && (() => {
-                const colour = walkScoreColour(walkScore);
-                const label = walkScoreLabel(walkScore);
-                const r = 20, c = 2 * Math.PI * r;
-                return (
-                  <div className="glass-card rounded-2xl p-4 border border-border flex items-center gap-4">
-                    <svg width="52" height="52" viewBox="0 0 56 56" className="shrink-0">
-                      <circle cx="28" cy="28" r={r} fill="none" stroke="hsl(var(--border))" strokeWidth="4" />
-                      <circle cx="28" cy="28" r={r} fill="none"
-                        stroke={colour} strokeWidth="4"
-                        strokeDasharray={`${c * walkScore / 100} ${c * (1 - walkScore / 100)}`}
-                        strokeLinecap="round"
-                        transform="rotate(-90 28 28)"
-                      />
-                      <text x="28" y="33" textAnchor="middle" fontSize="13" fontWeight="900" fill={colour}>{walkScore}</text>
-                    </svg>
-                    <div>
-                      <p className="text-sm font-bold" style={{ color: colour }}>{label}</p>
-                      <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Walk Score</p>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">Based on actual nearby amenities</p>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* AI Property Valuation — Pro-locked */}
-              <div className="relative">
-                <div className="pointer-events-none select-none opacity-40 blur-[2px]">
-                  <PropertyValuation
-                    title={title}
-                    city={city}
-                    address={address}
-                    price={price}
-                    sqm={sqm}
-                    bedrooms={bedrooms}
-                    bathrooms={bathrooms}
-                    propertyType={propertyType}
-                    listingType={listingType}
-                    floor={db?.floor}
-                    yearBuilt={db?.year_built}
-                    energyClass={energyClass}
-                    pricePerSqm={pricePerSqm ? Number(pricePerSqm) : undefined}
-                    hasParking={db?.has_parking}
-                    hasPool={db?.has_pool}
-                    hasElevator={db?.has_elevator}
-                    region={db?.region}
-                  />
-                </div>
-                {/* Lock overlay */}
-                <div className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl bg-background/60 backdrop-blur-sm border border-primary/20 gap-3 px-5 text-center">
-                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Lock className="w-5 h-5 text-primary" />
-                  </div>
-                  <p className="font-display font-bold text-sm">Pro Feature</p>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    Unlock the full <span className="font-semibold text-foreground">AI Property Valuation</span> — price range, confidence score, key factors &amp; renovation potential.
-                  </p>
-                  <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground gap-1.5 mt-1">
-                    <Zap className="w-3.5 h-3.5" /> Upgrade to Pro
-                  </Button>
-                </div>
-              </div>
-
-              {/* Contact / Buy card */}
+              {/* ① Contact / Buy card — Starting Bid FIRST */}
               <div className="glass-card rounded-2xl overflow-hidden border border-primary/10 shadow-elevated">
                 {/* Price header */}
                 <div className="bg-gradient-to-br from-primary/10 to-accent/5 border-b border-border px-5 py-4">
@@ -1238,7 +1172,111 @@ export default function PropertyDetail() {
                 )}
               </div>
 
-              {/* Verified listing badge — hidden for auctions */}
+              {/* ② Walk Score — derived from actual POIs loaded in PropertyMiniMap */}
+              {walkScore !== null && (() => {
+                const colour = walkScoreColour(walkScore);
+                const label = walkScoreLabel(walkScore);
+                const r = 20, c = 2 * Math.PI * r;
+                return (
+                  <div className="glass-card rounded-2xl p-4 border border-border flex items-center gap-4">
+                    <svg width="52" height="52" viewBox="0 0 56 56" className="shrink-0">
+                      <circle cx="28" cy="28" r={r} fill="none" stroke="hsl(var(--border))" strokeWidth="4" />
+                      <circle cx="28" cy="28" r={r} fill="none"
+                        stroke={colour} strokeWidth="4"
+                        strokeDasharray={`${c * walkScore / 100} ${c * (1 - walkScore / 100)}`}
+                        strokeLinecap="round"
+                        transform="rotate(-90 28 28)"
+                      />
+                      <text x="28" y="33" textAnchor="middle" fontSize="13" fontWeight="900" fill={colour}>{walkScore}</text>
+                    </svg>
+                    <div>
+                      <p className="text-sm font-bold" style={{ color: colour }}>{label}</p>
+                      <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Walk Score</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">Based on actual nearby amenities</p>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* ③ AI Property Valuation — Pro-locked */}
+              <div className="relative">
+                <div className="pointer-events-none select-none opacity-40 blur-[2px]">
+                  <PropertyValuation
+                    title={title}
+                    city={city}
+                    address={address}
+                    price={price}
+                    sqm={sqm}
+                    bedrooms={bedrooms}
+                    bathrooms={bathrooms}
+                    propertyType={propertyType}
+                    listingType={listingType}
+                    floor={db?.floor}
+                    yearBuilt={db?.year_built}
+                    energyClass={energyClass}
+                    pricePerSqm={pricePerSqm ? Number(pricePerSqm) : undefined}
+                    hasParking={db?.has_parking}
+                    hasPool={db?.has_pool}
+                    hasElevator={db?.has_elevator}
+                    region={db?.region}
+                  />
+                </div>
+                {/* Lock overlay */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl bg-background/60 backdrop-blur-sm border border-primary/20 gap-3 px-5 text-center">
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Lock className="w-5 h-5 text-primary" />
+                  </div>
+                  <p className="font-display font-bold text-sm">Pro Feature</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Unlock the full <span className="font-semibold text-foreground">AI Property Valuation</span> — price range, confidence score, key factors &amp; renovation potential.
+                  </p>
+                  <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground gap-1.5 mt-1" asChild>
+                    <Link to="/pro"><Zap className="w-3.5 h-3.5" /> Upgrade to Pro</Link>
+                  </Button>
+                </div>
+              </div>
+
+              {/* ④ Full AI Property Report */}
+              <Section className={reportPurchased ? "border-primary/30" : ""}>
+                <div className="p-6">
+                  <div className="flex items-start gap-4">
+                    <div className="w-11 h-11 rounded-xl bg-gradient-primary flex items-center justify-center shrink-0">
+                      <BarChart2 className="w-5 h-5 text-primary-foreground" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="font-display font-semibold text-sm">Full AI Property Report</h3>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold font-bold">PREMIUM</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
+                        Deep-dive: cadastre verification, price history, comparable sales, investment projections, ENFIA calculation, and legal status.
+                      </p>
+                      <div className="grid grid-cols-2 gap-2 mb-4">
+                        {["Cadastre Verification", "5-Year Price History", "Comparable Sales", "Investment Projection", "Legal Status Check", "Neighborhood Score"].map(item => (
+                          <div key={item} className={`flex items-center gap-1.5 text-xs ${reportPurchased ? "text-primary" : "text-muted-foreground"}`}>
+                            {reportPurchased ? <Check className="w-3 h-3 text-primary" /> : <Lock className="w-3 h-3" />}
+                            {item}
+                          </div>
+                        ))}
+                      </div>
+                      {!reportPurchased ? (
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <Button className="bg-gradient-primary border-0 text-primary-foreground text-sm" onClick={() => setReportPurchased(true)}>
+                            Unlock Report — €29
+                          </Button>
+                          <span className="text-xs text-muted-foreground">One-time · instant access</span>
+                        </div>
+                      ) : (
+                        <Button variant="outline" className="border-primary/30 text-primary gap-2 text-sm">
+                          <Download className="w-4 h-4" /> Download PDF
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </Section>
+
+              {/* ⑤ Verified listing badge — hidden for auctions */}
               {!isAuction && (
                 <div className="glass-card rounded-2xl p-4 border border-brand-emerald/20">
                   <div className="flex items-center gap-2 mb-3">
@@ -1260,7 +1298,7 @@ export default function PropertyDetail() {
                 </div>
               )}
 
-              {/* Mortgage Calculator — hidden for auctions and rentals */}
+              {/* ⑥ Mortgage Calculator — hidden for auctions and rentals */}
               {!isAuction && listingType !== "rent" && <MortgageCalculator price={price} />}
 
               {/* Rental Summary */}
@@ -1304,6 +1342,7 @@ export default function PropertyDetail() {
                 </button>
               </div>
             </div>
+
           </div>
         </div>
       </div>
