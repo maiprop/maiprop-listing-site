@@ -148,7 +148,31 @@ Rules:
     const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
     if (!toolCall) throw new Error("No tool call in AI response");
 
-    const args = JSON.parse(toolCall.function.arguments);
+    // Robust JSON parsing with repair for common AI formatting glitches
+    let rawArgs = toolCall.function.arguments ?? "";
+    // Strip markdown code fences if present
+    rawArgs = rawArgs.replace(/```json\s*/gi, "").replace(/```\s*/gi, "").trim();
+    // Extract outermost { ... }
+    const argsStart = rawArgs.indexOf("{");
+    const argsEnd = rawArgs.lastIndexOf("}");
+    if (argsStart !== -1 && argsEnd !== -1) rawArgs = rawArgs.slice(argsStart, argsEnd + 1);
+
+    let args: any;
+    try {
+      args = JSON.parse(rawArgs);
+    } catch {
+      const repaired = rawArgs
+        .replace(/,\s*}/g, "}")
+        .replace(/,\s*]/g, "]")
+        .replace(/\)\s*}/g, "}")
+        .replace(/\)\s*,/g, ",")
+        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
+      try {
+        args = JSON.parse(repaired);
+      } catch {
+        throw new Error("AI returned invalid JSON in tool call arguments");
+      }
+    }
 
     // Resolve feature keys → full { key, label } objects from our map
     const featureMap = Object.fromEntries(AVAILABLE_FEATURES.map(f => [f.key, f]));
