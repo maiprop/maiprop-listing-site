@@ -197,7 +197,7 @@ function AuctionCard({ a, favoritedIds, onToggleFav }: {
 
       {/* Info */}
       <div className="p-4 space-y-2 flex-1 flex flex-col">
-        <Link to={`/property/${a.id}`}>
+        <Link to={`/auction/${a.id}`}>
           <h3 className="font-semibold text-sm line-clamp-2 group-hover:text-brand-gold transition-colors">
             {a.title}
           </h3>
