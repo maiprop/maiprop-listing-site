@@ -343,6 +343,8 @@ Deno.serve(async (req) => {
             region: row.region,
             tags: row.tags,
             website_url: row.website_url,
+            // Only set cover_image_url if we have a Street View URL to avoid overwriting existing photos
+            ...(row.cover_image_url ? { cover_image_url: row.cover_image_url } : {}),
             status: "active",
             updated_at: new Date().toISOString(),
           },
