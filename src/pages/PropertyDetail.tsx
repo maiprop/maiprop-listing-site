@@ -1199,6 +1199,8 @@ export default function PropertyDetail() {
                   region={db?.region}
                   description={db?.description}
                   tags={db?.tags}
+                  ownershipStatus={ownershipStatus ?? undefined}
+                  ownershipPercentage={ownershipPct ?? undefined}
                   auctionCourt={db?.auction_court}
                   plotSurface={db?.plot_surface}
                   isNeoclassical={db?.is_neoclassical}
@@ -1228,7 +1230,9 @@ export default function PropertyDetail() {
                       withinSettlement={db?.within_settlement} buildingAllowance={db?.building_allowance}
                       coverageRatio={db?.coverage_ratio} isBuildable={db?.is_buildable}
                       cadastreNumber={db?.cadastre_number} hasLandConcession={db?.has_land_concession}
-                      landUse={db?.land_use} />
+                      landUse={db?.land_use}
+                      ownershipStatus={ownershipStatus ?? undefined}
+                      ownershipPercentage={ownershipPct ?? undefined} />
                   </div>
                   <div className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl bg-background/60 backdrop-blur-sm border border-primary/20 gap-3 px-5 text-center">
                     <Lock className="w-5 h-5 text-primary" />

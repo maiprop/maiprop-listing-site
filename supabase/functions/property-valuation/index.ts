@@ -356,7 +356,7 @@ Rules:
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-pro",
+        model: "google/gemini-2.5-flash",
         messages: [{ role: "user", content: prompt }],
         temperature: 0.15,
         max_tokens: 2000,
@@ -372,21 +372,28 @@ Rules:
     const aiData = await response.json();
     let raw = aiData.choices?.[0]?.message?.content || "";
 
-    // JSON extraction + repair
-    const jsonMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/) || raw.match(/(\{[\s\S]*\})/);
-    if (jsonMatch) raw = jsonMatch[1] || jsonMatch[0];
+    // Step 1: strip markdown code fences (greedy to capture full JSON)
+    const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]+?)```\s*$/);
+    if (fenceMatch) {
+      raw = fenceMatch[1].trim();
+    } else {
+      // Fallback: grab first { ... } block (greedy)
+      const braceMatch = raw.match(/\{[\s\S]+\}/);
+      if (braceMatch) raw = braceMatch[0];
+    }
+
+    // Step 2: minimal JSON repair
     raw = raw
-      .replace(/,\s*([}\]])/g, "$1")
-      .replace(/\)\s*}/g, "}")
-      .replace(/([{,]\s*)(\w+)\s*:/g, '$1"$2":')
+      .replace(/,\s*([}\]])/g, "$1")   // trailing commas
+      .replace(/\)\s*\}/g, "}")          // stray closing paren
       .trim();
 
     let result;
     try {
       result = JSON.parse(raw);
-    } catch {
-      console.error("JSON parse failed:", raw.slice(0, 300));
-      throw new Error("Failed to parse AI response");
+    } catch (parseErr) {
+      console.error("JSON parse failed:", parseErr, raw.slice(0, 500));
+      throw new Error("Failed to parse AI response — invalid JSON from model");
     }
 
     // Ensure backwards-compatible fields
