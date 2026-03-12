@@ -660,9 +660,50 @@ export default function Auctions() {
                 </div>{/* end grid */}
               </div>{/* end standard filters */}
 
-
+              {/* Pro filters */}
+              <div className="pt-1 border-t border-border">
+                <div className="flex items-center gap-2 mb-3">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Pro Filters</p>
+                  {!isPro && <PremiumBadge />}
+                  {isPro && (
+                    <span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/25">
+                      ✓ Unlocked
+                    </span>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {/* Ownership Status */}
+                  {isPro ? (
+                    <div>
+                      <label className="text-xs text-muted-foreground font-medium block mb-1.5">Ownership Status</label>
+                      <select value={filterOwnership} onChange={e => setFilterOwnership(e.target.value)} className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none">
+                        {OWNERSHIP_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="relative cursor-pointer group/pf" onClick={() => navigate("/pro")}>
+                      <label className="text-xs text-muted-foreground font-medium flex items-center gap-1.5 mb-1.5 pointer-events-none">Ownership Status <PremiumBadge /></label>
+                      <select disabled className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-muted-foreground outline-none appearance-none opacity-60 pointer-events-none"><option>All</option></select>
                     </div>
                   )}
+                  {/* Auction Round */}
+                  {isPro ? (
+                    <div>
+                      <label className="text-xs text-muted-foreground font-medium block mb-1.5">Auction Round</label>
+                      <select value={filterRound} onChange={e => setFilterRound(e.target.value)} className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none">
+                        <option value="">All Rounds</option>
+                        <option value="1">1st Auction</option>
+                        <option value="2">2nd Auction</option>
+                        <option value="3">3rd+ Auction</option>
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="relative cursor-pointer group/pf" onClick={() => navigate("/pro")}>
+                      <label className="text-xs text-muted-foreground font-medium flex items-center gap-1.5 mb-1.5 pointer-events-none">Auction Round <PremiumBadge /></label>
+                      <select disabled className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-muted-foreground outline-none appearance-none opacity-60 pointer-events-none"><option>All</option></select>
+                    </div>
+                  )}
+
 
                   {/* Expected rental yield */}
                   {isPro ? (
