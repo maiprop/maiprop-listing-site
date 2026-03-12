@@ -454,22 +454,7 @@ export default function Auctions() {
 
         {/* Toolbar */}
         <div className="container pb-4">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            {/* Area dropdown */}
-            <div className="relative">
-              <select
-                value={selectedCity}
-                onChange={e => setSelectedCity(e.target.value)}
-                className="appearance-none bg-secondary border border-border rounded-xl pl-3 pr-8 py-2 text-sm text-foreground outline-none focus:border-primary cursor-pointer"
-              >
-                {cityOptions.map(c => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-            </div>
-
-            <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center justify-end gap-2 shrink-0">
               {/* Filters toggle */}
               <Button
                 variant="outline"
@@ -509,7 +494,6 @@ export default function Auctions() {
                 </button>
               </div>
             </div>
-          </div>
 
           {/* Advanced Filters Panel */}
           {showFilters && (
@@ -528,7 +512,24 @@ export default function Auctions() {
               {/* Standard filters */}
               <div>
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Standard Filters</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* City */}
+                  <div>
+                    <label className="text-xs text-muted-foreground font-medium block mb-1.5">City</label>
+                    <div className="relative">
+                      <select
+                        value={selectedCity}
+                        onChange={e => setSelectedCity(e.target.value)}
+                        className="w-full appearance-none bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary cursor-pointer"
+                      >
+                        {cityOptions.map(c => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                      <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                    </div>
+                  </div>
+
                   {/* Typology */}
                   <div>
                     <label className="text-xs text-muted-foreground font-medium block mb-1.5">Property Type</label>
@@ -574,23 +575,20 @@ export default function Auctions() {
                   <PremiumBadge />
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {/* Ownership status — pro filter */}
+                  {/* Ownership status — pro filter: visible but locked */}
                   <div className="relative">
                     <label className="text-xs text-muted-foreground font-medium block mb-1.5 flex items-center gap-1.5">
                       Ownership Status <PremiumBadge />
                     </label>
                     <select
                       value={filterOwnership}
-                      onChange={() => {}}
                       disabled
-                      className="w-full bg-secondary/50 border border-border/50 rounded-xl px-3 py-2.5 text-sm text-muted-foreground outline-none cursor-not-allowed appearance-none opacity-60"
+                      className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-muted-foreground outline-none appearance-none opacity-70"
                     >
                       {OWNERSHIP_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                     </select>
-                    <div className="absolute inset-0 rounded-xl flex items-center justify-center bg-card/60 backdrop-blur-[1px] cursor-not-allowed">
-                      <span className="flex items-center gap-1.5 text-xs font-semibold text-brand-gold">
-                        <Lock className="w-3.5 h-3.5" /> Upgrade to Pro
-                      </span>
+                    <div className="absolute bottom-0 right-0 top-6 left-0 rounded-b-xl flex items-center justify-end pr-3 pointer-events-none">
+                      <Lock className="w-3.5 h-3.5 text-brand-gold" />
                     </div>
                   </div>
 
@@ -601,19 +599,16 @@ export default function Auctions() {
                     </label>
                     <select
                       value={filterRound}
-                      onChange={() => {}}
                       disabled
-                      className="w-full bg-secondary/50 border border-border/50 rounded-xl px-3 py-2.5 text-sm text-muted-foreground outline-none cursor-not-allowed appearance-none opacity-60"
+                      className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-muted-foreground outline-none appearance-none opacity-70"
                     >
                       <option value="">Any Round</option>
                       <option value="1">1st Auction</option>
                       <option value="2">2nd Auction</option>
                       <option value="3">3rd+ Auction</option>
                     </select>
-                    <div className="absolute inset-0 rounded-xl flex items-center justify-center bg-card/60 backdrop-blur-[1px] cursor-not-allowed">
-                      <span className="flex items-center gap-1.5 text-xs font-semibold text-brand-gold">
-                        <Lock className="w-3.5 h-3.5" /> Upgrade to Pro
-                      </span>
+                    <div className="absolute bottom-0 right-0 top-6 left-0 rounded-b-xl flex items-center justify-end pr-3 pointer-events-none">
+                      <Lock className="w-3.5 h-3.5 text-brand-gold" />
                     </div>
                   </div>
 
@@ -624,9 +619,8 @@ export default function Auctions() {
                     </label>
                     <select
                       value={filterYield}
-                      onChange={() => {}}
                       disabled
-                      className="w-full bg-secondary/50 border border-border/50 rounded-xl px-3 py-2.5 text-sm text-muted-foreground outline-none cursor-not-allowed appearance-none opacity-60"
+                      className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-muted-foreground outline-none appearance-none opacity-70"
                     >
                       <option value="">Any Yield</option>
                       <option value="low">Under 3%</option>
@@ -634,10 +628,8 @@ export default function Auctions() {
                       <option value="high">6% – 9%</option>
                       <option value="very_high">9%+</option>
                     </select>
-                    <div className="absolute inset-0 rounded-xl flex items-center justify-center bg-card/60 backdrop-blur-[1px] cursor-not-allowed">
-                      <span className="flex items-center gap-1.5 text-xs font-semibold text-brand-gold">
-                        <Lock className="w-3.5 h-3.5" /> Upgrade to Pro
-                      </span>
+                    <div className="absolute bottom-0 right-0 top-6 left-0 rounded-b-xl flex items-center justify-end pr-3 pointer-events-none">
+                      <Lock className="w-3.5 h-3.5 text-brand-gold" />
                     </div>
                   </div>
                 </div>
@@ -646,10 +638,10 @@ export default function Auctions() {
                 <div className="mt-4 flex items-center justify-between p-3 rounded-xl bg-brand-gold/5 border border-brand-gold/20">
                   <div className="flex items-center gap-2">
                     <Star className="w-4 h-4 text-brand-gold" />
-                    <span className="text-xs font-medium">Unlock premium filters with mAI Prop OS Pro</span>
+                    <span className="text-xs font-medium">Unlock premium filters with mAI Prop Pro</span>
                   </div>
                   <Button size="sm" className="bg-gradient-gold border-0 text-background font-semibold text-xs" asChild>
-                    <a href="https://os.maiprop.co" target="_blank" rel="noreferrer">Upgrade</a>
+                    <Link to="/pro">Upgrade to Pro</Link>
                   </Button>
                 </div>
               </div>
