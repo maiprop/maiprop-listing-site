@@ -1182,20 +1182,26 @@ export default function PropertyDetail() {
                   bedrooms={bedrooms}
                   bathrooms={bathrooms}
                   propertyType={propertyType}
-                  listingType={listingType}
-                  floor={db?.floor}
-                  yearBuilt={db?.year_built}
+                  listingType={db?.listing_type}
+                  floor={floor}
+                  totalFloors={db?.total_floors}
+                  yearBuilt={yearBuilt}
                   energyClass={energyClass}
                   pricePerSqm={pricePerSqm ? Number(pricePerSqm) : undefined}
                   hasParking={db?.has_parking}
                   hasPool={db?.has_pool}
                   hasElevator={db?.has_elevator}
+                  hasGarden={db?.has_garden}
+                  hasStorage={db?.has_storage}
+                  hasBalcony={db?.has_balcony}
+                  hasView={db?.has_view}
+                  hasFurnished={db?.has_furnished}
                   region={db?.region}
+                  description={db?.description}
+                  tags={db?.tags}
+                  auctionCourt={db?.auction_court}
+                  plotSurface={db?.plot_surface}
                 />
-              ) : (
-                <div className="relative">
-                  <div className="pointer-events-none select-none opacity-40 blur-[2px]">
-                    <PropertyValuation
                       title={title} city={city} address={address} price={price} sqm={sqm}
                       bedrooms={bedrooms} bathrooms={bathrooms} propertyType={propertyType}
                       listingType={listingType} floor={db?.floor} yearBuilt={db?.year_built}
