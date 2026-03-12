@@ -793,7 +793,7 @@ export default function Index() {
   const { ref: trustRef, inView: trustInView } = useInView();
 
   // DB listings for homepage sections — use separate lightweight queries with limits
-  const { data: featuredListings = [], isLoading: featuredLoading } = useQuery({
+  const { data: featuredListings = [], isLoading: featuredLoading, isError: featuredError } = useQuery({
     queryKey: ["homepage-featured"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -807,9 +807,10 @@ export default function Index() {
       return data || [];
     },
     staleTime: 5 * 60 * 1000,
+    retry: 1,
   });
 
-  const { data: auctionListings = [], isLoading: auctionsLoading } = useQuery({
+  const { data: auctionListings = [], isLoading: auctionsLoading, isError: auctionsError } = useQuery({
     queryKey: ["homepage-auctions"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -823,6 +824,7 @@ export default function Index() {
       return data || [];
     },
     staleTime: 5 * 60 * 1000,
+    retry: 1,
   });
 
   const listingTypeMap: Record<string, string> = {
@@ -1137,7 +1139,7 @@ export default function Index() {
           <div
             className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 reveal reveal-delay-1 ${featuredInView ? "in-view" : ""}`}>
             
-            {featuredLoading
+            {featuredLoading && !featuredError
               ? Array.from({ length: 4 }).map((_, i) => (
                   <div key={i} className="glass-card rounded-2xl border border-border overflow-hidden animate-pulse">
                     <div className="bg-muted h-52 w-full" />
