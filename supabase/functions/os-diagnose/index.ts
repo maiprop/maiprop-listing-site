@@ -24,9 +24,9 @@ async function getOsToken(baseUrl: string, email: string, password: string): Pro
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-  const OS_URL = Deno.env.get("https://app.os.maiprop.co:8080/swagger-ui/")?.replace(/\/$/, "") ?? "";
-  const OS_EMAIL = Deno.env.get("kr@maiprop.co") ?? "";
-  const OS_PASS = Deno.env.get("kr090692") ?? "";
+  const OS_URL = Deno.env.get("MAIPROP_OS_URL")?.replace(/\/$/, "") ?? "";
+  const OS_EMAIL = Deno.env.get("MAIPROP_OS_EMAIL") ?? "";
+  const OS_PASS = Deno.env.get("MAIPROP_OS_PASSWORD") ?? "";
 
   try {
     const token = await getOsToken(OS_URL, OS_EMAIL, OS_PASS);
