@@ -15,29 +15,40 @@ export function useListings(filters?: {
   return useQuery({
     queryKey: ["listings", filters],
     queryFn: async () => {
-      let query = supabase
-        .from("listings")
-        .select(`
-          *,
-          listing_images(url, sort_order)
-        `)
-        .order("created_at", { ascending: false })
-        .limit(filters?.limit ?? 500);
+      const FETCH_LIMIT = 500;
+      let allData: any[] = [];
+      let from = 0;
 
-      if (filters?.city) query = query.ilike("city", `%${filters.city}%`);
-      if (filters?.listing_type) {
-        query = query.eq("listing_type", filters.listing_type as any);
-      } else if (!filters?.includeAuctions) {
-        // Exclude auctions by default — they have a dedicated page and are too numerous
-        query = query.in("listing_type", ["sale", "rent", "firesale"] as any);
+      while (true) {
+        let query = supabase
+          .from("listings")
+          .select(`*, listing_images(url, sort_order)`)
+          .order("created_at", { ascending: false })
+          .range(from, from + FETCH_LIMIT - 1);
+
+        if (filters?.city) query = query.ilike("city", `%${filters.city}%`);
+        if (filters?.listing_type) {
+          query = query.eq("listing_type", filters.listing_type as any);
+        } else if (!filters?.includeAuctions) {
+          query = query.in("listing_type", ["sale", "rent", "firesale"] as any);
+        }
+        if (filters?.property_type) query = query.eq("property_type", filters.property_type as any);
+        if (filters?.owner_id) query = query.eq("owner_id", filters.owner_id);
+        if (!filters?.owner_id) query = query.eq("status", (filters?.status || "active") as any);
+
+        const { data, error } = await query;
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        allData = allData.concat(data);
+        // If explicit limit is set, respect it
+        if (filters?.limit && allData.length >= filters.limit) {
+          allData = allData.slice(0, filters.limit);
+          break;
+        }
+        if (data.length < FETCH_LIMIT) break;
+        from += FETCH_LIMIT;
       }
-      if (filters?.property_type) query = query.eq("property_type", filters.property_type as any);
-      if (filters?.owner_id) query = query.eq("owner_id", filters.owner_id);
-      if (!filters?.owner_id) query = query.eq("status", (filters?.status || "active") as any);
-
-      const { data, error } = await query;
-      if (error) throw error;
-      return data || [];
+      return allData;
     },
   });
 }
