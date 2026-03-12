@@ -284,8 +284,13 @@ export function PropertyCard({ property, compact = false }: PropertyCardProps) {
           {property.floor != null && (
             <span className="flex items-center gap-1 bg-secondary px-2.5 py-1 rounded-lg font-medium">
               <Layers className="w-3.5 h-3.5" />
-              {property.floor === 0 ? "Ground" : property.floor === -1 ? "Basement" : `${property.floor}F`}
+              {property.floor === -1 ? "Basement" : property.floor === 0 ? "Ground" : `${property.floor}F`}
               {property.totalFloors != null && `/${property.totalFloors}`}
+            </span>
+          )}
+          {property.yearBuilt != null && (
+            <span className="flex items-center gap-1 bg-secondary px-2.5 py-1 rounded-lg font-medium">
+              <Calendar className="w-3.5 h-3.5" /> {property.yearBuilt}
             </span>
           )}
           {property.energyClass && (
