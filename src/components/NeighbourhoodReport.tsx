@@ -77,7 +77,7 @@ function MiniChart({ trend }: { trend: PriceTrend }) {
   const range = (maxVal - minVal) || 1;
 
   // padBottom must be big enough for year labels (fontSize 7.5 ≈ 8px + 2px gap)
-  const w = 260, h = 100, padX = 18, padTop = 24, padBottom = 18;
+  const w = 400, h = 110, padX = 24, padTop = 28, padBottom = 20;
   const innerW = w - padX * 2;
   const innerH = h - padTop - padBottom;
 
