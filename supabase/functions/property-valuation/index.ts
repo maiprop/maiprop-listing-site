@@ -31,6 +31,7 @@ Deno.serve(async (req) => {
       hasParking && "Has parking",
       hasPool && "Has pool",
       hasElevator && "Has elevator",
+      ownershipStatus && ownershipStatus !== "full" && `Ownership: ${ownershipStatus}${ownershipPercentage ? ` (${ownershipPercentage}%)` : ""}`,
     ].filter(Boolean).join(", ");
 
     // ── Property-type specific analysis instructions ──────────────────────────
