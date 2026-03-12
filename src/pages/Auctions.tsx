@@ -355,9 +355,14 @@ export default function Auctions() {
         const ownershipTag = `ownership:${filterOwnership}`;
         if (!a.tags?.includes(ownershipTag)) return false;
       }
+      // Pro-only filter: auction round (stored in tags as "round:1", "round:2", "round:3")
+      if (filterRound && isPro) {
+        const roundTag = `round:${filterRound}`;
+        if (!a.tags?.includes(roundTag)) return false;
+      }
       return true;
     });
-  }, [auctions, selectedCity, filterType, filterBidRange, filterYearRange, filterOwnership]);
+  }, [auctions, selectedCity, filterType, filterBidRange, filterYearRange, filterOwnership, filterRound, isPro]);
 
   const activeFilterCount = [filterType, filterBidRange, filterYearRange, filterOwnership, filterRound, filterYield].filter(Boolean).length;
 
@@ -365,6 +370,9 @@ export default function Auctions() {
     setFilterType("");
     setFilterBidRange("");
     setFilterYearRange("");
+    setFilterOwnership("");
+    setFilterRound("");
+    setFilterYield("");
   };
 
   const now = new Date();
