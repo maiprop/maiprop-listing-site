@@ -73,9 +73,13 @@ export function PropertyCard({ property, compact = false }: PropertyCardProps) {
     toggleFav.mutate({ listing_id: property.id, isFavorited });
   };
 
+  const detailPath = property.listingType === "auction"
+    ? `/auction/${property.id}`
+    : `/property/${property.id}`;
+
   const handleShare = async (e: React.MouseEvent) => {
     e.preventDefault();
-    const url = `${window.location.origin}/property/${property.id}`;
+    const url = `${window.location.origin}${detailPath}`;
     if (navigator.share) {
       try { await navigator.share({ title: property.title, url }); } catch {}
     } else {
@@ -109,7 +113,7 @@ export function PropertyCard({ property, compact = false }: PropertyCardProps) {
 
   if (compact) {
     return (
-      <Link to={`/property/${property.id}`} className="glass-card rounded-xl overflow-hidden flex gap-3 p-3 property-card group">
+      <Link to={detailPath} className="glass-card rounded-xl overflow-hidden flex gap-3 p-3 property-card group">
         <div className="relative w-24 h-20 rounded-lg overflow-hidden shrink-0">
           <img src={property.images[0]} alt={property.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
           {badge && (
@@ -248,13 +252,13 @@ export function PropertyCard({ property, compact = false }: PropertyCardProps) {
       <div className="p-4 flex flex-col flex-1 gap-3">
         {/* Title + location */}
         <div>
-          <Link to={`/property/${property.id}`}>
+          <Link to={detailPath}>
             <h3 className="font-display font-semibold text-base text-foreground hover:text-primary transition-colors line-clamp-2 leading-snug">
               {property.title}
             </h3>
           </Link>
           <Link
-            to={`/property/${property.id}`}
+            to={detailPath}
             className="flex items-center gap-1 mt-1.5 text-muted-foreground text-xs group/addr hover:text-primary transition-colors w-fit max-w-full"
           >
             <MapPin className="w-3 h-3 shrink-0 text-primary/70 group-hover/addr:text-primary transition-colors" />
@@ -362,7 +366,7 @@ export function PropertyCard({ property, compact = false }: PropertyCardProps) {
           )}
           {/* Action row: Contact + Share + Report */}
           <div className="flex items-center gap-2">
-            <Link to={`/property/${property.id}`} className="flex-1">
+            <Link to={detailPath} className="flex-1">
               <button className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-primary text-primary-foreground font-semibold text-sm transition-all hover:opacity-90 hover:shadow-md active:scale-[0.98]">
                 <MessageCircle className="w-4 h-4" />
                 Contact Agent
