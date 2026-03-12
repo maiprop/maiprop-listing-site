@@ -1183,9 +1183,9 @@ export default function PropertyDetail() {
                   bathrooms={bathrooms}
                   propertyType={propertyType}
                   listingType={db?.listing_type}
-                  floor={floor}
+                  floor={db?.floor}
                   totalFloors={db?.total_floors}
-                  yearBuilt={yearBuilt}
+                  yearBuilt={db?.year_built}
                   energyClass={energyClass}
                   pricePerSqm={pricePerSqm ? Number(pricePerSqm) : undefined}
                   hasParking={db?.has_parking}
@@ -1208,7 +1208,7 @@ export default function PropertyDetail() {
                     <PropertyValuation
                       title={title} city={city} address={address} price={price} sqm={sqm}
                       bedrooms={bedrooms} bathrooms={bathrooms} propertyType={propertyType}
-                      listingType={db?.listing_type} floor={floor} yearBuilt={yearBuilt}
+                      listingType={db?.listing_type} floor={db?.floor} yearBuilt={db?.year_built}
                       energyClass={energyClass} pricePerSqm={pricePerSqm ? Number(pricePerSqm) : undefined}
                       hasParking={db?.has_parking} hasPool={db?.has_pool}
                       hasElevator={db?.has_elevator} region={db?.region} />
@@ -1222,17 +1222,6 @@ export default function PropertyDetail() {
                     <Link to="/pro" className="flex items-center gap-1.5 text-xs font-semibold bg-primary text-primary-foreground px-3 py-1.5 rounded-lg hover:bg-primary/90 transition-colors">
                       <Zap className="w-3.5 h-3.5" /> Upgrade to Pro
                     </Link>
-                  </div>
-                </div>
-              )}
-                    </div>
-                    <p className="font-display font-bold text-sm">Pro Feature</p>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      Unlock the full <span className="font-semibold text-foreground">AI Property Valuation</span> — price range, confidence score, key factors &amp; renovation potential.
-                    </p>
-                    <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground gap-1.5 mt-1" asChild>
-                      <Link to="/pro"><Zap className="w-3.5 h-3.5" /> Upgrade to Pro</Link>
-                    </Button>
                   </div>
                 </div>
               )}
