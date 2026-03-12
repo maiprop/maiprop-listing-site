@@ -130,12 +130,22 @@ function mapAuctionToListing(a: any) {
   const auctionUrl: string | null =
     a.url ?? a.auctionUrl ?? a.listingUrl ?? a.eAuctionUrl ?? null;
 
+  // Build Google Street View cover photo when coordinates are available
+  const googleMapsKey = Deno.env.get("GOOGLE_MAPS_API_KEY");
+  const lat = a.propertyLatitude != null ? Number(a.propertyLatitude) : null;
+  const lng = a.propertyLongitude != null ? Number(a.propertyLongitude) : null;
+  const streetViewUrl =
+    googleMapsKey && lat && lng
+      ? `https://maps.googleapis.com/maps/api/streetview?size=800x450&location=${lat},${lng}&fov=90&pitch=10&key=${googleMapsKey}`
+      : null;
+
   return {
     tagKey,
     row: {
       title: buildTitle(a),
       description: null,
       website_url: auctionUrl,
+      cover_image_url: streetViewUrl,
       price,
       price_per_sqm: a.pricePerSquareMeter != null ? Number(a.pricePerSquareMeter) : null,
       auction_starting_bid: price,
@@ -155,7 +165,6 @@ function mapAuctionToListing(a: any) {
       total_floors: a.numberOfFloors != null ? Math.round(Number(a.numberOfFloors)) : null,
       year_built: a.constructionYear != null ? Number(a.constructionYear) : null,
       cadastre_number: a.propertyFullKaek ?? null,
-      cover_image_url: null,
       owner_id: null,
       ai_score: 80,
       tags: [
@@ -333,6 +342,8 @@ Deno.serve(async (req) => {
             region: row.region,
             tags: row.tags,
             website_url: row.website_url,
+            // Only set cover_image_url if we have a Street View URL to avoid overwriting existing photos
+            ...(row.cover_image_url ? { cover_image_url: row.cover_image_url } : {}),
             status: "active",
             updated_at: new Date().toISOString(),
           },

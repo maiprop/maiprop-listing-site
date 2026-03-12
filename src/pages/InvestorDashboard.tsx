@@ -93,14 +93,7 @@ const TIERS = [
   },
 ];
 
-const MOCK_DEALS = [
-  { id: "m1", address: "Kolonaki, Athens", city: "Athens", property_type: "apartment", sqm: 145, bedrooms: 3, condition: "good", ai_estimate: 480000, asking_price: 420000, discount_pct: 12.5, status: "pending", created_at: new Date(Date.now() - 2 * 3600000).toISOString(), urgency: "HIGH", reason: "Divorce settlement", roi_est: 8.4 },
-  { id: "m2", address: "Glyfada Waterfront", city: "Athens", property_type: "villa", sqm: 320, bedrooms: 5, condition: "excellent", ai_estimate: 1_850_000, asking_price: 1_620_000, discount_pct: 12.4, status: "pending", created_at: new Date(Date.now() - 6 * 3600000).toISOString(), urgency: "MEDIUM", reason: "Relocation abroad", roi_est: 6.1 },
-  { id: "m3", address: "Thessaloniki Centre", city: "Thessaloniki", property_type: "commercial", sqm: 280, bedrooms: null, condition: "fair", ai_estimate: 620_000, asking_price: 520_000, discount_pct: 16.1, status: "pending", created_at: new Date(Date.now() - 18 * 3600000).toISOString(), urgency: "HIGH", reason: "Debt restructuring", roi_est: 11.2 },
-  { id: "m4", address: "Mykonos Town", city: "Mykonos", property_type: "house", sqm: 180, bedrooms: 4, condition: "good", ai_estimate: 2_100_000, asking_price: 1_850_000, discount_pct: 11.9, status: "pending", created_at: new Date(Date.now() - 32 * 3600000).toISOString(), urgency: "LOW", reason: "Estate liquidation", roi_est: 7.8 },
-  { id: "m5", address: "Piraeus Marina District", city: "Piraeus", property_type: "apartment", sqm: 90, bedrooms: 2, condition: "needs-work", ai_estimate: 195_000, asking_price: 155_000, discount_pct: 20.5, status: "pending", created_at: new Date(Date.now() - 48 * 3600000).toISOString(), urgency: "HIGH", reason: "Urgent financial need", roi_est: 13.4 },
-  { id: "m6", address: "Heraklion, Crete", city: "Heraklion", property_type: "land", sqm: 2400, bedrooms: null, condition: "excellent", ai_estimate: 890_000, asking_price: 760_000, discount_pct: 14.6, status: "pending", created_at: new Date(Date.now() - 72 * 3600000).toISOString(), urgency: "MEDIUM", reason: "Developer exit", roi_est: 9.3 },
-];
+// No mock deals — all data comes from the database
 
 const CITY_BREAKDOWN = [
   { city: "Athens", deals: 22, value: "€68M", pct: 49 },
@@ -663,11 +656,20 @@ export default function InvestorDashboard() {
     setShowGate(false);
   };
 
+  // Deal types — inferred from real DB data
+  type LiveDeal = {
+    id: string; address: string; city: string; property_type: string;
+    sqm: number; bedrooms: number | null; condition: string | null;
+    ai_estimate: number; asking_price: number; discount_pct: number;
+    status: string; created_at: string; urgency: "HIGH" | "MEDIUM" | "LOW";
+    reason: string; roi_est: number;
+  };
+
   // Deal feed state
   const [filterCity, setFilterCity] = useState("all");
   const [filterType, setFilterType] = useState("all");
   const [filterUrgency, setFilterUrgency] = useState("all");
-  const [liveDeals, setLiveDeals] = useState<typeof MOCK_DEALS>([]);
+  const [liveDeals, setLiveDeals] = useState<LiveDeal[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Admin state
@@ -675,7 +677,7 @@ export default function InvestorDashboard() {
   const [adminLoading, setAdminLoading] = useState(false);
   const [adminFilter, setAdminFilter] = useState("all");
 
-  // Load investor feed (own + mock)
+  // Load investor feed — real DB data only
   useEffect(() => {
     const loadDeals = async () => {
       setLoading(true);
@@ -686,7 +688,7 @@ export default function InvestorDashboard() {
           .order("created_at", { ascending: false })
           .limit(50);
 
-        const realDeals = (data || []).map(d => ({
+        const realDeals: LiveDeal[] = (data || []).map(d => ({
           id: d.id,
           address: d.address,
           city: d.city,
@@ -706,9 +708,9 @@ export default function InvestorDashboard() {
           roi_est: 8.5,
         }));
 
-        setLiveDeals([...realDeals, ...MOCK_DEALS]);
+        setLiveDeals(realDeals);
       } catch {
-        setLiveDeals(MOCK_DEALS);
+        setLiveDeals([]);
       } finally {
         setLoading(false);
       }
