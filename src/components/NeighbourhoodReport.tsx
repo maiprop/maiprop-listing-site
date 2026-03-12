@@ -76,10 +76,9 @@ function MiniChart({ trend }: { trend: PriceTrend }) {
   const maxVal = Math.max(...vals);
   const range = (maxVal - minVal) || 1;
 
-  const w = 600, h = 130, padX = 28, padTop = 32, padBottom = 24;
+  const w = 800, h = 160, padX = 40, padTop = 44, padBottom = 32;
   const innerW = w - padX * 2;
   const innerH = h - padTop - padBottom;
-
 
   const xs = points.map((_, i) => padX + (i / (points.length - 1)) * innerW);
   const ys = points.map(p => padTop + innerH - ((p.val - minVal) / range) * innerH);
@@ -95,49 +94,54 @@ function MiniChart({ trend }: { trend: PriceTrend }) {
   const rising = trend.current >= trend.oneYearAgo;
   const lineColour = rising ? "#22c55e" : "#ef4444";
 
-  // Clamp label x so first/last labels don't overflow edges
   const clampX = (x: number, i: number) => {
-    if (i === 0) return Math.max(x, 20);
-    if (i === points.length - 1) return Math.min(x, w - 20);
+    if (i === 0) return Math.max(x, 30);
+    if (i === points.length - 1) return Math.min(x, w - 30);
     return x;
   };
 
   return (
-    <div className="space-y-0 w-full">
-      <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="xMidYMid meet" className="overflow-visible block">
-
+    <div className="w-full overflow-visible">
+      <svg
+        width="100%"
+        height={h}
+        viewBox={`0 0 ${w} ${h}`}
+        preserveAspectRatio="xMidYMid meet"
+        className="overflow-visible block"
+        style={{ minHeight: h }}
+      >
         <defs>
           <linearGradient id="chartFillGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={lineColour} stopOpacity="0.2" />
+            <stop offset="0%" stopColor={lineColour} stopOpacity="0.25" />
             <stop offset="100%" stopColor={lineColour} stopOpacity="0" />
           </linearGradient>
         </defs>
         <path d={fill} fill="url(#chartFillGrad)" />
-        <path d={path} fill="none" stroke={lineColour} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <path d={path} fill="none" stroke={lineColour} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
         {points.map((p, i) => (
           <g key={i}>
-            <circle cx={xs[i]} cy={ys[i]} r="3" fill={lineColour} />
-            {/* Price label above each dot — clamped so it never clips */}
+            <circle cx={xs[i]} cy={ys[i]} r="5" fill={lineColour} />
+            {/* Price label above dot */}
             <text
               x={clampX(xs[i], i)}
-              y={ys[i] - 8}
+              y={ys[i] - 12}
               textAnchor="middle"
-              fontSize="7.5"
+              fontSize="13"
               fontWeight="700"
               fill={lineColour}
-              opacity={i === points.length - 1 ? 1 : 0.65}
+              opacity={i === points.length - 1 ? 1 : 0.75}
             >
               €{p.val >= 1000 ? `${(p.val / 1000).toFixed(1)}k` : p.val}
             </text>
-            {/* Year label — placed inside padBottom zone, fully visible */}
+            {/* Year label bottom */}
             <text
               x={clampX(xs[i], i)}
-              y={h - 4}
+              y={h - 6}
               textAnchor="middle"
-              fontSize="7.5"
+              fontSize="12"
               fontWeight={p.year === String(currentYear) ? "700" : "400"}
               fill={p.year === String(currentYear) ? lineColour : "currentColor"}
-              opacity={p.year === String(currentYear) ? 1 : 0.5}
+              opacity={p.year === String(currentYear) ? 1 : 0.55}
             >
               {p.year}
             </text>
