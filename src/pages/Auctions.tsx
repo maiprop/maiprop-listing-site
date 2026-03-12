@@ -732,7 +732,6 @@ export default function Auctions() {
                         <option>6% – 9%</option>
                         <option>9%+</option>
                       </select>
-                      <Lock className="absolute right-3 top-8 w-3.5 h-3.5 text-brand-gold pointer-events-none" />
                       <div className="absolute -top-1 left-1/2 -translate-x-1/2 -translate-y-full opacity-0 group-hover/pf:opacity-100 transition-opacity z-20 pointer-events-none">
                         <div className="bg-card border border-brand-gold/30 rounded-xl px-3 py-2 shadow-elevated text-center whitespace-nowrap">
                           <p className="text-[10px] font-bold text-brand-gold flex items-center gap-1 justify-center"><Zap className="w-2.5 h-2.5" /> Upgrade to Pro</p>
