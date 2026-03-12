@@ -15,7 +15,7 @@ import { MapView } from "@/components/MapView";
 import { CompareDrawer } from "@/components/CompareDrawer";
 import { SaveSearchModal } from "@/components/SaveSearchModal";
 import { AISearchBar } from "@/components/AISearchBar";
-import { mockProperties } from "@/data/mockProperties";
+
 import { useListings } from "@/hooks/useListings";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCookieConsent } from "@/hooks/useCookieConsent";

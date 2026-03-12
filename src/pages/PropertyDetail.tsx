@@ -262,12 +262,19 @@ export default function PropertyDetail() {
     ...(db.cover_image_url ? [db.cover_image_url] : []),
     ...((dbListing as any).listing_images?.map((img: any) => img.url) || []),
   ];
-  // For auctions, never fall back to stock photos — only show real images
-  const images = dbImages.length
-    ? dbImages
-    : isAuction
-      ? []
-      : ["https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&q=60"];
+
+  // Google Street View Static fallback — uses lat/lng when available, address otherwise
+  const streetViewFallback = (() => {
+    const key = "AIzaSyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY"; // Google Maps static API (publishable)
+    const size = "800x450";
+    if (db.latitude && db.longitude) {
+      return `https://maps.googleapis.com/maps/api/streetview?size=${size}&location=${db.latitude},${db.longitude}&fov=90&pitch=0&key=${key}`;
+    }
+    const q = encodeURIComponent(`${db.address || ""} ${db.city} Greece`.trim());
+    return `https://maps.googleapis.com/maps/api/streetview?size=${size}&location=${q}&fov=90&pitch=0&key=${key}`;
+  })();
+
+  const images = dbImages.length ? dbImages : [streetViewFallback];
 
   // ── Feature groups ──────────────────────────────────────────────────────────
   const internalFeatures: { icon?: any; label: string }[] = [];
