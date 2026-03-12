@@ -1,7 +1,8 @@
 import { useState } from "react";
 import {
   Zap, TrendingUp, TrendingDown, Minus, Loader2,
-  ChevronDown, ChevronUp, Info,
+  ChevronDown, ChevronUp, Info, AlertTriangle, Lightbulb,
+  BarChart3, Droplets,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -13,15 +14,22 @@ interface ValuationResult {
   estimatedValue: number;
   rangeLow: number;
   rangeHigh: number;
+  pricePerSqmEstimate: number;
   confidence: number;
   confidenceLabel: "High" | "Medium" | "Low";
-  pricePerSqmEstimate: number;
+  liquidityScore: number;
   marketComparison: "below_market" | "at_market" | "above_market";
   marketComparisonPct: number;
+  pricingPosition: "underpriced" | "fair" | "overpriced";
+  methodUsed: string;
   summary: string;
   keyFactors: { factor: string; impact: "positive" | "negative" | "neutral"; note: string }[];
-  renovationPotential: string;
+  renovationPotential: string | null;
   rentalYieldEstimate: number;
+  highestBestUseHint: string | null;
+  redFlags: string[];
+  auctionAdjustedValue: number | null;
+  listingQualityScore: number;
 }
 
 export interface PropertyValuationProps {
@@ -35,51 +43,87 @@ export interface PropertyValuationProps {
   propertyType?: string;
   listingType?: string;
   floor?: number | null;
+  totalFloors?: number | null;
   yearBuilt?: number | null;
   energyClass?: string | null;
   pricePerSqm?: number | null;
   hasParking?: boolean | null;
   hasPool?: boolean | null;
   hasElevator?: boolean | null;
+  hasGarden?: boolean | null;
+  hasStorage?: boolean | null;
+  hasBalcony?: boolean | null;
+  hasView?: boolean | null;
+  hasFurnished?: boolean | null;
   region?: string | null;
+  description?: string | null;
+  tags?: string[] | null;
+  ownershipStatus?: string;
+  ownershipPercentage?: number;
+  auctionCourt?: string | null;
+  plotSurface?: number | null;
+  condition?: string | null;
 }
 
-// ── Helper bits ────────────────────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────────────────
 
-function ConfidenceRing({ score, label }: { score: number; label: string }) {
-  const r = 22;
+function ScoreRing({
+  score,
+  label,
+  colour,
+  size = 56,
+}: {
+  score: number;
+  label: string;
+  colour: string;
+  size?: number;
+}) {
+  const r = size / 2 - 5;
   const c = 2 * Math.PI * r;
-  const pct = score / 100;
-  const colour = score >= 75 ? "#22c55e" : score >= 50 ? "#eab308" : "#ef4444";
+  const cx = size / 2;
   return (
     <div className="flex flex-col items-center gap-1">
-      <svg width="60" height="60" viewBox="0 0 60 60">
-        <circle cx="30" cy="30" r={r} fill="none" stroke="hsl(var(--border))" strokeWidth="4" />
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        <circle cx={cx} cy={cx} r={r} fill="none" stroke="hsl(var(--border))" strokeWidth="4" />
         <circle
-          cx="30" cy="30" r={r} fill="none"
+          cx={cx} cy={cx} r={r} fill="none"
           stroke={colour} strokeWidth="4"
-          strokeDasharray={`${c * pct} ${c * (1 - pct)}`}
+          strokeDasharray={`${c * (score / 100)} ${c * (1 - score / 100)}`}
           strokeLinecap="round"
-          transform="rotate(-90 30 30)"
+          transform={`rotate(-90 ${cx} ${cx})`}
         />
-        <text x="30" y="34" textAnchor="middle" fontSize="13" fontWeight="700" fill={colour}>{score}</text>
+        <text x={cx} y={cx + 4} textAnchor="middle" fontSize="12" fontWeight="700" fill={colour}>{score}</text>
       </svg>
-      <span className="text-[10px] font-semibold" style={{ color: colour }}>{label}</span>
+      <span className="text-[9px] font-semibold uppercase tracking-wide" style={{ color: colour }}>{label}</span>
     </div>
   );
 }
 
+function scoreColour(score: number) {
+  if (score >= 70) return "#22c55e";
+  if (score >= 45) return "#eab308";
+  return "#ef4444";
+}
+
+function liquidityColour(score: number) {
+  if (score >= 65) return "#22c55e";
+  if (score >= 35) return "#f97316";
+  return "#ef4444";
+}
+
 const IMPACT_ICON: Record<string, React.ReactNode> = {
-  positive: <TrendingUp className="w-3 h-3 text-emerald-400 shrink-0" />,
-  negative: <TrendingDown className="w-3 h-3 text-red-400 shrink-0" />,
-  neutral:  <Minus className="w-3 h-3 text-muted-foreground shrink-0" />,
+  positive: <TrendingUp className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />,
+  negative: <TrendingDown className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />,
+  neutral:  <Minus className="w-3.5 h-3.5 text-muted-foreground shrink-0 mt-0.5" />,
 };
 
-const CMP_CONFIG = {
-  below_market: { label: "Below Market", colour: "text-emerald-400", bg: "bg-emerald-400/10 border-emerald-400/20" },
-  at_market:    { label: "At Market",    colour: "text-yellow-400",  bg: "bg-yellow-400/10 border-yellow-400/20" },
-  above_market: { label: "Above Market", colour: "text-red-400",     bg: "bg-red-400/10 border-red-400/20" },
+const PRICING_CONFIG = {
+  underpriced: { label: "Underpriced",  colour: "text-emerald-400", bg: "bg-emerald-400/10 border-emerald-400/25" },
+  fair:        { label: "Fair Value",   colour: "text-yellow-400",  bg: "bg-yellow-400/10 border-yellow-400/25" },
+  overpriced:  { label: "Overpriced",   colour: "text-red-400",     bg: "bg-red-400/10 border-red-400/25" },
 };
+
+function fmt(n: number) { return n.toLocaleString("el-GR"); }
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
@@ -91,9 +135,7 @@ export default function PropertyValuation(props: PropertyValuationProps) {
   const runValuation = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("property-valuation", {
-        body: props,
-      });
+      const { data, error } = await supabase.functions.invoke("property-valuation", { body: props });
       if (error) throw new Error(error.message);
       if (data?.error) throw new Error(data.error);
       setResult(data as ValuationResult);
@@ -107,25 +149,25 @@ export default function PropertyValuation(props: PropertyValuationProps) {
 
   const diff = result ? result.estimatedValue - props.price : 0;
   const diffPct = result ? Math.round((diff / props.price) * 100) : 0;
-  const cmp = result ? CMP_CONFIG[result.marketComparison] : null;
+  const pricing = result ? PRICING_CONFIG[result.pricingPosition as keyof typeof PRICING_CONFIG] : null;
 
   return (
-    <div className="glass-card rounded-xl overflow-hidden border border-primary/20">
+    <div className="glass-card rounded-2xl overflow-hidden border border-primary/20">
       {/* Header */}
       <div className="flex items-center gap-2 px-5 py-3.5 bg-primary/5 border-b border-primary/20">
         <Zap className="w-4 h-4 text-primary" />
         <h4 className="font-display font-semibold text-sm flex-1">AI Property Valuation</h4>
         <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/15 text-primary font-semibold">
-          mAI Prop OS
+          mAI Prop · 2026 Model
         </span>
       </div>
 
       <div className="p-5">
-        {/* CTA state */}
+        {/* ── CTA state ── */}
         {!result && (
           <div className="text-center space-y-3">
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Get an instant AI-powered market valuation based on comparable sales, location data, and current trends.
+              Type-specific AI valuation using 2026 Greek market benchmarks — price range, confidence score, liquidity rating, and key value drivers.
             </p>
             <Button
               className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2"
@@ -134,36 +176,52 @@ export default function PropertyValuation(props: PropertyValuationProps) {
             >
               {loading
                 ? <><Loader2 className="w-4 h-4 animate-spin" /> Analysing…</>
-                : <><Zap className="w-4 h-4" /> Get AI Valuation</>
-              }
+                : <><Zap className="w-4 h-4" /> Run AI Valuation</>}
             </Button>
-            <p className="text-[10px] text-muted-foreground">Free · Instant · AI-powered estimate</p>
+            <p className="text-[10px] text-muted-foreground">Free · Instant · Not a formal appraisal</p>
           </div>
         )}
 
-        {/* Result state */}
+        {/* ── Result state ── */}
         {result && (
           <div className="space-y-4">
-            {/* Top row: estimated value + confidence */}
-            <div className="flex items-center gap-4">
-              <div className="flex-1">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">AI Estimated Value</p>
-                <p className="font-display font-black text-2xl text-foreground">
-                  €{result.estimatedValue.toLocaleString()}
+
+            {/* Estimated value + score rings */}
+            <div className="flex items-start gap-4">
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
+                  {result.auctionAdjustedValue ? "Auction-Adjusted Value" : "AI Estimated Value"}
                 </p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  €{result.rangeLow.toLocaleString()} – €{result.rangeHigh.toLocaleString()}
+                <p className="font-display font-black text-2xl text-foreground leading-none">
+                  €{fmt(result.estimatedValue)}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1.5 font-mono">
+                  €{fmt(result.rangeLow)} — €{fmt(result.rangeHigh)}
+                </p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  ≈ €{fmt(result.pricePerSqmEstimate)}/sqm (market)
                 </p>
               </div>
-              <ConfidenceRing score={result.confidence} label={result.confidenceLabel} />
+              <div className="flex gap-3 shrink-0">
+                <ScoreRing score={result.confidence} label="Confidence" colour={scoreColour(result.confidence)} />
+                <ScoreRing score={result.liquidityScore} label="Liquidity" colour={liquidityColour(result.liquidityScore)} size={56} />
+              </div>
             </div>
 
-            {/* Market comparison badge */}
-            {cmp && (
-              <div className={`flex items-center justify-between px-3 py-2 rounded-xl border ${cmp.bg}`}>
-                <span className={`text-xs font-semibold ${cmp.colour}`}>{cmp.label}</span>
-                <span className={`text-xs font-bold ${cmp.colour}`}>
-                  {result.marketComparisonPct > 0 ? "+" : ""}{result.marketComparisonPct}%
+            {/* Auction clean market value (if auction) */}
+            {result.auctionAdjustedValue && (
+              <div className="bg-amber-500/8 border border-amber-500/20 rounded-xl px-3 py-2 text-xs">
+                <span className="text-muted-foreground">Clean market value (pre-auction): </span>
+                <span className="font-bold text-amber-400">€{fmt(result.auctionAdjustedValue)}</span>
+              </div>
+            )}
+
+            {/* Pricing position badge */}
+            {pricing && (
+              <div className={`flex items-center justify-between px-3 py-2 rounded-xl border ${pricing.bg}`}>
+                <span className={`text-xs font-semibold ${pricing.colour}`}>{pricing.label}</span>
+                <span className={`text-xs font-bold font-mono ${pricing.colour}`}>
+                  {result.marketComparisonPct > 0 ? "+" : ""}{result.marketComparisonPct}% vs. market
                 </span>
               </div>
             )}
@@ -171,41 +229,77 @@ export default function PropertyValuation(props: PropertyValuationProps) {
             {/* vs listed price */}
             <div className="flex items-center justify-between text-xs border-t border-border pt-3">
               <span className="text-muted-foreground">vs. Listed Price</span>
-              <span className={`font-bold ${diff >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                {diff >= 0 ? "+" : ""}€{Math.abs(diff).toLocaleString()} ({diffPct > 0 ? "+" : ""}{diffPct}%)
+              <span className={`font-bold font-mono ${diff >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                {diff >= 0 ? "+" : ""}€{fmt(Math.abs(diff))} ({diffPct > 0 ? "+" : ""}{diffPct}%)
               </span>
             </div>
 
-            {/* Rental yield */}
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">Est. Rental Yield</span>
-              <span className="font-semibold text-primary">{result.rentalYieldEstimate}% p.a.</span>
+            {/* Rental yield + listing quality */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex items-center justify-between text-xs bg-secondary/50 rounded-lg px-2.5 py-2">
+                <span className="text-muted-foreground">Rental Yield</span>
+                <span className="font-semibold text-primary">{result.rentalYieldEstimate}% p.a.</span>
+              </div>
+              <div className="flex items-center justify-between text-xs bg-secondary/50 rounded-lg px-2.5 py-2">
+                <span className="text-muted-foreground">Data Quality</span>
+                <span className="font-semibold" style={{ color: scoreColour(result.listingQualityScore) }}>
+                  {result.listingQualityScore}/100
+                </span>
+              </div>
             </div>
 
-            {/* Expand/collapse toggle */}
+            {/* Red flags (if any) */}
+            {result.redFlags.length > 0 && (
+              <div className="bg-red-500/8 border border-red-500/20 rounded-xl p-3 space-y-1.5">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-red-400 flex items-center gap-1.5">
+                  <AlertTriangle className="w-3 h-3" /> Red Flags
+                </p>
+                {result.redFlags.map((flag, i) => (
+                  <p key={i} className="text-xs text-red-300/90 flex items-start gap-1.5">
+                    <span className="shrink-0 mt-0.5">•</span>{flag}
+                  </p>
+                ))}
+              </div>
+            )}
+
+            {/* Expand toggle */}
             <button
               onClick={() => setExpanded(v => !v)}
               className="flex items-center gap-1 text-xs text-primary hover:underline w-full justify-center"
             >
-              {expanded ? <><ChevronUp className="w-3 h-3" />Hide details</> : <><ChevronDown className="w-3 h-3" />Full analysis</>}
+              {expanded
+                ? <><ChevronUp className="w-3 h-3" />Hide analysis</>
+                : <><ChevronDown className="w-3 h-3" />Full analysis</>}
             </button>
 
+            {/* Expanded section */}
             {expanded && (
               <div className="space-y-4 border-t border-border pt-4">
+
+                {/* Method used */}
+                {result.methodUsed && (
+                  <div className="flex items-center gap-1.5">
+                    <BarChart3 className="w-3 h-3 text-muted-foreground shrink-0" />
+                    <p className="text-[10px] text-muted-foreground italic">{result.methodUsed}</p>
+                  </div>
+                )}
+
                 {/* Summary */}
                 <p className="text-xs text-muted-foreground leading-relaxed">{result.summary}</p>
 
                 {/* Key factors */}
                 {result.keyFactors.length > 0 && (
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Key Factors</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Key Value Drivers</p>
                     <div className="space-y-2">
                       {result.keyFactors.map((f, i) => (
                         <div key={i} className="flex items-start gap-2">
                           {IMPACT_ICON[f.impact]}
                           <div>
                             <span className="text-xs font-medium">{f.factor}</span>
-                            {f.note && <span className="text-[10px] text-muted-foreground ml-1.5">{f.note}</span>}
+                            {f.note && (
+                              <span className="text-[10px] text-muted-foreground ml-1.5 block leading-snug">{f.note}</span>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -216,13 +310,37 @@ export default function PropertyValuation(props: PropertyValuationProps) {
                 {/* Renovation potential */}
                 {result.renovationPotential && (
                   <div className="flex items-start gap-2 bg-secondary rounded-xl p-3">
-                    <Info className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+                    <Droplets className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
                     <div>
                       <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Renovation Potential</p>
-                      <p className="text-xs text-foreground">{result.renovationPotential}</p>
+                      <p className="text-xs text-foreground leading-relaxed">{result.renovationPotential}</p>
                     </div>
                   </div>
                 )}
+
+                {/* Highest & best use hint */}
+                {result.highestBestUseHint && (
+                  <div className="flex items-start gap-2 bg-primary/5 border border-primary/20 rounded-xl p-3">
+                    <Lightbulb className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-[10px] font-bold text-primary/70 uppercase tracking-wider mb-0.5">Highest &amp; Best Use</p>
+                      <p className="text-xs text-foreground leading-relaxed">{result.highestBestUseHint}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Confidence interpretation */}
+                <div className="flex items-start gap-2 bg-secondary/60 rounded-xl p-3">
+                  <Info className="w-3.5 h-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                  <p className="text-[10px] text-muted-foreground leading-relaxed">
+                    {result.confidence >= 75
+                      ? "Strong estimate — good listing data and comparable market depth."
+                      : result.confidence >= 50
+                      ? "Usable estimate — some missing fields reduce precision. Range reflects uncertainty."
+                      : "Low-confidence estimate — limited data. Treat range as indicative only."}
+                    {" "}Liquidity: {result.liquidityScore >= 65 ? "high" : result.liquidityScore >= 35 ? "moderate" : "low"} for this asset type.
+                  </p>
+                </div>
 
                 {/* Rerun */}
                 <button
@@ -236,8 +354,8 @@ export default function PropertyValuation(props: PropertyValuationProps) {
               </div>
             )}
 
-            <p className="text-[10px] text-muted-foreground text-center">
-              AI estimate only · Not a formal appraisal · Updated {new Date().toLocaleDateString("en-GB")}
+            <p className="text-[10px] text-muted-foreground text-center leading-relaxed">
+              AI estimate only · Not a formal appraisal · 2026 Greek market model
             </p>
           </div>
         )}
