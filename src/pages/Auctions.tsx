@@ -1,15 +1,17 @@
 import { useState, useMemo } from "react";
-import { Gavel, TrendingUp, Bell, ExternalLink, AlertCircle, Loader2, MapPin, Calendar, Euro, Map, List, Clock, SlidersHorizontal, X, Lock, Star } from "lucide-react";
+import { Gavel, TrendingUp, Bell, ExternalLink, AlertCircle, Loader2, MapPin, Calendar, Euro, Map, List, Clock, SlidersHorizontal, X, Lock, Star, Heart, Share2, Flag, Building2, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { MapView, MapListing } from "@/components/MapView";
 import { AuctionAlertModal } from "@/components/AuctionAlertModal";
 import { useAuth } from "@/contexts/AuthContext";
+import { useToggleFavorite } from "@/hooks/useFavorites";
+import { toast } from "sonner";
 
 // ── Fetch all future auctions from DB ─────────────────────────────────────────
 function useAuctionListings() {
@@ -18,7 +20,7 @@ function useAuctionListings() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("listings")
-        .select("id, title, city, address, price, auction_starting_bid, auction_date, auction_court, property_type, cover_image_url, sqm, bedrooms, bathrooms, latitude, longitude, tags, year_built, construction_status")
+        .select("id, title, city, address, price, auction_starting_bid, auction_date, auction_court, property_type, cover_image_url, sqm, bedrooms, bathrooms, latitude, longitude, tags, year_built, construction_status, website_url, region")
         .eq("listing_type", "auction")
         .eq("status", "active")
         .gte("auction_date", new Date().toISOString())
@@ -29,8 +31,6 @@ function useAuctionListings() {
     },
   });
 }
-
-const CITY_FILTERS = ["All Cities", "Αθήνα", "Θεσσαλονίκη", "Πειραιάς", "Πάτρα", "Ηράκλειο", "Λάρισα", "Βόλος"];
 
 const PROPERTY_TYPES = [
   { value: "", label: "All Types" },
@@ -70,6 +70,14 @@ const YEAR_RANGES = [
   { label: "Post-2020", value: "2020-2100" },
 ];
 
+const OWNERSHIP_STATUSES = [
+  { value: "", label: "Any Status" },
+  { value: "free", label: "Free of Encumbrances" },
+  { value: "mortgaged", label: "With Mortgage" },
+  { value: "occupied", label: "Occupied" },
+  { value: "vacated", label: "Vacated" },
+];
+
 type ViewMode = "list" | "map";
 
 function daysUntil(dateStr?: string | null): number | null {
@@ -92,6 +100,20 @@ function streetViewImg(lat?: number | null, lng?: number | null): string | null 
   return `https://maps.googleapis.com/maps/api/streetview?size=600x300&location=${lat},${lng}&fov=90&pitch=5`;
 }
 
+/** Extract ownership status tag from tags array */
+function getOwnershipStatus(tags?: string[] | null): string | null {
+  if (!tags) return null;
+  const tag = tags.find(t => t.startsWith("ownership:"));
+  return tag ? tag.replace("ownership:", "") : null;
+}
+
+const OWNERSHIP_BADGE: Record<string, { label: string; cls: string }> = {
+  free:     { label: "Χωρίς βάρη", cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/25" },
+  mortgaged:{ label: "Με υποθήκη", cls: "bg-amber-500/15 text-amber-400 border-amber-500/25" },
+  occupied: { label: "Κατειλημμένο", cls: "bg-destructive/15 text-destructive border-destructive/25" },
+  vacated:  { label: "Κενό", cls: "bg-blue-500/15 text-blue-400 border-blue-500/25" },
+};
+
 // Premium lock badge
 function PremiumBadge() {
   return (
@@ -101,24 +123,197 @@ function PremiumBadge() {
   );
 }
 
+// ── Auction card with favorite/share/report ────────────────────────────────────
+function AuctionCard({ a, favoritedIds, onToggleFav }: {
+  a: any;
+  favoritedIds: Set<string>;
+  onToggleFav: (id: string, isFav: boolean) => void;
+}) {
+  const days = daysUntil(a.auction_date);
+  const badge = countdownBadge(days);
+  const imgSrc = a.cover_image_url ?? streetViewImg(a.latitude, a.longitude);
+  const isFav = favoritedIds.has(a.id);
+  const ownershipStatus = getOwnershipStatus(a.tags);
+  const ownershipBadge = ownershipStatus ? OWNERSHIP_BADGE[ownershipStatus] : null;
+
+  const handleShare = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    const url = `${window.location.origin}/property/${a.id}`;
+    if (navigator.share) {
+      try { await navigator.share({ title: a.title, url }); } catch {}
+    } else {
+      await navigator.clipboard.writeText(url);
+      toast.success("Link copied to clipboard");
+    }
+  };
+
+  const handleReport = (e: React.MouseEvent) => {
+    e.preventDefault();
+    toast.info("Report submitted. Our team will review it.");
+  };
+
+  return (
+    <div className="glass-card rounded-xl overflow-hidden border border-border hover:border-brand-gold/40 transition-all group flex flex-col">
+      {/* Image */}
+      <Link to={`/property/${a.id}`} className="relative h-44 bg-secondary overflow-hidden block">
+        {imgSrc ? (
+          <img
+            src={imgSrc}
+            alt={a.title}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <Gavel className="w-10 h-10 text-muted-foreground/20" />
+          </div>
+        )}
+        {a.auction_date && (
+          <div className="absolute top-2 left-2 flex items-center gap-1 bg-background/90 backdrop-blur-sm border border-border rounded-full px-2 py-0.5 text-[10px] font-semibold">
+            <Calendar className="w-3 h-3 text-brand-gold" />
+            {format(new Date(a.auction_date), "dd MMM yyyy")}
+          </div>
+        )}
+        <div className="absolute top-2 right-2 bg-brand-gold/90 text-background text-[10px] font-bold px-2 py-0.5 rounded-full">
+          {PROPERTY_TYPE_GR[a.property_type] ?? a.property_type}
+        </div>
+        {badge && (
+          <div className={`absolute bottom-2 right-2 flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${badge.cls}`}>
+            <Clock className="w-3 h-3" />
+            {badge.label}
+          </div>
+        )}
+      </Link>
+
+      {/* Info */}
+      <div className="p-4 space-y-2 flex-1 flex flex-col">
+        <Link to={`/property/${a.id}`}>
+          <h3 className="font-semibold text-sm line-clamp-2 group-hover:text-brand-gold transition-colors">
+            {a.title}
+          </h3>
+        </Link>
+        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+          <MapPin className="w-3 h-3 shrink-0" />
+          <span className="truncate">{a.address ? `${a.address}, ` : ""}{a.city}</span>
+        </div>
+
+        {/* Ownership status badge */}
+        {ownershipBadge && (
+          <div className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border w-fit ${ownershipBadge.cls}`}>
+            <Building2 className="w-2.5 h-2.5" />
+            {ownershipBadge.label}
+          </div>
+        )}
+
+        {a.year_built && (
+          <div className="text-xs text-muted-foreground">Built {a.year_built}</div>
+        )}
+        <div className="flex items-center justify-between pt-1">
+          <div className="flex items-center gap-1 font-display font-bold text-brand-gold">
+            <Euro className="w-3.5 h-3.5" />
+            {(a.auction_starting_bid ?? a.price ?? 0).toLocaleString("el-GR")}
+          </div>
+          {a.sqm && a.sqm > 1 && (
+            <span className="text-xs text-muted-foreground">{a.sqm} τ.μ.</span>
+          )}
+        </div>
+        {a.auction_court && (
+          <p className="text-[10px] text-muted-foreground truncate">
+            {a.auction_court}
+          </p>
+        )}
+
+        {/* Action row */}
+        <div className="mt-auto pt-3 border-t border-border flex items-center gap-2">
+          {/* Favorite */}
+          <button
+            onClick={(e) => { e.preventDefault(); onToggleFav(a.id, isFav); }}
+            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all border ${
+              isFav
+                ? "bg-rose-500/15 border-rose-500/30 text-rose-400"
+                : "bg-secondary border-border text-muted-foreground hover:text-foreground"
+            }`}
+            aria-label="Save"
+          >
+            <Heart className={`w-3.5 h-3.5 ${isFav ? "fill-current text-rose-400" : ""}`} />
+            {isFav ? "Saved" : "Save"}
+          </button>
+
+          {/* Share */}
+          <button
+            onClick={handleShare}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-secondary border border-border text-muted-foreground hover:text-foreground transition-all"
+            aria-label="Share"
+          >
+            <Share2 className="w-3.5 h-3.5" />
+            Share
+          </button>
+
+          {/* Report */}
+          <button
+            onClick={handleReport}
+            className="ml-auto p-1.5 rounded-lg text-muted-foreground/50 hover:text-muted-foreground hover:bg-secondary transition-all"
+            aria-label="Report"
+          >
+            <Flag className="w-3.5 h-3.5" />
+          </button>
+
+          {/* External link */}
+          {a.website_url && (
+            <a
+              href={a.website_url}
+              target="_blank"
+              rel="noreferrer noopener"
+              onClick={(e) => e.stopPropagation()}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold bg-brand-gold/10 border border-brand-gold/25 text-brand-gold hover:bg-brand-gold/20 transition-all"
+            >
+              <ExternalLink className="w-3 h-3" />
+              eAuction
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Auctions() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [selectedCity, setSelectedCity] = useState("All Cities");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [showFilters, setShowFilters] = useState(false);
   const [alertModalOpen, setAlertModalOpen] = useState(false);
+  const [favoritedIds, setFavoritedIds] = useState<Set<string>>(new Set());
 
   // Standard filters
   const [filterType, setFilterType] = useState("");
   const [filterBidRange, setFilterBidRange] = useState("");
   const [filterYearRange, setFilterYearRange] = useState("");
+  const [filterOwnership, setFilterOwnership] = useState("");
 
-  // Premium filters (UI only — locked for non-pro, visually available)
-  const [filterRound, setFilterRound] = useState(""); // 1st, 2nd, 3rd+ auction
-  const [filterYield, setFilterYield] = useState(""); // expected rental yield band
-  const [filterOwnership, setFilterOwnership] = useState(""); // free / encumbered
+  // Premium filters
+  const [filterRound, setFilterRound] = useState("");
+  const [filterYield, setFilterYield] = useState("");
 
   const { data: auctions = [], isLoading, error } = useAuctionListings();
+  const toggleFav = useToggleFavorite();
+
+  // Dynamic city list from actual data
+  const cityOptions = useMemo(() => {
+    const cities = Array.from(new Set(auctions.map(a => a.city).filter(Boolean))).sort();
+    return ["All Cities", ...cities];
+  }, [auctions]);
+
+  const handleToggleFav = (id: string, isFav: boolean) => {
+    if (!user) { navigate("/login"); return; }
+    toggleFav.mutate({ listing_id: id, isFavorited: isFav });
+    setFavoritedIds(prev => {
+      const next = new Set(prev);
+      if (isFav) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
 
   // Apply all filters client-side
   const filtered = useMemo(() => {
@@ -134,19 +329,23 @@ export default function Auctions() {
         const [min, max] = filterYearRange.split("-").map(Number);
         if (a.year_built < min || a.year_built > max) return false;
       }
+      if (filterOwnership) {
+        const ownershipTag = `ownership:${filterOwnership}`;
+        if (!a.tags?.includes(ownershipTag)) return false;
+      }
       return true;
     });
-  }, [auctions, selectedCity, filterType, filterBidRange, filterYearRange]);
+  }, [auctions, selectedCity, filterType, filterBidRange, filterYearRange, filterOwnership]);
 
-  const activeFilterCount = [filterType, filterBidRange, filterYearRange, filterRound, filterYield, filterOwnership].filter(Boolean).length;
+  const activeFilterCount = [filterType, filterBidRange, filterYearRange, filterOwnership, filterRound, filterYield].filter(Boolean).length;
 
   const clearFilters = () => {
     setFilterType("");
     setFilterBidRange("");
     setFilterYearRange("");
+    setFilterOwnership("");
     setFilterRound("");
     setFilterYield("");
-    setFilterOwnership("");
   };
 
   const now = new Date();
@@ -161,11 +360,15 @@ export default function Auctions() {
     ? Math.round(filtered.reduce((sum, a) => sum + (a.auction_starting_bid ?? a.price ?? 0), 0) / filtered.length)
     : 0;
 
+  // Compute % of auctions that have a starting bid below stated price
+  const withDiscount = filtered.filter(a => a.auction_starting_bid && a.price && a.auction_starting_bid < a.price).length;
+  const discountPct = filtered.length > 0 ? Math.round((withDiscount / filtered.length) * 100) : 0;
+
   const auctionStats = [
     { value: isLoading ? "—" : String(thisWeek), label: "This Week", icon: Gavel },
     { value: isLoading ? "—" : filtered.length.toLocaleString(), label: "Total Listed", icon: TrendingUp },
     { value: isLoading ? "—" : avgBid > 0 ? `€${(avgBid / 1000).toFixed(0)}k` : "—", label: "Avg Starting Bid", icon: TrendingUp },
-    { value: "-38%", label: "Below Market Avg", icon: AlertCircle },
+    { value: isLoading ? "—" : `${discountPct}%`, label: "Below Listed Price", icon: AlertCircle },
   ];
 
   const mapListings: MapListing[] = filtered
@@ -232,24 +435,21 @@ export default function Auctions() {
           </div>
         </div>
 
-        {/* Toolbar: city filters + filters + view toggle */}
+        {/* Toolbar */}
         <div className="container pb-4">
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            {/* City pills */}
-            <div className="flex gap-2 flex-wrap">
-              {CITY_FILTERS.map(city => (
-                <button
-                  key={city}
-                  onClick={() => setSelectedCity(city)}
-                  className={`px-3 py-1.5 rounded-full text-sm transition-all ${
-                    selectedCity === city
-                      ? "bg-brand-gold/20 border border-brand-gold/40 text-brand-gold"
-                      : "bg-secondary border border-border text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {city}
-                </button>
-              ))}
+            {/* Area dropdown */}
+            <div className="relative">
+              <select
+                value={selectedCity}
+                onChange={e => setSelectedCity(e.target.value)}
+                className="appearance-none bg-secondary border border-border rounded-xl pl-3 pr-8 py-2 text-sm text-foreground outline-none focus:border-primary cursor-pointer"
+              >
+                {cityOptions.map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
@@ -311,7 +511,7 @@ export default function Auctions() {
               {/* Standard filters */}
               <div>
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Standard Filters</p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   {/* Typology */}
                   <div>
                     <label className="text-xs text-muted-foreground font-medium block mb-1.5">Property Type</label>
@@ -347,6 +547,18 @@ export default function Auctions() {
                       {YEAR_RANGES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                     </select>
                   </div>
+
+                  {/* Ownership status — now a real filter */}
+                  <div>
+                    <label className="text-xs text-muted-foreground font-medium block mb-1.5">Ownership Status</label>
+                    <select
+                      value={filterOwnership}
+                      onChange={e => setFilterOwnership(e.target.value)}
+                      className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none"
+                    >
+                      {OWNERSHIP_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                    </select>
+                  </div>
                 </div>
               </div>
 
@@ -356,7 +568,7 @@ export default function Auctions() {
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Premium Filters</p>
                   <PremiumBadge />
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Auction round */}
                   <div className="relative">
                     <label className="text-xs text-muted-foreground font-medium block mb-1.5 flex items-center gap-1.5">
@@ -403,29 +615,6 @@ export default function Auctions() {
                       </span>
                     </div>
                   </div>
-
-                  {/* Ownership status */}
-                  <div className="relative">
-                    <label className="text-xs text-muted-foreground font-medium block mb-1.5 flex items-center gap-1.5">
-                      Ownership Status <PremiumBadge />
-                    </label>
-                    <select
-                      value={filterOwnership}
-                      onChange={() => {}}
-                      disabled
-                      className="w-full bg-secondary/50 border border-border/50 rounded-xl px-3 py-2.5 text-sm text-muted-foreground outline-none cursor-not-allowed appearance-none opacity-60"
-                    >
-                      <option value="">Any Status</option>
-                      <option value="free">Free of Encumbrances</option>
-                      <option value="mortgaged">With Mortgage</option>
-                      <option value="occupied">Occupied</option>
-                    </select>
-                    <div className="absolute inset-0 rounded-xl flex items-center justify-center bg-card/60 backdrop-blur-[1px] cursor-not-allowed">
-                      <span className="flex items-center gap-1.5 text-xs font-semibold text-brand-gold">
-                        <Lock className="w-3.5 h-3.5" /> Upgrade to Pro
-                      </span>
-                    </div>
-                  </div>
                 </div>
 
                 {/* Upsell */}
@@ -449,6 +638,7 @@ export default function Auctions() {
               {filterType && <button onClick={() => setFilterType("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors capitalize">{filterType} <X className="w-3 h-3" /></button>}
               {filterBidRange && <button onClick={() => setFilterBidRange("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{BID_RANGES.find(r => r.value === filterBidRange)?.label} <X className="w-3 h-3" /></button>}
               {filterYearRange && <button onClick={() => setFilterYearRange("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{YEAR_RANGES.find(r => r.value === filterYearRange)?.label} <X className="w-3 h-3" /></button>}
+              {filterOwnership && <button onClick={() => setFilterOwnership("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{OWNERSHIP_STATUSES.find(s => s.value === filterOwnership)?.label} <X className="w-3 h-3" /></button>}
               <button onClick={clearFilters} className="text-xs text-muted-foreground hover:text-foreground ml-1">Clear all</button>
             </div>
           )}
@@ -520,77 +710,14 @@ export default function Auctions() {
                   {" · "}ordered by auction date
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {filtered.map(a => {
-                    const days = daysUntil(a.auction_date);
-                    const badge = countdownBadge(days);
-                    const imgSrc = a.cover_image_url ?? streetViewImg(a.latitude, a.longitude);
-                    return (
-                      <Link
-                        key={a.id}
-                        to={`/property/${a.id}`}
-                        className="glass-card rounded-xl overflow-hidden border border-border hover:border-brand-gold/40 transition-all group"
-                      >
-                        {/* Image */}
-                        <div className="relative h-44 bg-secondary overflow-hidden">
-                          {imgSrc ? (
-                            <img
-                              src={imgSrc}
-                              alt={a.title}
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center">
-                              <Gavel className="w-10 h-10 text-muted-foreground/20" />
-                            </div>
-                          )}
-                          {a.auction_date && (
-                            <div className="absolute top-2 left-2 flex items-center gap-1 bg-background/90 backdrop-blur-sm border border-border rounded-full px-2 py-0.5 text-[10px] font-semibold">
-                              <Calendar className="w-3 h-3 text-brand-gold" />
-                              {format(new Date(a.auction_date), "dd MMM yyyy")}
-                            </div>
-                          )}
-                          <div className="absolute top-2 right-2 bg-brand-gold/90 text-background text-[10px] font-bold px-2 py-0.5 rounded-full">
-                            {PROPERTY_TYPE_GR[a.property_type] ?? a.property_type}
-                          </div>
-                          {badge && (
-                            <div className={`absolute bottom-2 right-2 flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${badge.cls}`}>
-                              <Clock className="w-3 h-3" />
-                              {badge.label}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Info */}
-                        <div className="p-4 space-y-2">
-                          <h3 className="font-semibold text-sm line-clamp-2 group-hover:text-brand-gold transition-colors">
-                            {a.title}
-                          </h3>
-                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <MapPin className="w-3 h-3 shrink-0" />
-                            <span className="truncate">{a.address ? `${a.address}, ` : ""}{a.city}</span>
-                          </div>
-                          {a.year_built && (
-                            <div className="text-xs text-muted-foreground">Built {a.year_built}</div>
-                          )}
-                          <div className="flex items-center justify-between pt-1">
-                            <div className="flex items-center gap-1 font-display font-bold text-brand-gold">
-                              <Euro className="w-3.5 h-3.5" />
-                              {(a.auction_starting_bid ?? a.price ?? 0).toLocaleString("el-GR")}
-                            </div>
-                            {a.sqm && a.sqm > 1 && (
-                              <span className="text-xs text-muted-foreground">{a.sqm} τ.μ.</span>
-                            )}
-                          </div>
-                          {a.auction_court && (
-                            <p className="text-[10px] text-muted-foreground truncate">
-                              {a.auction_court}
-                            </p>
-                          )}
-                        </div>
-                      </Link>
-                    );
-                  })}
+                  {filtered.map(a => (
+                    <AuctionCard
+                      key={a.id}
+                      a={a}
+                      favoritedIds={favoritedIds}
+                      onToggleFav={handleToggleFav}
+                    />
+                  ))}
                 </div>
               </>
             )}
