@@ -210,6 +210,9 @@ function AuctionCard({ a, favoritedIds, onToggleFav }: {
           <div className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border w-fit ${ownershipBadge.cls}`}>
             <Building2 className="w-2.5 h-2.5" />
             {ownershipBadge.label}
+            {ownershipPct != null && ownershipPct < 100 && (
+              <span className="opacity-80">({ownershipPct}%)</span>
+            )}
           </div>
         )}
 
