@@ -1225,7 +1225,6 @@ export default function PropertyDetail() {
                   </div>
                 </div>
               )}
-                      <Lock className="w-5 h-5 text-primary" />
                     </div>
                     <p className="font-display font-bold text-sm">Pro Feature</p>
                     <p className="text-xs text-muted-foreground leading-relaxed">
