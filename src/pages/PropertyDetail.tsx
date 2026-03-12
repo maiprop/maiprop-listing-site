@@ -1038,8 +1038,8 @@ export default function PropertyDetail() {
                         €{(isAuction && db.auction_starting_bid ? Number(db.auction_starting_bid) : price).toLocaleString()}
                         {listingType === "rent" && <span className="text-sm font-normal text-muted-foreground">/mo</span>}
                       </p>
-                      {isAuction && db.auction_starting_bid && (
-                        <p className="text-xs text-muted-foreground mt-0.5">Market value: €{price.toLocaleString()}</p>
+                  {isAuction && db.auction_starting_bid && (
+                        <p className="text-xs text-muted-foreground mt-0.5">Full value: €{price.toLocaleString()}</p>
                       )}
                       {!isAuction && pricePerSqm && <p className="text-xs text-muted-foreground mt-0.5">€{Number(pricePerSqm).toLocaleString()}/m²</p>}
                     </div>
