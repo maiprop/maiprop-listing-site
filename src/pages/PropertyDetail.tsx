@@ -337,13 +337,10 @@ export default function PropertyDetail() {
     .slice(0, 4);
 
   // AI Market Insights — only show if db has an ai_score
-  const hasAIScore = db.ai_score != null;
-  const aiInsights = hasAIScore ? [
-    { label: "Investment Score", value: `${db.ai_score}`, unit: "/100", trend: "AI-assessed", color: "text-primary" },
-    { label: "vs Market", value: "-8%", unit: "below avg", trend: "Good deal", color: "text-brand-emerald" },
-    { label: "Rental Yield", value: "4.8%", unit: "p.a. est.", trend: "Stable", color: "text-brand-gold" },
-    { label: "Capital Growth", value: "+12%", unit: "5yr", trend: "Athens avg +9%", color: "text-accent" },
-  ] : null;
+  const hasAIScore = db.ai_score != null && db.ai_score > 0;
+  const aiInsights = hasAIScore
+    ? [{ label: "Investment Score", value: `${db.ai_score}`, unit: "/100", trend: "AI-assessed", color: "text-primary" }]
+    : null;
 
   // Build property details rows grouped
   const detailRows: { label: string; value: string }[] = [
