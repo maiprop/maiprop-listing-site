@@ -414,18 +414,27 @@ export default function Auctions() {
         const [min, max] = filterYearRange.split("-").map(Number);
         if (a.year_built < min || a.year_built > max) return false;
       }
+      // Ownership: matches ownership:<value> tag
       if (filterOwnership) {
         const ownershipTag = `ownership:${filterOwnership}`;
         if (!a.tags?.includes(ownershipTag)) return false;
       }
-      // Pro-only filter: auction round (stored in tags as "round:1", "round:2", "round:3")
-      if (filterRound) {
+      // Round: matches round:<N> tag (Pro)
+      if (filterRound && isPro) {
         const roundTag = `round:${filterRound}`;
         if (!a.tags?.includes(roundTag)) return false;
       }
+      // Yield: estimated from price × city rent benchmark (Pro)
+      if (filterYield && isPro) {
+        const range = yieldRange(filterYield);
+        if (range) {
+          const est = estimateYield(a);
+          if (est === null || est < range[0] || est > range[1]) return false;
+        }
+      }
       return true;
     });
-  }, [auctions, selectedCity, filterType, filterBidRange, filterYearRange, filterOwnership, filterRound, isPro]);
+  }, [auctions, selectedCity, filterType, filterBidRange, filterYearRange, filterOwnership, filterRound, filterYield, isPro]);
 
   const activeFilterCount = [filterType, filterBidRange, filterYearRange, filterOwnership, filterRound, filterYield].filter(Boolean).length;
 
