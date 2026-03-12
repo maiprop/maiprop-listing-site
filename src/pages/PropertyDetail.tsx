@@ -440,9 +440,17 @@ export default function PropertyDetail() {
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Link to="/" className="hover:text-foreground transition-colors">Home</Link>
             <ChevronRight className="w-3 h-3" />
-            <Link to="/listings" className="hover:text-foreground transition-colors">Listings</Link>
+            {isAuction ? (
+              <Link to="/auctions" className="hover:text-foreground transition-colors">Auctions</Link>
+            ) : (
+              <Link to="/listings" className="hover:text-foreground transition-colors">Listings</Link>
+            )}
             <ChevronRight className="w-3 h-3" />
-            <Link to={`/listings?city=${city}`} className="hover:text-foreground transition-colors">{city}</Link>
+            {isAuction ? (
+              <Link to={`/auctions?city=${city}`} className="hover:text-foreground transition-colors">{city}</Link>
+            ) : (
+              <Link to={`/listings?city=${city}`} className="hover:text-foreground transition-colors">{city}</Link>
+            )}
             <ChevronRight className="w-3 h-3" />
             <span className="text-foreground truncate max-w-[240px] font-medium">{title}</span>
           </div>
