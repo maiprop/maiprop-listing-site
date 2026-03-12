@@ -1237,31 +1237,44 @@ export default function PropertyDetail() {
                   landUse={db?.land_use}
                 />
               ) : (
-                <div className="relative">
-                  <div className="pointer-events-none select-none opacity-40 blur-[2px]">
-                    <PropertyValuation
-                      title={title} city={city} address={address} price={price} sqm={sqm}
-                      bedrooms={bedrooms} bathrooms={bathrooms} propertyType={propertyType}
-                      listingType={db?.listing_type} floor={db?.floor} yearBuilt={db?.year_built}
-                      energyClass={energyClass} pricePerSqm={pricePerSqm ? Number(pricePerSqm) : undefined}
-                      hasParking={db?.has_parking} hasPool={db?.has_pool}
-                      hasElevator={db?.has_elevator} region={db?.region}
-                      isNeoclassical={db?.is_neoclassical} isPreserved={db?.is_preserved}
-                      distanceFromSea={db?.distance_from_sea} withinCityPlan={db?.within_city_plan}
-                      withinSettlement={db?.within_settlement} buildingAllowance={db?.building_allowance}
-                      coverageRatio={db?.coverage_ratio} isBuildable={db?.is_buildable}
-                      cadastreNumber={db?.cadastre_number} hasLandConcession={db?.has_land_concession}
-                      landUse={db?.land_use}
-                      ownershipStatus={ownershipStatus ?? undefined}
-                      ownershipPercentage={ownershipPct ?? undefined} />
+                /* Non-pro: static locked card — no edge function calls */
+                <div className="glass-card rounded-2xl overflow-hidden border border-primary/20">
+                  <div className="flex items-center gap-2 px-5 py-3.5 bg-primary/5 border-b border-primary/20">
+                    <Zap className="w-4 h-4 text-primary" />
+                    <h4 className="font-display font-semibold text-sm flex-1">AI Property Valuation</h4>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/15 text-primary font-semibold">Pro</span>
                   </div>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl bg-background/60 backdrop-blur-sm border border-primary/20 gap-3 px-5 text-center">
-                    <Lock className="w-5 h-5 text-primary" />
-                    <p className="font-display font-bold text-sm">Pro Feature</p>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      Unlock the full <span className="font-semibold text-foreground">AI Property Valuation</span> — price range, confidence score, key factors &amp; renovation potential.
-                    </p>
-                    <Link to="/pro" className="flex items-center gap-1.5 text-xs font-semibold bg-primary text-primary-foreground px-3 py-1.5 rounded-lg hover:bg-primary/90 transition-colors">
+                  <div className="p-6 flex flex-col items-center gap-4 text-center">
+                    {/* Blurred mock data */}
+                    <div className="w-full pointer-events-none select-none blur-[5px] opacity-50 space-y-3">
+                      <div className="flex items-start gap-4">
+                        <div className="flex-1">
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">AI Estimated Value</p>
+                          <p className="font-display font-black text-2xl text-foreground">€███,███</p>
+                          <p className="text-xs text-muted-foreground mt-1 font-mono">€███,███ — €███,███</p>
+                        </div>
+                        <div className="flex gap-3 shrink-0">
+                          <div className="w-14 h-14 rounded-full bg-muted border-4 border-emerald-500/40" />
+                          <div className="w-14 h-14 rounded-full bg-muted border-4 border-primary/30" />
+                        </div>
+                      </div>
+                      <div className="bg-secondary/60 border border-border rounded-xl px-3 py-2 text-xs flex items-center justify-between">
+                        <span className="text-muted-foreground">Pricing position</span>
+                        <span className="font-bold text-emerald-400">Underpriced</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="bg-secondary/50 rounded-lg px-2.5 py-2 h-9" />
+                        <div className="bg-secondary/50 rounded-lg px-2.5 py-2 h-9" />
+                      </div>
+                    </div>
+                    <Lock className="w-6 h-6 text-primary" />
+                    <div>
+                      <p className="font-display font-bold text-sm">Pro Feature</p>
+                      <p className="text-xs text-muted-foreground mt-1 leading-relaxed max-w-[200px]">
+                        Full AI valuation — price range, confidence, legal &amp; tax overlay, key factors.
+                      </p>
+                    </div>
+                    <Link to="/pro" className="flex items-center gap-1.5 text-xs font-semibold bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors">
                       <Zap className="w-3.5 h-3.5" /> Upgrade to Pro
                     </Link>
                   </div>
