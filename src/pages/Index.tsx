@@ -810,7 +810,7 @@ export default function Index() {
     retry: 1,
   });
 
-  const { data: auctionListings = [], isLoading: auctionsLoading } = useQuery({
+  const { data: auctionListings = [], isLoading: auctionsLoading, isError: auctionsError } = useQuery({
     queryKey: ["homepage-auctions"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -824,6 +824,7 @@ export default function Index() {
       return data || [];
     },
     staleTime: 5 * 60 * 1000,
+    retry: 1,
   });
 
   const listingTypeMap: Record<string, string> = {
