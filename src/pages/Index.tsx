@@ -1203,11 +1203,16 @@ export default function Index() {
             className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 reveal reveal-delay-1 ${auctionsInView ? "in-view" : ""}`}>
             
             {auctionListings.map((l: any) => {
+              const googleKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+              const svFallback = googleKey && l.latitude && l.longitude
+                ? `https://maps.googleapis.com/maps/api/streetview?size=800x450&location=${l.latitude},${l.longitude}&fov=90&pitch=10&key=${googleKey}`
+                : null;
               const imgs: string[] = l.cover_image_url ? [l.cover_image_url] : [];
               if (!imgs.length && l.listing_images?.length) {
                 const sorted = [...l.listing_images].sort((a: any, b: any) => a.sort_order - b.sort_order);
                 sorted.forEach((img: any) => imgs.push(img.url));
               }
+              if (!imgs.length && svFallback) imgs.push(svFallback);
               return (
               <PropertyCard key={l.id} property={{
                 id: l.id, title: l.title, address: l.address || l.city, city: l.city,
