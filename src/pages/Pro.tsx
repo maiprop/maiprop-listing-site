@@ -1,8 +1,12 @@
-import { CheckCircle, Lock, Zap, TrendingUp, BarChart2, Filter, Bell, Star, ArrowRight, Shield } from "lucide-react";
+import { useState, useEffect } from "react";
+import { CheckCircle, Lock, Zap, TrendingUp, BarChart2, Filter, Bell, Star, ArrowRight, Shield, Loader2, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 const FREE_FEATURES = [
   "Browse all property listings",
@@ -28,11 +32,77 @@ const PRO_FEATURES = [
   { label: "Comparable Sales Data", icon: BarChart2, desc: "See recent sold prices for similar properties in the same area" },
 ];
 
+// Pro product ID mapping
+const PRO_PRODUCT_ID = "prod_U8SJbk3fZQ3xgD";
+
 export default function Pro() {
+  const { user, subscription, refreshSubscription } = useAuth();
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [portalLoading, setPortalLoading] = useState(false);
+  const [searchParams] = useSearchParams();
+
+  const successParam = searchParams.get("success");
+  const cancelledParam = searchParams.get("cancelled");
+
+  // Trigger subscription refresh on return from checkout
+  useEffect(() => {
+    if (successParam === "1") {
+      refreshSubscription();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [successParam]);
+
+  const isPro = subscription.subscribed && subscription.productId === PRO_PRODUCT_ID;
+
+  const handleUpgrade = async () => {
+    if (!user) {
+      toast.error("Please sign in to upgrade");
+      return;
+    }
+    setCheckoutLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("create-checkout", {});
+      if (error || !data?.url) throw new Error(error?.message || "Failed to create checkout");
+      window.open(data.url, "_blank");
+    } catch (e: any) {
+      toast.error(e.message || "Failed to start checkout");
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
+  const handleManage = async () => {
+    if (!user) return;
+    setPortalLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("customer-portal", {});
+      if (error || !data?.url) throw new Error(error?.message || "Failed to open portal");
+      window.open(data.url, "_blank");
+    } catch (e: any) {
+      toast.error(e.message || "Failed to open subscription portal");
+    } finally {
+      setPortalLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
       <div className="pt-16">
+        {/* Success / Cancelled banners */}
+        {successParam === "1" && (
+          <div className="bg-emerald-500/15 border-b border-emerald-500/30 py-3 text-center">
+            <p className="text-sm font-semibold text-emerald-400 flex items-center justify-center gap-2">
+              <CheckCircle className="w-4 h-4" /> Payment successful! Your Pro subscription is now active.
+            </p>
+          </div>
+        )}
+        {cancelledParam === "1" && (
+          <div className="bg-muted/60 border-b border-border py-3 text-center">
+            <p className="text-sm text-muted-foreground">Checkout cancelled. No charges were made.</p>
+          </div>
+        )}
+
         {/* Hero */}
         <div className="bg-card border-b border-border py-16">
           <div className="container max-w-4xl text-center">
@@ -46,6 +116,14 @@ export default function Pro() {
             <p className="text-muted-foreground text-lg max-w-xl mx-auto">
               Get professional-grade analysis, advanced auction filters, and complete AI valuations — everything serious investors need.
             </p>
+            {isPro && (
+              <div className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-semibold text-sm">
+                <Crown className="w-4 h-4" /> You have an active Pro subscription
+                {subscription.subscriptionEnd && (
+                  <span className="text-emerald-400/70 text-xs">· renews {new Date(subscription.subscriptionEnd).toLocaleDateString("en-GB")}</span>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -81,12 +159,18 @@ export default function Pro() {
             </div>
 
             {/* Pro plan */}
-            <div className="relative glass-card rounded-2xl border-2 border-brand-gold/50 overflow-hidden flex flex-col shadow-elevated">
-              {/* Popular badge */}
+            <div className={`relative glass-card rounded-2xl border-2 overflow-hidden flex flex-col shadow-elevated ${isPro ? "border-emerald-500/60" : "border-brand-gold/50"}`}>
+              {/* Badge */}
               <div className="absolute top-4 right-4">
-                <span className="flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full bg-brand-gold text-background uppercase tracking-wider">
-                  <Star className="w-2.5 h-2.5 fill-current" /> Most Popular
-                </span>
+                {isPro ? (
+                  <span className="flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-500 text-white uppercase tracking-wider">
+                    <Crown className="w-2.5 h-2.5" /> Your Plan
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full bg-brand-gold text-background uppercase tracking-wider">
+                    <Star className="w-2.5 h-2.5 fill-current" /> Most Popular
+                  </span>
+                )}
               </div>
 
               <div className="px-7 py-6 border-b border-border bg-brand-gold/5">
@@ -115,11 +199,28 @@ export default function Pro() {
               </div>
 
               <div className="px-7 pb-7 space-y-3">
-                <Button className="w-full bg-gradient-gold border-0 text-background font-bold gap-2 h-11 text-base">
-                  <Zap className="w-4 h-4" /> Upgrade to Pro
-                </Button>
+                {isPro ? (
+                  <Button
+                    className="w-full border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 gap-2 h-11"
+                    variant="outline"
+                    onClick={handleManage}
+                    disabled={portalLoading}
+                  >
+                    {portalLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Crown className="w-4 h-4" />}
+                    Manage Subscription
+                  </Button>
+                ) : (
+                  <Button
+                    className="w-full bg-gradient-gold border-0 text-background font-bold gap-2 h-11 text-base"
+                    onClick={handleUpgrade}
+                    disabled={checkoutLoading}
+                  >
+                    {checkoutLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                    {user ? "Upgrade to Pro" : "Get Started"}
+                  </Button>
+                )}
                 <p className="text-[11px] text-muted-foreground text-center">
-                  No commitment · Cancel anytime · Instant access
+                  {isPro ? "Cancel or change plan anytime" : "No commitment · Cancel anytime · Instant access"}
                 </p>
               </div>
             </div>
@@ -129,13 +230,11 @@ export default function Pro() {
           <div className="mt-14">
             <h2 className="font-display text-2xl font-bold text-center mb-8">Compare plans</h2>
             <div className="glass-card rounded-2xl border border-border overflow-hidden">
-              {/* Header row */}
               <div className="grid grid-cols-3 bg-card/50 border-b border-border">
                 <div className="px-5 py-3.5 text-xs font-bold uppercase tracking-wider text-muted-foreground">Feature</div>
                 <div className="px-4 py-3.5 text-xs font-bold uppercase tracking-wider text-muted-foreground text-center border-l border-border">Free</div>
                 <div className="px-4 py-3.5 text-xs font-bold uppercase tracking-wider text-brand-gold text-center border-l border-border">Pro</div>
               </div>
-
               {[
                 { feature: "Property search & listings", free: true, pro: true },
                 { feature: "Auction discovery", free: true, pro: true },
@@ -173,11 +272,18 @@ export default function Pro() {
           </div>
 
           {/* CTA bottom */}
-          <div className="mt-12 text-center">
-            <Button className="bg-gradient-gold border-0 text-background font-bold gap-2 h-12 px-8 text-base">
-              <Zap className="w-4 h-4" /> Get Pro Access <ArrowRight className="w-4 h-4" />
-            </Button>
-            <p className="text-xs text-muted-foreground mt-3">
+          <div className="mt-12 text-center space-y-3">
+            {!isPro && (
+              <Button
+                className="bg-gradient-gold border-0 text-background font-bold gap-2 h-12 px-8 text-base"
+                onClick={handleUpgrade}
+                disabled={checkoutLoading}
+              >
+                {checkoutLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                Get Pro Access <ArrowRight className="w-4 h-4" />
+              </Button>
+            )}
+            <p className="text-xs text-muted-foreground">
               Trusted by 500+ Greek property investors · Powered by mAI Prop OS
             </p>
           </div>

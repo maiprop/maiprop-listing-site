@@ -11,7 +11,8 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { title, city, address, price, sqm, bedrooms, bathrooms, propertyType,
             listingType, floor, yearBuilt, energyClass, pricePerSqm,
-            hasParking, hasPool, hasElevator, region } = body;
+            hasParking, hasPool, hasElevator, region,
+            ownershipStatus, ownershipPercentage } = body;
 
     if (!city || !sqm || !price) {
       return new Response(
@@ -30,6 +31,7 @@ Deno.serve(async (req) => {
       hasParking && "Has parking",
       hasPool && "Has pool",
       hasElevator && "Has elevator",
+      ownershipStatus && ownershipStatus !== "full" && `Ownership: ${ownershipStatus}${ownershipPercentage ? ` (${ownershipPercentage}%)` : ""}`,
     ].filter(Boolean).join(", ");
 
     // ── Property-type specific analysis instructions ──────────────────────────
@@ -132,6 +134,7 @@ Analyse this property:
 - Size: ${sqm} m²${bedrooms != null ? ` · ${bedrooms} bed` : ""}${bathrooms != null ? ` · ${bathrooms} bath` : ""}
 - Listed price: €${Number(price).toLocaleString()} (€${pricePerSqm ? Math.round(Number(pricePerSqm)) : Math.round(Number(price)/Number(sqm))}/m²)
 - Additional details: ${features || "standard specification"}
+${ownershipStatus && ownershipStatus !== "full" ? `- OWNERSHIP NOTE: This is a ${ownershipStatus} ownership auction property${ownershipPercentage ? ` (only ${ownershipPercentage}% share being auctioned)` : ""}. Adjust estimated value and market comparison accordingly — partial/shared ownership properties typically trade at a 20-40% discount to full ownership equivalent.\n` : ""}
 
 ${typeSpecificInstructions}
 
