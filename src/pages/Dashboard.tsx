@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import {
   Home, Plus, BarChart2, MessageSquare, Heart, Settings, User,
@@ -15,6 +15,7 @@ import { useFavorites } from "@/hooks/useFavorites";
 import { useViewings } from "@/hooks/useViewings";
 import { useSavedSearches, useDeleteSavedSearch, useToggleSavedSearchAlert } from "@/hooks/useSavedSearches";
 import { useAuctionAlerts, useDeleteAuctionAlert, useUpdateAuctionAlert } from "@/hooks/useAuctionAlerts";
+import { useMyProfessional, useProfessionalServices } from "@/hooks/useProfessionalServices";
 import { AuctionAlertModal } from "@/components/AuctionAlertModal";
 import { PropertyCard } from "@/components/PropertyCard";
 import ProfessionalServicesEditor from "@/components/ProfessionalServicesEditor";
@@ -130,29 +131,64 @@ function SavedPropertiesSection({ favorites, favLoading }: { favorites: any[]; f
   );
 }
 
-const navItems = [
-  { icon: Home, label: "Overview", key: "overview" },
-  { icon: Building2, label: "My Listings", key: "listings" },
-  { icon: BarChart2, label: "Analytics", key: "analytics" },
-  { icon: Heart, label: "Saved", key: "saved" },
-  { icon: Bookmark, label: "Saved Searches", key: "saved-searches" },
-  { icon: MessageSquare, label: "Messages", key: "messages" },
-  { icon: Calendar, label: "Viewings", key: "viewings" },
-  { icon: Gavel, label: "Auctions", key: "auctions" },
-  { icon: Wrench, label: "My Services", key: "services" },
-  { icon: Activity, label: "OS Sync", key: "os-sync" },
-  { icon: Shield, label: "Admin", key: "admin" },
-  { icon: User, label: "Profile", key: "profile" },
-  { icon: Settings, label: "Settings", key: "settings" },
+type DashboardRole = "individual" | "seller_landlord" | "agent" | "professional";
+
+const ALL_NAV_ITEMS = [
+  { icon: Home, label: "Overview", key: "overview" as const },
+  { icon: Building2, label: "My Listings", key: "listings" as const },
+  { icon: BarChart2, label: "Analytics", key: "analytics" as const },
+  { icon: Heart, label: "Saved", key: "saved" as const },
+  { icon: Bookmark, label: "Saved Searches", key: "saved-searches" as const },
+  { icon: MessageSquare, label: "Messages", key: "messages" as const },
+  { icon: Calendar, label: "Viewings", key: "viewings" as const },
+  { icon: Gavel, label: "Auction Alerts", key: "auctions" as const },
+  { icon: Wrench, label: "My Services", key: "services" as const },
+  { icon: Activity, label: "OS Sync", key: "os-sync" as const },
+  { icon: Shield, label: "Admin", key: "admin" as const },
+  { icon: User, label: "Profile", key: "profile" as const },
+  { icon: Settings, label: "Settings", key: "settings" as const },
 ];
+
+function getNavItemsForRole(role: DashboardRole): typeof ALL_NAV_ITEMS {
+  const r = role || "individual";
+  switch (r) {
+    case "individual":
+      return ALL_NAV_ITEMS.filter(i =>
+        ["overview", "saved", "saved-searches", "messages", "viewings", "auctions", "profile", "settings"].includes(i.key)
+      );
+    case "seller_landlord":
+      return ALL_NAV_ITEMS.filter(i =>
+        ["overview", "listings", "saved", "messages", "viewings", "profile", "settings"].includes(i.key)
+      );
+    case "agent":
+      return ALL_NAV_ITEMS.filter(i =>
+        ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "os-sync", "admin", "profile", "settings"].includes(i.key)
+      );
+    case "professional":
+      return ALL_NAV_ITEMS.filter(i =>
+        ["overview", "services", "messages", "viewings", "profile", "settings"].includes(i.key)
+      );
+    default:
+      return getNavItemsForRole("individual");
+  }
+}
 
 export default function Dashboard() {
   const { section } = useParams();
   const navigate = useNavigate();
   const { profile, user, signOut, updateProfile } = useAuth();
-  const [activeSection, setActiveSection] = useState(section || "overview");
+  const role: DashboardRole = (profile?.role as DashboardRole) || "individual";
+  const navItems = getNavItemsForRole(role);
+  const defaultSection = navItems[0]?.key ?? "overview";
+  const [activeSection, setActiveSection] = useState(section || defaultSection);
   const [alertModalOpen, setAlertModalOpen] = useState(false);
   const [editingAlert, setEditingAlert] = useState<any>(null);
+
+  // Keep activeSection in sync with role (if current section not in nav, switch to default)
+  useEffect(() => {
+    const valid = navItems.some(i => i.key === activeSection);
+    if (!valid && navItems.length) setActiveSection(navItems[0].key);
+  }, [role, activeSection, navItems]);
 
   const { data: myListings = [], isLoading: listingsLoading } = useMyListings();
   const { data: favorites = [], isLoading: favLoading } = useFavorites();
@@ -160,6 +196,8 @@ export default function Dashboard() {
   const { data: ownViewings = [] } = useViewings("owner");
   const { data: savedSearches = [], isLoading: savedSearchesLoading } = useSavedSearches();
   const { data: auctionAlerts = [], isLoading: alertsLoading } = useAuctionAlerts();
+  const { data: myProfessional } = useMyProfessional();
+  const { data: professionalServices = [] } = useProfessionalServices(myProfessional?.id || "");
   const updateListing = useUpdateListing();
   const deleteListing = useDeleteListing();
   const deleteSavedSearch = useDeleteSavedSearch();
@@ -178,14 +216,42 @@ export default function Dashboard() {
   };
 
   const displayName = profile?.display_name || profile?.first_name || user?.email?.split("@")[0] || "User";
-  const roleLabel = profile?.role || "individual";
+  const roleLabel = (() => {
+    const r = profile?.role || "individual";
+    if (r === "seller_landlord") return "Seller / Landlord";
+    return r;
+  })();
 
-  const stats = [
-    { label: "Active Listings", value: myListings.filter(l => l.status === "active").length, icon: Building2, color: "text-primary" },
-    { label: "Total Views", value: myListings.reduce((sum, l) => sum + (l.views_count || 0), 0), icon: Eye, color: "text-brand-emerald" },
-    { label: "Saved Properties", value: favorites.length, icon: Heart, color: "text-destructive" },
-    { label: "Upcoming Viewings", value: viewings.filter(v => v.status === "confirmed" || v.status === "pending").length, icon: Calendar, color: "text-brand-gold" },
-  ];
+  const upcomingViewingsCount = viewings.filter((v: any) => v.status === "confirmed" || v.status === "pending").length;
+  const ownViewingsCount = ownViewings.filter((v: any) => v.status === "confirmed" || v.status === "pending").length;
+
+  const statsByRole: Record<DashboardRole, { label: string; value: number; icon: typeof Building2; color: string }[]> = {
+    individual: [
+      { label: "Saved Properties", value: favorites.length, icon: Heart, color: "text-destructive" },
+      { label: "Saved Searches", value: savedSearches.length, icon: Bookmark, color: "text-primary" },
+      { label: "Upcoming Viewings", value: upcomingViewingsCount, icon: Calendar, color: "text-brand-gold" },
+      { label: "Auction Alerts", value: auctionAlerts.filter((a: any) => a.active).length, icon: Gavel, color: "text-brand-gold" },
+    ],
+    seller_landlord: [
+      { label: "Active Listings", value: myListings.filter(l => l.status === "active").length, icon: Building2, color: "text-primary" },
+      { label: "Total Views", value: myListings.reduce((sum, l) => sum + (l.views_count || 0), 0), icon: Eye, color: "text-brand-emerald" },
+      { label: "Saved", value: favorites.length, icon: Heart, color: "text-destructive" },
+      { label: "Upcoming Viewings", value: upcomingViewingsCount + ownViewingsCount, icon: Calendar, color: "text-brand-gold" },
+    ],
+    agent: [
+      { label: "Active Listings", value: myListings.filter(l => l.status === "active").length, icon: Building2, color: "text-primary" },
+      { label: "Total Views", value: myListings.reduce((sum, l) => sum + (l.views_count || 0), 0), icon: Eye, color: "text-brand-emerald" },
+      { label: "Saved", value: favorites.length, icon: Heart, color: "text-destructive" },
+      { label: "Upcoming Viewings", value: upcomingViewingsCount + ownViewingsCount, icon: Calendar, color: "text-brand-gold" },
+    ],
+    professional: [
+      { label: "Services", value: professionalServices.length, icon: Wrench, color: "text-primary" },
+      { label: "Upcoming Viewings", value: ownViewingsCount, icon: Calendar, color: "text-brand-gold" },
+      { label: "Saved", value: favorites.length, icon: Heart, color: "text-destructive" },
+      { label: "Auction Alerts", value: auctionAlerts.filter((a: any) => a.active).length, icon: Gavel, color: "text-brand-gold" },
+    ],
+  };
+  const stats = statsByRole[role];
 
   return (
     <div className="min-h-screen bg-background">
@@ -233,20 +299,42 @@ export default function Dashboard() {
           </div>
         </aside>
 
-        {/* Main Content */}
+        {/* Main Content — only render sections that are in this role's nav */}
         <main className="flex-1 p-6 max-w-full overflow-hidden">
+          {!navItems.some(i => i.key === activeSection) && (
+            <div className="flex items-center justify-center py-12">
+              <p className="text-sm text-muted-foreground">Select an option from the sidebar.</p>
+            </div>
+          )}
 
-          {/* OVERVIEW */}
-          {activeSection === "overview" && (
+          {/* OVERVIEW — role-specific welcome, CTA, and main content */}
+          {activeSection === "overview" && navItems.some(i => i.key === "overview") && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
                   <h1 className="font-display text-2xl font-bold">Good morning, {displayName} 👋</h1>
-                  <p className="text-muted-foreground text-sm mt-1">Here's what's happening with your account.</p>
+                  <p className="text-muted-foreground text-sm mt-1">
+                    {role === "individual" && "Here's your search activity and alerts."}
+                    {role === "seller_landlord" && "Manage your listings and viewings."}
+                    {role === "agent" && "Here's what's happening with your listings and leads."}
+                    {role === "professional" && "Your services and upcoming consultations."}
+                  </p>
                 </div>
-                <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" onClick={() => setActiveSection("listings")}>
-                  <Plus className="w-4 h-4" /> New Listing
-                </Button>
+                {(role === "seller_landlord" || role === "agent") && (
+                  <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" onClick={() => setActiveSection("listings")}>
+                    <Plus className="w-4 h-4" /> New Listing
+                  </Button>
+                )}
+                {role === "individual" && (
+                  <Button variant="outline" className="border-border gap-2" asChild>
+                    <Link to="/listings"><Search className="w-4 h-4" /> Browse Listings</Link>
+                  </Button>
+                )}
+                {role === "professional" && (
+                  <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" onClick={() => setActiveSection("services")}>
+                    <Wrench className="w-4 h-4" /> My Services
+                  </Button>
+                )}
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {stats.map(stat => (
@@ -259,40 +347,95 @@ export default function Dashboard() {
                   </div>
                 ))}
               </div>
-              {myListings.length > 0 ? (
-                <div>
-                  <h2 className="font-display font-semibold mb-4">Your Active Listings</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {myListings.slice(0, 3).map(l => (
-                      <div key={l.id} className="glass-card rounded-xl overflow-hidden">
-                        <img src={l.cover_image_url || "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400&q=60"} alt="" className="w-full h-36 object-cover" />
-                        <div className="p-4">
-                          <p className="font-semibold text-sm truncate">{l.title}</p>
-                          <p className="text-xs text-muted-foreground">{l.city} · €{Number(l.price).toLocaleString()}</p>
-                          <div className="flex gap-2 mt-3">
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${l.status === "active" ? "bg-brand-emerald/20 text-brand-emerald" : "bg-secondary text-muted-foreground"}`}>{l.status}</span>
-                            <span className="text-xs text-muted-foreground">{l.views_count} views</span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+
+              {/* Individual: saved & auction alerts teaser */}
+              {role === "individual" && (
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="glass-card rounded-xl p-6">
+                    <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Heart className="w-4 h-4 text-destructive" /> Saved Properties</h2>
+                    {favorites.length === 0 ? (
+                      <p className="text-sm text-muted-foreground mb-3">Save listings you like to find them here.</p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground mb-3">{favorites.length} saved — open Saved to view.</p>
+                    )}
+                    <Button variant="outline" size="sm" className="border-border" onClick={() => setActiveSection("saved")}>View Saved</Button>
+                  </div>
+                  <div className="glass-card rounded-xl p-6">
+                    <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Gavel className="w-4 h-4 text-brand-gold" /> Auction Alerts</h2>
+                    <p className="text-sm text-muted-foreground mb-3">Get notified when new auctions match your criteria.</p>
+                    <Button variant="outline" size="sm" className="border-brand-gold/40 text-brand-gold" onClick={() => setActiveSection("auctions")}>
+                      {auctionAlerts.length > 0 ? "Manage Alerts" : "Create Alert"}
+                    </Button>
                   </div>
                 </div>
-              ) : (
-                <div className="glass-card rounded-xl p-10 text-center">
-                  <Building2 className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-                  <p className="font-semibold">No listings yet</p>
-                  <p className="text-sm text-muted-foreground mt-1 mb-4">Create your first listing to get started</p>
-                  <Button className="bg-gradient-primary border-0 text-primary-foreground" onClick={() => setActiveSection("listings")}>
-                    <Plus className="w-4 h-4 mr-2" /> Create Listing
+              )}
+
+              {/* Seller / Landlord: listings + Pro CTA */}
+              {(role === "seller_landlord" || role === "agent") && (
+                <>
+                  {myListings.length > 0 ? (
+                    <div>
+                      <h2 className="font-display font-semibold mb-4">Your Active Listings</h2>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {myListings.slice(0, 3).map(l => (
+                          <div key={l.id} className="glass-card rounded-xl overflow-hidden">
+                            <img src={l.cover_image_url || "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400&q=60"} alt="" className="w-full h-36 object-cover" />
+                            <div className="p-4">
+                              <p className="font-semibold text-sm truncate">{l.title}</p>
+                              <p className="text-xs text-muted-foreground">{l.city} · €{Number(l.price).toLocaleString()}</p>
+                              <div className="flex gap-2 mt-3">
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${l.status === "active" ? "bg-brand-emerald/20 text-brand-emerald" : "bg-secondary text-muted-foreground"}`}>{l.status}</span>
+                                <span className="text-xs text-muted-foreground">{l.views_count} views</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <Button variant="outline" className="border-border mt-3" onClick={() => setActiveSection("listings")}>View all listings</Button>
+                    </div>
+                  ) : (
+                    <div className="glass-card rounded-xl p-10 text-center">
+                      <Building2 className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+                      <p className="font-semibold">No listings yet</p>
+                      <p className="text-sm text-muted-foreground mt-1 mb-4">Create your first listing to get started</p>
+                      <Button className="bg-gradient-primary border-0 text-primary-foreground" onClick={() => setActiveSection("listings")}>
+                        <Plus className="w-4 h-4 mr-2" /> Create Listing
+                      </Button>
+                    </div>
+                  )}
+                  {role === "seller_landlord" && (
+                    <div className="glass-card rounded-xl p-4 border border-primary/20 bg-primary/5 flex items-center justify-between flex-wrap gap-3">
+                      <div>
+                        <p className="font-semibold text-sm">Upgrade to Pro</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Get more visibility, in-app messaging with buyers, and selling addons.</p>
+                      </div>
+                      <Button variant="outline" size="sm" className="border-primary text-primary" asChild>
+                        <Link to="/pro">View Pro</Link>
+                      </Button>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Professional: services teaser */}
+              {role === "professional" && (
+                <div className="glass-card rounded-xl p-6">
+                  <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Wrench className="w-4 h-4 text-primary" /> My Services</h2>
+                  {professionalServices.length === 0 ? (
+                    <p className="text-sm text-muted-foreground mb-3">Add the services you offer so clients can find and book you.</p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground mb-3">{professionalServices.length} service(s) configured.</p>
+                  )}
+                  <Button variant="outline" size="sm" className="border-border" onClick={() => setActiveSection("services")}>
+                    {professionalServices.length > 0 ? "Edit Services" : "Add Services"}
                   </Button>
                 </div>
               )}
             </div>
           )}
 
-          {/* MY LISTINGS */}
-          {activeSection === "listings" && (
+          {/* MY LISTINGS — seller_landlord, agent */}
+          {activeSection === "listings" && navItems.some(i => i.key === "listings") && (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <h1 className="font-display text-2xl font-bold">My Listings</h1>
@@ -337,12 +480,12 @@ export default function Dashboard() {
           )}
 
           {/* SAVED */}
-          {activeSection === "saved" && (
+          {activeSection === "saved" && navItems.some(i => i.key === "saved") && (
             <SavedPropertiesSection favorites={favorites} favLoading={favLoading} />
           )}
 
           {/* MESSAGES */}
-          {activeSection === "messages" && (
+          {activeSection === "messages" && navItems.some(i => i.key === "messages") && (
             <div className="space-y-4">
               <h1 className="font-display text-2xl font-bold">Messages</h1>
               <Button className="bg-gradient-primary border-0 text-primary-foreground" asChild>
@@ -351,8 +494,8 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* SAVED SEARCHES */}
-          {activeSection === "saved-searches" && (
+          {/* SAVED SEARCHES — individual, agent */}
+          {activeSection === "saved-searches" && navItems.some(i => i.key === "saved-searches") && (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -435,7 +578,7 @@ export default function Dashboard() {
           )}
 
           {/* VIEWINGS */}
-          {activeSection === "viewings" && (
+          {activeSection === "viewings" && navItems.some(i => i.key === "viewings") && (
             <div className="space-y-6">
               <h1 className="font-display text-2xl font-bold">Viewings</h1>
               {viewingsLoading ? (
@@ -463,21 +606,21 @@ export default function Dashboard() {
           )}
 
           {/* PROFILE */}
-          {activeSection === "profile" && (
+          {activeSection === "profile" && navItems.some(i => i.key === "profile") && (
             <ProfileEditor profile={profile} onUpdate={updateProfile} />
           )}
 
-          {/* MY SERVICES (professionals) */}
-          {activeSection === "services" && <ProfessionalServicesEditor />}
+          {/* MY SERVICES — professional only */}
+          {activeSection === "services" && navItems.some(i => i.key === "services") && <ProfessionalServicesEditor />}
 
-          {/* OS SYNC */}
-          {activeSection === "os-sync" && <OSSyncPanel />}
+          {/* OS SYNC — agent only */}
+          {activeSection === "os-sync" && navItems.some(i => i.key === "os-sync") && <OSSyncPanel />}
 
-          {/* ADMIN */}
-          {activeSection === "admin" && <AdminPanel />}
+          {/* ADMIN — agent only */}
+          {activeSection === "admin" && navItems.some(i => i.key === "admin") && <AdminPanel />}
 
-          {/* AUCTION ALERTS */}
-          {activeSection === "auctions" && (
+          {/* AUCTION ALERTS — individual, agent */}
+          {activeSection === "auctions" && navItems.some(i => i.key === "auctions") && (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -570,7 +713,7 @@ export default function Dashboard() {
             </div>
           )}
 
-          {(activeSection === "analytics" || activeSection === "settings") && (
+          {navItems.some(i => i.key === activeSection) && (activeSection === "analytics" || activeSection === "settings") && (
             <div className="glass-card rounded-xl p-12 flex items-center justify-center">
               <div className="text-center">
                 <Settings className="w-12 h-12 text-muted-foreground mx-auto mb-3" />

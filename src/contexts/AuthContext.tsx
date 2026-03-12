@@ -81,13 +81,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    // Safety: never block the app for more than 10s if Supabase/auth hangs
+    const SAFETY_MS = 10_000;
+    const safetyTimer = setTimeout(() => {
+      setLoading(false);
+    }, SAFETY_MS);
+
     const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange(
       async (event, sess) => {
         setSession(sess);
         setUser(sess?.user ?? null);
         if (sess?.user) {
-          await fetchProfile(sess.user.id);
-          // Defer to avoid race condition
+          try {
+            await Promise.race([
+              fetchProfile(sess.user.id),
+              new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 8000)),
+            ]);
+          } catch {
+            // Profile fetch failed or timed out — still show app
+          }
           setTimeout(() => checkSubscription(sess), 0);
         } else {
           setProfile(null);
@@ -97,15 +109,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    supabase.auth.getSession().then(({ data: { session: sess } }) => {
-      setSession(sess);
-      setUser(sess?.user ?? null);
-      if (sess?.user) {
-        fetchProfile(sess.user.id).finally(() => setLoading(false));
-        checkSubscription(sess);
-      } else {
+    Promise.race([
+      supabase.auth.getSession(),
+      new Promise<{ data: { session: null } }>((res) => setTimeout(() => res({ data: { session: null } }), 8000)),
+    ]).then(({ data: { session: sess } }) => {
+      if (!sess) {
         setLoading(false);
+        return;
       }
+      setSession(sess);
+      setUser(sess.user);
+      Promise.race([
+        fetchProfile(sess.user.id),
+        new Promise<void>((res) => setTimeout(res, 6000)),
+      ])
+        .catch(() => {})
+        .finally(() => setLoading(false));
+      checkSubscription(sess);
     });
 
     // Refresh subscription every 5 minutes
@@ -116,6 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, 5 * 60 * 1000);
 
     return () => {
+      clearTimeout(safetyTimer);
       authSub.unsubscribe();
       clearInterval(interval);
     };

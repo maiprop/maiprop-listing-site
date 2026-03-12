@@ -28,7 +28,16 @@ import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
 import CookiePolicy from "./pages/CookiePolicy";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 0,
+      refetchOnWindowFocus: false,
+      // Avoid long loading loops when network/Supabase is unreachable
+      staleTime: 30_000,
+    },
+  },
+});
 
 // Show the global AI widget on all pages except auth & onboarding
 function GlobalAIWidget() {

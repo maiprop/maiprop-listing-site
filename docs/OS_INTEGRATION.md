@@ -2,6 +2,9 @@
 
 The **listing site** (this repo) integrates with **maiProp OS** ([app.os.maiprop.co:8080](https://app.os.maiprop.co:8080)) for:
 
+**If you see "Edge Function unreachable" or "Failed to send a request to the Edge Function" when running Full sync:**  
+The Edge Functions must be deployed to the **same** Supabase project as your app. Deploy them via Supabase Dashboard → Edge Functions (or `supabase functions deploy full-sync-from-os`). Ensure `VITE_SUPABASE_URL` in your app points to that project.
+
 - **Full sync OS → Listing** – Auctions (and extensible: reports, ML) are synced **from** OS into the Hub via `full-sync-from-os`.
 - **Firesale → OS** – Left as-is: listing site **sends** Quick Sale™ requests to OS via `sync-firesale-to-os`.
 - **Reports & ML** – OS holds the database; the listing site consumes it via the OS API (full sync covers auctions; more APIs can be added when available).

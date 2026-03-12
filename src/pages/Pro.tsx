@@ -36,7 +36,7 @@ const PRO_FEATURES = [
 const PRO_PRODUCT_ID = "prod_U8SJbk3fZQ3xgD";
 
 export default function Pro() {
-  const { user, subscription, refreshSubscription } = useAuth();
+  const { user, profile, subscription, refreshSubscription } = useAuth();
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
   const [searchParams] = useSearchParams();
@@ -116,6 +116,11 @@ export default function Pro() {
             <p className="text-muted-foreground text-lg max-w-xl mx-auto">
               Get professional-grade analysis, advanced auction filters, and complete AI valuations — everything serious investors need.
             </p>
+            {profile?.role === "seller_landlord" && (
+              <p className="text-sm text-primary/90 mt-3 max-w-lg mx-auto">
+                As a private seller or landlord, Pro unlocks listing visibility, in-app messaging with buyers, and selling addons.
+              </p>
+            )}
             {isPro && (
               <div className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-semibold text-sm">
                 <Crown className="w-4 h-4" /> You have an active Pro subscription

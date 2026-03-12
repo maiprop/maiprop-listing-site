@@ -125,19 +125,34 @@ export function OSSyncPanel() {
   // ── Mutation: poll OS auctions → Hub (single page range) ──────────────────────
   const pollAuctionsMutation = useMutation({
     mutationFn: async () => {
-      let totalImported = 0, totalUpdated = 0, totalErrors = 0, totalScanned = 0, totalAi = 0;
-      for (let p = pollPage; p < pollPage + pollPages; p++) {
-        const { data, error } = await supabase.functions.invoke("poll-os-auctions", {
-          body: { page: p, pageSize: 100 },
-        });
-        if (error) throw error;
-        totalImported += data?.imported     ?? 0;
-        totalUpdated  += data?.updated      ?? 0;
-        totalErrors   += data?.errors       ?? 0;
-        totalScanned  += data?.total        ?? 0;
-        totalAi       += data?.aiGenerated  ?? 0;
+      try {
+        let totalImported = 0, totalUpdated = 0, totalErrors = 0, totalScanned = 0, totalAi = 0;
+        for (let p = pollPage; p < pollPage + pollPages; p++) {
+          const { data, error } = await supabase.functions.invoke("poll-os-auctions", {
+            body: { page: p, pageSize: 100 },
+          });
+          if (error) throw error;
+          totalImported += data?.imported     ?? 0;
+          totalUpdated  += data?.updated      ?? 0;
+          totalErrors   += data?.errors       ?? 0;
+          totalScanned  += data?.total        ?? 0;
+          totalAi       += data?.aiGenerated  ?? 0;
+        }
+        return { imported: totalImported, updated: totalUpdated, errors: totalErrors, scanned: totalScanned, aiGenerated: totalAi };
+      } catch (e: any) {
+        const msg = e?.message ?? String(e);
+        if (
+          msg.includes("Failed to send a request") ||
+          msg.includes("fetch") ||
+          msg.includes("NetworkError") ||
+          msg.includes("Load failed")
+        ) {
+          throw new Error(
+            "Edge Function unreachable. Deploy 'poll-os-auctions' to your Supabase project (Dashboard → Edge Functions) and ensure your app's Supabase URL points to that project."
+          );
+        }
+        throw e;
       }
-      return { imported: totalImported, updated: totalUpdated, errors: totalErrors, scanned: totalScanned, aiGenerated: totalAi };
     },
     onSuccess: (result) => {
       setPollResult(result);
@@ -158,11 +173,26 @@ export function OSSyncPanel() {
   // ── Mutation: full sync from OS (all relevant APIs: auctions + extensible) ───
   const fullSyncMutation = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke("full-sync-from-os", {
-        body: { pageSize: 100, maxPages: 200 },
-      });
-      if (error) throw error;
-      return data;
+      try {
+        const { data, error } = await supabase.functions.invoke("full-sync-from-os", {
+          body: { pageSize: 100, maxPages: 200 },
+        });
+        if (error) throw error;
+        return data;
+      } catch (e: any) {
+        const msg = e?.message ?? String(e);
+        if (
+          msg.includes("Failed to send a request") ||
+          msg.includes("fetch") ||
+          msg.includes("NetworkError") ||
+          msg.includes("Load failed")
+        ) {
+          throw new Error(
+            "Edge Function unreachable. Deploy 'full-sync-from-os' to your Supabase project (Dashboard → Edge Functions) and ensure VITE_SUPABASE_URL points to that project."
+          );
+        }
+        throw e;
+      }
     },
     onSuccess: (result) => {
       setSyncingId(null);

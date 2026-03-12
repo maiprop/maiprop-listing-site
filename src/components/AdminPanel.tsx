@@ -224,24 +224,39 @@ export default function AdminPanel() {
 
   const pollMutation = useMutation({
     mutationFn: async () => {
-      const body: Record<string, unknown> = {
-        page: auctionStartPage,
-        pageSize: auctionPageSize,
-        size: auctionPageSize,
-      };
-      if (pollCity.trim()) body.city = pollCity.trim();
-      const { data, error } = await supabase.functions.invoke("poll-os-auctions", { body });
-      if (error) throw error;
-      return {
-        imported:     data?.imported     ?? 0,
-        updated:      data?.updated      ?? 0,
-        errors:       data?.errors       ?? 0,
-        scanned:      data?.total        ?? 0,
-        aiGenerated:  data?.aiGenerated  ?? 0,
-        endpoint:     data?.endpoint     ?? "/api/auctions/future",
-        totalInOS:    data?.totalAvailableInOS ?? 0,
-        rawResponse:  JSON.stringify(data).slice(0, 400),
-      };
+      try {
+        const body: Record<string, unknown> = {
+          page: auctionStartPage,
+          pageSize: auctionPageSize,
+          size: auctionPageSize,
+        };
+        if (pollCity.trim()) body.city = pollCity.trim();
+        const { data, error } = await supabase.functions.invoke("poll-os-auctions", { body });
+        if (error) throw error;
+        return {
+          imported:     data?.imported     ?? 0,
+          updated:      data?.updated      ?? 0,
+          errors:       data?.errors       ?? 0,
+          scanned:      data?.total        ?? 0,
+          aiGenerated:  data?.aiGenerated  ?? 0,
+          endpoint:     data?.endpoint     ?? "/api/auctions/future",
+          totalInOS:    data?.totalAvailableInOS ?? 0,
+          rawResponse:  JSON.stringify(data).slice(0, 400),
+        };
+      } catch (e: any) {
+        const msg = e?.message ?? String(e);
+        if (
+          msg.includes("Failed to send a request") ||
+          msg.includes("fetch") ||
+          msg.includes("NetworkError") ||
+          msg.includes("Load failed")
+        ) {
+          throw new Error(
+            "Edge Function unreachable. Deploy 'poll-os-auctions' to your Supabase project (Dashboard → Edge Functions) and ensure your app's Supabase URL points to that project."
+          );
+        }
+        throw e;
+      }
     },
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ["admin-sync-log", "admin-db-stats"] });
@@ -257,27 +272,42 @@ export default function AdminPanel() {
   const [syncProgress, setSyncProgress] = useState<string | null>(null);
   const fullSyncMutation = useMutation({
     mutationFn: async () => {
-      const batchSize = 10; // pages per batch
-      const totalPages = auctionMaxPages;
-      let totalImported = 0, totalUpdated = 0, totalErrors = 0, totalPagesDone = 0;
+      try {
+        const batchSize = 10; // pages per batch
+        const totalPages = auctionMaxPages;
+        let totalImported = 0, totalUpdated = 0, totalErrors = 0, totalPagesDone = 0;
 
-      for (let startPage = 0; startPage < totalPages; startPage += batchSize) {
-        const endPage = Math.min(startPage + batchSize, totalPages);
-        setSyncProgress(`Syncing pages ${startPage}–${endPage - 1} of ${totalPages}…`);
-        const { data, error } = await supabase.functions.invoke("full-sync-from-os", {
-          body: { pageSize: auctionPageSize, startPage, maxPages: batchSize },
-        });
-        if (error) throw new Error(`Batch ${startPage}-${endPage} failed: ${error.message}`);
-        const a = data?.sync?.auctions ?? {};
-        totalImported += a.imported ?? 0;
-        totalUpdated += a.updated ?? 0;
-        totalErrors += a.errors ?? 0;
-        totalPagesDone += a.pages ?? 0;
-        // Stop early if OS returned fewer pages than requested (end of data)
-        if ((a.pages ?? 0) < batchSize) break;
+        for (let startPage = 0; startPage < totalPages; startPage += batchSize) {
+          const endPage = Math.min(startPage + batchSize, totalPages);
+          setSyncProgress(`Syncing pages ${startPage}-${endPage - 1} of ${totalPages}...`);
+          const { data, error } = await supabase.functions.invoke("full-sync-from-os", {
+            body: { pageSize: auctionPageSize, startPage, maxPages: batchSize },
+          });
+          if (error) throw new Error(`Batch ${startPage}-${endPage} failed: ${error.message}`);
+          const a = data?.sync?.auctions ?? {};
+          totalImported += a.imported ?? 0;
+          totalUpdated += a.updated ?? 0;
+          totalErrors += a.errors ?? 0;
+          totalPagesDone += a.pages ?? 0;
+          // Stop early if OS returned fewer pages than requested (end of data)
+          if ((a.pages ?? 0) < batchSize) break;
+        }
+        setSyncProgress(null);
+        return { imported: totalImported, updated: totalUpdated, errors: totalErrors, pages: totalPagesDone };
+      } catch (e: any) {
+        const msg = e?.message ?? String(e);
+        if (
+          msg.includes("Failed to send a request") ||
+          msg.includes("fetch") ||
+          msg.includes("NetworkError") ||
+          msg.includes("Load failed")
+        ) {
+          throw new Error(
+            "Edge Function unreachable. Deploy 'full-sync-from-os' to your Supabase project (Dashboard → Edge Functions) and ensure VITE_SUPABASE_URL points to that project."
+          );
+        }
+        throw e;
       }
-      setSyncProgress(null);
-      return { imported: totalImported, updated: totalUpdated, errors: totalErrors, pages: totalPagesDone };
     },
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ["admin-sync-log", "admin-db-stats"] });
