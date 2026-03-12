@@ -14,22 +14,34 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { useToggleFavorite } from "@/hooks/useFavorites";
 import { toast } from "sonner";
 
-// ── Fetch all future auctions from DB ─────────────────────────────────────────
+// ── Fetch all future auctions from DB (paginated to bypass 1000-row limit) ────
+const AUCTION_FETCH_LIMIT = 1000;
+
 function useAuctionListings() {
   return useQuery({
     queryKey: ["auction-listings-all"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("listings")
-        .select("id, title, city, address, price, auction_starting_bid, auction_date, auction_court, property_type, cover_image_url, sqm, bedrooms, bathrooms, latitude, longitude, tags, year_built, construction_status, website_url, region, listing_images(url, sort_order)")
-        .eq("listing_type", "auction")
-        .eq("status", "active")
-        .gte("auction_date", new Date().toISOString())
-        .order("auction_date", { ascending: true })
-        .limit(2000);
-      if (error) throw error;
-      return data ?? [];
+      const today = new Date().toISOString();
+      let allAuctions: any[] = [];
+      let from = 0;
+      while (true) {
+        const { data, error } = await supabase
+          .from("listings")
+          .select("id, title, city, address, price, auction_starting_bid, auction_date, auction_court, property_type, cover_image_url, sqm, bedrooms, bathrooms, latitude, longitude, tags, year_built, construction_status, website_url, region, listing_images(url, sort_order)")
+          .eq("listing_type", "auction")
+          .eq("status", "active")
+          .gte("auction_date", today)
+          .order("auction_date", { ascending: true })
+          .range(from, from + AUCTION_FETCH_LIMIT - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        allAuctions = allAuctions.concat(data);
+        if (data.length < AUCTION_FETCH_LIMIT) break;
+        from += AUCTION_FETCH_LIMIT;
+      }
+      return allAuctions;
     },
+    staleTime: 5 * 60 * 1000, // 5 min cache
   });
 }
 
