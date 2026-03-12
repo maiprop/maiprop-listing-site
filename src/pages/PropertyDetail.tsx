@@ -1007,46 +1007,6 @@ export default function PropertyDetail() {
                 lng={db?.longitude ? Number(db.longitude) : undefined}
               />
 
-              {/* ── Premium AI Report ── */}
-              <Section className={reportPurchased ? "border-primary/30" : ""}>
-                <div className="p-6">
-                  <div className="flex items-start gap-4">
-                    <div className="w-11 h-11 rounded-xl bg-gradient-primary flex items-center justify-center shrink-0">
-                      <BarChart2 className="w-5 h-5 text-primary-foreground" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-display font-semibold text-sm">Full AI Property Report</h3>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold font-bold">PREMIUM</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
-                        Deep-dive: cadastre verification, price history, comparable sales, investment projections, ENFIA calculation, and legal status.
-                      </p>
-                      <div className="grid grid-cols-2 gap-2 mb-4">
-                        {["Cadastre Verification", "5-Year Price History", "Comparable Sales", "Investment Projection", "Legal Status Check", "Neighborhood Score"].map(item => (
-                          <div key={item} className={`flex items-center gap-1.5 text-xs ${reportPurchased ? "text-primary" : "text-muted-foreground"}`}>
-                            {reportPurchased ? <Check className="w-3 h-3 text-primary" /> : <Lock className="w-3 h-3" />}
-                            {item}
-                          </div>
-                        ))}
-                      </div>
-                      {!reportPurchased ? (
-                        <div className="flex items-center gap-3 flex-wrap">
-                          <Button className="bg-gradient-primary border-0 text-primary-foreground text-sm" onClick={() => setReportPurchased(true)}>
-                            Unlock Report — €29
-                          </Button>
-                          <span className="text-xs text-muted-foreground">One-time · instant access</span>
-                        </div>
-                      ) : (
-                        <Button variant="outline" className="border-primary/30 text-primary gap-2 text-sm">
-                          <Download className="w-4 h-4" /> Download PDF
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </Section>
-
             </div>
 
             {/* ──── RIGHT SIDEBAR ──── */}
