@@ -205,6 +205,60 @@ export default function PropertyDetail() {
   const [walkScore, setWalkScore] = useState<number | null>(null);
   const [auctionAlertOpen, setAuctionAlertOpen] = useState(false);
 
+  // AI Market Insights — dynamically loaded from property-valuation edge function
+  const [aiInsightsData, setAiInsightsData] = useState<{
+    vsMarket: number;
+    rentalYield: number;
+    estimatedValue: number;
+    marketComparison: string;
+    confidenceLabel: string;
+  } | null>(null);
+  const [aiInsightsLoading, setAiInsightsLoading] = useState(false);
+  const [aiInsightsLoaded, setAiInsightsLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!dbListing || aiInsightsLoaded) return;
+    setAiInsightsLoaded(true);
+    setAiInsightsLoading(true);
+    const invokeValuation = async () => {
+      try {
+        const { data } = await supabaseClient.functions.invoke("property-valuation", {
+          body: {
+            title: dbListing.title,
+            city: dbListing.city,
+            address: dbListing.address,
+            price: Number(dbListing.price),
+            sqm: Number(dbListing.sqm),
+            bedrooms: dbListing.bedrooms,
+            bathrooms: dbListing.bathrooms,
+            propertyType: dbListing.property_type,
+            listingType: dbListing.listing_type,
+            floor: dbListing.floor,
+            yearBuilt: dbListing.year_built,
+            energyClass: dbListing.energy_class,
+            pricePerSqm: dbListing.price_per_sqm ? Number(dbListing.price_per_sqm) : undefined,
+            hasParking: dbListing.has_parking,
+            hasPool: dbListing.has_pool,
+            hasElevator: dbListing.has_elevator,
+            region: dbListing.region,
+          },
+        });
+        if (data && !data.error) {
+          setAiInsightsData({
+            vsMarket: data.marketComparisonPct ?? 0,
+            rentalYield: data.rentalYieldEstimate ?? 0,
+            estimatedValue: data.estimatedValue ?? Number(dbListing.price),
+            marketComparison: data.marketComparison ?? "at_market",
+            confidenceLabel: data.confidenceLabel ?? "Medium",
+          });
+        }
+      } catch { /* silently fail */ } finally {
+        setAiInsightsLoading(false);
+      }
+    };
+    invokeValuation();
+  }, [dbListing, aiInsightsLoaded]);
+
   const { data: favorites = [] } = useFavorites();
   const toggleFav = useToggleFavorite();
   const startConversation = useStartConversation();
