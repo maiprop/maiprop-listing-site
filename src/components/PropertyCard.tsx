@@ -349,10 +349,15 @@ export function PropertyCard({ property, compact = false }: PropertyCardProps) {
           </div>
         )}
 
-        {/* Tags */}
-        {property.tags && property.tags.length > 0 && (
+        {/* Tags — system/internal tags are filtered out */}
+        {(() => {
+          const visibleTags = (property.tags || []).filter(
+            (t: string) => !SYSTEM_TAG_PREFIXES.some(p => t.toLowerCase().startsWith(p.toLowerCase()))
+          );
+          if (!visibleTags.length) return null;
+          return (
           <div className="flex gap-1.5 flex-wrap">
-            {property.tags.slice(0, 3).map(tag => (
+            {visibleTags.slice(0, 3).map(tag => (
               <span key={tag} className="px-2.5 py-0.5 rounded-full bg-primary/10 border border-primary/20 text-[10px] text-primary font-medium">
                 {tag}
               </span>
