@@ -11,7 +11,8 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { title, city, address, price, sqm, bedrooms, bathrooms, propertyType,
             listingType, floor, yearBuilt, energyClass, pricePerSqm,
-            hasParking, hasPool, hasElevator, region } = body;
+            hasParking, hasPool, hasElevator, region,
+            ownershipStatus, ownershipPercentage } = body;
 
     if (!city || !sqm || !price) {
       return new Response(
