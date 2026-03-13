@@ -577,15 +577,15 @@ export default function Listings() {
       <div className="pt-16">
         {/* Sticky search bar */}
         <div className="bg-card border-b border-border sticky top-16 z-40">
-          <div className="container py-3 sm:py-4">
-            {/* Top row — scrollable on mobile */}
-            <div className="flex gap-2 items-center overflow-x-auto scrollbar-none pb-1 sm:pb-0 sm:flex-wrap">
-              {/* Search — full width on mobile, then auto */}
-              <div className="shrink-0 sm:flex-1 w-[180px] sm:min-w-[200px] flex items-center gap-2 bg-secondary rounded-xl px-3 sm:px-4 py-2.5 border border-border focus-within:border-primary transition-colors">
+          <div className="container py-2 sm:py-4">
+            {/* Row 1 on mobile: Search + Map/Grid toggle */}
+            <div className="flex gap-2 items-center mb-2 sm:mb-0 sm:hidden">
+              {/* Search */}
+              <div className="flex-1 flex items-center gap-2 bg-secondary rounded-xl px-3 py-2.5 border border-border focus-within:border-primary transition-colors">
                 <Search className="w-4 h-4 text-muted-foreground shrink-0" />
                 <input
                   type="text"
-                  placeholder="City, area, address..."
+                  placeholder="City or area..."
                   value={searchQuery}
                   onChange={e => setParam("city", e.target.value)}
                   className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none min-w-0"
@@ -594,10 +594,30 @@ export default function Listings() {
                   <button onClick={() => setParam("city", "")}><X className="w-3.5 h-3.5 text-muted-foreground" /></button>
                 )}
               </div>
-              {/* Listing type button */}
-              <ListingTypeButton value={selectedListingType} onChange={v => setParam("listing_type", v)} />
+              {/* Map/Grid/Filters row */}
+              <div className="flex rounded-xl border border-border overflow-hidden shrink-0">
+                <button onClick={() => setViewMode("grid")} title="Grid"
+                  className={`p-2.5 transition-colors ${viewMode === "grid" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"}`}>
+                  <LayoutGrid className="w-4 h-4" />
+                </button>
+                <button onClick={() => setViewMode("map")} title="Map"
+                  className={`p-2.5 transition-colors ${viewMode === "map" || viewMode === "split" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"}`}>
+                  <Map className="w-4 h-4" />
+                </button>
+              </div>
+              <Button variant="outline" size="sm"
+                className={`shrink-0 px-3 h-[38px] ${showFilters ? "bg-primary/10 border-primary/30 text-primary" : "border-border"}`}
+                onClick={() => setShowFilters(!showFilters)}>
+                <SlidersHorizontal className="w-4 h-4" />
+                {activeFilterCount > 0 && (
+                  <span className="w-4 h-4 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center ml-1">{activeFilterCount}</span>
+                )}
+              </Button>
+            </div>
 
-              {/* Property type button */}
+            {/* Row 2 on mobile: scrollable type/price/sort chips */}
+            <div className="flex gap-2 items-center overflow-x-auto scrollbar-none sm:hidden pb-0.5">
+              <ListingTypeButton value={selectedListingType} onChange={v => setParam("listing_type", v)} />
               <PropertyTypeButton
                 value={selectedType}
                 subtype={selectedSubtype}
@@ -610,8 +630,47 @@ export default function Listings() {
                   }, { replace: true });
                 }}
               />
+              <div className="relative shrink-0">
+                <select value={selectedPrice} onChange={e => setParam("price", e.target.value)}
+                  className="appearance-none bg-secondary border border-border rounded-xl px-3 py-2 pr-7 text-xs text-foreground cursor-pointer outline-none focus:border-primary">
+                  {(selectedListingType === "rent" ? rentPriceRanges : buyPriceRanges).map(o => (
+                    <option key={o.value} value={o.value} className="bg-card">{o.label}</option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
+              </div>
+              <AISearchBar onFiltersApplied={applyAIFilters} />
+            </div>
 
-              {/* Price — adapts to listing type */}
+            {/* Desktop: single row — unchanged */}
+            <div className="hidden sm:flex gap-2 items-center overflow-x-auto scrollbar-none sm:flex-wrap">
+              {/* Search */}
+              <div className="shrink-0 flex-1 min-w-[200px] flex items-center gap-2 bg-secondary rounded-xl px-4 py-2.5 border border-border focus-within:border-primary transition-colors">
+                <Search className="w-4 h-4 text-muted-foreground shrink-0" />
+                <input
+                  type="text"
+                  placeholder="City, area, address..."
+                  value={searchQuery}
+                  onChange={e => setParam("city", e.target.value)}
+                  className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none min-w-0"
+                />
+                {searchQuery && (
+                  <button onClick={() => setParam("city", "")}><X className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                )}
+              </div>
+              <ListingTypeButton value={selectedListingType} onChange={v => setParam("listing_type", v)} />
+              <PropertyTypeButton
+                value={selectedType}
+                subtype={selectedSubtype}
+                onChange={(type, sub) => {
+                  setSearchParams(prev => {
+                    const next = new URLSearchParams(prev);
+                    if (type) next.set("type", type); else next.delete("type");
+                    if (sub) next.set("subtype", sub); else next.delete("subtype");
+                    return next;
+                  }, { replace: true });
+                }}
+              />
               <div className="relative">
                 <select value={selectedPrice} onChange={e => setParam("price", e.target.value)}
                   className="appearance-none bg-secondary border border-border rounded-xl px-3 py-2.5 pr-7 text-sm text-foreground cursor-pointer outline-none focus:border-primary">
@@ -621,8 +680,6 @@ export default function Listings() {
                 </select>
                 <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
               </div>
-
-              {/* Sort */}
               <div className="relative">
                 <select value={selectedSort} onChange={e => setParam("sort", e.target.value)}
                   className="appearance-none bg-secondary border border-border rounded-xl px-3 py-2.5 pr-7 text-sm text-foreground cursor-pointer outline-none focus:border-primary">
@@ -630,8 +687,6 @@ export default function Listings() {
                 </select>
                 <ArrowUpDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
               </div>
-
-              {/* More filters */}
               <Button variant="outline"
                 className={`border-border gap-2 shrink-0 ${showFilters ? "bg-primary/10 border-primary/30 text-primary" : ""}`}
                 onClick={() => setShowFilters(!showFilters)}>
@@ -641,11 +696,7 @@ export default function Listings() {
                   <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center">{activeFilterCount}</span>
                 )}
               </Button>
-
-              {/* AI Search */}
               <AISearchBar onFiltersApplied={applyAIFilters} />
-
-              {/* Save search – logged-in only */}
               {user && (
                 <Button variant="outline" className="border-border gap-2 shrink-0"
                   onClick={() => setShowSaveModal(true)}>
@@ -653,44 +704,37 @@ export default function Listings() {
                   Save Search
                 </Button>
               )}
-
-              {/* View toggle */}
               <div className="flex rounded-xl border border-border overflow-hidden shrink-0">
-                <button onClick={() => setViewMode("grid")}
-                  title="Grid view"
+                <button onClick={() => setViewMode("grid")} title="Grid view"
                   className={`p-2.5 transition-colors ${viewMode === "grid" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:text-foreground"}`}>
                   <LayoutGrid className="w-4 h-4" />
                 </button>
-                <button onClick={() => setViewMode("split")}
-                  title="Split view"
+                <button onClick={() => setViewMode("split")} title="Split view"
                   className={`p-2.5 transition-colors ${viewMode === "split" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:text-foreground"}`}>
                   <Columns2 className="w-4 h-4" />
                 </button>
-                <button onClick={() => setViewMode("map")}
-                  title="Map view"
+                <button onClick={() => setViewMode("map")} title="Map view"
                   className={`p-2.5 transition-colors ${viewMode === "map" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:text-foreground"}`}>
                   <Map className="w-4 h-4" />
                 </button>
               </div>
             </div>
 
-
-
             {/* Active filter chips */}
             {activeFilterCount > 0 && (
-              <div className="flex items-center gap-2 mt-3 flex-wrap">
-                <span className="text-xs text-muted-foreground">Active:</span>
-                {selectedType && <button onClick={() => { setParam("type", ""); setParam("subtype", ""); }} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{PROPERTY_TYPE_MAP[selectedType as PropertyTypeKey]?.emoji} {getTypeLabel(selectedType)} <X className="w-3 h-3" /></button>}
-                {selectedSubtype && selectedType && <button onClick={() => setParam("subtype", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{getSubtypeLabel(selectedType, selectedSubtype)} <X className="w-3 h-3" /></button>}
-                {selectedPrice && <button onClick={() => setParam("price", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{[...buyPriceRanges, ...rentPriceRanges].find(r => r.value === selectedPrice)?.label || selectedPrice} <X className="w-3 h-3" /></button>}
-                {bedsRange[0] && <button onClick={() => setParam("beds_min", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{bedsRange[0]}+ beds <X className="w-3 h-3" /></button>}
-                {selectedEnergyClasses.map(ec => <button key={ec} onClick={() => toggleMulti("energy", ec)} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">Energy {ec} <X className="w-3 h-3" /></button>)}
+              <div className="flex items-center gap-2 mt-2 flex-wrap overflow-x-auto scrollbar-none pb-0.5">
+                <span className="text-xs text-muted-foreground shrink-0">Active:</span>
+                {selectedType && <button onClick={() => { setParam("type", ""); setParam("subtype", ""); }} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">{PROPERTY_TYPE_MAP[selectedType as PropertyTypeKey]?.emoji} {getTypeLabel(selectedType)} <X className="w-3 h-3" /></button>}
+                {selectedSubtype && selectedType && <button onClick={() => setParam("subtype", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">{getSubtypeLabel(selectedType, selectedSubtype)} <X className="w-3 h-3" /></button>}
+                {selectedPrice && <button onClick={() => setParam("price", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">{[...buyPriceRanges, ...rentPriceRanges].find(r => r.value === selectedPrice)?.label || selectedPrice} <X className="w-3 h-3" /></button>}
+                {bedsRange[0] && <button onClick={() => setParam("beds_min", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">{bedsRange[0]}+ beds <X className="w-3 h-3" /></button>}
+                {selectedEnergyClasses.map(ec => <button key={ec} onClick={() => toggleMulti("energy", ec)} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">Energy {ec} <X className="w-3 h-3" /></button>)}
                 {selectedFeatures.map(f => {
-                  return <button key={f} onClick={() => toggleMulti("features", f)} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{aiFilterConfig.features.find(o => o.key === f)?.label.replace(/^[^\s]+ /, "") || f} <X className="w-3 h-3" /></button>;
+                  return <button key={f} onClick={() => toggleMulti("features", f)} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">{aiFilterConfig.features.find(o => o.key === f)?.label.replace(/^[^\s]+ /, "") || f} <X className="w-3 h-3" /></button>;
                 })}
-                {selectedHeating && <button onClick={() => setParam("heating", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">Heating: {HEATING_TYPES.find(h => h.value === selectedHeating)?.label || selectedHeating} <X className="w-3 h-3" /></button>}
-                {selectedConstruction && <button onClick={() => setParam("construction", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{CONSTRUCTION_STATUSES.find(s => s.value === selectedConstruction)?.label || selectedConstruction} <X className="w-3 h-3" /></button>}
-                <button onClick={clearAllFilters} className="text-xs text-muted-foreground hover:text-foreground ml-1">Clear all</button>
+                {selectedHeating && <button onClick={() => setParam("heating", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">Heating: {HEATING_TYPES.find(h => h.value === selectedHeating)?.label || selectedHeating} <X className="w-3 h-3" /></button>}
+                {selectedConstruction && <button onClick={() => setParam("construction", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">{CONSTRUCTION_STATUSES.find(s => s.value === selectedConstruction)?.label || selectedConstruction} <X className="w-3 h-3" /></button>}
+                <button onClick={clearAllFilters} className="text-xs text-muted-foreground hover:text-foreground ml-1 shrink-0">Clear all</button>
               </div>
             )}
           </div>
