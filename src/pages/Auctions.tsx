@@ -1015,9 +1015,8 @@ export default function Auctions() {
                  }
 
 
-                size="sm"
-                className="border-border"
-                disabled={currentPage === totalPages}
+
+
                 onClick={() => {setCurrentPage((p) => Math.min(totalPages, p + 1));window.scrollTo({ top: 0, behavior: "smooth" });}}>
                 
                        Next →
