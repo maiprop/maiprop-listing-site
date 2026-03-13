@@ -902,7 +902,7 @@ export default function Index() {
       <CookieConsentBanner />
 
       {/* ══ HERO ══════════════════════════════════════════════════════════════ */}
-      <section className="relative min-h-[100svh] sm:min-h-[92vh] flex items-center overflow-hidden pt-16">
+      <section className="relative min-h-[100svh] flex items-center overflow-hidden pt-14 sm:pt-16">
         {/* Background */}
         <div className="absolute inset-0 overflow-hidden">
           {/* Video background */}
@@ -918,21 +918,21 @@ export default function Index() {
               willChange: "transform",
               transform: "translateZ(0)",
               animation: "hero-zoom 30s ease-in-out infinite alternate",
+              objectPosition: "center 30%",
             }}
           >
             <source src="/hero-bg.mp4" type="video/mp4" />
           </video>
-          {/* Both modes: strong dark-left gradient so white text is always readable */}
+          {/* Both modes: strong dark overlay — heavier on mobile for readability */}
           <div
             className="absolute inset-0"
             style={{
               background:
-              "linear-gradient(120deg, hsl(25 20% 6% / 0.82) 0%, hsl(25 15% 8% / 0.55) 55%, hsl(30 10% 10% / 0.12) 100%)"
+              "linear-gradient(160deg, hsl(25 20% 4% / 0.88) 0%, hsl(25 15% 8% / 0.60) 55%, hsl(30 10% 10% / 0.18) 100%)"
             }} />
-          
 
           {/* Bottom fade into next section */}
-          <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-background via-background/60 to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 h-48 sm:h-56 bg-gradient-to-t from-background via-background/60 to-transparent" />
         </div>
         {/* Grid overlay */}
         <div
@@ -950,12 +950,12 @@ export default function Index() {
           style={{ background: "radial-gradient(hsl(192 100% 50%), hsl(270 75% 62%), transparent 70%)" }} />
         
 
-        <div className="container relative z-10 py-10 sm:py-16 lg:pl-16 xl:pl-24">
+        <div className="container relative z-10 py-8 sm:py-16 lg:pl-16 xl:pl-24">
           <div className="grid lg:grid-cols-[1fr_360px] xl:grid-cols-[1fr_400px] gap-8 lg:gap-12 items-center">
             {/* ── LEFT: Copy + Search ── */}
             <div className="text-white">
               {/* Eyebrow */}
-              <div className="relative inline-flex mb-5 sm:mb-7 animate-fade-in-up" style={{ animationDelay: "0s" }}>
+              <div className="relative inline-flex mb-4 sm:mb-7 animate-fade-in-up" style={{ animationDelay: "0s" }}>
                 {/* Glow ring */}
                 <span
                   className="absolute inset-0 rounded-full animate-pulse"
@@ -966,7 +966,7 @@ export default function Index() {
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-300 opacity-60" />
                     <span className="relative inline-flex rounded-full w-2 h-2 bg-cyan-300" />
                   </span>
-                  <span className="text-xs sm:text-sm font-semibold text-white">
+                  <span className="text-xs font-semibold text-white">
                     Greece's #1 AI-Powered Property Platform
                   </span>
                 </div>
@@ -974,12 +974,12 @@ export default function Index() {
 
               {/* Headline */}
               <h1
-                className="font-display font-black leading-[1.05] mb-4 sm:mb-6 animate-fade-in-up text-white text-3xl"
-                style={{ fontSize: "clamp(2rem, 8vw, 4.5rem)", animationDelay: "0.08s" }}>
-                
-                Find your perfect property in Greece
-                <div> </div>
-                <span className="gradient-text-primary text-6xl">with AI precision</span>
+                className="font-display font-black leading-[1.08] mb-4 sm:mb-6 animate-fade-in-up text-white"
+                style={{ fontSize: "clamp(1.75rem, 7vw, 4.5rem)", animationDelay: "0.08s" }}>
+                Find your perfect<br className="hidden xs:inline" /> property in Greece
+                <div className="mt-1">
+                  <span className="gradient-text-primary" style={{ fontSize: "clamp(1.9rem, 8vw, 4.8rem)" }}>with AI precision</span>
+                </div>
               </h1>
 
               {/* ── Search Card ── */}
@@ -1065,7 +1065,7 @@ export default function Index() {
       </section>
 
       {/* ══ BROWSE BY TYPE ══════════════════════════════════════════════════ */}
-      <section className="py-14 bg-secondary">
+      <section className="py-10 sm:py-14 bg-secondary">
         <div ref={browseRef} className="container">
           <div className={`flex items-center justify-between mb-7 reveal ${browseInView ? "in-view" : ""}`}>
             <div>
@@ -1172,18 +1172,18 @@ export default function Index() {
       </section>
 
       {/* ══ FEATURED PROPERTIES ══════════════════════════════════════════════ */}
-      <section className="py-16 bg-background">
+      <section className="py-10 sm:py-16 bg-background">
         <div ref={featuredRef} className="container">
-          <div className={`flex items-center justify-between mb-8 reveal ${featuredInView ? "in-view" : ""}`}>
+          <div className={`flex items-center justify-between mb-6 sm:mb-8 reveal ${featuredInView ? "in-view" : ""}`}>
             <div>
-              <h2 className="font-display text-2xl font-bold">Featured Properties</h2>
+              <h2 className="font-display text-xl sm:text-2xl font-bold">Featured Properties</h2>
             </div>
-            <Button variant="outline" className="border-border" asChild>
+            <Button variant="outline" size="sm" className="border-border text-xs" asChild>
               <Link to="/listings">View All</Link>
             </Button>
           </div>
           <div
-            className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 reveal reveal-delay-1 ${featuredInView ? "in-view" : ""}`}>
+            className={`grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 reveal reveal-delay-1 ${featuredInView ? "in-view" : ""}`}>
             
             {featuredLoading && !featuredError
               ? Array.from({ length: 4 }).map((_, i) => (
@@ -1225,27 +1225,24 @@ export default function Index() {
       </section>
 
       {/* ══ AUCTIONS ════════════════════════════════════════════════════════ */}
-      <section className="py-16 bg-secondary">
+      <section className="py-10 sm:py-16 bg-secondary">
         <div ref={auctionsRef} className="container">
-          <div className={`flex items-center justify-between mb-8 reveal ${auctionsInView ? "in-view" : ""}`}>
+          <div className={`flex items-center justify-between mb-6 sm:mb-8 reveal ${auctionsInView ? "in-view" : ""}`}>
             <div>
-              <div className="flex items-center gap-2 mb-2">
-                <Gavel className="w-5 h-5 text-brand-gold" />
+              <div className="flex items-center gap-2 mb-1">
+                <Gavel className="w-4 h-4 text-brand-gold" />
                 <span className="text-xs font-semibold text-brand-gold uppercase tracking-widest">Greek Auctions</span>
               </div>
-              <h2 className="font-display text-2xl font-bold">This Week's Auctions</h2>
-              
-
-              
+              <h2 className="font-display text-xl sm:text-2xl font-bold">This Week's Auctions</h2>
             </div>
-            <Button variant="outline" className="border-brand-gold/30 text-brand-gold hover:bg-brand-gold/10" asChild>
+            <Button variant="outline" size="sm" className="border-brand-gold/30 text-brand-gold hover:bg-brand-gold/10 text-xs" asChild>
               <Link to="/auctions">
                 All Auctions <ArrowRight className="w-3 h-3 ml-1" />
               </Link>
             </Button>
           </div>
           <div
-            className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 reveal reveal-delay-1 ${auctionsInView ? "in-view" : ""}`}>
+            className={`grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 reveal reveal-delay-1 ${auctionsInView ? "in-view" : ""}`}>
             
             {auctionListings.map((l: any) => {
               const googleKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
@@ -1339,10 +1336,10 @@ export default function Index() {
       </section>
 
       {/* ══ POPULAR LOCATIONS ════════════════════════════════════════════════ */}
-      <section className="py-16 bg-secondary">
+      <section className="py-10 sm:py-16 bg-secondary">
         <div ref={locationsRef} className="container">
-          <div className={`flex items-center justify-between mb-8 reveal ${locationsInView ? "in-view" : ""}`}>
-            <h2 className="font-display text-2xl font-bold">Popular Locations</h2>
+          <div className={`flex items-center justify-between mb-6 sm:mb-8 reveal ${locationsInView ? "in-view" : ""}`}>
+            <h2 className="font-display text-xl sm:text-2xl font-bold">Popular Locations</h2>
             <Link to="/listings" className="text-sm text-primary hover:underline flex items-center gap-1">
               Explore All <ArrowRight className="w-3 h-3" />
             </Link>
@@ -1410,7 +1407,7 @@ export default function Index() {
       </section>
 
       {/* ══ PROFESSIONALS CTA ════════════════════════════════════════════════ */}
-      <section className="py-20 bg-background">
+      <section className="py-10 sm:py-20 bg-background">
         <div ref={prosRef} className="container">
           <div
             className={`relative rounded-3xl overflow-hidden border border-accent/20 bg-foreground dark:bg-[hsl(265_40%_7%)] reveal ${prosInView ? "in-view" : ""}`}>
@@ -1425,10 +1422,10 @@ export default function Index() {
               style={{ background: "radial-gradient(hsl(183 100% 42%), transparent 70%)" }} />
             
 
-            <div className="relative p-10 md:p-14 lg:p-16 text-background">
-              <div className="grid lg:grid-cols-2 gap-12 items-center">
+            <div className="relative p-6 sm:p-10 md:p-14 lg:p-16 text-background">
+              <div className="grid lg:grid-cols-2 gap-8 sm:gap-12 items-center">
                 <div>
-                  <h2 className="font-display text-4xl lg:text-5xl font-bold leading-tight mb-4 text-destructive-foreground">
+                  <h2 className="font-display text-3xl sm:text-4xl lg:text-5xl font-bold leading-tight mb-4 text-destructive-foreground">
                     The right expert,
                     <br />
                     <span className="gradient-text-cyan">one click away</span>
@@ -1519,18 +1516,18 @@ export default function Index() {
       </section>
 
       {/* ══ mAI PROP OS ═════════════════════════════════════════════════════ */}
-      <section className="py-20 bg-secondary overflow-hidden">
+      <section className="py-12 sm:py-20 bg-secondary overflow-hidden">
         <div ref={osRef} className="container">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
+          <div className="grid lg:grid-cols-2 gap-8 sm:gap-12 items-center">
             {/* Copy */}
             <div className={`reveal ${osInView ? "in-view" : ""}`}>
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 mb-5">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 mb-4 sm:mb-5">
                 <BarChart2 className="w-3.5 h-3.5 text-primary" />
                 <span className="text-xs font-semibold text-primary uppercase tracking-wide">
                   Powered by mAI Prop OS
                 </span>
               </div>
-              <h2 className="font-display text-4xl font-bold leading-tight mb-4">
+              <h2 className="font-display text-3xl sm:text-4xl font-bold leading-tight mb-3 sm:mb-4">
                 Greece's Real Estate <br />
                 <span className="gradient-text-primary">Data Gateway</span>
               </h2>
@@ -1599,9 +1596,9 @@ export default function Index() {
       </section>
 
       {/* ══ PROPERTIES PORTAL / GOLDEN VISA ══════════════════════════════════ */}
-      <section className="py-20 bg-background overflow-hidden">
+      <section className="py-12 sm:py-20 bg-background overflow-hidden">
         <div ref={goldenRef} className="container">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
+          <div className="grid lg:grid-cols-2 gap-8 sm:gap-12 items-center">
             {/* App Mockup */}
             <div className={`relative order-last lg:order-first reveal ${goldenInView ? "in-view" : ""}`}>
               <div
@@ -1642,19 +1639,19 @@ export default function Index() {
 
             {/* Copy */}
             <div className={`reveal reveal-delay-1 ${goldenInView ? "in-view" : ""}`}>
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-brand-gold/10 border border-brand-gold/20 mb-5">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-brand-gold/10 border border-brand-gold/20 mb-4 sm:mb-5">
                 <Star className="w-3.5 h-3.5 text-brand-gold" />
                 <span className="text-xs font-semibold text-brand-gold uppercase tracking-wide">Greek Golden Visa</span>
               </div>
-              <h2 className="font-display text-4xl font-bold leading-tight mb-4">
+              <h2 className="font-display text-3xl sm:text-4xl font-bold leading-tight mb-3 sm:mb-4">
                 Secure EU Residency <br />
                 <span className="gradient-text-gold">Through Greek Property</span>
               </h2>
-              <p className="text-muted-foreground leading-relaxed mb-6">
+              <p className="text-muted-foreground leading-relaxed mb-4 sm:mb-6 text-sm sm:text-base">
                 Our dedicated investment properties portal showcases curated €250K+ properties eligible for the Greek
                 Golden Visa program — your gateway to EU residency, freedom of movement, and long-term capital growth.
               </p>
-              <ul className="space-y-3 mb-8">
+              <ul className="space-y-2 sm:space-y-3 mb-6 sm:mb-8">
                 {[
                 "Minimum €250K investment for EU residency",
                 "6–9 months to visa approval",
@@ -1668,19 +1665,10 @@ export default function Index() {
                 )}
               </ul>
               <div className="flex gap-3">
-                <Button className="bg-gradient-gold border-0 text-background font-semibold gap-2" asChild>
+                <Button className="bg-gradient-gold border-0 text-background font-semibold gap-2 w-full sm:w-auto" asChild>
                   <a href="https://properties.maiprop.co" target="_blank" rel="noreferrer">
                     Explore Properties
                   </a>
-                </Button>
-                <Button
-                  variant="outline"
-                  className="border-brand-gold/30 text-brand-gold hover:bg-brand-gold/10"
-                  asChild>
-                  
-                  
-
-                  
                 </Button>
               </div>
             </div>
@@ -1690,7 +1678,7 @@ export default function Index() {
 
       <Footer />
       {/* bottom spacing for mobile nav */}
-      <div className="h-16 lg:hidden" />
+      <div className="h-20 lg:hidden" />
     </div>);
 
 }
