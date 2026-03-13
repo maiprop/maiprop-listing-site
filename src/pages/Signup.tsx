@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff, Loader2, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -18,13 +18,22 @@ const GoogleIcon = () => (
 
 export default function Signup() {
   const navigate = useNavigate();
-  const { signUp } = useAuth();
+  const { signUp, user, loading: authLoading } = useAuth();
 
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [didSignUp, setDidSignUp] = useState(false);
 
   const [form, setForm] = useState({ firstName: "", lastName: "", email: "", password: "" });
+
+  // Navigate to onboarding once auth state settles after sign-up
+  useEffect(() => {
+    if (!didSignUp || authLoading) return;
+    if (user) {
+      navigate("/onboarding", { replace: true });
+    }
+  }, [didSignUp, authLoading, user, navigate]);
 
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
@@ -52,8 +61,8 @@ export default function Signup() {
     if (error) {
       toast.error(error.message);
     } else {
-      // Email verification required — go straight to onboarding after they verify
-      navigate("/onboarding");
+      // Don't navigate immediately — wait for auth state to settle
+      setDidSignUp(true);
     }
   };
 
@@ -141,9 +150,9 @@ export default function Signup() {
               <Button
                 type="submit"
                 className="w-full bg-gradient-primary border-0 text-primary-foreground"
-                disabled={loading || !form.email || !form.password}
+                disabled={loading || (didSignUp && authLoading) || !form.email || !form.password}
               >
-                {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                {(loading || (didSignUp && authLoading)) ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                 Create Account <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             </form>

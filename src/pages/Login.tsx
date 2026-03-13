@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Eye, EyeOff, Loader2, Mail, ArrowLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -20,7 +20,7 @@ const GoogleIcon = () => (
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { signIn } = useAuth();
+  const { signIn, user, loading: authLoading, needsOnboarding } = useAuth();
 
   const [view, setView] = useState<"login" | "forgot" | "forgot-sent">("login");
   const [email, setEmail] = useState("");
@@ -29,8 +29,20 @@ export default function Login() {
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  // Track whether the user just signed in so we only auto-redirect after sign-in
+  const [didSignIn, setDidSignIn] = useState(false);
 
   const from = (location.state as any)?.from?.pathname || "/dashboard";
+
+  // Redirect once auth state settles after sign-in (avoids navigating before
+  // onAuthStateChange has resolved and loading is cleared)
+  useEffect(() => {
+    if (!didSignIn || authLoading) return;
+    if (user) {
+      toast.success("Welcome back!");
+      navigate(needsOnboarding ? "/onboarding" : from, { replace: true });
+    }
+  }, [didSignIn, authLoading, user, needsOnboarding, from, navigate]);
 
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
@@ -51,8 +63,8 @@ export default function Login() {
     if (error) {
       toast.error("Invalid email or password");
     } else {
-      toast.success("Welcome back!");
-      navigate(from, { replace: true });
+      // Don't navigate here — wait for auth state to settle via useEffect above
+      setDidSignIn(true);
     }
   };
 
@@ -119,8 +131,8 @@ export default function Login() {
                       </button>
                     </div>
                   </div>
-                  <Button type="submit" className="w-full bg-gradient-primary border-0 text-primary-foreground" disabled={loading}>
-                    {loading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+                  <Button type="submit" className="w-full bg-gradient-primary border-0 text-primary-foreground" disabled={loading || (didSignIn && authLoading)}>
+                    {(loading || (didSignIn && authLoading)) && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
                     Sign In
                   </Button>
                 </form>
