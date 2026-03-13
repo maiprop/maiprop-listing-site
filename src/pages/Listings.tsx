@@ -1281,6 +1281,21 @@ export default function Listings() {
       </div>
 
       <Footer />
+
+      {/* Floating Map button on mobile — above bottom nav, for quick switch to map view */}
+      {viewMode !== "map" && viewMode !== "split" && (
+        <div className="lg:hidden fixed bottom-20 left-1/2 -translate-x-1/2 z-40">
+          <Button
+            size="lg"
+            onClick={() => setViewMode("map")}
+            className="rounded-full shadow-elevated bg-card border border-border gap-2 px-5 h-12 font-semibold"
+          >
+            <Map className="w-5 h-5" />
+            Map
+          </Button>
+        </div>
+      )}
+
       {/* bottom spacing for mobile nav */}
       <div className="h-16 lg:hidden" />
 

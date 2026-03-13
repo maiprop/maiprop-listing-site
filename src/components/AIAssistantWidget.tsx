@@ -43,6 +43,8 @@ interface Message {
 
 interface AIAssistantWidgetProps {
   propertyContext?: PropertyContext;
+  /** When "embedded", no floating button; chat panel only (e.g. for /ai-assistant page). When "floating", button is hidden on mobile (lg:hidden) so use bottom nav AI tab. */
+  variant?: "floating" | "embedded";
 }
 
 const SUGGESTIONS_GENERIC = [
@@ -59,8 +61,8 @@ const SUGGESTIONS_PROPERTY = (ctx: PropertyContext) => [
   "What should I know about this neighbourhood?",
 ];
 
-const AIAssistantWidget = forwardRef<HTMLDivElement, AIAssistantWidgetProps>(function AIAssistantWidget({ propertyContext }, _ref) {
-  const [open, setOpen] = useState(false);
+const AIAssistantWidget = forwardRef<HTMLDivElement, AIAssistantWidgetProps>(function AIAssistantWidget({ propertyContext, variant = "floating" }, _ref) {
+  const [open, setOpen] = useState(variant === "embedded");
   const [minimized, setMinimized] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -196,30 +198,36 @@ const AIAssistantWidget = forwardRef<HTMLDivElement, AIAssistantWidgetProps>(fun
     setIsStreaming(false);
   };
 
-  // ── Floating button (closed state) ──────────────────────────────────────────
-  if (!open) {
+  // ── Floating button (closed state) — hidden on mobile so bottom nav AI tab is used ──
+  if (!open && variant === "floating") {
     return (
-      <button
-        onClick={() => setOpen(true)}
-        className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-gradient-primary text-primary-foreground shadow-elevated flex items-center justify-center hover:scale-105 active:scale-95 transition-transform group"
-        aria-label="Open AI assistant"
-      >
-        <Sparkles className="w-6 h-6" />
-        {/* pulse ring */}
-        <span className="absolute inset-0 rounded-full border-2 border-primary/40 animate-ping" />
-        <span className="absolute -top-8 right-0 bg-card border border-border text-foreground text-xs px-2 py-1 rounded-lg shadow whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-          AI Assistant
-        </span>
-      </button>
+      <div className="hidden lg:flex fixed bottom-6 right-6 z-50">
+        <button
+          onClick={() => setOpen(true)}
+          className="w-14 h-14 rounded-full bg-gradient-primary text-primary-foreground shadow-elevated flex items-center justify-center hover:scale-105 active:scale-95 transition-transform group"
+          aria-label="Open AI assistant"
+        >
+          <Sparkles className="w-6 h-6" />
+          <span className="absolute inset-0 rounded-full border-2 border-primary/40 animate-ping" />
+          <span className="absolute -top-8 right-0 bg-card border border-border text-foreground text-xs px-2 py-1 rounded-lg shadow whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+            AI Assistant
+          </span>
+        </button>
+      </div>
     );
   }
 
+  if (!open && variant === "embedded") return null;
+
   // ── Chat window ──────────────────────────────────────────────────────────────
+  const isEmbedded = variant === "embedded";
   return (
     <div
-      className={`fixed bottom-6 right-6 z-50 w-[360px] bg-card border border-border rounded-2xl shadow-elevated flex flex-col overflow-hidden transition-all duration-200 ${
-        minimized ? "h-[52px]" : "h-[520px]"
-      }`}
+      className={
+        isEmbedded
+          ? `flex flex-col overflow-hidden transition-all duration-200 rounded-2xl border border-border bg-card shadow-elevated ${minimized ? "h-[52px]" : "min-h-[420px] flex-1"}`
+          : `fixed bottom-6 right-6 z-50 w-[360px] bg-card border border-border rounded-2xl shadow-elevated flex flex-col overflow-hidden transition-all duration-200 ${minimized ? "h-[52px]" : "h-[520px]"}`
+      }
     >
       {/* Header */}
       <div className="flex items-center gap-2.5 px-4 py-3 bg-gradient-primary shrink-0">
