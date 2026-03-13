@@ -374,7 +374,8 @@ function AuctionCard({ a, favoritedIds, onToggleFav
           <div className="text-xs text-muted-foreground truncate">{a.auction_court}</div>
         }
 
-        }
+
+
 
         {/* Action row */}
         <div className="mt-auto pt-3 border-t border-border flex items-center gap-2">
