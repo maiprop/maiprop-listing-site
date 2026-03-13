@@ -27,6 +27,7 @@ import Pro from "./pages/Pro";
 import FiresalePricing from "./pages/FiresalePricing";
 import Pricing from "./pages/Pricing";
 import AdminPricing from "./pages/AdminPricing";
+import AIAssistantPage from "./pages/AIAssistantPage";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
 import CookiePolicy from "./pages/CookiePolicy";
@@ -42,13 +43,13 @@ const queryClient = new QueryClient({
   },
 });
 
-// Show the global AI widget on all pages except auth & onboarding
+// Show the global AI floating widget on desktop only; /ai-assistant has its own embedded widget
 function GlobalAIWidget() {
   const loc = useLocation();
-  const hide = ["/login", "/signup", "/onboarding", "/dashboard", "/messages"].some(p => loc.pathname.startsWith(p));
+  const hide = ["/login", "/signup", "/onboarding", "/dashboard", "/messages", "/ai-assistant"].some(p => loc.pathname.startsWith(p));
   const isPropertyPage = loc.pathname.startsWith("/property/");
   if (hide || isPropertyPage) return null;
-  return <AIAssistantWidget />;
+  return <AIAssistantWidget variant="floating" />;
 }
 
 const App = () => (
@@ -81,6 +82,7 @@ const App = () => (
               <Route path="/cookie-policy" element={<CookiePolicy />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/pro" element={<Pro />} />
+              <Route path="/ai-assistant" element={<AIAssistantPage />} />
               <Route path="/pricing" element={<Pricing />} />
               <Route path="/pricing/firesale-investors" element={<FiresalePricing />} />
               <Route

@@ -160,8 +160,8 @@ export function PropertyCard({ property, compact = false }: PropertyCardProps) {
 
   return (
     <div className="property-card rounded-2xl overflow-hidden group flex flex-col bg-card border border-border">
-      {/* Image — taller ratio */}
-      <div className="relative overflow-hidden bg-secondary" style={{ aspectRatio: "3/2" }}>
+      {/* Image — taller on mobile (4/3) for better thumbnail, 3/2 on larger screens */}
+      <div className="relative overflow-hidden bg-secondary aspect-[4/3] sm:aspect-[3/2]">
         {mainImage ? (
           <img
             src={mainImage}
@@ -226,13 +226,13 @@ export function PropertyCard({ property, compact = false }: PropertyCardProps) {
           <div className="flex items-end justify-between">
             <div>
               {/* Amber-highlighted price */}
-              <div className="inline-flex items-baseline gap-1.5 bg-primary/90 backdrop-blur-sm rounded-xl px-3 py-1.5 shadow-md">
-                <span className="text-xl font-display font-bold text-primary-foreground leading-none">
+              <div className="inline-flex items-baseline gap-1.5 bg-primary/90 backdrop-blur-sm rounded-xl px-3 py-1.5 sm:px-3 sm:py-1.5 shadow-md">
+                <span className="text-lg sm:text-xl font-display font-bold text-primary-foreground leading-none">
                   {formatPrice(property.price, property.listingType)}
                 </span>
               </div>
               {property.pricePerSqm && (
-                <div className="text-[11px] text-white/70 mt-1 ml-1">€{property.pricePerSqm}/m²</div>
+                <div className="text-[11px] sm:text-[11px] text-white/70 mt-1 ml-1">€{property.pricePerSqm}/m²</div>
               )}
             </div>
             <div className="flex flex-col items-end gap-1">
@@ -256,12 +256,12 @@ export function PropertyCard({ property, compact = false }: PropertyCardProps) {
         </div>
       </div>
 
-      {/* Card body */}
-      <div className="p-4 flex flex-col flex-1 gap-3">
+      {/* Card body — more padding and slightly larger type on mobile for 2-col thumbnail view */}
+      <div className="p-4 sm:p-4 flex flex-col flex-1 gap-3">
         {/* Title + location */}
         <div>
           <Link to={detailPath}>
-            <h3 className="font-display font-semibold text-base text-foreground hover:text-primary transition-colors line-clamp-2 leading-snug">
+            <h3 className="font-display font-semibold text-[15px] sm:text-base text-foreground hover:text-primary transition-colors line-clamp-2 leading-snug">
               {property.title}
             </h3>
           </Link>
@@ -269,8 +269,8 @@ export function PropertyCard({ property, compact = false }: PropertyCardProps) {
             to={detailPath}
             className="flex items-center gap-1 mt-1.5 text-muted-foreground text-xs group/addr hover:text-primary transition-colors w-fit max-w-full"
           >
-            <MapPin className="w-3 h-3 shrink-0 text-primary/70 group-hover/addr:text-primary transition-colors" />
-            <span className="truncate underline-offset-2 group-hover/addr:underline">{property.address}, {property.city}</span>
+            <MapPin className="w-3.5 h-3.5 sm:w-3 sm:h-3 shrink-0 text-primary/70 group-hover/addr:text-primary transition-colors" />
+            <span className="truncate underline-offset-2 group-hover/addr:underline text-xs sm:text-xs">{property.address}, {property.city}</span>
           </Link>
         </div>
 

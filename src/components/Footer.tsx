@@ -31,6 +31,7 @@ export function Footer() {
               { label: "Greek Auctions", to: "/auctions" },
               { label: "Quick Sale™", to: "/firesale" },
               { label: "Professionals", to: "/professionals" },
+              { label: "Pricing", to: "/pricing" },
               { label: "AI Reports", to: "/listings" }].
               map((item) =>
               <li key={item.label}>

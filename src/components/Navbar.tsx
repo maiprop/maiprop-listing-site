@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import logoImg from "@/assets/logo.png";
 import logoDarkImg from "@/assets/logo-dark.png";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Bell, MessageSquare, User, Menu, X, ChevronDown, Plus, LogOut, LayoutDashboard, Building2, Sun, Moon, Home, List, Gavel, Flame, Zap } from "lucide-react";
+import { Bell, MessageSquare, User, Menu, X, ChevronDown, Plus, LogOut, LayoutDashboard, Building2, Sun, Moon, Home, List, Gavel, Flame, Zap, Sparkles, Euro } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useTheme } from "next-themes";
@@ -199,6 +199,11 @@ export function Navbar() {
                       <MessageSquare className="w-3.5 h-3.5" /> Messages
                     </Link>
                   </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/pricing" className="flex items-center gap-2 cursor-pointer">
+                      <Euro className="w-3.5 h-3.5" /> Pricing
+                    </Link>
+                  </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     onClick={handleSignOut}
@@ -289,6 +294,9 @@ export function Navbar() {
               {link.accent === "subtle" && <span className="w-1.5 h-1.5 rounded-full bg-accent/60" />}
             </Link>
           ))}
+          <Link to="/pricing" className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors" onClick={() => setMobileOpen(false)}>
+            <Euro className="w-4 h-4" /> Pricing
+          </Link>
           <div className="pt-2 flex gap-2">
             {user ? (
               <>
@@ -331,6 +339,7 @@ export function Navbar() {
             { to: "/listings", icon: List, label: "Listings" },
             { to: "/auctions", icon: Gavel, label: "Auctions" },
             { to: "/firesale", icon: Flame, label: "Quick Sale", accent: "text-destructive" },
+            { to: "/ai-assistant", icon: Sparkles, label: "AI" },
             { to: user ? "/dashboard" : "/login", icon: user ? LayoutDashboard : User, label: user ? "Dashboard" : "Sign In" },
           ].map(({ to, icon: Icon, label, accent }) => {
             const active = location.pathname === to || (to !== "/" && location.pathname.startsWith(to));
