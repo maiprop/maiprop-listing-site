@@ -172,10 +172,10 @@ export function OSSyncPanel() {
 
   // ── Mutation: full sync from OS (all relevant APIs: auctions + extensible) ───
   const fullSyncMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (replaceAll?: boolean) => {
       try {
         const { data, error } = await supabase.functions.invoke("full-sync-from-os", {
-          body: { pageSize: 100, maxPages: 200 },
+          body: { pageSize: 100, maxPages: 200, ...(replaceAll && { replaceAll: true }) },
         });
         if (error) throw error;
         return data;
@@ -194,16 +194,18 @@ export function OSSyncPanel() {
         throw e;
       }
     },
-    onSuccess: (result) => {
+    onSuccess: (result, replaceAll) => {
       setSyncingId(null);
       qc.invalidateQueries({ queryKey: ["sync_log"] });
       if (result?.status === "skipped") {
         toast.info("Full sync skipped — OS credentials pending.");
       } else if (result?.sync?.auctions) {
         const a = result.sync.auctions;
-        toast.success(
-          `Full sync: ${a.imported ?? 0} new · ${a.updated ?? 0} updated (${a.pages ?? 0} pages)`,
-        );
+        const replaced = a.replaced ?? 0;
+        const msg = replaceAll && replaced > 0
+          ? `Replaced ${replaced} auctions, then synced: ${a.imported ?? 0} new · ${a.updated ?? 0} updated (${a.pages ?? 0} pages)`
+          : `Full sync: ${a.imported ?? 0} new · ${a.updated ?? 0} updated (${a.pages ?? 0} pages)`;
+        toast.success(msg);
       } else {
         toast.success("Full sync from OS completed.");
       }
@@ -256,13 +258,29 @@ export function OSSyncPanel() {
             disabled={fullSyncMutation.isPending}
             onClick={() => {
               setSyncingId("full-sync");
-              fullSyncMutation.mutate();
+              fullSyncMutation.mutate(false);
             }}
           >
             {fullSyncMutation.isPending
               ? <Loader2 className="w-4 h-4 animate-spin" />
               : <RefreshCw className="w-4 h-4" />}
             Full sync (OS → Hub)
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-2 border-destructive/40 text-destructive hover:bg-destructive/10"
+            disabled={fullSyncMutation.isPending}
+            onClick={() => {
+              setSyncingId("full-sync");
+              fullSyncMutation.mutate(true);
+            }}
+            title="Delete all OS-sourced auctions, then refetch from OS with correct typology and filters"
+          >
+            {fullSyncMutation.isPending
+              ? <Loader2 className="w-4 h-4 animate-spin" />
+              : <RefreshCw className="w-4 h-4" />}
+            Replace all auctions & sync
           </Button>
           {/* Single-page-range poll */}
           <Button

@@ -31,6 +31,28 @@ const CATEGORY_MAP: Record<string, string> = {
   WAREHOUSE: "commercial",
   INDUSTRIAL: "commercial",
   STOREROOM: "commercial",
+  PARKING: "commercial",
+  HOTEL: "commercial",
+  OTHER_BUSINESS_SPACE: "commercial",
+};
+
+const LAND_TYPE_TAG: Record<string, string> = {
+  LAND: "land",
+  PLOT: "plot",
+  PLOT_WITH_BUILDING: "plot_with_building",
+  LAND_WITH_BUILDING: "land_with_building",
+};
+
+const COMMERCIAL_TYPE_TAG: Record<string, string> = {
+  STORE: "store",
+  WAREHOUSE: "warehouse",
+  INDUSTRIAL: "industrial",
+  STOREROOM: "storeroom",
+  PARKING: "parking",
+  HOTEL: "hotel",
+  OFFICE: "office",
+  OTHER_BUSINESS_SPACE: "other_business_space",
+  COMMERCIAL: "other_business_space",
 };
 
 const CATEGORY_GR: Record<string, string> = {
@@ -45,6 +67,14 @@ const CATEGORY_GR: Record<string, string> = {
 function mapCategory(cat?: string): string {
   if (!cat) return "apartment";
   return CATEGORY_MAP[cat.toUpperCase()] ?? "apartment";
+}
+
+function getSubtypeTag(cat?: string): string | null {
+  if (!cat) return null;
+  const u = cat.toUpperCase();
+  if (LAND_TYPE_TAG[u]) return `land_type:${LAND_TYPE_TAG[u]}`;
+  if (COMMERCIAL_TYPE_TAG[u]) return `commercial_type:${COMMERCIAL_TYPE_TAG[u]}`;
+  return null;
 }
 
 function mapOwnershipStatusToTag(rawOwnership?: string | null): string | null {
@@ -190,6 +220,7 @@ function mapAuctionToListing(a: any) {
         ...(a.currentRound != null ? [`round:${a.currentRound}`] : []),
         ...(ownershipTag ? [ownershipTag] : []),
         ...(ownershipPct != null ? [`ownership_pct:${ownershipPct}`] : []),
+        ...(getSubtypeTag(a.propertyCategory) ? [getSubtypeTag(a.propertyCategory)!] : []),
       ],
     },
   };
@@ -232,6 +263,51 @@ Deno.serve(async (req) => {
     );
     const maxPages = Math.min(Number(body.maxPages ?? MAX_PAGES), 500);
     const startPage = Math.max(0, Number(body.startPage ?? 0));
+    const replaceAll = body.replaceAll === true || body.replace_all === true;
+    let replacedCount = 0;
+
+    // When replaceAll: delete all auction listings that came from OS (tag os_auction:*) then refetch
+    if (replaceAll) {
+      const idsToDelete: string[] = [];
+      let offset = 0;
+      const pageSizeSelect = 500;
+      while (true) {
+        const { data: rows, error: selectErr } = await sb
+          .from("listings")
+          .select("id, tags")
+          .eq("listing_type", "auction")
+          .order("id", { ascending: true })
+          .range(offset, offset + pageSizeSelect - 1);
+        if (selectErr) {
+          await logSync(sb, "auction", "error", `Replace-all select failed: ${selectErr.message}`);
+          return new Response(
+            JSON.stringify({ ok: false, error: selectErr.message, sync: { auctions: {} } }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        if (!rows?.length) break;
+        for (const r of rows) {
+          if (Array.isArray(r.tags) && r.tags.some((t: string) => String(t).startsWith("os_auction:")))
+            idsToDelete.push(r.id);
+        }
+        if (rows.length < pageSizeSelect) break;
+        offset += pageSizeSelect;
+      }
+      const deleteChunkSize = 100;
+      for (let i = 0; i < idsToDelete.length; i += deleteChunkSize) {
+        const chunk = idsToDelete.slice(i, i + deleteChunkSize);
+        const { error: delErr } = await sb.from("listings").delete().in("id", chunk);
+        if (delErr) {
+          await logSync(sb, "auction", "error", `Replace-all delete failed: ${delErr.message}`);
+          return new Response(
+            JSON.stringify({ ok: false, error: delErr.message, sync: { auctions: { replaced: replacedCount } } }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        replacedCount += chunk.length;
+      }
+      console.log(`full-sync-from-os: replaceAll deleted ${replacedCount} OS auction listing(s)`);
+    }
 
     const today = new Date().toISOString().split("T")[0];
     const baseFilter: Record<string, any> = {
@@ -402,6 +478,7 @@ Deno.serve(async (req) => {
         errors: totalErrors,
         pages: pagesDone,
         totalAvailableInOS,
+        ...(replaceAll ? { replaced: replacedCount } : {}),
       },
     };
 
