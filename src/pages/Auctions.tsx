@@ -492,43 +492,7 @@ export default function Auctions() {
     });
   };
 
-  // Apply all filters client-side
-  const filtered = useMemo(() => {
-    return auctions.filter((a) => {
-      if (selectedCity !== "All Cities" && !a.city?.toLowerCase().includes(selectedCity.toLowerCase())) return false;
-      if (filterType && a.property_type !== filterType) return false;
-      if (filterBidRange) {
-        const [min, max] = filterBidRange.split("-").map(Number);
-        const bid = a.auction_starting_bid ?? a.price ?? 0;
-        if (bid < min || bid > max) return false;
-      }
-      if (filterYearRange && a.year_built) {
-        const [min, max] = filterYearRange.split("-").map(Number);
-        if (a.year_built < min || a.year_built > max) return false;
-      }
-      // Ownership: robust mapping from tags and ownership pct
-      if (filterOwnership && !ownershipMatches(filterOwnership, a.tags)) return false;
-      // Round: matches round:<N> tag (Pro)
-      if (filterRound && isPro) {
-        const round = getAuctionRound(a.tags);
-        if (filterRound === "3plus") {
-          if (!round || round < 3) return false;
-        } else {
-          const target = Number(filterRound);
-          if (!round || round !== target) return false;
-        }
-      }
-      // Yield: estimated from price × city rent benchmark (Pro)
-      if (filterYield && isPro) {
-        const range = yieldRange(filterYield);
-        if (range) {
-          const est = estimateYield(a);
-          if (est === null || est < range[0] || est > range[1]) return false;
-        }
-      }
-      return true;
-    });
-  }, [auctions, selectedCity, filterType, filterBidRange, filterYearRange, filterOwnership, filterRound, filterYield, isPro]);
+  // (filtering is applied inside visibleFiltered below, after the cap)
 
   const pageCap = isMaiPropOsUser ? Infinity : isPro ? MAX_PAGES_PRO : MAX_PAGES_FREE;
   const maxItems = Number.isFinite(pageCap) ? pageCap * PAGE_SIZE : Infinity;
