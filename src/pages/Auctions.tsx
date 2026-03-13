@@ -593,12 +593,15 @@ export default function Auctions() {
     setFilterYield("");
   };
 
-  const now = new Date();
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const weekEnd = new Date(todayStart);
+  weekEnd.setDate(weekEnd.getDate() + 7);
   const thisWeek = visibleFiltered.filter((a) => {
     if (!a.auction_date) return false;
     const d = new Date(a.auction_date);
-    const diff = (d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
-    return diff >= 0 && diff <= 7;
+    const dayOnly = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    return dayOnly >= todayStart && dayOnly <= weekEnd;
   }).length;
 
   const avgBid = visibleFiltered.length ?
