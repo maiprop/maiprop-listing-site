@@ -5,7 +5,6 @@ import {
   Eye, Bell, BellOff, LogOut, Building2, Gavel, CheckCircle,
   Loader2, Calendar, Trash2, ToggleLeft, ToggleRight, Bookmark, Search, Activity, Wrench, Shield, MapPin, Euro, Edit2
 } from "lucide-react";
-import { OSSyncPanel } from "@/components/OSSyncPanel";
 import AdminPanel from "@/components/AdminPanel";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -143,7 +142,6 @@ const ALL_NAV_ITEMS = [
   { icon: Calendar, label: "Viewings", key: "viewings" as const },
   { icon: Gavel, label: "Auction Alerts", key: "auctions" as const },
   { icon: Wrench, label: "My Services", key: "services" as const },
-  { icon: Activity, label: "OS Sync", key: "os-sync" as const },
   { icon: Shield, label: "Admin", key: "admin" as const },
   { icon: User, label: "Profile", key: "profile" as const },
   { icon: Settings, label: "Settings", key: "settings" as const },
@@ -162,7 +160,7 @@ function getNavItemsForRole(role: DashboardRole): typeof ALL_NAV_ITEMS {
       );
     case "agent":
       return ALL_NAV_ITEMS.filter(i =>
-        ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "os-sync", "admin", "profile", "settings"].includes(i.key)
+        ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "admin", "profile", "settings"].includes(i.key)
       );
     case "professional":
       return ALL_NAV_ITEMS.filter(i =>
@@ -613,10 +611,7 @@ export default function Dashboard() {
           {/* MY SERVICES — professional only */}
           {activeSection === "services" && navItems.some(i => i.key === "services") && <ProfessionalServicesEditor />}
 
-          {/* OS SYNC — agent only */}
-          {activeSection === "os-sync" && navItems.some(i => i.key === "os-sync") && <OSSyncPanel />}
-
-          {/* ADMIN — agent only */}
+          {/* ADMIN — agent only: OS sync, health, DB stats, edge tester (OSSyncPanel embedded) */}
           {activeSection === "admin" && navItems.some(i => i.key === "admin") && <AdminPanel />}
 
           {/* AUCTION ALERTS — individual, agent */}

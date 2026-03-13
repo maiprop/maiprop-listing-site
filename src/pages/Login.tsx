@@ -38,8 +38,7 @@ export default function Login() {
 
   const from = (location.state as any)?.from?.pathname || "/dashboard";
 
-  // Redirect once auth state settles after sign-in (avoids navigating before
-  // onAuthStateChange has resolved and loading is cleared)
+  // Fallback: if we signed in but are still here (e.g. auth state slow), redirect once user is set
   useEffect(() => {
     if (!didSignIn || authLoading) return;
     if (user) {
@@ -67,8 +66,9 @@ export default function Login() {
     if (error) {
       toast.error("Invalid email or password");
     } else {
-      // Don't navigate here — wait for auth state to settle via useEffect above
       setDidSignIn(true);
+      toast.success("Welcome back!");
+      navigate(from, { replace: true });
     }
   };
 
