@@ -2,13 +2,15 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-const SUPABASE_TIMEOUT_MS = 12000;
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_PROJECT_URL;
+const SUPABASE_PUBLISHABLE_KEY =
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY;
+const DEFAULT_TIMEOUT_MS = 20000;
+const FUNCTION_TIMEOUT_MS = 120000;
 
 if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
   throw new Error(
-    "Missing Supabase configuration. Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in your .env file."
+    "Missing Supabase configuration. Set VITE_SUPABASE_URL (or VITE_SUPABASE_PROJECT_URL) and VITE_SUPABASE_PUBLISHABLE_KEY (or VITE_SUPABASE_ANON_KEY)."
   );
 }
 
@@ -17,12 +19,15 @@ if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
 
 const timeoutFetch: typeof fetch = async (input, init) => {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), SUPABASE_TIMEOUT_MS);
+  const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+  const isFunctionInvoke = url.includes("/functions/v1/");
+  const timeoutMs = isFunctionInvoke ? FUNCTION_TIMEOUT_MS : DEFAULT_TIMEOUT_MS;
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(input, { ...init, signal: controller.signal });
   } catch (error: any) {
     if (error?.name === "AbortError") {
-      throw new Error(`Supabase request timed out after ${SUPABASE_TIMEOUT_MS / 1000}s`);
+      throw new Error(`Supabase request timed out after ${Math.round(timeoutMs / 1000)}s`);
     }
     throw error;
   } finally {
