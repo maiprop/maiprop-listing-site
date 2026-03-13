@@ -83,7 +83,7 @@ export function Navbar() {
         {/* Logo */}
         <Link to="/" className="flex items-center shrink-0">
           <img
-            src={forceLight ? logoDarkImg : logoImg}
+            src={forceLight || theme === "dark" ? logoDarkImg : logoImg}
             alt="maiProp — Real estate | Real decisions."
             className="h-10 w-auto object-contain transition-all duration-300"
           />
