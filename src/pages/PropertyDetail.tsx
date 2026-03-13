@@ -29,7 +29,7 @@ import { walkScoreLabel, walkScoreColour } from "@/lib/walkScore";
 import { HEATING_TYPES, CONDITION_OPTIONS } from "@/lib/filterConfig";
 import AIAssistantWidget from "@/components/AIAssistantWidget";
 import { AuctionAlertModal } from "@/components/AuctionAlertModal";
-import { GOOGLE_MAPS_API_KEY } from "@/lib/config";
+import { getStreetViewProxyUrl } from "@/lib/config";
 
 // ─── Energy class data ──────────────────────────────────────────────────────
 const ENERGY_SCALE = [
@@ -391,16 +391,13 @@ export default function PropertyDetail() {
   ...((dbListing as any).listing_images?.map((img: any) => img.url) || [])];
 
 
-  // Google Street View Static API fallback — shows real street-level photo when no listing images
+  // Street View fallback via proxy (key never in client URLs)
   const streetViewFallback = (() => {
-    if (!GOOGLE_MAPS_API_KEY) return null;
-    // Prefer coordinate-based lookup (more accurate); fall back to address string
-    if (db.latitude && db.longitude) {
-      return `https://maps.googleapis.com/maps/api/streetview?size=800x450&location=${db.latitude},${db.longitude}&fov=90&pitch=10&key=${GOOGLE_MAPS_API_KEY}`;
+    if (db.latitude != null && db.longitude != null) {
+      return getStreetViewProxyUrl({ lat: Number(db.latitude), lng: Number(db.longitude) });
     }
     if (db.address || db.city) {
-      const loc = encodeURIComponent(`${db.address ?? ""} ${db.city ?? ""}`.trim());
-      return `https://maps.googleapis.com/maps/api/streetview?size=800x450&location=${loc}&fov=90&pitch=10&key=${GOOGLE_MAPS_API_KEY}`;
+      return getStreetViewProxyUrl({ location: `${db.address ?? ""} ${db.city ?? ""}`.trim() });
     }
     return null;
   })();

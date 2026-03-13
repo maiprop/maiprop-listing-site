@@ -27,7 +27,7 @@ export function useConversations() {
       });
       if (userIds.size === 0) return list;
       const { data: profiles } = await supabase
-        .from("profiles")
+        .from("profiles_public")
         .select("user_id, display_name, avatar_url")
         .in("user_id", Array.from(userIds));
       const profileByUserId = new Map((profiles || []).map((p: any) => [p.user_id, p]));
@@ -55,7 +55,7 @@ export function useMessages(conversation_id: string) {
       const senderIds = [...new Set(list.map((m: any) => m.sender_id).filter(Boolean))];
       if (senderIds.length === 0) return list;
       const { data: profiles } = await supabase
-        .from("profiles")
+        .from("profiles_public")
         .select("user_id, display_name, avatar_url")
         .in("user_id", senderIds);
       const profileByUserId = new Map((profiles || []).map((p: any) => [p.user_id, p]));

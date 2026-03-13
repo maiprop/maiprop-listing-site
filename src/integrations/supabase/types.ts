@@ -826,6 +826,19 @@ export type Database = {
         }
         Relationships: []
       }
+      profiles_public: {
+        Row: {
+          user_id: string
+          display_name: string | null
+          avatar_url: string | null
+          first_name: string | null
+          last_name: string | null
+          role: Database["public"]["Enums"]["user_role"]
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null

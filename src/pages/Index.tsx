@@ -29,6 +29,7 @@ import {
   Brain,
   Store } from
 "lucide-react";
+import { getStreetViewProxyUrl } from "@/lib/config";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { MarketTicker } from "@/components/MarketTicker";
@@ -1272,9 +1273,8 @@ export default function Index() {
             className={`grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 reveal reveal-delay-1 ${auctionsInView ? "in-view" : ""}`}>
             
             {auctionListings.map((l: any) => {
-              const googleKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-              const svFallback = googleKey && l.latitude && l.longitude
-                ? `https://maps.googleapis.com/maps/api/streetview?size=800x450&location=${l.latitude},${l.longitude}&fov=90&pitch=10&key=${googleKey}`
+              const svFallback = l.latitude != null && l.longitude != null
+                ? getStreetViewProxyUrl({ lat: Number(l.latitude), lng: Number(l.longitude) })
                 : null;
               const imgs: string[] = l.cover_image_url ? [l.cover_image_url] : [];
               if (!imgs.length && l.listing_images?.length) {

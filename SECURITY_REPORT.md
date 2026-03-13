@@ -82,6 +82,18 @@
    - Replaced “authenticated can modify” with “agents can insert/update/delete” using `public.has_role(auth.uid(), 'agent')`.  
    - Run migrations so this is applied in all environments.
 
+2. **Security fixes (2026-03-19)** — **File:** `supabase/migrations/20260319120000_security_fixes.sql`  
+   - **Profiles / phone:** Created `profiles_public` view; RLS: users see own profile only, agents see all. App uses `profiles_public` for other users’ display (useListings, useMessages, InvestorDashboard).  
+   - **Investor subscriptions:** Only agents can insert/update; users can only SELECT own.  
+   - **Professionals subscription_tier:** Trigger blocks non-agent from changing tier.  
+   - **firesale-photos:** Authenticated-only upload.  
+   - **sync_log:** INSERT policy removed; only service_role can insert.  
+   - **Consultation requests:** INSERT policy prevents spoofed requester_id (anon: requester_id NULL; authenticated: requester_id only own uid).
+
+3. **Edge functions (sync):** `poll-os-auctions`, `full-sync-from-os`, `sync-to-os`, `sync-firesale-to-os` require JWT + agent role via `requireAgent()`.
+
+4. **Google Maps key:** `streetview-proxy` edge function serves Street View with server-side key; client uses `getStreetViewProxyUrl()` so the key is never in URLs.
+
 ---
 
 ## 8. Recommended next steps
@@ -90,6 +102,13 @@
 2. **sync_log:** If only edge functions (service role) should write to `sync_log`, tighten the INSERT policy (e.g. disallow anon/authenticated inserts, or restrict to a specific role).
 3. **Owner-only pricing:** If only specific owner emails should edit pricing (not all agents), introduce an “owner” role or an allowlist table and restrict `pricing_configs` write policies to that.
 4. **Audit:** Periodically re-run this checklist and review new edge functions and RLS changes.
+
+---
+
+## 9. Dashboard / config (not code)
+
+- **Extension in Public:** If your security scanner reports an extension as "in public", this usually refers to a Supabase database extension (e.g. `pg_cron`, `uuid-ossp`) being enabled in a public schema. Restrict or document as intended; disable any extension that is not required.
+- **Leaked Password Protection Disabled:** Supabase Auth can check passwords against breach databases. Enable it in **Supabase Dashboard → Authentication → Settings → Security**: turn on "Check for compromised passwords" (or equivalent) so that weak or leaked passwords are rejected.
 
 ---
 
