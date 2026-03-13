@@ -998,6 +998,21 @@ export default function Auctions() {
                      </Button>
                    </div>
             }
+                 {/* Banner when Pro user hits 10-page cap */}
+                 {(isPro || isMaiPropOsUser) && !isMaiPropOsUser && filtered.length > MAX_PAGES_PRO * PAGE_SIZE &&
+            <div className="mt-8 p-4 rounded-2xl bg-secondary border border-border flex flex-col sm:flex-row items-center gap-3 text-center sm:text-left">
+                     <ExternalLink className="w-5 h-5 text-muted-foreground shrink-0" />
+                     <div className="flex-1">
+                       <p className="text-sm font-medium text-foreground">Showing {MAX_PAGES_PRO * PAGE_SIZE} of {filtered.length} auctions</p>
+                       <p className="text-xs text-muted-foreground mt-0.5">Visit mAI Prop OS for the complete, unfiltered auction database.</p>
+                     </div>
+                     <Button size="sm" variant="outline" className="shrink-0 border-border" asChild>
+                       <a href="https://os.maiprop.co" target="_blank" rel="noreferrer">
+                         Visit mAI Prop OS <ExternalLink className="w-3 h-3 ml-1.5" />
+                       </a>
+                     </Button>
+                   </div>
+                 }
                  {/* Upsell when free user hits page cap */}
                  {!isPro && !isMaiPropOsUser && filtered.length > MAX_PAGES_FREE * PAGE_SIZE &&
             <div className="mt-8 p-5 rounded-2xl bg-brand-gold/10 border border-brand-gold/30 flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">
