@@ -492,9 +492,21 @@ export default function Auctions() {
     });
   };
 
-  // Apply all filters client-side
-  const filtered = useMemo(() => {
-    return auctions.filter((a) => {
+  // (filtering is applied inside visibleFiltered below, after the cap)
+
+  const pageCap = isMaiPropOsUser ? Infinity : isPro ? MAX_PAGES_PRO : MAX_PAGES_FREE;
+  const maxItems = Number.isFinite(pageCap) ? pageCap * PAGE_SIZE : Infinity;
+
+  // Cap is applied on the RAW auctions list BEFORE filtering so that
+  // narrowing filters cannot be used to bypass the page cap.
+  const cappedAuctions = useMemo(
+    () => Number.isFinite(maxItems) ? auctions.slice(0, maxItems) : auctions,
+    [auctions, maxItems]
+  );
+  const totalRaw = auctions.length; // full count for upsell copy
+
+  const visibleFiltered = useMemo(() => {
+    return cappedAuctions.filter((a) => {
       if (selectedCity !== "All Cities" && !a.city?.toLowerCase().includes(selectedCity.toLowerCase())) return false;
       if (filterType && a.property_type !== filterType) return false;
       if (filterBidRange) {
@@ -506,9 +518,7 @@ export default function Auctions() {
         const [min, max] = filterYearRange.split("-").map(Number);
         if (a.year_built < min || a.year_built > max) return false;
       }
-      // Ownership: robust mapping from tags and ownership pct
       if (filterOwnership && !ownershipMatches(filterOwnership, a.tags)) return false;
-      // Round: matches round:<N> tag (Pro)
       if (filterRound && isPro) {
         const round = getAuctionRound(a.tags);
         if (filterRound === "3plus") {
@@ -518,7 +528,6 @@ export default function Auctions() {
           if (!round || round !== target) return false;
         }
       }
-      // Yield: estimated from price × city rent benchmark (Pro)
       if (filterYield && isPro) {
         const range = yieldRange(filterYield);
         if (range) {
@@ -528,15 +537,8 @@ export default function Auctions() {
       }
       return true;
     });
-  }, [auctions, selectedCity, filterType, filterBidRange, filterYearRange, filterOwnership, filterRound, filterYield, isPro]);
+  }, [cappedAuctions, selectedCity, filterType, filterBidRange, filterYearRange, filterOwnership, filterRound, filterYield, isPro]);
 
-  const pageCap = isMaiPropOsUser ? Infinity : isPro ? MAX_PAGES_PRO : MAX_PAGES_FREE;
-  const maxItems = Number.isFinite(pageCap) ? pageCap * PAGE_SIZE : Infinity;
-
-  const visibleFiltered = useMemo(
-    () => Number.isFinite(maxItems) ? filtered.slice(0, maxItems) : filtered,
-    [filtered, maxItems]
-  );
   const totalPages = Math.max(1, Math.ceil(visibleFiltered.length / PAGE_SIZE));
   const paginated = useMemo(() => {
     const start = (currentPage - 1) * PAGE_SIZE;
@@ -627,9 +629,9 @@ export default function Auctions() {
             <p className="text-muted-foreground max-w-xl">
               Real-time data powered by mAI Prop OS.
             </p>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
+            <div className="grid grid-cols-3 gap-4 mt-8 max-w-2xl">
               {auctionStats.map((s) =>
-              <div key={s.label} className="glass-card rounded-xl p-5 text-center flex flex-col items-center justify-center flex-1">
+              <div key={s.label} className="glass-card rounded-xl p-5 text-center flex flex-col items-center justify-center">
                   <div className="font-display text-3xl font-bold gradient-text-gold">{s.value}</div>
                   <div className="text-xs text-muted-foreground mt-1.5 font-medium">{s.label}</div>
                 </div>
@@ -951,9 +953,6 @@ export default function Auctions() {
                    <span className="font-semibold text-foreground">{visibleFiltered.length}</span> auctions
                    {selectedCity !== "All Cities" ? ` in ${selectedCity}` : ""}
                    {" · "}ordered by date
-                   {!isMaiPropOsUser && filtered.length > visibleFiltered.length &&
-              <span className="text-brand-gold"> · page limit: {isPro ? MAX_PAGES_PRO : MAX_PAGES_FREE} pages</span>
-              }
                  </p>
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                    {paginated.map((a) =>
@@ -1014,11 +1013,11 @@ export default function Auctions() {
             </div>
                  }
                  {/* Banner when Pro user hits 10-page cap */}
-                 {isPro && !isMaiPropOsUser && filtered.length > MAX_PAGES_PRO * PAGE_SIZE &&
+                 {isPro && !isMaiPropOsUser && totalRaw > MAX_PAGES_PRO * PAGE_SIZE &&
                    <div className="mt-8 p-4 rounded-2xl bg-secondary border border-border flex flex-col sm:flex-row items-center gap-3 text-center sm:text-left">
                      <ExternalLink className="w-5 h-5 text-muted-foreground shrink-0" />
                      <div className="flex-1">
-                       <p className="text-sm font-medium text-foreground">Showing {MAX_PAGES_PRO * PAGE_SIZE} of {filtered.length} auctions</p>
+                       <p className="text-sm font-medium text-foreground">Showing {MAX_PAGES_PRO * PAGE_SIZE} of {totalRaw} auctions</p>
                        <p className="text-xs text-muted-foreground mt-0.5">Visit mAI Prop OS for the complete, unfiltered auction database.</p>
                      </div>
                      <Button size="sm" variant="outline" className="shrink-0 border-border" asChild>
@@ -1029,12 +1028,12 @@ export default function Auctions() {
                    </div>
                  }
                  {/* Upsell when free user hits page cap */}
-                 {!isPro && !isMaiPropOsUser && filtered.length > MAX_PAGES_FREE * PAGE_SIZE &&
+                 {!isPro && !isMaiPropOsUser && totalRaw > MAX_PAGES_FREE * PAGE_SIZE &&
                    <div className="mt-8 p-5 rounded-2xl bg-brand-gold/10 border border-brand-gold/30 flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">
                      <Gavel className="w-8 h-8 text-brand-gold shrink-0" />
                      <div className="flex-1">
                        <p className="font-display font-semibold text-sm">
-                         {filtered.length - MAX_PAGES_FREE * PAGE_SIZE} more auctions available on Pro
+                         {totalRaw - MAX_PAGES_FREE * PAGE_SIZE} more auctions available on Pro
                        </p>
                        <p className="text-xs text-muted-foreground mt-0.5">
                          Upgrade to see up to {MAX_PAGES_PRO} pages of results plus Pro filters.
