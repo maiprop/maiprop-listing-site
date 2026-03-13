@@ -2,12 +2,38 @@
  * os-diagnose — probes the OS API to understand data shape, filters, and
  * how many PENDING (future) auctions are available.
  * Also probes the new GET /api/auctions/future endpoint directly.
+ * Requires agent role (admin-only).
  */
+
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+async function requireAgent(req: Request, sb: ReturnType<typeof createClient>): Promise<Response | null> {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return new Response(JSON.stringify({ error: "Missing or invalid Authorization header" }), {
+      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  const token = authHeader.slice(7);
+  const { data: { user }, error } = await sb.auth.getUser(token);
+  if (error || !user) {
+    return new Response(JSON.stringify({ error: "Invalid or expired token" }), {
+      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  const { data: profile } = await sb.from("profiles").select("role").eq("user_id", user.id).single();
+  if (profile?.role !== "agent") {
+    return new Response(JSON.stringify({ error: "Agent role required" }), {
+      status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  return null;
+}
 
 async function getOsToken(baseUrl: string, email: string, password: string): Promise<string> {
   const res = await fetch(`${baseUrl}/auth/login`, {
@@ -23,6 +49,13 @@ async function getOsToken(baseUrl: string, email: string, password: string): Pro
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+  const authErr = await requireAgent(req, supabase);
+  if (authErr) return authErr;
 
   const OS_URL = Deno.env.get("MAIPROP_OS_URL")?.replace(/\/$/, "") ?? "";
   const OS_EMAIL = Deno.env.get("MAIPROP_OS_EMAIL") ?? "";
