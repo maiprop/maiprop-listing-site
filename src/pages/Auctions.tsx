@@ -71,13 +71,29 @@ function useAuctionListings() {
 }
 
 const PROPERTY_TYPES = [
-{ value: "", label: "All Types" },
-{ value: "apartment", label: "Apartment" },
-{ value: "house", label: "House" },
-{ value: "villa", label: "Villa" },
-{ value: "land", label: "Land" },
-{ value: "commercial", label: "Commercial" },
-{ value: "office", label: "Office" }];
+  { value: "", label: "All Types" },
+  // Residential
+  { value: "apartment", label: "Apartment" },
+  { value: "house", label: "House" },
+  { value: "villa", label: "Villa" },
+  // Land & plots (sub-segmented via tags)
+  { value: "land", label: "Land / Plot (any)" },
+  { value: "land:land", label: "Land (no building)" },
+  { value: "land:land_with_building", label: "Land with building" },
+  { value: "land:plot", label: "Agricultural plot" },
+  { value: "land:plot_with_building", label: "Plot with building" },
+  // Commercial (sub-segmented via tags)
+  { value: "commercial", label: "Commercial (any)" },
+  { value: "commercial:store", label: "Store / Retail" },
+  { value: "commercial:warehouse", label: "Warehouse" },
+  { value: "commercial:industrial", label: "Industrial" },
+  { value: "commercial:storeroom", label: "Storeroom" },
+  { value: "commercial:parking", label: "Parking" },
+  { value: "commercial:hotel", label: "Hotel" },
+  { value: "commercial:other_business_space", label: "Other business space" },
+  // Office (also a commercial subtype but kept separate for clarity)
+  { value: "office", label: "Office" },
+];
 
 
 const PROPERTY_TYPE_GR: Record<string, string> = {
@@ -508,7 +524,20 @@ export default function Auctions() {
   const visibleFiltered = useMemo(() => {
     return cappedAuctions.filter((a) => {
       if (selectedCity !== "All Cities" && !a.city?.toLowerCase().includes(selectedCity.toLowerCase())) return false;
-      if (filterType && a.property_type !== filterType) return false;
+      if (filterType) {
+        const [base, subtype] = filterType.split(":");
+        // Base property_type must always match
+        if (base && a.property_type !== base) return false;
+        // For land/commercial subtypes, also require the corresponding tag
+        if (subtype && base === "land") {
+          const targetTag = `land_type:${subtype}`;
+          if (!a.tags?.includes(targetTag)) return false;
+        }
+        if (subtype && base === "commercial") {
+          const targetTag = `commercial_type:${subtype}`;
+          if (!a.tags?.includes(targetTag)) return false;
+        }
+      }
       if (filterBidRange) {
         const [min, max] = filterBidRange.split("-").map(Number);
         const bid = a.auction_starting_bid ?? a.price ?? 0;
