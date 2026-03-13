@@ -115,7 +115,7 @@ export default function AdminPricing() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("pricing_configs").delete().eq("id", id);
+      const { error } = await (supabase as any).from("pricing_configs").delete().eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
