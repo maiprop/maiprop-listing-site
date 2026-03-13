@@ -902,7 +902,7 @@ export default function Index() {
       <CookieConsentBanner />
 
       {/* ══ HERO ══════════════════════════════════════════════════════════════ */}
-      <section className="relative min-h-[100svh] sm:min-h-[92vh] flex items-center overflow-hidden pt-16">
+      <section className="relative min-h-[100svh] flex items-center overflow-hidden pt-14 sm:pt-16">
         {/* Background */}
         <div className="absolute inset-0 overflow-hidden">
           {/* Video background */}
@@ -918,21 +918,21 @@ export default function Index() {
               willChange: "transform",
               transform: "translateZ(0)",
               animation: "hero-zoom 30s ease-in-out infinite alternate",
+              objectPosition: "center 30%",
             }}
           >
             <source src="/hero-bg.mp4" type="video/mp4" />
           </video>
-          {/* Both modes: strong dark-left gradient so white text is always readable */}
+          {/* Both modes: strong dark overlay — heavier on mobile for readability */}
           <div
             className="absolute inset-0"
             style={{
               background:
-              "linear-gradient(120deg, hsl(25 20% 6% / 0.82) 0%, hsl(25 15% 8% / 0.55) 55%, hsl(30 10% 10% / 0.12) 100%)"
+              "linear-gradient(160deg, hsl(25 20% 4% / 0.88) 0%, hsl(25 15% 8% / 0.60) 55%, hsl(30 10% 10% / 0.18) 100%)"
             }} />
-          
 
           {/* Bottom fade into next section */}
-          <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-background via-background/60 to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 h-48 sm:h-56 bg-gradient-to-t from-background via-background/60 to-transparent" />
         </div>
         {/* Grid overlay */}
         <div
