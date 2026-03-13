@@ -1107,7 +1107,7 @@ export default function Index() {
             { label: "Mixed-Use", emoji: "🔀", sub: "mixed_use", bg: "bg-primary/10", animated: true },
             { label: "Auctions", emoji: "🔨", sub: null, bg: "bg-brand-gold/10", animated: true, href: "/auctions" }].
             map((item) =>
-            <Link key={item.sub} to={`/listings?type=commercial&subtype=${item.sub}`}>
+            <Link key={item.label} to={item.href ?? `/listings?type=commercial&subtype=${item.sub}`}>
                 <div
                 className={`relative glass-card rounded-xl p-4 flex flex-col items-center text-center hover:border-accent/40 hover:bg-accent/5 transition-all group gap-2 cursor-pointer${item.animated ? " overflow-hidden" : ""}`}>
                 
