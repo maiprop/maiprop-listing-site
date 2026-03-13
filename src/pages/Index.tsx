@@ -912,6 +912,7 @@ export default function Index() {
             loop
             playsInline
             className="w-full h-full object-cover opacity-100 dark:opacity-70"
+            style={{ animation: "hero-zoom 20s ease-in-out infinite alternate" }}
           >
             <source src="/hero-bg.mp4" type="video/mp4" />
             {/* Fallback to static image */}
