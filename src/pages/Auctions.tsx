@@ -461,8 +461,7 @@ export default function Auctions() {
   const email = (user?.email || "").toLowerCase();
   const isMaiPropOsUser =
     email.endsWith("@maiprop.co") ||
-    email.endsWith("@os.maiprop.co") ||
-    ((profile?.subscription_tier || "").toLowerCase() === "os");
+    email.endsWith("@os.maiprop.co");
   const visibilityCap = isMaiPropOsUser ? Number.POSITIVE_INFINITY : isPro ? 300 : 100;
 
   // Dynamic city list from actual data

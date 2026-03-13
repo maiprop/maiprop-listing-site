@@ -276,12 +276,12 @@ export function PropertyCard({ property, compact = false }: PropertyCardProps) {
 
         {/* Key specs */}
         <div className="flex items-center gap-1.5 text-xs flex-wrap">
-          {property.bedrooms != null && (
+          {property.bedrooms != null && property.bedrooms > 0 && (
             <span className="flex items-center gap-1 bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-400/20 px-2.5 py-1 rounded-lg font-medium">
               <Bed className="w-3.5 h-3.5" /> {property.bedrooms} bed
             </span>
           )}
-          {property.bathrooms != null && (
+          {property.bathrooms != null && property.bathrooms > 0 && (
             <span className="flex items-center gap-1 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border border-cyan-400/20 px-2.5 py-1 rounded-lg font-medium">
               <Bath className="w-3.5 h-3.5" /> {property.bathrooms} bath
             </span>
