@@ -1105,7 +1105,7 @@ export default function Index() {
             {[
             { label: "Retail Shop", emoji: "🛍️", sub: "shop", bg: "bg-accent/10", animated: true },
             { label: "Mixed-Use", emoji: "🔀", sub: "mixed_use", bg: "bg-primary/10", animated: true },
-            { label: "Coworking", emoji: "🤝", sub: "office_coworking", bg: "bg-brand-cyan/10", animated: false }].
+            { label: "Auctions", emoji: "🔨", sub: null, bg: "bg-brand-gold/10", animated: true, href: "/auctions" }].
             map((item) =>
             <Link key={item.sub} to={`/listings?type=commercial&subtype=${item.sub}`}>
                 <div
