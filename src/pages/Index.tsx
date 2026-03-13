@@ -1105,9 +1105,9 @@ export default function Index() {
             {[
             { label: "Retail Shop", emoji: "🛍️", sub: "shop", bg: "bg-accent/10", animated: true },
             { label: "Mixed-Use", emoji: "🔀", sub: "mixed_use", bg: "bg-primary/10", animated: true },
-            { label: "Coworking", emoji: "🤝", sub: "office_coworking", bg: "bg-brand-cyan/10", animated: false }].
+            { label: "Auctions", emoji: "🔨", sub: null, bg: "bg-brand-gold/10", animated: true, href: "/auctions" }].
             map((item) =>
-            <Link key={item.sub} to={`/listings?type=commercial&subtype=${item.sub}`}>
+            <Link key={item.label} to={item.href ?? `/listings?type=commercial&subtype=${item.sub}`}>
                 <div
                 className={`relative glass-card rounded-xl p-4 flex flex-col items-center text-center hover:border-accent/40 hover:bg-accent/5 transition-all group gap-2 cursor-pointer${item.animated ? " overflow-hidden" : ""}`}>
                 
@@ -1344,7 +1344,7 @@ export default function Index() {
               name: "Thessaloniki",
               listings: 8240,
               trend: "+0.8%",
-              image: "https://images.unsplash.com/photo-1586796676474-a72c3b85c2d2?w=600&q=80"
+              image: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600&q=80"
             },
             {
               name: "Mykonos",
