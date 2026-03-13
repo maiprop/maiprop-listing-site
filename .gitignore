@@ -23,3 +23,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local / separate project (not part of this repo)
+mai-pro-os/
