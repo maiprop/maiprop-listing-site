@@ -912,12 +912,12 @@ export default function Index() {
             loop
             playsInline
             preload="auto"
-            poster={heroBg}
+            poster="/hero-poster.jpg"
             className="w-full h-full object-cover opacity-100 dark:opacity-70"
             style={{
               willChange: "transform",
               transform: "translateZ(0)",
-              animation: "hero-zoom 20s ease-in-out infinite alternate",
+              animation: "hero-zoom 30s ease-in-out infinite alternate",
             }}
           >
             <source src="/hero-bg.mp4" type="video/mp4" />

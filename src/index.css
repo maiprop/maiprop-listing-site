@@ -470,6 +470,6 @@
 /* ── Hero video cinematic Ken Burns (zoom + pan) ── */
 @keyframes hero-zoom {
   0%   { transform: translateZ(0) scale(1)    translateX(0%); }
-  50%  { transform: translateZ(0) scale(1.06) translateX(-2%); }
-  100% { transform: translateZ(0) scale(1.1)  translateX(2%); }
+  50%  { transform: translateZ(0) scale(1.04) translateX(-1.5%); }
+  100% { transform: translateZ(0) scale(1.07) translateX(1.5%); }
 }
