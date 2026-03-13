@@ -913,7 +913,7 @@ export default function Index() {
             playsInline
             preload="auto"
             poster="/hero-poster.jpg"
-            className="w-full h-full object-cover opacity-100 dark:opacity-70"
+            className="hero-video w-full h-full object-cover opacity-100 dark:opacity-70"
             style={{
               willChange: "transform",
               transform: "translateZ(0)",
