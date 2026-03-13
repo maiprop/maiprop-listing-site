@@ -18,20 +18,23 @@ const corsHeaders = {
 
 // OS propertyCategory → Hub property_type
 const CATEGORY_MAP: Record<string, string> = {
-  RESIDENCE: "apartment",
+  RESIDENCE: "house",             // Κατοικία
   APARTMENT: "apartment",
   HOUSE: "house",
   VILLA: "villa",
-  LAND: "land",
-  PLOT: "land",
-  PLOT_WITH_BUILDING: "land",
-  LAND_WITH_BUILDING: "land",
+  LAND: "land",                   // Οικόπεδο
+  LAND_WITH_BUILDING: "land",     // Οικόπεδο με κτίσμα
+  PLOT: "land",                   // Αγροτεμάχιο
+  PLOT_WITH_BUILDING: "land",     // Αγροτεμάχιο με κτίσμα
   COMMERCIAL: "commercial",
-  OFFICE: "office",
-  STORE: "commercial",
+  OTHER_BUSINESS_SPACE: "commercial", // Άλλος Επαγγελματικός Χώρος
+  STORE: "commercial",                // Κατάστημα
   WAREHOUSE: "commercial",
-  INDUSTRIAL: "commercial",
-  STOREROOM: "commercial",
+  INDUSTRIAL: "commercial",           // Βιομηχανικός/Βιοτεχνικός Χώρος
+  STOREROOM: "commercial",            // Αποθήκη
+  PARKING: "commercial",              // Θέση Στάθμευσης
+  HOTEL: "commercial",                // Ξενοδοχειακή Μονάδα
+  OFFICE: "office",                   // Γραφείο
 };
 
 const CATEGORY_GR: Record<string, string> = {
@@ -46,6 +49,33 @@ const CATEGORY_GR: Record<string, string> = {
 function mapCategory(cat?: string): string {
   if (!cat) return "apartment";
   return CATEGORY_MAP[cat.toUpperCase()] ?? "apartment";
+}
+
+/** Land / plot sub-segmentation (pure vs with building) */
+function landSubtypeTag(cat?: string): string | null {
+  if (!cat) return null;
+  const c = cat.toUpperCase().trim();
+  if (c === "LAND") return "land_type:land";
+  if (c === "PLOT") return "land_type:plot";
+  if (c === "LAND_WITH_BUILDING") return "land_type:land_with_building";
+  if (c === "PLOT_WITH_BUILDING") return "land_type:plot_with_building";
+  return null;
+}
+
+/** Commercial sub-segmentation (store vs hotel vs parking, etc.) */
+function commercialSubtypeTag(cat?: string): string | null {
+  if (!cat) return null;
+  const c = cat.toUpperCase().trim();
+  if (c === "STORE") return "commercial_type:store";
+  if (c === "WAREHOUSE") return "commercial_type:warehouse";
+  if (c === "INDUSTRIAL") return "commercial_type:industrial";
+  if (c === "STOREROOM") return "commercial_type:storeroom";
+  if (c === "OFFICE") return "commercial_type:office";
+  if (c === "PARKING") return "commercial_type:parking";
+  if (c === "HOTEL") return "commercial_type:hotel";
+  if (c === "OTHER_BUSINESS_SPACE") return "commercial_type:other_business_space";
+  if (c === "COMMERCIAL") return "commercial_type:generic";
+  return null;
 }
 
 function mapOwnershipStatusToTag(rawOwnership?: string | null): string | null {
@@ -162,6 +192,9 @@ function mapAuctionToListing(a: any) {
     else if (ownershipPct > 0) ownershipTag = "ownership:common";
   }
 
+  const landTag = catKey === "land" ? landSubtypeTag(a.propertyCategory) : null;
+  const commercialTag = catKey === "commercial" ? commercialSubtypeTag(a.propertyCategory) : null;
+
   return {
     tagKey,
     row: {
@@ -195,6 +228,8 @@ function mapAuctionToListing(a: any) {
         "source:maiprop-os",
         `auction_status:${a.auctionStatus ?? "scheduled"}`,
         ...(a.currentRound != null ? [`round:${a.currentRound}`] : []),
+        ...(landTag ? [landTag] : []),
+        ...(commercialTag ? [commercialTag] : []),
         ...(ownershipTag ? [ownershipTag] : []),
         ...(ownershipPct != null ? [`ownership_pct:${ownershipPct}`] : []),
       ],
