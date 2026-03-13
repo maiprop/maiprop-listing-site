@@ -905,8 +905,18 @@ export default function Index() {
       <section className="relative min-h-[100svh] sm:min-h-[92vh] flex items-center overflow-hidden pt-16">
         {/* Background */}
         <div className="absolute inset-0">
-          {/* Light mode: show more of the actual photo — lower opacity overlay */}
-          <img src={heroBg} alt="Athens skyline" className="w-full h-full object-cover opacity-100 dark:opacity-70" />
+          {/* Video background */}
+          <video
+            autoPlay
+            muted
+            loop
+            playsInline
+            className="w-full h-full object-cover opacity-100 dark:opacity-70"
+          >
+            <source src="/hero-bg.mp4" type="video/mp4" />
+            {/* Fallback to static image */}
+            <img src={heroBg} alt="Athens skyline" className="w-full h-full object-cover" />
+          </video>
           {/* Both modes: strong dark-left gradient so white text is always readable */}
           <div
             className="absolute inset-0"
