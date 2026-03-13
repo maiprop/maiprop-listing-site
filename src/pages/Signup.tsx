@@ -22,6 +22,7 @@ const GoogleIcon = () => (
 export default function Signup() {
   const navigate = useNavigate();
   const { signUp, user, loading: authLoading } = useAuth();
+  const { theme } = useTheme();
 
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
