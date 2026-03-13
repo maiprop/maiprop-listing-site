@@ -6,6 +6,9 @@ import { Navbar } from "@/components/Navbar";
 import { useAuth } from "@/contexts/AuthContext";
 import { lovable } from "@/integrations/lovable/index";
 import { toast } from "sonner";
+import { useTheme } from "next-themes";
+import logoImg from "@/assets/logo.png";
+import logoDarkImg from "@/assets/logo-dark.png";
 
 const GoogleIcon = () => (
   <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
