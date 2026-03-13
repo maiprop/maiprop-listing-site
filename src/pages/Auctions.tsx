@@ -17,6 +17,7 @@ import { toast } from "sonner";
 const AUCTION_SELECT_CORE = "id, title, city, address, price, auction_starting_bid, auction_date, auction_court, property_type, cover_image_url, sqm, bedrooms, bathrooms, latitude, longitude, tags, year_built, construction_status, website_url, region";
 const QUERY_TIMEOUT_MS = 15_000;
 const AUCTION_FETCH_LIMIT = 500;
+const PAGE_SIZE = 20;
 
 // ── Fetch all auctions from DB (future or date TBD) ─────────────────────────────
 // Include null auction_date so OS-synced rows without a date still show
@@ -107,10 +108,12 @@ const YEAR_RANGES = [
 
 const OWNERSHIP_STATUSES = [
   { value: "", label: "Any Status" },
-  { value: "full", label: "Full Ownership (100%)" },
-  { value: "common", label: "Common / Shared" },
-  { value: "partial", label: "Partial Ownership" },
-  { value: "none", label: "No Ownership" },
+  { value: "full", label: "Full" },
+  { value: "bare", label: "Bare" },
+  { value: "common", label: "Common" },
+  { value: "usufruct", label: "Usufruct" },
+  { value: "vertical", label: "Vertical" },
+  { value: "horizontal", label: "Horizontal" },
 ];
 
 /** Extract ownership status tag from tags array */
@@ -125,6 +128,42 @@ function getOwnershipPct(tags?: string[] | null): number | null {
   if (!tags) return null;
   const tag = tags.find(t => t.startsWith("ownership_pct:"));
   return tag ? Number(tag.replace("ownership_pct:", "")) : null;
+}
+
+function normalizeOwnership(v?: string | null): string | null {
+  if (!v) return null;
+  const raw = v.toLowerCase().trim();
+  if (["full", "full_ownership", "complete", "100"].includes(raw)) return "full";
+  if (["bare", "bare_ownership", "psili"].includes(raw)) return "bare";
+  if (["common", "shared", "undivided", "joint"].includes(raw)) return "common";
+  if (["usufruct", "epikarpia"].includes(raw)) return "usufruct";
+  if (["vertical", "vertical_ownership"].includes(raw)) return "vertical";
+  if (["horizontal", "horizontal_ownership"].includes(raw)) return "horizontal";
+  return raw;
+}
+
+function ownershipMatches(filterValue: string, tags?: string[] | null): boolean {
+  if (!filterValue) return true;
+  const status = normalizeOwnership(getOwnershipStatus(tags));
+  const pct = getOwnershipPct(tags);
+  const f = normalizeOwnership(filterValue);
+  if (!f) return true;
+  if (f === "full") return status === "full" || (pct != null && pct >= 100);
+  if (f === "bare") return status === "bare";
+  if (f === "common") return status === "common" || (status == null && pct != null && pct > 0 && pct < 100);
+  if (f === "usufruct") return status === "usufruct";
+  if (f === "vertical") return status === "vertical";
+  if (f === "horizontal") return status === "horizontal";
+  return status === f;
+}
+
+function getAuctionRound(tags?: string[] | null): number | null {
+  if (!tags?.length) return null;
+  const t = tags.find(x => x.startsWith("round:"));
+  if (!t) return null;
+  const n = Number(t.replace("round:", ""));
+  if (!Number.isFinite(n) || n < 1) return null;
+  return n;
 }
 
 /**
@@ -192,11 +231,11 @@ function yieldRange(bucket: string): [number, number] | null {
 
 const OWNERSHIP_BADGE: Record<string, { label: string; cls: string }> = {
   full:     { label: "Πλήρης κυριότητα", cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/25" },
-  partial:  { label: "Μερική κυριότητα", cls: "bg-amber-500/15 text-amber-400 border-amber-500/25" },
+  bare:     { label: "Ψιλή κυριότητα", cls: "bg-amber-500/15 text-amber-400 border-amber-500/25" },
   common:   { label: "Εξ αδιαιρέτου", cls: "bg-sky-500/15 text-sky-400 border-sky-500/25" },
-  none:     { label: "Χωρίς κυριότητα", cls: "bg-red-500/15 text-red-400 border-red-500/25" },
-  occupied: { label: "Κατειλημμένο", cls: "bg-destructive/15 text-destructive border-destructive/25" },
-  vacated:  { label: "Κενό", cls: "bg-blue-500/15 text-blue-400 border-blue-500/25" },
+  usufruct: { label: "Επικαρπία", cls: "bg-violet-500/15 text-violet-400 border-violet-500/25" },
+  vertical: { label: "Κάθετη ιδιοκτησία", cls: "bg-cyan-500/15 text-cyan-400 border-cyan-500/25" },
+  horizontal: { label: "Οριζόντια ιδιοκτησία", cls: "bg-indigo-500/15 text-indigo-400 border-indigo-500/25" },
 };
 
 type ViewMode = "list" | "map";
@@ -241,7 +280,7 @@ function AuctionCard({ a, favoritedIds, onToggleFav }: {
   const badge = countdownBadge(days);
   const imgSrc = a.cover_image_url ?? streetViewImg(a.latitude, a.longitude);
   const isFav = favoritedIds.has(a.id);
-  const ownershipStatus = getOwnershipStatus(a.tags);
+  const ownershipStatus = normalizeOwnership(getOwnershipStatus(a.tags));
   const ownershipPct = getOwnershipPct(a.tags);
   const ownershipBadge = ownershipStatus ? OWNERSHIP_BADGE[ownershipStatus] : null;
 
@@ -390,7 +429,7 @@ function AuctionCard({ a, favoritedIds, onToggleFav }: {
 }
 
 export default function Auctions() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { isPro } = useSubscription();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -409,6 +448,7 @@ export default function Auctions() {
   const [filterOwnership, setFilterOwnership] = useState("");
   const [filterRound, setFilterRound] = useState("");
   const [filterYield, setFilterYield] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Prefill city from URL when data loads
   useEffect(() => {
@@ -418,11 +458,26 @@ export default function Auctions() {
 
   const { data: auctions = [], isLoading, error } = useAuctionListings();
   const toggleFav = useToggleFavorite();
+  const email = (user?.email || "").toLowerCase();
+  const isMaiPropOsUser =
+    email.endsWith("@maiprop.co") ||
+    email.endsWith("@os.maiprop.co") ||
+    ((profile?.subscription_tier || "").toLowerCase() === "os");
+  const visibilityCap = isMaiPropOsUser ? Number.POSITIVE_INFINITY : isPro ? 300 : 100;
 
   // Dynamic city list from actual data
   const cityOptions = useMemo(() => {
     const cities = Array.from(new Set(auctions.map(a => a.city).filter(Boolean))).sort();
     return ["All Cities", ...cities];
+  }, [auctions]);
+
+  const roundOptions = useMemo(() => {
+    const rounds = auctions.map((a: any) => getAuctionRound(a.tags)).filter((n): n is number => n != null);
+    const opts: { value: string; label: string }[] = [{ value: "", label: "All Rounds" }];
+    if (rounds.some(n => n === 1)) opts.push({ value: "1", label: "1st Auction" });
+    if (rounds.some(n => n === 2)) opts.push({ value: "2", label: "2nd Auction" });
+    if (rounds.some(n => n >= 3)) opts.push({ value: "3plus", label: "3rd+ Auction" });
+    return opts;
   }, [auctions]);
 
   const handleToggleFav = (id: string, isFav: boolean) => {
@@ -449,15 +504,17 @@ export default function Auctions() {
         const [min, max] = filterYearRange.split("-").map(Number);
         if (a.year_built < min || a.year_built > max) return false;
       }
-      // Ownership: matches ownership:<value> tag
-      if (filterOwnership) {
-        const ownershipTag = `ownership:${filterOwnership}`;
-        if (!a.tags?.includes(ownershipTag)) return false;
-      }
+      // Ownership: robust mapping from tags and ownership pct
+      if (filterOwnership && !ownershipMatches(filterOwnership, a.tags)) return false;
       // Round: matches round:<N> tag (Pro)
       if (filterRound && isPro) {
-        const roundTag = `round:${filterRound}`;
-        if (!a.tags?.includes(roundTag)) return false;
+        const round = getAuctionRound(a.tags);
+        if (filterRound === "3plus") {
+          if (!round || round < 3) return false;
+        } else {
+          const target = Number(filterRound);
+          if (!round || round !== target) return false;
+        }
       }
       // Yield: estimated from price × city rent benchmark (Pro)
       if (filterYield && isPro) {
@@ -471,6 +528,24 @@ export default function Auctions() {
     });
   }, [auctions, selectedCity, filterType, filterBidRange, filterYearRange, filterOwnership, filterRound, filterYield, isPro]);
 
+  const visibleFiltered = useMemo(
+    () => (Number.isFinite(visibilityCap) ? filtered.slice(0, visibilityCap) : filtered),
+    [filtered, visibilityCap]
+  );
+  const totalPages = Math.max(1, Math.ceil(visibleFiltered.length / PAGE_SIZE));
+  const paginated = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return visibleFiltered.slice(start, start + PAGE_SIZE);
+  }, [visibleFiltered, currentPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedCity, filterType, filterBidRange, filterYearRange, filterOwnership, filterRound, filterYield, visibilityCap]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
+
   const activeFilterCount = [filterType, filterBidRange, filterYearRange, filterOwnership, filterRound, filterYield].filter(Boolean).length;
 
   const clearFilters = () => {
@@ -483,28 +558,28 @@ export default function Auctions() {
   };
 
   const now = new Date();
-  const thisWeek = filtered.filter(a => {
+  const thisWeek = visibleFiltered.filter(a => {
     if (!a.auction_date) return false;
     const d = new Date(a.auction_date);
     const diff = (d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
     return diff >= 0 && diff <= 7;
   }).length;
 
-  const avgBid = filtered.length
-    ? Math.round(filtered.reduce((sum, a) => sum + (a.auction_starting_bid ?? a.price ?? 0), 0) / filtered.length)
+  const avgBid = visibleFiltered.length
+    ? Math.round(visibleFiltered.reduce((sum, a) => sum + (a.auction_starting_bid ?? a.price ?? 0), 0) / visibleFiltered.length)
     : 0;
 
   // Compute % of auctions that have a starting bid below stated price
-  const withDiscount = filtered.filter(a => a.auction_starting_bid && a.price && a.auction_starting_bid < a.price).length;
-  const discountPct = filtered.length > 0 ? Math.round((withDiscount / filtered.length) * 100) : 0;
+  const withDiscount = visibleFiltered.filter(a => a.auction_starting_bid && a.price && a.auction_starting_bid < a.price).length;
+  const discountPct = visibleFiltered.length > 0 ? Math.round((withDiscount / visibleFiltered.length) * 100) : 0;
 
   const auctionStats = [
     { value: isLoading ? "—" : String(thisWeek), label: "This Week", icon: Gavel },
-    { value: isLoading ? "—" : filtered.length.toLocaleString(), label: "Total Listed", icon: TrendingUp },
+    { value: isLoading ? "—" : visibleFiltered.length.toLocaleString(), label: "Visible Auctions", icon: TrendingUp },
     { value: isLoading ? "—" : avgBid > 0 ? `€${(avgBid / 1000).toFixed(0)}k` : "—", label: "Avg Starting Bid", icon: TrendingUp },
   ];
 
-  const mapListings: MapListing[] = filtered
+  const mapListings: MapListing[] = visibleFiltered
     .filter(a => a.latitude != null && a.longitude != null)
     .map(a => ({
       id: a.id,
@@ -722,10 +797,7 @@ export default function Auctions() {
                     <div>
                       <label className="text-xs text-muted-foreground font-medium block mb-1.5">Auction Round</label>
                       <select value={filterRound} onChange={e => setFilterRound(e.target.value)} className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none">
-                        <option value="">All Rounds</option>
-                        <option value="1">1st Auction</option>
-                        <option value="2">2nd Auction</option>
-                        <option value="3">3rd+ Auction</option>
+                        {roundOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                       </select>
                     </div>
                   ) : (
@@ -801,7 +873,7 @@ export default function Auctions() {
               {filterBidRange && <button onClick={() => setFilterBidRange("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{BID_RANGES.find(r => r.value === filterBidRange)?.label} <X className="w-3 h-3" /></button>}
               {filterYearRange && <button onClick={() => setFilterYearRange("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{YEAR_RANGES.find(r => r.value === filterYearRange)?.label} <X className="w-3 h-3" /></button>}
               {filterOwnership && <button onClick={() => setFilterOwnership("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-sky-500/10 border border-sky-500/20 text-xs text-sky-400 hover:bg-sky-500/20 transition-colors">{OWNERSHIP_STATUSES.find(s => s.value === filterOwnership)?.label} <X className="w-3 h-3" /></button>}
-              {filterRound && <button onClick={() => setFilterRound("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-brand-gold/10 border border-brand-gold/20 text-xs text-brand-gold hover:bg-brand-gold/20 transition-colors">Round {filterRound} <X className="w-3 h-3" /></button>}
+              {filterRound && <button onClick={() => setFilterRound("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-brand-gold/10 border border-brand-gold/20 text-xs text-brand-gold hover:bg-brand-gold/20 transition-colors">{roundOptions.find(o => o.value === filterRound)?.label || `Round ${filterRound}`} <X className="w-3 h-3" /></button>}
               {filterYield && <button onClick={() => setFilterYield("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-brand-gold/10 border border-brand-gold/20 text-xs text-brand-gold hover:bg-brand-gold/20 transition-colors">Yield: {filterYield.replace("_", " ")} <X className="w-3 h-3" /></button>}
               <button onClick={clearFilters} className="text-xs text-muted-foreground hover:text-foreground ml-1">Clear all</button>
             </div>
@@ -819,16 +891,16 @@ export default function Auctions() {
               <div className="flex flex-col items-center justify-center h-[560px] rounded-2xl bg-card border border-border gap-3">
                 <MapPin className="w-10 h-10 text-muted-foreground/30" />
                 <p className="text-sm text-muted-foreground">
-                  {filtered.length === 0
+                  {visibleFiltered.length === 0
                     ? "No auctions match the current filters."
-                    : `${filtered.length} auction(s) found but none have coordinates.`}
+                    : `${visibleFiltered.length} auction(s) found but none have coordinates.`}
                 </p>
               </div>
             ) : (
               <div>
                 <p className="text-xs text-muted-foreground mb-3">
                   Showing <span className="font-semibold text-foreground">{mappableCount}</span> pinned auction{mappableCount !== 1 ? "s" : ""} on map
-                  {filtered.length > mappableCount && ` (${filtered.length - mappableCount} without coordinates hidden)`}
+                  {visibleFiltered.length > mappableCount && ` (${visibleFiltered.length - mappableCount} without coordinates hidden)`}
                 </p>
                 <MapView listings={mapListings} height="560px" />
               </div>
@@ -853,7 +925,7 @@ export default function Auctions() {
               </div>
             )}
 
-            {!isLoading && !error && filtered.length === 0 && (
+            {!isLoading && !error && visibleFiltered.length === 0 && (
               <div className="text-center py-20">
                 <Gavel className="w-12 h-12 text-brand-gold/30 mx-auto mb-4" />
                 <p className="font-display font-semibold text-lg mb-2">No auctions match your filters</p>
@@ -866,15 +938,20 @@ export default function Auctions() {
               </div>
             )}
 
-            {!isLoading && filtered.length > 0 && (
+            {!isLoading && visibleFiltered.length > 0 && (
               <>
                 <p className="text-xs text-muted-foreground mb-4">
-                  Showing <span className="font-semibold text-foreground">{filtered.length}</span> upcoming auctions
+                  Showing <span className="font-semibold text-foreground">{((currentPage - 1) * PAGE_SIZE) + 1}-{Math.min(currentPage * PAGE_SIZE, visibleFiltered.length)}</span>
+                  {" of "}
+                  <span className="font-semibold text-foreground">{visibleFiltered.length}</span> visible auctions
                   {selectedCity !== "All Cities" ? ` in ${selectedCity}` : ""}
                   {" · "}ordered by auction date
+                  {!isMaiPropOsUser && Number.isFinite(visibilityCap) && filtered.length > visibilityCap && (
+                    <span>{" · "}capped at {visibilityCap} for your plan</span>
+                  )}
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {filtered.map(a => (
+                  {paginated.map(a => (
                     <AuctionCard
                       key={a.id}
                       a={a}
@@ -883,6 +960,31 @@ export default function Auctions() {
                     />
                   ))}
                 </div>
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-center gap-2 mt-6">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-border"
+                      disabled={currentPage === 1}
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    >
+                      Previous
+                    </Button>
+                    <span className="text-xs text-muted-foreground px-2">
+                      Page {currentPage} / {totalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-border"
+                      disabled={currentPage === totalPages}
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                )}
               </>
             )}
 

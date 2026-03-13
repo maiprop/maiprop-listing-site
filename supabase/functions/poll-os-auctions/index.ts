@@ -48,6 +48,18 @@ function mapCategory(cat?: string): string {
   return CATEGORY_MAP[cat.toUpperCase()] ?? "apartment";
 }
 
+function mapOwnershipStatusToTag(rawOwnership?: string | null): string | null {
+  if (!rawOwnership) return null;
+  const occ = rawOwnership.toUpperCase().trim();
+  if (occ === "FULL" || occ === "COMPLETE" || occ === "FULL_OWNERSHIP") return "ownership:full";
+  if (occ === "BARE" || occ === "BARE_OWNERSHIP") return "ownership:bare";
+  if (occ === "COMMON" || occ === "JOINT" || occ === "SHARED" || occ === "CO_OWNERSHIP") return "ownership:common";
+  if (occ === "USUFRUCT" || occ === "PSILI_KYPHIOTITA") return "ownership:usufruct";
+  if (occ === "VERTICAL" || occ === "VERTICAL_OWNERSHIP") return "ownership:vertical";
+  if (occ === "HORIZONTAL" || occ === "HORIZONTAL_OWNERSHIP") return "ownership:horizontal";
+  return `ownership:${occ.toLowerCase()}`;
+}
+
 function buildTitle(a: any): string {
   const catKey = mapCategory(a.propertyCategory);
   const catGr = CATEGORY_GR[catKey] ?? "Ακίνητο";
@@ -139,32 +151,15 @@ function mapAuctionToListing(a: any) {
       ? `https://maps.googleapis.com/maps/api/streetview?size=800x450&location=${lat},${lng}&fov=90&pitch=10&key=${googleMapsKey}`
       : null;
 
-  // Map ownershipStatus from OS API
-  // Confirmed field: ownershipStatus (values: FULL, PARTIAL, NONE, etc.)
-  // ownershipPercentage: number (e.g. 100 = full, 50 = partial)
+  // Map ownershipStatus from OS API to normalized tags used by frontend filters
+  // Canonical values: full, bare, common, usufruct, vertical, horizontal
   const rawOwnership: string | undefined = a.ownershipStatus;
   const ownershipPct: number | undefined = a.ownershipPercentage != null ? Number(a.ownershipPercentage) : undefined;
-  let ownershipTag: string | null = null;
-  if (rawOwnership) {
-    const occ = rawOwnership.toUpperCase();
-    if (occ === "FULL" || occ === "COMPLETE") {
-      ownershipTag = "ownership:full";
-    } else if (occ === "PARTIAL" || occ === "FRACTIONAL") {
-      ownershipTag = "ownership:partial";
-    } else if (occ === "COMMON" || occ === "JOINT" || occ === "SHARED" || occ === "CO_OWNERSHIP") {
-      // Εξ αδιαιρέτου — fractional undivided shared ownership
-      ownershipTag = "ownership:common";
-    } else if (occ === "NONE" || occ === "NO_OWNERSHIP" || occ === "ZERO") {
-      ownershipTag = "ownership:none";
-    } else {
-      // Store raw lowercase value for any other status
-      ownershipTag = `ownership:${occ.toLowerCase()}`;
-    }
-  } else if (ownershipPct != null) {
-    // Fallback: derive from percentage
+  let ownershipTag: string | null = mapOwnershipStatusToTag(rawOwnership);
+  if (!ownershipTag && ownershipPct != null) {
+    // Fallback: best-effort derivation when status is absent
     if (ownershipPct >= 100) ownershipTag = "ownership:full";
-    else if (ownershipPct > 0) ownershipTag = "ownership:partial";
-    else ownershipTag = "ownership:none";
+    else if (ownershipPct > 0) ownershipTag = "ownership:common";
   }
 
   return {
