@@ -1596,9 +1596,9 @@ export default function Index() {
       </section>
 
       {/* ══ PROPERTIES PORTAL / GOLDEN VISA ══════════════════════════════════ */}
-      <section className="py-20 bg-background overflow-hidden">
+      <section className="py-12 sm:py-20 bg-background overflow-hidden">
         <div ref={goldenRef} className="container">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
+          <div className="grid lg:grid-cols-2 gap-8 sm:gap-12 items-center">
             {/* App Mockup */}
             <div className={`relative order-last lg:order-first reveal ${goldenInView ? "in-view" : ""}`}>
               <div
