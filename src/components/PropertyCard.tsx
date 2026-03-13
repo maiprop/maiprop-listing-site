@@ -246,7 +246,7 @@ export function PropertyCard({ property, compact = false }: PropertyCardProps) {
                   {property.priceChange > 0 ? "+" : ""}{property.priceChange}%
                 </div>
               )}
-              {property.views && (
+              {!!property.views && property.views > 0 && (
                 <div className="flex items-center gap-1 text-[11px] text-white/60">
                   <Eye className="w-3 h-3" /> {property.views}
                 </div>

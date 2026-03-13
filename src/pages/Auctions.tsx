@@ -18,6 +18,8 @@ const AUCTION_SELECT_CORE = "id, title, city, address, price, auction_starting_b
 const QUERY_TIMEOUT_MS = 15_000;
 const AUCTION_FETCH_LIMIT = 500;
 const PAGE_SIZE = 20;
+const MAX_PAGES_FREE = 3;   // free: up to 3 pages = 60 items
+const MAX_PAGES_PRO  = 10;  // pro:  up to 10 pages = 200 items
 
 // ── Fetch all auctions from DB (future or date TBD) ─────────────────────────────
 // Include null auction_date so OS-synced rows without a date still show
@@ -462,7 +464,7 @@ export default function Auctions() {
   const isMaiPropOsUser =
     email.endsWith("@maiprop.co") ||
     email.endsWith("@os.maiprop.co");
-  const visibilityCap = isMaiPropOsUser ? Number.POSITIVE_INFINITY : isPro ? 300 : 100;
+  const visibilityCap = isMaiPropOsUser ? Number.POSITIVE_INFINITY : isPro ? MAX_PAGES_PRO * PAGE_SIZE : MAX_PAGES_FREE * PAGE_SIZE;
 
   // Dynamic city list from actual data
   const cityOptions = useMemo(() => {
@@ -527,9 +529,12 @@ export default function Auctions() {
     });
   }, [auctions, selectedCity, filterType, filterBidRange, filterYearRange, filterOwnership, filterRound, filterYield, isPro]);
 
+  const pageCap = isMaiPropOsUser ? Infinity : isPro ? MAX_PAGES_PRO : MAX_PAGES_FREE;
+  const maxItems = Number.isFinite(pageCap) ? pageCap * PAGE_SIZE : Infinity;
+
   const visibleFiltered = useMemo(
-    () => (Number.isFinite(visibilityCap) ? filtered.slice(0, visibilityCap) : filtered),
-    [filtered, visibilityCap]
+    () => (Number.isFinite(maxItems) ? filtered.slice(0, maxItems) : filtered),
+    [filtered, maxItems]
   );
   const totalPages = Math.max(1, Math.ceil(visibleFiltered.length / PAGE_SIZE));
   const paginated = useMemo(() => {
@@ -539,7 +544,7 @@ export default function Auctions() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedCity, filterType, filterBidRange, filterYearRange, filterOwnership, filterRound, filterYield, visibilityCap]);
+  }, [selectedCity, filterType, filterBidRange, filterYearRange, filterOwnership, filterRound, filterYield, maxItems]);
 
   useEffect(() => {
     if (currentPage > totalPages) setCurrentPage(totalPages);
@@ -939,52 +944,77 @@ export default function Auctions() {
 
             {!isLoading && visibleFiltered.length > 0 && (
               <>
-                <p className="text-xs text-muted-foreground mb-4">
-                  Showing <span className="font-semibold text-foreground">{((currentPage - 1) * PAGE_SIZE) + 1}-{Math.min(currentPage * PAGE_SIZE, visibleFiltered.length)}</span>
-                  {" of "}
-                  <span className="font-semibold text-foreground">{visibleFiltered.length}</span> visible auctions
-                  {selectedCity !== "All Cities" ? ` in ${selectedCity}` : ""}
-                  {" · "}ordered by auction date
-                  {!isMaiPropOsUser && Number.isFinite(visibilityCap) && filtered.length > visibilityCap && (
-                    <span>{" · "}capped at {visibilityCap} for your plan</span>
-                  )}
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {paginated.map(a => (
-                    <AuctionCard
-                      key={a.id}
-                      a={a}
-                      favoritedIds={favoritedIds}
-                      onToggleFav={handleToggleFav}
-                    />
-                  ))}
-                </div>
-                {totalPages > 1 && (
-                  <div className="flex items-center justify-center gap-2 mt-6">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="border-border"
-                      disabled={currentPage === 1}
-                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                    >
-                      Previous
-                    </Button>
-                    <span className="text-xs text-muted-foreground px-2">
-                      Page {currentPage} / {totalPages}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="border-border"
-                      disabled={currentPage === totalPages}
-                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                    >
-                      Next
-                    </Button>
-                  </div>
-                )}
-              </>
+                 <p className="text-xs text-muted-foreground mb-4">
+                   Showing <span className="font-semibold text-foreground">{((currentPage - 1) * PAGE_SIZE) + 1}–{Math.min(currentPage * PAGE_SIZE, visibleFiltered.length)}</span>
+                   {" of "}
+                   <span className="font-semibold text-foreground">{visibleFiltered.length}</span> auctions
+                   {selectedCity !== "All Cities" ? ` in ${selectedCity}` : ""}
+                   {" · "}ordered by date
+                   {!isMaiPropOsUser && filtered.length > visibleFiltered.length && (
+                     <span className="text-brand-gold"> · page limit: {isPro ? MAX_PAGES_PRO : MAX_PAGES_FREE} pages</span>
+                   )}
+                 </p>
+                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                   {paginated.map(a => (
+                     <AuctionCard
+                       key={a.id}
+                       a={a}
+                       favoritedIds={favoritedIds}
+                       onToggleFav={handleToggleFav}
+                     />
+                   ))}
+                 </div>
+                 {totalPages > 1 && (
+                   <div className="flex items-center justify-center gap-2 mt-8 flex-wrap">
+                     <Button
+                       variant="outline"
+                       size="sm"
+                       className="border-border"
+                       disabled={currentPage === 1}
+                       onClick={() => { setCurrentPage(p => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                     >
+                       ← Previous
+                     </Button>
+                     {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                       <Button
+                         key={page}
+                         variant={page === currentPage ? "default" : "outline"}
+                         size="sm"
+                         className={page === currentPage ? "bg-brand-gold border-0 text-background font-bold" : "border-border"}
+                         onClick={() => { setCurrentPage(page); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                       >
+                         {page}
+                       </Button>
+                     ))}
+                     <Button
+                       variant="outline"
+                       size="sm"
+                       className="border-border"
+                       disabled={currentPage === totalPages}
+                       onClick={() => { setCurrentPage(p => Math.min(totalPages, p + 1)); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                     >
+                       Next →
+                     </Button>
+                   </div>
+                 )}
+                 {/* Upsell when free user hits page cap */}
+                 {!isPro && !isMaiPropOsUser && filtered.length > MAX_PAGES_FREE * PAGE_SIZE && (
+                   <div className="mt-8 p-5 rounded-2xl bg-brand-gold/10 border border-brand-gold/30 flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">
+                     <Gavel className="w-8 h-8 text-brand-gold shrink-0" />
+                     <div className="flex-1">
+                       <p className="font-display font-semibold text-sm">
+                         {filtered.length - MAX_PAGES_FREE * PAGE_SIZE} more auctions available on Pro
+                       </p>
+                       <p className="text-xs text-muted-foreground mt-0.5">
+                         Upgrade to see up to {MAX_PAGES_PRO} pages of results plus Pro filters.
+                       </p>
+                     </div>
+                     <Button size="sm" className="bg-gradient-gold border-0 text-background font-semibold shrink-0" asChild>
+                       <Link to="/pro">Upgrade to Pro</Link>
+                     </Button>
+                   </div>
+                 )}
+               </>
             )}
 
             {/* CTA */}
