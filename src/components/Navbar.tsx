@@ -83,9 +83,9 @@ export function Navbar() {
         {/* Logo */}
         <Link to="/" className="flex items-center shrink-0">
           <img
-            src={logoImg}
+            src={forceLight ? logoDarkImg : logoImg}
             alt="maiProp — Real estate | Real decisions."
-            className={`h-10 w-auto object-contain transition-all duration-300 ${forceLight ? "brightness-0 invert" : ""}`}
+            className="h-10 w-auto object-contain transition-all duration-300"
           />
         </Link>
 
