@@ -1015,28 +1015,6 @@ export default function Auctions() {
                  }
 
 
-                     <Button
-                variant="outline"
-                size="sm"
-                className="border-border"
-                disabled={currentPage === 1}
-                onClick={() => {setCurrentPage((p) => Math.max(1, p - 1));window.scrollTo({ top: 0, behavior: "smooth" });}}>
-                
-                       ← Previous
-                     </Button>
-                     {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) =>
-              <Button
-                key={page}
-                variant={page === currentPage ? "default" : "outline"}
-                size="sm"
-                className={page === currentPage ? "bg-brand-gold border-0 text-background font-bold" : "border-border"}
-                onClick={() => {setCurrentPage(page);window.scrollTo({ top: 0, behavior: "smooth" });}}>
-                
-                         {page}
-                       </Button>
-              )}
-                     <Button
-                variant="outline"
                 size="sm"
                 className="border-border"
                 disabled={currentPage === totalPages}
