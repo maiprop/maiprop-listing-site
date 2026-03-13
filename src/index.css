@@ -466,3 +466,9 @@
 .animate-fade-in-up {
   animation: hero-fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
+
+/* ── Hero video cinematic zoom ── */
+@keyframes hero-zoom {
+  from { transform: scale(1); }
+  to   { transform: scale(1.08); }
+}
