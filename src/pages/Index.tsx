@@ -913,6 +913,21 @@ export default function Index() {
       {showAI && <AISearchModal onFiltersApplied={handleAIFilters} onClose={() => setShowAI(false)} />}
       <CookieConsentBanner />
 
+      {/* Pull-to-refresh indicator — mobile only */}
+      {(pulling || refreshing) && (
+        <div className="lg:hidden fixed top-14 left-0 right-0 z-50 flex justify-center pointer-events-none">
+          <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-card border border-border shadow-elevated mt-2 transition-all">
+            <div
+              className={`w-4 h-4 rounded-full border-2 border-primary transition-all ${refreshing ? "animate-spin border-t-transparent" : ""}`}
+              style={!refreshing ? { background: `conic-gradient(hsl(var(--primary)) ${progress * 360}deg, transparent 0deg)` } : undefined}
+            />
+            <span className="text-xs font-medium text-foreground">
+              {refreshing ? "Refreshing…" : progress >= 1 ? "Release to refresh" : "Pull to refresh"}
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* ══ HERO ══════════════════════════════════════════════════════════════ */}
       <section className="relative min-h-[100svh] flex items-center overflow-hidden pt-14 sm:pt-16">
         {/* Background */}
