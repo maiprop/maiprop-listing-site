@@ -319,6 +319,28 @@ export default function AdminPanel() {
     onError: (e: any) => { setSyncProgress(null); toast.error("Full sync failed: " + e.message); },
   });
 
+  // Replace all OS auctions then full sync (fix typology/filters)
+  const replaceAllSyncMutation = useMutation({
+    mutationFn: async () => {
+      setSyncProgress("Replacing all OS auctions, then syncing...");
+      const { data, error } = await supabase.functions.invoke("full-sync-from-os", {
+        body: { replaceAll: true, pageSize: auctionPageSize, maxPages: auctionMaxPages },
+      });
+      setSyncProgress(null);
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["admin-sync-log", "admin-db-stats"] });
+      const a = data?.sync?.auctions ?? {};
+      const msg = a.replaced != null
+        ? `Replaced ${a.replaced} auctions · ${a.imported ?? 0} new · ${a.updated ?? 0} updated (${a.pages ?? 0} pages)`
+        : `Full sync: ${a.imported ?? 0} new · ${a.updated ?? 0} updated (${a.pages ?? 0} pages)`;
+      toast.success(msg, { duration: 8000 });
+    },
+    onError: (e: any) => { setSyncProgress(null); toast.error("Replace all & sync failed: " + e.message); },
+  });
+
   // ── Derived ─────────────────────────────────────────────────────────────────
   const filteredLogs = logFilter === "all" ? logs : logs.filter(l => l.direction === logFilter);
   const successCount = logs.filter(l => l.status === "success").length;
@@ -474,14 +496,18 @@ export default function AdminPanel() {
             <p className="text-[11px] text-muted-foreground">
               Request: page={auctionStartPage}, size={auctionPageSize}{pollCity.trim() ? `, city=${pollCity.trim()}` : ""}
             </p>
-            <div className="flex gap-2">
-              <Button className="flex-1 gap-2" size="sm" disabled={pollMutation.isPending} onClick={() => pollMutation.mutate()}>
+            <div className="flex flex-wrap gap-2">
+              <Button className="flex-1 min-w-[140px] gap-2" size="sm" disabled={pollMutation.isPending} onClick={() => pollMutation.mutate()}>
                 {pollMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
                 {pollMutation.isPending ? "Polling…" : "Pull Future Auctions"}
               </Button>
-              <Button className="flex-1 gap-2" size="sm" variant="secondary" disabled={fullSyncMutation.isPending} onClick={() => fullSyncMutation.mutate()}>
+              <Button className="flex-1 min-w-[140px] gap-2" size="sm" variant="secondary" disabled={fullSyncMutation.isPending} onClick={() => fullSyncMutation.mutate()}>
                 {fullSyncMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
                 {fullSyncMutation.isPending ? (syncProgress ?? "Syncing…") : "Full sync (OS → Hub)"}
+              </Button>
+              <Button className="flex-1 min-w-[140px] gap-2" size="sm" variant="outline" disabled={replaceAllSyncMutation.isPending} onClick={() => replaceAllSyncMutation.mutate()} title="Delete all OS-sourced auctions, then refetch with correct typology (land_type, commercial_type) so filters work">
+                {replaceAllSyncMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                {replaceAllSyncMutation.isPending ? (syncProgress ?? "Replacing…") : "Replace all & sync"}
               </Button>
             </div>
           </div>

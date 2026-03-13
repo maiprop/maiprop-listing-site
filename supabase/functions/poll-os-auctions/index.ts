@@ -16,7 +16,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-// OS propertyCategory → Hub property_type
+// OS propertyCategory → Hub property_type (and optional land_type / commercial_type for filters)
 const CATEGORY_MAP: Record<string, string> = {
   RESIDENCE: "apartment",
   APARTMENT: "apartment",
@@ -32,6 +32,30 @@ const CATEGORY_MAP: Record<string, string> = {
   WAREHOUSE: "commercial",
   INDUSTRIAL: "commercial",
   STOREROOM: "commercial",
+  PARKING: "commercial",
+  HOTEL: "commercial",
+  OTHER_BUSINESS_SPACE: "commercial",
+};
+
+// OS category → land_type tag value (for Auctions page filter; must match PROPERTY_TYPES in Auctions.tsx)
+const LAND_TYPE_TAG: Record<string, string> = {
+  LAND: "land",
+  PLOT: "plot",
+  PLOT_WITH_BUILDING: "plot_with_building",
+  LAND_WITH_BUILDING: "land_with_building",
+};
+
+// OS category → commercial_type tag value (for Auctions page filter)
+const COMMERCIAL_TYPE_TAG: Record<string, string> = {
+  STORE: "store",
+  WAREHOUSE: "warehouse",
+  INDUSTRIAL: "industrial",
+  STOREROOM: "storeroom",
+  PARKING: "parking",
+  HOTEL: "hotel",
+  OFFICE: "office",
+  OTHER_BUSINESS_SPACE: "other_business_space",
+  COMMERCIAL: "other_business_space",
 };
 
 const CATEGORY_GR: Record<string, string> = {
@@ -46,6 +70,15 @@ const CATEGORY_GR: Record<string, string> = {
 function mapCategory(cat?: string): string {
   if (!cat) return "apartment";
   return CATEGORY_MAP[cat.toUpperCase()] ?? "apartment";
+}
+
+/** Returns optional land_type or commercial_type tag for filter matching on Auctions page. */
+function getSubtypeTag(cat?: string): string | null {
+  if (!cat) return null;
+  const u = cat.toUpperCase();
+  if (LAND_TYPE_TAG[u]) return `land_type:${LAND_TYPE_TAG[u]}`;
+  if (COMMERCIAL_TYPE_TAG[u]) return `commercial_type:${COMMERCIAL_TYPE_TAG[u]}`;
+  return null;
 }
 
 function mapOwnershipStatusToTag(rawOwnership?: string | null): string | null {
@@ -197,6 +230,7 @@ function mapAuctionToListing(a: any) {
         ...(a.currentRound != null ? [`round:${a.currentRound}`] : []),
         ...(ownershipTag ? [ownershipTag] : []),
         ...(ownershipPct != null ? [`ownership_pct:${ownershipPct}`] : []),
+        ...(getSubtypeTag(a.propertyCategory) ? [getSubtypeTag(a.propertyCategory)!] : []),
       ],
     },
   };
