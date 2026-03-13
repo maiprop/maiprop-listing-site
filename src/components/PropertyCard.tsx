@@ -190,7 +190,7 @@ export function PropertyCard({ property, compact = false }: PropertyCardProps) {
               {getSubtypeLabel(property.type, property.subtype)}
             </span>
           )}
-          {discountPct && discountPct > 0 && (
+          {discountPct !== null && discountPct > 0 && (
             <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-destructive/90 text-white shadow-sm">
               -{discountPct}% off
             </span>
