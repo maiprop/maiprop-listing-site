@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Eye, EyeOff, Loader2, Mail, ArrowLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,45 +16,6 @@ const GoogleIcon = () => (
     <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58Z" fill="#EA4335"/>
   </svg>
 );
-
-export default function Login() {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { signIn } = useAuth();
-
-  const [view, setView] = useState<"login" | "forgot" | "forgot-sent">("login");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [forgotEmail, setForgotEmail] = useState("");
-  const [showPass, setShowPass] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
-
-  const from = (location.state as any)?.from?.pathname || "/dashboard";
-
-  const handleGoogleSignIn = async () => {
-    setGoogleLoading(true);
-    const { error } = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin,
-    });
-    if (error) {
-      toast.error("Google sign-in failed. Please try again.");
-      setGoogleLoading(false);
-    }
-  };
-
-  const handleSignIn = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    const { error } = await signIn(email, password);
-    setLoading(false);
-    if (error) {
-      toast.error("Invalid email or password");
-    } else {
-      toast.success("Welcome back!");
-      navigate(from, { replace: true });
-    }
-  };
 
   const handleForgot = async (e: React.FormEvent) => {
     e.preventDefault();
