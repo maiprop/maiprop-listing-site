@@ -856,17 +856,17 @@ export default function Listings() {
                         </div>
                       </div>
                     )}
-                    {/* Construction Status */}
+                    {/* Condition (renovated, new, needs renovation, etc.) */}
                     {aiFilterConfig.sections.includes("construction_status") && (
                       <div className="space-y-2">
                         <label className="flex items-center gap-1.5 text-xs font-semibold text-foreground/70 uppercase tracking-wider">
                           <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block" />
-                          Construction
+                          Condition
                         </label>
                         <div className="relative">
                           <select value={selectedConstruction} onChange={e => setParam("construction", e.target.value)}
                             className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none cursor-pointer">
-                            <option value="">Any status</option>
+                            <option value="">Any condition</option>
                             {CONSTRUCTION_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                           </select>
                           <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />

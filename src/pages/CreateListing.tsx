@@ -1,9 +1,9 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ChevronLeft, ChevronRight, Check, Upload, X, Loader2,
   Home, Building2, Zap, MapPin, DollarSign, Image as ImageIcon,
-  Info, GripVertical, Star, Sparkles, TrendingUp, RefreshCw
+  Info, GripVertical, Star, Sparkles, TrendingUp, RefreshCw, AlertCircle, CheckCircle2
 } from "lucide-react";
 import { PROPERTY_TYPES as PROP_TYPES, PROPERTY_TYPE_MAP, type PropertyTypeKey } from "@/lib/propertyTypes";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,9 @@ import { Navbar } from "@/components/Navbar";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { useCreateListingConnections } from "@/hooks/useCreateListingConnections";
+import { GOOGLE_MAPS_API_KEY } from "@/lib/config";
+import { HEATING_TYPES, CONDITION_OPTIONS } from "@/lib/filterConfig";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -19,8 +22,6 @@ type PropertyType = typeof PROPERTY_TYPE_KEYS[number];
 const LISTING_TYPES = ["sale", "rent", "auction"] as const;
 type ListingType = typeof LISTING_TYPES[number];
 const ENERGY_CLASSES = ["A+", "A", "B+", "B", "C", "D", "E", "F", "G", "Exempt"];
-const HEATING_SYSTEMS = ["autonomous", "central", "floor", "none", "other"];
-const CONSTRUCTION_STATUSES = ["new", "under_construction", "renovated", "needs_renovation", "unfinished", "preserved", "neoclassical"];
 const SLOPES = ["flat", "slight", "steep"];
 const ZONE_TYPES = ["residential", "agricultural", "tourist", "industrial", "commercial", "mixed"];
 const ROAD_TYPES = ["asphalt", "paved", "dirt"];
@@ -235,6 +236,18 @@ export default function CreateListing() {
   } | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Connection verification (Supabase, Storage, location API)
+  const connections = useCreateListingConnections();
+
+  // Location autocomplete: Nominatim suggestions or Google Places
+  type NominatimHit = { display_name: string; address?: { road?: string; house_number?: string; city?: string; town?: string; village?: string; state?: string; postcode?: string } };
+  const [addressSuggestions, setAddressSuggestions] = useState<NominatimHit[]>([]);
+  const [addressLoading, setAddressLoading] = useState(false);
+  const addressAbortRef = useRef<AbortController | null>(null);
+  const addressInputRef = useRef<HTMLInputElement | null>(null);
+  const googleAutocompleteRef = useRef<{ getPlace: () => { address_components?: Array<{ long_name: string; short_name: string; types: string[] }>; formatted_address?: string } } | null>(null);
+  const googleScriptLoadedRef = useRef(false);
+
   // Field refs for scroll-to-error
   const fieldRefs = useRef<Record<string, HTMLElement | null>>({});
   const setFieldRef = (key: string) => (el: HTMLElement | null) => { fieldRefs.current[key] = el; };
@@ -292,6 +305,105 @@ export default function CreateListing() {
 
   const pt = form.property_type;
   const lt = form.listing_type;
+
+  // ── Location autocomplete: Nominatim (when not using Google) ───────────────
+  useEffect(() => {
+    if (step !== 4 || GOOGLE_MAPS_API_KEY) {
+      setAddressSuggestions([]);
+      setAddressLoading(false);
+      return;
+    }
+    const q = [form.address, form.city].filter(Boolean).join(", ").trim();
+    if (addressAbortRef.current) {
+      addressAbortRef.current.abort();
+      addressAbortRef.current = null;
+    }
+    if (q.length < 3) {
+      setAddressSuggestions([]);
+      setAddressLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    addressAbortRef.current = controller;
+    setAddressLoading(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&countrycodes=gr&q=${encodeURIComponent(q)}`,
+          {
+            headers: { "Accept-Language": "el,en", "User-Agent": "maiprop-listing-site-create-listing" },
+            signal: controller.signal,
+          }
+        );
+        const json = await res.json().catch(() => []);
+        if (!controller.signal.aborted && Array.isArray(json)) {
+          setAddressSuggestions(json.map((r: any) => ({ display_name: r.display_name, address: r.address })));
+        } else {
+          setAddressSuggestions([]);
+        }
+      } catch {
+        if (!controller.signal.aborted) setAddressSuggestions([]);
+      } finally {
+        if (!controller.signal.aborted) setAddressLoading(false);
+      }
+    }, 400);
+    return () => {
+      clearTimeout(t);
+      controller.abort();
+    };
+  }, [step, form.address, form.city]);
+
+  // ── Load Google Places script and attach Autocomplete when key is set ────────
+  useEffect(() => {
+    if (!GOOGLE_MAPS_API_KEY || step !== 4 || !addressInputRef.current || googleScriptLoadedRef.current) return;
+    const input = addressInputRef.current;
+
+    const initGoogle = () => {
+      const g = (window as any).google;
+      if (!g?.maps?.places?.Autocomplete) return;
+      if (googleAutocompleteRef.current) return;
+      const autocomplete = new g.maps.places.Autocomplete(input, {
+        types: ["address"],
+        componentRestrictions: { country: "gr" },
+        fields: ["address_components", "formatted_address"],
+      });
+      autocomplete.addListener("place_changed", () => {
+        const place = autocomplete.getPlace();
+        if (!place.address_components) return;
+        const ac = place.address_components;
+        const get = (type: string) => ac.find((c: any) => c.types.includes(type))?.long_name ?? "";
+        const street = get("route");
+        const number = get("street_number");
+        const city = get("locality") || get("administrative_area_level_2") || get("administrative_area_level_1");
+        const state = get("administrative_area_level_1");
+        const postcode = get("postal_code");
+        setForm(f => ({
+          ...f,
+          address: [number, street].filter(Boolean).join(" ") || place.formatted_address || f.address,
+          city: city || f.city,
+          region: state || f.region,
+          postal_code: postcode || f.postal_code,
+        }));
+      });
+      googleAutocompleteRef.current = autocomplete;
+    };
+
+    if ((window as any).google?.maps?.places) {
+      initGoogle();
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places`;
+    script.async = true;
+    script.onload = () => {
+      googleScriptLoadedRef.current = true;
+      initGoogle();
+    };
+    document.head.appendChild(script);
+    return () => {
+      googleAutocompleteRef.current = null;
+    };
+  }, [step, GOOGLE_MAPS_API_KEY]);
 
   // ── Per-step validation with inline errors ────────────────────────────────
   const scrollToField = (key: string) => {
@@ -813,21 +925,23 @@ export default function CreateListing() {
                       <div><FieldLabel>Floor</FieldLabel><Input type="number" placeholder="3" value={form.floor} onChange={e => set("floor", e.target.value)} /></div>
                       <div><FieldLabel>Total Floors in Building</FieldLabel><Input type="number" placeholder="6" value={form.total_floors} onChange={e => set("total_floors", e.target.value)} /></div>
                     </div>
-                    <SectionTitle>Systems & Construction</SectionTitle>
+                    <SectionTitle>Systems & condition</SectionTitle>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <FieldLabel>Heating System</FieldLabel>
+                        <FieldLabel>Heating</FieldLabel>
                         <Select value={form.heating_system} onChange={e => set("heating_system", e.target.value)}>
                           <option value="">Select...</option>
-                          {HEATING_SYSTEMS.map(h => <option key={h} value={h} className="capitalize">{h.replace("_", " ")}</option>)}
+                          {HEATING_TYPES.map(h => <option key={h.value} value={h.value}>{h.label}</option>)}
                         </Select>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">Autonomous (oil/gas), central (oil/gas), or underfloor</p>
                       </div>
                       <div>
-                        <FieldLabel>Construction Status</FieldLabel>
+                        <FieldLabel>Condition</FieldLabel>
                         <Select value={form.construction_status} onChange={e => set("construction_status", e.target.value)}>
                           <option value="">Select...</option>
-                          {CONSTRUCTION_STATUSES.map(s => <option key={s} value={s} className="capitalize">{s.replace("_", " ")}</option>)}
+                          {CONDITION_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                         </Select>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">Renovated, new, needs renovation, etc.</p>
                       </div>
                     </div>
                   </>
@@ -852,17 +966,17 @@ export default function CreateListing() {
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <FieldLabel>Heating System</FieldLabel>
+                        <FieldLabel>Heating</FieldLabel>
                         <Select value={form.heating_system} onChange={e => set("heating_system", e.target.value)}>
                           <option value="">Select...</option>
-                          {HEATING_SYSTEMS.map(h => <option key={h} value={h}>{h.replace("_", " ")}</option>)}
+                          {HEATING_TYPES.map(h => <option key={h.value} value={h.value}>{h.label}</option>)}
                         </Select>
                       </div>
                       <div>
-                        <FieldLabel>Construction Status</FieldLabel>
+                        <FieldLabel>Condition</FieldLabel>
                         <Select value={form.construction_status} onChange={e => set("construction_status", e.target.value)}>
                           <option value="">Select...</option>
-                          {CONSTRUCTION_STATUSES.map(s => <option key={s} value={s}>{s.replace("_", " ")}</option>)}
+                          {CONDITION_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                         </Select>
                       </div>
                     </div>
@@ -1049,6 +1163,29 @@ export default function CreateListing() {
             {/* ── STEP 4: Location ── */}
             {step === 4 && (
               <div className="space-y-4">
+                {/* Connection status: required APIs and modules */}
+                <div className={`rounded-xl border p-3 text-xs ${connections.supabaseOk && connections.storageOk && connections.locationOk ? "border-brand-emerald/30 bg-brand-emerald/5" : "border-destructive/30 bg-destructive/5"}`}>
+                  <div className="flex items-center gap-2 font-semibold mb-2">
+                    {connections.loading ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
+                    ) : connections.supabaseOk && connections.storageOk && connections.locationOk ? (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-brand-emerald" />
+                    ) : (
+                      <AlertCircle className="w-3.5 h-3.5 text-destructive" />
+                    )}
+                    <span className={connections.supabaseOk && connections.storageOk && connections.locationOk ? "text-brand-emerald" : "text-destructive"}>
+                      {connections.loading ? "Checking connections…" : connections.supabaseOk && connections.storageOk && connections.locationOk ? "All required services connected" : "Some services need attention"}
+                    </span>
+                  </div>
+                  {!connections.loading && (
+                    <ul className="space-y-0.5 text-muted-foreground">
+                      <li>Supabase: {connections.supabaseOk ? "✓ Connected" : "✗ Unavailable"}</li>
+                      <li>Storage (listing images): {connections.storageOk ? "✓ Ready" : "✗ Unavailable"}</li>
+                      <li>Location autocomplete: {connections.locationOk ? (connections.locationSource === "google" ? "✓ Google Places" : "✓ Nominatim (Greece)") : "✗ Not available"}</li>
+                    </ul>
+                  )}
+                </div>
+
                 <h2 className="font-display text-xl font-semibold">Location</h2>
                 <div ref={setFieldRef("city") as any}>
                   <FieldLabel required>City</FieldLabel>
@@ -1056,8 +1193,43 @@ export default function CreateListing() {
                   <FieldError msg={errors.city} />
                 </div>
                 <div>
-                  <FieldLabel>Street Address</FieldLabel>
-                  <Input placeholder="e.g. Voukourestiou 14" value={form.address} onChange={e => set("address", e.target.value)} />
+                  <FieldLabel>Street Address {GOOGLE_MAPS_API_KEY ? "(start typing for Google suggestions)" : ""}</FieldLabel>
+                  <input
+                    ref={el => {
+                      addressInputRef.current = el;
+                      setFieldRef("address")(el);
+                    }}
+                    type="text"
+                    placeholder={GOOGLE_MAPS_API_KEY ? "e.g. Voukourestiou 14, Athens" : "e.g. Voukourestiou 14"}
+                    value={form.address}
+                    onChange={e => set("address", e.target.value)}
+                    className={`w-full bg-secondary border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors ${errors.address ? "border-destructive ring-1 ring-destructive/30" : "border-border"}`}
+                  />
+                  {addressLoading && (
+                    <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Searching address…</p>
+                  )}
+                  {!addressLoading && addressSuggestions.length > 0 && (
+                    <div className="mt-1 bg-background border border-border rounded-xl shadow-md text-sm max-h-40 overflow-auto">
+                      {addressSuggestions.map((s, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => {
+                            set("address", s.address?.road && (s.address?.house_number || s.address?.road) ? [s.address.house_number, s.address.road].filter(Boolean).join(" ") : s.display_name);
+                            if (s.address?.city) set("city", s.address.city);
+                            else if (s.address?.town) set("city", s.address.town);
+                            else if (s.address?.village) set("city", s.address.village);
+                            if (s.address?.state) set("region", s.address.state);
+                            if (s.address?.postcode) set("postal_code", s.address.postcode);
+                            setAddressSuggestions([]);
+                          }}
+                          className="w-full text-left px-3 py-2 hover:bg-muted/80 border-b border-border last:border-0 first:rounded-t-xl last:rounded-b-xl"
+                        >
+                          {s.display_name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div><FieldLabel>Region / Municipality</FieldLabel><Input placeholder="Attica" value={form.region} onChange={e => set("region", e.target.value)} /></div>

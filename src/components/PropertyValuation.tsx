@@ -54,6 +54,7 @@ export interface PropertyValuationProps {
   floor?: number | null;
   totalFloors?: number | null;
   yearBuilt?: number | null;
+  heatingSystem?: string | null;
   energyClass?: string | null;
   pricePerSqm?: number | null;
   hasParking?: boolean | null;

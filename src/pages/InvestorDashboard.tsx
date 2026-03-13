@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { useNavigate, Link } from "react-router-dom";
 import {
   Flame, Lock, BarChart2, TrendingUp, TrendingDown, MapPin,
   Building2, ChevronRight, Zap,
@@ -8,7 +8,8 @@ import {
   Crown, Sparkles, AlertCircle, RefreshCw,
   ChevronDown, FileText, Save, LayoutGrid, ShieldCheck,
   Calendar, Ban, ArrowUpCircle, UserCheck, CreditCard,
-  SendHorizonal, ThumbsUp, ThumbsDown, MessageCircle, Trophy, X as XIcon, ArrowLeftRight
+  SendHorizonal, ThumbsUp, ThumbsDown, MessageCircle, Trophy, X as XIcon, ArrowLeftRight,
+  ExternalLink, Target
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -95,20 +96,28 @@ const TIERS = [
 
 // No mock deals — all data comes from the database
 
-const CITY_BREAKDOWN = [
+const CITY_BREAKDOWN_FALLBACK = [
   { city: "Athens", deals: 22, value: "€68M", pct: 49 },
   { city: "Thessaloniki", deals: 9, value: "€21M", pct: 19 },
-  { city: "Mykonos/Santorini", deals: 7, value: "€31M", pct: 22 },
-  { city: "Other Greece", deals: 9, value: "€18M", pct: 16 },
+  { city: "Other", deals: 9, value: "€18M", pct: 16 },
 ];
 
-const TYPE_BREAKDOWN = [
+const TYPE_BREAKDOWN_FALLBACK = [
   { type: "Apartment", pct: 38, color: "bg-primary" },
   { type: "Villa", pct: 24, color: "bg-brand-gold" },
   { type: "Commercial", pct: 18, color: "bg-accent" },
   { type: "House", pct: 12, color: "bg-brand-emerald" },
   { type: "Land", pct: 8, color: "bg-destructive" },
 ];
+
+const TYPE_COLORS: Record<string, string> = {
+  apartment: "bg-primary",
+  villa: "bg-brand-gold",
+  commercial: "bg-accent",
+  house: "bg-brand-emerald",
+  land: "bg-destructive",
+  office: "bg-primary",
+};
 
 const URGENCY_COLORS: Record<string, string> = {
   HIGH: "bg-destructive/15 text-destructive border-destructive/20",
@@ -813,6 +822,47 @@ export default function InvestorDashboard() {
 
   const filteredAdmin = adminDeals.filter(d => adminFilter === "all" || d.status === adminFilter);
 
+  // Dynamic pipeline summary from live deals (fallback to placeholder when empty)
+  const cityBreakdown = useMemo(() => {
+    if (liveDeals.length === 0) return CITY_BREAKDOWN_FALLBACK;
+    const byCity = liveDeals.reduce<Record<string, { count: number; value: number }>>((acc, d) => {
+      const c = d.city || "Other";
+      if (!acc[c]) acc[c] = { count: 0, value: 0 };
+      acc[c].count += 1;
+      acc[c].value += d.asking_price || 0;
+      return acc;
+    }, {});
+    const total = liveDeals.length;
+    const totalVal = liveDeals.reduce((s, d) => s + (d.asking_price || 0), 0);
+    return Object.entries(byCity)
+      .map(([city, { count, value }]) => ({
+        city,
+        deals: count,
+        value: value >= 1_000_000 ? `€${(value / 1_000_000).toFixed(1)}M` : `€${(value / 1000).toFixed(0)}k`,
+        pct: total ? Math.round((count / total) * 100) : 0,
+      }))
+      .sort((a, b) => b.deals - a.deals)
+      .slice(0, 5);
+  }, [liveDeals]);
+
+  const typeBreakdown = useMemo(() => {
+    if (liveDeals.length === 0) return TYPE_BREAKDOWN_FALLBACK;
+    const byType = liveDeals.reduce<Record<string, number>>((acc, d) => {
+      const t = (d.property_type || "other").toLowerCase();
+      acc[t] = (acc[t] || 0) + 1;
+      return acc;
+    }, {});
+    const total = liveDeals.length;
+    return Object.entries(byType)
+      .map(([type, count]) => ({
+        type: type.charAt(0).toUpperCase() + type.slice(1),
+        pct: total ? Math.round((count / total) * 100) : 0,
+        color: TYPE_COLORS[type] || "bg-muted",
+      }))
+      .sort((a, b) => b.pct - a.pct)
+      .slice(0, 5);
+  }, [liveDeals]);
+
   const totalValue = liveDeals.reduce((s, d) => s + (d.asking_price || 0), 0);
   const avgDiscount = liveDeals.length
     ? (liveDeals.reduce((s, d) => s + (d.discount_pct || 0), 0) / liveDeals.length).toFixed(1)
@@ -854,9 +904,18 @@ export default function InvestorDashboard() {
                 </p>
               </div>
               <div className="flex flex-col items-end gap-3">
-                <div className="flex items-center gap-1.5 text-xs bg-brand-emerald/10 border border-brand-emerald/20 text-brand-emerald px-3 py-1.5 rounded-full font-semibold">
-                  <div className="w-1.5 h-1.5 rounded-full bg-brand-emerald animate-pulse" />
-                  {liveDeals.length} live deals
+                <div className="flex items-center gap-2 flex-wrap justify-end">
+                  <div className="flex items-center gap-1.5 text-xs bg-brand-emerald/10 border border-brand-emerald/20 text-brand-emerald px-3 py-1.5 rounded-full font-semibold">
+                    <div className="w-1.5 h-1.5 rounded-full bg-brand-emerald animate-pulse" />
+                    {liveDeals.length} live deals
+                  </div>
+                  <Link
+                    to="/pricing/firesale-investors"
+                    className="inline-flex items-center gap-1.5 text-xs bg-primary/10 border border-primary/20 text-primary px-3 py-1.5 rounded-full font-semibold hover:bg-primary/20 transition-colors"
+                  >
+                    <Target className="w-3 h-3" />
+                    Plans & pricing
+                  </Link>
                 </div>
                 {subscribed && subscription && (
                   <div className="flex items-center gap-1.5 text-xs bg-primary/10 border border-primary/20 text-primary px-3 py-1.5 rounded-full font-bold capitalize">
@@ -1079,7 +1138,7 @@ export default function InvestorDashboard() {
                     <p className="font-display font-semibold text-sm">Deals by City</p>
                   </div>
                   <div className="space-y-2.5">
-                    {CITY_BREAKDOWN.map(c => (
+                    {cityBreakdown.map(c => (
                       <div key={c.city}>
                         <div className="flex justify-between text-xs mb-1">
                           <span className="text-muted-foreground">{c.city}</span>
@@ -1099,7 +1158,7 @@ export default function InvestorDashboard() {
                     <p className="font-display font-semibold text-sm">Deals by Type</p>
                   </div>
                   <div className="space-y-2.5">
-                    {TYPE_BREAKDOWN.map(t => (
+                    {typeBreakdown.map(t => (
                       <div key={t.type} className="flex items-center gap-2.5">
                         <div className={`w-2 h-2 rounded-full shrink-0 ${t.color}`} />
                         <span className="text-xs text-muted-foreground flex-1">{t.type}</span>
@@ -1140,9 +1199,16 @@ export default function InvestorDashboard() {
                       <Crown className="w-5 h-5 text-primary mb-3" />
                       <h4 className="font-display font-bold text-sm mb-1">Unlock Full Access</h4>
                       <p className="text-xs text-muted-foreground mb-3 leading-relaxed">Get seller contacts, full AI reports, and real-time deal alerts.</p>
-                      <Button className="w-full bg-gradient-primary border-0 text-primary-foreground text-xs h-9" onClick={() => setShowGate(true)}>
+                      <Button className="w-full bg-gradient-primary border-0 text-primary-foreground text-xs h-9 mb-2" onClick={() => setShowGate(true)}>
                         View Subscription Plans
                       </Button>
+                      <Link
+                        to="/pricing/firesale-investors"
+                        className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        Full pricing page
+                      </Link>
                     </div>
                   </div>
                 )}
@@ -1497,7 +1563,14 @@ export default function InvestorDashboard() {
                   </div>
                 ))}
               </div>
-              <div className="text-center mt-6">
+              <div className="text-center mt-6 flex flex-col items-center gap-2">
+                <Link
+                  to="/pricing/firesale-investors"
+                  className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  View full pricing page
+                </Link>
                 <button className="text-xs text-muted-foreground hover:text-foreground" onClick={() => setShowGate(false)}>
                   Continue browsing (limited access)
                 </button>

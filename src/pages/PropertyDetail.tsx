@@ -26,6 +26,7 @@ import PropertyMiniMap from "@/components/PropertyMiniMap";
 import PropertyValuation from "@/components/PropertyValuation";
 import NeighbourhoodReport from "@/components/NeighbourhoodReport";
 import { walkScoreLabel, walkScoreColour } from "@/lib/walkScore";
+import { HEATING_TYPES, CONDITION_OPTIONS } from "@/lib/filterConfig";
 import AIAssistantWidget from "@/components/AIAssistantWidget";
 import { AuctionAlertModal } from "@/components/AuctionAlertModal";
 import { GOOGLE_MAPS_API_KEY } from "@/lib/config";
@@ -489,9 +490,9 @@ export default function PropertyDetail() {
   ...((db as any)?.kitchens ? [{ label: "Kitchens", value: String((db as any).kitchens) }] : []),
   ...((db as any)?.living_rooms ? [{ label: "Living Rooms", value: String((db as any).living_rooms) }] : []),
   ...((db as any)?.wc_count ? [{ label: "WC", value: String((db as any).wc_count) }] : []),
-  ...((db as any)?.heating_system ? [{ label: "Heating", value: (db as any).heating_system.replace("_", " ") }] : []),
+  ...((db as any)?.heating_system ? [{ label: "Heating", value: HEATING_TYPES.find(h => h.value === (db as any).heating_system)?.label ?? (db as any).heating_system.replace(/_/g, " ") }] : []),
   ...(db.energy_class ? [{ label: "Energy Class", value: db.energy_class }] : []),
-  ...((db as any)?.construction_status ? [{ label: "Construction", value: (db as any).construction_status.replace("_", " ") }] : []),
+  ...((db as any)?.construction_status ? [{ label: "Condition", value: CONDITION_OPTIONS.find(c => c.value === (db as any).construction_status)?.label ?? (db as any).construction_status.replace(/_/g, " ") }] : []),
   ...(db.cadastre_number ? [{ label: "Cadastre No.", value: db.cadastre_number }] : []),
   ...(db.enfia_zone ? [{ label: "ENFIA Zone", value: db.enfia_zone }] : []),
   ...(db.postal_code ? [{ label: "Postal Code", value: db.postal_code }] : []),
@@ -707,12 +708,17 @@ export default function PropertyDetail() {
                   }
                   {db.year_built != null &&
                   <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium">
-                      <Calendar className="w-3.5 h-3.5 text-primary" />Built {db.year_built}
+                      <Calendar className="w-3.5 h-3.5 text-primary" />Construction year {db.year_built}
                     </div>
                   }
                   {(db as any)?.heating_system &&
-                  <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium capitalize">
-                      <Thermometer className="w-3.5 h-3.5 text-primary" />{(db as any).heating_system}
+                  <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium">
+                      <Thermometer className="w-3.5 h-3.5 text-primary" />{HEATING_TYPES.find(h => h.value === (db as any).heating_system)?.label ?? (db as any).heating_system.replace(/_/g, " ")}
+                    </div>
+                  }
+                  {(db as any)?.construction_status &&
+                  <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium">
+                      <Building2 className="w-3.5 h-3.5 text-primary" />{CONDITION_OPTIONS.find(c => c.value === (db as any).construction_status)?.label ?? (db as any).construction_status.replace(/_/g, " ")}
                     </div>
                   }
                   {/* Ownership pills — shown for all listing types when present in tags */}
@@ -1207,6 +1213,7 @@ export default function PropertyDetail() {
                   floor={db?.floor}
                   totalFloors={db?.total_floors}
                   yearBuilt={db?.year_built}
+                  heatingSystem={(db as any)?.heating_system ?? undefined}
                   energyClass={energyClass}
                   pricePerSqm={pricePerSqm ? Number(pricePerSqm) : undefined}
                   hasParking={db?.has_parking}
@@ -1224,6 +1231,7 @@ export default function PropertyDetail() {
                   ownershipPercentage={ownershipPct ?? undefined}
                   auctionCourt={db?.auction_court}
                   plotSurface={db?.plot_surface}
+                  condition={(db as any)?.construction_status ?? undefined}
                   isNeoclassical={db?.is_neoclassical}
                   isPreserved={db?.is_preserved}
                   distanceFromSea={db?.distance_from_sea}
