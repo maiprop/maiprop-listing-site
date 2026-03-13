@@ -1639,19 +1639,19 @@ export default function Index() {
 
             {/* Copy */}
             <div className={`reveal reveal-delay-1 ${goldenInView ? "in-view" : ""}`}>
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-brand-gold/10 border border-brand-gold/20 mb-5">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-brand-gold/10 border border-brand-gold/20 mb-4 sm:mb-5">
                 <Star className="w-3.5 h-3.5 text-brand-gold" />
                 <span className="text-xs font-semibold text-brand-gold uppercase tracking-wide">Greek Golden Visa</span>
               </div>
-              <h2 className="font-display text-4xl font-bold leading-tight mb-4">
+              <h2 className="font-display text-3xl sm:text-4xl font-bold leading-tight mb-3 sm:mb-4">
                 Secure EU Residency <br />
                 <span className="gradient-text-gold">Through Greek Property</span>
               </h2>
-              <p className="text-muted-foreground leading-relaxed mb-6">
+              <p className="text-muted-foreground leading-relaxed mb-4 sm:mb-6 text-sm sm:text-base">
                 Our dedicated investment properties portal showcases curated €250K+ properties eligible for the Greek
                 Golden Visa program — your gateway to EU residency, freedom of movement, and long-term capital growth.
               </p>
-              <ul className="space-y-3 mb-8">
+              <ul className="space-y-2 sm:space-y-3 mb-6 sm:mb-8">
                 {[
                 "Minimum €250K investment for EU residency",
                 "6–9 months to visa approval",
@@ -1665,19 +1665,10 @@ export default function Index() {
                 )}
               </ul>
               <div className="flex gap-3">
-                <Button className="bg-gradient-gold border-0 text-background font-semibold gap-2" asChild>
+                <Button className="bg-gradient-gold border-0 text-background font-semibold gap-2 w-full sm:w-auto" asChild>
                   <a href="https://properties.maiprop.co" target="_blank" rel="noreferrer">
                     Explore Properties
                   </a>
-                </Button>
-                <Button
-                  variant="outline"
-                  className="border-brand-gold/30 text-brand-gold hover:bg-brand-gold/10"
-                  asChild>
-                  
-                  
-
-                  
                 </Button>
               </div>
             </div>
@@ -1687,7 +1678,7 @@ export default function Index() {
 
       <Footer />
       {/* bottom spacing for mobile nav */}
-      <div className="h-16 lg:hidden" />
+      <div className="h-20 lg:hidden" />
     </div>);
 
 }
