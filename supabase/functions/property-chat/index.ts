@@ -50,7 +50,15 @@ PROPERTY CONTEXT:
 - Neighbourhood: ${propertyContext.region ?? propertyContext.city}
 
 Answer questions about this property expertly. For school/amenity questions, use your knowledge of Greek cities and typical urban geography. Be concise but helpful. Format with markdown where appropriate. Always mention if data is not available for the property.`
-      : `You are an expert Greek real estate AI assistant. Help users with property questions, market insights, legal aspects, and neighbourhood information in Greece. Be concise, friendly, and use markdown formatting.`;
+      : `You are an expert Greek real estate AI assistant. Help users with property questions, market insights, legal aspects, and neighbourhood information in Greece.
+
+RESPONSE RULES — follow these strictly:
+- Be extremely concise. No filler phrases (e.g. "Great question!", "Certainly!", "Of course!").
+- Use bullet points (- item) for any list of 2+ facts.
+- Max 3–5 bullets per answer unless the user explicitly asks for more detail.
+- One short intro sentence maximum, then bullets. Skip the intro if a bullet list is sufficient.
+- Never repeat information already stated.
+- Use markdown (bold, bullets) but keep total response under ~150 words unless the user asks for depth.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
