@@ -39,6 +39,7 @@ import { PROPERTY_TYPES, PROPERTY_GROUPS, PROPERTY_TYPE_MAP, type PropertyTypeKe
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import heroBg from "@/assets/hero-bg.jpg";
+import thessalonikiLandmark from "@/assets/thessaloniki-landmark.jpg";
 
 const RECENT_SEARCHES_KEY = "maiprop_recent_searches";
 const MAX_RECENT = 6;
@@ -1330,9 +1331,7 @@ export default function Index() {
               Explore All <ArrowRight className="w-3 h-3" />
             </Link>
           </div>
-          <div
-            className={`grid grid-cols-2 lg:grid-cols-4 gap-4 reveal reveal-delay-1 ${locationsInView ? "in-view" : ""}`}>
-            
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {[
             {
               name: "Athens",
@@ -1344,7 +1343,7 @@ export default function Index() {
               name: "Thessaloniki",
               listings: 8240,
               trend: "+0.8%",
-              image: "https://images.unsplash.com/photo-1601581987809-a874a81309c9?w=600&q=80"
+              image: thessalonikiLandmark
             },
             {
               name: "Mykonos",
@@ -1358,20 +1357,34 @@ export default function Index() {
               trend: "+1.9%",
               image: "https://images.unsplash.com/photo-1570077188670-e3a8d69ac5ff?w=600&q=80"
             }].
-            map((city) =>
-            <Link key={city.name} to={`/listings?city=${city.name}`}>
-                <div className="relative rounded-xl overflow-hidden aspect-[3/4] group">
+            map((city, idx) =>
+            <Link
+              key={city.name}
+              to={`/listings?city=${city.name}`}
+              className={`reveal ${locationsInView ? "in-view" : ""}`}
+              style={{ transitionDelay: `${idx * 0.1}s` }}>
+                <div className="relative rounded-xl overflow-hidden aspect-[3/4] group shadow-card hover:shadow-elevated transition-shadow duration-500">
                   <img
                   src={city.image}
                   alt={city.name}
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                
+                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out" />
 
-                  <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-background/30 to-transparent" />
-                  <div className="absolute bottom-4 left-4">
-                    <div className="font-display font-bold text-lg">{city.name}</div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-background/30 to-transparent group-hover:from-background/95 transition-all duration-500" />
+                  {/* Shimmer on hover */}
+                  <div
+                    className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+                    style={{ background: "linear-gradient(135deg, hsl(var(--primary) / 0.08) 0%, transparent 60%)" }} />
+                  <div className="absolute bottom-4 left-4 translate-y-1 group-hover:translate-y-0 transition-transform duration-300">
+                    <div className="font-display font-bold text-lg text-foreground">{city.name}</div>
                     <div className="text-xs text-muted-foreground">{city.listings.toLocaleString()} listings</div>
-                    <div className="text-xs text-brand-emerald font-semibold">{city.trend}</div>
+                    <div className="text-xs text-brand-emerald font-semibold flex items-center gap-1 mt-0.5">
+                      <TrendingUp className="w-3 h-3" />
+                      {city.trend}
+                    </div>
+                  </div>
+                  {/* Arrow appears on hover */}
+                  <div className="absolute top-3 right-3 w-8 h-8 rounded-full bg-primary/80 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100 transition-all duration-300">
+                    <ArrowRight className="w-4 h-4 text-primary-foreground" />
                   </div>
                 </div>
               </Link>
