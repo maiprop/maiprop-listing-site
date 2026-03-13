@@ -134,7 +134,7 @@ export default function AdminPricing() {
         created_at: now,
         updated_at: now,
       }));
-      const { error } = await supabase.from("pricing_configs").upsert(rows, { onConflict: "id" });
+      const { error } = await (supabase as any).from("pricing_configs").upsert(rows, { onConflict: "id" });
       if (error) throw error;
     },
     onSuccess: () => {
