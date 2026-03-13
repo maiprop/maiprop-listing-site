@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "db:push": "supabase db push",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
