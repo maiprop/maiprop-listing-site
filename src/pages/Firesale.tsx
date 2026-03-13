@@ -63,6 +63,9 @@ export default function Firesale() {
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const [addressSuggestions, setAddressSuggestions] = useState<string[]>([]);
+  const [addressLoading, setAddressLoading] = useState(false);
+  const addressAbortRef = useRef<AbortController | null>(null);
 
   const [form, setForm] = useState({
     address: "",
@@ -70,6 +73,7 @@ export default function Firesale() {
     propertyType: "",
     sqm: "",
     askingPrice: "",
+    constructionYear: "",
     contactName: profile?.display_name || profile?.first_name || "",
     contactEmail: user?.email || "",
     contactPhone: profile?.phone || "",
@@ -90,6 +94,53 @@ export default function Firesale() {
 
   const upd = (k: string, v: string) => setForm((prev) => ({ ...prev, [k]: v }));
 
+  // Lightweight address autocomplete via Nominatim (OSM)
+  useEffect(() => {
+    const q = form.address.trim();
+    if (addressAbortRef.current) {
+      addressAbortRef.current.abort();
+      addressAbortRef.current = null;
+    }
+    if (q.length < 3) {
+      setAddressSuggestions([]);
+      setAddressLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    addressAbortRef.current = controller;
+    setAddressLoading(true);
+    const timeout = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&q=${encodeURIComponent(
+            q,
+          )}`,
+          {
+            headers: {
+              "Accept-Language": "el,en",
+              "User-Agent": "maiprop-listing-site-firesale-autocomplete",
+            },
+            signal: controller.signal,
+          },
+        );
+        const json = await res.json().catch(() => []);
+        if (Array.isArray(json)) {
+          setAddressSuggestions(json.map((r: any) => r.display_name as string));
+        } else {
+          setAddressSuggestions([]);
+        }
+      } catch {
+        setAddressSuggestions([]);
+      } finally {
+        setAddressLoading(false);
+      }
+    }, 400);
+    return () => {
+      clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [form.address]);
+
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     const valid = files.filter((f) => f.type.startsWith("image/") && f.size < 10 * 1024 * 1024);
@@ -109,12 +160,65 @@ export default function Firesale() {
     setPhotoPreviews(newPreviews);
   };
 
+  // Downscale and compress images client-side before upload
+  const compressImage = (file: File, maxDim = 1600, quality = 0.75): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const reader = new FileReader();
+
+      reader.onload = () => {
+        if (typeof reader.result !== "string") {
+          resolve(file);
+          return;
+        }
+        img.onload = () => {
+          try {
+            const canvas = document.createElement("canvas");
+            let { width, height } = img;
+            if (width > height && width > maxDim) {
+              height = (height * maxDim) / width;
+              width = maxDim;
+            } else if (height > maxDim) {
+              width = (width * maxDim) / height;
+              height = maxDim;
+            }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            if (!ctx) {
+              resolve(file);
+              return;
+            }
+            ctx.drawImage(img, 0, 0, width, height);
+            const type = file.type && file.type.startsWith("image/") ? file.type : "image/jpeg";
+            canvas.toBlob(
+              (blob) => {
+                if (blob) resolve(blob);
+                else resolve(file);
+              },
+              type,
+              quality,
+            );
+          } catch (err) {
+            resolve(file);
+          }
+        };
+        img.onerror = () => resolve(file);
+        img.src = reader.result;
+      };
+
+      reader.onerror = () => resolve(file);
+      reader.readAsDataURL(file);
+    });
+  };
+
   const uploadPhotos = async (requestId: string): Promise<string[]> => {
     const urls: string[] = [];
     for (const file of photoFiles) {
       const ext = file.name.split(".").pop();
       const path = `${requestId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-      const { error } = await supabase.storage.from("firesale-photos").upload(path, file);
+      const compressed = await compressImage(file);
+      const { error } = await supabase.storage.from("firesale-photos").upload(path, compressed);
       if (!error) {
         const { data } = supabase.storage.from("firesale-photos").getPublicUrl(path);
         urls.push(data.publicUrl);
@@ -127,7 +231,10 @@ export default function Firesale() {
     form.address.trim() &&
     form.propertyType &&
     form.sqm &&
-    Number(form.sqm) > 0
+    Number(form.sqm) > 0 &&
+    form.askingPrice &&
+    Number(form.askingPrice) > 0 &&
+    photoFiles.length >= 5
   );
   const step2Valid = !!(form.contactName.trim() && form.contactEmail.trim() && /\S+@\S+\.\S+/.test(form.contactEmail));
 
@@ -182,10 +289,26 @@ export default function Firesale() {
     try {
       const estimate = aiEstimate || Math.round(Number(form.sqm) * 1900 * 0.92);
 
-      const notesWithKaek = [
-        form.kaek ? `KAEK: ${form.kaek.trim()}` : null,
-        form.notes.trim() || null,
-      ].filter(Boolean).join("\n");
+      const metaLines: string[] = [];
+      if (form.constructionYear.trim()) {
+        metaLines.push(`Construction year: ${form.constructionYear.trim()}`);
+      }
+      if (photoFiles.length > 0) {
+        // Simple heuristic grade 1–10 based on number of photos provided
+        const count = photoFiles.length;
+        let grade = 3;
+        if (count >= 8) grade = 9;
+        else if (count >= 5) grade = 7;
+        else if (count >= 3) grade = 5;
+        metaLines.push(`Photo condition grade (1–10): ${grade}`);
+      }
+      if (form.kaek.trim()) {
+        metaLines.push(`KAEK: ${form.kaek.trim()}`);
+      }
+      if (form.notes.trim()) {
+        metaLines.push(form.notes.trim());
+      }
+      const notesWithMeta = metaLines.join("\n");
 
       const { data, error } = await supabase
         .from("firesale_requests")
@@ -195,10 +318,10 @@ export default function Firesale() {
           property_type: form.propertyType as any,
           sqm: Number(form.sqm),
           condition: null,
-          asking_price: form.askingPrice ? Number(form.askingPrice) : null,
+          asking_price: Number(form.askingPrice),
           contact_email: form.contactEmail.trim(),
           contact_phone: form.contactPhone.trim() || null,
-          notes: notesWithKaek || null,
+          notes: notesWithMeta || null,
           ai_estimate: estimate,
           user_id: user.id,
           status: "pending",
@@ -369,7 +492,7 @@ export default function Firesale() {
                       <div className="space-y-5">
                         <h4 className="font-display font-semibold text-sm">Property Details</h4>
 
-                        {/* Address */}
+                        {/* Address with autocomplete */}
                         <div>
                           <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
                             Property Address <span className="text-destructive">*</span>
@@ -384,6 +507,26 @@ export default function Firesale() {
                               className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
                             />
                           </div>
+                          {addressLoading && (
+                            <p className="mt-1 text-[10px] text-muted-foreground">Searching address suggestions…</p>
+                          )}
+                          {!addressLoading && addressSuggestions.length > 0 && (
+                            <div className="mt-1 bg-background border border-border rounded-xl shadow-md text-sm max-h-40 overflow-auto">
+                              {addressSuggestions.map((s) => (
+                                <button
+                                  key={s}
+                                  type="button"
+                                  onClick={() => {
+                                    upd("address", s);
+                                    setAddressSuggestions([]);
+                                  }}
+                                  className="w-full text-left px-3 py-1.5 hover:bg-muted/80"
+                                >
+                                  {s}
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </div>
 
                         {/* KAEK */}
@@ -435,7 +578,7 @@ export default function Firesale() {
 
                           <div className="col-span-2">
                             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                              Asking Price <span className="text-[10px] font-normal normal-case">(optional)</span>
+                              Asking Price <span className="text-destructive">*</span>
                             </label>
                             <div className="flex gap-2 bg-muted border border-border rounded-xl px-3 py-2.5 focus-within:border-primary transition-colors">
                               <Euro className="w-4 h-4 text-muted-foreground shrink-0" />
@@ -448,12 +591,29 @@ export default function Firesale() {
                               />
                             </div>
                           </div>
+
+                          <div className="col-span-2">
+                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
+                              Construction Year
+                            </label>
+                            <input
+                              type="number"
+                              placeholder="e.g. 1998"
+                              value={form.constructionYear}
+                              onChange={(e) => upd("constructionYear", e.target.value)}
+                              className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
+                            />
+                          </div>
                         </div>
 
                         {/* Photo upload */}
                         <div>
                           <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                            Property Photos <span className="text-[10px] font-normal normal-case">(up to 10 images)</span>
+                            Property Photos{" "}
+                            <span className="text-destructive">*</span>{" "}
+                            <span className="text-[10px] font-normal normal-case text-muted-foreground">
+                              (min 5, up to 10 images)
+                            </span>
                           </label>
                           <input
                             ref={fileInputRef}
@@ -502,7 +662,10 @@ export default function Firesale() {
                                   </button>
                                 )}
                               </div>
-                              <p className="text-[10px] text-muted-foreground">{photoPreviews.length} photo{photoPreviews.length > 1 ? "s" : ""} selected</p>
+                              <p className="text-[10px] text-muted-foreground">
+                                {photoPreviews.length} photo{photoPreviews.length !== 1 ? "s" : ""} selected
+                                {photoPreviews.length < 5 && " · add at least 5 photos to continue"}
+                              </p>
                             </div>
                           )}
                         </div>
