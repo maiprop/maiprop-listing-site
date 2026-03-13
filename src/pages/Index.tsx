@@ -39,6 +39,7 @@ import { PROPERTY_TYPES, PROPERTY_GROUPS, PROPERTY_TYPE_MAP, type PropertyTypeKe
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import heroBg from "@/assets/hero-bg.jpg";
+import thessalonikiLandmark from "@/assets/thessaloniki-landmark.jpg";
 
 const RECENT_SEARCHES_KEY = "maiprop_recent_searches";
 const MAX_RECENT = 6;
