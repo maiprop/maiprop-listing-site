@@ -629,9 +629,9 @@ export default function Auctions() {
             <p className="text-muted-foreground max-w-xl">
               Real-time data powered by mAI Prop OS.
             </p>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
+            <div className="grid grid-cols-3 gap-4 mt-8 max-w-2xl">
               {auctionStats.map((s) =>
-              <div key={s.label} className="glass-card rounded-xl p-5 text-center flex flex-col items-center justify-center flex-1">
+              <div key={s.label} className="glass-card rounded-xl p-5 text-center flex flex-col items-center justify-center">
                   <div className="font-display text-3xl font-bold gradient-text-gold">{s.value}</div>
                   <div className="text-xs text-muted-foreground mt-1.5 font-medium">{s.label}</div>
                 </div>
