@@ -7,6 +7,9 @@ import { Navbar } from "@/components/Navbar";
 import { useAuth } from "@/contexts/AuthContext";
 import { lovable } from "@/integrations/lovable/index";
 import { toast } from "sonner";
+import { useTheme } from "next-themes";
+import logoImg from "@/assets/logo.png";
+import logoDarkImg from "@/assets/logo-dark.png";
 
 const GoogleIcon = () => (
   <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -21,6 +24,7 @@ export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
   const { signIn, user, loading: authLoading, needsOnboarding } = useAuth();
+  const { theme } = useTheme();
 
   const [view, setView] = useState<"login" | "forgot" | "forgot-sent">("login");
   const [email, setEmail] = useState("");
@@ -93,7 +97,11 @@ export default function Login() {
             {view === "login" && (
               <>
                 <div className="text-center mb-6">
-                  <span className="font-display font-bold text-2xl">mai<span className="gradient-text-cyan">prop</span></span>
+                  <img
+                    src={theme === "dark" ? logoDarkImg : logoImg}
+                    alt="maiProp"
+                    className="h-10 w-auto object-contain mx-auto mb-2"
+                  />
                   <p className="text-muted-foreground text-sm mt-1">Sign in to your account</p>
                 </div>
 
