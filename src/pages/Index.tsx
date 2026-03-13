@@ -904,19 +904,23 @@ export default function Index() {
       {/* ══ HERO ══════════════════════════════════════════════════════════════ */}
       <section className="relative min-h-[100svh] sm:min-h-[92vh] flex items-center overflow-hidden pt-16">
         {/* Background */}
-        <div className="absolute inset-0">
+        <div className="absolute inset-0 overflow-hidden">
           {/* Video background */}
           <video
             autoPlay
             muted
             loop
             playsInline
+            preload="auto"
+            poster={heroBg}
             className="w-full h-full object-cover opacity-100 dark:opacity-70"
-            style={{ animation: "hero-zoom 20s ease-in-out infinite alternate" }}
+            style={{
+              willChange: "transform",
+              transform: "translateZ(0)",
+              animation: "hero-zoom 20s ease-in-out infinite alternate",
+            }}
           >
             <source src="/hero-bg.mp4" type="video/mp4" />
-            {/* Fallback to static image */}
-            <img src={heroBg} alt="Athens skyline" className="w-full h-full object-cover" />
           </video>
           {/* Both modes: strong dark-left gradient so white text is always readable */}
           <div
