@@ -765,7 +765,7 @@ export default function InvestorDashboard() {
       let profileMap: Record<string, string> = {};
       if (userIds.length > 0) {
         const { data: profiles } = await supabase
-          .from("profiles")
+          .from("profiles_public")
           .select("user_id, display_name")
           .in("user_id", userIds);
         (profiles || []).forEach((p: any) => { profileMap[p.user_id] = p.display_name || p.user_id.slice(0, 8); });

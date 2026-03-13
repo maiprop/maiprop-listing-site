@@ -9,6 +9,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { format } from "date-fns";
 import { MapView, MapListing } from "@/components/MapView";
 import { AuctionAlertModal } from "@/components/AuctionAlertModal";
+import { getStreetViewProxyUrl } from "@/lib/config";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToggleFavorite } from "@/hooks/useFavorites";
@@ -259,10 +260,8 @@ const OWNERSHIP_BADGE: Record<string, {label: string;cls: string;}> = {
 type ViewMode = "list" | "map";
 
 function streetViewImg(lat?: number | null, lng?: number | null): string | null {
-  if (!lat || !lng) return null;
-  const key = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || import.meta.env.VITE_GOOGLE_STREETVIEW_KEY;
-  if (!key) return null;
-  return `https://maps.googleapis.com/maps/api/streetview?size=800x450&location=${lat},${lng}&fov=90&pitch=10&key=${key}`;
+  if (lat == null || lng == null) return null;
+  return getStreetViewProxyUrl({ lat, lng }) ?? null;
 }
 
 function daysUntil(dateStr?: string | null): number {

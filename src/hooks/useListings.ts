@@ -73,7 +73,7 @@ export function useListing(id: string) {
       let ownerIsPro = false;
       if (data?.owner_id) {
         const [{ data: profile }, { data: sub }] = await Promise.all([
-          supabase.from("profiles").select("*").eq("user_id", data.owner_id).maybeSingle(),
+          supabase.from("profiles_public").select("user_id, display_name, avatar_url").eq("user_id", data.owner_id).maybeSingle(),
           supabase.from("investor_subscriptions").select("tier, status").eq("user_id", data.owner_id).order("started_at", { ascending: false }).limit(1).maybeSingle(),
         ]);
         profiles = profile ?? null;

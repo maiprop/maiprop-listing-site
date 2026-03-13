@@ -229,6 +229,32 @@ function mapAuctionToListing(a: any) {
 const DEFAULT_PAGE_SIZE = 100;
 const MAX_PAGES = 200; // safety cap
 
+async function requireAgent(
+  req: Request,
+  sb: ReturnType<typeof createClient>
+): Promise<Response | null> {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return new Response(JSON.stringify({ error: "Missing or invalid Authorization header" }), {
+      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  const token = authHeader.slice(7);
+  const { data: { user }, error } = await sb.auth.getUser(token);
+  if (error || !user) {
+    return new Response(JSON.stringify({ error: "Invalid or expired token" }), {
+      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  const { data: profile } = await sb.from("profiles").select("role").eq("user_id", user.id).single();
+  if (profile?.role !== "agent") {
+    return new Response(JSON.stringify({ error: "Agent role required" }), {
+      status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  return null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS")
     return new Response(null, { headers: corsHeaders });
@@ -237,6 +263,9 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
+
+  const authErr = await requireAgent(req, sb);
+  if (authErr) return authErr;
 
   const OS_URL = Deno.env.get("MAIPROP_OS_URL")?.replace(/\/$/, "");
   const OS_EMAIL = Deno.env.get("MAIPROP_OS_EMAIL");
