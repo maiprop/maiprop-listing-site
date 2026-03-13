@@ -81,52 +81,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    // Safety: never block the app for more than 10s if Supabase/auth hangs
-    const SAFETY_MS = 10_000;
-    const safetyTimer = setTimeout(() => {
-      setLoading(false);
-    }, SAFETY_MS);
+    // Safety: never block the app for more than 8s if Supabase/auth hangs
+    const SAFETY_MS = 8_000;
+    const safetyTimer = setTimeout(() => setLoading(false), SAFETY_MS);
 
+    // onAuthStateChange is the single source of truth for auth state.
+    // CRITICAL: set loading=false immediately so the UI unblocks, then
+    // fetch profile + subscription in the background without blocking navigation.
     const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange(
-      async (event, sess) => {
+      (event, sess) => {
         setSession(sess);
         setUser(sess?.user ?? null);
+
         if (sess?.user) {
-          try {
-            await Promise.race([
-              fetchProfile(sess.user.id),
-              new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 8000)),
-            ]);
-          } catch {
-            // Profile fetch failed or timed out — still show app
-          }
+          // Unblock UI immediately — profile arrives shortly after
+          setLoading(false);
+          // Fire-and-forget: don't await, never block the auth flow
+          fetchProfile(sess.user.id).catch(() => {});
           setTimeout(() => checkSubscription(sess), 0);
         } else {
           setProfile(null);
           setSubscription({ subscribed: false, productId: null, subscriptionEnd: null, loading: false });
+          setLoading(false);
         }
-        setLoading(false);
       }
     );
 
-    Promise.race([
-      supabase.auth.getSession(),
-      new Promise<{ data: { session: null } }>((res) => setTimeout(() => res({ data: { session: null } }), 8000)),
-    ]).then(({ data: { session: sess } }) => {
+    // Restore session from storage on mount
+    supabase.auth.getSession().then(({ data: { session: sess } }) => {
       if (!sess) {
+        // No session — stop loading, let login page show
         setLoading(false);
-        return;
       }
-      setSession(sess);
-      setUser(sess.user);
-      Promise.race([
-        fetchProfile(sess.user.id),
-        new Promise<void>((res) => setTimeout(res, 6000)),
-      ])
-        .catch(() => {})
-        .finally(() => setLoading(false));
-      checkSubscription(sess);
-    });
+      // If there IS a session, onAuthStateChange will fire and handle everything
+    }).catch(() => setLoading(false));
 
     // Refresh subscription every 5 minutes
     const interval = setInterval(() => {
