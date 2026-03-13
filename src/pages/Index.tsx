@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useInView } from "@/hooks/useInView";
+import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import ReactDOM from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -759,11 +760,22 @@ function PropertiesMockup() {
 // ── Main ───────────────────────────────────────────────────────────────────────
 export default function Index() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchType, setSearchType] = useState("Buy");
   const [selectedPropertyType, setSelectedPropertyType] = useState("");
   const [showAI, setShowAI] = useState(false);
   const [typeCounts, setTypeCounts] = useState<Record<string, number>>({});
+
+  // Pull-to-refresh — invalidates featured & auction queries
+  const { pulling, refreshing, progress } = usePullToRefresh({
+    onRefresh: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["homepage-featured"] }),
+        queryClient.invalidateQueries({ queryKey: ["homepage-auctions"] }),
+      ]);
+    },
+  });
 
   // Fetch live listing counts grouped by property_type
   useEffect(() => {
@@ -901,6 +913,21 @@ export default function Index() {
       {showAI && <AISearchModal onFiltersApplied={handleAIFilters} onClose={() => setShowAI(false)} />}
       <CookieConsentBanner />
 
+      {/* Pull-to-refresh indicator — mobile only */}
+      {(pulling || refreshing) && (
+        <div className="lg:hidden fixed top-14 left-0 right-0 z-50 flex justify-center pointer-events-none">
+          <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-card border border-border shadow-elevated mt-2 transition-all">
+            <div
+              className={`w-4 h-4 rounded-full border-2 border-primary transition-all ${refreshing ? "animate-spin border-t-transparent" : ""}`}
+              style={!refreshing ? { background: `conic-gradient(hsl(var(--primary)) ${progress * 360}deg, transparent 0deg)` } : undefined}
+            />
+            <span className="text-xs font-medium text-foreground">
+              {refreshing ? "Refreshing…" : progress >= 1 ? "Release to refresh" : "Pull to refresh"}
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* ══ HERO ══════════════════════════════════════════════════════════════ */}
       <section className="relative min-h-[100svh] flex items-center overflow-hidden pt-14 sm:pt-16">
         {/* Background */}
@@ -913,7 +940,7 @@ export default function Index() {
             playsInline
             preload="auto"
             poster="/hero-poster.jpg"
-            className="w-full h-full object-cover opacity-100 dark:opacity-70"
+            className="hero-video w-full h-full object-cover opacity-100 dark:opacity-70"
             style={{
               willChange: "transform",
               transform: "translateZ(0)",

@@ -473,3 +473,11 @@
   50%  { transform: translateZ(0) scale(1.04) translateX(-1.5%); }
   100% { transform: translateZ(0) scale(1.07) translateX(1.5%); }
 }
+
+/* Disable Ken Burns for users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .hero-video {
+    animation: none !important;
+    transform: translateZ(0) scale(1.04) translateX(0%) !important;
+  }
+}
