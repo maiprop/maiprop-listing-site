@@ -371,6 +371,8 @@ function AuctionCard({ a, favoritedIds, onToggleFav
           }
         </div>
         {a.auction_court && !/^[A-Z_]+$/.test(a.auction_court) &&
+          <div className="text-xs text-muted-foreground truncate">{a.auction_court}</div>
+        }
 
         }
 
