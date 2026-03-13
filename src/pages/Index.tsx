@@ -1225,27 +1225,24 @@ export default function Index() {
       </section>
 
       {/* ══ AUCTIONS ════════════════════════════════════════════════════════ */}
-      <section className="py-16 bg-secondary">
+      <section className="py-10 sm:py-16 bg-secondary">
         <div ref={auctionsRef} className="container">
-          <div className={`flex items-center justify-between mb-8 reveal ${auctionsInView ? "in-view" : ""}`}>
+          <div className={`flex items-center justify-between mb-6 sm:mb-8 reveal ${auctionsInView ? "in-view" : ""}`}>
             <div>
-              <div className="flex items-center gap-2 mb-2">
-                <Gavel className="w-5 h-5 text-brand-gold" />
+              <div className="flex items-center gap-2 mb-1">
+                <Gavel className="w-4 h-4 text-brand-gold" />
                 <span className="text-xs font-semibold text-brand-gold uppercase tracking-widest">Greek Auctions</span>
               </div>
-              <h2 className="font-display text-2xl font-bold">This Week's Auctions</h2>
-              
-
-              
+              <h2 className="font-display text-xl sm:text-2xl font-bold">This Week's Auctions</h2>
             </div>
-            <Button variant="outline" className="border-brand-gold/30 text-brand-gold hover:bg-brand-gold/10" asChild>
+            <Button variant="outline" size="sm" className="border-brand-gold/30 text-brand-gold hover:bg-brand-gold/10 text-xs" asChild>
               <Link to="/auctions">
                 All Auctions <ArrowRight className="w-3 h-3 ml-1" />
               </Link>
             </Button>
           </div>
           <div
-            className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 reveal reveal-delay-1 ${auctionsInView ? "in-view" : ""}`}>
+            className={`grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 reveal reveal-delay-1 ${auctionsInView ? "in-view" : ""}`}>
             
             {auctionListings.map((l: any) => {
               const googleKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
