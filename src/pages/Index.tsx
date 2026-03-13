@@ -950,12 +950,12 @@ export default function Index() {
           style={{ background: "radial-gradient(hsl(192 100% 50%), hsl(270 75% 62%), transparent 70%)" }} />
         
 
-        <div className="container relative z-10 py-10 sm:py-16 lg:pl-16 xl:pl-24">
+        <div className="container relative z-10 py-8 sm:py-16 lg:pl-16 xl:pl-24">
           <div className="grid lg:grid-cols-[1fr_360px] xl:grid-cols-[1fr_400px] gap-8 lg:gap-12 items-center">
             {/* ── LEFT: Copy + Search ── */}
             <div className="text-white">
               {/* Eyebrow */}
-              <div className="relative inline-flex mb-5 sm:mb-7 animate-fade-in-up" style={{ animationDelay: "0s" }}>
+              <div className="relative inline-flex mb-4 sm:mb-7 animate-fade-in-up" style={{ animationDelay: "0s" }}>
                 {/* Glow ring */}
                 <span
                   className="absolute inset-0 rounded-full animate-pulse"
@@ -966,7 +966,7 @@ export default function Index() {
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-300 opacity-60" />
                     <span className="relative inline-flex rounded-full w-2 h-2 bg-cyan-300" />
                   </span>
-                  <span className="text-xs sm:text-sm font-semibold text-white">
+                  <span className="text-xs font-semibold text-white">
                     Greece's #1 AI-Powered Property Platform
                   </span>
                 </div>
@@ -974,12 +974,12 @@ export default function Index() {
 
               {/* Headline */}
               <h1
-                className="font-display font-black leading-[1.05] mb-4 sm:mb-6 animate-fade-in-up text-white text-3xl"
-                style={{ fontSize: "clamp(2rem, 8vw, 4.5rem)", animationDelay: "0.08s" }}>
-                
-                Find your perfect property in Greece
-                <div> </div>
-                <span className="gradient-text-primary text-6xl">with AI precision</span>
+                className="font-display font-black leading-[1.08] mb-4 sm:mb-6 animate-fade-in-up text-white"
+                style={{ fontSize: "clamp(1.75rem, 7vw, 4.5rem)", animationDelay: "0.08s" }}>
+                Find your perfect<br className="hidden xs:inline" /> property in Greece
+                <div className="mt-1">
+                  <span className="gradient-text-primary" style={{ fontSize: "clamp(1.9rem, 8vw, 4.8rem)" }}>with AI precision</span>
+                </div>
               </h1>
 
               {/* ── Search Card ── */}
