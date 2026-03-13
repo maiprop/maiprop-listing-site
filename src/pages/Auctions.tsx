@@ -370,9 +370,7 @@ function AuctionCard({ a, favoritedIds, onToggleFav
           <span className="text-xs text-muted-foreground">{a.sqm} τ.μ.</span>
           }
         </div>
-        {a.auction_court
-
-
+        {a.auction_court && !/^[A-Z_]+$/.test(a.auction_court) &&
 
         }
 
