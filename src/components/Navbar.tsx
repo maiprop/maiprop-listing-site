@@ -58,6 +58,7 @@ export function Navbar() {
     { label: "Auctions", href: "/auctions", badge: "Live" },
     { label: "Quick Sale™", href: "/firesale", accent: "flame" },
     { label: "Professionals", href: "/professionals", accent: "subtle" },
+    { label: "Pricing", href: "/pricing", icon: Euro },
   ];
 
   const displayName = profile?.display_name || profile?.first_name || user?.email?.split("@")[0] || "Account";
@@ -116,6 +117,7 @@ export function Navbar() {
                 }`}
             >
               {link.accent === "flame" && <span className="text-sm">🔥</span>}
+              {link.icon === Euro && <Euro className="w-3.5 h-3.5" />}
               {link.label}
               {link.badge && (
                 <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold animate-pulse ${
@@ -292,11 +294,9 @@ export function Navbar() {
                 <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold font-semibold">{link.badge}</span>
               )}
               {link.accent === "subtle" && <span className="w-1.5 h-1.5 rounded-full bg-accent/60" />}
+              {(link as { icon?: typeof Euro }).icon === Euro && <Euro className="w-4 h-4" />}
             </Link>
           ))}
-          <Link to="/pricing" className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors" onClick={() => setMobileOpen(false)}>
-            <Euro className="w-4 h-4" /> Pricing
-          </Link>
           <div className="pt-2 flex gap-2">
             {user ? (
               <>

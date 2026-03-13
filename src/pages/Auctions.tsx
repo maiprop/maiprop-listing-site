@@ -1059,22 +1059,22 @@ export default function Auctions() {
                    </div>
                  }
                  {/* Upsell when free user hits page cap */}
-                 {!isPro && !isMaiPropOsUser && totalRaw > MAX_PAGES_FREE * PAGE_SIZE &&
-                   <div className="mt-8 p-5 rounded-2xl bg-brand-gold/10 border border-brand-gold/30 flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">
-                     <Gavel className="w-8 h-8 text-brand-gold shrink-0" />
-                     <div className="flex-1">
-                       <p className="font-display font-semibold text-sm">
-                         {totalRaw - MAX_PAGES_FREE * PAGE_SIZE} more auctions available on Pro
-                       </p>
-                       <p className="text-xs text-muted-foreground mt-0.5">
-                         Upgrade to see up to {MAX_PAGES_PRO} pages of results plus Pro filters.
-                       </p>
-                     </div>
-                     <Button size="sm" className="bg-gradient-gold border-0 text-background font-semibold shrink-0" asChild>
-                       <Link to="/pro">Upgrade to Pro</Link>
-                     </Button>
-                   </div>
-                 }
+                {!isPro && !isMaiPropOsUser && totalRaw > MAX_PAGES_FREE * PAGE_SIZE &&
+                  <div className="mt-8 p-5 rounded-2xl bg-brand-gold/10 border border-brand-gold/30 flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">
+                    <Gavel className="w-8 h-8 text-brand-gold shrink-0" />
+                    <div className="flex-1">
+                      <p className="font-display font-semibold text-sm">
+                        See 300% more results with Pro
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Pro shows 3× the free results — not all future auctions. For the full database, use mAI Prop OS.
+                      </p>
+                    </div>
+                    <Button size="sm" className="bg-gradient-gold border-0 text-background font-semibold shrink-0" asChild>
+                      <Link to="/pro">Upgrade to Pro</Link>
+                    </Button>
+                  </div>
+                }
                </>
            }
             {/* CTA */}

@@ -611,7 +611,7 @@ export default function Dashboard() {
           {/* MY SERVICES — professional only */}
           {activeSection === "services" && navItems.some(i => i.key === "services") && <ProfessionalServicesEditor />}
 
-          {/* ADMIN — agent only: OS sync, health, DB stats, edge tester (OSSyncPanel embedded) */}
+          {/* ADMIN — agent only: sync, backoffice tools */}
           {activeSection === "admin" && navItems.some(i => i.key === "admin") && <AdminPanel />}
 
           {/* AUCTION ALERTS — individual, agent */}

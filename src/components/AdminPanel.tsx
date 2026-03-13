@@ -278,10 +278,10 @@ export default function AdminPanel() {
         <div>
           <h1 className="font-display text-2xl font-bold flex items-center gap-2">
             <Shield className="w-6 h-6 text-primary" />
-            Admin — maiProp OS Sync
+            Admin
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Pull auctions from OS or push your listings and firesales to OS.
+            Pull auctions, push listings and firesales, view sync log.
           </p>
         </div>
         <div className="flex items-center gap-2">
