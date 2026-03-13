@@ -17,6 +17,57 @@ const GoogleIcon = () => (
   </svg>
 );
 
+export default function Login() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { signIn, user, loading: authLoading, needsOnboarding } = useAuth();
+
+  const [view, setView] = useState<"login" | "forgot" | "forgot-sent">("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [showPass, setShowPass] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  // Track whether the user just signed in so we only auto-redirect after sign-in
+  const [didSignIn, setDidSignIn] = useState(false);
+
+  const from = (location.state as any)?.from?.pathname || "/dashboard";
+
+  // Redirect once auth state settles after sign-in (avoids navigating before
+  // onAuthStateChange has resolved and loading is cleared)
+  useEffect(() => {
+    if (!didSignIn || authLoading) return;
+    if (user) {
+      toast.success("Welcome back!");
+      navigate(needsOnboarding ? "/onboarding" : from, { replace: true });
+    }
+  }, [didSignIn, authLoading, user, needsOnboarding, from, navigate]);
+
+  const handleGoogleSignIn = async () => {
+    setGoogleLoading(true);
+    const { error } = await lovable.auth.signInWithOAuth("google", {
+      redirect_uri: window.location.origin,
+    });
+    if (error) {
+      toast.error("Google sign-in failed. Please try again.");
+      setGoogleLoading(false);
+    }
+  };
+
+  const handleSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    const { error } = await signIn(email, password);
+    setLoading(false);
+    if (error) {
+      toast.error("Invalid email or password");
+    } else {
+      // Don't navigate here — wait for auth state to settle via useEffect above
+      setDidSignIn(true);
+    }
+  };
+
   const handleForgot = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -80,8 +131,8 @@ const GoogleIcon = () => (
                       </button>
                     </div>
                   </div>
-                  <Button type="submit" className="w-full bg-gradient-primary border-0 text-primary-foreground" disabled={loading}>
-                    {loading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+                  <Button type="submit" className="w-full bg-gradient-primary border-0 text-primary-foreground" disabled={loading || (didSignIn && authLoading)}>
+                    {(loading || (didSignIn && authLoading)) && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
                     Sign In
                   </Button>
                 </form>
