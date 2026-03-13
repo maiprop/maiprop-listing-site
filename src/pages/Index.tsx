@@ -931,7 +931,8 @@ export default function Index() {
             }} />
           
 
-          <div className="absolute inset-0 bg-gradient-to-t from-background/70 via-transparent to-transparent" />
+          {/* Bottom fade into next section */}
+          <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-background via-background/60 to-transparent" />
         </div>
         {/* Grid overlay */}
         <div
