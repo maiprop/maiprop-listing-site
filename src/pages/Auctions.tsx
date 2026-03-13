@@ -1013,7 +1013,8 @@ export default function Auctions() {
               </Button>
             </div>
                  }
-            <div className="flex items-center justify-center gap-2 mt-8 flex-wrap">
+
+
                      <Button
                 variant="outline"
                 size="sm"
