@@ -1065,7 +1065,7 @@ export default function Index() {
       </section>
 
       {/* ══ BROWSE BY TYPE ══════════════════════════════════════════════════ */}
-      <section className="py-14 bg-secondary">
+      <section className="py-10 sm:py-14 bg-secondary">
         <div ref={browseRef} className="container">
           <div className={`flex items-center justify-between mb-7 reveal ${browseInView ? "in-view" : ""}`}>
             <div>
