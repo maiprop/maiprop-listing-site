@@ -1331,9 +1331,7 @@ export default function Index() {
               Explore All <ArrowRight className="w-3 h-3" />
             </Link>
           </div>
-          <div
-            className={`grid grid-cols-2 lg:grid-cols-4 gap-4 reveal reveal-delay-1 ${locationsInView ? "in-view" : ""}`}>
-            
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {[
             {
               name: "Athens",
@@ -1363,11 +1361,8 @@ export default function Index() {
             <Link
               key={city.name}
               to={`/listings?city=${city.name}`}
-              className="reveal"
-              style={{
-                animationDelay: `${idx * 0.1}s`,
-                transitionDelay: `${idx * 0.08}s`
-              }}>
+              className={`reveal ${locationsInView ? "in-view" : ""}`}
+              style={{ transitionDelay: `${idx * 0.1}s` }}>
                 <div className="relative rounded-xl overflow-hidden aspect-[3/4] group shadow-card hover:shadow-elevated transition-shadow duration-500">
                   <img
                   src={city.image}
@@ -1376,7 +1371,8 @@ export default function Index() {
 
                   <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-background/30 to-transparent group-hover:from-background/95 transition-all duration-500" />
                   {/* Shimmer on hover */}
-                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+                  <div
+                    className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
                     style={{ background: "linear-gradient(135deg, hsl(var(--primary) / 0.08) 0%, transparent 60%)" }} />
                   <div className="absolute bottom-4 left-4 translate-y-1 group-hover:translate-y-0 transition-transform duration-300">
                     <div className="font-display font-bold text-lg text-foreground">{city.name}</div>
