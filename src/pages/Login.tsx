@@ -97,7 +97,11 @@ export default function Login() {
             {view === "login" && (
               <>
                 <div className="text-center mb-6">
-                  <span className="font-display font-bold text-2xl">mai<span className="gradient-text-cyan">prop</span></span>
+                  <img
+                    src={theme === "dark" ? logoDarkImg : logoImg}
+                    alt="maiProp"
+                    className="h-10 w-auto object-contain mx-auto mb-2"
+                  />
                   <p className="text-muted-foreground text-sm mt-1">Sign in to your account</p>
                 </div>
 
