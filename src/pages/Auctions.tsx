@@ -544,7 +544,7 @@ export default function Auctions() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedCity, filterType, filterBidRange, filterYearRange, filterOwnership, filterRound, filterYield, visibilityCap]);
+  }, [selectedCity, filterType, filterBidRange, filterYearRange, filterOwnership, filterRound, filterYield, maxItems]);
 
   useEffect(() => {
     if (currentPage > totalPages) setCurrentPage(totalPages);
