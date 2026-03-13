@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import logoImg from "@/assets/logo.png";
+import logoDarkImg from "@/assets/logo-dark.png";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Bell, MessageSquare, User, Menu, X, ChevronDown, Plus, LogOut, LayoutDashboard, Building2, Sun, Moon, Home, List, Gavel, Flame, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -82,9 +83,9 @@ export function Navbar() {
         {/* Logo */}
         <Link to="/" className="flex items-center shrink-0">
           <img
-            src={logoImg}
+            src={forceLight ? logoDarkImg : logoImg}
             alt="maiProp — Real estate | Real decisions."
-            className={`h-10 w-auto object-contain transition-all duration-300 ${forceLight ? "brightness-0 invert" : ""}`}
+            className="h-10 w-auto object-contain transition-all duration-300"
           />
         </Link>
 
