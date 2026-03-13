@@ -24,6 +24,7 @@ export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
   const { signIn, user, loading: authLoading, needsOnboarding } = useAuth();
+  const { theme } = useTheme();
 
   const [view, setView] = useState<"login" | "forgot" | "forgot-sent">("login");
   const [email, setEmail] = useState("");
