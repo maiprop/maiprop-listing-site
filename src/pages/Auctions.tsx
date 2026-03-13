@@ -465,7 +465,7 @@ export default function Auctions() {
   const isMaiPropOsUser =
   email.endsWith("@maiprop.co") ||
   email.endsWith("@os.maiprop.co");
-  const visibilityCap = isMaiPropOsUser ? Number.POSITIVE_INFINITY : isPro ? MAX_PAGES_PRO * PAGE_SIZE : MAX_PAGES_FREE * PAGE_SIZE;
+  // pageCap and maxItems computed below when cappedAuctions is built
 
   // Dynamic city list from actual data
   const cityOptions = useMemo(() => {
