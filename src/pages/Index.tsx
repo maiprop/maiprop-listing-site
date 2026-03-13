@@ -1516,18 +1516,18 @@ export default function Index() {
       </section>
 
       {/* ══ mAI PROP OS ═════════════════════════════════════════════════════ */}
-      <section className="py-20 bg-secondary overflow-hidden">
+      <section className="py-12 sm:py-20 bg-secondary overflow-hidden">
         <div ref={osRef} className="container">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
+          <div className="grid lg:grid-cols-2 gap-8 sm:gap-12 items-center">
             {/* Copy */}
             <div className={`reveal ${osInView ? "in-view" : ""}`}>
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 mb-5">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 mb-4 sm:mb-5">
                 <BarChart2 className="w-3.5 h-3.5 text-primary" />
                 <span className="text-xs font-semibold text-primary uppercase tracking-wide">
                   Powered by mAI Prop OS
                 </span>
               </div>
-              <h2 className="font-display text-4xl font-bold leading-tight mb-4">
+              <h2 className="font-display text-3xl sm:text-4xl font-bold leading-tight mb-3 sm:mb-4">
                 Greece's Real Estate <br />
                 <span className="gradient-text-primary">Data Gateway</span>
               </h2>
