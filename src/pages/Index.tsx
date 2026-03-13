@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useInView } from "@/hooks/useInView";
+import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import ReactDOM from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import {
