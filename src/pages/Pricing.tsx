@@ -45,7 +45,7 @@ function useAllPricing() {
   return useQuery({
     queryKey: ["pricing", "all"],
     queryFn: async (): Promise<PricingRow[]> => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("pricing_configs")
         .select("id, key, label, description, amount, unit, currency, module, audience, sort_order")
         .eq("is_active", true)
