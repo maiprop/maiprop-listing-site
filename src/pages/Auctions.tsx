@@ -1014,8 +1014,7 @@ export default function Auctions() {
                      </Button>
                    </div>
                  )}
-                )}
-              </>
+               </>
             )}
 
             {/* CTA */}
