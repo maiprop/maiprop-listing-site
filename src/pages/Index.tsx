@@ -1410,7 +1410,7 @@ export default function Index() {
       </section>
 
       {/* ══ PROFESSIONALS CTA ════════════════════════════════════════════════ */}
-      <section className="py-20 bg-background">
+      <section className="py-10 sm:py-20 bg-background">
         <div ref={prosRef} className="container">
           <div
             className={`relative rounded-3xl overflow-hidden border border-accent/20 bg-foreground dark:bg-[hsl(265_40%_7%)] reveal ${prosInView ? "in-view" : ""}`}>
@@ -1425,10 +1425,10 @@ export default function Index() {
               style={{ background: "radial-gradient(hsl(183 100% 42%), transparent 70%)" }} />
             
 
-            <div className="relative p-10 md:p-14 lg:p-16 text-background">
-              <div className="grid lg:grid-cols-2 gap-12 items-center">
+            <div className="relative p-6 sm:p-10 md:p-14 lg:p-16 text-background">
+              <div className="grid lg:grid-cols-2 gap-8 sm:gap-12 items-center">
                 <div>
-                  <h2 className="font-display text-4xl lg:text-5xl font-bold leading-tight mb-4 text-destructive-foreground">
+                  <h2 className="font-display text-3xl sm:text-4xl lg:text-5xl font-bold leading-tight mb-4 text-destructive-foreground">
                     The right expert,
                     <br />
                     <span className="gradient-text-cyan">one click away</span>
