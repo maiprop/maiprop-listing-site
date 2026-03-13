@@ -1064,10 +1064,10 @@ export default function Auctions() {
         }
       </div>
       <Footer />
-      {showAlertModal && (
+      {alertModalOpen && (
         <AuctionAlertModal
-          isOpen={showAlertModal}
-          onClose={() => setShowAlertModal(false)}
+          open={alertModalOpen}
+          onClose={() => setAlertModalOpen(false)}
         />
       )}
     </div>
