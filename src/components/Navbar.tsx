@@ -58,7 +58,6 @@ export function Navbar() {
     { label: "Auctions", href: "/auctions", badge: "Live" },
     { label: "Quick Sale™", href: "/firesale", accent: "flame" },
     { label: "Professionals", href: "/professionals", accent: "subtle" },
-    { label: "Pricing", href: "/pricing", icon: Euro },
   ];
 
   const displayName = profile?.display_name || profile?.first_name || user?.email?.split("@")[0] || "Account";
@@ -135,6 +134,16 @@ export function Navbar() {
 
         {/* Right actions */}
         <div className="hidden lg:flex items-center gap-1">
+          <Link
+            to="/pricing"
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
+              forceLight
+                ? "text-white/90 hover:text-white hover:bg-white/10"
+                : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+            }`}
+          >
+            <Euro className="w-3.5 h-3.5" /> Pricing
+          </Link>
           {/* Theme toggle */}
           <button
             onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
@@ -275,6 +284,13 @@ export function Navbar() {
       {/* Mobile dropdown */}
       {mobileOpen && (
         <div className="lg:hidden bg-card/95 backdrop-blur-xl border-b border-border px-4 py-4 space-y-1">
+          <Link
+            to="/pricing"
+            className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-semibold text-primary hover:bg-primary/10 transition-colors"
+            onClick={() => setMobileOpen(false)}
+          >
+            <Euro className="w-4 h-4" /> Pricing
+          </Link>
           {navLinks.map((link) => (
             <Link
               key={link.href}
@@ -294,7 +310,6 @@ export function Navbar() {
                 <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold font-semibold">{link.badge}</span>
               )}
               {link.accent === "subtle" && <span className="w-1.5 h-1.5 rounded-full bg-accent/60" />}
-              {(link as { icon?: typeof Euro }).icon === Euro && <Euro className="w-4 h-4" />}
             </Link>
           ))}
           <div className="pt-2 flex gap-2">
@@ -339,6 +354,7 @@ export function Navbar() {
             { to: "/listings", icon: List, label: "Listings" },
             { to: "/auctions", icon: Gavel, label: "Auctions" },
             { to: "/firesale", icon: Flame, label: "Quick Sale", accent: "text-destructive" },
+            { to: "/pricing", icon: Euro, label: "Pricing" },
             { to: "/ai-assistant", icon: Sparkles, label: "AI" },
             { to: user ? "/dashboard" : "/login", icon: user ? LayoutDashboard : User, label: user ? "Dashboard" : "Sign In" },
           ].map(({ to, icon: Icon, label, accent }) => {
