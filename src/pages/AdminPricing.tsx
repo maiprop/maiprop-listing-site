@@ -9,7 +9,22 @@ import { toast } from "sonner";
 import { SlidersHorizontal, Save, Plus, Loader2, Shield, Euro, Trash2, Sparkles, X as XIcon } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 
-type PricingConfig = Tables<"pricing_configs">;
+type PricingConfig = {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  key: string;
+  label: string;
+  description: string | null;
+  audience: string;
+  module: string;
+  unit: string;
+  currency: string;
+  amount: number;
+  is_active: boolean;
+  sort_order: number;
+  metadata: Record<string, unknown>;
+};
 
 const OWNER_EMAILS = ["kr@maiprop.co", "kr@maiprop.com"].map(e => e.toLowerCase());
 
@@ -61,14 +76,14 @@ function usePricingConfigs() {
   return useQuery<PricingConfig[]>({
     queryKey: ["admin-pricing-configs"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("pricing_configs")
         .select("*")
         .order("module", { ascending: true })
         .order("audience", { ascending: true })
         .order("sort_order", { ascending: true });
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as PricingConfig[];
     },
   });
 }
@@ -86,7 +101,7 @@ export default function AdminPricing() {
         id,
         ...rest,
       }));
-      const { error } = await supabase.from("pricing_configs").upsert(payload, { onConflict: "id" });
+      const { error } = await (supabase as any).from("pricing_configs").upsert(payload, { onConflict: "id" });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -100,7 +115,7 @@ export default function AdminPricing() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("pricing_configs").delete().eq("id", id);
+      const { error } = await (supabase as any).from("pricing_configs").delete().eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -119,7 +134,7 @@ export default function AdminPricing() {
         created_at: now,
         updated_at: now,
       }));
-      const { error } = await supabase.from("pricing_configs").upsert(rows, { onConflict: "id" });
+      const { error } = await (supabase as any).from("pricing_configs").upsert(rows, { onConflict: "id" });
       if (error) throw error;
     },
     onSuccess: () => {

@@ -234,57 +234,6 @@ export type Database = {
         }
         Relationships: []
       }
-      pricing_configs: {
-        Row: {
-          id: string
-          key: string
-          label: string
-          description: string | null
-          audience: string
-          module: string
-          unit: string
-          currency: string
-          amount: number
-          is_active: boolean
-          sort_order: number
-          metadata: Json | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          key: string
-          label: string
-          description?: string | null
-          audience: string
-          module: string
-          unit?: string
-          currency?: string
-          amount?: number
-          is_active?: boolean
-          sort_order?: number
-          metadata?: Json | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          key?: string
-          label?: string
-          description?: string | null
-          audience?: string
-          module?: string
-          unit?: string
-          currency?: string
-          amount?: number
-          is_active?: boolean
-          sort_order?: number
-          metadata?: Json | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
       investor_subscriptions: {
         Row: {
           created_at: string
