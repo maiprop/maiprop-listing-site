@@ -1339,10 +1339,10 @@ export default function Index() {
       </section>
 
       {/* ══ POPULAR LOCATIONS ════════════════════════════════════════════════ */}
-      <section className="py-16 bg-secondary">
+      <section className="py-10 sm:py-16 bg-secondary">
         <div ref={locationsRef} className="container">
-          <div className={`flex items-center justify-between mb-8 reveal ${locationsInView ? "in-view" : ""}`}>
-            <h2 className="font-display text-2xl font-bold">Popular Locations</h2>
+          <div className={`flex items-center justify-between mb-6 sm:mb-8 reveal ${locationsInView ? "in-view" : ""}`}>
+            <h2 className="font-display text-xl sm:text-2xl font-bold">Popular Locations</h2>
             <Link to="/listings" className="text-sm text-primary hover:underline flex items-center gap-1">
               Explore All <ArrowRight className="w-3 h-3" />
             </Link>
