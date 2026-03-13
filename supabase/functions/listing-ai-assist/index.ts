@@ -15,6 +15,11 @@ Deno.serve(async (req) => {
     let systemPrompt = "";
     let userPrompt = "";
 
+    if (type === "ping") {
+      return new Response(JSON.stringify({ ok: true, message: "listing-ai-assist is available" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     if (type === "description") {
       systemPrompt = `You are a professional Greek real estate copywriter. Write compelling, accurate, and SEO-friendly property descriptions in English for listings on a Greek property portal. Be enthusiastic but factual. Include highlights, location benefits, and investment potential where relevant. Write in 2-3 short paragraphs (120-180 words total). Do NOT include a title. Do NOT add asterisks or markdown.`;
       userPrompt = `Write a listing description for this property:
@@ -43,7 +48,7 @@ ${property.features?.length ? `Key features: ${property.features.join(", ")}` : 
 ${property.listing_type === "rent" ? "Provide monthly rent estimate in EUR." : "Provide sale price estimate in EUR."}`;
     } else {
       return new Response(
-        JSON.stringify({ error: `Unsupported type: "${type}". Use "description" or "price".` }),
+        JSON.stringify({ error: `Unsupported type: "${type}". Use "description", "price", or "ping".` }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
