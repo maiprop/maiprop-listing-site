@@ -1023,6 +1023,7 @@ export default function Auctions() {
                      </Button>
                    </div>
             }
+
                  {/* Banner when Pro user hits 10-page cap */}
                  {isPro && !isMaiPropOsUser && filtered.length > MAX_PAGES_PRO * PAGE_SIZE &&
             <div className="mt-8 p-4 rounded-2xl bg-secondary border border-border flex flex-col sm:flex-row items-center gap-3 text-center sm:text-left">
