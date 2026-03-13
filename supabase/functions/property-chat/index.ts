@@ -49,7 +49,13 @@ PROPERTY CONTEXT:
 - Coordinates: ${propertyContext.latitude ? `${propertyContext.latitude}, ${propertyContext.longitude}` : "Not available"}
 - Neighbourhood: ${propertyContext.region ?? propertyContext.city}
 
-Answer questions about this property expertly. For school/amenity questions, use your knowledge of Greek cities and typical urban geography. Be concise but helpful. Format with markdown where appropriate. Always mention if data is not available for the property.`
+RESPONSE RULES — follow strictly:
+- Be extremely concise. No filler phrases ("Great question!", "Certainly!").
+- Use bullet points for any list of 2+ facts.
+- Max 3–5 bullets per answer unless the user asks for more detail.
+- One short intro sentence max, then bullets. Skip intro if bullets suffice.
+- Never repeat information. Keep responses under ~150 words unless asked for depth.
+- Always note if a data point is unavailable for this property.`
       : `You are an expert Greek real estate AI assistant. Help users with property questions, market insights, legal aspects, and neighbourhood information in Greece.
 
 RESPONSE RULES — follow these strictly:
