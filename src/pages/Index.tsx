@@ -1172,18 +1172,18 @@ export default function Index() {
       </section>
 
       {/* ══ FEATURED PROPERTIES ══════════════════════════════════════════════ */}
-      <section className="py-16 bg-background">
+      <section className="py-10 sm:py-16 bg-background">
         <div ref={featuredRef} className="container">
-          <div className={`flex items-center justify-between mb-8 reveal ${featuredInView ? "in-view" : ""}`}>
+          <div className={`flex items-center justify-between mb-6 sm:mb-8 reveal ${featuredInView ? "in-view" : ""}`}>
             <div>
-              <h2 className="font-display text-2xl font-bold">Featured Properties</h2>
+              <h2 className="font-display text-xl sm:text-2xl font-bold">Featured Properties</h2>
             </div>
-            <Button variant="outline" className="border-border" asChild>
+            <Button variant="outline" size="sm" className="border-border text-xs" asChild>
               <Link to="/listings">View All</Link>
             </Button>
           </div>
           <div
-            className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 reveal reveal-delay-1 ${featuredInView ? "in-view" : ""}`}>
+            className={`grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 reveal reveal-delay-1 ${featuredInView ? "in-view" : ""}`}>
             
             {featuredLoading && !featuredError
               ? Array.from({ length: 4 }).map((_, i) => (
