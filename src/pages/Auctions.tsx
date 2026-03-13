@@ -973,6 +973,53 @@ export default function Auctions() {
                 className="border-border"
                 disabled={currentPage === 1}
                 onClick={() => {setCurrentPage((p) => Math.max(1, p - 1));window.scrollTo({ top: 0, behavior: "smooth" });}}>
+                ← Previous
+              </Button>
+              {(() => {
+                const pages: (number | "…")[] = [];
+                if (totalPages <= 7) {
+                  for (let i = 1; i <= totalPages; i++) pages.push(i);
+                } else {
+                  pages.push(1);
+                  if (currentPage > 4) pages.push("…");
+                  const start = Math.max(2, currentPage - 2);
+                  const end = Math.min(totalPages - 1, currentPage + 2);
+                  for (let i = start; i <= end; i++) pages.push(i);
+                  if (currentPage < totalPages - 3) pages.push("…");
+                  pages.push(totalPages);
+                }
+                return pages.map((p, idx) =>
+                  p === "…" ? (
+                    <span key={`ellipsis-${idx}`} className="text-sm text-muted-foreground px-1 select-none">…</span>
+                  ) : (
+                    <Button
+                      key={p}
+                      variant={p === currentPage ? "default" : "outline"}
+                      size="sm"
+                      className={p === currentPage ? "bg-brand-gold border-0 text-background font-bold" : "border-border"}
+                      onClick={() => {setCurrentPage(p as number);window.scrollTo({ top: 0, behavior: "smooth" });}}>
+                      {p}
+                    </Button>
+                  )
+                );
+              })()}
+              <Button
+                size="sm"
+                className="border-border"
+                variant="outline"
+                disabled={currentPage === totalPages}
+                onClick={() => {setCurrentPage((p) => Math.min(totalPages, p + 1));window.scrollTo({ top: 0, behavior: "smooth" });}}>
+                Next →
+              </Button>
+            </div>
+                 }
+            <div className="flex items-center justify-center gap-2 mt-8 flex-wrap">
+                     <Button
+                variant="outline"
+                size="sm"
+                className="border-border"
+                disabled={currentPage === 1}
+                onClick={() => {setCurrentPage((p) => Math.max(1, p - 1));window.scrollTo({ top: 0, behavior: "smooth" });}}>
                 
                        ← Previous
                      </Button>
