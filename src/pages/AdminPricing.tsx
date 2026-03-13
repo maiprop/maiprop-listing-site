@@ -76,14 +76,14 @@ function usePricingConfigs() {
   return useQuery<PricingConfig[]>({
     queryKey: ["admin-pricing-configs"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("pricing_configs")
         .select("*")
         .order("module", { ascending: true })
         .order("audience", { ascending: true })
         .order("sort_order", { ascending: true });
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as PricingConfig[];
     },
   });
 }
