@@ -101,7 +101,7 @@ export default function AdminPricing() {
         id,
         ...rest,
       }));
-      const { error } = await supabase.from("pricing_configs").upsert(payload, { onConflict: "id" });
+      const { error } = await (supabase as any).from("pricing_configs").upsert(payload, { onConflict: "id" });
       if (error) throw error;
     },
     onSuccess: () => {
