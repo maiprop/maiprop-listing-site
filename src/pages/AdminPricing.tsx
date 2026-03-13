@@ -9,7 +9,22 @@ import { toast } from "sonner";
 import { SlidersHorizontal, Save, Plus, Loader2, Shield, Euro, Trash2, Sparkles, X as XIcon } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 
-type PricingConfig = Tables<"pricing_configs">;
+type PricingConfig = {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  key: string;
+  label: string;
+  description: string | null;
+  audience: string;
+  module: string;
+  unit: string;
+  currency: string;
+  amount: number;
+  is_active: boolean;
+  sort_order: number;
+  metadata: Record<string, unknown>;
+};
 
 const OWNER_EMAILS = ["kr@maiprop.co", "kr@maiprop.com"].map(e => e.toLowerCase());
 
