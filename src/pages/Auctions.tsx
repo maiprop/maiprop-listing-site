@@ -953,9 +953,6 @@ export default function Auctions() {
                    <span className="font-semibold text-foreground">{visibleFiltered.length}</span> auctions
                    {selectedCity !== "All Cities" ? ` in ${selectedCity}` : ""}
                    {" · "}ordered by date
-                   {!isMaiPropOsUser && filtered.length > visibleFiltered.length &&
-              <span className="text-brand-gold"> · page limit: {isPro ? MAX_PAGES_PRO : MAX_PAGES_FREE} pages</span>
-              }
                  </p>
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                    {paginated.map((a) =>
