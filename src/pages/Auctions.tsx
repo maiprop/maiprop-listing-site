@@ -529,9 +529,12 @@ export default function Auctions() {
     });
   }, [auctions, selectedCity, filterType, filterBidRange, filterYearRange, filterOwnership, filterRound, filterYield, isPro]);
 
+  const pageCap = isMaiPropOsUser ? Infinity : isPro ? MAX_PAGES_PRO : MAX_PAGES_FREE;
+  const maxItems = Number.isFinite(pageCap) ? pageCap * PAGE_SIZE : Infinity;
+
   const visibleFiltered = useMemo(
-    () => (Number.isFinite(visibilityCap) ? filtered.slice(0, visibilityCap) : filtered),
-    [filtered, visibilityCap]
+    () => (Number.isFinite(maxItems) ? filtered.slice(0, maxItems) : filtered),
+    [filtered, maxItems]
   );
   const totalPages = Math.max(1, Math.ceil(visibleFiltered.length / PAGE_SIZE));
   const paginated = useMemo(() => {
