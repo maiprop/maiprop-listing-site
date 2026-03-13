@@ -18,6 +18,8 @@ const AUCTION_SELECT_CORE = "id, title, city, address, price, auction_starting_b
 const QUERY_TIMEOUT_MS = 15_000;
 const AUCTION_FETCH_LIMIT = 500;
 const PAGE_SIZE = 20;
+const MAX_PAGES_FREE = 3;   // free: up to 3 pages = 60 items
+const MAX_PAGES_PRO  = 10;  // pro:  up to 10 pages = 200 items
 
 // ── Fetch all auctions from DB (future or date TBD) ─────────────────────────────
 // Include null auction_date so OS-synced rows without a date still show
