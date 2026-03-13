@@ -759,6 +759,9 @@ function PropertiesMockup() {
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────────
+// Hero video: use preload in index.html + deferred src so it loads faster. For even faster load, re-encode with faststart and lower bitrate (e.g. 720p, 1–2 Mbps).
+const HERO_VIDEO_SRC = "/hero-bg.mp4";
+
 export default function Index() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -767,6 +770,13 @@ export default function Index() {
   const [selectedPropertyType, setSelectedPropertyType] = useState("");
   const [showAI, setShowAI] = useState(false);
   const [typeCounts, setTypeCounts] = useState<Record<string, number>>({});
+  const [heroVideoSrc, setHeroVideoSrc] = useState<string>("");
+
+  // Defer video src until after first paint so the poster shows instantly and preload can run
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setHeroVideoSrc(HERO_VIDEO_SRC));
+    return () => cancelAnimationFrame(id);
+  }, []);
 
   // Pull-to-refresh — invalidates featured & auction queries
   const { pulling, refreshing, progress } = usePullToRefresh({
@@ -949,7 +959,7 @@ export default function Index() {
               objectPosition: "center 30%",
             }}
           >
-            <source src="/hero-bg.mp4" type="video/mp4" />
+            {heroVideoSrc && <source src={heroVideoSrc} type="video/mp4" />}
           </video>
           {/* Both modes: strong dark overlay — heavier on mobile for readability */}
           <div
