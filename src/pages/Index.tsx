@@ -760,11 +760,22 @@ function PropertiesMockup() {
 // ── Main ───────────────────────────────────────────────────────────────────────
 export default function Index() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchType, setSearchType] = useState("Buy");
   const [selectedPropertyType, setSelectedPropertyType] = useState("");
   const [showAI, setShowAI] = useState(false);
   const [typeCounts, setTypeCounts] = useState<Record<string, number>>({});
+
+  // Pull-to-refresh — invalidates featured & auction queries
+  const { pulling, refreshing, progress } = usePullToRefresh({
+    onRefresh: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["homepage-featured"] }),
+        queryClient.invalidateQueries({ queryKey: ["homepage-auctions"] }),
+      ]);
+    },
+  });
 
   // Fetch live listing counts grouped by property_type
   useEffect(() => {
