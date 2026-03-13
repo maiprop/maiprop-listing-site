@@ -224,7 +224,7 @@ export default function PropertyDetail() {
   const [aiInsightsLoaded, setAiInsightsLoaded] = useState(false);
 
   useEffect(() => {
-    if (!dbListing || aiInsightsLoaded || !isPro) return;
+    if (!dbListing || aiInsightsLoaded) return;
     setAiInsightsLoaded(true);
     setAiInsightsLoading(true);
     const listingId = id ?? dbListing.id;
