@@ -23,7 +23,7 @@ const ROWS: { label: string; key: string; format?: (v: any) => string }[] = [
   { label: "Year Built", key: "year_built", format: v => v ?? "—" },
   { label: "Energy Class", key: "energy_class" },
   { label: "Heating", key: "heating_system", format: v => v ? v.replace("_", " ") : "—" },
-  { label: "Construction", key: "construction_status", format: v => v ? v.replace("_", " ") : "—" },
+  { label: "Condition", key: "construction_status", format: v => v ? v.replace(/_/g, " ") : "—" },
   { label: "Parking", key: "has_parking" },
   { label: "Elevator", key: "has_elevator" },
   { label: "Pool", key: "has_pool" },

@@ -24,6 +24,9 @@ import CreateListing from "./pages/CreateListing";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 import Pro from "./pages/Pro";
+import FiresalePricing from "./pages/FiresalePricing";
+import Pricing from "./pages/Pricing";
+import AdminPricing from "./pages/AdminPricing";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
 import CookiePolicy from "./pages/CookiePolicy";
@@ -78,6 +81,16 @@ const App = () => (
               <Route path="/cookie-policy" element={<CookiePolicy />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/pro" element={<Pro />} />
+              <Route path="/pricing" element={<Pricing />} />
+              <Route path="/pricing/firesale-investors" element={<FiresalePricing />} />
+              <Route
+                path="/admin/pricing"
+                element={
+                  <ProtectedRoute>
+                    <AdminPricing />
+                  </ProtectedRoute>
+                }
+              />
               <Route path="*" element={<NotFound />} />
             </Routes>
             <GlobalAIWidget />

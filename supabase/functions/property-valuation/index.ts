@@ -213,7 +213,7 @@ Deno.serve(async (req) => {
     const {
       title, city, address, price, sqm, bedrooms, bathrooms,
       propertyType, listingType, floor, totalFloors, yearBuilt,
-      energyClass, pricePerSqm, hasParking, hasPool, hasElevator,
+      heatingSystem, energyClass, pricePerSqm, hasParking, hasPool, hasElevator,
       hasGarden, hasStorage, hasBalcony, hasView, hasFurnished,
       region, description, tags,
       ownershipStatus, ownershipPercentage,
@@ -233,10 +233,18 @@ Deno.serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
+    // ── Key property specifics (construction year, condition, heating) for valuation ──
+    const keySpecifics = [
+      yearBuilt != null && yearBuilt !== "" ? `Construction year: ${yearBuilt}` : null,
+      condition ? `Condition: ${String(condition).replace(/_/g, " ")}` : null,
+      heatingSystem ? `Heating: ${String(heatingSystem).replace(/_/g, " ")}` : null,
+    ].filter(Boolean).join(". ") || "Not specified";
+
     // ── Build observed features layer ──────────────────────────────────────────
     const observedFeatures = [
       floor != null && `Floor: ${floor}${totalFloors ? `/${totalFloors}` : ""}`,
       yearBuilt && `Year built: ${yearBuilt}`,
+      heatingSystem && `Heating: ${String(heatingSystem).replace(/_/g, " ")}`,
       energyClass && `Energy class: ${energyClass}`,
       bedrooms != null && `Bedrooms: ${bedrooms}`,
       bathrooms != null && `Bathrooms: ${bathrooms}`,
@@ -249,7 +257,7 @@ Deno.serve(async (req) => {
       hasView && "Has view",
       hasFurnished && "Furnished",
       plotSurface && `Plot area: ${plotSurface}sqm`,
-      condition && `Condition: ${condition}`,
+      condition && `Condition: ${String(condition).replace(/_/g, " ")}`,
       ownershipStatus && ownershipStatus !== "full" && `Ownership: ${ownershipStatus}${ownershipPercentage ? ` (${ownershipPercentage}%)` : ""}`,
       auctionCourt && `Auction court: ${auctionCourt}`,
       tags?.length && `Tags: ${tags.join(", ")}`,
@@ -284,6 +292,8 @@ ${MARKET_BENCHMARKS}
 ${LEGAL_TAX_FRAMEWORK}
 
 === PROPERTY TO VALUE ===
+KEY PROPERTY SPECIFICS (use these in your methodology): ${keySpecifics}
+
 Title: ${title || "Property"}
 Location: ${address ? `${address}, ` : ""}${city}${region ? `, ${region}` : ""}, Greece
 Type: ${propertyType || "apartment"} | Transaction: ${listingType || "sale"}

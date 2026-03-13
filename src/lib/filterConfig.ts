@@ -254,20 +254,33 @@ export const FEATURES_LAND = [
 ];
 
 export const ENERGY_CLASSES = ["A+", "A", "B+", "B", "C", "D", "E", "F", "G"];
+
+/** Heating: autonomous (oil/gas) vs central (oil/gas), underfloor, none, other. Backward compatible with legacy "autonomous" / "central". */
 export const HEATING_TYPES = [
-  { value: "autonomous", label: "Autonomous" },
-  { value: "central",    label: "Central" },
-  { value: "floor",      label: "Underfloor" },
-  { value: "none",       label: "None" },
+  { value: "autonomous_oil", label: "Autonomous (oil)" },
+  { value: "autonomous_gas", label: "Autonomous (gas)" },
+  { value: "autonomous",     label: "Autonomous (other)" },
+  { value: "central_oil",    label: "Central (oil)" },
+  { value: "central_gas",    label: "Central (gas)" },
+  { value: "central",       label: "Central (other)" },
+  { value: "floor",         label: "Underfloor" },
+  { value: "none",         label: "None" },
+  { value: "other",        label: "Other" },
 ];
-export const CONSTRUCTION_STATUSES = [
-  { value: "new",                label: "New Build" },
-  { value: "under_construction", label: "Under Construction" },
+
+/** Condition of the property (renovated, new, needs renovation, etc.) — used in filters and listing details. Label "Condition". */
+export const CONDITION_OPTIONS = [
+  { value: "new",                label: "New" },
+  { value: "under_construction", label: "Under construction" },
   { value: "renovated",          label: "Renovated" },
-  { value: "needs_renovation",   label: "Needs Renovation" },
+  { value: "needs_renovation",   label: "Needs renovation" },
+  { value: "unfinished",         label: "Unfinished" },
   { value: "preserved",          label: "Preserved" },
   { value: "neoclassical",       label: "Neoclassical" },
 ];
+
+/** @deprecated Use CONDITION_OPTIONS; same values, kept for filter param compatibility. */
+export const CONSTRUCTION_STATUSES = CONDITION_OPTIONS;
 export const ROAD_TYPES = [
   { value: "main",       label: "Main Road" },
   { value: "secondary",  label: "Secondary Road" },
