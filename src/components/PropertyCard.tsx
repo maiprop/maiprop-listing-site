@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, forwardRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   MapPin, Bed, Bath, Square, Heart, Gavel, Flame,
@@ -67,7 +67,7 @@ const SYSTEM_TAG_PREFIXES = [
   "round:", "status:", "posted", "sync:",
 ];
 
-export function PropertyCard({ property, compact = false }: PropertyCardProps) {
+export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(function PropertyCard({ property, compact = false }, _ref) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { data: isFavorited = false } = useIsFavorited(property.id);
@@ -423,4 +423,7 @@ export function PropertyCard({ property, compact = false }: PropertyCardProps) {
       </div>
     </div>
   );
-}
+});
+
+PropertyCard.displayName = "PropertyCard";
+
