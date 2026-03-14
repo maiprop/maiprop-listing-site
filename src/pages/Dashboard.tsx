@@ -214,11 +214,23 @@ export default function Dashboard() {
   };
 
   const displayName = profile?.display_name || profile?.first_name || user?.email?.split("@")[0] || "User";
+  const bioType = profile?.bio?.startsWith("__type:") ? profile.bio.replace("__type:", "").split(" ")[0] : null;
   const roleLabel = (() => {
     const r = profile?.role || "individual";
     if (r === "seller_landlord") return "Seller / Landlord";
+    if (r === "agent") {
+      if (bioType === "institutional") return "Institutional";
+      if (bioType === "developer") return "Developer";
+      return "Agent";
+    }
+    if (r === "individual") {
+      if (bioType === "investor") return "Investor";
+      if (bioType === "buyer") return "Buyer / Renter";
+      return "Individual";
+    }
     return r;
   })();
+  const isInvestorUser = bioType === "investor";
 
   const upcomingViewingsCount = viewings.filter((v: any) => v.status === "confirmed" || v.status === "pending").length;
   const ownViewingsCount = ownViewings.filter((v: any) => v.status === "confirmed" || v.status === "pending").length;
@@ -325,13 +337,14 @@ export default function Dashboard() {
           )}
 
           {/* OVERVIEW — role-specific welcome, CTA, and main content */}
-          {activeSection === "overview" && navItems.some(i => i.key === "overview") && (
+           {activeSection === "overview" && navItems.some(i => i.key === "overview") && (
             <div className="space-y-6">
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
                   <h1 className="font-display text-2xl font-bold">Good morning, {displayName} 👋</h1>
                   <p className="text-muted-foreground text-sm mt-1">
-                    {role === "individual" && "Here's your search activity and alerts."}
+                    {role === "individual" && isInvestorUser && "Your investment pipeline and opportunities."}
+                    {role === "individual" && !isInvestorUser && "Here's your search activity and alerts."}
                     {role === "seller_landlord" && "Manage your listings and viewings."}
                     {role === "agent" && "Here's what's happening with your listings and leads."}
                     {role === "professional" && "Your services and upcoming consultations."}
@@ -342,7 +355,12 @@ export default function Dashboard() {
                     <Plus className="w-4 h-4" /> New Listing
                   </Button>
                 )}
-                {role === "individual" && (
+                {role === "individual" && isInvestorUser && (
+                  <Button className="bg-gradient-gold border-0 text-background font-semibold gap-2" asChild>
+                    <Link to="/auctions"><Gavel className="w-4 h-4" /> Browse Auctions</Link>
+                  </Button>
+                )}
+                {role === "individual" && !isInvestorUser && (
                   <Button variant="outline" className="border-border gap-2" asChild>
                     <Link to="/listings"><Search className="w-4 h-4" /> Browse Listings</Link>
                   </Button>
@@ -365,25 +383,71 @@ export default function Dashboard() {
                 ))}
               </div>
 
-              {/* Individual: saved & auction alerts teaser */}
+              {/* Individual/Investor: context-specific panels */}
               {role === "individual" && (
                 <div className="grid md:grid-cols-2 gap-6">
-                  <div className="glass-card rounded-xl p-6">
-                    <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Heart className="w-4 h-4 text-destructive" /> Saved Properties</h2>
-                    {favorites.length === 0 ? (
-                      <p className="text-sm text-muted-foreground mb-3">Save listings you like to find them here.</p>
-                    ) : (
-                      <p className="text-sm text-muted-foreground mb-3">{favorites.length} saved — open Saved to view.</p>
-                    )}
-                    <Button variant="outline" size="sm" className="border-border" onClick={() => setActiveSection("saved")}>View Saved</Button>
-                  </div>
-                  <div className="glass-card rounded-xl p-6">
-                    <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Gavel className="w-4 h-4 text-brand-gold" /> Auction Alerts</h2>
-                    <p className="text-sm text-muted-foreground mb-3">Get notified when new auctions match your criteria.</p>
-                    <Button variant="outline" size="sm" className="border-brand-gold/40 text-brand-gold" onClick={() => setActiveSection("auctions")}>
-                      {auctionAlerts.length > 0 ? "Manage Alerts" : "Create Alert"}
-                    </Button>
-                  </div>
+                  {isInvestorUser ? (
+                    <>
+                      {/* Investor: high-value shortcut cards */}
+                      <div className="glass-card rounded-xl p-5 border border-amber-500/20 bg-amber-500/5">
+                        <h2 className="font-display font-semibold mb-1 flex items-center gap-2 text-brand-gold">
+                          <Gavel className="w-4 h-4" /> Live Auctions
+                        </h2>
+                        <p className="text-sm text-muted-foreground mb-3">Properties available below market value through court auctions.</p>
+                        <Button size="sm" className="bg-gradient-gold border-0 text-background font-semibold gap-1.5" asChild>
+                          <Link to="/auctions"><Gavel className="w-3.5 h-3.5" /> Browse Auctions</Link>
+                        </Button>
+                      </div>
+                      <div className="glass-card rounded-xl p-5 border border-destructive/20 bg-destructive/5">
+                        <h2 className="font-display font-semibold mb-1 flex items-center gap-2 text-destructive">
+                          <Activity className="w-4 h-4" /> Quick-Sale Deals
+                        </h2>
+                        <p className="text-sm text-muted-foreground mb-3">Off-market properties at discounted prices — motivated sellers only.</p>
+                        <Button size="sm" variant="outline" className="border-destructive/40 text-destructive hover:bg-destructive/10 gap-1.5" asChild>
+                          <Link to="/firesale"><Activity className="w-3.5 h-3.5" /> View Firesale</Link>
+                        </Button>
+                      </div>
+                      <div className="glass-card rounded-xl p-5">
+                        <h2 className="font-display font-semibold mb-1 flex items-center gap-2">
+                          <Bell className="w-4 h-4 text-brand-gold" /> Auction Alerts
+                        </h2>
+                        <p className="text-sm text-muted-foreground mb-3">Get notified instantly when new auctions match your criteria.</p>
+                        <Button variant="outline" size="sm" className="border-brand-gold/40 text-brand-gold" onClick={() => setActiveSection("auctions")}>
+                          {auctionAlerts.length > 0 ? `Manage ${auctionAlerts.length} Alerts` : "Create Alert"}
+                        </Button>
+                      </div>
+                      <div className="glass-card rounded-xl p-5">
+                        <h2 className="font-display font-semibold mb-1 flex items-center gap-2">
+                          <Heart className="w-4 h-4 text-destructive" /> Saved Properties
+                        </h2>
+                        {favorites.length === 0 ? (
+                          <p className="text-sm text-muted-foreground mb-3">Save listings you like to compare and track.</p>
+                        ) : (
+                          <p className="text-sm text-muted-foreground mb-3">{favorites.length} saved — tap to view all.</p>
+                        )}
+                        <Button variant="outline" size="sm" className="border-border" onClick={() => setActiveSection("saved")}>View Saved</Button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="glass-card rounded-xl p-6">
+                        <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Heart className="w-4 h-4 text-destructive" /> Saved Properties</h2>
+                        {favorites.length === 0 ? (
+                          <p className="text-sm text-muted-foreground mb-3">Save listings you like to find them here.</p>
+                        ) : (
+                          <p className="text-sm text-muted-foreground mb-3">{favorites.length} saved — open Saved to view.</p>
+                        )}
+                        <Button variant="outline" size="sm" className="border-border" onClick={() => setActiveSection("saved")}>View Saved</Button>
+                      </div>
+                      <div className="glass-card rounded-xl p-6">
+                        <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Gavel className="w-4 h-4 text-brand-gold" /> Auction Alerts</h2>
+                        <p className="text-sm text-muted-foreground mb-3">Get notified when new auctions match your criteria.</p>
+                        <Button variant="outline" size="sm" className="border-brand-gold/40 text-brand-gold" onClick={() => setActiveSection("auctions")}>
+                          {auctionAlerts.length > 0 ? "Manage Alerts" : "Create Alert"}
+                        </Button>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 
