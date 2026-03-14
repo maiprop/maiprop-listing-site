@@ -188,7 +188,7 @@ const REQUEST_TYPE_LABELS: Record<string, string> = {
 export default function Dashboard() {
   const { section } = useParams();
   const navigate = useNavigate();
-  const { profile, user, signOut, updateProfile } = useAuth();
+  const { profile, user, signOut, updateProfile, refreshProfile } = useAuth();
   const role: DashboardRole = (profile?.role as DashboardRole) || "individual";
   const bioType = profile?.bio?.startsWith("__type:") ? profile.bio.replace("__type:", "").split(" ")[0] : null;
 
@@ -827,8 +827,13 @@ export default function Dashboard() {
           {/* ── ADMIN — agent, institutional, developer ──────────────────── */}
           {activeSection === "admin" && navItems.some(i => i.key === "admin") && <AdminPanel />}
 
-          {/* ── PLACEHOLDER MODULES (contacts, projects, portfolios, analytics, settings) ─── */}
-          {["contacts", "projects", "portfolios", "analytics", "settings"].map(key =>
+          {/* ── SETTINGS ─────────────────────────────────────────────── */}
+          {activeSection === "settings" && navItems.some(i => i.key === "settings") && (
+            <SettingsSection bioType={bioType} roleLabel={roleLabel} onUpdate={updateProfile} refreshProfile={refreshProfile} />
+          )}
+
+          {/* ── PLACEHOLDER MODULES (contacts, projects, portfolios, analytics) ─── */}
+          {["contacts", "projects", "portfolios", "analytics"].map(key =>
             activeSection === key && navItems.some(i => i.key === key) ? (
               <PlaceholderSection key={key} sectionKey={key} />
             ) : null
@@ -996,6 +1001,155 @@ function ProfileEditor({ profile, onUpdate }: { profile: any; onUpdate: any }) {
           {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
           Save Changes
         </Button>
+      </div>
+    </div>
+  );
+}
+
+// ── Settings section ───────────────────────────────────────────────────────────
+const BIO_TYPE_LABELS: Record<string, string> = {
+  buyer: "Buyer / Renter",
+  seller: "Seller / Landlord",
+  investor: "Investor",
+  agent: "Real Estate Agent",
+  institutional: "Institutional",
+  developer: "Developer",
+  professional: "Professional",
+};
+
+const ROLE_PERMISSIONS: Record<string, { label: string; can: string[] }> = {
+  individual:      { label: "Individual",       can: ["Browse listings", "Save properties", "Request viewings", "Auction alerts"] },
+  seller_landlord: { label: "Seller/Landlord",  can: ["Create & manage listings", "Receive viewing requests", "AI listing assist"] },
+  agent:           { label: "Agent",            can: ["Unlimited listings", "OS sync & admin", "Lead management", "Analytics"] },
+  professional:    { label: "Professional",     can: ["Professional directory", "Service catalog", "Client leads", "Verified badge"] },
+};
+
+function SettingsSection({
+  bioType,
+  roleLabel,
+  onUpdate,
+  refreshProfile,
+}: {
+  bioType: string | null;
+  roleLabel: string;
+  onUpdate: (updates: any) => Promise<{ error: Error | null }>;
+  refreshProfile: () => Promise<void>;
+}) {
+  const navigate = useNavigate();
+  const [switching, setSwitching] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  // ── SECURITY: only the __type: prefix in bio is cleared ──────────────────
+  // The actual `role` column (which controls RLS permissions) is NEVER touched here.
+  // RLS on the profiles table also blocks any self-escalation of the role column.
+  const handleSwitchRole = async () => {
+    setSwitching(true);
+    // Wipe ONLY the participant-type tag from bio — never touches role
+    const { error } = await onUpdate({ bio: null });
+    if (error) {
+      toast.error("Could not reset participant type: " + error.message);
+      setSwitching(false);
+      return;
+    }
+    await refreshProfile();
+    setSwitching(false);
+    toast.success("Participant type cleared — redirecting to setup…");
+    navigate("/onboarding");
+  };
+
+  const currentBioLabel = bioType ? BIO_TYPE_LABELS[bioType] ?? bioType : "Not set";
+
+  return (
+    <div className="space-y-6 max-w-xl">
+      <h1 className="font-display text-2xl font-bold">Settings</h1>
+
+      {/* Current account info */}
+      <div className="glass-card rounded-xl p-6 space-y-4">
+        <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Account</h2>
+
+        <div className="flex items-center justify-between py-2 border-b border-border">
+          <div>
+            <p className="text-sm font-medium">Account Type</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Your permission level — cannot be changed by yourself</p>
+          </div>
+          <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-primary/10 text-primary border border-primary/20">
+            {roleLabel}
+          </span>
+        </div>
+
+        <div className="flex items-center justify-between py-2">
+          <div>
+            <p className="text-sm font-medium">Dashboard View</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Currently configured as <strong>{currentBioLabel}</strong></p>
+          </div>
+          <span className="text-xs px-2.5 py-1 rounded-full bg-secondary border border-border text-foreground">
+            {currentBioLabel}
+          </span>
+        </div>
+      </div>
+
+      {/* What your role can do */}
+      {ROLE_PERMISSIONS[roleLabel.toLowerCase().replace(/ \/ /g, "_").replace(/ /g, "_")] ? null : (
+        <div className="glass-card rounded-xl p-5 border border-primary/10">
+          <h2 className="font-semibold text-sm mb-3 flex items-center gap-2">
+            <Shield className="w-4 h-4 text-primary" /> Your Permissions
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            Your access rights are determined server-side and cannot be changed from here.
+          </p>
+        </div>
+      )}
+
+      {/* Security notice */}
+      <div className="glass-card rounded-xl p-5 border border-amber-500/20 bg-amber-500/5">
+        <div className="flex items-start gap-3">
+          <Shield className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold text-sm text-amber-300">Security Notice</p>
+            <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+              Switching your participant type <strong>only changes how your dashboard is organised</strong> — it does not
+              affect your actual account permissions or data access rights.
+              Those are enforced server-side and cannot be changed from the app.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Switch participant type */}
+      <div className="glass-card rounded-xl p-6 space-y-4">
+        <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Participant Type</h2>
+        <p className="text-sm text-muted-foreground">
+          Re-run the setup wizard to reconfigure your dashboard view. This only changes which modules you see — not your
+          actual account role.
+        </p>
+
+        {!confirmOpen ? (
+          <Button variant="outline" className="border-border gap-2" onClick={() => setConfirmOpen(true)}>
+            <Settings className="w-4 h-4" /> Switch Participant Type
+          </Button>
+        ) : (
+          <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 space-y-3">
+            <p className="text-sm font-semibold text-destructive">Are you sure?</p>
+            <p className="text-xs text-muted-foreground">
+              Your current setup (<strong>{currentBioLabel}</strong>) will be cleared and you'll go through onboarding again.
+              Your listings, saved properties, and messages won't be affected.
+            </p>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" className="border-border" onClick={() => setConfirmOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                className="bg-destructive/90 border-0 text-destructive-foreground hover:bg-destructive gap-2"
+                disabled={switching}
+                onClick={handleSwitchRole}
+              >
+                {switching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowRight className="w-3.5 h-3.5" />}
+                Yes, reset my type
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
