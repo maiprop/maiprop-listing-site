@@ -423,4 +423,7 @@ export const PropertyCard = React.forwardRef<HTMLDivElement, PropertyCardProps>(
       </div>
     </div>
   );
-}
+});
+
+PropertyCard.displayName = "PropertyCard";
+
