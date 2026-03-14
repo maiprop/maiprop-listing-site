@@ -317,24 +317,23 @@ export default function Professionals() {
           <div className="absolute top-0 right-0 w-96 h-96 rounded-full blur-3xl opacity-10"
           style={{ background: "radial-gradient(hsl(183 100% 42%), transparent 70%)" }} />
 
-          <div className="container relative py-14">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-accent/15 border border-accent/30 mb-5">
+          <div className="container relative py-8 sm:py-14">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-accent/15 border border-accent/30 mb-4 sm:mb-5">
               <Sparkles className="w-3.5 h-3.5 text-accent" />
               <span className="text-xs font-bold text-accent uppercase tracking-widest">AI-Powered Pro Network</span>
             </div>
-            <div className="grid lg:grid-cols-2 gap-8 items-end">
+            <div className="grid lg:grid-cols-2 gap-6 sm:gap-8 items-end">
               <div>
-                <h1 className="font-display text-5xl font-bold mb-3 leading-tight">
+                <h1 className="font-display text-3xl sm:text-5xl font-bold mb-3 leading-tight">
                   Every expert you need,<br />
                   <span className="gradient-text-cyan">amplified by AI</span>
                 </h1>
-                <p className="text-muted-foreground max-w-lg text-lg leading-relaxed mb-5">
+                <p className="text-muted-foreground max-w-lg text-base sm:text-lg leading-relaxed mb-4 sm:mb-5">
                   From legal due-diligence to renovation — every professional on maiProp uses AI to deliver faster, smarter, and more transparent results.
                 </p>
                 <button
                   onClick={() => setAiModal({ groupId: "legal", groupLabel: "Legal & Title" })}
                   className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary/15 border border-primary/30 text-primary text-sm font-semibold hover:bg-primary/25 transition-colors">
-                  
                   <Brain className="w-4 h-4" />
                   Try AI Tools Now
                   <ChevronRight className="w-3.5 h-3.5" />
