@@ -188,7 +188,7 @@ const REQUEST_TYPE_LABELS: Record<string, string> = {
 export default function Dashboard() {
   const { section } = useParams();
   const navigate = useNavigate();
-  const { profile, user, signOut, updateProfile } = useAuth();
+  const { profile, user, signOut, updateProfile, refreshProfile } = useAuth();
   const role: DashboardRole = (profile?.role as DashboardRole) || "individual";
   const bioType = profile?.bio?.startsWith("__type:") ? profile.bio.replace("__type:", "").split(" ")[0] : null;
 
