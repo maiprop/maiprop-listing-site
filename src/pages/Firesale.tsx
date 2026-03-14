@@ -458,8 +458,8 @@ export default function Firesale() {
         </div>
 
         {/* Main section: Form + Investor pitch */}
-        <div className="container py-16">
-          <div className="grid lg:grid-cols-[1fr_420px] gap-10 items-start">
+        <div className="container py-8 sm:py-16 pb-24 lg:pb-16">
+          <div className="grid lg:grid-cols-[1fr_420px] gap-6 sm:gap-10 items-start">
             {/* Left: Form */}
             <div className="reveal in-view">
               {!submitted ? (
