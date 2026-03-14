@@ -1282,22 +1282,36 @@ export default function Listings() {
 
       <Footer />
 
-      {/* Floating Map button on mobile — above bottom nav, for quick switch to map view */}
-      {viewMode !== "map" && viewMode !== "split" && (
-        <div className="lg:hidden fixed bottom-20 left-1/2 -translate-x-1/2 z-40">
-          <Button
-            size="lg"
-            onClick={() => setViewMode("map")}
-            className="rounded-full shadow-elevated bg-card border border-border gap-2 px-5 h-12 font-semibold"
+      {/* Floating Map / List pill — mobile only, above bottom nav */}
+      <div className="md:hidden fixed bottom-[4.75rem] left-1/2 -translate-x-1/2 z-50 animate-fade-in">
+        {viewMode === "map" ? (
+          <button
+            onClick={() => setViewMode("grid")}
+            className="flex items-center gap-2 pl-4 pr-5 py-3 rounded-full shadow-elevated bg-foreground text-background text-sm font-semibold transition-all active:scale-95"
+            style={{ boxShadow: "0 4px 24px 0 hsl(var(--foreground) / 0.18)" }}
           >
-            <Map className="w-5 h-5" />
-            Map
-          </Button>
-        </div>
-      )}
+            <LayoutGrid className="w-4 h-4" />
+            Show List
+          </button>
+        ) : (
+          <button
+            onClick={() => setViewMode("map")}
+            className="flex items-center gap-2 pl-4 pr-5 py-3 rounded-full shadow-elevated bg-foreground text-background text-sm font-semibold transition-all active:scale-95"
+            style={{ boxShadow: "0 4px 24px 0 hsl(var(--foreground) / 0.18)" }}
+          >
+            <Map className="w-4 h-4" />
+            Show Map
+            {filtered.length > 0 && (
+              <span className="ml-0.5 bg-primary text-primary-foreground text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                {filtered.length > 99 ? "99+" : filtered.length}
+              </span>
+            )}
+          </button>
+        )}
+      </div>
 
       {/* bottom spacing for mobile nav */}
-      <div className="h-16 lg:hidden" />
+      <div className="h-16 md:hidden" />
 
       {/* Compare drawer */}
       <CompareDrawer
