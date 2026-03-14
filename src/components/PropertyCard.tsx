@@ -67,7 +67,7 @@ const SYSTEM_TAG_PREFIXES = [
   "round:", "status:", "posted", "sync:",
 ];
 
-export const PropertyCard = React.forwardRef<HTMLDivElement, PropertyCardProps>(function PropertyCard({ property, compact = false }, _ref) {
+export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(function PropertyCard({ property, compact = false }, _ref) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { data: isFavorited = false } = useIsFavorited(property.id);
