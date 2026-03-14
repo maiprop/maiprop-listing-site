@@ -955,7 +955,7 @@ export default function Auctions() {
 
         {/* ── LIST VIEW ── */}
         {viewMode === "list" &&
-        <div className="container pb-16">
+        <div className="container pb-24 lg:pb-16">
             {isLoading &&
           <div className="flex items-center justify-center py-20 gap-3 text-muted-foreground">
                 <Loader2 className="w-5 h-5 animate-spin" />
@@ -992,7 +992,7 @@ export default function Auctions() {
                    {selectedCity !== "All Cities" ? ` in ${selectedCity}` : ""}
                    {" · "}ordered by date
                  </p>
-                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                    {paginated.map((a) =>
               <AuctionCard
                 key={a.id}

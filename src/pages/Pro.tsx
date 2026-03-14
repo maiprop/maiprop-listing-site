@@ -133,8 +133,8 @@ export default function Pro() {
         </div>
 
         {/* Pricing cards */}
-        <div className="container max-w-5xl py-16">
-          <div className="grid md:grid-cols-2 gap-6 items-stretch">
+        <div className="container max-w-5xl py-8 sm:py-16 pb-24 lg:pb-16 px-4">
+          <div className="grid md:grid-cols-2 gap-4 sm:gap-6 items-stretch">
 
             {/* Free plan */}
             <div className="glass-card rounded-2xl border border-border overflow-hidden flex flex-col">
