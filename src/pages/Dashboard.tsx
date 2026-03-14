@@ -337,13 +337,14 @@ export default function Dashboard() {
           )}
 
           {/* OVERVIEW — role-specific welcome, CTA, and main content */}
-          {activeSection === "overview" && navItems.some(i => i.key === "overview") && (
+           {activeSection === "overview" && navItems.some(i => i.key === "overview") && (
             <div className="space-y-6">
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
                   <h1 className="font-display text-2xl font-bold">Good morning, {displayName} 👋</h1>
                   <p className="text-muted-foreground text-sm mt-1">
-                    {role === "individual" && "Here's your search activity and alerts."}
+                    {role === "individual" && isInvestorUser && "Your investment pipeline and opportunities."}
+                    {role === "individual" && !isInvestorUser && "Here's your search activity and alerts."}
                     {role === "seller_landlord" && "Manage your listings and viewings."}
                     {role === "agent" && "Here's what's happening with your listings and leads."}
                     {role === "professional" && "Your services and upcoming consultations."}
@@ -354,10 +355,16 @@ export default function Dashboard() {
                     <Plus className="w-4 h-4" /> New Listing
                   </Button>
                 )}
-                {role === "individual" && (
+                {role === "individual" && isInvestorUser && (
+                  <Button className="bg-gradient-gold border-0 text-background font-semibold gap-2" asChild>
+                    <Link to="/auctions"><Gavel className="w-4 h-4" /> Browse Auctions</Link>
+                  </Button>
+                )}
+                {role === "individual" && !isInvestorUser && (
                   <Button variant="outline" className="border-border gap-2" asChild>
                     <Link to="/listings"><Search className="w-4 h-4" /> Browse Listings</Link>
                   </Button>
+                )}
                 )}
                 {role === "professional" && (
                   <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" onClick={() => setActiveSection("services")}>
