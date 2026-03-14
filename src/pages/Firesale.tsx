@@ -432,11 +432,11 @@ export default function Firesale() {
         </div>
 
         {/* How it works */}
-        <div className="container py-16 border-b border-border">
-          <p className="reveal in-view text-[11px] font-bold uppercase tracking-widest text-muted-foreground text-center mb-8">
+        <div className="container py-10 sm:py-16 border-b border-border">
+          <p className="reveal in-view text-[11px] font-bold uppercase tracking-widest text-muted-foreground text-center mb-6 sm:mb-8">
             How It Works
           </p>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
             {steps.map((s, i) => (
               <div
                 key={s.step}
