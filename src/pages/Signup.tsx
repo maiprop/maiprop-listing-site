@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Eye, EyeOff, Loader2, ArrowRight, Home, Users, TrendingUp, UserCheck, Globe2, Building2, Briefcase, ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -42,11 +42,14 @@ const PARTICIPANT_TYPES: {
 
 export default function Signup() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { signUp, updateProfile, user, loading: authLoading } = useAuth();
   const { theme } = useTheme();
 
-  const [step, setStep] = useState<"role" | "details">("role");
-  const [selectedType, setSelectedType] = useState<ParticipantId | null>(null);
+  const isProfessionalIntent = searchParams.get("role") === "professional" || searchParams.get("type") === "professional";
+
+  const [step, setStep] = useState<"role" | "details">(isProfessionalIntent ? "details" : "role");
+  const [selectedType, setSelectedType] = useState<ParticipantId | null>(isProfessionalIntent ? "professional" : null);
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -68,6 +71,10 @@ export default function Signup() {
 
   const handleGoogleSignIn = async () => {
     if (!selectedType) return;
+    // Persist type for post-OAuth so Onboarding can apply it
+    try {
+      sessionStorage.setItem("signup_participant_type", selectedType);
+    } catch (_) {}
     setGoogleLoading(true);
     const { error } = await lovable.auth.signInWithOAuth("google", {
       redirect_uri: `${window.location.origin}/onboarding`,

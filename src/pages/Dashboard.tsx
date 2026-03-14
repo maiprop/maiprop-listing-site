@@ -9,6 +9,7 @@ import {
   ArrowRight, Clock, CheckCircle2, AlertCircle, Phone,
 } from "lucide-react";
 import AdminPanel from "@/components/AdminPanel";
+import ContactsCRM from "@/components/ContactsCRM";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { useAuth } from "@/contexts/AuthContext";
@@ -25,6 +26,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { getParticipantTypeFromProfile, PARTICIPANT_LABELS } from "@/lib/participantConfig";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -190,7 +192,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { profile, user, signOut, updateProfile, refreshProfile } = useAuth();
   const role: DashboardRole = (profile?.role as DashboardRole) || "individual";
-  const bioType = profile?.bio?.startsWith("__type:") ? profile.bio.replace("__type:", "").split(" ")[0] : null;
+  const bioType = getParticipantTypeFromProfile(profile);
 
   const navItems = getNavItemsForBioType(bioType, role);
   const defaultSection = navItems[0]?.key ?? "overview";
@@ -466,7 +468,7 @@ export default function Dashboard() {
                         <p className="font-semibold text-sm">Upgrade to Pro</p>
                         <p className="text-xs text-muted-foreground mt-0.5">Get more visibility, AI listing assist, and selling add-ons.</p>
                       </div>
-                      <Button variant="outline" size="sm" className="border-primary text-primary" asChild><Link to="/pro">View Pro</Link></Button>
+                      <Button variant="outline" size="sm" className="border-primary text-primary" asChild><Link to="/pricing">View Pro</Link></Button>
                     </div>
                   )}
                 </>
@@ -827,16 +829,45 @@ export default function Dashboard() {
           {/* ── ADMIN — agent, institutional, developer ──────────────────── */}
           {activeSection === "admin" && navItems.some(i => i.key === "admin") && <AdminPanel />}
 
+          {/* ── CONTACTS CRM ───────────────────────────────────────────── */}
+          {activeSection === "contacts" && navItems.some(i => i.key === "contacts") && <ContactsCRM />}
+
+          {/* ── PROJECTS — link to full page ───────────────────────────── */}
+          {activeSection === "projects" && navItems.some(i => i.key === "projects") && (
+            <LinkSection
+              icon={Globe2}
+              title="Projects"
+              desc="Showcase your development projects and pre-sale listings."
+              href="/projects"
+              cta="Manage Projects"
+              stats={myListings.filter(l => l.project_id).length > 0 ? [{ label: "Listings in projects", value: myListings.filter(l => l.project_id).length }] : undefined}
+            />
+          )}
+
+          {/* ── PORTFOLIOS — link to full page ─────────────────────────── */}
+          {activeSection === "portfolios" && navItems.some(i => i.key === "portfolios") && (
+            <LinkSection
+              icon={TrendingUp}
+              title="Portfolios"
+              desc="Track your property portfolio, valuations, and performance."
+              href="/portfolios"
+              cta="Manage Portfolios"
+            />
+          )}
+
+          {/* ── ANALYTICS — minimal listing analytics ─────────────────── */}
+          {activeSection === "analytics" && navItems.some(i => i.key === "analytics") && (
+            <AnalyticsSection
+              myListings={myListings}
+              leads={leads as any[]}
+              role={role}
+              listingsLoading={listingsLoading}
+            />
+          )}
+
           {/* ── SETTINGS ─────────────────────────────────────────────── */}
           {activeSection === "settings" && navItems.some(i => i.key === "settings") && (
             <SettingsSection bioType={bioType} roleLabel={roleLabel} onUpdate={updateProfile} refreshProfile={refreshProfile} />
-          )}
-
-          {/* ── PLACEHOLDER MODULES (contacts, projects, portfolios, analytics) ─── */}
-          {["contacts", "projects", "portfolios", "analytics"].map(key =>
-            activeSection === key && navItems.some(i => i.key === key) ? (
-              <PlaceholderSection key={key} sectionKey={key} />
-            ) : null
           )}
 
         </main>
@@ -928,25 +959,144 @@ function LeadsSection({ leads, onUpdateStatus }: { leads: any[]; onUpdateStatus:
   );
 }
 
-// ── Placeholder sections (coming soon) ────────────────────────────────────────
-const PLACEHOLDER_META: Record<string, { icon: React.ElementType; title: string; desc: string }> = {
-  contacts:   { icon: Users,       title: "Contacts CRM",  desc: "Manage your leads, clients, and contacts in one place." },
-  projects:   { icon: Globe2,      title: "Projects",      desc: "Showcase your development projects and pre-sale listings." },
-  portfolios: { icon: TrendingUp,  title: "Portfolios",    desc: "Track your property portfolio, valuations, and performance." },
-  analytics:  { icon: BarChart2,   title: "Analytics",     desc: "Advanced listing and lead analytics — connect to mAI Prop OS." },
-  settings:   { icon: Settings,    title: "Settings",      desc: "Account preferences, notifications, and integrations." },
-};
-
-function PlaceholderSection({ sectionKey }: { sectionKey: string }) {
-  const meta = PLACEHOLDER_META[sectionKey] ?? { icon: Settings, title: sectionKey, desc: "Coming soon." };
-  const Icon = meta.icon;
+// ── Link section (Projects, Portfolios) ────────────────────────────────────────
+function LinkSection({
+  icon: Icon,
+  title,
+  desc,
+  href,
+  cta,
+  stats,
+}: {
+  icon: React.ElementType;
+  title: string;
+  desc: string;
+  href: string;
+  cta: string;
+  stats?: { label: string; value: number }[];
+}) {
   return (
-    <div className="glass-card rounded-xl p-12 flex items-center justify-center">
-      <div className="text-center">
-        <Icon className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-        <p className="font-semibold capitalize">{meta.title}</p>
-        <p className="text-sm text-muted-foreground mt-1 max-w-xs mx-auto">{meta.desc}</p>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="font-display text-2xl font-bold flex items-center gap-2">
+            <Icon className="w-6 h-6 text-primary" /> {title}
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">{desc}</p>
+        </div>
+        <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" asChild>
+          <Link to={href}><ArrowRight className="w-4 h-4" /> {cta}</Link>
+        </Button>
       </div>
+      {stats && stats.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {stats.map(s => (
+            <div key={s.label} className="glass-card rounded-xl p-4">
+              <span className="text-xs text-muted-foreground">{s.label}</span>
+              <div className="font-display text-2xl font-bold text-primary mt-1">{s.value}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="glass-card rounded-xl p-10 text-center">
+        <Icon className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+        <p className="font-semibold text-foreground mb-1">{title}</p>
+        <p className="text-sm text-muted-foreground mb-4 max-w-sm mx-auto">{desc}</p>
+        <Button variant="outline" className="border-border gap-2" asChild>
+          <Link to={href}>{cta} <ArrowRight className="w-4 h-4" /></Link>
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ── Analytics section (minimal listing & lead analytics) ───────────────────────
+function AnalyticsSection({
+  myListings,
+  leads,
+  role,
+  listingsLoading,
+}: {
+  myListings: any[];
+  leads: any[];
+  role: string;
+  listingsLoading: boolean;
+}) {
+  const totalViews = myListings.reduce((s, l) => s + (l.views_count || 0), 0);
+  const activeCount = myListings.filter(l => l.status === "active").length;
+  const pendingLeads = leads.filter(l => l.status === "pending").length;
+  const totalLeads = leads.length;
+
+  const stats: { label: string; value: number; color: string }[] = [
+    { label: "Active Listings", value: activeCount, color: "text-primary" },
+    { label: "Total Views", value: totalViews, color: "text-brand-emerald" },
+    ...(role === "professional" ? [
+      { label: "Pending Leads", value: pendingLeads, color: "text-brand-gold" },
+      { label: "Total Leads", value: totalLeads, color: "text-primary" },
+    ] : []),
+  ];
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="font-display text-2xl font-bold flex items-center gap-2">
+            <BarChart2 className="w-6 h-6 text-primary" /> Analytics
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {role === "professional" ? "Lead and consultation analytics." : "Listing performance overview."}
+          </p>
+        </div>
+        <Button variant="outline" className="border-border gap-2" asChild>
+          <Link to="/market-intelligence"><ArrowRight className="w-4 h-4" /> Market Intelligence</Link>
+        </Button>
+      </div>
+
+      {listingsLoading ? (
+        <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {stats.map(s => (
+              <div key={s.label} className="glass-card rounded-xl p-4">
+                <span className="text-xs text-muted-foreground">{s.label}</span>
+                <div className={cn("font-display text-2xl font-bold mt-1", s.color)}>{s.value}</div>
+              </div>
+            ))}
+          </div>
+
+          {myListings.length > 0 && (
+            <div>
+              <h2 className="font-display font-semibold mb-4">Listing Performance</h2>
+              <div className="space-y-2">
+                {myListings.slice(0, 10).map(l => (
+                  <div key={l.id} className="glass-card rounded-xl p-4 flex items-center gap-4">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm truncate">{l.title}</p>
+                      <p className="text-xs text-muted-foreground">{l.city} · €{Number(l.price).toLocaleString()}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span className="font-display text-lg font-bold text-brand-emerald">{l.views_count ?? 0}</span>
+                      <span className="text-xs text-muted-foreground block">views</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {role !== "professional" && myListings.length === 0 && (
+            <div className="glass-card rounded-xl p-10 text-center">
+              <BarChart2 className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+              <p className="font-semibold">No listing data yet</p>
+              <p className="text-sm text-muted-foreground mt-1">Create listings to see performance analytics here.</p>
+              <Button variant="outline" className="border-border mt-4" asChild>
+                <Link to="/listings/new">Create Listing</Link>
+              </Button>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -1006,16 +1156,6 @@ function ProfileEditor({ profile, onUpdate }: { profile: any; onUpdate: any }) {
   );
 }
 
-// ── Settings section ───────────────────────────────────────────────────────────
-const BIO_TYPE_LABELS: Record<string, string> = {
-  buyer: "Buyer / Renter",
-  seller: "Seller / Landlord",
-  investor: "Investor",
-  agent: "Real Estate Agent",
-  institutional: "Institutional",
-  developer: "Developer",
-  professional: "Professional",
-};
 
 const ROLE_PERMISSIONS: Record<string, { label: string; can: string[] }> = {
   individual:      { label: "Individual",       can: ["Browse listings", "Save properties", "Request viewings", "Auction alerts"] },
@@ -1057,7 +1197,7 @@ function SettingsSection({
     navigate("/onboarding");
   };
 
-  const currentBioLabel = bioType ? BIO_TYPE_LABELS[bioType] ?? bioType : "Not set";
+  const currentBioLabel = bioType ? (PARTICIPANT_LABELS[bioType as keyof typeof PARTICIPANT_LABELS] ?? bioType) : "Not set";
 
   return (
     <div className="space-y-6 max-w-xl">

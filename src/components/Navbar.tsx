@@ -225,7 +225,7 @@ export function Navbar() {
               {/* Pro badge / CTA */}
               {isPro ? (
                 <Link
-                  to="/pro"
+                  to="/pricing"
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
                     forceLight
                       ? "bg-brand-gold/30 border-brand-gold/50 text-yellow-200"
@@ -236,7 +236,7 @@ export function Navbar() {
                 </Link>
               ) : (
                 <Link
-                  to="/pro"
+                  to="/pricing"
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all hover:scale-105 ${
                     forceLight
                       ? "bg-brand-gold/20 border-brand-gold/40 text-yellow-200 hover:bg-brand-gold/30"

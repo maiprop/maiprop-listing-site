@@ -832,7 +832,7 @@ export default function Auctions() {
                       </select>
                     </div> :
 
-                <div className="relative cursor-pointer group/pf" onClick={() => navigate("/pro")}>
+                <div className="relative cursor-pointer group/pf" onClick={() => navigate("/pricing")}>
                       <label className="text-xs text-muted-foreground font-medium flex items-center gap-1.5 mb-1.5 pointer-events-none">Ownership Status <PremiumBadge /></label>
                       <select disabled className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-muted-foreground outline-none appearance-none opacity-60 pointer-events-none"><option>All</option></select>
                     </div>
@@ -846,7 +846,7 @@ export default function Auctions() {
                       </select>
                     </div> :
 
-                <div className="relative cursor-pointer group/pf" onClick={() => navigate("/pro")}>
+                <div className="relative cursor-pointer group/pf" onClick={() => navigate("/pricing")}>
                       <label className="text-xs text-muted-foreground font-medium flex items-center gap-1.5 mb-1.5 pointer-events-none">Auction Round <PremiumBadge /></label>
                       <select disabled className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-muted-foreground outline-none appearance-none opacity-60 pointer-events-none"><option>All</option></select>
                     </div>
@@ -873,7 +873,7 @@ export default function Auctions() {
                       </select>
                     </div> :
 
-                <div className="relative cursor-pointer group/pf" onClick={() => navigate("/pro")}>
+                <div className="relative cursor-pointer group/pf" onClick={() => navigate("/pricing")}>
                       <label className="text-xs text-muted-foreground font-medium flex items-center gap-1.5 mb-1.5 pointer-events-none">
                         Est. Rental Yield <PremiumBadge />
                       </label>
@@ -902,7 +902,7 @@ export default function Auctions() {
                       <span className="text-xs font-medium">Unlock Pro filters — Auction Round &amp; Rental Yield</span>
                     </div>
                     <Button size="sm" className="bg-gradient-gold border-0 text-background font-semibold text-xs" asChild>
-                      <Link to="/pro">Upgrade to Pro</Link>
+                      <Link to="/pricing">Upgrade to Pro</Link>
                     </Button>
                   </div>
               }
@@ -1078,7 +1078,7 @@ export default function Auctions() {
                       </p>
                     </div>
                     <Button size="sm" className="bg-gradient-gold border-0 text-background font-semibold shrink-0" asChild>
-                      <Link to="/pro">Upgrade to Pro</Link>
+                      <Link to="/pricing">Upgrade to Pro</Link>
                     </Button>
                   </div>
                 }
