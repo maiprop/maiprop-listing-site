@@ -728,7 +728,6 @@ function Shell({
   stepIndex,
   totalSteps,
   onBack,
-  wide,
   step,
 }: {
   children: React.ReactNode;
@@ -736,7 +735,6 @@ function Shell({
   totalSteps: number;
   step: OnboardingStep;
   onBack?: () => void;
-  wide?: boolean;
 }) {
   const prevStepRef = useRef<OnboardingStep | null>(null);
   const prevIndexRef = useRef(stepIndex);
