@@ -357,6 +357,7 @@ export default function PropertyDetail() {
   const subtype = (db as any)?.commercial_subtype as string | null;
   const description = db.description;
   const ownerProfile = (dbListing as any).profiles;
+  const ownerParticipantType = (dbListing as any).ownerParticipantType ?? null;
   const pricePerSqm = db.price_per_sqm;
   const energyClass = db.energy_class;
   const isLandType = propertyType === "land";
@@ -1074,8 +1075,18 @@ export default function PropertyDetail() {
                       ownerProfile.display_name?.[0] || "O"}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-sm truncate">{ownerProfile.display_name || "Owner"}</p>
-                          <p className="text-xs text-muted-foreground">Listing Owner</p>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-semibold text-sm truncate">{ownerProfile.display_name || "Owner"}</p>
+                            {ownerParticipantType === "agent" && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30">Agent</span>
+                            )}
+                            {ownerParticipantType === "seller" && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-600 dark:text-violet-400 border border-violet-500/30">Private Seller</span>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {ownerParticipantType === "agent" ? "Licensed real estate agent" : ownerParticipantType === "seller" ? "Private seller / landlord" : "Listing owner"}
+                          </p>
                         </div>
                         {ownerProfile.verified &&
                     <div className="flex items-center gap-1 text-xs text-primary shrink-0">

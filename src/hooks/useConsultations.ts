@@ -3,6 +3,47 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
+export type ConsultationRequestInput = {
+  professional_id: string;
+  requester_name: string;
+  requester_email: string;
+  requester_phone?: string;
+  request_type: "consultation" | "callback" | "message";
+  service?: string;
+  preferred_date?: string;
+  preferred_time?: string;
+  callback_time?: string;
+  message?: string;
+};
+
+export function useSubmitConsultation() {
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: ConsultationRequestInput) => {
+      const { error } = await supabase.from("consultation_requests").insert({
+        professional_id: input.professional_id,
+        requester_id: user?.id ?? null,
+        requester_name: input.requester_name,
+        requester_email: input.requester_email,
+        requester_phone: input.requester_phone ?? null,
+        request_type: input.request_type,
+        service: input.service ?? null,
+        preferred_date: input.preferred_date ?? null,
+        preferred_time: input.preferred_time ?? null,
+        callback_time: input.callback_time ?? null,
+        message: input.message ?? null,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["consultation-requests"] });
+      toast.success("Request sent! The professional will contact you soon.");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
 export function useMyConsultationRequests() {
   const { user } = useAuth();
   return useQuery({

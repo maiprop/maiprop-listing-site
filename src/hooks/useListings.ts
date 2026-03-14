@@ -52,7 +52,17 @@ export function useListings(filters?: {
         if (data.length < FETCH_LIMIT) break;
         from += FETCH_LIMIT;
       }
-      return allData;
+      if (allData.length === 0) return allData;
+      const ownerIds = [...new Set(allData.map((r: any) => r.owner_id).filter(Boolean))];
+      const { data: ownerProfiles = [] } = await supabase
+        .from("profiles")
+        .select("user_id, display_name, avatar_url, role, bio")
+        .in("user_id", ownerIds);
+      const profileMap = new Map((ownerProfiles as any[]).map((p: any) => [p.user_id, p]));
+      return allData.map((r: any) => ({
+        ...r,
+        profiles: profileMap.get(r.owner_id) ?? null,
+      }));
     },
   });
 }
@@ -75,15 +85,24 @@ export function useListing(id: string) {
       // Fetch owner profile and Pro status (Pro owners can receive messages and calendar)
       let profiles = null;
       let ownerIsPro = false;
+      let ownerParticipantType: "agent" | "seller" | null = null;
       if (data?.owner_id) {
-        const [{ data: profile }, { data: sub }] = await Promise.all([
+        const [{ data: profilePublic }, { data: profileFull }, { data: invSub }] = await Promise.all([
           supabase.from("profiles_public").select("user_id, display_name, avatar_url").eq("user_id", data.owner_id).maybeSingle(),
+          supabase.from("profiles").select("user_id, role, bio").eq("user_id", data.owner_id).maybeSingle(),
           supabase.from("investor_subscriptions").select("tier, status").eq("user_id", data.owner_id).order("started_at", { ascending: false }).limit(1).maybeSingle(),
         ]);
-        profiles = profile ?? null;
-        ownerIsPro = !!(sub?.status === "active" && (sub?.tier || "").toLowerCase() === "pro");
+        profiles = profilePublic ?? null;
+        ownerIsPro = !!(invSub?.status === "active" && (invSub?.tier || "").toLowerCase() === "pro");
+        if (profileFull) {
+          ownerParticipantType = profileFull.role === "agent" ? "agent"
+            : profileFull.role === "seller_landlord" ? "seller"
+            : (profileFull.bio ?? "").startsWith("__type:seller") ? "seller"
+            : (profileFull.bio ?? "").startsWith("__type:agent") ? "agent"
+            : null;
+        }
       }
-      return { ...data, profiles, ownerIsPro };
+      return { ...data, profiles, ownerIsPro, ownerParticipantType };
     },
     enabled: !!id,
   });

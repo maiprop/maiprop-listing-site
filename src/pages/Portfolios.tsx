@@ -11,6 +11,7 @@ import { PropertyCard } from "@/components/PropertyCard";
 import { usePortfolios, usePortfolio, useCreatePortfolio, useUpdatePortfolio, useDeletePortfolio } from "@/hooks/usePortfolios";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useAuth } from "@/contexts/AuthContext";
+import { getOwnerParticipantType } from "@/lib/participantConfig";
 import { toast } from "sonner";
 
 function dbListingToCard(l: any) {
@@ -30,6 +31,8 @@ function dbListingToCard(l: any) {
     ].filter(Boolean),
     type: l.property_type as any,
     listingType: l.listing_type as any,
+    ownerParticipantType: getOwnerParticipantType(l.profiles ?? null),
+    agent: l.profiles ? { name: l.profiles.display_name || "Owner", verified: l.profiles.verified || false, avatar: l.profiles.avatar_url } : undefined,
   };
 }
 

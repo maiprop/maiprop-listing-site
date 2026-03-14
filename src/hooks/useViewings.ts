@@ -66,3 +66,20 @@ export function useUpdateViewingStatus() {
     },
   });
 }
+
+export function useUpdateViewing() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, updates }: { id: string; updates: { status?: string; video_link?: string | null } }) => {
+      const { error } = await supabase
+        .from("viewings")
+        .update(updates as any)
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["viewings"] });
+      toast.success("Viewing updated!");
+    },
+  });
+}

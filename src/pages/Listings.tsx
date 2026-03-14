@@ -24,6 +24,7 @@ import {
   ENERGY_CLASSES, HEATING_TYPES, CONSTRUCTION_STATUSES, ROAD_TYPES, SLOPE_TYPES,
 } from "@/lib/filterConfig";
 import { useSmartFilters } from "@/hooks/useSmartFilters";
+import { getOwnerParticipantType } from "@/lib/participantConfig";
 import { toast } from "sonner";
 
 
@@ -67,6 +68,7 @@ const sortOptions = [
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function dbListingToCard(l: any) {
+  const ownerParticipantType = getOwnerParticipantType(l.profiles ?? null);
   // Parse ownership from tags array (e.g. "ownership:full", "ownership_pct:50")
   const tags: string[] = l.tags || [];
   const ownershipTag = tags.find((t: string) => t.startsWith("ownership:") && !t.startsWith("ownership_pct:"));
@@ -120,6 +122,7 @@ function dbListingToCard(l: any) {
       verified: l.profiles.verified || false,
       avatar: l.profiles.avatar_url,
     } : undefined,
+    ownerParticipantType,
     tags: displayTags,
     hasVideo: l.has_video_tour,
     hasVirtualTour: l.has_virtual_tour,
