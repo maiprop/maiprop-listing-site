@@ -41,7 +41,6 @@ interface ParticipantType {
   color: string;
   features: string[];
   isPro?: boolean;
-  /** Section heading so Real estate agents are one category by themselves */
   section?: string;
 }
 
@@ -142,12 +141,10 @@ const PRO_CATEGORIES = [
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 const DEFAULT_AVAILABILITY: DayAvailability[] = DAYS.map((_, i) => ({
-  enabled: i >= 1 && i <= 5, // Mon–Fri enabled by default
+  enabled: i >= 1 && i <= 5,
   start: "09:00",
   end: "18:00",
 }));
-
-// ── Step progress map ──────────────────────────────────────────────────────────
 
 const PRO_STEPS: OnboardingStep[] = ["pick-type", "pro-category", "pro-verify", "pro-services", "pro-availability", "pro-video", "done"];
 const OTHER_STEPS: OnboardingStep[] = ["pick-type", "done"];
@@ -162,33 +159,25 @@ export default function Onboarding() {
   const [selected, setSelected] = useState<ParticipantType | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Pro state
   const [proCategory, setProCategory] = useState("");
   const [professionalId, setProfessionalId] = useState<string | null>(null);
   const [proForm, setProForm] = useState({ businessName: "", taxId: "", phone: "", licenseNumber: "" });
   const [proErrors, setProErrors] = useState<Record<string, string>>({});
 
-  // Services state
   const [selectedServices, setSelectedServices] = useState<Record<string, SelectedService>>({});
-
-  // Availability state
   const [availability, setAvailability] = useState<DayAvailability[]>(DEFAULT_AVAILABILITY);
-
-  // Video/premium state
   const [videoLink, setVideoLink] = useState("");
   const [calendarNotes, setCalendarNotes] = useState("");
 
   const steps = selected?.isPro ? PRO_STEPS : OTHER_STEPS;
   const stepIndex = steps.indexOf(step);
-  const totalSteps = steps.length - 1; // exclude "done" from count display
+  const totalSteps = steps.length - 1;
 
-  // ── Non-pro finish ───────────────────────────────────────────────────────────
+  // ── Handlers ─────────────────────────────────────────────────────────────────
+
   const handleSelectNonPro = async (p: ParticipantType) => {
     setSelected(p);
-    if (p.isPro) {
-      setStep("pro-category");
-      return;
-    }
+    if (p.isPro) { setStep("pro-category"); return; }
     setLoading(true);
     await updateProfile({ role: p.role });
     await supabase.from("profiles").update({ bio: `__type:${p.id}` }).eq("user_id", user!.id);
@@ -197,13 +186,11 @@ export default function Onboarding() {
     setStep("done");
   };
 
-  // ── Pro category → verify ────────────────────────────────────────────────────
   const handleCategoryNext = () => {
     if (!proCategory) { toast.error("Please select your professional category"); return; }
     setStep("pro-verify");
   };
 
-  // ── Pro verify → create professionals record ─────────────────────────────────
   const handleProVerify = async () => {
     const errs: Record<string, string> = {};
     if (!proForm.businessName.trim()) errs.businessName = "Business name is required";
@@ -212,10 +199,8 @@ export default function Onboarding() {
     if (Object.keys(errs).length) { setProErrors(errs); return; }
 
     setLoading(true);
-    // Update profile role
     await updateProfile({ role: "professional", phone: proForm.phone });
 
-    // Create professionals record
     const { data: proData, error } = await supabase
       .from("professionals")
       .insert({
@@ -230,54 +215,27 @@ export default function Onboarding() {
       .select()
       .single();
 
-    if (error) {
-      toast.error("Could not save professional profile. Please try again.");
-      setLoading(false);
-      return;
-    }
+    if (error) { toast.error("Could not save professional profile. Please try again."); setLoading(false); return; }
     setProfessionalId((proData as any).id);
-
-    // Also write bio marker to profiles
     await supabase.from("profiles").update({ bio: `__type:professional` }).eq("user_id", user!.id);
     await refreshProfile();
-
     setLoading(false);
     setStep("pro-services");
   };
 
-  // ── Toggle / configure a service ─────────────────────────────────────────────
   const toggleService = (svc: ServiceTemplate) => {
     setSelectedServices(prev => {
-      if (prev[svc.key]) {
-        const next = { ...prev };
-        delete next[svc.key];
-        return next;
-      }
-      return {
-        ...prev,
-        [svc.key]: {
-          template: svc,
-          pricingModel: svc.defaultPricing,
-          rate: String(svc.suggestedRate),
-          videoEnabled: svc.videoAvailable,
-        },
-      };
+      if (prev[svc.key]) { const next = { ...prev }; delete next[svc.key]; return next; }
+      return { ...prev, [svc.key]: { template: svc, pricingModel: svc.defaultPricing, rate: String(svc.suggestedRate), videoEnabled: svc.videoAvailable } };
     });
   };
 
   const updateServicePricing = (key: string, field: "pricingModel" | "rate" | "videoEnabled", value: any) => {
-    setSelectedServices(prev => ({
-      ...prev,
-      [key]: { ...prev[key], [field]: value },
-    }));
+    setSelectedServices(prev => ({ ...prev, [key]: { ...prev[key], [field]: value } }));
   };
 
-  // ── Save services ─────────────────────────────────────────────────────────────
   const handleSaveServices = async () => {
-    if (Object.keys(selectedServices).length === 0) {
-      toast.error("Please select at least one service you offer");
-      return;
-    }
+    if (Object.keys(selectedServices).length === 0) { toast.error("Please select at least one service you offer"); return; }
     setLoading(true);
     const rows = Object.values(selectedServices).map(s => ({
       professional_id: professionalId!,
@@ -298,33 +256,24 @@ export default function Onboarding() {
     setStep("pro-availability");
   };
 
-  // ── Save availability ─────────────────────────────────────────────────────────
   const handleSaveAvailability = async () => {
     setLoading(true);
-    const rows = availability
-      .map((day, i) => ({ ...day, dayIndex: i }))
-      .filter(d => d.enabled)
-      .map(d => ({
-        professional_id: professionalId!,
-        day_of_week: d.dayIndex,
-        start_time: d.start,
-        end_time: d.end,
-        is_active: true,
-      }));
-
-    if (rows.length > 0) {
-      await supabase.from("professional_availability" as any).insert(rows);
-    }
+    const rows = availability.map((day, i) => ({ ...day, dayIndex: i })).filter(d => d.enabled).map(d => ({
+      professional_id: professionalId!,
+      day_of_week: d.dayIndex,
+      start_time: d.start,
+      end_time: d.end,
+      is_active: true,
+    }));
+    if (rows.length > 0) await supabase.from("professional_availability" as any).insert(rows);
     setLoading(false);
     setStep("pro-video");
   };
 
-  // ── Save video + finish ────────────────────────────────────────────────────────
   const handleSaveVideo = async () => {
     setLoading(true);
     if (professionalId) {
-      await supabase
-        .from("professionals")
+      await supabase.from("professionals")
         .update({ video_link: videoLink || null, calendar_notes: calendarNotes || null } as any)
         .eq("id", professionalId);
     }
@@ -332,20 +281,19 @@ export default function Onboarding() {
     setStep("done");
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────────
+  // ── Step content ──────────────────────────────────────────────────────────────
 
-  // Step: Pick type
-  if (step === "pick-type") {
-    return (
-      <Shell stepIndex={1} totalSteps={totalSteps} step={step}>
+  const stepContent = (() => {
+
+    // ── Pick type ──
+    if (step === "pick-type") return (
+      <div>
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-full px-4 py-1.5 text-xs font-medium text-primary mb-4">
             <Sparkles className="w-3.5 h-3.5" /> Personalise your experience
           </div>
           <h1 className="font-display font-bold text-2xl md:text-3xl text-foreground mb-2">How do you use the market?</h1>
-          <p className="text-muted-foreground text-sm max-w-sm mx-auto">
-            Choose your profile. You can always update it in settings.
-          </p>
+          <p className="text-muted-foreground text-sm max-w-sm mx-auto">Choose your profile. You can always update it in settings.</p>
         </div>
         <div className="space-y-6">
           {(["Private", "Real estate agents", "Institutional & development", "Services"] as const).map(section => {
@@ -399,19 +347,15 @@ export default function Onboarding() {
         </div>
         <p className="text-center text-xs text-muted-foreground mt-6">
           Not sure yet?{" "}
-          <button className="text-primary hover:underline" onClick={() => handleSelectNonPro(participants[0])}>
-            Continue as a buyer
-          </button>{" "}
+          <button className="text-primary hover:underline" onClick={() => handleSelectNonPro(participants[0])}>Continue as a buyer</button>{" "}
           and customise later.
         </p>
-      </Shell>
+      </div>
     );
-  }
 
-  // Step: Pro category
-  if (step === "pro-category") {
-    return (
-      <Shell stepIndex={2} totalSteps={6} step={step} onBack={() => setStep("pick-type")}>
+    // ── Pro category ──
+    if (step === "pro-category") return (
+      <div>
         <div className="text-center mb-6">
           <div className="w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/25 flex items-center justify-center mx-auto mb-4">
             <Wrench className="w-7 h-7 text-rose-400" />
@@ -439,14 +383,12 @@ export default function Onboarding() {
         <Button className="w-full bg-gradient-primary border-0 text-primary-foreground" onClick={handleCategoryNext}>
           Continue <ArrowRight className="w-4 h-4 ml-2" />
         </Button>
-      </Shell>
+      </div>
     );
-  }
 
-  // Step: Pro verify
-  if (step === "pro-verify") {
-    return (
-      <Shell stepIndex={3} totalSteps={6} step={step} onBack={() => setStep("pro-category")}>
+    // ── Pro verify ──
+    if (step === "pro-verify") return (
+      <div>
         <div className="text-center mb-5">
           <h1 className="font-display font-bold text-2xl text-foreground mb-1">Business Verification</h1>
           <p className="text-muted-foreground text-sm">As a {CATEGORY_LABELS[proCategory] ?? "professional"}, we need to verify your identity</p>
@@ -482,166 +424,119 @@ export default function Onboarding() {
             Verify & Continue
           </Button>
         </div>
-      </Shell>
+      </div>
     );
-  }
 
-  // Step: Service selection
-  if (step === "pro-services") {
-    const catalog = getServicesForCategory(proCategory);
-    const selectedCount = Object.keys(selectedServices).length;
-    return (
-      <Shell stepIndex={4} totalSteps={6} step={step} onBack={() => setStep("pro-verify")} wide>
-        <div className="text-center mb-6">
-          <h1 className="font-display font-bold text-2xl text-foreground mb-1">Your Services</h1>
-          <p className="text-muted-foreground text-sm">
-            Select the services you offer as a <span className="font-medium text-foreground">{CATEGORY_LABELS[proCategory]}</span>.
-            Set your pricing model and rate for each.
-          </p>
-        </div>
-
-        {selectedCount > 0 && (
-          <div className="mb-4 flex items-center gap-2 text-xs text-primary font-medium">
-            <Check className="w-3.5 h-3.5" /> {selectedCount} service{selectedCount > 1 ? "s" : ""} selected
+    // ── Pro services ──
+    if (step === "pro-services") {
+      const catalog = getServicesForCategory(proCategory);
+      const selectedCount = Object.keys(selectedServices).length;
+      return (
+        <div>
+          <div className="text-center mb-6">
+            <h1 className="font-display font-bold text-2xl text-foreground mb-1">Your Services</h1>
+            <p className="text-muted-foreground text-sm">
+              Select the services you offer as a <span className="font-medium text-foreground">{CATEGORY_LABELS[proCategory]}</span>.
+              Set your pricing model and rate for each.
+            </p>
           </div>
-        )}
-
-        <div className="space-y-3 mb-6">
-          {catalog.map(svc => {
-            const active = !!selectedServices[svc.key];
-            const sel = selectedServices[svc.key];
-            return (
-              <div
-                key={svc.key}
-                className={cn(
-                  "rounded-2xl border transition-all duration-200 overflow-hidden",
-                  active ? "border-primary/50 bg-primary/5" : "border-border bg-secondary/40"
-                )}
-              >
-                {/* Header row */}
-                <div className="flex items-start gap-3 p-4 cursor-pointer" onClick={() => toggleService(svc)}>
-                  <div className={cn(
-                    "mt-0.5 w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-colors",
-                    active ? "bg-primary border-primary" : "border-border bg-background"
-                  )}>
-                    {active && <Check className="w-3 h-3 text-primary-foreground" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-sm text-foreground">{svc.name}</span>
-                      {svc.isPremiumFeature && (
-                        <span className="inline-flex items-center gap-1 bg-amber-500/15 border border-amber-500/30 rounded-full px-2 py-0.5 text-[10px] text-amber-400 font-medium">
-                          <Crown className="w-2.5 h-2.5" /> Pro
-                        </span>
+          {selectedCount > 0 && (
+            <div className="mb-4 flex items-center gap-2 text-xs text-primary font-medium">
+              <Check className="w-3.5 h-3.5" /> {selectedCount} service{selectedCount > 1 ? "s" : ""} selected
+            </div>
+          )}
+          <div className="space-y-3 mb-6">
+            {catalog.map(svc => {
+              const active = !!selectedServices[svc.key];
+              const sel = selectedServices[svc.key];
+              return (
+                <div key={svc.key} className={cn("rounded-2xl border transition-all duration-200 overflow-hidden", active ? "border-primary/50 bg-primary/5" : "border-border bg-secondary/40")}>
+                  <div className="flex items-start gap-3 p-4 cursor-pointer" onClick={() => toggleService(svc)}>
+                    <div className={cn("mt-0.5 w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-colors", active ? "bg-primary border-primary" : "border-border bg-background")}>
+                      {active && <Check className="w-3 h-3 text-primary-foreground" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-sm text-foreground">{svc.name}</span>
+                        {svc.isPremiumFeature && (
+                          <span className="inline-flex items-center gap-1 bg-amber-500/15 border border-amber-500/30 rounded-full px-2 py-0.5 text-[10px] text-amber-400 font-medium">
+                            <Crown className="w-2.5 h-2.5" /> Pro
+                          </span>
+                        )}
+                        {svc.videoAvailable && (
+                          <span className="inline-flex items-center gap-1 bg-cyan-500/10 border border-cyan-500/20 rounded-full px-2 py-0.5 text-[10px] text-cyan-400">
+                            <Video className="w-2.5 h-2.5" /> Video
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{svc.description}</p>
+                      {!active && (
+                        <div className="flex items-center gap-3 mt-1.5 text-[11px] text-muted-foreground/70">
+                          <span className="flex items-center gap-1"><Euro className="w-3 h-3" />Suggested: €{svc.suggestedRate.toLocaleString()} / {PRICING_LABELS[svc.defaultPricing]}</span>
+                          {svc.estimatedHours && <span className="flex items-center gap-1"><Clock className="w-3 h-3" />~{svc.estimatedHours}h</span>}
+                        </div>
                       )}
+                    </div>
+                    <div className={cn("shrink-0 mt-0.5 transition-transform", active ? "rotate-45" : "")}>
+                      {active ? <Minus className="w-4 h-4 text-muted-foreground" /> : <Plus className="w-4 h-4 text-muted-foreground" />}
+                    </div>
+                  </div>
+                  {active && sel && (
+                    <div className="px-4 pb-4 border-t border-primary/15 pt-3 space-y-3">
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground block mb-2">Pricing Model</label>
+                        <div className="flex gap-2">
+                          {(["hourly", "daily", "fixed"] as PricingModel[]).map(pm => (
+                            <button key={pm} onClick={() => updateServicePricing(svc.key, "pricingModel", pm)}
+                              className={cn("flex-1 py-1.5 rounded-lg text-xs font-medium border transition-all", sel.pricingModel === pm ? "border-primary bg-primary/10 text-foreground" : "border-border bg-secondary text-muted-foreground hover:border-primary/40")}>
+                              {PRICING_LABELS[pm]}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1">
+                          <label className="text-xs font-medium text-muted-foreground block mb-1.5">
+                            Your Rate (€){sel.pricingModel === "hourly" ? " / hour" : sel.pricingModel === "daily" ? " / day" : " fixed"}
+                          </label>
+                          <div className="relative">
+                            <Euro className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                            <input type="number" min={0} value={sel.rate} onChange={e => updateServicePricing(svc.key, "rate", e.target.value)}
+                              className="w-full bg-background border border-border rounded-xl pl-8 pr-3 py-2 text-sm text-foreground outline-none focus:border-primary transition-colors" />
+                          </div>
+                        </div>
+                        {svc.estimatedHours && <div className="text-xs text-muted-foreground pt-5">~{svc.estimatedHours}h typical</div>}
+                      </div>
                       {svc.videoAvailable && (
-                        <span className="inline-flex items-center gap-1 bg-cyan-500/10 border border-cyan-500/20 rounded-full px-2 py-0.5 text-[10px] text-cyan-400">
-                          <Video className="w-2.5 h-2.5" /> Video
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{svc.description}</p>
-                    {!active && (
-                      <div className="flex items-center gap-3 mt-1.5 text-[11px] text-muted-foreground/70">
-                        <span className="flex items-center gap-1"><Euro className="w-3 h-3" />Suggested: €{svc.suggestedRate.toLocaleString()} / {PRICING_LABELS[svc.defaultPricing]}</span>
-                        {svc.estimatedHours && <span className="flex items-center gap-1"><Clock className="w-3 h-3" />~{svc.estimatedHours}h</span>}
-                      </div>
-                    )}
-                  </div>
-                  <div className={cn("shrink-0 mt-0.5 transition-transform", active ? "rotate-45" : "")}>
-                    {active ? <Minus className="w-4 h-4 text-muted-foreground" /> : <Plus className="w-4 h-4 text-muted-foreground" />}
-                  </div>
-                </div>
-
-                {/* Pricing panel (expanded when selected) */}
-                {active && sel && (
-                  <div className="px-4 pb-4 border-t border-primary/15 pt-3 space-y-3">
-                    {/* Pricing model tabs */}
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground block mb-2">Pricing Model</label>
-                      <div className="flex gap-2">
-                        {(["hourly", "daily", "fixed"] as PricingModel[]).map(pm => (
-                          <button
-                            key={pm}
-                            onClick={() => updateServicePricing(svc.key, "pricingModel", pm)}
-                            className={cn(
-                              "flex-1 py-1.5 rounded-lg text-xs font-medium border transition-all",
-                              sel.pricingModel === pm
-                                ? "border-primary bg-primary/10 text-foreground"
-                                : "border-border bg-secondary text-muted-foreground hover:border-primary/40"
-                            )}
-                          >
-                            {PRICING_LABELS[pm]}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    {/* Rate */}
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1">
-                        <label className="text-xs font-medium text-muted-foreground block mb-1.5">
-                          Your Rate (€){sel.pricingModel === "hourly" ? " / hour" : sel.pricingModel === "daily" ? " / day" : " fixed"}
+                        <label className="flex items-center gap-3 cursor-pointer">
+                          <div onClick={() => { if (svc.isPremiumFeature && !sel.videoEnabled) { toast("Video consultations require the Pro plan", { icon: "🔒" }); return; } updateServicePricing(svc.key, "videoEnabled", !sel.videoEnabled); }}
+                            className={cn("w-9 h-5 rounded-full border relative transition-colors cursor-pointer", sel.videoEnabled ? "bg-primary border-primary" : "bg-secondary border-border")}>
+                            <div className={cn("absolute top-0.5 w-4 h-4 rounded-full bg-background shadow transition-transform", sel.videoEnabled ? "translate-x-4" : "translate-x-0.5")} />
+                          </div>
+                          <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+                            <Video className="w-3.5 h-3.5 text-cyan-400" />Available via video consultation
+                            {svc.isPremiumFeature && <Lock className="w-3 h-3 text-amber-400" />}
+                          </span>
                         </label>
-                        <div className="relative">
-                          <Euro className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                          <input
-                            type="number"
-                            min={0}
-                            value={sel.rate}
-                            onChange={e => updateServicePricing(svc.key, "rate", e.target.value)}
-                            className="w-full bg-background border border-border rounded-xl pl-8 pr-3 py-2 text-sm text-foreground outline-none focus:border-primary transition-colors"
-                          />
-                        </div>
-                      </div>
-                      {svc.estimatedHours && (
-                        <div className="text-xs text-muted-foreground pt-5">~{svc.estimatedHours}h typical</div>
                       )}
                     </div>
-                    {/* Video toggle */}
-                    {svc.videoAvailable && (
-                      <label className="flex items-center gap-3 cursor-pointer">
-                        <div
-                          onClick={() => {
-                            if (svc.isPremiumFeature && !sel.videoEnabled) {
-                              toast("Video consultations require the Pro plan", { icon: "🔒" });
-                              return;
-                            }
-                            updateServicePricing(svc.key, "videoEnabled", !sel.videoEnabled);
-                          }}
-                          className={cn(
-                            "w-9 h-5 rounded-full border relative transition-colors cursor-pointer",
-                            sel.videoEnabled ? "bg-primary border-primary" : "bg-secondary border-border"
-                          )}
-                        >
-                          <div className={cn("absolute top-0.5 w-4 h-4 rounded-full bg-background shadow transition-transform", sel.videoEnabled ? "translate-x-4" : "translate-x-0.5")} />
-                        </div>
-                        <span className="text-xs text-muted-foreground flex items-center gap-1.5">
-                          <Video className="w-3.5 h-3.5 text-cyan-400" />
-                          Available via video consultation
-                          {svc.isPremiumFeature && <Lock className="w-3 h-3 text-amber-400" />}
-                        </span>
-                      </label>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <Button className="w-full bg-gradient-primary border-0 text-primary-foreground" disabled={loading || selectedCount === 0} onClick={handleSaveServices}>
+            {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+            Save {selectedCount > 0 ? `${selectedCount} Services` : "Services"} & Continue
+            <ArrowRight className="w-4 h-4 ml-2" />
+          </Button>
         </div>
+      );
+    }
 
-        <Button className="w-full bg-gradient-primary border-0 text-primary-foreground" disabled={loading || selectedCount === 0} onClick={handleSaveServices}>
-          {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-          Save {selectedCount > 0 ? `${selectedCount} Services` : "Services"} & Continue
-          <ArrowRight className="w-4 h-4 ml-2" />
-        </Button>
-      </Shell>
-    );
-  }
-
-  // Step: Availability
-  if (step === "pro-availability") {
-    return (
-      <Shell stepIndex={5} totalSteps={6} step={step} onBack={() => setStep("pro-services")} wide>
+    // ── Pro availability ──
+    if (step === "pro-availability") return (
+      <div>
         <div className="text-center mb-6">
           <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center mx-auto mb-4">
             <Calendar className="w-7 h-7 text-emerald-400" />
@@ -649,45 +544,24 @@ export default function Onboarding() {
           <h1 className="font-display font-bold text-2xl text-foreground mb-1">Your Availability</h1>
           <p className="text-muted-foreground text-sm">Set when you're available for client appointments</p>
         </div>
-
         <div className="space-y-2 mb-6">
           {DAYS.map((day, i) => {
             const d = availability[i];
             return (
-              <div
-                key={day}
-                className={cn(
-                  "rounded-xl border p-3 transition-all",
-                  d.enabled ? "border-primary/40 bg-primary/5" : "border-border bg-secondary/40"
-                )}
-              >
+              <div key={day} className={cn("rounded-xl border p-3 transition-all", d.enabled ? "border-primary/40 bg-primary/5" : "border-border bg-secondary/40")}>
                 <div className="flex items-center gap-3">
-                  {/* Toggle */}
-                  <div
-                    onClick={() => setAvailability(prev => prev.map((v, idx) => idx === i ? { ...v, enabled: !v.enabled } : v))}
-                    className={cn(
-                      "w-9 h-5 rounded-full border relative transition-colors cursor-pointer shrink-0",
-                      d.enabled ? "bg-primary border-primary" : "bg-secondary border-border"
-                    )}
-                  >
+                  <div onClick={() => setAvailability(prev => prev.map((v, idx) => idx === i ? { ...v, enabled: !v.enabled } : v))}
+                    className={cn("w-9 h-5 rounded-full border relative transition-colors cursor-pointer shrink-0", d.enabled ? "bg-primary border-primary" : "bg-secondary border-border")}>
                     <div className={cn("absolute top-0.5 w-4 h-4 rounded-full bg-background shadow transition-transform", d.enabled ? "translate-x-4" : "translate-x-0.5")} />
                   </div>
                   <span className={cn("text-sm font-semibold w-8 shrink-0", d.enabled ? "text-foreground" : "text-muted-foreground")}>{day}</span>
                   {d.enabled ? (
                     <div className="flex items-center gap-2 flex-1">
-                      <input
-                        type="time"
-                        value={d.start}
-                        onChange={e => setAvailability(prev => prev.map((v, idx) => idx === i ? { ...v, start: e.target.value } : v))}
-                        className="bg-background border border-border rounded-lg px-2 py-1 text-xs text-foreground outline-none focus:border-primary transition-colors"
-                      />
+                      <input type="time" value={d.start} onChange={e => setAvailability(prev => prev.map((v, idx) => idx === i ? { ...v, start: e.target.value } : v))}
+                        className="bg-background border border-border rounded-lg px-2 py-1 text-xs text-foreground outline-none focus:border-primary transition-colors" />
                       <span className="text-xs text-muted-foreground">to</span>
-                      <input
-                        type="time"
-                        value={d.end}
-                        onChange={e => setAvailability(prev => prev.map((v, idx) => idx === i ? { ...v, end: e.target.value } : v))}
-                        className="bg-background border border-border rounded-lg px-2 py-1 text-xs text-foreground outline-none focus:border-primary transition-colors"
-                      />
+                      <input type="time" value={d.end} onChange={e => setAvailability(prev => prev.map((v, idx) => idx === i ? { ...v, end: e.target.value } : v))}
+                        className="bg-background border border-border rounded-lg px-2 py-1 text-xs text-foreground outline-none focus:border-primary transition-colors" />
                     </div>
                   ) : (
                     <span className="text-xs text-muted-foreground">Not available</span>
@@ -697,7 +571,6 @@ export default function Onboarding() {
             );
           })}
         </div>
-
         <Button className="w-full bg-gradient-primary border-0 text-primary-foreground" disabled={loading} onClick={handleSaveAvailability}>
           {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
           Save Availability & Continue <ArrowRight className="w-4 h-4 ml-2" />
@@ -705,14 +578,12 @@ export default function Onboarding() {
         <button className="w-full mt-3 text-xs text-muted-foreground hover:text-foreground transition-colors" onClick={() => setStep("pro-video")}>
           Skip for now →
         </button>
-      </Shell>
+      </div>
     );
-  }
 
-  // Step: Video + premium
-  if (step === "pro-video") {
-    return (
-      <Shell stepIndex={6} totalSteps={6} step={step} onBack={() => setStep("pro-availability")} wide>
+    // ── Pro video ──
+    if (step === "pro-video") return (
+      <div>
         <div className="text-center mb-6">
           <div className="w-14 h-14 rounded-2xl bg-cyan-500/10 border border-cyan-500/25 flex items-center justify-center mx-auto mb-4">
             <Video className="w-7 h-7 text-cyan-400" />
@@ -720,36 +591,24 @@ export default function Onboarding() {
           <h1 className="font-display font-bold text-2xl text-foreground mb-1">Video Consultations</h1>
           <p className="text-muted-foreground text-sm">Add your meeting link so clients can book video calls with you</p>
         </div>
-
         <div className="space-y-4 mb-6">
           <div>
             <label className="text-xs font-medium text-muted-foreground block mb-1.5">Meeting Link</label>
             <div className="relative">
               <Video className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <input
-                type="url"
-                placeholder="https://meet.google.com/xxx or https://zoom.us/j/..."
-                value={videoLink}
-                onChange={e => setVideoLink(e.target.value)}
-                className="w-full bg-secondary border border-border rounded-xl pl-9 pr-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
-              />
+              <input type="url" placeholder="https://meet.google.com/xxx or https://zoom.us/j/..."
+                value={videoLink} onChange={e => setVideoLink(e.target.value)}
+                className="w-full bg-secondary border border-border rounded-xl pl-9 pr-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors" />
             </div>
             <p className="text-[11px] text-muted-foreground mt-1">Supports Google Meet, Zoom, Teams, Whereby, and any video link</p>
           </div>
-
           <div>
             <label className="text-xs font-medium text-muted-foreground block mb-1.5">Booking Notes (optional)</label>
-            <textarea
-              rows={2}
-              placeholder="e.g. 'Please bring property documents to the call' or 'Consultations in Greek or English'"
-              value={calendarNotes}
-              onChange={e => setCalendarNotes(e.target.value)}
-              className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors resize-none"
-            />
+            <textarea rows={2} placeholder="e.g. 'Please bring property documents to the call'"
+              value={calendarNotes} onChange={e => setCalendarNotes(e.target.value)}
+              className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors resize-none" />
           </div>
         </div>
-
-        {/* Premium upsell */}
         <div className="bg-amber-500/8 border border-amber-500/25 rounded-2xl p-4 mb-6">
           <div className="flex items-center gap-2 mb-3">
             <Crown className="w-4 h-4 text-amber-400" />
@@ -757,13 +616,7 @@ export default function Onboarding() {
             <span className="ml-auto text-xs text-amber-400 font-medium border border-amber-500/30 rounded-full px-2 py-0.5">Coming Soon</span>
           </div>
           <div className="space-y-2 mb-3">
-            {[
-              "Priority placement in professional directory",
-              "Calendly-style booking page with auto-confirmation",
-              "AI lead matching — be auto-recommended to buyers",
-              "Advanced analytics: views, inquiries, conversion rate",
-              "Branded video consultation room",
-            ].map(f => (
+            {["Priority placement in directory", "Calendly-style booking page", "AI lead matching", "Advanced analytics", "Branded video room"].map(f => (
               <div key={f} className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Lock className="w-3 h-3 text-amber-400 shrink-0" /> {f}
               </div>
@@ -773,7 +626,6 @@ export default function Onboarding() {
             <Crown className="w-3.5 h-3.5 mr-1.5" /> Notify me when Pro launches
           </Button>
         </div>
-
         <Button className="w-full bg-gradient-primary border-0 text-primary-foreground" disabled={loading} onClick={handleSaveVideo}>
           {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
           Finish Setup <ArrowRight className="w-4 h-4 ml-2" />
@@ -781,17 +633,14 @@ export default function Onboarding() {
         <button className="w-full mt-3 text-xs text-muted-foreground hover:text-foreground transition-colors" onClick={() => handleSaveVideo()}>
           Skip for now →
         </button>
-      </Shell>
+      </div>
     );
-  }
 
-  // Step: Done
-  const selectedColor = selected ? colorMap[selected.color] : colorMap.emerald;
-  const SelectedIcon = selected?.icon ?? Home;
-  const isPro = selected?.isPro;
-
-  return (
-    <Shell stepIndex={isPro ? 7 : 2} totalSteps={isPro ? 6 : 1} step={step}>
+    // ── Done ──
+    const selectedColor = selected ? colorMap[selected.color] : colorMap.emerald;
+    const SelectedIcon = selected?.icon ?? Home;
+    const isPro = selected?.isPro;
+    return (
       <div className="text-center py-4">
         <div className="relative w-20 h-20 mx-auto mb-6">
           <div className={cn("w-20 h-20 rounded-full flex items-center justify-center border-2", selectedColor.bg, selectedColor.border)}>
@@ -801,7 +650,6 @@ export default function Onboarding() {
             <Check className="w-3.5 h-3.5 text-white" />
           </div>
         </div>
-
         <h1 className="font-display font-bold text-2xl text-foreground mb-2">
           {isPro ? "Profile Created!" : "You're all set!"}
         </h1>
@@ -810,10 +658,7 @@ export default function Onboarding() {
             ? `Your professional profile as a ${CATEGORY_LABELS[proCategory] ?? "professional"} is live.`
             : `Welcome to maiprop as a ${selected?.label ?? "member"}.`}
         </p>
-        {isPro && (
-          <p className="text-xs text-muted-foreground mb-2">We'll review your business details within 24–48 hours and add your verified badge.</p>
-        )}
-
+        {isPro && <p className="text-xs text-muted-foreground mb-2">We'll review your business details within 24–48 hours and add your verified badge.</p>}
         <div className="bg-secondary/60 border border-border rounded-2xl p-4 text-left mb-6 mt-4 space-y-2">
           <p className="text-xs font-semibold text-foreground/70 mb-2 uppercase tracking-wide">What's unlocked</p>
           {(selected?.features ?? []).map(f => (
@@ -824,17 +669,14 @@ export default function Onboarding() {
           {isPro && (
             <>
               <div className="flex items-center gap-2 text-sm text-foreground/80">
-                <Check className="w-4 h-4 shrink-0 text-rose-400" />
-                {Object.keys(selectedServices).length} services configured
+                <Check className="w-4 h-4 shrink-0 text-rose-400" />{Object.keys(selectedServices).length} services configured
               </div>
               <div className="flex items-center gap-2 text-sm text-foreground/80">
-                <Check className="w-4 h-4 shrink-0 text-rose-400" />
-                Availability schedule set
+                <Check className="w-4 h-4 shrink-0 text-rose-400" />Availability schedule set
               </div>
             </>
           )}
         </div>
-
         <Button className="w-full bg-gradient-primary border-0 text-primary-foreground" onClick={() => navigate("/dashboard")}>
           Go to Dashboard <ArrowRight className="w-4 h-4 ml-2" />
         </Button>
@@ -842,11 +684,27 @@ export default function Onboarding() {
           Explore the platform first →
         </button>
       </div>
+    );
+  })();
+
+  // Per-step back handler and wide flag
+  const onBack = step === "pro-category" ? () => setStep("pick-type")
+    : step === "pro-verify" ? () => setStep("pro-category")
+    : step === "pro-services" ? () => setStep("pro-verify")
+    : step === "pro-availability" ? () => setStep("pro-services")
+    : step === "pro-video" ? () => setStep("pro-availability")
+    : undefined;
+
+  const isWide = step === "pro-services" || step === "pro-availability" || step === "pro-video";
+
+  return (
+    <Shell stepIndex={stepIndex + 1} totalSteps={totalSteps} step={step} onBack={onBack} wide={isWide}>
+      {stepContent}
     </Shell>
   );
 }
 
-// ── Shell wrapper ──────────────────────────────────────────────────────────────
+// ── Shell — single instance, animates children on step change ─────────────────
 
 function Shell({
   children,
@@ -864,16 +722,16 @@ function Shell({
   wide?: boolean;
 }) {
   const prevStepRef = useRef<OnboardingStep | null>(null);
+  const prevIndexRef = useRef(stepIndex);
+  const [displayedChildren, setDisplayedChildren] = useState(children);
   const [animClass, setAnimClass] = useState("opacity-100 translate-x-0");
   const [isTransitioning, setIsTransitioning] = useState(false);
-  const [displayedChildren, setDisplayedChildren] = useState(children);
-
-  // Track the direction: if stepIndex increased → slide left-to-right, else right-to-left
-  const prevIndexRef = useRef(stepIndex);
 
   useEffect(() => {
+    // First render — just record, no animation
     if (prevStepRef.current === null) {
       prevStepRef.current = step;
+      prevIndexRef.current = stepIndex;
       return;
     }
     if (prevStepRef.current === step) return;
@@ -882,40 +740,42 @@ function Shell({
     prevStepRef.current = step;
     prevIndexRef.current = stepIndex;
 
-    // Exit current
-    setAnimClass(forward ? "opacity-0 -translate-x-8" : "opacity-0 translate-x-8");
     setIsTransitioning(true);
+    // 1. Exit current content
+    setAnimClass(forward ? "opacity-0 -translate-x-6" : "opacity-0 translate-x-6");
 
     const t = setTimeout(() => {
+      // 2. Swap content and set entry start position
       setDisplayedChildren(children);
-      setAnimClass(forward ? "opacity-0 translate-x-8" : "opacity-0 -translate-x-8");
+      setAnimClass(forward ? "opacity-0 translate-x-6" : "opacity-0 -translate-x-6");
 
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
+          // 3. Animate in
           setAnimClass("opacity-100 translate-x-0");
           setIsTransitioning(false);
         });
       });
-    }, 180);
+    }, 170);
 
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
-  // Keep displayedChildren in sync when NOT transitioning
+  // Keep children in sync while not transitioning
   useEffect(() => {
     if (!isTransitioning) setDisplayedChildren(children);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [children, isTransitioning]);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-start px-4 pt-10 pb-16 overflow-hidden">
+    <div className="min-h-screen bg-background flex flex-col items-center justify-start px-4 pt-10 pb-16 overflow-x-hidden">
       {/* Logo */}
       <div className="mb-6 text-center shrink-0">
         <span className="font-display font-bold text-2xl">mai<span className="gradient-text-cyan">prop</span></span>
       </div>
 
-      {/* Progress bar */}
+      {/* Progress pills */}
       {totalSteps > 1 && (
         <div className="flex items-center gap-1.5 mb-8 shrink-0">
           {Array.from({ length: totalSteps }).map((_, i) => (
@@ -934,21 +794,13 @@ function Shell({
 
       <div className={cn("w-full", wide ? "max-w-2xl" : "max-w-lg")}>
         {onBack && (
-          <button
-            onClick={onBack}
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-4 transition-colors"
-          >
+          <button onClick={onBack} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-4 transition-colors">
             ← Back
           </button>
         )}
 
-        {/* Animated content */}
-        <div
-          className={cn(
-            "transition-all duration-[220ms] ease-out will-change-transform",
-            animClass
-          )}
-        >
+        {/* Animated step content */}
+        <div className={cn("transition-all duration-[200ms] ease-out will-change-transform", animClass)}>
           {displayedChildren}
         </div>
       </div>
@@ -956,7 +808,7 @@ function Shell({
   );
 }
 
-// ── Field helper ───────────────────────────────────────────────────────────────
+// ── Field helper ──────────────────────────────────────────────────────────────
 
 function ProField({ label, required, error, hint, icon, children }: {
   label: string; required?: boolean; error?: string; hint?: string; icon?: React.ReactNode; children: React.ReactNode;
