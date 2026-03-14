@@ -38,14 +38,13 @@ export default function Login() {
 
   const from = (location.state as any)?.from?.pathname || "/dashboard";
 
-  // Fallback: if we signed in but are still here (e.g. auth state slow), redirect once user is set
+  // If auth state settles and we already have a user (e.g. existing session), redirect away from login
   useEffect(() => {
-    if (!didSignIn || authLoading) return;
+    if (authLoading) return;
     if (user) {
-      toast.success("Welcome back!");
       navigate(needsOnboarding ? "/onboarding" : from, { replace: true });
     }
-  }, [didSignIn, authLoading, user, needsOnboarding, from, navigate]);
+  }, [authLoading, user, needsOnboarding, from, navigate]);
 
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
@@ -66,9 +65,8 @@ export default function Login() {
     if (error) {
       toast.error("Invalid email or password");
     } else {
+      // signIn triggers onAuthStateChange which sets user → useEffect above redirects
       setDidSignIn(true);
-      toast.success("Welcome back!");
-      navigate(from, { replace: true });
     }
   };
 

@@ -31,13 +31,14 @@ export default function Signup() {
 
   const [form, setForm] = useState({ firstName: "", lastName: "", email: "", password: "" });
 
-  // Navigate to onboarding once auth state settles after sign-up
+  // Redirect as soon as auth state settles with a user — covers both
+  // immediate sign-in and the case where email confirmation auto-logs in.
   useEffect(() => {
-    if (!didSignUp || authLoading) return;
+    if (authLoading) return;
     if (user) {
       navigate("/onboarding", { replace: true });
     }
-  }, [didSignUp, authLoading, user, navigate]);
+  }, [authLoading, user, navigate]);
 
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
@@ -65,8 +66,8 @@ export default function Signup() {
     if (error) {
       toast.error(error.message);
     } else {
-      // Don't navigate immediately — wait for auth state to settle
       setDidSignUp(true);
+      // onAuthStateChange will set user → useEffect above handles redirect
     }
   };
 
