@@ -463,8 +463,8 @@ export default function Professionals() {
             </div> :
 
           <>
-              <p className="text-sm text-muted-foreground mb-4">{filtered.length} professionals found{activeGroup ? ` in ${activeGroup.label}` : ""}</p>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <p className="text-sm text-muted-foreground mb-4">{filtered.length} professional{filtered.length !== 1 ? "s" : ""} found{activeGroup ? ` in ${activeGroup.label}` : ""}</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                 {filtered.map((pro: any) => {
                 const name = pro.display_name || "Professional";
                 const catData = categoryInfo[pro.category] || { emoji: "👤", label: pro.category, group: "" };
