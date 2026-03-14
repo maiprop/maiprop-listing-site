@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Search, Send, Phone, Video, MoreVertical, Paperclip, Loader2, MessageSquare } from "lucide-react";
+import { Search, Send, Phone, Video, MoreVertical, Paperclip, Loader2, MessageSquare, ArrowLeft } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { useConversations, useMessages, useSendMessage } from "@/hooks/useMessages";
 import { useAuth } from "@/contexts/AuthContext";
@@ -25,6 +25,8 @@ export default function Messages() {
   const [input, setInput] = useState("");
   const [search, setSearch] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
+  // Mobile: show list or chat pane
+  const [mobileView, setMobileView] = useState<"list" | "chat">("list");
 
   const { data: messages = [], isLoading: msgsLoading } = useMessages(activeConvId);
   const sendMessage = useSendMessage();
@@ -37,6 +39,7 @@ export default function Messages() {
     const openId = (location.state as any)?.openConversationId;
     if (openId && typeof openId === "string") {
       setActiveConvId(openId);
+      setMobileView("chat");
       navigate(location.pathname, { replace: true, state: {} });
     }
   }, [location.state, location.pathname, navigate]);
@@ -58,6 +61,11 @@ export default function Messages() {
     setInput("");
   };
 
+  const handleSelectConv = (id: string) => {
+    setActiveConvId(id);
+    setMobileView("chat");
+  };
+
   const filteredConvs = conversations.filter((c: any) => {
     const other = getOtherProfile(c, user?.id || "");
     const name = other?.display_name || "";
@@ -67,16 +75,20 @@ export default function Messages() {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <div className="pt-16 h-screen flex">
-        {/* Conversation list */}
-        <div className="w-72 shrink-0 bg-card border-r border-border flex flex-col">
+      <div className="pt-16 h-[100dvh] flex overflow-hidden">
+
+        {/* ── Conversation list ── visible on desktop always; on mobile only when mobileView=list */}
+        <div className={`
+          w-full md:w-72 shrink-0 bg-card border-r border-border flex flex-col
+          ${mobileView === "chat" ? "hidden md:flex" : "flex"}
+        `}>
           <div className="p-4 border-b border-border">
             <h2 className="font-display font-bold text-lg">Messages</h2>
-            <div className="flex items-center gap-2 mt-3 bg-secondary rounded-xl px-3 py-2 border border-border">
-              <Search className="w-4 h-4 text-muted-foreground" />
+            <div className="flex items-center gap-2 mt-3 bg-secondary rounded-xl px-3 py-2.5 border border-border">
+              <Search className="w-4 h-4 text-muted-foreground shrink-0" />
               <input
                 type="text"
-                placeholder="Search..."
+                placeholder="Search conversations..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
@@ -102,10 +114,10 @@ export default function Messages() {
                 return (
                   <button
                     key={conv.id}
-                    onClick={() => setActiveConvId(conv.id)}
+                    onClick={() => handleSelectConv(conv.id)}
                     className={`w-full p-4 text-left flex gap-3 border-b border-border transition-colors hover:bg-secondary ${isActive ? "bg-primary/5 border-l-2 border-l-primary" : ""}`}
                   >
-                    <div className="w-10 h-10 rounded-full bg-gradient-primary flex items-center justify-center font-bold text-primary-foreground text-sm shrink-0">
+                    <div className="w-10 h-10 rounded-full bg-gradient-primary flex items-center justify-center font-bold text-primary-foreground text-sm shrink-0 overflow-hidden">
                       {other?.avatar_url ? (
                         <img src={other.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
                       ) : (
@@ -137,112 +149,125 @@ export default function Messages() {
           </div>
         </div>
 
-        {/* Chat area */}
-        {!activeConvId || !activeConv ? (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center">
-              <MessageSquare className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-              <h3 className="font-display font-semibold text-lg">Select a conversation</h3>
-              <p className="text-muted-foreground text-sm mt-1 mb-4">Or start a new one from a property listing</p>
-              <Button asChild className="bg-gradient-primary border-0 text-primary-foreground">
-                <Link to="/listings">Browse Listings</Link>
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className="flex-1 flex flex-col min-w-0">
-            {/* Chat header */}
-            <div className="flex items-center gap-3 p-4 bg-card border-b border-border shrink-0">
-              <div className="w-9 h-9 rounded-full bg-gradient-primary flex items-center justify-center font-bold text-primary-foreground text-sm shrink-0 overflow-hidden">
-                {otherProfile?.avatar_url ? (
-                  <img src={otherProfile.avatar_url} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  getInitials(otherProfile?.display_name || "?")
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="font-semibold text-sm">{otherProfile?.display_name || "User"}</div>
-                {activeConv?.listings && (
-                  <Link to={`/property/${activeConv.listing_id}`} className="text-xs text-primary/70 hover:text-primary truncate block">
-                    {activeConv.listings.title} · {activeConv.listings.city}
-                  </Link>
-                )}
-              </div>
-              <div className="flex items-center gap-1">
-                <button className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors" title="Voice call">
-                  <Phone className="w-4 h-4" />
-                </button>
-                <button className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors" title="Video call">
-                  <Video className="w-4 h-4" />
-                </button>
-                <button className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
-                  <MoreVertical className="w-4 h-4" />
-                </button>
+        {/* ── Chat area ── visible on desktop always; on mobile only when mobileView=chat */}
+        <div className={`
+          flex-1 flex flex-col min-w-0
+          ${mobileView === "list" ? "hidden md:flex" : "flex"}
+        `}>
+          {!activeConvId || !activeConv ? (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center px-6">
+                <MessageSquare className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+                <h3 className="font-display font-semibold text-lg">Select a conversation</h3>
+                <p className="text-muted-foreground text-sm mt-1 mb-4">Or start a new one from a property listing</p>
+                <Button asChild className="bg-gradient-primary border-0 text-primary-foreground">
+                  <Link to="/listings">Browse Listings</Link>
+                </Button>
               </div>
             </div>
+          ) : (
+            <>
+              {/* Chat header */}
+              <div className="flex items-center gap-3 p-4 bg-card border-b border-border shrink-0">
+                {/* Back button — mobile only */}
+                <button
+                  onClick={() => setMobileView("list")}
+                  className="md:hidden p-2 -ml-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                  aria-label="Back to conversations"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                </button>
+                <div className="w-9 h-9 rounded-full bg-gradient-primary flex items-center justify-center font-bold text-primary-foreground text-sm shrink-0 overflow-hidden">
+                  {otherProfile?.avatar_url ? (
+                    <img src={otherProfile.avatar_url} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    getInitials(otherProfile?.display_name || "?")
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-sm">{otherProfile?.display_name || "User"}</div>
+                  {activeConv?.listings && (
+                    <Link to={`/property/${activeConv.listing_id}`} className="text-xs text-primary/70 hover:text-primary truncate block">
+                      {activeConv.listings.title} · {activeConv.listings.city}
+                    </Link>
+                  )}
+                </div>
+                <div className="flex items-center gap-1">
+                  <button className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors" title="Voice call">
+                    <Phone className="w-4 h-4" />
+                  </button>
+                  <button className="hidden sm:block p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors" title="Video call">
+                    <Video className="w-4 h-4" />
+                  </button>
+                  <button className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
+                    <MoreVertical className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
 
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              {msgsLoading ? (
-                <div className="flex items-center justify-center py-20">
-                  <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-                </div>
-              ) : messages.length === 0 ? (
-                <div className="text-center py-16">
-                  <p className="text-muted-foreground text-sm">No messages yet. Say hello! 👋</p>
-                </div>
-              ) : (
-                messages.map((msg: any) => {
-                  const isMe = msg.sender_id === user?.id;
-                  return (
-                    <div key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"} gap-2`}>
-                      {!isMe && (
-                        <div className="w-7 h-7 rounded-full bg-gradient-primary flex items-center justify-center text-xs font-bold text-primary-foreground shrink-0 mt-1 overflow-hidden">
-                          {msg.profiles?.avatar_url ? (
-                            <img src={msg.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
-                          ) : (
-                            getInitials(msg.profiles?.display_name || "?")
-                          )}
-                        </div>
-                      )}
-                      <div className={`max-w-[60%] px-4 py-3 text-sm leading-relaxed ${isMe ? "chat-bubble-sent" : "chat-bubble-received"}`}>
-                        {msg.content}
-                        <div className={`text-[10px] mt-1 ${isMe ? "text-primary-foreground/60" : "text-muted-foreground"} text-right`}>
-                          {new Date(msg.created_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+              {/* Messages */}
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+                {msgsLoading ? (
+                  <div className="flex items-center justify-center py-20">
+                    <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : messages.length === 0 ? (
+                  <div className="text-center py-16">
+                    <p className="text-muted-foreground text-sm">No messages yet. Say hello! 👋</p>
+                  </div>
+                ) : (
+                  messages.map((msg: any) => {
+                    const isMe = msg.sender_id === user?.id;
+                    return (
+                      <div key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"} gap-2`}>
+                        {!isMe && (
+                          <div className="w-7 h-7 rounded-full bg-gradient-primary flex items-center justify-center text-xs font-bold text-primary-foreground shrink-0 mt-1 overflow-hidden">
+                            {msg.profiles?.avatar_url ? (
+                              <img src={msg.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              getInitials(msg.profiles?.display_name || "?")
+                            )}
+                          </div>
+                        )}
+                        <div className={`max-w-[75%] sm:max-w-[60%] px-4 py-3 text-sm leading-relaxed ${isMe ? "chat-bubble-sent" : "chat-bubble-received"}`}>
+                          {msg.content}
+                          <div className={`text-[10px] mt-1 ${isMe ? "text-primary-foreground/60" : "text-muted-foreground"} text-right`}>
+                            {new Date(msg.created_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })
-              )}
-              <div ref={bottomRef} />
-            </div>
-
-            {/* Input */}
-            <div className="p-4 bg-card border-t border-border shrink-0">
-              <div className="flex items-center gap-3">
-                <button className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
-                  <Paperclip className="w-4 h-4" />
-                </button>
-                <input
-                  type="text"
-                  value={input}
-                  onChange={e => setInput(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && !e.shiftKey && handleSend()}
-                  placeholder="Type a message..."
-                  className="flex-1 bg-secondary border border-border rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
-                />
-                <button
-                  onClick={handleSend}
-                  disabled={!input.trim() || sendMessage.isPending}
-                  className="p-2.5 rounded-xl bg-gradient-primary text-primary-foreground disabled:opacity-50 transition-opacity hover:opacity-90"
-                >
-                  {sendMessage.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                </button>
+                    );
+                  })
+                )}
+                <div ref={bottomRef} />
               </div>
-            </div>
-          </div>
-        )}
+
+              {/* Input */}
+              <div className="p-3 sm:p-4 bg-card border-t border-border shrink-0 pb-safe">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <button className="hidden sm:block p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
+                    <Paperclip className="w-4 h-4" />
+                  </button>
+                  <input
+                    type="text"
+                    value={input}
+                    onChange={e => setInput(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && !e.shiftKey && handleSend()}
+                    placeholder="Type a message..."
+                    className="flex-1 bg-secondary border border-border rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
+                  />
+                  <button
+                    onClick={handleSend}
+                    disabled={!input.trim() || sendMessage.isPending}
+                    className="p-2.5 rounded-xl bg-gradient-primary text-primary-foreground disabled:opacity-50 transition-opacity hover:opacity-90 shrink-0"
+                  >
+                    {sendMessage.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

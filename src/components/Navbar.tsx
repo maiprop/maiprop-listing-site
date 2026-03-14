@@ -116,7 +116,7 @@ export function Navbar() {
                 }`}
             >
               {link.accent === "flame" && <span className="text-sm">🔥</span>}
-              {link.icon === Euro && <Euro className="w-3.5 h-3.5" />}
+              {(link as any).icon === Euro && <Euro className="w-3.5 h-3.5" />}
               {link.label}
               {link.badge && (
                 <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold animate-pulse ${

@@ -317,24 +317,23 @@ export default function Professionals() {
           <div className="absolute top-0 right-0 w-96 h-96 rounded-full blur-3xl opacity-10"
           style={{ background: "radial-gradient(hsl(183 100% 42%), transparent 70%)" }} />
 
-          <div className="container relative py-14">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-accent/15 border border-accent/30 mb-5">
+          <div className="container relative py-8 sm:py-14">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-accent/15 border border-accent/30 mb-4 sm:mb-5">
               <Sparkles className="w-3.5 h-3.5 text-accent" />
               <span className="text-xs font-bold text-accent uppercase tracking-widest">AI-Powered Pro Network</span>
             </div>
-            <div className="grid lg:grid-cols-2 gap-8 items-end">
+            <div className="grid lg:grid-cols-2 gap-6 sm:gap-8 items-end">
               <div>
-                <h1 className="font-display text-5xl font-bold mb-3 leading-tight">
+                <h1 className="font-display text-3xl sm:text-5xl font-bold mb-3 leading-tight">
                   Every expert you need,<br />
                   <span className="gradient-text-cyan">amplified by AI</span>
                 </h1>
-                <p className="text-muted-foreground max-w-lg text-lg leading-relaxed mb-5">
+                <p className="text-muted-foreground max-w-lg text-base sm:text-lg leading-relaxed mb-4 sm:mb-5">
                   From legal due-diligence to renovation — every professional on maiProp uses AI to deliver faster, smarter, and more transparent results.
                 </p>
                 <button
                   onClick={() => setAiModal({ groupId: "legal", groupLabel: "Legal & Title" })}
                   className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary/15 border border-primary/30 text-primary text-sm font-semibold hover:bg-primary/25 transition-colors">
-                  
                   <Brain className="w-4 h-4" />
                   Try AI Tools Now
                   <ChevronRight className="w-3.5 h-3.5" />
@@ -359,28 +358,27 @@ export default function Professionals() {
 
         {/* ── Category Groups ─────────────────────────────────────────── */}
         <div className="bg-card/40 border-b border-border">
-          <div className="container py-6">
-            <div className="flex gap-3 flex-wrap">
+          <div className="container py-4 sm:py-6">
+            {/* Horizontally scrollable on mobile */}
+            <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1">
               <button
                 onClick={() => setSelectedGroup(null)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border transition-all ${
+                className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-sm font-medium border transition-all shrink-0 ${
                 !selectedGroup ?
                 "bg-secondary border-primary/40 text-foreground" :
                 "border-border bg-secondary/50 text-muted-foreground hover:text-foreground"}`
                 }>
-                
                 All Professionals
               </button>
               {categoryGroups.map((group) =>
               <button
                 key={group.id}
                 onClick={() => setSelectedGroup(selectedGroup === group.id ? null : group.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border transition-all ${
+                className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-sm font-semibold border transition-all shrink-0 ${
                 selectedGroup === group.id ?
                 `${group.bg} ${group.border} ${group.color}` :
                 "border-border bg-secondary/50 text-muted-foreground hover:text-foreground"}`
                 }>
-                
                   <span>{group.emoji}</span>
                   <span>{group.label}</span>
                 </button>
@@ -389,7 +387,7 @@ export default function Professionals() {
           </div>
         </div>
 
-        <div className="container py-8">
+        <div className="container py-6 sm:py-8 pb-24 lg:pb-8">
 
           {/* ── AI Capabilities Banner (context-aware) ───────────────── */}
           {activeGroup &&
