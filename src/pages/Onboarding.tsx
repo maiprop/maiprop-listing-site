@@ -854,6 +854,7 @@ function Shell({
   totalSteps,
   onBack,
   wide,
+  step,
 }: {
   children: React.ReactNode;
   stepIndex: number;
@@ -862,22 +863,68 @@ function Shell({
   onBack?: () => void;
   wide?: boolean;
 }) {
+  const prevStepRef = useRef<OnboardingStep | null>(null);
+  const [animClass, setAnimClass] = useState("opacity-100 translate-x-0");
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [displayedChildren, setDisplayedChildren] = useState(children);
+
+  // Track the direction: if stepIndex increased → slide left-to-right, else right-to-left
+  const prevIndexRef = useRef(stepIndex);
+
+  useEffect(() => {
+    if (prevStepRef.current === null) {
+      prevStepRef.current = step;
+      return;
+    }
+    if (prevStepRef.current === step) return;
+
+    const forward = stepIndex >= prevIndexRef.current;
+    prevStepRef.current = step;
+    prevIndexRef.current = stepIndex;
+
+    // Exit current
+    setAnimClass(forward ? "opacity-0 -translate-x-8" : "opacity-0 translate-x-8");
+    setIsTransitioning(true);
+
+    const t = setTimeout(() => {
+      setDisplayedChildren(children);
+      setAnimClass(forward ? "opacity-0 translate-x-8" : "opacity-0 -translate-x-8");
+
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setAnimClass("opacity-100 translate-x-0");
+          setIsTransitioning(false);
+        });
+      });
+    }, 180);
+
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
+
+  // Keep displayedChildren in sync when NOT transitioning
+  useEffect(() => {
+    if (!isTransitioning) setDisplayedChildren(children);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [children, isTransitioning]);
+
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-start px-4 pt-10 pb-16">
-      <div className="mb-8 text-center">
+    <div className="min-h-screen bg-background flex flex-col items-center justify-start px-4 pt-10 pb-16 overflow-hidden">
+      {/* Logo */}
+      <div className="mb-6 text-center shrink-0">
         <span className="font-display font-bold text-2xl">mai<span className="gradient-text-cyan">prop</span></span>
       </div>
 
-      {/* Progress pills */}
+      {/* Progress bar */}
       {totalSteps > 1 && (
-        <div className="flex items-center gap-1.5 mb-8">
+        <div className="flex items-center gap-1.5 mb-8 shrink-0">
           {Array.from({ length: totalSteps }).map((_, i) => (
             <div
               key={i}
               className={cn(
                 "h-1.5 rounded-full transition-all duration-500",
                 i + 1 < stepIndex ? "bg-primary w-5" :
-                i + 1 === stepIndex ? "bg-primary w-10" : "bg-secondary w-5"
+                i + 1 === stepIndex ? "bg-primary w-10" : "bg-muted w-5"
               )}
             />
           ))}
@@ -887,11 +934,23 @@ function Shell({
 
       <div className={cn("w-full", wide ? "max-w-2xl" : "max-w-lg")}>
         {onBack && (
-          <button onClick={onBack} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-4 transition-colors">
+          <button
+            onClick={onBack}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-4 transition-colors"
+          >
             ← Back
           </button>
         )}
-        {children}
+
+        {/* Animated content */}
+        <div
+          className={cn(
+            "transition-all duration-[220ms] ease-out will-change-transform",
+            animClass
+          )}
+        >
+          {displayedChildren}
+        </div>
       </div>
     </div>
   );
