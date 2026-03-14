@@ -1101,7 +1101,7 @@ export default function Listings() {
         )}
 
         {/* Results */}
-        <div className={`${viewMode === "split" ? "" : "container"} py-8`}>
+        <div className={`${viewMode === "split" ? "" : "container"} py-4 sm:py-8 pb-28 lg:pb-8`}>
           {/* Stats bar */}
           <div className={`flex items-center justify-between mb-6 flex-wrap gap-3 ${viewMode === "split" ? "container" : ""}`}>
             <div className="flex items-center gap-3">

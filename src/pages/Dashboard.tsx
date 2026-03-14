@@ -297,20 +297,20 @@ export default function Dashboard() {
           </div>
         </aside>
 
-        {/* Mobile horizontal scrollable nav tabs */}
+        {/* Mobile horizontal scrollable nav tabs — sits above global bottom nav (bottom-16) */}
         <div className="md:hidden fixed bottom-16 left-0 right-0 z-40 bg-card/95 backdrop-blur-xl border-t border-border overflow-x-auto scrollbar-none">
-          <div className="flex items-stretch h-12 px-2 gap-0.5 min-w-max">
-            {navItems.slice(0, 6).map(item => (
+          <div className="flex items-stretch h-11 min-w-max">
+            {navItems.map(item => (
               <button key={item.key} onClick={() => setActiveSection(item.key)}
-                className={`flex flex-col items-center justify-center gap-0.5 px-3 text-[10px] font-semibold transition-colors whitespace-nowrap ${
-                  activeSection === item.key ? "text-primary" : "text-muted-foreground"
+                className={`flex flex-col items-center justify-center gap-0.5 px-3.5 text-[9px] font-semibold transition-colors whitespace-nowrap min-w-[56px] ${
+                  activeSection === item.key ? "text-primary border-b-2 border-primary" : "text-muted-foreground"
                 }`}>
-                <item.icon className="w-4 h-4" />
+                <item.icon className="w-3.5 h-3.5" />
                 {item.label}
               </button>
             ))}
-            <button onClick={handleSignOut} className="flex flex-col items-center justify-center gap-0.5 px-3 text-[10px] font-semibold text-muted-foreground whitespace-nowrap">
-              <LogOut className="w-4 h-4" />
+            <button onClick={handleSignOut} className="flex flex-col items-center justify-center gap-0.5 px-3.5 text-[9px] font-semibold text-muted-foreground whitespace-nowrap min-w-[56px]">
+              <LogOut className="w-3.5 h-3.5" />
               Sign Out
             </button>
           </div>
