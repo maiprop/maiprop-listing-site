@@ -405,12 +405,12 @@ export default function Firesale() {
               <div className="reveal in-view inline-flex items-center gap-2 bg-destructive/10 border border-destructive/20 text-destructive px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest mb-6">
                 <Flame className="w-3.5 h-3.5 flame-flicker" /> Quick Sale™ — Instant Cash Offer
               </div>
-              <h1 className="reveal in-view reveal-delay-1 font-display text-5xl md:text-6xl font-black mb-5 leading-tight">
+              <h1 className="reveal in-view reveal-delay-1 font-display text-3xl sm:text-5xl md:text-6xl font-black mb-4 sm:mb-5 leading-tight">
                 Sell Your Property
                 <br />
                 <span className="gradient-text-primary">in 96 Hours.</span>
               </h1>
-              <p className="reveal in-view reveal-delay-2 text-muted-foreground text-xl mb-8 leading-relaxed max-w-2xl">
+              <p className="reveal in-view reveal-delay-2 text-muted-foreground text-base sm:text-xl mb-6 sm:mb-8 leading-relaxed max-w-2xl">
                 AI-powered guaranteed cash offer. Fast viewings, no negotiations. Your property is matched instantly to
                 our network of <strong className="text-foreground">private investors</strong>.
               </p>
