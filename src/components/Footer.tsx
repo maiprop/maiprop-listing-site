@@ -32,6 +32,7 @@ export function Footer() {
               { label: "Quick Sale™", to: "/firesale" },
               { label: "Professionals", to: "/professionals" },
               { label: "Pricing", to: "/pricing" },
+              { label: "Market Intelligence", to: "/market-intelligence" },
               { label: "AI Reports", to: "/listings" }].
               map((item) =>
               <li key={item.label}>

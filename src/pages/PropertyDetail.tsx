@@ -24,6 +24,8 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { toast } from "sonner";
 import PropertyMiniMap from "@/components/PropertyMiniMap";
 import PropertyValuation from "@/components/PropertyValuation";
+import { ROICalculator } from "@/components/ROICalculator";
+import { DealChecklist } from "@/components/DealChecklist";
 import NeighbourhoodReport from "@/components/NeighbourhoodReport";
 import { walkScoreLabel, walkScoreColour } from "@/lib/walkScore";
 import { HEATING_TYPES, CONDITION_OPTIONS } from "@/lib/filterConfig";
@@ -1343,6 +1345,16 @@ export default function PropertyDetail() {
 
               {/* ⑥ Mortgage Calculator — hidden for auctions and rentals */}
               {!isAuction && listingType !== "rent" && <MortgageCalculator price={price} />}
+
+              {/* ROI Calculator — for investors */}
+              {!isAuction && (
+                <ROICalculator defaultPrice={price} defaultSqm={sqm ?? 80} />
+              )}
+
+              {/* Due diligence checklist — for logged-in users */}
+              {user && !isAuction && (
+                <DealChecklist entityType="listing" entityId={id} />
+              )}
 
               {/* Rental Summary */}
               {listingType === "rent" &&

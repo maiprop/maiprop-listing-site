@@ -11,6 +11,8 @@ export function useListings(filters?: {
   owner_id?: string;
   includeAuctions?: boolean;
   limit?: number;
+  pre_sale_only?: boolean;
+  off_market_only?: boolean;
 }) {
   return useQuery({
     queryKey: ["listings", filters],
@@ -34,6 +36,8 @@ export function useListings(filters?: {
         }
         if (filters?.property_type) query = query.eq("property_type", filters.property_type as any);
         if (filters?.owner_id) query = query.eq("owner_id", filters.owner_id);
+        if (filters?.pre_sale_only) query = query.eq("is_pre_sale", true);
+        if (filters?.off_market_only) query = query.eq("is_off_market", true);
         if (!filters?.owner_id) query = query.eq("status", (filters?.status || "active") as any);
 
         const { data, error } = await query;

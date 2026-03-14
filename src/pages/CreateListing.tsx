@@ -295,6 +295,8 @@ export default function CreateListing() {
     price: "", auction_starting_bid: "", auction_date: "", auction_court: "",
     deposit_months: "", monthly_expenses: "", agent_fee_included: false,
     pets_allowed: false, short_term_rental: false, available_from: "", min_rental_months: "",
+    is_pre_sale: false,
+    is_off_market: false,
   });
 
   const set = (key: string, value: unknown) => {
@@ -707,6 +709,8 @@ export default function CreateListing() {
         has_electricity_supply: form.has_electricity_supply, has_land_concession: form.has_land_concession,
         has_three_phase_power: form.has_three_phase_power, has_loading_dock: form.has_loading_dock,
         has_structured_cabling: form.has_structured_cabling, has_equipped: form.has_equipped,
+        is_pre_sale: form.is_pre_sale,
+        is_off_market: form.is_off_market,
       };
 
       const { data, error } = await supabase
@@ -810,6 +814,36 @@ export default function CreateListing() {
                       </button>
                     ))}
                   </div>
+                </div>
+
+                {/* Pre-sale — for sale listings (new developments) */}
+                {lt === "sale" && (
+                  <div>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={form.is_pre_sale}
+                        onChange={() => toggle("is_pre_sale")}
+                        className="rounded border-border"
+                      />
+                      <span className="text-sm font-medium">Pre-sale / Off-plan</span>
+                      <span className="text-xs text-muted-foreground">New development before completion</span>
+                    </label>
+                  </div>
+                )}
+
+                {/* Off-market — not publicly advertised */}
+                <div>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.is_off_market}
+                      onChange={() => toggle("is_off_market")}
+                      className="rounded border-border"
+                    />
+                    <span className="text-sm font-medium">Off-market</span>
+                    <span className="text-xs text-muted-foreground">Visible only to subscribed investors</span>
+                  </label>
                 </div>
 
                 {/* Property type — rich cards */}
