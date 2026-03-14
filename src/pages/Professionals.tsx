@@ -358,28 +358,27 @@ export default function Professionals() {
 
         {/* ── Category Groups ─────────────────────────────────────────── */}
         <div className="bg-card/40 border-b border-border">
-          <div className="container py-6">
-            <div className="flex gap-3 flex-wrap">
+          <div className="container py-4 sm:py-6">
+            {/* Horizontally scrollable on mobile */}
+            <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1">
               <button
                 onClick={() => setSelectedGroup(null)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border transition-all ${
+                className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-sm font-medium border transition-all shrink-0 ${
                 !selectedGroup ?
                 "bg-secondary border-primary/40 text-foreground" :
                 "border-border bg-secondary/50 text-muted-foreground hover:text-foreground"}`
                 }>
-                
                 All Professionals
               </button>
               {categoryGroups.map((group) =>
               <button
                 key={group.id}
                 onClick={() => setSelectedGroup(selectedGroup === group.id ? null : group.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border transition-all ${
+                className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-sm font-semibold border transition-all shrink-0 ${
                 selectedGroup === group.id ?
                 `${group.bg} ${group.border} ${group.color}` :
                 "border-border bg-secondary/50 text-muted-foreground hover:text-foreground"}`
                 }>
-                
                   <span>{group.emoji}</span>
                   <span>{group.label}</span>
                 </button>
@@ -388,7 +387,7 @@ export default function Professionals() {
           </div>
         </div>
 
-        <div className="container py-8">
+        <div className="container py-6 sm:py-8 pb-24 lg:pb-8">
 
           {/* ── AI Capabilities Banner (context-aware) ───────────────── */}
           {activeGroup &&
