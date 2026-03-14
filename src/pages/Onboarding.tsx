@@ -431,20 +431,39 @@ export default function Onboarding() {
     if (step === "pro-services") {
       const catalog = getServicesForCategory(proCategory);
       const selectedCount = Object.keys(selectedServices).length;
+      const allSelected = selectedCount === catalog.length;
+
+      const selectAll = () => {
+        const next: Record<string, SelectedService> = {};
+        catalog.forEach(svc => {
+          next[svc.key] = { template: svc, pricingModel: svc.defaultPricing, rate: String(svc.suggestedRate), videoEnabled: svc.videoAvailable };
+        });
+        setSelectedServices(next);
+      };
+
+      const deselectAll = () => setSelectedServices({});
+
       return (
         <div>
-          <div className="text-center mb-6">
+          <div className="text-center mb-5">
             <h1 className="font-display font-bold text-2xl text-foreground mb-1">Your Services</h1>
             <p className="text-muted-foreground text-sm">
               Select the services you offer as a <span className="font-medium text-foreground">{CATEGORY_LABELS[proCategory]}</span>.
               Set your pricing model and rate for each.
             </p>
           </div>
-          {selectedCount > 0 && (
-            <div className="mb-4 flex items-center gap-2 text-xs text-primary font-medium">
-              <Check className="w-3.5 h-3.5" /> {selectedCount} service{selectedCount > 1 ? "s" : ""} selected
+          <div className="flex items-center justify-between mb-4">
+            <div className="text-xs text-primary font-medium flex items-center gap-1.5">
+              {selectedCount > 0 && <><Check className="w-3.5 h-3.5" />{selectedCount} of {catalog.length} selected</>}
+              {selectedCount === 0 && <span className="text-muted-foreground">None selected yet</span>}
             </div>
-          )}
+            <button
+              onClick={allSelected ? deselectAll : selectAll}
+              className="text-xs font-medium text-primary hover:text-primary/80 border border-primary/30 hover:border-primary/60 rounded-full px-3 py-1 transition-all"
+            >
+              {allSelected ? "Deselect All" : "Select All"}
+            </button>
+          </div>
           <div className="space-y-3 mb-6">
             {catalog.map(svc => {
               const active = !!selectedServices[svc.key];
@@ -527,7 +546,7 @@ export default function Onboarding() {
           </div>
           <Button className="w-full bg-gradient-primary border-0 text-primary-foreground" disabled={loading || selectedCount === 0} onClick={handleSaveServices}>
             {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-            Save {selectedCount > 0 ? `${selectedCount} Services` : "Services"} & Continue
+            Save {selectedCount > 0 ? `${selectedCount} Service${selectedCount > 1 ? "s" : ""}` : "Services"} & Continue
             <ArrowRight className="w-4 h-4 ml-2" />
           </Button>
         </div>
