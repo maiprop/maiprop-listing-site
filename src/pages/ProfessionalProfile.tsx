@@ -432,8 +432,8 @@ export default function ProfessionalProfile() {
         </div>
 
         {/* ── Body ── */}
-        <div className="container py-8">
-          <div className="grid lg:grid-cols-3 gap-8">
+        <div className="container py-5 sm:py-8 pb-24 lg:pb-10">
+          <div className="grid lg:grid-cols-3 gap-5 sm:gap-8">
 
             {/* Main column */}
             <div className="lg:col-span-2 space-y-6">
