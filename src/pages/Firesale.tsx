@@ -377,7 +377,7 @@ export default function Firesale() {
       <Navbar />
       <div className="pt-16">
         {/* Hero */}
-        <div className="relative py-28 overflow-hidden border-b border-border">
+        <div className="relative py-16 sm:py-28 overflow-hidden border-b border-border">
           {/* Animated glow orbs */}
           <div
             className="firesale-orb-1 absolute -left-24 top-1/4 w-[520px] h-[520px] rounded-full pointer-events-none"
