@@ -365,7 +365,6 @@ export default function Dashboard() {
                     <Link to="/listings"><Search className="w-4 h-4" /> Browse Listings</Link>
                   </Button>
                 )}
-                )}
                 {role === "professional" && (
                   <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" onClick={() => setActiveSection("services")}>
                     <Wrench className="w-4 h-4" /> My Services
