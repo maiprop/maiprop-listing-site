@@ -1136,14 +1136,18 @@ export default function PropertyDetail() {
                         <Button variant="outline" className="border-border gap-1.5 h-9 text-xs">
                           <Phone className="w-3.5 h-3.5" />Call
                         </Button>
-                        <Button variant="outline" className="border-border gap-1.5 h-9 text-xs" onClick={() => setViewingOpen(true)}>
+                        <Button variant="outline" className="border-border gap-1.5 h-9 text-xs" onClick={() => user ? setViewingOpen(true) : (toast.error("Sign in to request a viewing"), navigate("/login"))}>
                           <Calendar className="w-3.5 h-3.5" />Viewing
                         </Button>
                       </div>
                       <Button
                       variant="outline"
                       className="w-full border-border gap-2 h-9 text-xs"
-                      onClick={() => canVideoView ? setViewingOpen(true) : (toast.info("Video viewing is available for Pro users, or free for retailers."), navigate("/pricing"))}>
+                      onClick={() => {
+                        if (!user) { toast.error("Sign in to request a viewing"); navigate("/login"); return; }
+                        if (canVideoView) setViewingOpen(true);
+                        else (toast.info("Video viewing is available for Pro users, or free for retailers."), navigate("/pricing"));
+                      }}>
                       
                         <Video className="w-3.5 h-3.5" />Video Viewing{!canVideoView && <Lock className="w-3 h-3 ml-0.5 opacity-60" />}
                       </Button>
@@ -1408,6 +1412,7 @@ export default function PropertyDetail() {
         open={viewingOpen}
         onClose={() => setViewingOpen(false)}
         canVideoView={canVideoView}
+        ownerId={(db as any).owner_id ?? (db as any).profiles?.user_id ?? ""}
         property={{
           id: db.id, title: db.title, city: db.city,
           price: Number(db.price), sqm: Number(db.sqm),

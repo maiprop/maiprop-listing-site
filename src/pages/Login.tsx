@@ -38,13 +38,17 @@ export default function Login() {
 
   const from = (location.state as any)?.from?.pathname || "/dashboard";
 
-  // Redirect existing/just-signed-in users straight to their destination — never back to onboarding
+  // Redirect: if needs onboarding go there first; otherwise to intended destination
   useEffect(() => {
     if (authLoading) return;
     if (user) {
-      navigate(from, { replace: true });
+      if (needsOnboarding) {
+        navigate("/onboarding", { replace: true });
+      } else {
+        navigate(from, { replace: true });
+      }
     }
-  }, [authLoading, user, from, navigate]);
+  }, [authLoading, user, needsOnboarding, from, navigate]);
 
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);

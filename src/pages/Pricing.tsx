@@ -14,6 +14,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 // ── Audience config ────────────────────────────────────────────────────────────
 
@@ -360,8 +362,9 @@ export default function Pricing() {
       const { data, error } = await supabase.functions.invoke("customer-portal", {});
       if (error || !data?.url) throw new Error(error?.message || "Failed to open billing portal");
       window.open(data.url, "_blank");
-    } catch (e: Error) {
-      toast.error(e.message || "Failed to open billing portal");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to open billing portal";
+      toast.error(msg || "Failed to open billing portal");
     } finally {
       setPortalLoading(false);
     }

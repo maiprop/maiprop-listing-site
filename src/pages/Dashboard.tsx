@@ -1280,6 +1280,10 @@ function SettingsSection({
               <span className="text-green-400 shrink-0 mt-0.5">▸</span>
               <span><strong className="text-foreground">Access rights will change.</strong> Choosing a superior participant type may unlock additional features and data access (e.g. admin panel, deal flow, leads). These are granted server-side upon plan activation.</span>
             </li>
+            <li className="flex items-start gap-2">
+              <span className="text-primary shrink-0 mt-0.5">▸</span>
+              <span><strong className="text-foreground">Active subscriptions remain.</strong> Your Pro or Firesale subscription stays active until it expires. You may need to update your plan on the Pricing page if your new type requires different access.</span>
+            </li>
           </ul>
         </div>
 

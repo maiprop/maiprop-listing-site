@@ -622,6 +622,7 @@ export default function InvestorDashboard() {
   // Deal flow is for investors only — not real estate agents. Participant type from bio.
   const participantType = profile?.bio?.match(/^__type:(\w+)/)?.[1] || "";
   const isInvestorType = ["investor", "institutional", "developer", "buyer"].includes(participantType);
+  const isRealEstateAgent = profile?.role === "agent" || participantType === "agent";
   const canAccessDealFlow = subscribed && isInvestorType;
   const [showGate, setShowGate] = useState(false);
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
