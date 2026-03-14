@@ -1,13 +1,17 @@
-import { useState } from "react";
-import { Calendar, Clock, Video, MapPin, Check, X } from "lucide-react";
+import { useState, useMemo } from "react";
+import { Calendar, Video, MapPin, Check, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 import type { Property } from "@/components/PropertyCard";
 
 interface ViewingDialogProps {
   open: boolean;
   onClose: () => void;
   property: Property;
+  ownerId: string;
   /** If false, video viewing is disabled (Pro or retailers only). */
   canVideoView?: boolean;
 }
@@ -16,25 +20,64 @@ const timeSlots = [
   "09:00", "10:00", "11:00", "12:00", "14:00", "15:00", "16:00", "17:00", "18:00"
 ];
 
-const days = [
-  { label: "Mon", date: "Mar 10" },
-  { label: "Tue", date: "Mar 11" },
-  { label: "Wed", date: "Mar 12" },
-  { label: "Thu", date: "Mar 13" },
-  { label: "Fri", date: "Mar 14" },
-  { label: "Sat", date: "Mar 15" },
-];
+function buildDynamicDays(): { label: string; date: string; iso: string }[] {
+  const days: { label: string; date: string; iso: string }[] = [];
+  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const now = new Date();
+  for (let i = 1; i <= 7; i++) {
+    const d = new Date(now);
+    d.setDate(d.getDate() + i);
+    const month = d.toLocaleString("en-GB", { month: "short" });
+    const dayNum = d.getDate();
+    days.push({
+      label: dayNames[d.getDay()],
+      date: `${month} ${dayNum}`,
+      iso: d.toISOString().slice(0, 10),
+    });
+  }
+  return days;
+}
 
-export default function ViewingDialog({ open, onClose, property, canVideoView = true }: ViewingDialogProps) {
+export default function ViewingDialog({ open, onClose, property, ownerId, canVideoView = true }: ViewingDialogProps) {
+  const { user } = useAuth();
   const [viewType, setViewType] = useState<"in-person" | "video">("in-person");
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [selectedIso, setSelectedIso] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  const [note, setNote] = useState("");
   const [confirmed, setConfirmed] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleBook = () => {
-    if (selectedDay && selectedTime) {
-      setConfirmed(true);
+  const days = useMemo(buildDynamicDays, [open]);
+
+  const handleDaySelect = (day: { label: string; date: string; iso: string }) => {
+    setSelectedDay(day.date);
+    setSelectedIso(day.iso);
+    setSelectedTime(null);
+  };
+
+  const handleBook = async () => {
+    if (!user) { toast.error("Please sign in to request a viewing"); return; }
+    if (!ownerId) { toast.error("Could not determine property owner."); return; }
+    if (!selectedIso || !selectedTime) return;
+    setLoading(true);
+    const scheduledAt = new Date(`${selectedIso}T${selectedTime}:00`);
+    const { error } = await supabase.from("viewings").insert({
+      listing_id: property.id,
+      requester_id: user.id,
+      owner_id: ownerId,
+      viewing_type: viewType === "video" ? "video" : "in_person",
+      status: "pending",
+      scheduled_at: scheduledAt.toISOString(),
+      note: note.trim() || null,
+    } as any);
+    setLoading(false);
+    if (error) {
+      toast.error("Could not submit viewing request. Please try again.");
+      return;
     }
+    setConfirmed(true);
+    toast.success("Viewing request submitted! The property owner will be notified.");
   };
 
   return (
@@ -42,7 +85,7 @@ export default function ViewingDialog({ open, onClose, property, canVideoView = 
       <DialogContent className="bg-card border-border max-w-md">
         <DialogHeader>
           <DialogTitle className="font-display text-lg">
-            {confirmed ? "Viewing Confirmed! 🎉" : "Book a Viewing"}
+            {confirmed ? "Viewing Request Sent! 🎉" : "Book a Viewing"}
           </DialogTitle>
         </DialogHeader>
 
@@ -58,9 +101,9 @@ export default function ViewingDialog({ open, onClose, property, canVideoView = 
               </p>
             </div>
             <div className="bg-secondary rounded-xl p-4 text-sm text-left space-y-2">
-              <p className="text-muted-foreground">A confirmation has been sent to your email with all the details.</p>
+              <p className="text-muted-foreground">Your request has been sent to the property owner. They will confirm the appointment and you will receive a notification.</p>
               {viewType === "video" && (
-                <p className="text-primary">A video call link will be sent 15 minutes before the viewing.</p>
+                <p className="text-primary">If video viewing is confirmed, a call link will be sent before the scheduled time.</p>
               )}
             </div>
             <Button className="w-full bg-gradient-primary border-0 text-primary-foreground" onClick={onClose}>
@@ -114,11 +157,11 @@ export default function ViewingDialog({ open, onClose, property, canVideoView = 
             {/* Day selection */}
             <div>
               <label className="text-sm font-medium block mb-2">Select Day</label>
-              <div className="grid grid-cols-6 gap-1">
+              <div className="grid grid-cols-7 gap-1">
                 {days.map(day => (
                   <button
-                    key={day.date}
-                    onClick={() => setSelectedDay(day.date)}
+                    key={day.iso}
+                    onClick={() => handleDaySelect(day)}
                     className={`p-2 rounded-lg text-center text-xs transition-all ${
                       selectedDay === day.date
                         ? "bg-gradient-primary text-primary-foreground"
@@ -161,14 +204,17 @@ export default function ViewingDialog({ open, onClose, property, canVideoView = 
                 placeholder="Any specific requirements or questions..."
                 className="w-full bg-secondary border border-border rounded-xl p-3 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary resize-none"
                 rows={2}
+                value={note}
+                onChange={e => setNote(e.target.value)}
               />
             </div>
 
             <Button
               className="w-full bg-gradient-primary border-0 text-primary-foreground"
-              disabled={!selectedDay || !selectedTime}
+              disabled={!selectedDay || !selectedTime || loading}
               onClick={handleBook}
             >
+              {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               <Calendar className="w-4 h-4 mr-2" />
               Confirm Booking
             </Button>

@@ -223,15 +223,54 @@ export default function Onboarding() {
   const stepIndex = steps.indexOf(step);
   const totalSteps = steps.length - 1;
 
+  const DRAFT_KEY = "onboarding_draft";
+
+  // ── Restore draft (user left mid-flow) ─────────────────────────────────────
+  const draftRestoredRef = useRef(false);
+  useEffect(() => {
+    if (!user?.id || draftRestoredRef.current) return;
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const draft = JSON.parse(raw) as { userId: string; step: OnboardingStep; selectedId?: string; proCategory?: string };
+      if (draft.userId !== user.id) return;
+      draftRestoredRef.current = true;
+      const p = draft.selectedId ? participants.find(x => x.id === draft.selectedId) : null;
+      setSelected(p ?? null);
+      setStep(draft.step);
+      if (draft.proCategory) setProCategory(draft.proCategory);
+    } catch (_) { localStorage.removeItem(DRAFT_KEY); }
+  }, [user?.id]);
+
+  // ── Persist draft when step/selected changes ─────────────────────────────────
+  useEffect(() => {
+    if (!user?.id || step === "done") return;
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({
+        userId: user.id,
+        step,
+        selectedId: selected?.id,
+        proCategory: proCategory || undefined,
+      }));
+    } catch (_) {}
+  }, [user?.id, step, selected?.id, proCategory]);
+
+  // ── Clear draft when done ────────────────────────────────────────────────────
+  useEffect(() => {
+    if (step === "done") localStorage.removeItem(DRAFT_KEY);
+  }, [step]);
+
   // ── Restore participant type from Signup (Google OAuth) ──────────────────────
   const restoredRef = useRef(false);
   useEffect(() => {
     if (!user || restoredRef.current) return;
     (async () => {
       try {
-        const stored = sessionStorage.getItem("signup_participant_type");
+        const stored = sessionStorage.getItem("signup_participant_type") || localStorage.getItem("signup_participant_type");
         if (!stored) return;
         sessionStorage.removeItem("signup_participant_type");
+        localStorage.removeItem("signup_participant_type");
+        localStorage.removeItem(DRAFT_KEY);
         restoredRef.current = true;
         const p = participants.find(x => x.id === stored);
         if (!p) return;

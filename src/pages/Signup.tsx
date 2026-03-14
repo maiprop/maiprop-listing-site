@@ -60,20 +60,28 @@ export default function Signup() {
   // After signup, write the bio __type: tag then go to onboarding
   useEffect(() => {
     if (authLoading || !didSignUp) return;
-    if (user) {
-      // Save the chosen participant type to bio so onboarding/dashboard knows
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
       if (selectedType) {
-        updateProfile({ bio: `__type:${selectedType}` }).catch(() => {});
+        const { error } = await updateProfile({ bio: `__type:${selectedType}` });
+        if (cancelled) return;
+        if (error) {
+          toast.error("Could not save your profile. Please try again.");
+          return;
+        }
       }
       navigate("/onboarding", { replace: true });
-    }
+    })();
+    return () => { cancelled = true; };
   }, [authLoading, user, didSignUp, selectedType, navigate, updateProfile]);
 
   const handleGoogleSignIn = async () => {
     if (!selectedType) return;
-    // Persist type for post-OAuth so Onboarding can apply it
+    // Persist type for post-OAuth so Onboarding can apply it (both storage types for robustness)
     try {
       sessionStorage.setItem("signup_participant_type", selectedType);
+      localStorage.setItem("signup_participant_type", selectedType);
     } catch (_) {}
     setGoogleLoading(true);
     const { error } = await lovable.auth.signInWithOAuth("google", {
