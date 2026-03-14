@@ -150,15 +150,26 @@ export default function Pricing() {
   const { isPro } = useSubscription();
   const navigate = useNavigate();
 
-  // Auto-detect default tab from user profile
-  const defaultTab: AudienceId = (() => {
+  // Derive tab from profile role
+  const roleTab: AudienceId = (() => {
     if (!profile) return "buyer";
     if (profile.role === "agent") return "agent";
     if (profile.role === "professional") return "professional";
     return "buyer";
   })();
 
-  const [activeTab, setActiveTab] = useState<AudienceId>(defaultTab);
+  // Start with "buyer" so we never block on profile load; sync once profile arrives
+  const [activeTab, setActiveTab] = useState<AudienceId>("buyer");
+  const [hasAutoSelected, setHasAutoSelected] = useState(false);
+
+  // Sync to profile role once profile is available (async auth)
+  useEffect(() => {
+    if (!hasAutoSelected && profile) {
+      setActiveTab(roleTab);
+      setHasAutoSelected(true);
+    }
+  }, [profile, roleTab, hasAutoSelected]);
+
   const plan = PLANS[activeTab];
 
   return (
