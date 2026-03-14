@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Eye, EyeOff, Loader2, ArrowRight } from "lucide-react";
+import { Eye, EyeOff, Loader2, ArrowRight, Home, Users, TrendingUp, UserCheck, Globe2, Building2, Briefcase, ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { useAuth } from "@/contexts/AuthContext";
 import { lovable } from "@/integrations/lovable/index";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
+import { cn } from "@/lib/utils";
 import logoImg from "@/assets/logo.png";
 import logoDarkImg from "@/assets/logo-dark.png";
 
@@ -19,11 +20,33 @@ const GoogleIcon = () => (
   </svg>
 );
 
+type ParticipantId = "buyer" | "seller" | "investor" | "agent" | "institutional" | "developer" | "professional";
+
+const PARTICIPANT_TYPES: {
+  id: ParticipantId;
+  label: string;
+  sublabel: string;
+  icon: React.ElementType;
+  accent: string;
+  accentBg: string;
+  accentBorder: string;
+}[] = [
+  { id: "buyer",         label: "Buyer / Renter",      sublabel: "Browse, search & book viewings",         icon: Home,       accent: "text-brand-gold",  accentBg: "bg-brand-gold/10",  accentBorder: "border-brand-gold/40" },
+  { id: "seller",        label: "Seller / Landlord",   sublabel: "List & manage your property",            icon: Users,      accent: "text-violet-400",  accentBg: "bg-violet-500/10",  accentBorder: "border-violet-500/40" },
+  { id: "investor",      label: "Investor",             sublabel: "Deal flow, auctions & AI valuations",    icon: TrendingUp, accent: "text-destructive",  accentBg: "bg-destructive/10", accentBorder: "border-destructive/30" },
+  { id: "agent",         label: "Agent",                sublabel: "Listings, CRM & client management",      icon: UserCheck,  accent: "text-cyan-400",    accentBg: "bg-cyan-500/10",    accentBorder: "border-cyan-500/40" },
+  { id: "institutional", label: "Institutional / Fund", sublabel: "Portfolio tools & deal pipeline",        icon: Globe2,     accent: "text-amber-400",   accentBg: "bg-amber-500/10",   accentBorder: "border-amber-500/40" },
+  { id: "developer",     label: "Developer",            sublabel: "Project showcases & pre-sale management", icon: Building2, accent: "text-orange-400",  accentBg: "bg-orange-500/10",  accentBorder: "border-orange-500/40" },
+  { id: "professional",  label: "Professional",         sublabel: "Directory listing, leads & bookings",    icon: Briefcase,  accent: "text-rose-400",    accentBg: "bg-rose-500/10",    accentBorder: "border-rose-500/40" },
+];
+
 export default function Signup() {
   const navigate = useNavigate();
-  const { signUp, user, loading: authLoading } = useAuth();
+  const { signUp, updateProfile, user, loading: authLoading } = useAuth();
   const { theme } = useTheme();
 
+  const [step, setStep] = useState<"role" | "details">("role");
+  const [selectedType, setSelectedType] = useState<ParticipantId | null>(null);
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -31,16 +54,20 @@ export default function Signup() {
 
   const [form, setForm] = useState({ firstName: "", lastName: "", email: "", password: "" });
 
-  // Redirect as soon as auth state settles with a user — covers both
-  // immediate sign-in and the case where email confirmation auto-logs in.
+  // After signup, write the bio __type: tag then go to onboarding
   useEffect(() => {
-    if (authLoading) return;
+    if (authLoading || !didSignUp) return;
     if (user) {
+      // Save the chosen participant type to bio so onboarding/dashboard knows
+      if (selectedType) {
+        updateProfile({ bio: `__type:${selectedType}` }).catch(() => {});
+      }
       navigate("/onboarding", { replace: true });
     }
-  }, [authLoading, user, navigate]);
+  }, [authLoading, user, didSignUp, selectedType, navigate, updateProfile]);
 
   const handleGoogleSignIn = async () => {
+    if (!selectedType) return;
     setGoogleLoading(true);
     const { error } = await lovable.auth.signInWithOAuth("google", {
       redirect_uri: `${window.location.origin}/onboarding`,
@@ -67,115 +94,193 @@ export default function Signup() {
       toast.error(error.message);
     } else {
       setDidSignUp(true);
-      // onAuthStateChange will set user → useEffect above handles redirect
     }
   };
+
+  const selected = PARTICIPANT_TYPES.find(t => t.id === selectedType);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Navbar />
       <div className="flex-1 flex items-center justify-center pt-16 px-4 py-10">
-        <div className="w-full max-w-sm">
+        <div className="w-full max-w-lg">
           <div className="glass-card rounded-2xl p-8 border border-border">
 
-            <div className="text-center mb-6">
-              <img
-                src={theme === "dark" ? logoDarkImg : logoImg}
-                alt="maiProp"
-                className="h-10 w-auto object-contain mx-auto mb-2"
-              />
-              <p className="text-muted-foreground text-sm mt-1">Create your free account</p>
-            </div>
-
-            {/* Google */}
-            <button
-              onClick={handleGoogleSignIn}
-              disabled={googleLoading}
-              className="w-full flex items-center justify-center gap-3 bg-secondary hover:bg-secondary/80 border border-border rounded-xl px-4 py-3 text-sm font-semibold transition-colors disabled:opacity-60 mb-4"
-            >
-              {googleLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <GoogleIcon />}
-              Continue with Google
-            </button>
-
-            <div className="flex items-center gap-3 mb-4">
-              <div className="flex-1 h-px bg-border" />
-              <span className="text-xs text-muted-foreground">or with email</span>
-              <div className="flex-1 h-px bg-border" />
-            </div>
-
-            <form onSubmit={handleSignUp} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground block mb-1.5">First Name</label>
-                  <input
-                    type="text"
-                    placeholder="Nikos"
-                    value={form.firstName}
-                    onChange={e => setForm(f => ({ ...f, firstName: e.target.value }))}
-                    className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
+            {/* ── STEP 1: ROLE PICKER ── */}
+            {step === "role" && (
+              <>
+                <div className="text-center mb-6">
+                  <img
+                    src={theme === "dark" ? logoDarkImg : logoImg}
+                    alt="maiProp"
+                    className="h-9 w-auto object-contain mx-auto mb-3"
                   />
+                  <h1 className="font-display font-bold text-xl">Who are you on maiProp?</h1>
+                  <p className="text-muted-foreground text-sm mt-1">Choose your participant type to personalise your dashboard</p>
                 </div>
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground block mb-1.5">Last Name</label>
-                  <input
-                    type="text"
-                    placeholder="Papadopoulos"
-                    value={form.lastName}
-                    onChange={e => setForm(f => ({ ...f, lastName: e.target.value }))}
-                    className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
-                  />
+
+                <div className="grid grid-cols-1 gap-2 mb-6">
+                  {PARTICIPANT_TYPES.map(type => {
+                    const Icon = type.icon;
+                    const isSelected = selectedType === type.id;
+                    return (
+                      <button
+                        key={type.id}
+                        type="button"
+                        onClick={() => setSelectedType(type.id)}
+                        className={cn(
+                          "flex items-center gap-3 rounded-xl px-4 py-3 border text-left transition-all",
+                          isSelected
+                            ? `${type.accentBg} ${type.accentBorder} border`
+                            : "bg-secondary/50 border-border hover:border-muted-foreground/30"
+                        )}
+                      >
+                        <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center shrink-0", type.accentBg)}>
+                          <Icon className={cn("w-4 h-4", type.accent)} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={cn("text-sm font-semibold leading-tight", isSelected ? type.accent : "text-foreground")}>
+                            {type.label}
+                          </p>
+                          <p className="text-xs text-muted-foreground truncate">{type.sublabel}</p>
+                        </div>
+                        {isSelected && (
+                          <div className={cn("w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0", type.accentBorder)}>
+                            <div className={cn("w-2 h-2 rounded-full", type.accent.replace("text-", "bg-"))} />
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
-              </div>
 
-              <div>
-                <label className="text-xs font-medium text-muted-foreground block mb-1.5">Email</label>
-                <input
-                  type="email"
-                  placeholder="you@example.com"
-                  value={form.email}
-                  onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                  required
-                  className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
-                />
-              </div>
+                <Button
+                  className="w-full bg-gradient-primary border-0 text-primary-foreground"
+                  disabled={!selectedType}
+                  onClick={() => setStep("details")}
+                >
+                  Continue <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
 
-              <div>
-                <label className="text-xs font-medium text-muted-foreground block mb-1.5">Password</label>
-                <div className="relative">
-                  <input
-                    type={showPass ? "text" : "password"}
-                    placeholder="Min. 6 characters"
-                    value={form.password}
-                    onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                    required
-                    className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 pr-10 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
-                  />
-                  <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" onClick={() => setShowPass(v => !v)}>
-                    {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
+                <p className="text-xs text-muted-foreground text-center mt-4">
+                  Already have an account?{" "}
+                  <Link to="/login" className="text-primary hover:underline">Sign in</Link>
+                </p>
+              </>
+            )}
+
+            {/* ── STEP 2: ACCOUNT DETAILS ── */}
+            {step === "details" && (
+              <>
+                <button
+                  onClick={() => setStep("role")}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-5 transition-colors"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" /> Back
+                </button>
+
+                <div className="text-center mb-5">
+                  {selected && (
+                    <div className={cn("inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold mb-3", selected.accentBg, selected.accent, "border", selected.accentBorder)}>
+                      <selected.icon className="w-3.5 h-3.5" />
+                      {selected.label}
+                    </div>
+                  )}
+                  <h1 className="font-display font-bold text-xl">Create your account</h1>
+                  <p className="text-muted-foreground text-sm mt-1">Start free — upgrade anytime</p>
                 </div>
-              </div>
 
-              <Button
-                type="submit"
-                className="w-full bg-gradient-primary border-0 text-primary-foreground"
-                disabled={loading || (didSignUp && authLoading) || !form.email || !form.password}
-              >
-                {(loading || (didSignUp && authLoading)) ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                Create Account <ArrowRight className="w-4 h-4 ml-2" />
-              </Button>
-            </form>
+                {/* Google */}
+                <button
+                  onClick={handleGoogleSignIn}
+                  disabled={googleLoading}
+                  className="w-full flex items-center justify-center gap-3 bg-secondary hover:bg-secondary/80 border border-border rounded-xl px-4 py-3 text-sm font-semibold transition-colors disabled:opacity-60 mb-4"
+                >
+                  {googleLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <GoogleIcon />}
+                  Continue with Google
+                </button>
 
-            <p className="text-xs text-muted-foreground text-center mt-4">
-              Already have an account?{" "}
-              <Link to="/login" className="text-primary hover:underline">Sign in</Link>
-            </p>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="flex-1 h-px bg-border" />
+                  <span className="text-xs text-muted-foreground">or with email</span>
+                  <div className="flex-1 h-px bg-border" />
+                </div>
 
-            <p className="text-xs text-muted-foreground text-center mt-3">
-              By signing up you agree to our{" "}
-              <Link to="/terms-of-service" className="text-primary hover:underline">Terms</Link> and{" "}
-              <Link to="/privacy-policy" className="text-primary hover:underline">Privacy Policy</Link>
-            </p>
+                <form onSubmit={handleSignUp} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground block mb-1.5">First Name</label>
+                      <input
+                        type="text"
+                        placeholder="Nikos"
+                        value={form.firstName}
+                        onChange={e => setForm(f => ({ ...f, firstName: e.target.value }))}
+                        className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground block mb-1.5">Last Name</label>
+                      <input
+                        type="text"
+                        placeholder="Papadopoulos"
+                        value={form.lastName}
+                        onChange={e => setForm(f => ({ ...f, lastName: e.target.value }))}
+                        className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">Email</label>
+                    <input
+                      type="email"
+                      placeholder="you@example.com"
+                      value={form.email}
+                      onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                      required
+                      className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">Password</label>
+                    <div className="relative">
+                      <input
+                        type={showPass ? "text" : "password"}
+                        placeholder="Min. 6 characters"
+                        value={form.password}
+                        onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+                        required
+                        className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 pr-10 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
+                      />
+                      <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" onClick={() => setShowPass(v => !v)}>
+                        {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    className="w-full bg-gradient-primary border-0 text-primary-foreground"
+                    disabled={loading || !form.email || !form.password}
+                  >
+                    {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                    Create Account <ArrowRight className="w-4 h-4 ml-2" />
+                  </Button>
+                </form>
+
+                <p className="text-xs text-muted-foreground text-center mt-4">
+                  Already have an account?{" "}
+                  <Link to="/login" className="text-primary hover:underline">Sign in</Link>
+                </p>
+
+                <p className="text-xs text-muted-foreground text-center mt-3">
+                  By signing up you agree to our{" "}
+                  <Link to="/terms-of-service" className="text-primary hover:underline">Terms</Link> and{" "}
+                  <Link to="/privacy-policy" className="text-primary hover:underline">Privacy Policy</Link>
+                </p>
+              </>
+            )}
           </div>
         </div>
       </div>
