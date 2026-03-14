@@ -23,7 +23,6 @@ import Messages from "./pages/Messages";
 import CreateListing from "./pages/CreateListing";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
-import Pro from "./pages/Pro";
 import MarketIntelligence from "./pages/MarketIntelligence";
 import Projects from "./pages/Projects";
 import Portfolios from "./pages/Portfolios";
@@ -84,7 +83,6 @@ const App = () => (
               <Route path="/terms-of-service" element={<TermsOfService />} />
               <Route path="/cookie-policy" element={<CookiePolicy />} />
               <Route path="/reset-password" element={<ResetPassword />} />
-              <Route path="/pro" element={<Pro />} />
               <Route path="/market-intelligence" element={<MarketIntelligence />} />
               <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
               <Route path="/portfolios" element={<ProtectedRoute><Portfolios /></ProtectedRoute>} />

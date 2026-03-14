@@ -174,6 +174,7 @@ const colorMap: Record<string, { bg: string; border: string; text: string; iconB
 };
 
 const PRO_CATEGORIES = [
+  { value: "real_estate_agent", label: "Real Estate Agent" },
   { value: "architect", label: "Architect" },
   { value: "civil_engineer", label: "Civil Engineer" },
   { value: "lawyer", label: "Lawyer" },
@@ -221,6 +222,33 @@ export default function Onboarding() {
   const steps = selected?.isPro ? PRO_STEPS : OTHER_STEPS;
   const stepIndex = steps.indexOf(step);
   const totalSteps = steps.length - 1;
+
+  // ── Restore participant type from Signup (Google OAuth) ──────────────────────
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (!user || restoredRef.current) return;
+    (async () => {
+      try {
+        const stored = sessionStorage.getItem("signup_participant_type");
+        if (!stored) return;
+        sessionStorage.removeItem("signup_participant_type");
+        restoredRef.current = true;
+        const p = participants.find(x => x.id === stored);
+        if (!p) return;
+        setSelected(p);
+        if (p.isPro) {
+          setStep("pro-category");
+        } else {
+          setLoading(true);
+          await updateProfile({ role: p.role });
+          await supabase.from("profiles").update({ bio: `__type:${p.id}` }).eq("user_id", user.id);
+          await refreshProfile();
+          setLoading(false);
+          setStep("done");
+        }
+      } catch (_) {}
+    })();
+  }, [user, updateProfile, refreshProfile]);
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
 

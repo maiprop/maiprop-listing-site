@@ -15,6 +15,7 @@ export interface ServiceTemplate {
 }
 
 export const CATEGORY_LABELS: Record<string, string> = {
+  real_estate_agent: "Real Estate Agent",
   architect: "Architect",
   civil_engineer: "Civil Engineer",
   lawyer: "Lawyer",
@@ -29,6 +30,56 @@ export const CATEGORY_LABELS: Record<string, string> = {
 };
 
 export const SERVICE_CATALOG: Record<string, ServiceTemplate[]> = {
+
+  // ── Real Estate Agent ──────────────────────────────────────────────────────
+  real_estate_agent: [
+    {
+      key: "buyer_representation",
+      name: "Buyer Representation",
+      description: "Full service buyer agency — property search, viewings, negotiations, and transaction coordination.",
+      defaultPricing: "fixed",
+      suggestedRate: 2500,
+      videoAvailable: true,
+      isPremiumFeature: false,
+    },
+    {
+      key: "seller_representation",
+      name: "Seller Representation",
+      description: "Listing, marketing, viewings, and sale coordination. Typical fee 2–3% of sale price.",
+      defaultPricing: "fixed",
+      suggestedRate: 0,
+      videoAvailable: true,
+      isPremiumFeature: false,
+    },
+    {
+      key: "rental_management",
+      name: "Rental Management",
+      description: "Find tenants, draft contracts, handle handover and ongoing tenant relations.",
+      defaultPricing: "fixed",
+      suggestedRate: 500,
+      videoAvailable: true,
+      isPremiumFeature: false,
+    },
+    {
+      key: "property_valuation",
+      name: "Property Valuation",
+      description: "Market valuation for sale, purchase, or refinancing purposes.",
+      defaultPricing: "fixed",
+      suggestedRate: 150,
+      videoAvailable: true,
+      isPremiumFeature: false,
+    },
+    {
+      key: "investment_consultation",
+      name: "Investment Consultation",
+      description: "Guidance on yields, neighbourhood trends, and off-market opportunities.",
+      defaultPricing: "hourly",
+      suggestedRate: 80,
+      estimatedHours: 1,
+      videoAvailable: true,
+      isPremiumFeature: true,
+    },
+  ],
 
   // ── Architect ──────────────────────────────────────────────────────────────
   architect: [
@@ -751,3 +802,23 @@ export const PRICING_LABELS: Record<PricingModel, string> = {
   daily: "Per Day",
   fixed: "Fixed Price",
 };
+
+/** Flat list for Professionals search autocomplete: categories + service names. */
+export interface ProfessionalSearchSuggestion {
+  label: string;
+  category: string;
+  type: "category" | "service";
+}
+
+export function getProfessionalSearchSuggestions(): ProfessionalSearchSuggestion[] {
+  const out: ProfessionalSearchSuggestion[] = [];
+  for (const [cat, label] of Object.entries(CATEGORY_LABELS)) {
+    out.push({ label, category: cat, type: "category" });
+  }
+  for (const [cat, services] of Object.entries(SERVICE_CATALOG)) {
+    for (const s of services) {
+      out.push({ label: s.name, category: cat, type: "service" });
+    }
+  }
+  return out;
+}

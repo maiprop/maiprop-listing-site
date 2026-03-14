@@ -27,9 +27,11 @@ import {
   Star,
   Globe,
   Brain,
-  Store } from
+  Store,
+  Briefcase } from
 "lucide-react";
-import { getStreetViewProxyUrl } from "@/lib/config";
+import { getStreetViewProxyUrl, GOOGLE_MAPS_API_KEY } from "@/lib/config";
+import { getProfessionalSearchSuggestions } from "@/lib/professionalServiceCatalog";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { MarketTicker } from "@/components/MarketTicker";
@@ -322,9 +324,11 @@ function LocationInput({
   const [focused, setFocused] = useState(false);
   const [recents, setRecents] = useState<string[]>([]);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const googleLoadedRef = useRef(false);
+  const autocompleteRef = useRef<any>(null);
   const refresh = useCallback(() => setRecents(getRecentSearches()), []);
 
-  // Compute portal position live from the DOM ref each render — no stale-state race
   const getPos = () => {
     if (!wrapRef.current) return { top: 0, left: 0, width: 300 };
     const r = wrapRef.current.getBoundingClientRect();
@@ -342,6 +346,37 @@ function LocationInput({
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [refresh]);
+
+  useEffect(() => {
+    if (!GOOGLE_MAPS_API_KEY || !inputRef.current || googleLoadedRef.current) return;
+    const input = inputRef.current;
+    const initGoogle = () => {
+      const g = (window as any).google;
+      if (!g?.maps?.places?.Autocomplete) return;
+      if (autocompleteRef.current) return;
+      const autocomplete = new g.maps.places.Autocomplete(input, {
+        types: ["(regions)"],
+        componentRestrictions: { country: "gr" },
+        fields: ["address_components", "formatted_address"],
+      });
+      autocomplete.addListener("place_changed", () => {
+        const place = autocomplete.getPlace();
+        if (!place.address_components) return;
+        const ac = place.address_components;
+        const get = (t: string) => ac.find((c: any) => c.types.includes(t))?.long_name ?? "";
+        const city = get("locality") || get("administrative_area_level_2") || get("administrative_area_level_1") || place.formatted_address || "";
+        onChange(city);
+      });
+      autocompleteRef.current = autocomplete;
+    };
+    if ((window as any).google?.maps?.places) { initGoogle(); return; }
+    const script = document.createElement("script");
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places`;
+    script.async = true;
+    script.onload = () => { googleLoadedRef.current = true; initGoogle(); };
+    document.head.appendChild(script);
+    return () => { autocompleteRef.current = null; };
+  }, [onChange]);
 
   const showDropdown = focused && recents.length > 0 && !value;
   const pos = showDropdown ? getPos() : null;
@@ -391,6 +426,7 @@ function LocationInput({
       <div className="flex items-center gap-2 px-4 py-2.5 h-full min-h-[44px]">
         <MapPin className="w-4 h-4 text-primary shrink-0" />
         <input
+          ref={inputRef}
           type="text"
           placeholder="City, area, or neighbourhood..."
           value={value}
@@ -406,7 +442,8 @@ function LocationInput({
             }
             if (e.key === "Escape") setFocused(false);
           }}
-          className="flex-1 bg-transparent text-sm font-medium text-foreground placeholder:text-muted-foreground outline-none min-w-0" />
+          className="flex-1 bg-transparent text-sm font-medium text-foreground placeholder:text-muted-foreground outline-none min-w-0"
+          autoComplete="off" />
         
 
         {value &&
@@ -420,7 +457,83 @@ function LocationInput({
       </div>
       {dropdown && ReactDOM.createPortal(dropdown, document.body)}
     </div>);
+}
 
+// ── Service Input (Professionals autocomplete) ─────────────────────────────────
+const PROFESSIONAL_SUGGESTIONS = getProfessionalSearchSuggestions();
+
+function ServiceInput({ value, onChange, onSearch }: { value: string; onChange: (v: string) => void; onSearch: (category: string) => void }) {
+  const [focused, setFocused] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const q = value.toLowerCase().trim();
+  const filtered = q
+    ? PROFESSIONAL_SUGGESTIONS.filter((s) => s.label.toLowerCase().includes(q) || s.category.toLowerCase().includes(q)).slice(0, 12)
+    : PROFESSIONAL_SUGGESTIONS.slice(0, 10);
+
+  const getPos = () => {
+    if (!wrapRef.current) return { top: 0, left: 0, width: 300 };
+    const r = wrapRef.current.getBoundingClientRect();
+    return { top: r.bottom + window.scrollY + 4, left: r.left + window.scrollX, width: r.width };
+  };
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      const portal = document.getElementById("service-dropdown-portal");
+      if (wrapRef.current?.contains(e.target as Node)) return;
+      if (portal?.contains(e.target as Node)) return;
+      setFocused(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const showDropdown = focused && filtered.length > 0;
+  const pos = showDropdown ? getPos() : null;
+
+  const dropdown = showDropdown && pos ? (
+    <div
+      id="service-dropdown-portal"
+      style={{ position: "absolute", top: pos.top, left: pos.left, width: Math.max(pos.width, 280), zIndex: 9999 }}
+      className="bg-card border border-border rounded-2xl shadow-elevated overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border bg-secondary/40">
+        <Briefcase className="w-3.5 h-3.5 text-muted-foreground" />
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Professionals & Services</span>
+      </div>
+      {filtered.map((s) => (
+        <div
+          key={`${s.category}-${s.label}-${s.type}`}
+          className="flex items-center px-4 py-2.5 hover:bg-secondary transition-colors cursor-pointer"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => { onChange(s.label); setFocused(false); onSearch(s.category); }}>
+          <span className="text-sm text-foreground">{s.label}</span>
+          {s.type === "service" && <span className="ml-auto text-[10px] text-muted-foreground truncate max-w-[120px]">{s.category.replace(/_/g, " ")}</span>}
+        </div>
+      ))}
+    </div>
+  ) : null;
+
+  return (
+    <div ref={wrapRef} className="flex-1 min-w-0 relative">
+      <div className="flex items-center gap-2 px-4 py-2.5 h-full min-h-[44px]">
+        <Briefcase className="w-4 h-4 text-primary shrink-0" />
+        <input
+          type="text"
+          placeholder="e.g. Architect, Lawyer, Property Valuation..."
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onFocus={() => setFocused(true)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && filtered[0]) { onChange(filtered[0].label); setFocused(false); onSearch(filtered[0].category); }
+            if (e.key === "Escape") setFocused(false);
+          }}
+          className="flex-1 bg-transparent text-sm font-medium text-foreground placeholder:text-muted-foreground outline-none min-w-0"
+          autoComplete="off"
+        />
+        {value && <button onClick={() => onChange("")} className="text-muted-foreground hover:text-foreground transition-colors"><X className="w-3.5 h-3.5" /></button>}
+      </div>
+      {dropdown && ReactDOM.createPortal(dropdown, document.body)}
+    </div>
+  );
 }
 
 // ── OS Dashboard Mockup (faithful to os.maiprop.co) ──────────────────────────
@@ -768,6 +881,7 @@ export default function Index() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchType, setSearchType] = useState("Buy");
   const [selectedPropertyType, setSelectedPropertyType] = useState("");
+  const [professionalService, setProfessionalService] = useState("");
   const [showAI, setShowAI] = useState(false);
   const [typeCounts, setTypeCounts] = useState<Record<string, number>>({});
   const [heroVideoSrc, setHeroVideoSrc] = useState<string>("");
@@ -888,15 +1002,18 @@ export default function Index() {
   };
 
   const handleSearch = () => {
+    if (searchType === "Professionals") {
+      const q = (professionalService || searchQuery).trim().toLowerCase();
+      const params = new URLSearchParams();
+      const match = PROFESSIONAL_SUGGESTIONS.find(s => s.category === q || s.label.toLowerCase() === q || s.category.replace(/_/g, " ") === q);
+      if (match) params.set("category", match.category);
+      else if (q) params.set("search", q);
+      navigate(`/professionals?${params.toString()}`);
+      return;
+    }
     const lt = listingTypeMap[searchType];
-    if (lt === "firesale") {
-      navigate("/firesale");
-      return;
-    }
-    if (lt === "auction") {
-      navigate("/auctions");
-      return;
-    }
+    if (lt === "firesale") { navigate("/firesale"); return; }
+    if (lt === "auction") { navigate("/auctions"); return; }
     if (searchQuery.trim()) addRecentSearch(searchQuery.trim());
     const params = new URLSearchParams();
     if (searchQuery) params.set("city", searchQuery);
@@ -904,6 +1021,13 @@ export default function Index() {
     if (lt) params.set("listing_type", lt);
     navigate(`/listings?${params.toString()}`);
   };
+
+  const handleProfessionalSearch = (category: string) => {
+    setProfessionalService(category);
+    navigate(`/professionals?category=${category}`);
+  };
+
+  const professionalInputValue = searchType === "Professionals" ? searchQuery : "";
 
   const handleAIFilters = (filters: Record<string, any>) => {
     const params = new URLSearchParams();
@@ -1035,7 +1159,8 @@ export default function Index() {
                     { label: "Buy", emoji: "🏠", color: "" },
                     { label: "Rent", emoji: "🔑", color: "" },
                     { label: "Auctions", emoji: "⚖️", color: "" },
-                    { label: "Quick Sale", emoji: "⚡", color: "text-destructive" }].
+                    { label: "Quick Sale", emoji: "⚡", color: "text-destructive" },
+                    { label: "Professionals", emoji: "👔", color: "text-cyan-400" }].
                     map(({ label, emoji, color }) =>
                     <button
                       key={label}
@@ -1057,25 +1182,36 @@ export default function Index() {
                   {/* Search row — stacks on mobile */}
                   <div className="p-2 flex flex-col sm:flex-row gap-2 sm:gap-0 sm:items-stretch">
                     <div className="flex-1 min-w-0">
-                      <LocationInput value={searchQuery} onChange={setSearchQuery} onSearch={handleSearch} />
+                      {searchType === "Professionals" ? (
+                        <ServiceInput
+                          value={professionalInputValue}
+                          onChange={(v) => { setSearchQuery(v); const m = PROFESSIONAL_SUGGESTIONS.find(s => s.label === v); setProfessionalService(m ? m.category : ""); }}
+                          onSearch={handleProfessionalSearch}
+                        />
+                      ) : (
+                        <LocationInput value={searchQuery} onChange={setSearchQuery} onSearch={handleSearch} />
+                      )}
                     </div>
-                    <div className="hidden sm:block w-px bg-border/50 mx-1 self-stretch my-1" />
-                    <PropertyTypeDropdown value={selectedPropertyType} onChange={setSelectedPropertyType} />
-                    <div className="hidden sm:block w-px bg-border/50 mx-1 self-stretch my-1" />
-                    {/* AI + Search on same row on mobile */}
+                    {searchType !== "Professionals" && (
+                      <>
+                        <div className="hidden sm:block w-px bg-border/50 mx-1 self-stretch my-1" />
+                        <PropertyTypeDropdown value={selectedPropertyType} onChange={setSelectedPropertyType} />
+                        <div className="hidden sm:block w-px bg-border/50 mx-1 self-stretch my-1" />
+                      </>
+                    )}
                     <div className="flex gap-2 sm:contents">
-                      <button
-                        onClick={() => setShowAI(true)}
-                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all text-primary hover:bg-primary/10 shrink-0 whitespace-nowrap border border-border sm:border-0">
-                        
-                        <Sparkles className="w-4 h-4" />
-                        <span>AI Search</span>
-                      </button>
+                      {searchType !== "Professionals" && (
+                        <button
+                          onClick={() => setShowAI(true)}
+                          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all text-primary hover:bg-primary/10 shrink-0 whitespace-nowrap border border-border sm:border-0">
+                          <Sparkles className="w-4 h-4" />
+                          <span>AI Search</span>
+                        </button>
+                      )}
                       <Button
                         size="lg"
                         onClick={handleSearch}
                         className="flex-1 sm:flex-none bg-primary hover:opacity-90 border-0 text-primary-foreground rounded-xl px-6 font-semibold shrink-0 sm:ml-1">
-                        
                         <Search className="w-4 h-4 mr-2" />
                         Search
                       </Button>

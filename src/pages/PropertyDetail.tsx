@@ -1143,7 +1143,7 @@ export default function PropertyDetail() {
                       <Button
                       variant="outline"
                       className="w-full border-border gap-2 h-9 text-xs"
-                      onClick={() => canVideoView ? setViewingOpen(true) : (toast.info("Video viewing is available for Pro users, or free for retailers."), navigate("/pro"))}>
+                      onClick={() => canVideoView ? setViewingOpen(true) : (toast.info("Video viewing is available for Pro users, or free for retailers."), navigate("/pricing"))}>
                       
                         <Video className="w-3.5 h-3.5" />Video Viewing{!canVideoView && <Lock className="w-3 h-3 ml-0.5 opacity-60" />}
                       </Button>
@@ -1275,7 +1275,7 @@ export default function PropertyDetail() {
                         Full AI valuation — price range, confidence, legal &amp; tax overlay, key factors.
                       </p>
                     </div>
-                    <Link to="/pro" className="flex items-center gap-1.5 text-xs font-semibold bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors">
+                    <Link to="/pricing" className="flex items-center gap-1.5 text-xs font-semibold bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors">
                       <Zap className="w-3.5 h-3.5" /> Upgrade to Pro
                     </Link>
                   </div>

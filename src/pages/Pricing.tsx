@@ -10,8 +10,10 @@ import {
   TrendingUp, BarChart2, Bell, Star, Shield, Filter, ArrowRight,
   Crown, Sparkles, Building2, Gavel, Globe2, Home, Wrench,
   ChevronRight, MessageSquare, Eye, FileText, Layers, FolderKanban,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
 
 // ── Audience config ────────────────────────────────────────────────────────────
 
@@ -274,13 +276,13 @@ const PLANS: Record<AudienceId, {
 }> = {
   buyer: {
     freeLabel: "Free", freePrice: "€0", freeDesc: "Everything to start your search", freeCTA: "Browse Free", freeHref: "/listings",
-    paidLabel: "mAI Prop Pro", paidPrice: "€29", paidPriceUnit: "/ month", paidDesc: "AI-powered investor intelligence", paidCTA: "Get Pro", paidHref: "/pro",
+    paidLabel: "mAI Prop Pro", paidPrice: "€29", paidPriceUnit: "/ month", paidDesc: "AI-powered investor intelligence", paidCTA: "Get Pro", paidHref: "/pricing",
     freeList: BUYER_FREE_LIST, features: BUYER_PRO,
     accent: "text-brand-gold", accentBg: "bg-brand-gold/10", accentBorder: "border-brand-gold/40",
   },
   seller: {
     freeLabel: "Free", freePrice: "€0", freeDesc: "List your property and manage viewings", freeCTA: "List a Property", freeHref: "/listings/new",
-    paidLabel: "Seller Pro", paidPrice: "€19", paidPriceUnit: "/ month", paidDesc: "Unlimited listings, AI assist & analytics", paidCTA: "Get Seller Pro", paidHref: "/pro",
+    paidLabel: "Seller Pro", paidPrice: "€19", paidPriceUnit: "/ month", paidDesc: "Unlimited listings, AI assist & analytics", paidCTA: "Get Seller Pro", paidHref: "/pricing",
     freeList: SELLER_FREE_LIST, features: SELLER_PRO,
     accent: "text-violet-400", accentBg: "bg-violet-500/10", accentBorder: "border-violet-500/40",
   },
@@ -292,43 +294,30 @@ const PLANS: Record<AudienceId, {
   },
   agent: {
     freeLabel: "Starter", freePrice: "€0", freeDesc: "List a few properties & test the platform", freeCTA: "Start Free", freeHref: "/signup",
-    paidLabel: "Agency Pro", paidPrice: "€89", paidPriceUnit: "/ month", paidDesc: "Unlimited listings, CRM, OS sync & analytics", paidCTA: "Get Agency Pro", paidHref: "/pro",
+    paidLabel: "Agency Pro", paidPrice: "€89", paidPriceUnit: "/ month", paidDesc: "Unlimited listings, CRM, OS sync & analytics", paidCTA: "Get Agency Pro", paidHref: "/pricing",
     freeList: AGENT_FREE_LIST, features: AGENT_PRO,
     accent: "text-cyan-400", accentBg: "bg-cyan-500/10", accentBorder: "border-cyan-500/40",
   },
   institutional: {
     freeLabel: "Basic", freePrice: "Free", freeDesc: "Browse listings and explore the platform", freeCTA: "Register Free", freeHref: "/signup",
-    paidLabel: "Institutional Pro", paidPrice: "€149", paidPriceUnit: "/ month", paidDesc: "Full deal flow, portfolio tools & priority support", paidCTA: "Get Institutional Pro", paidHref: "/pro",
+    paidLabel: "Institutional Pro", paidPrice: "€149", paidPriceUnit: "/ month", paidDesc: "Full deal flow, portfolio tools & priority support", paidCTA: "Get Institutional Pro", paidHref: "/pricing",
     freeList: INSTITUTIONAL_FREE_LIST, features: INSTITUTIONAL_PRO,
     accent: "text-amber-400", accentBg: "bg-amber-500/10", accentBorder: "border-amber-500/40",
   },
   developer: {
     freeLabel: "Starter", freePrice: "€0", freeDesc: "List projects and manage inquiries", freeCTA: "Start Free", freeHref: "/signup",
-    paidLabel: "Developer Pro", paidPrice: "€89", paidPriceUnit: "/ month", paidDesc: "Unlimited listings, project showcases & analytics", paidCTA: "Get Developer Pro", paidHref: "/pro",
+    paidLabel: "Developer Pro", paidPrice: "€89", paidPriceUnit: "/ month", paidDesc: "Unlimited listings, project showcases & analytics", paidCTA: "Get Developer Pro", paidHref: "/pricing",
     freeList: DEVELOPER_FREE_LIST, features: DEVELOPER_PRO,
     accent: "text-orange-400", accentBg: "bg-orange-500/10", accentBorder: "border-orange-500/40",
   },
   professional: {
     freeLabel: "Free", freePrice: "€0", freeDesc: "Join the directory & receive basic leads", freeCTA: "Register Free", freeHref: "/signup",
-    paidLabel: "Pro Plan", paidPrice: "€39", paidPriceUnit: "/ month", paidDesc: "Priority leads, booking page & AI tools", paidCTA: "Get Pro Plan", paidHref: "/pro",
+    paidLabel: "Pro Plan", paidPrice: "€39", paidPriceUnit: "/ month", paidDesc: "Priority leads, booking page & AI tools", paidCTA: "Get Pro Plan", paidHref: "/pricing",
     freeList: PROFESSIONAL_FREE_LIST, features: PROFESSIONAL_PRO,
     accent: "text-rose-400", accentBg: "bg-rose-500/10", accentBorder: "border-rose-500/40",
   },
 };
 
-// ── Role → tab mapping ────────────────────────────────────────────────────────
-// We use bio __type: prefix to distinguish sub-roles like investor vs buyer (both map to 'individual' db role)
-function roleToTab(profile: { role: string; bio?: string | null } | null): AudienceId {
-  if (!profile) return "buyer";
-  const bio = profile.bio ?? "";
-  if (bio.startsWith("__type:investor")) return "investor";
-  if (bio.startsWith("__type:institutional")) return "institutional";
-  if (bio.startsWith("__type:developer")) return "developer";
-  if (bio.startsWith("__type:seller")) return "seller";
-  if (profile.role === "agent") return "agent";
-  if (profile.role === "professional") return "professional";
-  return "buyer";
-}
 
 // ── Module table ───────────────────────────────────────────────────────────────
 function ModuleTable({ audience, accent }: { audience: AudienceId; accent: string }) {
@@ -363,10 +352,24 @@ export default function Pricing() {
 
   const [activeTab, setActiveTab] = useState<AudienceId>("buyer");
   const [hasAutoSelected, setHasAutoSelected] = useState(false);
+  const [portalLoading, setPortalLoading] = useState(false);
+
+  const handleManageSubscription = async () => {
+    setPortalLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("customer-portal", {});
+      if (error || !data?.url) throw new Error(error?.message || "Failed to open billing portal");
+      window.open(data.url, "_blank");
+    } catch (e: Error) {
+      toast.error(e.message || "Failed to open billing portal");
+    } finally {
+      setPortalLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!hasAutoSelected && profile) {
-      setActiveTab(roleToTab(profile));
+      setActiveTab(getParticipantTypeFromProfile(profile));
       setHasAutoSelected(true);
     }
   }, [profile, hasAutoSelected]);
@@ -500,8 +503,14 @@ export default function Pricing() {
 
               <div className="px-6 sm:px-8 pb-6 sm:pb-8 space-y-2">
                 {activeTab === "buyer" && isPro ? (
-                  <Button variant="outline" className="w-full h-11 border-emerald-500/40 text-emerald-400" asChild>
-                    <Link to="/pro">Manage Subscription</Link>
+                  <Button
+                    variant="outline"
+                    className="w-full h-11 border-emerald-500/40 text-emerald-400"
+                    onClick={handleManageSubscription}
+                    disabled={portalLoading}
+                  >
+                    {portalLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                    {portalLoading ? "Opening…" : "Manage Subscription"}
                   </Button>
                 ) : (
                   <Button
@@ -526,7 +535,7 @@ export default function Pricing() {
           {/* Cross-links */}
           <div className="mt-12 grid sm:grid-cols-3 gap-4">
             {[
-              { icon: Crown, label: "mAI Prop Pro", desc: "Full AI valuation & investor tools", href: "/pro", accent: "text-brand-gold" },
+              { icon: Crown, label: "mAI Prop Pro", desc: "Full AI valuation & investor tools", href: "/pricing", accent: "text-brand-gold" },
               { icon: Gavel, label: "Auction Hub", desc: "Live court auctions & foreclosures", href: "/auctions", accent: "text-primary" },
               { icon: Flame, label: "Firesale Investor", desc: "Off-market Quick Sale™ deal flow", href: "/investor-dashboard", accent: "text-destructive" },
             ].map((item) => (

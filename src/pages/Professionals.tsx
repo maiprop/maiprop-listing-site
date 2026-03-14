@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Search, Star, MapPin, CheckCircle, Loader2, Sparkles, TrendingUp, Clock, MessageSquare, ArrowRight, Zap, Brain, FileSearch, BarChart2, X, Send, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -11,6 +12,16 @@ import ReactMarkdown from "react-markdown";
 
 // ─── Category Groups ──────────────────────────────────────────────────────────
 const categoryGroups = [
+{
+  id: "agents",
+  label: "Real Estate Agents",
+  emoji: "🏠",
+  color: "text-cyan-400",
+  bg: "bg-cyan-500/10",
+  border: "border-cyan-500/20",
+  categories: ["real_estate_agent"],
+  description: "Buy, sell, rent — licensed agents & agencies"
+},
 {
   id: "legal",
   label: "Legal & Title",
@@ -66,6 +77,7 @@ const categoryGroups = [
 const ALL_CATEGORIES = categoryGroups.flatMap((g) => g.categories);
 
 const categoryInfo: Record<string, {emoji: string;label: string;group: string;}> = {
+  real_estate_agent: { emoji: "🏠", label: "Real Estate Agent", group: "agents" },
   architect: { emoji: "🏛️", label: "Architect", group: "design" },
   civil_engineer: { emoji: "⚙️", label: "Civil Engineer", group: "design" },
   lawyer: { emoji: "⚖️", label: "Lawyer", group: "legal" },
@@ -110,6 +122,10 @@ const aiCapabilities: Record<string, {icon: React.ElementType;label: string;}[]>
 
 // ── AI Tools Modal ─────────────────────────────────────────────────────────────
 const aiToolPrompts: Record<string, {system: string;placeholder: string;}> = {
+  agents: {
+    system: "You are a Greek real estate agent AI assistant. Help with property sales, rentals, market prices, neighbourhood insights, listing strategies, and buyer/seller guidance in the Greek property market.",
+    placeholder: "e.g. What's the typical agent fee for a sale in Athens? How do I price my apartment in Glyfada?"
+  },
   legal: {
     system: "You are a Greek real estate legal AI assistant. Help with contract risk analysis, title deed checks, due diligence summaries, and conveyancing questions in the Greek property market. Be concise and highlight key risks.",
     placeholder: "e.g. What should I check in a Greek property purchase contract? Are there risks with cadastre registration?"
@@ -274,9 +290,26 @@ function AIToolsModal({ groupId, groupLabel, onClose }: {groupId: string;groupLa
 }
 
 export default function Professionals() {
-  const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const categoryFromUrl = searchParams.get("category");
+  const searchFromUrl = searchParams.get("search") || "";
+
+  const [selectedGroup, setSelectedGroup] = useState<string | null>(() => {
+    if (!categoryFromUrl) return null;
+    const g = categoryGroups.find((gr) => gr.categories.includes(categoryFromUrl));
+    return g?.id ?? null;
+  });
+  const [search, setSearch] = useState(searchFromUrl);
   const [aiModal, setAiModal] = useState<{groupId: string;groupLabel: string;} | null>(null);
+
+  useEffect(() => {
+    if (categoryFromUrl) {
+      const g = categoryGroups.find((gr) => gr.categories.includes(categoryFromUrl));
+      setSelectedGroup(g?.id ?? null);
+    }
+  }, [categoryFromUrl]);
+
+  useEffect(() => { setSearch(searchFromUrl); }, [searchFromUrl]);
 
   // Derive DB categories from group selection
   const dbCategory = selectedGroup ?
@@ -286,8 +319,10 @@ export default function Professionals() {
   const { data: professionals = [], isLoading } = useProfessionals(dbCategory);
 
   const filtered = professionals.filter((p: any) => {
-    // Group filter
-    if (selectedGroup) {
+    // Category from URL (e.g. from homepage search) — exact match
+    if (categoryFromUrl) {
+      if (p.category !== categoryFromUrl) return false;
+    } else if (selectedGroup) {
       const group = categoryGroups.find((g) => g.id === selectedGroup);
       if (group && !group.categories.includes(p.category)) return false;
     }
@@ -362,7 +397,7 @@ export default function Professionals() {
             {/* Horizontally scrollable on mobile */}
             <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1">
               <button
-                onClick={() => setSelectedGroup(null)}
+                onClick={() => { setSelectedGroup(null); setSearchParams((p) => { const n = new URLSearchParams(p); n.delete("category"); return n; }); }}
                 className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-sm font-medium border transition-all shrink-0 ${
                 !selectedGroup ?
                 "bg-secondary border-primary/40 text-foreground" :
@@ -370,10 +405,30 @@ export default function Professionals() {
                 }>
                 All Professionals
               </button>
-              {categoryGroups.map((group) =>
+              <button
+                onClick={() => {
+                  if (selectedGroup === "agents") { setSelectedGroup(null); setSearchParams((p) => { const n = new URLSearchParams(p); n.delete("category"); return n; }); }
+                  else { setSelectedGroup("agents"); setSearchParams((p) => { const n = new URLSearchParams(p); n.set("category", "real_estate_agent"); return n; }); }
+                }}
+                className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-sm font-semibold border transition-all shrink-0 ${
+                selectedGroup === "agents" ?
+                "bg-cyan-500/10 border-cyan-500/20 text-cyan-400" :
+                "border-border bg-secondary/50 text-muted-foreground hover:text-foreground"}`}
+              >
+                <span>🏠</span>
+                <span>Real Estate Agents</span>
+              </button>
+              {categoryGroups.filter(g => g.id !== "agents").map((group) =>
               <button
                 key={group.id}
-                onClick={() => setSelectedGroup(selectedGroup === group.id ? null : group.id)}
+                onClick={() => {
+                  if (selectedGroup === group.id) { setSelectedGroup(null); setSearchParams((p) => { const n = new URLSearchParams(p); n.delete("category"); return n; }); }
+                  else {
+                    setSelectedGroup(group.id);
+                    const cat = group.categories[0];
+                    setSearchParams((p) => { const n = new URLSearchParams(p); if (cat) n.set("category", cat); else n.delete("category"); return n; });
+                  }
+                }}
                 className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-sm font-semibold border transition-all shrink-0 ${
                 selectedGroup === group.id ?
                 `${group.bg} ${group.border} ${group.color}` :
