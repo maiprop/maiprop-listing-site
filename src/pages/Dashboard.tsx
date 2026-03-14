@@ -214,11 +214,23 @@ export default function Dashboard() {
   };
 
   const displayName = profile?.display_name || profile?.first_name || user?.email?.split("@")[0] || "User";
+  const bioType = profile?.bio?.startsWith("__type:") ? profile.bio.replace("__type:", "").split(" ")[0] : null;
   const roleLabel = (() => {
     const r = profile?.role || "individual";
     if (r === "seller_landlord") return "Seller / Landlord";
+    if (r === "agent") {
+      if (bioType === "institutional") return "Institutional";
+      if (bioType === "developer") return "Developer";
+      return "Agent";
+    }
+    if (r === "individual") {
+      if (bioType === "investor") return "Investor";
+      if (bioType === "buyer") return "Buyer / Renter";
+      return "Individual";
+    }
     return r;
   })();
+  const isInvestorUser = bioType === "investor";
 
   const upcomingViewingsCount = viewings.filter((v: any) => v.status === "confirmed" || v.status === "pending").length;
   const ownViewingsCount = ownViewings.filter((v: any) => v.status === "confirmed" || v.status === "pending").length;
