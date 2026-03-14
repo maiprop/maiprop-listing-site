@@ -58,6 +58,7 @@ export function Navbar() {
     { label: "Auctions", href: "/auctions", badge: "Live" },
     { label: "Quick Sale™", href: "/firesale", accent: "flame" },
     { label: "Professionals", href: "/professionals", accent: "subtle" },
+    { label: "Pricing", href: "/pricing", accent: "pricing" },
   ];
 
   const displayName = profile?.display_name || profile?.first_name || user?.email?.split("@")[0] || "Account";
