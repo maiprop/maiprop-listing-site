@@ -827,8 +827,13 @@ export default function Dashboard() {
           {/* ── ADMIN — agent, institutional, developer ──────────────────── */}
           {activeSection === "admin" && navItems.some(i => i.key === "admin") && <AdminPanel />}
 
-          {/* ── PLACEHOLDER MODULES (contacts, projects, portfolios, analytics, settings) ─── */}
-          {["contacts", "projects", "portfolios", "analytics", "settings"].map(key =>
+          {/* ── SETTINGS ─────────────────────────────────────────────── */}
+          {activeSection === "settings" && navItems.some(i => i.key === "settings") && (
+            <SettingsSection bioType={bioType} roleLabel={roleLabel} onUpdate={updateProfile} refreshProfile={refreshProfile} />
+          )}
+
+          {/* ── PLACEHOLDER MODULES (contacts, projects, portfolios, analytics) ─── */}
+          {["contacts", "projects", "portfolios", "analytics"].map(key =>
             activeSection === key && navItems.some(i => i.key === key) ? (
               <PlaceholderSection key={key} sectionKey={key} />
             ) : null
