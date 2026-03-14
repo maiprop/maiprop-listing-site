@@ -304,12 +304,12 @@ export default function ProfessionalProfile() {
 
         {/* ── Hero ── */}
         <div className="bg-card border-b border-border">
-          <div className="container py-8">
-            <Link to="/professionals" className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-6 w-fit transition-colors">
+          <div className="container py-6 sm:py-8">
+            <Link to="/professionals" className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-4 sm:mb-6 w-fit transition-colors">
               <ChevronLeft className="w-3 h-3" /> Back to Directory
             </Link>
 
-            <div className="flex flex-col md:flex-row gap-6 items-start">
+            <div className="flex flex-col sm:flex-row gap-5 sm:gap-6 items-start">
               {/* Avatar */}
               <div className="relative shrink-0">
                 <div className="w-28 h-28 rounded-2xl bg-gradient-primary flex items-center justify-center font-display font-bold text-4xl text-primary-foreground overflow-hidden shadow-lg ring-2 ring-primary/20">
