@@ -58,6 +58,7 @@ export function Navbar() {
     { label: "Auctions", href: "/auctions", badge: "Live" },
     { label: "Quick Sale™", href: "/firesale", accent: "flame" },
     { label: "Professionals", href: "/professionals", accent: "subtle" },
+    { label: "Pricing", href: "/pricing", accent: "pricing" },
   ];
 
   const displayName = profile?.display_name || profile?.first_name || user?.email?.split("@")[0] || "Account";
@@ -110,13 +111,17 @@ export function Navbar() {
                       ? forceLight
                         ? "text-white/80 hover:text-white hover:bg-white/10"
                         : "text-accent/90 hover:text-accent hover:bg-accent/10"
-                      : forceLight
-                        ? "text-white/80 hover:text-white hover:bg-white/10"
-                        : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                      : link.accent === "pricing"
+                        ? forceLight
+                          ? "text-white/80 hover:text-white hover:bg-white/10"
+                          : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                        : forceLight
+                          ? "text-white/80 hover:text-white hover:bg-white/10"
+                          : "text-muted-foreground hover:text-foreground hover:bg-secondary"
                 }`}
             >
               {link.accent === "flame" && <span className="text-sm">🔥</span>}
-              {(link as any).icon === Euro && <Euro className="w-3.5 h-3.5" />}
+              {link.accent === "pricing" && <Euro className="w-3.5 h-3.5" />}
               {link.label}
               {link.badge && (
                 <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold animate-pulse ${
@@ -134,17 +139,6 @@ export function Navbar() {
 
         {/* Right actions */}
         <div className="hidden lg:flex items-center gap-1">
-          <Link
-            to="/pricing"
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
-              forceLight
-                ? "text-white/90 hover:text-white hover:bg-white/10"
-                : "text-muted-foreground hover:text-foreground hover:bg-secondary"
-            }`}
-          >
-            <Euro className="w-3.5 h-3.5" /> Pricing
-          </Link>
-          {/* Theme toggle */}
           <button
             onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
             className={`p-2 rounded-lg transition-colors ${
@@ -284,13 +278,6 @@ export function Navbar() {
       {/* Mobile dropdown */}
       {mobileOpen && (
         <div className="lg:hidden bg-card/95 backdrop-blur-xl border-b border-border px-4 py-4 space-y-1">
-          <Link
-            to="/pricing"
-            className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-semibold text-primary hover:bg-primary/10 transition-colors"
-            onClick={() => setMobileOpen(false)}
-          >
-            <Euro className="w-4 h-4" /> Pricing
-          </Link>
           {navLinks.map((link) => (
             <Link
               key={link.href}
@@ -305,6 +292,7 @@ export function Navbar() {
               onClick={() => setMobileOpen(false)}
             >
               {link.accent === "flame" && <span>🔥</span>}
+              {link.accent === "pricing" && <Euro className="w-4 h-4" />}
               {link.label}
               {link.badge && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold font-semibold">{link.badge}</span>
