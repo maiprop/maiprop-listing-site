@@ -367,23 +367,23 @@ export default function ProfessionalProfile() {
                   </div>
 
                   {/* CTA buttons — messaging & calendar only for Pro professionals */}
-                  <div className="flex flex-col gap-2 shrink-0 min-w-[160px]">
+                  <div className="flex flex-col gap-2 w-full sm:shrink-0 sm:min-w-[160px]">
                     {professionalIsPro ? (
                       <>
-                        <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" onClick={() => setMsgOpen(true)}>
+                        <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2 w-full" onClick={() => setMsgOpen(true)}>
                           <MessageSquare className="w-4 h-4" /> Send Message
                         </Button>
-                        <Button variant="outline" className="border-border gap-2" onClick={() => setConsultOpen(true)}>
+                        <Button variant="outline" className="border-border gap-2 w-full" onClick={() => setConsultOpen(true)}>
                           <Calendar className="w-4 h-4" /> Book Consultation
                         </Button>
                       </>
                     ) : (
                       <p className="text-xs text-muted-foreground py-1">In-app messaging and booking available for Pro professionals.</p>
                     )}
-                    <Button variant="outline" className="border-border gap-2 text-muted-foreground" onClick={() => setVideoOpen(true)}>
+                    <Button variant="outline" className="border-border gap-2 text-muted-foreground w-full" onClick={() => setVideoOpen(true)}>
                       <Video className="w-4 h-4" /> Video Meeting
                     </Button>
-                    <Button variant="outline" className="border-primary/40 text-primary hover:bg-primary/10 gap-2" onClick={() => setAiMatchOpen(true)}>
+                    <Button variant="outline" className="border-primary/40 text-primary hover:bg-primary/10 gap-2 w-full" onClick={() => setAiMatchOpen(true)}>
                       <Sparkles className="w-4 h-4" /> AI-Powered Request
                     </Button>
                     {pro.website_url && (
