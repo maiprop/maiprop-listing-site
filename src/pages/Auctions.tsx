@@ -650,21 +650,21 @@ export default function Auctions() {
       <Navbar />
       <div className="pt-16">
         {/* Hero */}
-        <div className="bg-card border-b border-border py-8 sm:py-12">
+        <div className="bg-card border-b border-border py-6 sm:py-12">
           <div className="container">
-            <div className="flex items-center gap-2 mb-3">
-              <Gavel className="w-5 h-5 text-brand-gold" />
-              <span className="text-xs font-bold text-brand-gold uppercase tracking-widest">Greek Auctions</span>
+            <div className="flex items-center gap-2 mb-2 sm:mb-3">
+              <Gavel className="w-4 h-4 sm:w-5 sm:h-5 text-brand-gold" />
+              <span className="text-[10px] sm:text-xs font-bold text-brand-gold uppercase tracking-widest">Greek Auctions · Live Data</span>
             </div>
-            <h1 className="font-display text-2xl sm:text-4xl font-bold mb-2">Property Auctions</h1>
-            <p className="text-muted-foreground text-sm sm:text-base max-w-xl">
-              Real-time data powered by mAI Prop OS.
+            <h1 className="font-display text-xl sm:text-4xl font-bold mb-1.5 sm:mb-2">Property Auctions</h1>
+            <p className="text-muted-foreground text-xs sm:text-base max-w-xl">
+              Real-time court auction data powered by mAI Prop OS.
             </p>
-            <div className="grid grid-cols-3 gap-3 mt-6 sm:mt-8 max-w-2xl">
+            <div className="grid grid-cols-3 gap-2 sm:gap-3 mt-4 sm:mt-8 max-w-2xl">
               {auctionStats.map((s) =>
-              <div key={s.label} className="glass-card rounded-xl p-3 sm:p-5 text-center flex flex-col items-center justify-center">
-                  <div className="font-display text-xl sm:text-3xl font-bold gradient-text-gold">{s.value}</div>
-                  <div className="text-[10px] sm:text-xs text-muted-foreground mt-1 sm:mt-1.5 font-medium leading-tight">{s.label}</div>
+              <div key={s.label} className="glass-card rounded-xl p-2.5 sm:p-5 text-center flex flex-col items-center justify-center">
+                  <div className="font-display text-lg sm:text-3xl font-bold gradient-text-gold">{s.value}</div>
+                  <div className="text-[9px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1.5 font-medium leading-tight">{s.label}</div>
                 </div>
               )}
             </div>
