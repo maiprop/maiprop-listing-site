@@ -809,7 +809,8 @@ function Shell({
         </div>
       )}
 
-      <div className={cn("w-full", wide ? "max-w-2xl" : "max-w-lg")}>
+      {/* Always max-w-2xl — avoids jarring width jump between narrow and wide steps */}
+      <div className="w-full max-w-2xl">
         {onBack && (
           <button onClick={onBack} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-4 transition-colors">
             ← Back
