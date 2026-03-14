@@ -927,20 +927,20 @@ export default function InvestorDashboard() {
             </div>
 
             {/* KPI bar */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-8">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 mt-5 sm:mt-8">
               {[
                 { label: "Live Deals", value: String(liveDeals.length), delta: "+8 this week", icon: Flame, color: "text-destructive" },
                 { label: "Total Deal Value", value: `€${(totalValue / 1_000_000).toFixed(1)}M`, delta: "In pipeline", icon: DollarSign, color: "text-primary" },
                 { label: "Avg. Discount", value: `${avgDiscount}%`, delta: "vs market", icon: TrendingDown, color: "text-brand-emerald" },
                 { label: "Avg. Est. ROI", value: "9.4%", delta: "p.a.", icon: TrendingUp, color: "text-brand-gold" },
               ].map(s => (
-                <div key={s.label} className="glass-card rounded-xl p-4 border border-border">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{s.label}</p>
-                    <s.icon className={`w-3.5 h-3.5 ${s.color}`} />
+                <div key={s.label} className="glass-card rounded-xl p-3 sm:p-4 border border-border">
+                  <div className="flex items-center justify-between mb-1.5 sm:mb-2">
+                    <p className="text-[9px] sm:text-[10px] text-muted-foreground uppercase tracking-widest">{s.label}</p>
+                    <s.icon className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${s.color}`} />
                   </div>
-                  <p className={`font-display font-black text-2xl ${s.color}`}>{s.value}</p>
-                  <p className="text-[10px] text-muted-foreground mt-1">{s.delta}</p>
+                  <p className={`font-display font-black text-xl sm:text-2xl ${s.color}`}>{s.value}</p>
+                  <p className="text-[9px] sm:text-[10px] text-muted-foreground mt-0.5 sm:mt-1">{s.delta}</p>
                 </div>
               ))}
             </div>
