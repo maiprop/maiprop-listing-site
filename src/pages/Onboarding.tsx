@@ -431,20 +431,39 @@ export default function Onboarding() {
     if (step === "pro-services") {
       const catalog = getServicesForCategory(proCategory);
       const selectedCount = Object.keys(selectedServices).length;
+      const allSelected = selectedCount === catalog.length;
+
+      const selectAll = () => {
+        const next: Record<string, SelectedService> = {};
+        catalog.forEach(svc => {
+          next[svc.key] = { template: svc, pricingModel: svc.defaultPricing, rate: String(svc.suggestedRate), videoEnabled: svc.videoAvailable };
+        });
+        setSelectedServices(next);
+      };
+
+      const deselectAll = () => setSelectedServices({});
+
       return (
         <div>
-          <div className="text-center mb-6">
+          <div className="text-center mb-5">
             <h1 className="font-display font-bold text-2xl text-foreground mb-1">Your Services</h1>
             <p className="text-muted-foreground text-sm">
               Select the services you offer as a <span className="font-medium text-foreground">{CATEGORY_LABELS[proCategory]}</span>.
               Set your pricing model and rate for each.
             </p>
           </div>
-          {selectedCount > 0 && (
-            <div className="mb-4 flex items-center gap-2 text-xs text-primary font-medium">
-              <Check className="w-3.5 h-3.5" /> {selectedCount} service{selectedCount > 1 ? "s" : ""} selected
+          <div className="flex items-center justify-between mb-4">
+            <div className="text-xs text-primary font-medium flex items-center gap-1.5">
+              {selectedCount > 0 && <><Check className="w-3.5 h-3.5" />{selectedCount} of {catalog.length} selected</>}
+              {selectedCount === 0 && <span className="text-muted-foreground">None selected yet</span>}
             </div>
-          )}
+            <button
+              onClick={allSelected ? deselectAll : selectAll}
+              className="text-xs font-medium text-primary hover:text-primary/80 border border-primary/30 hover:border-primary/60 rounded-full px-3 py-1 transition-all"
+            >
+              {allSelected ? "Deselect All" : "Select All"}
+            </button>
+          </div>
           <div className="space-y-3 mb-6">
             {catalog.map(svc => {
               const active = !!selectedServices[svc.key];
@@ -527,7 +546,7 @@ export default function Onboarding() {
           </div>
           <Button className="w-full bg-gradient-primary border-0 text-primary-foreground" disabled={loading || selectedCount === 0} onClick={handleSaveServices}>
             {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-            Save {selectedCount > 0 ? `${selectedCount} Services` : "Services"} & Continue
+            Save {selectedCount > 0 ? `${selectedCount} Service${selectedCount > 1 ? "s" : ""}` : "Services"} & Continue
             <ArrowRight className="w-4 h-4 ml-2" />
           </Button>
         </div>
@@ -687,7 +706,7 @@ export default function Onboarding() {
     );
   })();
 
-  // Per-step back handler and wide flag
+  // Per-step back handler
   const onBack = step === "pro-category" ? () => setStep("pick-type")
     : step === "pro-verify" ? () => setStep("pro-category")
     : step === "pro-services" ? () => setStep("pro-verify")
@@ -695,10 +714,8 @@ export default function Onboarding() {
     : step === "pro-video" ? () => setStep("pro-availability")
     : undefined;
 
-  const isWide = step === "pro-services" || step === "pro-availability" || step === "pro-video";
-
   return (
-    <Shell stepIndex={stepIndex + 1} totalSteps={totalSteps} step={step} onBack={onBack} wide={isWide}>
+    <Shell stepIndex={stepIndex + 1} totalSteps={totalSteps} step={step} onBack={onBack}>
       {stepContent}
     </Shell>
   );
@@ -711,7 +728,6 @@ function Shell({
   stepIndex,
   totalSteps,
   onBack,
-  wide,
   step,
 }: {
   children: React.ReactNode;
@@ -719,7 +735,6 @@ function Shell({
   totalSteps: number;
   step: OnboardingStep;
   onBack?: () => void;
-  wide?: boolean;
 }) {
   const prevStepRef = useRef<OnboardingStep | null>(null);
   const prevIndexRef = useRef(stepIndex);
@@ -792,7 +807,8 @@ function Shell({
         </div>
       )}
 
-      <div className={cn("w-full", wide ? "max-w-2xl" : "max-w-lg")}>
+      {/* Always max-w-2xl — avoids jarring width jump between narrow and wide steps */}
+      <div className="w-full max-w-2xl">
         {onBack && (
           <button onClick={onBack} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-4 transition-colors">
             ← Back
