@@ -741,6 +741,7 @@ export default function Onboarding() {
         </div>
       </div>
     );
+  })();
 
   // Per-step back handler
   const onBack = step === "pro-category" ? () => setStep("pick-type")
