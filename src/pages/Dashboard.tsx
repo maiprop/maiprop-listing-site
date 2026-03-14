@@ -1119,9 +1119,29 @@ function SettingsSection({
       <div className="glass-card rounded-xl p-6 space-y-4">
         <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Participant Type</h2>
         <p className="text-sm text-muted-foreground">
-          Re-run the setup wizard to reconfigure your dashboard view. This only changes which modules you see — not your
-          actual account role.
+          Re-run the setup wizard to reconfigure your dashboard view.
         </p>
+
+        {/* Billing & Access warning */}
+        <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-2">
+          <p className="text-xs font-semibold text-primary flex items-center gap-1.5">
+            <span>⚡</span> Before you switch — important billing &amp; access notes
+          </p>
+          <ul className="text-xs text-muted-foreground space-y-1.5 leading-relaxed list-none">
+            <li className="flex items-start gap-2">
+              <span className="text-amber-400 shrink-0 mt-0.5">▸</span>
+              <span><strong className="text-foreground">Extra charges may apply.</strong> Upgrading to a higher-tier participant type (e.g. Agent, Institutional) may activate a paid plan. You will be informed before any charge is made.</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-destructive shrink-0 mt-0.5">▸</span>
+              <span><strong className="text-foreground">No refunds on downgrade.</strong> If you switch to a lower-tier type mid-billing cycle, the remaining period is non-refundable per our Terms of Service.</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-green-400 shrink-0 mt-0.5">▸</span>
+              <span><strong className="text-foreground">Access rights will change.</strong> Choosing a superior participant type may unlock additional features and data access (e.g. admin panel, deal flow, leads). These are granted server-side upon plan activation.</span>
+            </li>
+          </ul>
+        </div>
 
         {!confirmOpen ? (
           <Button variant="outline" className="border-border gap-2" onClick={() => setConfirmOpen(true)}>
@@ -1129,10 +1149,10 @@ function SettingsSection({
           </Button>
         ) : (
           <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 space-y-3">
-            <p className="text-sm font-semibold text-destructive">Are you sure?</p>
+            <p className="text-sm font-semibold text-destructive">Confirm switch</p>
             <p className="text-xs text-muted-foreground">
               Your current setup (<strong>{currentBioLabel}</strong>) will be cleared and you'll go through onboarding again.
-              Your listings, saved properties, and messages won't be affected.
+              Your listings, saved properties, and messages won't be affected. By proceeding you acknowledge the billing &amp; access notes above.
             </p>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" className="border-border" onClick={() => setConfirmOpen(false)}>
@@ -1145,7 +1165,7 @@ function SettingsSection({
                 onClick={handleSwitchRole}
               >
                 {switching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowRight className="w-3.5 h-3.5" />}
-                Yes, reset my type
+                I understand — switch my type
               </Button>
             </div>
           </div>
