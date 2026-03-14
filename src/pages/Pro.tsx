@@ -104,16 +104,16 @@ export default function Pro() {
         )}
 
         {/* Hero */}
-        <div className="bg-card border-b border-border py-16">
-          <div className="container max-w-4xl text-center">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-brand-gold/15 border border-brand-gold/30 text-brand-gold text-xs font-bold uppercase tracking-widest mb-5">
+        <div className="bg-card border-b border-border py-10 sm:py-16">
+          <div className="container max-w-4xl text-center px-4">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-brand-gold/15 border border-brand-gold/30 text-brand-gold text-xs font-bold uppercase tracking-widest mb-4 sm:mb-5">
               <Zap className="w-3.5 h-3.5" /> mAI Prop Pro
             </div>
-            <h1 className="font-display text-4xl md:text-5xl font-black mb-4 leading-tight">
+            <h1 className="font-display text-3xl sm:text-4xl md:text-5xl font-black mb-3 sm:mb-4 leading-tight">
               Unlock the full power of<br />
               <span className="gradient-text-gold">AI Property Intelligence</span>
             </h1>
-            <p className="text-muted-foreground text-lg max-w-xl mx-auto">
+            <p className="text-muted-foreground text-base sm:text-lg max-w-xl mx-auto">
               Get professional-grade analysis, advanced auction filters, and complete AI valuations — everything serious investors need.
             </p>
             {profile?.role === "seller_landlord" && (
@@ -133,8 +133,8 @@ export default function Pro() {
         </div>
 
         {/* Pricing cards */}
-        <div className="container max-w-5xl py-16">
-          <div className="grid md:grid-cols-2 gap-6 items-stretch">
+        <div className="container max-w-5xl py-8 sm:py-16 pb-24 lg:pb-16 px-4">
+          <div className="grid md:grid-cols-2 gap-4 sm:gap-6 items-stretch">
 
             {/* Free plan */}
             <div className="glass-card rounded-2xl border border-border overflow-hidden flex flex-col">

@@ -888,13 +888,13 @@ export default function InvestorDashboard() {
           <div className="absolute inset-0" style={{
             background: "radial-gradient(ellipse 70% 80% at 10% 50%, hsl(265 80% 60% / 0.08), transparent 60%), radial-gradient(ellipse 50% 60% at 90% 30%, hsl(183 100% 42% / 0.06), transparent 60%)"
           }} />
-          <div className="container relative py-10">
-            <div className="flex items-start justify-between flex-wrap gap-6">
+          <div className="container relative py-7 sm:py-10">
+            <div className="flex items-start justify-between flex-wrap gap-4 sm:gap-6">
               <div>
-                <div className="inline-flex items-center gap-2 bg-accent/10 border border-accent/20 text-accent px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest mb-4">
-                  <Crown className="w-3.5 h-3.5" /> Investor Deal Flow — Exclusive Access
+                <div className="inline-flex items-center gap-2 bg-accent/10 border border-accent/20 text-accent px-3 py-1.5 rounded-full text-[10px] sm:text-xs font-bold uppercase tracking-widest mb-3 sm:mb-4">
+                  <Crown className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> Investor Deal Flow — Exclusive Access
                 </div>
-                <h1 className="font-display text-4xl font-black mb-3">
+                <h1 className="font-display text-2xl sm:text-4xl font-black mb-2 sm:mb-3">
                   Private Quick Sale™ <br />
                   <span className="gradient-text-primary">Deal Pipeline</span>
                 </h1>
@@ -927,20 +927,20 @@ export default function InvestorDashboard() {
             </div>
 
             {/* KPI bar */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-8">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 mt-5 sm:mt-8">
               {[
                 { label: "Live Deals", value: String(liveDeals.length), delta: "+8 this week", icon: Flame, color: "text-destructive" },
                 { label: "Total Deal Value", value: `€${(totalValue / 1_000_000).toFixed(1)}M`, delta: "In pipeline", icon: DollarSign, color: "text-primary" },
                 { label: "Avg. Discount", value: `${avgDiscount}%`, delta: "vs market", icon: TrendingDown, color: "text-brand-emerald" },
                 { label: "Avg. Est. ROI", value: "9.4%", delta: "p.a.", icon: TrendingUp, color: "text-brand-gold" },
               ].map(s => (
-                <div key={s.label} className="glass-card rounded-xl p-4 border border-border">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{s.label}</p>
-                    <s.icon className={`w-3.5 h-3.5 ${s.color}`} />
+                <div key={s.label} className="glass-card rounded-xl p-3 sm:p-4 border border-border">
+                  <div className="flex items-center justify-between mb-1.5 sm:mb-2">
+                    <p className="text-[9px] sm:text-[10px] text-muted-foreground uppercase tracking-widest">{s.label}</p>
+                    <s.icon className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${s.color}`} />
                   </div>
-                  <p className={`font-display font-black text-2xl ${s.color}`}>{s.value}</p>
-                  <p className="text-[10px] text-muted-foreground mt-1">{s.delta}</p>
+                  <p className={`font-display font-black text-xl sm:text-2xl ${s.color}`}>{s.value}</p>
+                  <p className="text-[9px] sm:text-[10px] text-muted-foreground mt-0.5 sm:mt-1">{s.delta}</p>
                 </div>
               ))}
             </div>

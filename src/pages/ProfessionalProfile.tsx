@@ -304,12 +304,12 @@ export default function ProfessionalProfile() {
 
         {/* ── Hero ── */}
         <div className="bg-card border-b border-border">
-          <div className="container py-8">
-            <Link to="/professionals" className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-6 w-fit transition-colors">
+          <div className="container py-6 sm:py-8">
+            <Link to="/professionals" className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-4 sm:mb-6 w-fit transition-colors">
               <ChevronLeft className="w-3 h-3" /> Back to Directory
             </Link>
 
-            <div className="flex flex-col md:flex-row gap-6 items-start">
+            <div className="flex flex-col sm:flex-row gap-5 sm:gap-6 items-start">
               {/* Avatar */}
               <div className="relative shrink-0">
                 <div className="w-28 h-28 rounded-2xl bg-gradient-primary flex items-center justify-center font-display font-bold text-4xl text-primary-foreground overflow-hidden shadow-lg ring-2 ring-primary/20">
@@ -367,23 +367,23 @@ export default function ProfessionalProfile() {
                   </div>
 
                   {/* CTA buttons — messaging & calendar only for Pro professionals */}
-                  <div className="flex flex-col gap-2 shrink-0 min-w-[160px]">
+                  <div className="flex flex-col gap-2 w-full sm:shrink-0 sm:min-w-[160px]">
                     {professionalIsPro ? (
                       <>
-                        <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" onClick={() => setMsgOpen(true)}>
+                        <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2 w-full" onClick={() => setMsgOpen(true)}>
                           <MessageSquare className="w-4 h-4" /> Send Message
                         </Button>
-                        <Button variant="outline" className="border-border gap-2" onClick={() => setConsultOpen(true)}>
+                        <Button variant="outline" className="border-border gap-2 w-full" onClick={() => setConsultOpen(true)}>
                           <Calendar className="w-4 h-4" /> Book Consultation
                         </Button>
                       </>
                     ) : (
                       <p className="text-xs text-muted-foreground py-1">In-app messaging and booking available for Pro professionals.</p>
                     )}
-                    <Button variant="outline" className="border-border gap-2 text-muted-foreground" onClick={() => setVideoOpen(true)}>
+                    <Button variant="outline" className="border-border gap-2 text-muted-foreground w-full" onClick={() => setVideoOpen(true)}>
                       <Video className="w-4 h-4" /> Video Meeting
                     </Button>
-                    <Button variant="outline" className="border-primary/40 text-primary hover:bg-primary/10 gap-2" onClick={() => setAiMatchOpen(true)}>
+                    <Button variant="outline" className="border-primary/40 text-primary hover:bg-primary/10 gap-2 w-full" onClick={() => setAiMatchOpen(true)}>
                       <Sparkles className="w-4 h-4" /> AI-Powered Request
                     </Button>
                     {pro.website_url && (
@@ -409,7 +409,7 @@ export default function ProfessionalProfile() {
             </div>
 
             {/* ── Stats bar ── */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-8 pt-6 border-t border-border">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-3 mt-6 sm:mt-8 pt-5 sm:pt-6 border-t border-border">
               {[
                 { icon: Star, label: "Rating", value: rating > 0 ? `${rating.toFixed(1)} / 5.0` : "New", color: "text-brand-gold" },
                 { icon: Briefcase, label: "Projects Done", value: pro.projects_count || 0, color: "text-primary" },
@@ -432,8 +432,8 @@ export default function ProfessionalProfile() {
         </div>
 
         {/* ── Body ── */}
-        <div className="container py-8">
-          <div className="grid lg:grid-cols-3 gap-8">
+        <div className="container py-5 sm:py-8 pb-24 lg:pb-10">
+          <div className="grid lg:grid-cols-3 gap-5 sm:gap-8">
 
             {/* Main column */}
             <div className="lg:col-span-2 space-y-6">

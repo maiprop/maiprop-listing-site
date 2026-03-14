@@ -377,7 +377,7 @@ export default function Firesale() {
       <Navbar />
       <div className="pt-16">
         {/* Hero */}
-        <div className="relative py-28 overflow-hidden border-b border-border">
+        <div className="relative py-16 sm:py-28 overflow-hidden border-b border-border">
           {/* Animated glow orbs */}
           <div
             className="firesale-orb-1 absolute -left-24 top-1/4 w-[520px] h-[520px] rounded-full pointer-events-none"
@@ -405,12 +405,12 @@ export default function Firesale() {
               <div className="reveal in-view inline-flex items-center gap-2 bg-destructive/10 border border-destructive/20 text-destructive px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest mb-6">
                 <Flame className="w-3.5 h-3.5 flame-flicker" /> Quick Sale™ — Instant Cash Offer
               </div>
-              <h1 className="reveal in-view reveal-delay-1 font-display text-5xl md:text-6xl font-black mb-5 leading-tight">
+              <h1 className="reveal in-view reveal-delay-1 font-display text-3xl sm:text-5xl md:text-6xl font-black mb-4 sm:mb-5 leading-tight">
                 Sell Your Property
                 <br />
                 <span className="gradient-text-primary">in 96 Hours.</span>
               </h1>
-              <p className="reveal in-view reveal-delay-2 text-muted-foreground text-xl mb-8 leading-relaxed max-w-2xl">
+              <p className="reveal in-view reveal-delay-2 text-muted-foreground text-base sm:text-xl mb-6 sm:mb-8 leading-relaxed max-w-2xl">
                 AI-powered guaranteed cash offer. Fast viewings, no negotiations. Your property is matched instantly to
                 our network of <strong className="text-foreground">private investors</strong>.
               </p>
@@ -432,11 +432,11 @@ export default function Firesale() {
         </div>
 
         {/* How it works */}
-        <div className="container py-16 border-b border-border">
-          <p className="reveal in-view text-[11px] font-bold uppercase tracking-widest text-muted-foreground text-center mb-8">
+        <div className="container py-10 sm:py-16 border-b border-border">
+          <p className="reveal in-view text-[11px] font-bold uppercase tracking-widest text-muted-foreground text-center mb-6 sm:mb-8">
             How It Works
           </p>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
             {steps.map((s, i) => (
               <div
                 key={s.step}
@@ -458,8 +458,8 @@ export default function Firesale() {
         </div>
 
         {/* Main section: Form + Investor pitch */}
-        <div className="container py-16">
-          <div className="grid lg:grid-cols-[1fr_420px] gap-10 items-start">
+        <div className="container py-8 sm:py-16 pb-24 lg:pb-16">
+          <div className="grid lg:grid-cols-[1fr_420px] gap-6 sm:gap-10 items-start">
             {/* Left: Form */}
             <div className="reveal in-view">
               {!submitted ? (
