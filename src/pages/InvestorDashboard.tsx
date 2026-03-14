@@ -888,13 +888,13 @@ export default function InvestorDashboard() {
           <div className="absolute inset-0" style={{
             background: "radial-gradient(ellipse 70% 80% at 10% 50%, hsl(265 80% 60% / 0.08), transparent 60%), radial-gradient(ellipse 50% 60% at 90% 30%, hsl(183 100% 42% / 0.06), transparent 60%)"
           }} />
-          <div className="container relative py-10">
-            <div className="flex items-start justify-between flex-wrap gap-6">
+          <div className="container relative py-7 sm:py-10">
+            <div className="flex items-start justify-between flex-wrap gap-4 sm:gap-6">
               <div>
-                <div className="inline-flex items-center gap-2 bg-accent/10 border border-accent/20 text-accent px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest mb-4">
-                  <Crown className="w-3.5 h-3.5" /> Investor Deal Flow — Exclusive Access
+                <div className="inline-flex items-center gap-2 bg-accent/10 border border-accent/20 text-accent px-3 py-1.5 rounded-full text-[10px] sm:text-xs font-bold uppercase tracking-widest mb-3 sm:mb-4">
+                  <Crown className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> Investor Deal Flow — Exclusive Access
                 </div>
-                <h1 className="font-display text-4xl font-black mb-3">
+                <h1 className="font-display text-2xl sm:text-4xl font-black mb-2 sm:mb-3">
                   Private Quick Sale™ <br />
                   <span className="gradient-text-primary">Deal Pipeline</span>
                 </h1>
