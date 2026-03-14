@@ -650,21 +650,21 @@ export default function Auctions() {
       <Navbar />
       <div className="pt-16">
         {/* Hero */}
-        <div className="bg-card border-b border-border py-12">
+        <div className="bg-card border-b border-border py-8 sm:py-12">
           <div className="container">
             <div className="flex items-center gap-2 mb-3">
               <Gavel className="w-5 h-5 text-brand-gold" />
               <span className="text-xs font-bold text-brand-gold uppercase tracking-widest">Greek Auctions</span>
             </div>
-            <h1 className="font-display text-4xl font-bold mb-2">Property Auctions</h1>
-            <p className="text-muted-foreground max-w-xl">
+            <h1 className="font-display text-2xl sm:text-4xl font-bold mb-2">Property Auctions</h1>
+            <p className="text-muted-foreground text-sm sm:text-base max-w-xl">
               Real-time data powered by mAI Prop OS.
             </p>
-            <div className="grid grid-cols-3 gap-4 mt-8 max-w-2xl">
+            <div className="grid grid-cols-3 gap-3 mt-6 sm:mt-8 max-w-2xl">
               {auctionStats.map((s) =>
-              <div key={s.label} className="glass-card rounded-xl p-5 text-center flex flex-col items-center justify-center">
-                  <div className="font-display text-3xl font-bold gradient-text-gold">{s.value}</div>
-                  <div className="text-xs text-muted-foreground mt-1.5 font-medium">{s.label}</div>
+              <div key={s.label} className="glass-card rounded-xl p-3 sm:p-5 text-center flex flex-col items-center justify-center">
+                  <div className="font-display text-xl sm:text-3xl font-bold gradient-text-gold">{s.value}</div>
+                  <div className="text-[10px] sm:text-xs text-muted-foreground mt-1 sm:mt-1.5 font-medium leading-tight">{s.label}</div>
                 </div>
               )}
             </div>
@@ -672,64 +672,71 @@ export default function Auctions() {
         </div>
 
         {/* Alert CTA */}
-        <div className="container py-6">
-          <div className="flex items-center gap-4 p-4 rounded-xl bg-brand-gold/10 border border-brand-gold/20">
-            <Bell className="w-5 h-5 text-brand-gold shrink-0" />
-            <div className="flex-1">
-              <p className="text-sm font-medium">Get notified of new auctions matching your criteria</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Set custom alerts for location, price range, and property type</p>
+        <div className="container py-4 sm:py-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 p-4 rounded-xl bg-brand-gold/10 border border-brand-gold/20">
+            <div className="flex items-start gap-3 flex-1">
+              <Bell className="w-5 h-5 text-brand-gold shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium">Get notified of new auctions matching your criteria</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Set custom alerts for location, price range, and property type</p>
+              </div>
             </div>
             <Button
-              className="bg-gradient-gold border-0 text-background font-semibold shrink-0"
+              size="sm"
+              className="bg-gradient-gold border-0 text-background font-semibold w-full sm:w-auto shrink-0"
               onClick={() => user ? setAlertModalOpen(true) : window.location.href = "/login"}>
-              
               {user ? "Set Alert" : "Sign in to Alert"}
             </Button>
           </div>
         </div>
 
         {/* Toolbar */}
-        <div className="container pb-4">
-          <div className="flex items-center justify-end gap-2 shrink-0">
-              {/* Filters toggle */}
-              <Button
+        <div className="container pb-3 sm:pb-4">
+          <div className="flex items-center justify-between sm:justify-end gap-2">
+            {/* City select — visible on mobile as part of toolbar */}
+            <select
+              value={selectedCity}
+              onChange={(e) => setSelectedCity(e.target.value)}
+              className="sm:hidden flex-1 appearance-none bg-secondary border border-border rounded-xl px-3 py-2 text-sm text-foreground outline-none focus:border-primary cursor-pointer"
+            >
+              {cityOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+            {/* Filters toggle */}
+            <Button
               variant="outline"
               size="sm"
               className={`border-border gap-1.5 ${showFilters ? "bg-primary/10 border-primary/30 text-primary" : ""}`}
               onClick={() => setShowFilters((v) => !v)}>
-              
-                <SlidersHorizontal className="w-3.5 h-3.5" />
-                Filters
-                {activeFilterCount > 0 &&
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Filters</span>
+              {activeFilterCount > 0 &&
               <span className="w-4 h-4 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center font-bold">{activeFilterCount}</span>
               }
-              </Button>
+            </Button>
 
-              {/* View mode toggle */}
-              <div className="flex items-center gap-1 bg-secondary rounded-lg p-1 border border-border">
-                <button
-                onClick={() => setViewMode("list")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                viewMode === "list" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`
-                }>
-                
-                  <List className="w-3.5 h-3.5" /> List
-                </button>
-                <button
-                onClick={() => setViewMode("map")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                viewMode === "map" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`
-                }>
-                
-                  <Map className="w-3.5 h-3.5" /> Map
-                  {!isLoading && mappableCount > 0 &&
-                <span className="ml-0.5 text-[10px] bg-brand-gold/20 text-brand-gold px-1.5 py-0.5 rounded-full font-bold">
-                      {mappableCount}
-                    </span>
-                }
-                </button>
-              </div>
+            {/* View mode toggle */}
+            <div className="flex items-center gap-1 bg-secondary rounded-lg p-1 border border-border">
+              <button
+              onClick={() => setViewMode("list")}
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+              viewMode === "list" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`
+              }>
+                <List className="w-3.5 h-3.5" /> <span className="hidden sm:inline">List</span>
+              </button>
+              <button
+              onClick={() => setViewMode("map")}
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+              viewMode === "map" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`
+              }>
+                <Map className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Map</span>
+                {!isLoading && mappableCount > 0 &&
+              <span className="ml-0.5 text-[10px] bg-brand-gold/20 text-brand-gold px-1.5 py-0.5 rounded-full font-bold">
+                    {mappableCount}
+                  </span>
+              }
+              </button>
             </div>
+          </div>
 
           {/* Advanced Filters Panel */}
           {showFilters &&

@@ -826,19 +826,6 @@ export type Database = {
         }
         Relationships: []
       }
-      profiles_public: {
-        Row: {
-          user_id: string
-          display_name: string | null
-          avatar_url: string | null
-          first_name: string | null
-          last_name: string | null
-          role: Database["public"]["Enums"]["user_role"]
-        }
-        Insert: never
-        Update: never
-        Relationships: []
-      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -1029,7 +1016,33 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      profiles_public: {
+        Row: {
+          avatar_url: string | null
+          display_name: string | null
+          first_name: string | null
+          last_name: string | null
+          role: Database["public"]["Enums"]["user_role"] | null
+          user_id: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          display_name?: string | null
+          first_name?: string | null
+          last_name?: string | null
+          role?: Database["public"]["Enums"]["user_role"] | null
+          user_id?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          display_name?: string | null
+          first_name?: string | null
+          last_name?: string | null
+          role?: Database["public"]["Enums"]["user_role"] | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       get_my_role: {

@@ -255,7 +255,7 @@ export default function Dashboard() {
     <div className="min-h-screen bg-background">
       <Navbar />
       <div className="pt-16 flex">
-        {/* Sidebar */}
+        {/* Sidebar — desktop only */}
         <aside className="w-60 shrink-0 hidden md:flex flex-col bg-card border-r border-border min-h-screen sticky top-16 h-[calc(100vh-4rem)]">
           <div className="p-5 border-b border-border">
             <div className="flex items-center gap-3">
@@ -297,8 +297,27 @@ export default function Dashboard() {
           </div>
         </aside>
 
+        {/* Mobile horizontal scrollable nav tabs */}
+        <div className="md:hidden fixed bottom-16 left-0 right-0 z-40 bg-card/95 backdrop-blur-xl border-t border-border overflow-x-auto scrollbar-none">
+          <div className="flex items-stretch h-12 px-2 gap-0.5 min-w-max">
+            {navItems.slice(0, 6).map(item => (
+              <button key={item.key} onClick={() => setActiveSection(item.key)}
+                className={`flex flex-col items-center justify-center gap-0.5 px-3 text-[10px] font-semibold transition-colors whitespace-nowrap ${
+                  activeSection === item.key ? "text-primary" : "text-muted-foreground"
+                }`}>
+                <item.icon className="w-4 h-4" />
+                {item.label}
+              </button>
+            ))}
+            <button onClick={handleSignOut} className="flex flex-col items-center justify-center gap-0.5 px-3 text-[10px] font-semibold text-muted-foreground whitespace-nowrap">
+              <LogOut className="w-4 h-4" />
+              Sign Out
+            </button>
+          </div>
+        </div>
+
         {/* Main Content — only render sections that are in this role's nav */}
-        <main className="flex-1 p-6 max-w-full overflow-hidden">
+        <main className="flex-1 p-4 sm:p-6 max-w-full overflow-hidden pb-28 md:pb-6">
           {!navItems.some(i => i.key === activeSection) && (
             <div className="flex items-center justify-center py-12">
               <p className="text-sm text-muted-foreground">Select an option from the sidebar.</p>
