@@ -111,13 +111,17 @@ export function Navbar() {
                       ? forceLight
                         ? "text-white/80 hover:text-white hover:bg-white/10"
                         : "text-accent/90 hover:text-accent hover:bg-accent/10"
-                      : forceLight
-                        ? "text-white/80 hover:text-white hover:bg-white/10"
-                        : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                      : link.accent === "pricing"
+                        ? forceLight
+                          ? "text-white/80 hover:text-white hover:bg-white/10"
+                          : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                        : forceLight
+                          ? "text-white/80 hover:text-white hover:bg-white/10"
+                          : "text-muted-foreground hover:text-foreground hover:bg-secondary"
                 }`}
             >
               {link.accent === "flame" && <span className="text-sm">🔥</span>}
-              {(link as any).icon === Euro && <Euro className="w-3.5 h-3.5" />}
+              {link.accent === "pricing" && <Euro className="w-3.5 h-3.5" />}
               {link.label}
               {link.badge && (
                 <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold animate-pulse ${
