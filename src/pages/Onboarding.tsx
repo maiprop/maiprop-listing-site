@@ -687,7 +687,7 @@ export default function Onboarding() {
     );
   })();
 
-  // Per-step back handler and wide flag
+  // Per-step back handler
   const onBack = step === "pro-category" ? () => setStep("pick-type")
     : step === "pro-verify" ? () => setStep("pro-category")
     : step === "pro-services" ? () => setStep("pro-verify")
@@ -695,10 +695,8 @@ export default function Onboarding() {
     : step === "pro-video" ? () => setStep("pro-availability")
     : undefined;
 
-  const isWide = step === "pro-services" || step === "pro-availability" || step === "pro-video";
-
   return (
-    <Shell stepIndex={stepIndex + 1} totalSteps={totalSteps} step={step} onBack={onBack} wide={isWide}>
+    <Shell stepIndex={stepIndex + 1} totalSteps={totalSteps} step={step} onBack={onBack}>
       {stepContent}
     </Shell>
   );
