@@ -1321,25 +1321,25 @@ export default function PropertyDetail() {
               </Section>
 
               {/* ⑤ Verified listing badge — hidden for auctions */}
-              {!isAuction &&
-              <div className="glass-card rounded-2xl p-4 border border-brand-emerald/20">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="w-6 h-6 rounded-lg bg-brand-emerald/10 flex items-center justify-center">
-                      <Shield className="w-3.5 h-3.5 text-brand-emerald" />
-                    </div>
-                    <span className="font-display font-semibold text-sm">Verified Listing</span>
-                  </div>
-                  <div className="space-y-2">
-                    {["Cadastre verified", "Agent ID checked", "No encumbrances found"].map((item) =>
-                  <div key={item} className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Check className="w-3 h-3 text-brand-emerald shrink-0" />{item}
-                      </div>
-                  )}
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Clock className="w-3 h-3 shrink-0" />Last verified: today
-                    </div>
-                  </div>
-                </div>
+              {!isAuction
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
               }
 
               {/* ⑥ Mortgage Calculator — hidden for auctions and rentals */}
