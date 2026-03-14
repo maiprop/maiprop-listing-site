@@ -3,7 +3,10 @@ import { Link, useParams, useNavigate } from "react-router-dom";
 import {
   Home, Plus, BarChart2, MessageSquare, Heart, Settings, User,
   Eye, Bell, BellOff, LogOut, Building2, Gavel, CheckCircle,
-  Loader2, Calendar, Trash2, ToggleLeft, ToggleRight, Bookmark, Search, Activity, Wrench, Shield, MapPin, Euro, Edit2
+  Loader2, Calendar, Trash2, ToggleLeft, ToggleRight, Bookmark,
+  Search, Activity, Wrench, Shield, MapPin, Euro, Edit2,
+  FolderKanban, Users, Briefcase, TrendingUp, Globe2, Flame,
+  ArrowRight, Clock, CheckCircle2, AlertCircle, Phone,
 } from "lucide-react";
 import AdminPanel from "@/components/AdminPanel";
 import { Button } from "@/components/ui/button";
@@ -18,58 +21,39 @@ import { useMyProfessional, useProfessionalServices } from "@/hooks/useProfessio
 import { AuctionAlertModal } from "@/components/AuctionAlertModal";
 import { PropertyCard } from "@/components/PropertyCard";
 import ProfessionalServicesEditor from "@/components/ProfessionalServicesEditor";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function dbListingToCard(l: any) {
   return {
-    id: l.id,
-    title: l.title,
-    address: l.address || l.city,
-    city: l.city,
-    price: Number(l.price),
-    pricePerSqm: l.price_per_sqm ? Number(l.price_per_sqm) : undefined,
-    bedrooms: l.bedrooms ?? undefined,
-    bathrooms: l.bathrooms ?? undefined,
-    sqm: Number(l.sqm),
-    floor: l.floor ?? undefined,
-    totalFloors: l.total_floors ?? undefined,
-    yearBuilt: l.year_built ?? undefined,
-    energyClass: l.energy_class ?? undefined,
-    images: [
-      ...(l.cover_image_url ? [l.cover_image_url] : []),
-      ...(l.listing_images?.map((img: any) => img.url) || []),
-    ].filter(Boolean),
-    type: l.property_type as any,
-    listingType: l.listing_type as any,
+    id: l.id, title: l.title, address: l.address || l.city, city: l.city,
+    price: Number(l.price), pricePerSqm: l.price_per_sqm ? Number(l.price_per_sqm) : undefined,
+    bedrooms: l.bedrooms ?? undefined, bathrooms: l.bathrooms ?? undefined,
+    sqm: Number(l.sqm), floor: l.floor ?? undefined, totalFloors: l.total_floors ?? undefined,
+    yearBuilt: l.year_built ?? undefined, energyClass: l.energy_class ?? undefined,
+    images: [...(l.cover_image_url ? [l.cover_image_url] : []), ...(l.listing_images?.map((img: any) => img.url) || [])].filter(Boolean),
+    type: l.property_type as any, listingType: l.listing_type as any,
     auctionDate: l.auction_date ? new Date(l.auction_date).toLocaleDateString("en-GB") : undefined,
     auctionStartingBid: l.auction_starting_bid ? Number(l.auction_starting_bid) : undefined,
-    aiScore: l.ai_score ?? undefined,
-    views: l.views_count ?? undefined,
+    aiScore: l.ai_score ?? undefined, views: l.views_count ?? undefined,
     tags: (l.tags || []).filter(Boolean) as string[],
-    hasVideo: l.has_video_tour,
-    hasVirtualTour: l.has_virtual_tour,
+    hasVideo: l.has_video_tour, hasVirtualTour: l.has_virtual_tour,
   };
 }
 
 const SAVED_TABS = [
-  { label: "All", value: "" },
-  { label: "Sale", value: "sale" },
-  { label: "Rent", value: "rent" },
-  { label: "Auction", value: "auction" },
+  { label: "All", value: "" }, { label: "Sale", value: "sale" },
+  { label: "Rent", value: "rent" }, { label: "Auction", value: "auction" },
   { label: "Quick Sale", value: "firesale" },
 ] as const;
 
 function SavedPropertiesSection({ favorites, favLoading }: { favorites: any[]; favLoading: boolean }) {
   const [tab, setTab] = useState<string>("");
-
-  const filtered = favorites.filter((f: any) => {
-    if (!f.listings) return false;
-    if (!tab) return true;
-    return f.listings.listing_type === tab;
-  });
-
+  const filtered = favorites.filter((f: any) => f.listings && (!tab || f.listings.listing_type === tab));
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -81,112 +65,143 @@ function SavedPropertiesSection({ favorites, favLoading }: { favorites: any[]; f
           <Link to="/listings"><Search className="w-4 h-4" /> Browse More</Link>
         </Button>
       </div>
-
-      {/* Filter tabs */}
       <div className="flex gap-2 flex-wrap">
         {SAVED_TABS.map(t => (
-          <button
-            key={t.value}
-            onClick={() => setTab(t.value)}
+          <button key={t.value} onClick={() => setTab(t.value)}
             className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${
-              tab === t.value
-                ? "bg-primary text-primary-foreground border-primary"
-                : "bg-secondary text-muted-foreground border-border hover:border-primary/40 hover:text-foreground"
-            }`}
-          >
+              tab === t.value ? "bg-primary text-primary-foreground border-primary"
+              : "bg-secondary text-muted-foreground border-border hover:border-primary/40 hover:text-foreground"}`}>
             {t.label}
-            {t.value && (
-              <span className="ml-1.5 text-xs opacity-60">
-                {favorites.filter(f => f.listings?.listing_type === t.value).length}
-              </span>
-            )}
+            {t.value && <span className="ml-1.5 text-xs opacity-60">{favorites.filter(f => f.listings?.listing_type === t.value).length}</span>}
           </button>
         ))}
       </div>
-
       {favLoading ? (
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-6 h-6 animate-spin text-primary" />
-        </div>
+        <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
       ) : filtered.length === 0 ? (
         <div className="glass-card rounded-xl p-12 text-center">
           <Heart className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-          <p className="font-semibold">
-            {tab ? `No saved ${tab} properties` : "No saved properties yet"}
-          </p>
+          <p className="font-semibold">{tab ? `No saved ${tab} properties` : "No saved properties yet"}</p>
           <p className="text-sm text-muted-foreground mt-1">Browse listings and tap the heart to save</p>
-          <Button variant="outline" className="border-border mt-4" asChild>
-            <Link to="/listings">Browse Listings</Link>
-          </Button>
+          <Button variant="outline" className="border-border mt-4" asChild><Link to="/listings">Browse Listings</Link></Button>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-          {filtered.map((f: any) => (
-            <PropertyCard key={f.id} property={dbListingToCard(f.listings)} />
-          ))}
+          {filtered.map((f: any) => <PropertyCard key={f.id} property={dbListingToCard(f.listings)} />)}
         </div>
       )}
     </div>
   );
 }
 
-type DashboardRole = "individual" | "seller_landlord" | "agent" | "professional";
-
-const ALL_NAV_ITEMS = [
-  { icon: Home, label: "Overview", key: "overview" as const },
-  { icon: Building2, label: "My Listings", key: "listings" as const },
-  { icon: BarChart2, label: "Analytics", key: "analytics" as const },
-  { icon: Heart, label: "Saved", key: "saved" as const },
-  { icon: Bookmark, label: "Saved Searches", key: "saved-searches" as const },
-  { icon: MessageSquare, label: "Messages", key: "messages" as const },
-  { icon: Calendar, label: "Viewings", key: "viewings" as const },
-  { icon: Gavel, label: "Auction Alerts", key: "auctions" as const },
-  { icon: Wrench, label: "My Services", key: "services" as const },
-  { icon: Shield, label: "Admin", key: "admin" as const },
-  { icon: User, label: "Profile", key: "profile" as const },
-  { icon: Settings, label: "Settings", key: "settings" as const },
-];
-
-function getNavItemsForRole(role: DashboardRole): typeof ALL_NAV_ITEMS {
-  const r = role || "individual";
-  switch (r) {
-    case "individual":
-      return ALL_NAV_ITEMS.filter(i =>
-        ["overview", "saved", "saved-searches", "messages", "viewings", "auctions", "profile", "settings"].includes(i.key)
-      );
-    case "seller_landlord":
-      return ALL_NAV_ITEMS.filter(i =>
-        ["overview", "listings", "saved", "messages", "viewings", "profile", "settings"].includes(i.key)
-      );
-    case "agent":
-      return ALL_NAV_ITEMS.filter(i =>
-        ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "admin", "profile", "settings"].includes(i.key)
-      );
-    case "professional":
-      return ALL_NAV_ITEMS.filter(i =>
-        ["overview", "services", "messages", "viewings", "profile", "settings"].includes(i.key)
-      );
-    default:
-      return getNavItemsForRole("individual");
-  }
+// ── Consultation requests hook (for Leads module) ──────────────────────────────
+function useMyLeads(professionalId: string | undefined) {
+  return useQuery({
+    queryKey: ["consultation_requests", professionalId],
+    queryFn: async () => {
+      if (!professionalId) return [];
+      const { data, error } = await supabase
+        .from("consultation_requests")
+        .select("*")
+        .eq("professional_id", professionalId)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!professionalId,
+  });
 }
 
+function useUpdateLeadStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      const { error } = await supabase.from("consultation_requests").update({ status }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["consultation_requests"] }); toast.success("Status updated"); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+// ── Nav key type ───────────────────────────────────────────────────────────────
+type NavKey =
+  | "overview" | "listings" | "analytics" | "saved" | "saved-searches"
+  | "messages" | "viewings" | "auctions" | "services" | "leads"
+  | "deal-flow" | "contacts" | "projects" | "portfolios" | "admin"
+  | "profile" | "settings";
+
+type DashboardRole = "individual" | "seller_landlord" | "agent" | "professional";
+
+const ALL_NAV_ITEMS: { icon: React.ElementType; label: string; key: NavKey }[] = [
+  { icon: Home,          label: "Overview",       key: "overview"       },
+  { icon: FolderKanban,  label: "Deal Flow",       key: "deal-flow"      },
+  { icon: Building2,     label: "My Listings",     key: "listings"       },
+  { icon: BarChart2,     label: "Analytics",       key: "analytics"      },
+  { icon: Heart,         label: "Saved",           key: "saved"          },
+  { icon: Bookmark,      label: "Saved Searches",  key: "saved-searches" },
+  { icon: MessageSquare, label: "Messages",         key: "messages"       },
+  { icon: Calendar,      label: "Viewings",         key: "viewings"       },
+  { icon: Gavel,         label: "Auction Alerts",   key: "auctions"       },
+  { icon: Wrench,        label: "My Services",      key: "services"       },
+  { icon: Briefcase,     label: "Leads",            key: "leads"          },
+  { icon: Users,         label: "Contacts",         key: "contacts"       },
+  { icon: Globe2,        label: "Projects",         key: "projects"       },
+  { icon: TrendingUp,    label: "Portfolios",       key: "portfolios"     },
+  { icon: Shield,        label: "Admin",            key: "admin"          },
+  { icon: User,          label: "Profile",          key: "profile"        },
+  { icon: Settings,      label: "Settings",         key: "settings"       },
+];
+
+// ── Nav per bio-type (spec-accurate) ──────────────────────────────────────────
+const NAV_BY_TYPE: Record<string, NavKey[]> = {
+  buyer:         ["overview", "saved", "saved-searches", "messages", "viewings", "auctions", "profile", "settings"],
+  seller:        ["overview", "listings", "saved", "messages", "viewings", "profile", "settings"],
+  investor:      ["overview", "deal-flow", "saved", "saved-searches", "messages", "viewings", "auctions", "profile", "settings"],
+  agent:         ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "contacts", "projects", "portfolios", "admin", "profile", "settings"],
+  institutional: ["overview", "deal-flow", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "contacts", "projects", "portfolios", "admin", "profile", "settings"],
+  developer:     ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "contacts", "projects", "portfolios", "admin", "profile", "settings"],
+  professional:  ["overview", "services", "leads", "messages", "viewings", "profile", "settings"],
+};
+
+function getNavItemsForBioType(bioType: string | null, role: DashboardRole) {
+  const key = bioType ?? (role === "seller_landlord" ? "seller" : role === "professional" ? "professional" : role === "agent" ? "agent" : "buyer");
+  const keys = NAV_BY_TYPE[key] ?? NAV_BY_TYPE.buyer;
+  return ALL_NAV_ITEMS.filter(i => keys.includes(i.key));
+}
+
+// ── Lead status badge ──────────────────────────────────────────────────────────
+const LEAD_STATUS_COLORS: Record<string, string> = {
+  pending:   "bg-brand-gold/20 text-brand-gold",
+  reviewed:  "bg-blue-500/20 text-blue-400",
+  confirmed: "bg-emerald-500/20 text-emerald-400",
+  cancelled: "bg-muted text-muted-foreground",
+};
+
+const REQUEST_TYPE_LABELS: Record<string, string> = {
+  consultation: "📋 Consultation",
+  callback:     "📞 Callback",
+  message:      "💬 Message",
+};
+
+// ── Main Dashboard ────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const { section } = useParams();
   const navigate = useNavigate();
   const { profile, user, signOut, updateProfile } = useAuth();
   const role: DashboardRole = (profile?.role as DashboardRole) || "individual";
-  const navItems = getNavItemsForRole(role);
+  const bioType = profile?.bio?.startsWith("__type:") ? profile.bio.replace("__type:", "").split(" ")[0] : null;
+
+  const navItems = getNavItemsForBioType(bioType, role);
   const defaultSection = navItems[0]?.key ?? "overview";
-  const [activeSection, setActiveSection] = useState(section || defaultSection);
+  const [activeSection, setActiveSection] = useState<NavKey>((section as NavKey) || defaultSection);
   const [alertModalOpen, setAlertModalOpen] = useState(false);
   const [editingAlert, setEditingAlert] = useState<any>(null);
 
-  // Keep activeSection in sync with role (if current section not in nav, switch to default)
   useEffect(() => {
     const valid = navItems.some(i => i.key === activeSection);
     if (!valid && navItems.length) setActiveSection(navItems[0].key);
-  }, [role, activeSection, navItems]);
+  }, [role, bioType, activeSection, navItems]);
 
   const { data: myListings = [], isLoading: listingsLoading } = useMyListings();
   const { data: favorites = [], isLoading: favLoading } = useFavorites();
@@ -196,78 +211,59 @@ export default function Dashboard() {
   const { data: auctionAlerts = [], isLoading: alertsLoading } = useAuctionAlerts();
   const { data: myProfessional } = useMyProfessional();
   const { data: professionalServices = [] } = useProfessionalServices(myProfessional?.id || "");
+  const { data: leads = [], isLoading: leadsLoading } = useMyLeads(myProfessional?.id);
   const updateListing = useUpdateListing();
   const deleteListing = useDeleteListing();
   const deleteSavedSearch = useDeleteSavedSearch();
   const toggleAlert = useToggleSavedSearchAlert();
   const deleteAuctionAlert = useDeleteAuctionAlert();
   const toggleAuctionAlert = useUpdateAuctionAlert();
+  const updateLeadStatus = useUpdateLeadStatus();
 
-  const handleSignOut = async () => {
-    await signOut();
-    navigate("/");
-  };
-
+  const handleSignOut = async () => { await signOut(); navigate("/"); };
   const toggleListingStatus = (id: string, currentStatus: string) => {
-    const newStatus = currentStatus === "active" ? "paused" : "active";
-    updateListing.mutate({ id, updates: { status: newStatus } });
+    updateListing.mutate({ id, updates: { status: currentStatus === "active" ? "paused" : "active" } });
   };
 
   const displayName = profile?.display_name || profile?.first_name || user?.email?.split("@")[0] || "User";
-  const bioType = profile?.bio?.startsWith("__type:") ? profile.bio.replace("__type:", "").split(" ")[0] : null;
   const roleLabel = (() => {
-    const r = profile?.role || "individual";
-    if (r === "seller_landlord") return "Seller / Landlord";
-    if (r === "agent") {
+    if (role === "seller_landlord") return "Seller / Landlord";
+    if (role === "agent") {
       if (bioType === "institutional") return "Institutional";
       if (bioType === "developer") return "Developer";
       return "Agent";
     }
-    if (r === "individual") {
+    if (role === "individual") {
       if (bioType === "investor") return "Investor";
       if (bioType === "buyer") return "Buyer / Renter";
       return "Individual";
     }
-    return r;
+    return role;
   })();
-  const isInvestorUser = bioType === "investor";
 
+  const isInvestorLike = bioType === "investor" || bioType === "institutional";
+  const isAgentLike    = role === "agent";
   const upcomingViewingsCount = viewings.filter((v: any) => v.status === "confirmed" || v.status === "pending").length;
   const ownViewingsCount = ownViewings.filter((v: any) => v.status === "confirmed" || v.status === "pending").length;
+  const pendingLeadsCount = (leads as any[]).filter(l => l.status === "pending").length;
 
-  const statsByRole: Record<DashboardRole, { label: string; value: number; icon: typeof Building2; color: string }[]> = {
-    individual: [
-      { label: "Saved Properties", value: favorites.length, icon: Heart, color: "text-destructive" },
-      { label: "Saved Searches", value: savedSearches.length, icon: Bookmark, color: "text-primary" },
-      { label: "Upcoming Viewings", value: upcomingViewingsCount, icon: Calendar, color: "text-brand-gold" },
-      { label: "Auction Alerts", value: auctionAlerts.filter((a: any) => a.active).length, icon: Gavel, color: "text-brand-gold" },
-    ],
-    seller_landlord: [
-      { label: "Active Listings", value: myListings.filter(l => l.status === "active").length, icon: Building2, color: "text-primary" },
-      { label: "Total Views", value: myListings.reduce((sum, l) => sum + (l.views_count || 0), 0), icon: Eye, color: "text-brand-emerald" },
-      { label: "Saved", value: favorites.length, icon: Heart, color: "text-destructive" },
-      { label: "Upcoming Viewings", value: upcomingViewingsCount + ownViewingsCount, icon: Calendar, color: "text-brand-gold" },
-    ],
-    agent: [
-      { label: "Active Listings", value: myListings.filter(l => l.status === "active").length, icon: Building2, color: "text-primary" },
-      { label: "Total Views", value: myListings.reduce((sum, l) => sum + (l.views_count || 0), 0), icon: Eye, color: "text-brand-emerald" },
-      { label: "Saved", value: favorites.length, icon: Heart, color: "text-destructive" },
-      { label: "Upcoming Viewings", value: upcomingViewingsCount + ownViewingsCount, icon: Calendar, color: "text-brand-gold" },
-    ],
-    professional: [
-      { label: "Services", value: professionalServices.length, icon: Wrench, color: "text-primary" },
-      { label: "Upcoming Viewings", value: ownViewingsCount, icon: Calendar, color: "text-brand-gold" },
-      { label: "Saved", value: favorites.length, icon: Heart, color: "text-destructive" },
-      { label: "Auction Alerts", value: auctionAlerts.filter((a: any) => a.active).length, icon: Gavel, color: "text-brand-gold" },
-    ],
+  const statsByType: Record<string, { label: string; value: number; icon: React.ElementType; color: string }[]> = {
+    buyer:         [{ label: "Saved", value: favorites.length, icon: Heart, color: "text-destructive" }, { label: "Saved Searches", value: savedSearches.length, icon: Bookmark, color: "text-primary" }, { label: "Viewings", value: upcomingViewingsCount, icon: Calendar, color: "text-brand-gold" }, { label: "Auction Alerts", value: auctionAlerts.filter((a: any) => a.active).length, icon: Gavel, color: "text-brand-gold" }],
+    seller:        [{ label: "Active Listings", value: myListings.filter(l => l.status === "active").length, icon: Building2, color: "text-primary" }, { label: "Total Views", value: myListings.reduce((s, l) => s + (l.views_count || 0), 0), icon: Eye, color: "text-brand-emerald" }, { label: "Saved", value: favorites.length, icon: Heart, color: "text-destructive" }, { label: "Viewings", value: upcomingViewingsCount + ownViewingsCount, icon: Calendar, color: "text-brand-gold" }],
+    investor:      [{ label: "Saved Deals", value: favorites.length, icon: Heart, color: "text-destructive" }, { label: "Saved Searches", value: savedSearches.length, icon: Bookmark, color: "text-primary" }, { label: "Auction Alerts", value: auctionAlerts.filter((a: any) => a.active).length, icon: Gavel, color: "text-brand-gold" }, { label: "Viewings", value: upcomingViewingsCount, icon: Calendar, color: "text-brand-gold" }],
+    agent:         [{ label: "Active Listings", value: myListings.filter(l => l.status === "active").length, icon: Building2, color: "text-primary" }, { label: "Total Views", value: myListings.reduce((s, l) => s + (l.views_count || 0), 0), icon: Eye, color: "text-brand-emerald" }, { label: "Saved", value: favorites.length, icon: Heart, color: "text-destructive" }, { label: "Viewings", value: upcomingViewingsCount + ownViewingsCount, icon: Calendar, color: "text-brand-gold" }],
+    institutional: [{ label: "Active Listings", value: myListings.filter(l => l.status === "active").length, icon: Building2, color: "text-primary" }, { label: "Saved Deals", value: favorites.length, icon: Heart, color: "text-destructive" }, { label: "Auction Alerts", value: auctionAlerts.filter((a: any) => a.active).length, icon: Gavel, color: "text-brand-gold" }, { label: "Viewings", value: upcomingViewingsCount + ownViewingsCount, icon: Calendar, color: "text-brand-gold" }],
+    developer:     [{ label: "Active Listings", value: myListings.filter(l => l.status === "active").length, icon: Building2, color: "text-primary" }, { label: "Total Views", value: myListings.reduce((s, l) => s + (l.views_count || 0), 0), icon: Eye, color: "text-brand-emerald" }, { label: "Saved", value: favorites.length, icon: Heart, color: "text-destructive" }, { label: "Viewings", value: upcomingViewingsCount + ownViewingsCount, icon: Calendar, color: "text-brand-gold" }],
+    professional:  [{ label: "Services", value: professionalServices.length, icon: Wrench, color: "text-primary" }, { label: "Pending Leads", value: pendingLeadsCount, icon: Briefcase, color: "text-brand-gold" }, { label: "Viewings", value: ownViewingsCount, icon: Calendar, color: "text-brand-gold" }, { label: "Total Leads", value: (leads as any[]).length, icon: Users, color: "text-primary" }],
   };
-  const stats = statsByRole[role];
+  const statsKey = bioType ?? (role === "seller_landlord" ? "seller" : role === "professional" ? "professional" : role === "agent" ? "agent" : "buyer");
+  const stats = statsByType[statsKey] ?? statsByType.buyer;
 
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
       <div className="pt-16 flex">
-        {/* Sidebar — desktop only */}
+        {/* Sidebar — desktop */}
         <aside className="w-60 shrink-0 hidden md:flex flex-col bg-card border-r border-border min-h-screen sticky top-16 h-[calc(100vh-4rem)]">
           <div className="p-5 border-b border-border">
             <div className="flex items-center gap-3">
@@ -282,177 +278,157 @@ export default function Dashboard() {
                     ? <CheckCircle className="w-3 h-3 text-primary" />
                     : profile?.role === "professional"
                       ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/20 font-semibold">⏳ Pending</span>
-                      : null
-                  }
+                      : null}
                 </div>
               </div>
             </div>
           </div>
-
           <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
             {navItems.map(item => (
               <button key={item.key} onClick={() => setActiveSection(item.key)}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                className={cn("w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors relative",
                   activeSection === item.key ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:text-foreground hover:bg-secondary"
-                }`}>
+                )}>
                 <item.icon className="w-4 h-4 shrink-0" />
                 {item.label}
+                {item.key === "leads" && pendingLeadsCount > 0 && (
+                  <span className="ml-auto text-[10px] font-bold bg-brand-gold text-background rounded-full px-1.5 py-0.5 min-w-[18px] text-center">{pendingLeadsCount}</span>
+                )}
               </button>
             ))}
           </nav>
-
           <div className="p-3 border-t border-border">
             <button onClick={handleSignOut} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
-              <LogOut className="w-4 h-4" />
-              Sign Out
+              <LogOut className="w-4 h-4" /> Sign Out
             </button>
           </div>
         </aside>
 
-        {/* Mobile horizontal scrollable nav tabs — sits above global bottom nav (bottom-16) */}
+        {/* Mobile horizontal nav */}
         <div className="md:hidden fixed bottom-16 left-0 right-0 z-40 bg-card/95 backdrop-blur-xl border-t border-border overflow-x-auto scrollbar-none">
           <div className="flex items-stretch h-11 min-w-max">
             {navItems.map(item => (
               <button key={item.key} onClick={() => setActiveSection(item.key)}
-                className={`flex flex-col items-center justify-center gap-0.5 px-3.5 text-[9px] font-semibold transition-colors whitespace-nowrap min-w-[56px] ${
+                className={cn("flex flex-col items-center justify-center gap-0.5 px-3.5 text-[9px] font-semibold transition-colors whitespace-nowrap min-w-[56px] relative",
                   activeSection === item.key ? "text-primary border-b-2 border-primary" : "text-muted-foreground"
-                }`}>
+                )}>
                 <item.icon className="w-3.5 h-3.5" />
                 {item.label}
+                {item.key === "leads" && pendingLeadsCount > 0 && (
+                  <span className="absolute top-0.5 right-1.5 text-[8px] font-bold bg-brand-gold text-background rounded-full w-3.5 h-3.5 flex items-center justify-center">{pendingLeadsCount}</span>
+                )}
               </button>
             ))}
             <button onClick={handleSignOut} className="flex flex-col items-center justify-center gap-0.5 px-3.5 text-[9px] font-semibold text-muted-foreground whitespace-nowrap min-w-[56px]">
-              <LogOut className="w-3.5 h-3.5" />
-              Sign Out
+              <LogOut className="w-3.5 h-3.5" /> Sign Out
             </button>
           </div>
         </div>
 
-        {/* Main Content — only render sections that are in this role's nav */}
+        {/* Main content */}
         <main className="flex-1 p-4 sm:p-6 max-w-full overflow-hidden pb-28 md:pb-6">
-          {!navItems.some(i => i.key === activeSection) && (
-            <div className="flex items-center justify-center py-12">
-              <p className="text-sm text-muted-foreground">Select an option from the sidebar.</p>
-            </div>
-          )}
 
-          {/* OVERVIEW — role-specific welcome, CTA, and main content */}
-           {activeSection === "overview" && navItems.some(i => i.key === "overview") && (
+          {/* ── OVERVIEW ───────────────────────────────────────────────────── */}
+          {activeSection === "overview" && navItems.some(i => i.key === "overview") && (
             <div className="space-y-6">
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
                   <h1 className="font-display text-2xl font-bold">Good morning, {displayName} 👋</h1>
                   <p className="text-muted-foreground text-sm mt-1">
-                    {role === "individual" && isInvestorUser && "Your investment pipeline and opportunities."}
-                    {role === "individual" && !isInvestorUser && "Here's your search activity and alerts."}
-                    {role === "seller_landlord" && "Manage your listings and viewings."}
-                    {role === "agent" && "Here's what's happening with your listings and leads."}
-                    {role === "professional" && "Your services and upcoming consultations."}
+                    {isInvestorLike ? "Your investment pipeline and deal opportunities." :
+                     role === "seller_landlord" ? "Manage your listings and viewings." :
+                     isAgentLike ? "Here's what's happening with your listings and leads." :
+                     role === "professional" ? "Your services and incoming client leads." :
+                     "Here's your search activity and alerts."}
                   </p>
                 </div>
-                {(role === "seller_landlord" || role === "agent") && (
+                {(role === "seller_landlord" || isAgentLike) && (
                   <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" onClick={() => setActiveSection("listings")}>
                     <Plus className="w-4 h-4" /> New Listing
                   </Button>
                 )}
-                {role === "individual" && isInvestorUser && (
+                {isInvestorLike && (
                   <Button className="bg-gradient-gold border-0 text-background font-semibold gap-2" asChild>
-                    <Link to="/auctions"><Gavel className="w-4 h-4" /> Browse Auctions</Link>
+                    <Link to="/investor-dashboard"><FolderKanban className="w-4 h-4" /> Deal Flow</Link>
                   </Button>
                 )}
-                {role === "individual" && !isInvestorUser && (
+                {role === "professional" && (
+                  <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" onClick={() => setActiveSection("leads")}>
+                    <Briefcase className="w-4 h-4" /> View Leads {pendingLeadsCount > 0 && `(${pendingLeadsCount})`}
+                  </Button>
+                )}
+                {!isInvestorLike && !isAgentLike && role === "individual" && (
                   <Button variant="outline" className="border-border gap-2" asChild>
                     <Link to="/listings"><Search className="w-4 h-4" /> Browse Listings</Link>
                   </Button>
                 )}
-                {role === "professional" && (
-                  <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" onClick={() => setActiveSection("services")}>
-                    <Wrench className="w-4 h-4" /> My Services
-                  </Button>
-                )}
               </div>
+
+              {/* Stats */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {stats.map(stat => (
                   <div key={stat.label} className="glass-card rounded-xl p-4">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-xs text-muted-foreground">{stat.label}</span>
-                      <stat.icon className={`w-4 h-4 ${stat.color}`} />
+                      <stat.icon className={cn("w-4 h-4", stat.color)} />
                     </div>
-                    <div className={`font-display text-2xl font-bold ${stat.color}`}>{stat.value}</div>
+                    <div className={cn("font-display text-2xl font-bold", stat.color)}>{stat.value}</div>
                   </div>
                 ))}
               </div>
 
-              {/* Individual/Investor: context-specific panels */}
-              {role === "individual" && (
-                <div className="grid md:grid-cols-2 gap-6">
-                  {isInvestorUser ? (
-                    <>
-                      {/* Investor: high-value shortcut cards */}
-                      <div className="glass-card rounded-xl p-5 border border-amber-500/20 bg-amber-500/5">
-                        <h2 className="font-display font-semibold mb-1 flex items-center gap-2 text-brand-gold">
-                          <Gavel className="w-4 h-4" /> Live Auctions
-                        </h2>
-                        <p className="text-sm text-muted-foreground mb-3">Properties available below market value through court auctions.</p>
-                        <Button size="sm" className="bg-gradient-gold border-0 text-background font-semibold gap-1.5" asChild>
-                          <Link to="/auctions"><Gavel className="w-3.5 h-3.5" /> Browse Auctions</Link>
-                        </Button>
-                      </div>
-                      <div className="glass-card rounded-xl p-5 border border-destructive/20 bg-destructive/5">
-                        <h2 className="font-display font-semibold mb-1 flex items-center gap-2 text-destructive">
-                          <Activity className="w-4 h-4" /> Quick-Sale Deals
-                        </h2>
-                        <p className="text-sm text-muted-foreground mb-3">Off-market properties at discounted prices — motivated sellers only.</p>
-                        <Button size="sm" variant="outline" className="border-destructive/40 text-destructive hover:bg-destructive/10 gap-1.5" asChild>
-                          <Link to="/firesale"><Activity className="w-3.5 h-3.5" /> View Firesale</Link>
-                        </Button>
-                      </div>
-                      <div className="glass-card rounded-xl p-5">
-                        <h2 className="font-display font-semibold mb-1 flex items-center gap-2">
-                          <Bell className="w-4 h-4 text-brand-gold" /> Auction Alerts
-                        </h2>
-                        <p className="text-sm text-muted-foreground mb-3">Get notified instantly when new auctions match your criteria.</p>
-                        <Button variant="outline" size="sm" className="border-brand-gold/40 text-brand-gold" onClick={() => setActiveSection("auctions")}>
-                          {auctionAlerts.length > 0 ? `Manage ${auctionAlerts.length} Alerts` : "Create Alert"}
-                        </Button>
-                      </div>
-                      <div className="glass-card rounded-xl p-5">
-                        <h2 className="font-display font-semibold mb-1 flex items-center gap-2">
-                          <Heart className="w-4 h-4 text-destructive" /> Saved Properties
-                        </h2>
-                        {favorites.length === 0 ? (
-                          <p className="text-sm text-muted-foreground mb-3">Save listings you like to compare and track.</p>
-                        ) : (
-                          <p className="text-sm text-muted-foreground mb-3">{favorites.length} saved — tap to view all.</p>
-                        )}
-                        <Button variant="outline" size="sm" className="border-border" onClick={() => setActiveSection("saved")}>View Saved</Button>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="glass-card rounded-xl p-6">
-                        <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Heart className="w-4 h-4 text-destructive" /> Saved Properties</h2>
-                        {favorites.length === 0 ? (
-                          <p className="text-sm text-muted-foreground mb-3">Save listings you like to find them here.</p>
-                        ) : (
-                          <p className="text-sm text-muted-foreground mb-3">{favorites.length} saved — open Saved to view.</p>
-                        )}
-                        <Button variant="outline" size="sm" className="border-border" onClick={() => setActiveSection("saved")}>View Saved</Button>
-                      </div>
-                      <div className="glass-card rounded-xl p-6">
-                        <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Gavel className="w-4 h-4 text-brand-gold" /> Auction Alerts</h2>
-                        <p className="text-sm text-muted-foreground mb-3">Get notified when new auctions match your criteria.</p>
-                        <Button variant="outline" size="sm" className="border-brand-gold/40 text-brand-gold" onClick={() => setActiveSection("auctions")}>
-                          {auctionAlerts.length > 0 ? "Manage Alerts" : "Create Alert"}
-                        </Button>
-                      </div>
-                    </>
-                  )}
+              {/* Investor / Institutional overview cards */}
+              {isInvestorLike && (
+                <div className="grid md:grid-cols-2 gap-5">
+                  <div className="glass-card rounded-xl p-5 border border-amber-500/20 bg-amber-500/5">
+                    <h2 className="font-display font-semibold mb-1 flex items-center gap-2 text-brand-gold"><FolderKanban className="w-4 h-4" /> Deal Flow</h2>
+                    <p className="text-sm text-muted-foreground mb-3">Your private pipeline of off-market and Quick Sale™ opportunities.</p>
+                    <Button size="sm" className="bg-gradient-gold border-0 text-background font-semibold gap-1.5" asChild>
+                      <Link to="/investor-dashboard"><FolderKanban className="w-3.5 h-3.5" /> Open Dashboard</Link>
+                    </Button>
+                  </div>
+                  <div className="glass-card rounded-xl p-5 border border-destructive/20 bg-destructive/5">
+                    <h2 className="font-display font-semibold mb-1 flex items-center gap-2 text-destructive"><Flame className="w-4 h-4" /> Quick-Sale Deals</h2>
+                    <p className="text-sm text-muted-foreground mb-3">Off-market properties at discounted prices — motivated sellers only.</p>
+                    <Button size="sm" variant="outline" className="border-destructive/40 text-destructive hover:bg-destructive/10 gap-1.5" asChild>
+                      <Link to="/firesale"><Activity className="w-3.5 h-3.5" /> View Firesale</Link>
+                    </Button>
+                  </div>
+                  <div className="glass-card rounded-xl p-5">
+                    <h2 className="font-display font-semibold mb-1 flex items-center gap-2"><Gavel className="w-4 h-4 text-brand-gold" /> Auction Alerts</h2>
+                    <p className="text-sm text-muted-foreground mb-3">Get notified when new auctions match your criteria.</p>
+                    <Button variant="outline" size="sm" className="border-brand-gold/40 text-brand-gold" onClick={() => setActiveSection("auctions")}>
+                      {auctionAlerts.length > 0 ? `Manage ${auctionAlerts.length} Alerts` : "Create Alert"}
+                    </Button>
+                  </div>
+                  <div className="glass-card rounded-xl p-5">
+                    <h2 className="font-display font-semibold mb-1 flex items-center gap-2"><Heart className="w-4 h-4 text-destructive" /> Saved Deals</h2>
+                    <p className="text-sm text-muted-foreground mb-3">{favorites.length > 0 ? `${favorites.length} saved — tap to view.` : "Save listings you like to compare and track."}</p>
+                    <Button variant="outline" size="sm" className="border-border" onClick={() => setActiveSection("saved")}>View Saved</Button>
+                  </div>
                 </div>
               )}
 
-              {/* Seller / Landlord: listings + Pro CTA */}
-              {(role === "seller_landlord" || role === "agent") && (
+              {/* Buyer overview */}
+              {role === "individual" && !isInvestorLike && (
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="glass-card rounded-xl p-6">
+                    <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Heart className="w-4 h-4 text-destructive" /> Saved Properties</h2>
+                    <p className="text-sm text-muted-foreground mb-3">{favorites.length > 0 ? `${favorites.length} saved — open Saved to view.` : "Save listings you like to find them here."}</p>
+                    <Button variant="outline" size="sm" className="border-border" onClick={() => setActiveSection("saved")}>View Saved</Button>
+                  </div>
+                  <div className="glass-card rounded-xl p-6">
+                    <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Gavel className="w-4 h-4 text-brand-gold" /> Auction Alerts</h2>
+                    <p className="text-sm text-muted-foreground mb-3">Get notified when new auctions match your criteria.</p>
+                    <Button variant="outline" size="sm" className="border-brand-gold/40 text-brand-gold" onClick={() => setActiveSection("auctions")}>
+                      {auctionAlerts.length > 0 ? "Manage Alerts" : "Create Alert"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Seller / Agent overview */}
+              {(role === "seller_landlord" || isAgentLike) && (
                 <>
                   {myListings.length > 0 ? (
                     <div>
@@ -488,34 +464,144 @@ export default function Dashboard() {
                     <div className="glass-card rounded-xl p-4 border border-primary/20 bg-primary/5 flex items-center justify-between flex-wrap gap-3">
                       <div>
                         <p className="font-semibold text-sm">Upgrade to Pro</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">Get more visibility, in-app messaging with buyers, and selling addons.</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Get more visibility, AI listing assist, and selling add-ons.</p>
                       </div>
-                      <Button variant="outline" size="sm" className="border-primary text-primary" asChild>
-                        <Link to="/pro">View Pro</Link>
-                      </Button>
+                      <Button variant="outline" size="sm" className="border-primary text-primary" asChild><Link to="/pro">View Pro</Link></Button>
                     </div>
                   )}
                 </>
               )}
 
-              {/* Professional: services teaser */}
+              {/* Professional overview */}
               {role === "professional" && (
-                <div className="glass-card rounded-xl p-6">
-                  <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Wrench className="w-4 h-4 text-primary" /> My Services</h2>
-                  {professionalServices.length === 0 ? (
-                    <p className="text-sm text-muted-foreground mb-3">Add the services you offer so clients can find and book you.</p>
-                  ) : (
-                    <p className="text-sm text-muted-foreground mb-3">{professionalServices.length} service(s) configured.</p>
-                  )}
-                  <Button variant="outline" size="sm" className="border-border" onClick={() => setActiveSection("services")}>
-                    {professionalServices.length > 0 ? "Edit Services" : "Add Services"}
-                  </Button>
+                <div className="grid md:grid-cols-2 gap-5">
+                  <div className="glass-card rounded-xl p-6">
+                    <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Wrench className="w-4 h-4 text-primary" /> My Services</h2>
+                    <p className="text-sm text-muted-foreground mb-3">{professionalServices.length > 0 ? `${professionalServices.length} service(s) configured.` : "Add the services you offer so clients can find and book you."}</p>
+                    <Button variant="outline" size="sm" className="border-border" onClick={() => setActiveSection("services")}>
+                      {professionalServices.length > 0 ? "Edit Services" : "Add Services"}
+                    </Button>
+                  </div>
+                  <div className="glass-card rounded-xl p-6 border border-brand-gold/20">
+                    <h2 className="font-display font-semibold mb-3 flex items-center gap-2">
+                      <Briefcase className="w-4 h-4 text-brand-gold" /> Incoming Leads
+                      {pendingLeadsCount > 0 && (
+                        <span className="ml-auto text-xs font-bold bg-brand-gold text-background rounded-full px-2 py-0.5">{pendingLeadsCount} new</span>
+                      )}
+                    </h2>
+                    <p className="text-sm text-muted-foreground mb-3">{(leads as any[]).length > 0 ? `${(leads as any[]).length} total request(s).` : "Client consultation and callback requests will appear here."}</p>
+                    <Button variant="outline" size="sm" className="border-brand-gold/40 text-brand-gold hover:bg-brand-gold/10" onClick={() => setActiveSection("leads")}>
+                      View Leads <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
           )}
 
-          {/* MY LISTINGS — seller_landlord, agent */}
+          {/* ── DEAL FLOW — investor, institutional ────────────────────────── */}
+          {activeSection === "deal-flow" && navItems.some(i => i.key === "deal-flow") && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div>
+                  <h1 className="font-display text-2xl font-bold flex items-center gap-2">
+                    <FolderKanban className="w-6 h-6 text-brand-gold" /> Deal Flow
+                  </h1>
+                  <p className="text-sm text-muted-foreground mt-1">Your private investment pipeline — off-market opportunities and Quick Sale™ deals.</p>
+                </div>
+                <Button className="bg-gradient-gold border-0 text-background font-semibold gap-2" asChild>
+                  <Link to="/investor-dashboard"><ArrowRight className="w-4 h-4" /> Open Full Dashboard</Link>
+                </Button>
+              </div>
+
+              {/* Quick links */}
+              <div className="grid sm:grid-cols-3 gap-4">
+                {[
+                  { icon: FolderKanban, label: "Investor Dashboard", desc: "Full deal pipeline with status tracking", href: "/investor-dashboard", accent: "text-brand-gold", border: "border-amber-500/20", bg: "bg-amber-500/5" },
+                  { icon: Flame, label: "Firesale Deals", desc: "Off-market Quick Sale™ properties", href: "/firesale", accent: "text-destructive", border: "border-destructive/20", bg: "bg-destructive/5" },
+                  { icon: Gavel, label: "Live Auctions", desc: "Court auctions below market value", href: "/auctions", accent: "text-primary", border: "border-primary/20", bg: "bg-primary/5" },
+                ].map(item => (
+                  <Link key={item.href} to={item.href}
+                    className={cn("glass-card rounded-xl p-5 border flex flex-col gap-3 hover:scale-[1.02] transition-all", item.border, item.bg)}>
+                    <div className={cn("flex items-center gap-2 font-semibold text-sm", item.accent)}>
+                      <item.icon className="w-4 h-4" /> {item.label}
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">{item.desc}</p>
+                    <div className={cn("flex items-center gap-1 text-xs font-medium", item.accent)}>
+                      Open <ArrowRight className="w-3 h-3" />
+                    </div>
+                  </Link>
+                ))}
+              </div>
+
+              {/* Saved deals preview */}
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="font-display font-semibold">Saved Deals</h2>
+                  <Button variant="outline" size="sm" className="border-border gap-1.5" onClick={() => setActiveSection("saved")}>
+                    View All <ArrowRight className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+                {favorites.length === 0 ? (
+                  <div className="glass-card rounded-xl p-10 text-center">
+                    <Heart className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
+                    <p className="text-sm font-semibold">No saved deals yet</p>
+                    <p className="text-xs text-muted-foreground mt-1 mb-4">Browse firesale and auction listings to build your pipeline</p>
+                    <div className="flex gap-2 justify-center flex-wrap">
+                      <Button size="sm" variant="outline" className="border-border" asChild><Link to="/auctions">Browse Auctions</Link></Button>
+                      <Button size="sm" variant="outline" className="border-border" asChild><Link to="/firesale">Firesale Deals</Link></Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                    {favorites.slice(0, 6).map((f: any) => f.listings && <PropertyCard key={f.id} property={dbListingToCard(f.listings)} />)}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── LEADS — professional only ────────────────────────────────── */}
+          {activeSection === "leads" && navItems.some(i => i.key === "leads") && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div>
+                  <h1 className="font-display text-2xl font-bold flex items-center gap-2">
+                    <Briefcase className="w-5 h-5 text-brand-gold" /> Client Leads
+                    {pendingLeadsCount > 0 && (
+                      <span className="text-sm font-bold bg-brand-gold text-background rounded-full px-2 py-0.5">{pendingLeadsCount} new</span>
+                    )}
+                  </h1>
+                  <p className="text-sm text-muted-foreground mt-1">Consultation requests, callbacks, and messages from potential clients.</p>
+                </div>
+                <Button variant="outline" className="border-border gap-2" asChild>
+                  <Link to="/professionals"><Eye className="w-4 h-4" /> View My Profile</Link>
+                </Button>
+              </div>
+
+              {/* Status filter tabs */}
+              {(leads as any[]).length > 0 && (
+                <LeadsSection leads={leads as any[]} onUpdateStatus={(id, status) => updateLeadStatus.mutate({ id, status })} />
+              )}
+
+              {leadsLoading ? (
+                <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
+              ) : (leads as any[]).length === 0 ? (
+                <div className="glass-card rounded-xl p-12 text-center">
+                  <Briefcase className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+                  <p className="font-semibold">No leads yet</p>
+                  <p className="text-sm text-muted-foreground mt-1 mb-4">
+                    Leads appear here when clients book consultations or request callbacks from your profile.
+                  </p>
+                  <Button variant="outline" className="border-border" asChild>
+                    <Link to="/professionals">View My Professional Profile</Link>
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+          )}
+
+          {/* ── MY LISTINGS ──────────────────────────────────────────────── */}
           {activeSection === "listings" && navItems.some(i => i.key === "listings") && (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
@@ -544,12 +630,10 @@ export default function Dashboard() {
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
                         <span className="text-xs text-muted-foreground mr-2">{l.views_count} views</span>
-                        <button onClick={() => toggleListingStatus(l.id, l.status)}
-                          className="p-2 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground">
+                        <button onClick={() => toggleListingStatus(l.id, l.status)} className="p-2 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground">
                           {l.status === "active" ? <ToggleRight className="w-4 h-4 text-primary" /> : <ToggleLeft className="w-4 h-4" />}
                         </button>
-                        <button onClick={() => { if (confirm("Delete this listing?")) deleteListing.mutate(l.id); }}
-                          className="p-2 rounded-lg hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive">
+                        <button onClick={() => { if (confirm("Delete this listing?")) deleteListing.mutate(l.id); }} className="p-2 rounded-lg hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -560,12 +644,12 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* SAVED */}
+          {/* ── SAVED ────────────────────────────────────────────────────── */}
           {activeSection === "saved" && navItems.some(i => i.key === "saved") && (
             <SavedPropertiesSection favorites={favorites} favLoading={favLoading} />
           )}
 
-          {/* MESSAGES */}
+          {/* ── MESSAGES ─────────────────────────────────────────────────── */}
           {activeSection === "messages" && navItems.some(i => i.key === "messages") && (
             <div className="space-y-4">
               <h1 className="font-display text-2xl font-bold">Messages</h1>
@@ -575,7 +659,7 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* SAVED SEARCHES — individual, agent */}
+          {/* ── SAVED SEARCHES ───────────────────────────────────────────── */}
           {activeSection === "saved-searches" && navItems.some(i => i.key === "saved-searches") && (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
@@ -594,9 +678,7 @@ export default function Dashboard() {
                   <Bookmark className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
                   <p className="font-semibold">No saved searches yet</p>
                   <p className="text-sm text-muted-foreground mt-1">Go to Listings, apply filters, and click "Save Search"</p>
-                  <Button variant="outline" className="border-border mt-4" asChild>
-                    <Link to="/listings">Browse Listings</Link>
-                  </Button>
+                  <Button variant="outline" className="border-border mt-4" asChild><Link to="/listings">Browse Listings</Link></Button>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -615,38 +697,19 @@ export default function Dashboard() {
                             )}
                           </div>
                           <p className="text-xs text-muted-foreground truncate">
-                            {filterCount > 0
-                              ? Object.entries(s.filters).filter(([, v]) => v).map(([k, v]) => `${k.replace(/_/g, " ")}: ${v}`).join(", ")
-                              : "All listings"}
+                            {filterCount > 0 ? Object.entries(s.filters).filter(([, v]) => v).map(([k, v]) => `${k.replace(/_/g, " ")}: ${v}`).join(", ") : "All listings"}
                           </p>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            Saved {new Date(s.created_at).toLocaleDateString()}
-                          </p>
+                          <p className="text-xs text-muted-foreground mt-0.5">Saved {new Date(s.created_at).toLocaleDateString()}</p>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                          {/* Toggle email alerts */}
-                          <button
-                            onClick={() => toggleAlert.mutate({ id: s.id, emailAlerts: !s.email_alerts })}
-                            title={s.email_alerts ? "Disable email alerts" : "Enable email alerts"}
-                            className={`p-2 rounded-lg border transition-colors ${
-                              s.email_alerts
-                                ? "border-primary bg-primary/10 text-primary hover:bg-primary/20"
-                                : "border-border bg-secondary text-muted-foreground hover:text-foreground hover:border-primary/40"
-                            }`}
-                          >
+                          <button onClick={() => toggleAlert.mutate({ id: s.id, emailAlerts: !s.email_alerts })}
+                            className={`p-2 rounded-lg border transition-colors ${s.email_alerts ? "border-primary bg-primary/10 text-primary hover:bg-primary/20" : "border-border bg-secondary text-muted-foreground hover:text-foreground hover:border-primary/40"}`}>
                             {s.email_alerts ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
                           </button>
-                          {/* Run search */}
                           <Button size="sm" variant="outline" className="border-border text-xs gap-1.5" asChild>
-                            <Link to={`/listings?${params.toString()}`}>
-                              <Search className="w-3 h-3" /> Run
-                            </Link>
+                            <Link to={`/listings?${params.toString()}`}><Search className="w-3 h-3" /> Run</Link>
                           </Button>
-                          {/* Delete */}
-                          <button
-                            onClick={() => { if (confirm("Delete this saved search?")) deleteSavedSearch.mutate(s.id); }}
-                            className="p-2 rounded-lg hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive"
-                          >
+                          <button onClick={() => { if (confirm("Delete this saved search?")) deleteSavedSearch.mutate(s.id); }} className="p-2 rounded-lg hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive">
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
@@ -658,7 +721,7 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* VIEWINGS */}
+          {/* ── VIEWINGS ─────────────────────────────────────────────────── */}
           {activeSection === "viewings" && navItems.some(i => i.key === "viewings") && (
             <div className="space-y-6">
               <h1 className="font-display text-2xl font-bold">Viewings</h1>
@@ -686,18 +749,7 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* PROFILE */}
-          {activeSection === "profile" && navItems.some(i => i.key === "profile") && (
-            <ProfileEditor profile={profile} onUpdate={updateProfile} />
-          )}
-
-          {/* MY SERVICES — professional only */}
-          {activeSection === "services" && navItems.some(i => i.key === "services") && <ProfessionalServicesEditor />}
-
-          {/* ADMIN — agent only: sync, backoffice tools */}
-          {activeSection === "admin" && navItems.some(i => i.key === "admin") && <AdminPanel />}
-
-          {/* AUCTION ALERTS — individual, agent */}
+          {/* ── AUCTION ALERTS ───────────────────────────────────────────── */}
           {activeSection === "auctions" && navItems.some(i => i.key === "auctions") && (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
@@ -717,8 +769,7 @@ export default function Dashboard() {
                   <Bell className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
                   <p className="font-semibold">No auction alerts yet</p>
                   <p className="text-sm text-muted-foreground mt-1 mb-4">Create an alert to get notified of matching auctions</p>
-                  <Button className="bg-gradient-gold border-0 text-background font-semibold gap-2"
-                    onClick={() => { setEditingAlert(null); setAlertModalOpen(true); }}>
+                  <Button className="bg-gradient-gold border-0 text-background font-semibold gap-2" onClick={() => { setEditingAlert(null); setAlertModalOpen(true); }}>
                     <Bell className="w-4 h-4" /> Create First Alert
                   </Button>
                 </div>
@@ -729,58 +780,32 @@ export default function Dashboard() {
                       <div className={`w-2 h-10 rounded-full shrink-0 ${a.active ? "bg-brand-gold" : "bg-muted-foreground/30"}`} />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1 flex-wrap">
-                          {a.city && (
-                            <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-secondary border border-border text-foreground">
-                              <MapPin className="w-3 h-3" />{a.city}
-                            </span>
-                          )}
-                          {a.property_type && (
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-brand-gold/15 text-brand-gold border border-brand-gold/20 capitalize">{a.property_type}</span>
-                          )}
+                          {a.city && <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-secondary border border-border text-foreground"><MapPin className="w-3 h-3" />{a.city}</span>}
+                          {a.property_type && <span className="text-xs px-2 py-0.5 rounded-full bg-brand-gold/15 text-brand-gold border border-brand-gold/20 capitalize">{a.property_type}</span>}
                           {(a.min_price || a.max_price) && (
                             <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-secondary border border-border text-foreground">
                               <Euro className="w-3 h-3" />
                               {a.min_price ? `€${Number(a.min_price).toLocaleString()}` : "Any"} – {a.max_price ? `€${Number(a.max_price).toLocaleString()}` : "Any"}
                             </span>
                           )}
-                          {!a.city && !a.property_type && !a.min_price && !a.max_price && (
-                            <span className="text-xs text-muted-foreground">All auctions</span>
-                          )}
+                          {!a.city && !a.property_type && !a.min_price && !a.max_price && <span className="text-xs text-muted-foreground">All auctions</span>}
                         </div>
                         {a.court_name && <p className="text-xs text-muted-foreground truncate">{a.court_name}</p>}
                         <div className="flex items-center gap-2 mt-1">
-                          <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${a.active ? "bg-brand-emerald/20 text-brand-emerald" : "bg-secondary text-muted-foreground"}`}>
-                            {a.active ? "Active" : "Paused"}
-                          </span>
+                          <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${a.active ? "bg-brand-emerald/20 text-brand-emerald" : "bg-secondary text-muted-foreground"}`}>{a.active ? "Active" : "Paused"}</span>
                           {a.email_notify && <span className="text-xs text-muted-foreground">📧 Email on</span>}
                           <span className="text-xs text-muted-foreground">Created {new Date(a.created_at).toLocaleDateString()}</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
-                        {/* Toggle active */}
-                        <button
-                          onClick={() => toggleAuctionAlert.mutate({ id: a.id, updates: { active: !a.active } })}
-                          title={a.active ? "Pause alert" : "Activate alert"}
-                          className={`p-2 rounded-lg border transition-colors ${
-                            a.active
-                              ? "border-brand-gold/30 bg-brand-gold/10 text-brand-gold hover:bg-brand-gold/20"
-                              : "border-border bg-secondary text-muted-foreground hover:text-foreground"
-                          }`}
-                        >
+                        <button onClick={() => toggleAuctionAlert.mutate({ id: a.id, updates: { active: !a.active } })}
+                          className={`p-2 rounded-lg border transition-colors ${a.active ? "border-brand-gold/30 bg-brand-gold/10 text-brand-gold hover:bg-brand-gold/20" : "border-border bg-secondary text-muted-foreground hover:text-foreground"}`}>
                           {a.active ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
                         </button>
-                        {/* Edit */}
-                        <button
-                          onClick={() => { setEditingAlert(a); setAlertModalOpen(true); }}
-                          className="p-2 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
-                        >
+                        <button onClick={() => { setEditingAlert(a); setAlertModalOpen(true); }} className="p-2 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground">
                           <Edit2 className="w-4 h-4" />
                         </button>
-                        {/* Delete */}
-                        <button
-                          onClick={() => { if (confirm("Delete this alert?")) deleteAuctionAlert.mutate(a.id); }}
-                          className="p-2 rounded-lg hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive"
-                        >
+                        <button onClick={() => { if (confirm("Delete this alert?")) deleteAuctionAlert.mutate(a.id); }} className="p-2 rounded-lg hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -791,19 +816,27 @@ export default function Dashboard() {
             </div>
           )}
 
-          {navItems.some(i => i.key === activeSection) && (activeSection === "analytics" || activeSection === "settings") && (
-            <div className="glass-card rounded-xl p-12 flex items-center justify-center">
-              <div className="text-center">
-                <Settings className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-                <p className="font-semibold capitalize">{activeSection}</p>
-                <p className="text-sm text-muted-foreground mt-1">Coming soon — connect to mAI Prop OS for advanced analytics</p>
-              </div>
-            </div>
+          {/* ── PROFILE ──────────────────────────────────────────────────── */}
+          {activeSection === "profile" && navItems.some(i => i.key === "profile") && (
+            <ProfileEditor profile={profile} onUpdate={updateProfile} />
           )}
+
+          {/* ── MY SERVICES — professional ───────────────────────────────── */}
+          {activeSection === "services" && navItems.some(i => i.key === "services") && <ProfessionalServicesEditor />}
+
+          {/* ── ADMIN — agent, institutional, developer ──────────────────── */}
+          {activeSection === "admin" && navItems.some(i => i.key === "admin") && <AdminPanel />}
+
+          {/* ── PLACEHOLDER MODULES (contacts, projects, portfolios, analytics, settings) ─── */}
+          {["contacts", "projects", "portfolios", "analytics", "settings"].map(key =>
+            activeSection === key && navItems.some(i => i.key === key) ? (
+              <PlaceholderSection key={key} sectionKey={key} />
+            ) : null
+          )}
+
         </main>
       </div>
 
-      {/* Auction alert modal */}
       <AuctionAlertModal
         open={alertModalOpen}
         onClose={() => { setAlertModalOpen(false); setEditingAlert(null); }}
@@ -813,6 +846,107 @@ export default function Dashboard() {
   );
 }
 
+// ── Leads section ──────────────────────────────────────────────────────────────
+function LeadsSection({ leads, onUpdateStatus }: { leads: any[]; onUpdateStatus: (id: string, status: string) => void }) {
+  const [statusFilter, setStatusFilter] = useState("all");
+  const statuses = ["all", "pending", "reviewed", "confirmed", "cancelled"];
+  const filtered = statusFilter === "all" ? leads : leads.filter(l => l.status === statusFilter);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-2 flex-wrap">
+        {statuses.map(s => (
+          <button key={s} onClick={() => setStatusFilter(s)}
+            className={cn("px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors capitalize",
+              statusFilter === s ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-muted-foreground border-border hover:border-primary/40 hover:text-foreground"
+            )}>
+            {s} {s === "all" ? `(${leads.length})` : `(${leads.filter(l => l.status === s).length})`}
+          </button>
+        ))}
+      </div>
+      <div className="space-y-3">
+        {filtered.map((lead: any) => (
+          <div key={lead.id} className="glass-card rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className={cn("w-2 h-full min-h-[40px] rounded-full shrink-0 hidden sm:block",
+              lead.status === "pending" ? "bg-brand-gold" :
+              lead.status === "confirmed" ? "bg-brand-emerald" :
+              lead.status === "reviewed" ? "bg-blue-400" : "bg-muted-foreground/30"
+            )} />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap mb-1">
+                <span className="font-semibold text-sm">{lead.requester_name}</span>
+                <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium capitalize", LEAD_STATUS_COLORS[lead.status] ?? "bg-secondary text-muted-foreground")}>{lead.status}</span>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-secondary border border-border text-muted-foreground">
+                  {REQUEST_TYPE_LABELS[lead.request_type] ?? lead.request_type}
+                </span>
+              </div>
+              {lead.service && <p className="text-xs text-primary font-medium mb-0.5">Service: {lead.service}</p>}
+              {lead.message && <p className="text-xs text-muted-foreground line-clamp-2">{lead.message}</p>}
+              <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground flex-wrap">
+                <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{new Date(lead.created_at).toLocaleDateString()}</span>
+                {lead.requester_email && <span>{lead.requester_email}</span>}
+                {lead.requester_phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{lead.requester_phone}</span>}
+                {lead.preferred_date && <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{lead.preferred_date}</span>}
+                {lead.callback_time && <span>Callback: {lead.callback_time}</span>}
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+              {lead.status === "pending" && (
+                <>
+                  <Button size="sm" variant="outline" className="border-brand-emerald/40 text-brand-emerald hover:bg-brand-emerald/10 text-xs gap-1"
+                    onClick={() => onUpdateStatus(lead.id, "reviewed")}>
+                    <CheckCircle2 className="w-3 h-3" /> Mark Reviewed
+                  </Button>
+                  <Button size="sm" variant="outline" className="border-primary/40 text-primary hover:bg-primary/10 text-xs gap-1"
+                    onClick={() => onUpdateStatus(lead.id, "confirmed")}>
+                    <CheckCircle2 className="w-3 h-3" /> Confirm
+                  </Button>
+                </>
+              )}
+              {lead.status === "reviewed" && (
+                <Button size="sm" variant="outline" className="border-primary/40 text-primary hover:bg-primary/10 text-xs gap-1"
+                  onClick={() => onUpdateStatus(lead.id, "confirmed")}>
+                  <CheckCircle2 className="w-3 h-3" /> Confirm
+                </Button>
+              )}
+              {(lead.status === "confirmed" || lead.status === "reviewed") && (
+                <Button size="sm" variant="outline" className="border-muted text-muted-foreground hover:bg-secondary text-xs gap-1"
+                  onClick={() => onUpdateStatus(lead.id, "cancelled")}>
+                  <AlertCircle className="w-3 h-3" /> Cancel
+                </Button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Placeholder sections (coming soon) ────────────────────────────────────────
+const PLACEHOLDER_META: Record<string, { icon: React.ElementType; title: string; desc: string }> = {
+  contacts:   { icon: Users,       title: "Contacts CRM",  desc: "Manage your leads, clients, and contacts in one place." },
+  projects:   { icon: Globe2,      title: "Projects",      desc: "Showcase your development projects and pre-sale listings." },
+  portfolios: { icon: TrendingUp,  title: "Portfolios",    desc: "Track your property portfolio, valuations, and performance." },
+  analytics:  { icon: BarChart2,   title: "Analytics",     desc: "Advanced listing and lead analytics — connect to mAI Prop OS." },
+  settings:   { icon: Settings,    title: "Settings",      desc: "Account preferences, notifications, and integrations." },
+};
+
+function PlaceholderSection({ sectionKey }: { sectionKey: string }) {
+  const meta = PLACEHOLDER_META[sectionKey] ?? { icon: Settings, title: sectionKey, desc: "Coming soon." };
+  const Icon = meta.icon;
+  return (
+    <div className="glass-card rounded-xl p-12 flex items-center justify-center">
+      <div className="text-center">
+        <Icon className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+        <p className="font-semibold capitalize">{meta.title}</p>
+        <p className="text-sm text-muted-foreground mt-1 max-w-xs mx-auto">{meta.desc}</p>
+      </div>
+    </div>
+  );
+}
+
+// ── Profile editor ─────────────────────────────────────────────────────────────
 function ProfileEditor({ profile, onUpdate }: { profile: any; onUpdate: any }) {
   const [form, setForm] = useState({
     display_name: profile?.display_name || "",
