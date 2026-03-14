@@ -409,7 +409,7 @@ export default function ProfessionalProfile() {
             </div>
 
             {/* ── Stats bar ── */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-8 pt-6 border-t border-border">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-3 mt-6 sm:mt-8 pt-5 sm:pt-6 border-t border-border">
               {[
                 { icon: Star, label: "Rating", value: rating > 0 ? `${rating.toFixed(1)} / 5.0` : "New", color: "text-brand-gold" },
                 { icon: Briefcase, label: "Projects Done", value: pro.projects_count || 0, color: "text-primary" },
