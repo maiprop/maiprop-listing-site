@@ -139,17 +139,6 @@ export function Navbar() {
 
         {/* Right actions */}
         <div className="hidden lg:flex items-center gap-1">
-          <Link
-            to="/pricing"
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
-              forceLight
-                ? "text-white/90 hover:text-white hover:bg-white/10"
-                : "text-muted-foreground hover:text-foreground hover:bg-secondary"
-            }`}
-          >
-            <Euro className="w-3.5 h-3.5" /> Pricing
-          </Link>
-          {/* Theme toggle */}
           <button
             onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
             className={`p-2 rounded-lg transition-colors ${
