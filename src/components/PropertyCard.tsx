@@ -36,6 +36,8 @@ export interface Property {
     avatar?: string;
     verified: boolean;
   };
+  /** Owner type for badge: agent vs private seller/landlord */
+  ownerParticipantType?: "agent" | "seller" | null;
   aiScore?: number;
   views?: number;
   priceChange?: number;
@@ -137,9 +139,11 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
           ) : (
             <div className="w-full h-full flex items-center justify-center"><Home className="w-6 h-6 text-muted-foreground/30" /></div>
           )}
-          {badge && (
-            <span className={`absolute top-1 left-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full ${badge.cls}`}>{badge.label}</span>
-          )}
+          <div className="absolute top-1 left-1 flex gap-1 flex-wrap">
+            {badges.map((b) => (
+              <span key={b.label} className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${b.cls}`}>{b.label}</span>
+            ))}
+          </div>
         </div>
         <div className="flex-1 min-w-0">
           <h3 className="font-display font-semibold text-xs text-foreground group-hover:text-primary transition-colors line-clamp-2">{property.title}</h3>
@@ -180,11 +184,11 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
 
         {/* Badges top-left */}
         <div className="absolute top-3 left-3 flex gap-1.5 flex-wrap max-w-[70%]">
-          {badge && (
-            <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wide shadow-sm ${badge.cls}`}>
-              {badge.label}
+          {badges.map((b) => (
+            <span key={b.label} className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wide shadow-sm ${b.cls}`}>
+              {b.label}
             </span>
-          )}
+          ))}
           {property.subtype && (
             <span className="text-[10px] font-semibold px-2.5 py-1 rounded-full bg-accent/90 text-accent-foreground shadow-sm capitalize">
               {getSubtypeLabel(property.type, property.subtype)}

@@ -32,6 +32,17 @@ export function getParticipantTypeFromProfile(
   return "buyer";
 }
 
+/** Derive owner type for listing display: agent vs private seller/landlord */
+export function getOwnerParticipantType(profile: { role?: string; bio?: string | null } | null): "agent" | "seller" | null {
+  if (!profile) return null;
+  if (profile.role === "agent") return "agent";
+  if (profile.role === "seller_landlord") return "seller";
+  const bio = profile.bio ?? "";
+  if (bio.startsWith("__type:seller")) return "seller";
+  if (bio.startsWith("__type:agent")) return "agent";
+  return null;
+}
+
 export const PARTICIPANT_LABELS: Record<ParticipantId, string> = {
   buyer: "Buyer / Renter",
   seller: "Seller / Landlord",

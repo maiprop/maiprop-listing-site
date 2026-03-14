@@ -6,7 +6,7 @@ import {
   Loader2, Calendar, Trash2, ToggleLeft, ToggleRight, Bookmark,
   Search, Activity, Wrench, Shield, MapPin, Euro, Edit2,
   FolderKanban, Users, Briefcase, TrendingUp, Globe2, Flame,
-  ArrowRight, Clock, CheckCircle2, AlertCircle, Phone,
+  ArrowRight, Clock, CheckCircle2, AlertCircle, Phone, ExternalLink,
 } from "lucide-react";
 import AdminPanel from "@/components/AdminPanel";
 import ContactsCRM from "@/components/ContactsCRM";
@@ -15,7 +15,7 @@ import { Navbar } from "@/components/Navbar";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMyListings, useUpdateListing, useDeleteListing } from "@/hooks/useListings";
 import { useFavorites } from "@/hooks/useFavorites";
-import { useViewings } from "@/hooks/useViewings";
+import { useViewings, useUpdateViewing } from "@/hooks/useViewings";
 import { useSavedSearches, useDeleteSavedSearch, useToggleSavedSearchAlert } from "@/hooks/useSavedSearches";
 import { useAuctionAlerts, useDeleteAuctionAlert, useUpdateAuctionAlert } from "@/hooks/useAuctionAlerts";
 import { useMyProfessional, useProfessionalServices } from "@/hooks/useProfessionalServices";
@@ -26,11 +26,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { getParticipantTypeFromProfile, PARTICIPANT_LABELS } from "@/lib/participantConfig";
+import { getParticipantTypeFromProfile, getOwnerParticipantType, PARTICIPANT_LABELS } from "@/lib/participantConfig";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function dbListingToCard(l: any) {
+  const ownerParticipantType = getOwnerParticipantType(l.profiles ?? null);
   return {
     id: l.id, title: l.title, address: l.address || l.city, city: l.city,
     price: Number(l.price), pricePerSqm: l.price_per_sqm ? Number(l.price_per_sqm) : undefined,
@@ -42,6 +43,8 @@ function dbListingToCard(l: any) {
     auctionDate: l.auction_date ? new Date(l.auction_date).toLocaleDateString("en-GB") : undefined,
     auctionStartingBid: l.auction_starting_bid ? Number(l.auction_starting_bid) : undefined,
     aiScore: l.ai_score ?? undefined, views: l.views_count ?? undefined,
+    agent: l.profiles ? { name: l.profiles.display_name || "Owner", verified: l.profiles.verified || false, avatar: l.profiles.avatar_url } : undefined,
+    ownerParticipantType,
     tags: (l.tags || []).filter(Boolean) as string[],
     hasVideo: l.has_video_tour, hasVirtualTour: l.has_virtual_tour,
   };
@@ -221,6 +224,7 @@ export default function Dashboard() {
   const deleteAuctionAlert = useDeleteAuctionAlert();
   const toggleAuctionAlert = useUpdateAuctionAlert();
   const updateLeadStatus = useUpdateLeadStatus();
+  const updateViewing = useUpdateViewing();
 
   const handleSignOut = async () => { await signOut(); navigate("/"); };
   const toggleListingStatus = (id: string, currentStatus: string) => {
@@ -730,23 +734,75 @@ export default function Dashboard() {
               {viewingsLoading ? (
                 <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
               ) : (
-                <div className="space-y-3">
+                <>
                   {[...viewings, ...ownViewings].length === 0 ? (
                     <div className="glass-card rounded-xl p-12 text-center">
                       <Calendar className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
                       <p className="font-semibold">No viewings scheduled</p>
                     </div>
-                  ) : [...viewings, ...ownViewings].map((v: any) => (
-                    <div key={v.id} className="glass-card rounded-xl p-4 flex items-center gap-4">
-                      <div className={`w-2 h-10 rounded-full shrink-0 ${v.status === "confirmed" ? "bg-brand-emerald" : v.status === "pending" ? "bg-brand-gold" : "bg-muted-foreground"}`} />
-                      <div className="flex-1">
-                        <p className="font-semibold text-sm">{v.listings?.title || "Property"}</p>
-                        <p className="text-xs text-muted-foreground">{new Date(v.scheduled_at).toLocaleString()} · {v.viewing_type === "video" ? "📹 Video" : "🏠 In-person"}</p>
-                        <span className={`text-xs px-2 py-0.5 rounded-full capitalize inline-block mt-1 ${v.status === "confirmed" ? "bg-brand-emerald/20 text-brand-emerald" : "bg-brand-gold/20 text-brand-gold"}`}>{v.status}</span>
-                      </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {(() => {
+                        const all = [...viewings, ...ownViewings] as any[];
+                        const byDate = all.reduce((acc: Record<string, any[]>, v) => {
+                          const d = new Date(v.scheduled_at).toLocaleDateString("en-GB");
+                          if (!acc[d]) acc[d] = [];
+                          acc[d].push(v);
+                          return acc;
+                        }, {});
+                        const sortedDates = Object.keys(byDate).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+                        return sortedDates.map((dateStr) => (
+                          <div key={dateStr}>
+                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">{dateStr}</p>
+                            <div className="space-y-2">
+                              {byDate[dateStr].map((v: any) => {
+                                const isOwner = ownViewings.some((o: any) => o.id === v.id);
+                                const isVideo = v.viewing_type === "video";
+                                const hasVideoLink = !!v.video_link;
+                                return (
+                                  <div key={v.id} className="glass-card rounded-xl p-4 flex flex-wrap items-start gap-4">
+                                    <div className={`w-2 h-10 rounded-full shrink-0 ${v.status === "confirmed" ? "bg-brand-emerald" : v.status === "pending" ? "bg-brand-gold" : "bg-muted-foreground"}`} />
+                                    <div className="flex-1 min-w-0">
+                                      <p className="font-semibold text-sm">{v.listings?.title || "Property"}</p>
+                                      <p className="text-xs text-muted-foreground">{new Date(v.scheduled_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · {isVideo ? "📹 Video" : "🏠 In-person"}</p>
+                                      <span className={`text-xs px-2 py-0.5 rounded-full capitalize inline-block mt-1 ${v.status === "confirmed" ? "bg-brand-emerald/20 text-brand-emerald" : "bg-brand-gold/20 text-brand-gold"}`}>{v.status}</span>
+                                      {isVideo && isOwner && !hasVideoLink && v.status === "confirmed" && (
+                                        <div className="mt-2 flex items-center gap-2 flex-wrap">
+                                          <input
+                                            type="url"
+                                            placeholder="Paste video call link (Zoom, Whereby...)"
+                                            defaultValue={profile?.video_link || ""}
+                                            className="flex-1 min-w-[200px] bg-secondary border border-border rounded-lg px-3 py-1.5 text-xs"
+                                            onKeyDown={(e) => {
+                                              if (e.key === "Enter") {
+                                                const url = (e.target as HTMLInputElement).value.trim();
+                                                if (url) updateViewing.mutate({ id: v.id, updates: { video_link: url } });
+                                              }
+                                            }}
+                                          />
+                                          <Button size="sm" className="text-xs h-8" onClick={(e) => {
+                                            const input = (e.currentTarget as HTMLElement).previousElementSibling as HTMLInputElement | null;
+                                            const url = input?.value?.trim();
+                                            if (url) updateViewing.mutate({ id: v.id, updates: { video_link: url } });
+                                          }}>Set link</Button>
+                                        </div>
+                                      )}
+                                      {isVideo && hasVideoLink && (
+                                        <a href={v.video_link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-2 text-xs text-primary hover:underline">
+                                          <ExternalLink className="w-3 h-3" /> Join video call
+                                        </a>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ));
+                      })()}
                     </div>
-                  ))}
-                </div>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -1111,6 +1167,7 @@ function ProfileEditor({ profile, onUpdate }: { profile: any; onUpdate: any }) {
     bio: profile?.bio || "",
     city: profile?.city || "",
     website_url: profile?.website_url || "",
+    video_link: profile?.video_link || "",
   });
   const [saving, setSaving] = useState(false);
 
@@ -1135,7 +1192,7 @@ function ProfileEditor({ profile, onUpdate }: { profile: any; onUpdate: any }) {
             </div>
           ))}
         </div>
-        {[["Display Name", "display_name"], ["Phone", "phone"], ["City", "city"], ["Website", "website_url"]].map(([label, key]) => (
+        {[["Display Name", "display_name"], ["Phone", "phone"], ["City", "city"], ["Website", "website_url"], ["Video call link (Zoom, Whereby…)", "video_link"]].map(([label, key]) => (
           <div key={key}>
             <label className="text-xs text-muted-foreground block mb-1.5">{label}</label>
             <input value={(form as any)[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
