@@ -708,87 +708,36 @@ export default function Onboarding() {
     const selectedColor = selected ? colorMap[selected.color] : colorMap.emerald;
     const SelectedIcon = selected?.icon ?? Home;
     const isPro = selected?.isPro;
-    const isInvestor = selected?.id === "investor";
-    const isAgent = selected?.id === "agent" || selected?.id === "institutional" || selected?.id === "developer";
-    const isSeller = selected?.id === "seller";
-    const isBuyer = selected?.id === "buyer";
+    const participantId = selected?.id ?? "buyer";
 
-    // Role-specific quick actions shown on the done screen
-    const quickActions: { label: string; href: string; primary?: boolean }[] = isPro
-      ? [{ label: "View My Profile", href: "/professionals", primary: true }, { label: "Explore Dashboard", href: "/dashboard" }]
-      : isInvestor
-      ? [{ label: "Browse Auctions", href: "/auctions", primary: true }, { label: "Firesale Deals", href: "/firesale" }, { label: "Go to Dashboard", href: "/dashboard" }]
-      : isAgent
-      ? [{ label: "Create First Listing", href: "/listings/new", primary: true }, { label: "Browse Listings", href: "/listings" }, { label: "Go to Dashboard", href: "/dashboard" }]
-      : isSeller
-      ? [{ label: "List My Property", href: "/listings/new", primary: true }, { label: "Browse Market", href: "/listings" }, { label: "Go to Dashboard", href: "/dashboard" }]
-      : [{ label: "Browse Listings", href: "/listings", primary: true }, { label: "View Auctions", href: "/auctions" }, { label: "Go to Dashboard", href: "/dashboard" }];
+    // Per participant-id: primary redirect + secondary actions
+    const PARTICIPANT_ACTIONS: Record<string, {
+      primary: { label: string; href: string };
+      secondary: { label: string; href: string }[];
+      subtitle: string;
+    }> = {
+      buyer:         { primary: { label: "Browse Listings",       href: "/listings" },           secondary: [{ label: "View Auctions", href: "/auctions" }, { label: "Go to Dashboard", href: "/dashboard" }], subtitle: "Find your perfect property." },
+      seller:        { primary: { label: "List My Property",       href: "/listings/new" },        secondary: [{ label: "Browse Market",  href: "/listings" }, { label: "Go to Dashboard", href: "/dashboard" }], subtitle: "Start with your first listing." },
+      investor:      { primary: { label: "Investor Dashboard",     href: "/investor-dashboard" },  secondary: [{ label: "Browse Auctions", href: "/auctions" }, { label: "Firesale Deals", href: "/firesale" }],  subtitle: "Your deal pipeline is ready." },
+      agent:         { primary: { label: "Create First Listing",   href: "/listings/new" },        secondary: [{ label: "Browse Listings", href: "/listings" }, { label: "Go to Dashboard", href: "/dashboard" }], subtitle: "Start listing properties for your clients." },
+      institutional: { primary: { label: "Investor Dashboard",     href: "/investor-dashboard" },  secondary: [{ label: "Browse Listings", href: "/listings" }, { label: "Go to Dashboard", href: "/dashboard" }], subtitle: "Manage your portfolio and deal flow." },
+      developer:     { primary: { label: "Create First Listing",   href: "/listings/new" },        secondary: [{ label: "Browse Listings", href: "/listings" }, { label: "Go to Dashboard", href: "/dashboard" }], subtitle: "Showcase your projects to buyers." },
+      professional:  { primary: { label: "View My Profile",        href: "/professionals" },       secondary: [{ label: "Explore Dashboard", href: "/dashboard" }], subtitle: "Your profile is live in the directory." },
+    };
+
+    const actions = PARTICIPANT_ACTIONS[participantId] ?? PARTICIPANT_ACTIONS.buyer;
 
     return (
-      <div className="text-center py-4">
-        <div className="relative w-20 h-20 mx-auto mb-5">
-          <div className={cn("w-20 h-20 rounded-full flex items-center justify-center border-2", selectedColor.bg, selectedColor.border)}>
-            <SelectedIcon className={cn("w-9 h-9", selectedColor.text)} />
-          </div>
-          <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-emerald-500 flex items-center justify-center border-2 border-background">
-            <Check className="w-3.5 h-3.5 text-white" />
-          </div>
-        </div>
-
-        <h1 className="font-display font-bold text-2xl text-foreground mb-1.5">
-          {isPro ? "Profile Created!" : "You're all set!"}
-        </h1>
-        <p className="text-muted-foreground text-sm mb-1">
-          {isPro
-            ? `Your professional profile as a ${CATEGORY_LABELS[proCategory] ?? "professional"} is live.`
-            : isInvestor
-            ? "Your investor account is ready. Time to find opportunities."
-            : isAgent
-            ? "Your agent account is ready. Start listing properties."
-            : isSeller
-            ? "Your seller account is ready. List your first property."
-            : `Welcome to maiprop as a ${selected?.label ?? "member"}.`}
-        </p>
-        {isPro && <p className="text-xs text-muted-foreground mb-2">We'll review your business details within 24–48 hours and add your verified badge.</p>}
-
-        {/* Features unlocked */}
-        <div className="bg-secondary/60 border border-border rounded-2xl p-4 text-left mb-5 mt-4 space-y-1.5">
-          <p className="text-[11px] font-semibold text-muted-foreground mb-2 uppercase tracking-wide">What's unlocked</p>
-          {(selected?.features ?? []).map(f => (
-            <div key={f} className="flex items-center gap-2 text-sm text-foreground/80">
-              <Check className={cn("w-3.5 h-3.5 shrink-0", selectedColor.text)} /> {f}
-            </div>
-          ))}
-          {isPro && (
-            <>
-              <div className="flex items-center gap-2 text-sm text-foreground/80">
-                <Check className="w-3.5 h-3.5 shrink-0 text-rose-400" />{Object.keys(selectedServices).length} services configured
-              </div>
-              <div className="flex items-center gap-2 text-sm text-foreground/80">
-                <Check className="w-3.5 h-3.5 shrink-0 text-rose-400" />Availability schedule set
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Role-specific quick actions */}
-        <div className="space-y-2">
-          {quickActions.map((a, i) => (
-            <Button
-              key={a.href}
-              className={cn(
-                "w-full",
-                i === 0
-                  ? "bg-gradient-primary border-0 text-primary-foreground"
-                  : "variant-outline border-border bg-secondary text-foreground hover:bg-secondary/80"
-              )}
-              onClick={() => navigate(a.href)}
-            >
-              {a.label} {i === 0 && <ArrowRight className="w-4 h-4 ml-2" />}
-            </Button>
-          ))}
-        </div>
-      </div>
+      <DoneScreen
+        selected={selected}
+        selectedColor={selectedColor}
+        SelectedIcon={SelectedIcon}
+        isPro={!!isPro}
+        proCategory={proCategory}
+        selectedServicesCount={Object.keys(selectedServices).length}
+        actions={actions}
+        navigate={navigate}
+      />
     );
   })();
 
