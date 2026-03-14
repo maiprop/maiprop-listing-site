@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
+import { ROICalculator } from "@/components/ROICalculator";
 import { Footer } from "@/components/Footer";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -617,6 +618,11 @@ export default function InvestorDashboard() {
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [subLoading, setSubLoading] = useState(true);
   const subscribed = subscription?.status === "active" || subscription?.status === "trial";
+
+  // Deal flow is for investors only — not real estate agents. Participant type from bio.
+  const participantType = profile?.bio?.match(/^__type:(\w+)/)?.[1] || "";
+  const isInvestorType = ["investor", "institutional", "developer", "buyer"].includes(participantType);
+  const canAccessDealFlow = subscribed && isInvestorType;
   const [showGate, setShowGate] = useState(false);
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
 
@@ -653,11 +659,17 @@ export default function InvestorDashboard() {
       toast.error("Please sign in to subscribe");
       return;
     }
+    if (isRealEstateAgent) {
+      toast.error("This deal flow is for investors. As an agent, use Admin Pipeline to manage requests.");
+      return;
+    }
     const { error } = await supabase
       .from("investor_subscriptions" as any)
       .upsert({ user_id: user.id, tier: tierId, status: tierId === "sovereign" ? "trial" : "active" }, { onConflict: "user_id" });
     if (error) {
-      toast.error("Could not save subscription");
+      toast.error("Please complete your subscription at the pricing page");
+      setShowGate(false);
+      navigate("/pricing/firesale-investors");
       return;
     }
     await loadSubscription();
@@ -1034,7 +1046,7 @@ export default function InvestorDashboard() {
                 ) : (
                   <div className="space-y-3">
                     {filtered.map((deal, idx) => {
-                      const isBlurred = !subscribed && idx >= 2;
+                      const isBlurred = !canAccessDealFlow && idx >= 2;
                       return (
                         <div key={deal.id} className={`relative glass-card rounded-2xl border border-border overflow-hidden transition-all duration-200 ${!isBlurred ? "hover:border-primary/30" : ""}`}>
                           {isBlurred && (
@@ -1102,12 +1114,12 @@ export default function InvestorDashboard() {
                             </div>
                             {!isBlurred && (
                               <div className="flex gap-2 mt-4">
-                                <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground text-xs h-8 flex-1" onClick={() => subscribed ? toast.info("Connecting you with seller...") : setShowGate(true)}>
-                                  {subscribed ? "Contact Seller" : <><Lock className="w-3 h-3 mr-1" />Unlock Contact</>}
+                                <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground text-xs h-8 flex-1" onClick={() => canAccessDealFlow ? toast.info("Connecting you with seller...") : setShowGate(true)}>
+                                  {canAccessDealFlow ? "Contact Seller" : <><Lock className="w-3 h-3 mr-1" />Unlock Contact</>}
                                 </Button>
-                                <Button size="sm" variant="outline" className="border-border text-xs h-8" onClick={() => subscribed ? toast.success("AI report downloading...") : setShowGate(true)}>
+                                <Button size="sm" variant="outline" className="border-border text-xs h-8" onClick={() => canAccessDealFlow ? toast.success("AI report downloading...") : setShowGate(true)}>
                                   <BarChart2 className="w-3 h-3 mr-1" />
-                                  {subscribed ? "AI Report" : "Report"}
+                                  {canAccessDealFlow ? "AI Report" : "Report"}
                                 </Button>
                               </div>
                             )}
@@ -1118,7 +1130,7 @@ export default function InvestorDashboard() {
                   </div>
                 )}
 
-                {!subscribed && filtered.length > 2 && (
+                {!canAccessDealFlow && filtered.length > 2 && (
                   <div className="text-center py-6 glass-card rounded-2xl border border-dashed border-border">
                     <Lock className="w-5 h-5 text-muted-foreground mx-auto mb-2" />
                     <p className="text-sm font-semibold mb-1">{filtered.length - 2} more deals in the pipeline</p>
@@ -1132,6 +1144,7 @@ export default function InvestorDashboard() {
 
               {/* Right sidebar analytics */}
               <div className="space-y-4 lg:sticky lg:top-24 self-start">
+                <ROICalculator defaultPrice={200000} defaultSqm={80} />
                 <div className="glass-card rounded-2xl border border-border p-5">
                   <div className="flex items-center gap-2 mb-4">
                     <MapPin className="w-3.5 h-3.5 text-primary" />
@@ -1192,23 +1205,35 @@ export default function InvestorDashboard() {
                   </div>
                 </div>
 
-                {!subscribed && (
+                {!canAccessDealFlow && (
                   <div className="glass-card rounded-2xl border border-primary/20 p-5 relative overflow-hidden">
                     <div className="absolute top-0 right-0 w-20 h-20 rounded-bl-full bg-primary/5" />
                     <div className="relative">
                       <Crown className="w-5 h-5 text-primary mb-3" />
-                      <h4 className="font-display font-bold text-sm mb-1">Unlock Full Access</h4>
-                      <p className="text-xs text-muted-foreground mb-3 leading-relaxed">Get seller contacts, full AI reports, and real-time deal alerts.</p>
-                      <Button className="w-full bg-gradient-primary border-0 text-primary-foreground text-xs h-9 mb-2" onClick={() => setShowGate(true)}>
-                        View Subscription Plans
-                      </Button>
-                      <Link
-                        to="/pricing/firesale-investors"
-                        className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
-                      >
-                        <ExternalLink className="w-3 h-3" />
-                        Full pricing page
-                      </Link>
+                      {isRealEstateAgent ? (
+                        <>
+                          <h4 className="font-display font-bold text-sm mb-1">Deal Flow for Investors</h4>
+                          <p className="text-xs text-muted-foreground mb-3 leading-relaxed">This dashboard is for investors and institutional buyers. As a real estate agent, use the <strong>Admin Pipeline</strong> tab to manage firesale requests.</p>
+                          <Button className="w-full bg-primary/10 border border-primary/30 text-primary text-xs h-9" onClick={() => setActiveTab("admin")}>
+                            Go to Admin Pipeline
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <h4 className="font-display font-bold text-sm mb-1">Unlock Full Access</h4>
+                          <p className="text-xs text-muted-foreground mb-3 leading-relaxed">Get seller contacts, full AI reports, and real-time deal alerts.</p>
+                          <Button className="w-full bg-gradient-primary border-0 text-primary-foreground text-xs h-9 mb-2" onClick={() => setShowGate(true)}>
+                            View Subscription Plans
+                          </Button>
+                          <Link
+                            to="/pricing/firesale-investors"
+                            className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            Full pricing page
+                          </Link>
+                        </>
+                      )}
                     </div>
                   </div>
                 )}

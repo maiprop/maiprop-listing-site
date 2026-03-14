@@ -26,7 +26,17 @@ export function useToggleFavorite() {
   const { user } = useAuth();
 
   return useMutation({
-    mutationFn: async ({ listing_id, isFavorited }: { listing_id: string; isFavorited: boolean }) => {
+    mutationFn: async ({
+      listing_id,
+      isFavorited,
+      priceAlert,
+      price,
+    }: {
+      listing_id: string;
+      isFavorited: boolean;
+      priceAlert?: boolean;
+      price?: number;
+    }) => {
       if (!user) throw new Error("Must be logged in to save properties");
       if (isFavorited) {
         const { error } = await supabase
@@ -36,15 +46,58 @@ export function useToggleFavorite() {
           .eq("listing_id", listing_id);
         if (error) throw error;
       } else {
-        const { error } = await supabase
-          .from("favorites")
-          .insert({ user_id: user.id, listing_id });
+        const { error } = await supabase.from("favorites").insert({
+          user_id: user.id,
+          listing_id,
+          price_alert: priceAlert ?? false,
+          price_when_saved: price ?? null,
+        });
         if (error) throw error;
       }
     },
-    onSuccess: (_, { isFavorited }) => {
+    onSuccess: (_, { isFavorited, priceAlert }) => {
       queryClient.invalidateQueries({ queryKey: ["favorites"] });
-      toast.success(isFavorited ? "Removed from saved" : "Saved to favorites!");
+      toast.success(
+        isFavorited
+          ? "Removed from saved"
+          : priceAlert
+            ? "Saved! We'll notify you if the price drops."
+            : "Saved to favorites!"
+      );
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+export function useTogglePriceAlert() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async ({
+      listing_id,
+      priceAlert,
+      price,
+    }: {
+      listing_id: string;
+      priceAlert: boolean;
+      price?: number;
+    }) => {
+      if (!user) throw new Error("Must be logged in");
+      const { error } = await supabase
+        .from("favorites")
+        .update({
+          price_alert: priceAlert,
+          price_when_saved: priceAlert ? price ?? null : null,
+        })
+        .eq("user_id", user.id)
+        .eq("listing_id", listing_id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["favorites"] });
+      queryClient.invalidateQueries({ queryKey: ["favorite"] });
+      toast.success("Price alert updated");
     },
     onError: (err: Error) => toast.error(err.message),
   });

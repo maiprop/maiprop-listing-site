@@ -24,6 +24,9 @@ import CreateListing from "./pages/CreateListing";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 import Pro from "./pages/Pro";
+import MarketIntelligence from "./pages/MarketIntelligence";
+import Projects from "./pages/Projects";
+import Portfolios from "./pages/Portfolios";
 import FiresalePricing from "./pages/FiresalePricing";
 import Pricing from "./pages/Pricing";
 import AdminPricing from "./pages/AdminPricing";
@@ -68,7 +71,7 @@ const App = () => (
               <Route path="/auction/:id" element={<PropertyDetail />} />
               <Route path="/auctions" element={<Auctions />} />
               <Route path="/firesale" element={<Firesale />} />
-              <Route path="/investor-dashboard" element={<InvestorDashboard />} />
+              <Route path="/investor-dashboard" element={<ProtectedRoute><InvestorDashboard /></ProtectedRoute>} />
               <Route path="/professionals" element={<Professionals />} />
               <Route path="/professionals/:id" element={<ProfessionalProfile />} />
               <Route path="/signup" element={<Signup />} />
@@ -82,6 +85,9 @@ const App = () => (
               <Route path="/cookie-policy" element={<CookiePolicy />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/pro" element={<Pro />} />
+              <Route path="/market-intelligence" element={<MarketIntelligence />} />
+              <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
+              <Route path="/portfolios" element={<ProtectedRoute><Portfolios /></ProtectedRoute>} />
               <Route path="/ai-assistant" element={<AIAssistantPage />} />
               <Route path="/pricing" element={<Pricing />} />
               <Route path="/pricing/firesale-investors" element={<FiresalePricing />} />
