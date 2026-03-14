@@ -278,13 +278,6 @@ export function Navbar() {
       {/* Mobile dropdown */}
       {mobileOpen && (
         <div className="lg:hidden bg-card/95 backdrop-blur-xl border-b border-border px-4 py-4 space-y-1">
-          <Link
-            to="/pricing"
-            className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-semibold text-primary hover:bg-primary/10 transition-colors"
-            onClick={() => setMobileOpen(false)}
-          >
-            <Euro className="w-4 h-4" /> Pricing
-          </Link>
           {navLinks.map((link) => (
             <Link
               key={link.href}
@@ -299,6 +292,7 @@ export function Navbar() {
               onClick={() => setMobileOpen(false)}
             >
               {link.accent === "flame" && <span>🔥</span>}
+              {link.accent === "pricing" && <Euro className="w-4 h-4" />}
               {link.label}
               {link.badge && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold font-semibold">{link.badge}</span>
