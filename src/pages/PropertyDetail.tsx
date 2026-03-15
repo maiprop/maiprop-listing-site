@@ -208,7 +208,7 @@ export default function PropertyDetail() {
     propertyType: dbListing?.property_type,
     listingType: dbListing?.listing_type,
     price: dbListing ? Number(dbListing.price) : undefined,
-    limit: 8,
+    limit: 8
   });
 
   // Redirect: if auction opened via /property/:id, send to /auction/:id
@@ -484,9 +484,9 @@ export default function PropertyDetail() {
 
   const hasAnyFeatures = internalFeatures.length + externalFeatures.length + constructionFeatures.length + suitabilityFeatures.length > 0;
 
-  const similarListings = (similarFromDb as any[])
-    .filter((l: any) => l.id !== id)
-    .slice(0, 6);
+  const similarListings = (similarFromDb as any[]).
+  filter((l: any) => l.id !== id).
+  slice(0, 6);
 
   // Build property details rows grouped
   const detailRows: {label: string;value: string;}[] = [
@@ -1086,12 +1086,12 @@ export default function PropertyDetail() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <p className="font-semibold text-sm truncate">{ownerProfile.display_name || "Owner"}</p>
-                            {ownerParticipantType === "agent" && (
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30">Agent</span>
-                            )}
-                            {ownerParticipantType === "seller" && (
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-600 dark:text-violet-400 border border-violet-500/30">Private Seller</span>
-                            )}
+                            {ownerParticipantType === "agent" &&
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30">Agent</span>
+                        }
+                            {ownerParticipantType === "seller" &&
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-600 dark:text-violet-400 border border-violet-500/30">Private Seller</span>
+                        }
                           </div>
                           <p className="text-xs text-muted-foreground mt-0.5">
                             {ownerParticipantType === "agent" ? "Licensed real estate agent" : ownerParticipantType === "seller" ? "Private seller / landlord" : "Listing owner"}
@@ -1164,9 +1164,9 @@ export default function PropertyDetail() {
                       variant="outline"
                       className="w-full border-border gap-2 h-9 text-xs"
                       onClick={() => {
-                        if (!user) { toast.error("Sign in to request a viewing"); navigate("/login"); return; }
-                        if (canVideoView) setViewingOpen(true);
-                        else (toast.info("Video viewing is available for Pro users, or free for retailers."), navigate("/pricing"));
+                        if (!user) {toast.error("Sign in to request a viewing");navigate("/login");return;}
+                        if (canVideoView) setViewingOpen(true);else
+                        toast.info("Video viewing is available for Pro users, or free for retailers."), navigate("/pricing");
                       }}>
                       
                         <Video className="w-3.5 h-3.5" />Video Viewing{!canVideoView && <Lock className="w-3 h-3 ml-0.5 opacity-60" />}
@@ -1322,11 +1322,11 @@ export default function PropertyDetail() {
                         Deep-dive: Area trends, comparable sales, property specifics analysis, and charts.
                       </p>
                       <div className="grid grid-cols-2 gap-2 mb-4">
-                        {["Cadastre Verification", "5-Year Price History", "Comparable Sales", "Investment Projection", "Legal Status Check", "Neighborhood Score"].map((item) => (
-                          <div key={item} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <Check className="w-3 h-3 text-brand-gold shrink-0" />{item}
-                          </div>
-                        ))}
+                        {["Cadastre Verification", "5-Year Price History", "Comparable Sales", "Investment Projection", "Legal Status Check", "Neighborhood Score"].map((item) => {}
+
+
+
+                        )}
                       </div>
                       {!reportPurchased ?
                       <div className="flex items-center gap-3 flex-wrap">
@@ -1357,8 +1357,8 @@ export default function PropertyDetail() {
                   <p className="text-xs text-muted-foreground mb-3">Formal valuation reports, legal due diligence, and building legality checks — book accredited professionals in your area.</p>
                   <Link
                     to={`/professionals${city ? `?search=${encodeURIComponent(city)}` : ""}`}
-                    className="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline"
-                  >
+                    className="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline">
+                    
                     Find valuers &amp; lawyers in {city || "Greece"} <ExternalLink className="w-3.5 h-3.5" />
                   </Link>
                 </div>
@@ -1390,14 +1390,14 @@ export default function PropertyDetail() {
               {!isAuction && listingType !== "rent" && <MortgageCalculator price={price} />}
 
               {/* ROI Calculator — for investors */}
-              {!isAuction && (
-                <ROICalculator defaultPrice={price} defaultSqm={sqm ?? 80} />
-              )}
+              {!isAuction &&
+              <ROICalculator defaultPrice={price} defaultSqm={sqm ?? 80} />
+              }
 
               {/* Due diligence checklist — for logged-in users */}
-              {user && !isAuction && (
-                <DealChecklist entityType="listing" entityId={id} />
-              )}
+              {user && !isAuction &&
+              <DealChecklist entityType="listing" entityId={id} />
+              }
 
               {/* Rental Summary */}
               {listingType === "rent" &&
@@ -1445,8 +1445,8 @@ export default function PropertyDetail() {
         </div>
 
         {/* Similar Listings / Similar Deals */}
-        {similarListings.length > 0 && (
-          <div className="container pb-16">
+        {similarListings.length > 0 &&
+        <div className="container pb-16">
             <h2 className="font-display text-xl font-bold mb-4 flex items-center gap-2">
               <LayoutGrid className="w-5 h-5 text-primary" />
               {isAuction ? "Similar Deals" : "Similar Listings"}
@@ -1455,12 +1455,12 @@ export default function PropertyDetail() {
               {isAuction ? "More auctions from the OS database" : "Related properties you might like"}
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {similarListings.map((l: any) => (
-                <PropertyCard key={l.id} property={dbListingToCard(l, { includeOwnership: true, includeRaw: true, maxImages: 3 })} />
-              ))}
+              {similarListings.map((l: any) =>
+            <PropertyCard key={l.id} property={dbListingToCard(l, { includeOwnership: true, includeRaw: true, maxImages: 3 })} />
+            )}
             </div>
           </div>
-        )}
+        }
       </div>
 
       <Footer />
