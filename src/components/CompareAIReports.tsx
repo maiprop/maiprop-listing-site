@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Sparkles, Loader2, TrendingUp, TrendingDown, Minus, ShieldCheck, Volume2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { getAiErrorMessage } from "@/lib/aiErrorUtils";
 import { computeWalkScore, walkScoreLabel, walkScoreColour } from "@/lib/walkScore";
 import { toast } from "sonner";
 
@@ -162,6 +163,11 @@ export function CompareAIReports({ listings }: { listings: Listing[] }) {
           ? valRes.value.data as AIReport
           : null;
 
+        let reportError: string | null = null;
+        const valFail = valRes.status === "fulfilled" ? valRes.value.error?.message ?? valRes.value.data?.error : null;
+        const nbFail = nbRes.status === "fulfilled" ? nbRes.value.error?.message ?? nbRes.value.data?.error : null;
+        if (valFail ?? nbFail) reportError = getAiErrorMessage(null, { error: valFail ?? nbFail }, "AI analysis failed");
+
         let neighbourhood: NeighbourhoodData | null = null;
         if (nbRes.status === "fulfilled" && !nbRes.value.error) {
           const nb = nbRes.value.data;
@@ -193,6 +199,8 @@ export function CompareAIReports({ listings }: { listings: Listing[] }) {
           const poisRes = await supabase.functions.invoke("property-pois", {
             body: { latitude: raw.latitude, longitude: raw.longitude, city: raw.city },
           });
+          const poisFail = poisRes.error?.message ?? poisRes.data?.error;
+          if (poisFail && !reportError) reportError = getAiErrorMessage(null, { error: poisFail }, "AI analysis failed");
           if (!poisRes.error && poisRes.data?.pois) {
             walkScore = computeWalkScore(
               poisRes.data.pois.map((p: any) => ({
@@ -205,12 +213,12 @@ export function CompareAIReports({ listings }: { listings: Listing[] }) {
 
         setReports(prev => ({
           ...prev,
-          [listing.id]: { valuation, walkScore, neighbourhood, loading: false, error: null },
+          [listing.id]: { valuation, walkScore, neighbourhood, loading: false, error: reportError ?? null },
         }));
-      } catch (e: any) {
+      } catch (e: unknown) {
         setReports(prev => ({
           ...prev,
-          [listing.id]: { valuation: null, walkScore: null, neighbourhood: null, loading: false, error: e.message },
+          [listing.id]: { valuation: null, walkScore: null, neighbourhood: null, loading: false, error: getAiErrorMessage(e, null, "AI analysis failed") },
         }));
       }
     }));

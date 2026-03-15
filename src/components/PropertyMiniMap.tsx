@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MAPBOX_TOKEN } from "@/lib/config";
+import { getAiErrorMessage } from "@/lib/aiErrorUtils";
 import { supabase } from "@/integrations/supabase/client";
 import "mapbox-gl/dist/mapbox-gl.css";
 
@@ -120,8 +121,8 @@ export default function PropertyMiniMap({
       // Compute walk score and notify parent
       const score = computeWalkScore(data);
       onWalkScoreChange?.(score);
-    } catch (e: any) {
-      setPoiError(e.message || "Failed to load nearby places");
+    } catch (e: unknown) {
+      setPoiError(getAiErrorMessage(e, null, "Failed to load nearby places"));
     } finally {
       setLoadingPOIs(false);
     }

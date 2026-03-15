@@ -5,6 +5,7 @@ import {
   Clock, AlertCircle,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { getAiErrorMessage } from "@/lib/aiErrorUtils";
 import { toast } from "sonner";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -200,12 +201,13 @@ export default function NeighbourhoodReport({ city, address, region, propertyTyp
       const { data: result, error: fnErr } = await supabase.functions.invoke("neighbourhood-report", {
         body: { city, address, region, propertyType, lat, lng },
       });
-      if (fnErr) throw new Error(fnErr.message);
+      if (fnErr) throw fnErr;
       if (result?.error) throw new Error(result.error);
       setData(result as NeighbourhoodData);
-    } catch (e: any) {
-      setError(e.message || "Failed to load neighbourhood report");
-      toast.error("Neighbourhood report failed");
+    } catch (e: unknown) {
+      const msg = getAiErrorMessage(e, null, "Failed to load neighbourhood report");
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
