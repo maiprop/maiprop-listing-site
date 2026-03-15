@@ -23,7 +23,7 @@ const GoogleIcon = () => (
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { signIn, user, loading: authLoading, needsOnboarding } = useAuth();
+  const { signIn, user, loading: authLoading } = useAuth();
   const { theme } = useTheme();
 
   const [view, setView] = useState<"login" | "forgot" | "forgot-sent">("login");
@@ -33,22 +33,17 @@ export default function Login() {
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-  // Track whether the user just signed in so we only auto-redirect after sign-in
   const [didSignIn, setDidSignIn] = useState(false);
 
   const from = (location.state as any)?.from?.pathname || "/dashboard";
 
-  // Redirect: if needs onboarding go there first; otherwise to intended destination
+  // After sign-in, always redirect to the intended destination (never force onboarding)
   useEffect(() => {
     if (authLoading) return;
     if (user) {
-      if (needsOnboarding) {
-        navigate("/onboarding", { replace: true });
-      } else {
-        navigate(from, { replace: true });
-      }
+      navigate(from, { replace: true });
     }
-  }, [authLoading, user, needsOnboarding, from, navigate]);
+  }, [authLoading, user, from, navigate]);
 
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
