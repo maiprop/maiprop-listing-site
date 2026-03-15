@@ -611,16 +611,19 @@ export default function InvestorDashboard() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
 
-  const isAdmin = profile?.role === "agent";
   const [activeTab, setActiveTab] = useState<"deals" | "admin" | "subscribers">("deals");
+
+  // Participant type from bio (agent, developer, institutional, etc.)
+  const participantType = profile?.bio?.match(/^__type:(\w+)/)?.[1] || "";
+  // Admin (firesale pipeline, subscriber management) only for real estate agents, not developer/institutional
+  const isAdmin = profile?.role === "agent" && participantType === "agent";
 
   // Subscription state (loaded from DB)
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [subLoading, setSubLoading] = useState(true);
   const subscribed = subscription?.status === "active" || subscription?.status === "trial";
 
-  // Deal flow is for investors only — not real estate agents. Participant type from bio.
-  const participantType = profile?.bio?.match(/^__type:(\w+)/)?.[1] || "";
+  // Deal flow is for investors only — not real estate agents.
   const isInvestorType = ["investor", "institutional", "developer", "buyer"].includes(participantType);
   const isRealEstateAgent = profile?.role === "agent" || participantType === "agent";
   const canAccessDealFlow = subscribed && isInvestorType;
