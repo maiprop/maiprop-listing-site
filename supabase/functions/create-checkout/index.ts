@@ -11,6 +11,21 @@ const logStep = (step: string, details?: any) => {
   console.log(`[CREATE-CHECKOUT] ${step}${detailsStr}`);
 };
 
+/** Plan keys matching pricing_configs; env fallback: STRIPE_PRICE_<UPPERCASE_KEY> */
+const DEFAULT_PRICE = "price_1TABOeIy442hLqOtw3067Nzz";
+
+async function getPriceForPlan(supabase: ReturnType<typeof createClient>, planKey: string): Promise<string> {
+  const envKey = `STRIPE_PRICE_${planKey.toUpperCase().replace(/-/g, "_")}`;
+  const envPrice = Deno.env.get(envKey);
+  if (envPrice) return envPrice;
+
+  const { data } = await supabase.from("pricing_configs").select("metadata").eq("key", planKey).maybeSingle();
+  const stripePriceId = (data as any)?.metadata?.stripe_price_id;
+  if (stripePriceId) return stripePriceId;
+
+  return Deno.env.get("STRIPE_PRICE_DEFAULT") ?? DEFAULT_PRICE;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -18,7 +33,7 @@ Deno.serve(async (req) => {
 
   const supabaseClient = createClient(
     Deno.env.get("SUPABASE_URL") ?? "",
-    Deno.env.get("SUPABASE_ANON_KEY") ?? ""
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SUPABASE_ANON_KEY") ?? ""
   );
 
   try {
@@ -32,32 +47,38 @@ Deno.serve(async (req) => {
     const user = userData.user;
     logStep("User authenticated", { userId: user.id, email: user.email });
 
+    const body = (req.method === "POST" && req.body) ? await req.json().catch(() => ({})) : {};
+    const plan = (body.plan ?? "pro") as string;
+    const successUrl = body.success_url;
+    const cancelUrl = body.cancel_url;
+
     const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", { apiVersion: "2025-08-27.basil" });
 
-    // Find or create customer
+    const priceId = await getPriceForPlan(supabaseClient, plan);
+    logStep("Resolved price", { plan, priceId });
+
     const customers = await stripe.customers.list({ email: user.email, limit: 1 });
     let customerId: string | undefined;
     if (customers.data.length > 0) {
       customerId = customers.data[0].id;
       logStep("Existing Stripe customer found", { customerId });
-    } else {
-      logStep("No existing customer, will create at checkout");
     }
 
     const origin = req.headers.get("origin") || "https://maiprop-listing-site.lovable.app";
+    const success = successUrl ?? (plan.startsWith("professional") ? `${origin}/dashboard?pro=success` : `${origin}/pro?success=1`);
+    const cancel = cancelUrl ?? (plan.startsWith("professional") ? `${origin}/pricing` : `${origin}/pro?cancelled=1`);
 
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       customer_email: customerId ? undefined : user.email,
-      line_items: [
-        { price: "price_1TABOeIy442hLqOtw3067Nzz", quantity: 1 },
-      ],
+      line_items: [{ price: priceId, quantity: 1 }],
       mode: "subscription",
-      success_url: `${origin}/pro?success=1`,
-      cancel_url: `${origin}/pro?cancelled=1`,
+      success_url: success,
+      cancel_url: cancel,
+      metadata: { user_id: user.id, plan },
     });
 
-    logStep("Checkout session created", { sessionId: session.id });
+    logStep("Checkout session created", { sessionId: session.id, plan });
 
     return new Response(JSON.stringify({ url: session.url }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

@@ -397,6 +397,18 @@ export default function Onboarding() {
     setStep("done");
   };
 
+  const handleUpgradeToPro = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke("create-checkout", {
+        body: { plan: "professional_basic", success_url: `${window.location.origin}/dashboard?pro=success`, cancel_url: `${window.location.origin}/pricing` },
+      });
+      if (error || !data?.url) throw new Error(error?.message ?? data?.error ?? "Checkout failed");
+      window.location.href = data.url;
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Could not start checkout");
+    }
+  };
+
   // ── Step content ──────────────────────────────────────────────────────────────
 
   const stepContent = (() => {
@@ -804,6 +816,7 @@ export default function Onboarding() {
         selectedServicesCount={Object.keys(selectedServices).length}
         actions={actions}
         navigate={navigate}
+        onUpgradeToPro={participantId === "professional" ? handleUpgradeToPro : undefined}
       />
     );
   })();
@@ -957,6 +970,7 @@ function DoneScreen({
   selectedServicesCount,
   actions,
   navigate,
+  onUpgradeToPro,
 }: {
   selected: ParticipantType | null;
   selectedColor: { bg: string; border: string; text: string; iconBg: string };
@@ -966,6 +980,7 @@ function DoneScreen({
   selectedServicesCount: number;
   actions: { primary: { label: string; href: string }; secondary: { label: string; href: string }[]; subtitle: string };
   navigate: (href: string) => void;
+  onUpgradeToPro?: () => Promise<void>;
 }) {
   const [countdown, setCountdown] = useState(4);
   const [redirectCancelled, setRedirectCancelled] = useState(false);
@@ -1039,6 +1054,17 @@ function DoneScreen({
             Stay here
           </button>
         </p>
+      )}
+
+      {/* Upgrade to Pro — charge equivalent when professional upgrades */}
+      {onUpgradeToPro && (
+        <Button
+          className="w-full mb-2 border-2 border-rose-500/40 bg-rose-500/10 text-rose-600 hover:bg-rose-500/20"
+          onClick={() => { setRedirectCancelled(true); onUpgradeToPro(); }}
+        >
+          <Crown className="w-4 h-4 mr-2" />
+          Upgrade to Pro — €49/mo
+        </Button>
       )}
 
       {/* Secondary actions */}
