@@ -776,7 +776,7 @@ export default function Dashboard() {
                                           <input
                                             type="url"
                                             placeholder="Paste video call link (Zoom, Whereby...)"
-                                            defaultValue={profile?.video_link || ""}
+                                            defaultValue={(profile as any)?.video_link || ""}
                                             className="flex-1 min-w-[200px] bg-secondary border border-border rounded-lg px-3 py-1.5 text-xs"
                                             onKeyDown={(e) => {
                                               if (e.key === "Enter") {
