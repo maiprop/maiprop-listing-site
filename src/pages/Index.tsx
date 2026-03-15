@@ -904,11 +904,12 @@ export default function Index() {
 
   // Fetch live listing counts grouped by property_type
   useEffect(() => {
-    supabase
-      .from("listings")
-      .select("property_type")
-      .eq("status", "active")
-      .then(({ data }) => {
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from("listings")
+          .select("property_type")
+          .eq("status", "active");
         if (!data) return;
         const counts: Record<string, number> = {};
         data.forEach((row) => {
@@ -916,8 +917,8 @@ export default function Index() {
           counts[k] = (counts[k] || 0) + 1;
         });
         setTypeCounts(counts);
-      })
-      .catch(() => {});
+      } catch {}
+    })();
   }, []);
 
   // Scroll-reveal refs
