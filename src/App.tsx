@@ -38,6 +38,8 @@ import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
 import CookiePolicy from "./pages/CookiePolicy";
 import BrandedVideoRoom from "./pages/BrandedVideoRoom";
+import OpenHouses from "./pages/OpenHouses";
+import OpenHouseDetail from "./pages/OpenHouseDetail";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -80,6 +82,8 @@ const App = () => (
               <Route path="/professionals" element={<Professionals />} />
               <Route path="/professionals/:id" element={<ProfessionalProfile />} />
               <Route path="/video-room/:professionalId" element={<BrandedVideoRoom />} />
+              <Route path="/open-houses" element={<OpenHouses />} />
+              <Route path="/open-house/:id" element={<OpenHouseDetail />} />
               <Route path="/signup" element={<Signup />} />
               <Route path="/login" element={<Login />} />
               <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />

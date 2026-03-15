@@ -454,6 +454,7 @@ export type Database = {
           levels: number | null
           listing_type: Database["public"]["Enums"]["listing_type"]
           living_rooms: number | null
+          open_house_date: string | null
           longitude: number | null
           min_rental_months: number | null
           monthly_expenses: number | null
@@ -566,6 +567,7 @@ export type Database = {
           longitude?: number | null
           min_rental_months?: number | null
           monthly_expenses?: number | null
+          open_house_date?: string | null
           owner_id?: string | null
           pets_allowed?: boolean | null
           plot_depth?: number | null
@@ -675,6 +677,7 @@ export type Database = {
           longitude?: number | null
           min_rental_months?: number | null
           monthly_expenses?: number | null
+          open_house_date?: string | null
           owner_id?: string | null
           pets_allowed?: boolean | null
           plot_depth?: number | null
@@ -740,6 +743,173 @@ export type Database = {
             referencedRelation: "conversations"
             referencedColumns: ["id"]
           },
+        ]
+      }
+      open_house_offers: {
+        Row: {
+          id: string
+          listing_id: string
+          bidder_id: string
+          amount: number
+          currency: string
+          message: string | null
+          status: Database["public"]["Enums"]["oh_offer_status"]
+          submitted_at: string
+          revealed_at: string | null
+          decided_by: string | null
+          decided_at: string | null
+        }
+        Insert: {
+          id?: string
+          listing_id: string
+          bidder_id: string
+          amount: number
+          currency?: string
+          message?: string | null
+          status?: Database["public"]["Enums"]["oh_offer_status"]
+          submitted_at?: string
+          revealed_at?: string | null
+          decided_by?: string | null
+          decided_at?: string | null
+        }
+        Update: {
+          id?: string
+          listing_id?: string
+          bidder_id?: string
+          amount?: number
+          currency?: string
+          message?: string | null
+          status?: Database["public"]["Enums"]["oh_offer_status"]
+          submitted_at?: string
+          revealed_at?: string | null
+          decided_by?: string | null
+          decided_at?: string | null
+        }
+        Relationships: [
+          { foreignKeyName: "open_house_offers_bidder_id_fkey", columns: ["bidder_id"], isOneToOne: false, referencedRelation: "profiles", referencedColumns: ["user_id"] },
+          { foreignKeyName: "open_house_offers_listing_id_fkey", columns: ["listing_id"], isOneToOne: false, referencedRelation: "listings", referencedColumns: ["id"] },
+        ]
+      }
+      open_house_registrations: {
+        Row: {
+          id: string
+          listing_id: string
+          requester_id: string
+          timeslot_index: number | null
+          id_doc_type: Database["public"]["Enums"]["oh_id_doc_type"] | null
+          id_doc_url: string | null
+          id_verified_at: string | null
+          waiver_signed_at: string | null
+          waiver_url: string | null
+          proof_of_funds_url: string | null
+          proof_amount: number | null
+          investor_declaration_signed_at: string | null
+          status: Database["public"]["Enums"]["oh_registration_status"]
+          approved_by: string | null
+          approved_at: string | null
+          rejection_reason: string | null
+          attended_at: string | null
+          note: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          listing_id: string
+          requester_id: string
+          timeslot_index?: number | null
+          id_doc_type?: Database["public"]["Enums"]["oh_id_doc_type"] | null
+          id_doc_url?: string | null
+          id_verified_at?: string | null
+          waiver_signed_at?: string | null
+          waiver_url?: string | null
+          proof_of_funds_url?: string | null
+          proof_amount?: number | null
+          investor_declaration_signed_at?: string | null
+          status?: Database["public"]["Enums"]["oh_registration_status"]
+          approved_by?: string | null
+          approved_at?: string | null
+          rejection_reason?: string | null
+          attended_at?: string | null
+          note?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          listing_id?: string
+          requester_id?: string
+          timeslot_index?: number | null
+          id_doc_type?: Database["public"]["Enums"]["oh_id_doc_type"] | null
+          id_doc_url?: string | null
+          id_verified_at?: string | null
+          waiver_signed_at?: string | null
+          waiver_url?: string | null
+          proof_of_funds_url?: string | null
+          proof_amount?: number | null
+          investor_declaration_signed_at?: string | null
+          status?: Database["public"]["Enums"]["oh_registration_status"]
+          approved_by?: string | null
+          approved_at?: string | null
+          rejection_reason?: string | null
+          attended_at?: string | null
+          note?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          { foreignKeyName: "open_house_registrations_listing_id_fkey", columns: ["listing_id"], isOneToOne: false, referencedRelation: "listings", referencedColumns: ["id"] },
+          { foreignKeyName: "open_house_registrations_requester_id_fkey", columns: ["requester_id"], isOneToOne: false, referencedRelation: "profiles", referencedColumns: ["user_id"] },
+        ]
+      }
+      open_house_settings: {
+        Row: {
+          id: string
+          listing_id: string
+          timeslots: unknown
+          max_visitors_per_slot: number
+          max_total_visitors: number | null
+          broker_required: boolean
+          require_proof_of_funds: boolean
+          min_proof_amount: number | null
+          require_investor_declaration: boolean
+          offer_deadline: string | null
+          allow_sealed_bids: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          listing_id: string
+          timeslots?: unknown
+          max_visitors_per_slot?: number
+          max_total_visitors?: number | null
+          broker_required?: boolean
+          require_proof_of_funds?: boolean
+          min_proof_amount?: number | null
+          require_investor_declaration?: boolean
+          offer_deadline?: string | null
+          allow_sealed_bids?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          listing_id?: string
+          timeslots?: unknown
+          max_visitors_per_slot?: number
+          max_total_visitors?: number | null
+          broker_required?: boolean
+          require_proof_of_funds?: boolean
+          min_proof_amount?: number | null
+          require_investor_declaration?: boolean
+          offer_deadline?: string | null
+          allow_sealed_bids?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          { foreignKeyName: "open_house_settings_listing_id_fkey", columns: ["listing_id"], isOneToOne: true, referencedRelation: "listings", referencedColumns: ["id"] },
         ]
       }
       portfolios: {
@@ -1222,7 +1392,7 @@ export type Database = {
         | "sold"
         | "rented"
         | "expired"
-      listing_type: "sale" | "rent" | "auction" | "firesale"
+      listing_type: "sale" | "rent" | "auction" | "firesale" | "open_house"
       message_status: "sent" | "read"
       professional_category:
         | "architect"
@@ -1274,6 +1444,9 @@ export type Database = {
       user_role: "individual" | "agent" | "professional" | "seller_landlord" | "investor" | "institutional" | "developer"
       viewing_status: "pending" | "confirmed" | "cancelled" | "completed"
       viewing_type: "in_person" | "video"
+      oh_registration_status: "pending" | "approved" | "rejected" | "attended" | "cancelled"
+      oh_id_doc_type: "id_card" | "passport"
+      oh_offer_status: "submitted" | "revealed" | "accepted" | "rejected" | "withdrawn"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1409,7 +1582,7 @@ export const Constants = {
         "rented",
         "expired",
       ],
-      listing_type: ["sale", "rent", "auction", "firesale"],
+      listing_type: ["sale", "rent", "auction", "firesale", "open_house"],
       message_status: ["sent", "read"],
       professional_category: [
         "architect", "civil_engineer", "lawyer", "notary", "electrician", "plumber",
@@ -1435,6 +1608,9 @@ export const Constants = {
       user_role: ["individual", "agent", "professional", "seller_landlord", "investor", "institutional", "developer"],
       viewing_status: ["pending", "confirmed", "cancelled", "completed"],
       viewing_type: ["in_person", "video"],
+      oh_registration_status: ["pending", "approved", "rejected", "attended", "cancelled"],
+      oh_id_doc_type: ["id_card", "passport"],
+      oh_offer_status: ["submitted", "revealed", "accepted", "rejected", "withdrawn"],
     },
   },
 } as const

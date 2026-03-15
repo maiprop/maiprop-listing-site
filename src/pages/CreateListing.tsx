@@ -20,7 +20,7 @@ import { HEATING_TYPES, CONDITION_OPTIONS } from "@/lib/filterConfig";
 
 const PROPERTY_TYPE_KEYS = ["apartment", "house", "villa", "land", "commercial", "office"] as const;
 type PropertyType = typeof PROPERTY_TYPE_KEYS[number];
-const LISTING_TYPES = ["sale", "rent", "auction"] as const;
+const LISTING_TYPES = ["sale", "rent", "auction", "open_house"] as const;
 type ListingType = typeof LISTING_TYPES[number];
 const ENERGY_CLASSES = ["A+", "A", "B+", "B", "C", "D", "E", "F", "G", "Exempt"];
 const SLOPES = ["flat", "slight", "steep"];
@@ -316,7 +316,7 @@ export default function CreateListing() {
     distance_from_sea: "", distance_from_city: "",
     address: "", city: "", region: "", postal_code: "",
     cadastre_number: "", enfia_zone: "",
-    price: "", auction_starting_bid: "", auction_date: "", auction_court: "",
+    price: "", auction_starting_bid: "", auction_date: "", auction_court: "", open_house_date: "",
     deposit_months: "", monthly_expenses: "", agent_fee_included: false,
     pets_allowed: false, short_term_rental: false, available_from: "", min_rental_months: "",
     is_pre_sale: false,
@@ -451,6 +451,7 @@ export default function CreateListing() {
     if (s === 5) {
       if (!form.price) newErrors.price = lt === "rent" ? "Monthly rent is required" : "Asking price is required";
       if (lt === "auction" && !form.auction_starting_bid) newErrors.auction_starting_bid = "Starting bid is required";
+      if (lt === "open_house" && !form.open_house_date) newErrors.open_house_date = "Open house date & time is required";
     }
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -715,6 +716,9 @@ export default function CreateListing() {
           auction_date: form.auction_date || undefined,
           auction_court: form.auction_court || undefined,
         }),
+        ...(lt === "open_house" && {
+          open_house_date: form.open_house_date ? new Date(form.open_house_date).toISOString() : undefined,
+        }),
         has_elevator: form.has_elevator, has_ac: form.has_ac, has_solar_water: form.has_solar_water,
         has_storage: form.has_storage, has_secure_door: form.has_secure_door, has_alarm: form.has_alarm,
         has_cctv: form.has_cctv, has_security: form.has_security, has_smart_home: form.has_smart_home,
@@ -761,7 +765,7 @@ export default function CreateListing() {
       }
 
       toast.success(asDraft ? "Listing saved as draft!" : "Listing published successfully!");
-      navigate(`/property/${data.id}`);
+      navigate(lt === "open_house" ? `/open-house/${data.id}` : `/property/${data.id}`);
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -827,11 +831,12 @@ export default function CreateListing() {
                 {/* Listing type */}
                 <div>
                   <FieldLabel>Listing Type</FieldLabel>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {([
                       { v: "sale", label: "🏷️ For Sale", desc: "Sell your property" },
                       { v: "rent", label: "🔑 For Rent", desc: "Monthly or long-term" },
                       { v: "auction", label: "⚖️ Auction", desc: "Greek judicial / bank" },
+                      { v: "open_house", label: "🏠 Open House", desc: "Public viewing event" },
                     ] as const).map(({ v, label, desc }) => (
                       <button key={v} onClick={() => set("listing_type", v)}
                         className={`p-4 rounded-xl border text-left transition-all ${
@@ -1413,6 +1418,12 @@ export default function CreateListing() {
                     <div ref={setFieldRef("auction_starting_bid") as any}><FieldLabel>Starting Bid (€)</FieldLabel><Input type="number" value={form.auction_starting_bid} onChange={e => set("auction_starting_bid", e.target.value)} hasError={!!errors.auction_starting_bid} /><FieldError msg={errors.auction_starting_bid} /></div>
                     <div><FieldLabel>Auction Date & Time</FieldLabel><Input type="datetime-local" value={form.auction_date} onChange={e => set("auction_date", e.target.value)} /></div>
                     <div><FieldLabel>Court / Platform</FieldLabel><Input placeholder="e.g. Athens Court of First Instance" value={form.auction_court} onChange={e => set("auction_court", e.target.value)} /></div>
+                  </>
+                )}
+                {lt === "open_house" && (
+                  <>
+                    <SectionTitle>Open House Details</SectionTitle>
+                    <div ref={setFieldRef("open_house_date") as any}><FieldLabel required>Date & Time</FieldLabel><Input type="datetime-local" value={form.open_house_date} onChange={e => set("open_house_date", e.target.value)} hasError={!!errors.open_house_date} /><FieldError msg={errors.open_house_date} /></div>
                   </>
                 )}
 

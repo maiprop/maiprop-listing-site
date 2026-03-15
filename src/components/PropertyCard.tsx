@@ -24,7 +24,7 @@ export interface Property {
   sqm: number;
   images: string[];
   type: "apartment" | "house" | "land" | "commercial" | "villa" | "office";
-  listingType: "sale" | "rent" | "auction" | "firesale";
+  listingType: "sale" | "rent" | "auction" | "firesale" | "open_house";
   subtype?: string;
   auctionDate?: string;
   auctionStartingBid?: number;
@@ -83,6 +83,8 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
 
   const detailPath = property.listingType === "auction"
     ? `/auction/${property.id}`
+    : property.listingType === "open_house"
+    ? `/open-house/${property.id}`
     : `/property/${property.id}`;
 
   const handleShare = async (e: React.MouseEvent) => {
@@ -118,6 +120,7 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
 
   const getBadge = () => {
     if (property.listingType === "auction") return { label: "Auction", cls: "badge-auction" };
+    if (property.listingType === "open_house") return { label: "Open House", cls: "bg-emerald-500/90 text-white" };
     if (property.listingType === "firesale") return { label: "Quick Sale", cls: "badge-firesale" };
     if (property.isNew) return { label: "New", cls: "badge-new" };
     if (property.isPremium) return { label: "Premium", cls: "bg-brand-coral/90 text-white" };
@@ -334,6 +337,15 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
         </div>
 
         {/* Auction banner */}
+        {property.listingType === "open_house" && property.auctionDate && (
+          <div className="flex items-center gap-2 bg-emerald-500/10 rounded-xl p-2.5 border border-emerald-500/25">
+            <Calendar className="w-4 h-4 text-emerald-600 shrink-0" />
+            <div>
+              <div className="text-xs font-bold text-emerald-700">Open House</div>
+              <div className="text-[11px] text-muted-foreground truncate">{property.auctionDate}</div>
+            </div>
+          </div>
+        )}
         {property.listingType === "auction" && property.auctionDate && (
           <div className="flex items-center gap-2 bg-brand-gold/10 rounded-xl p-2.5 border border-brand-gold/25">
             <Gavel className="w-4 h-4 text-brand-gold shrink-0" />
@@ -395,13 +407,21 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
               )}
             </div>
           )}
-          {/* Action row: Contact (non-auction only) + Share + Report */}
+          {/* Action row: Contact (non-auction/non-open_house) + Share + Report */}
           <div className="flex items-center gap-2">
-            {property.listingType !== "auction" && (
+            {property.listingType !== "auction" && property.listingType !== "open_house" && (
               <Link to={detailPath} className="flex-1">
                 <button className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-primary text-primary-foreground font-semibold text-sm transition-all hover:opacity-90 hover:shadow-md active:scale-[0.98]">
                   <MessageCircle className="w-4 h-4" />
                   Contact Agent
+                </button>
+              </Link>
+            )}
+            {property.listingType === "open_house" && (
+              <Link to={detailPath} className="flex-1">
+                <button className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-emerald-500 text-white font-semibold text-sm transition-all hover:opacity-90 hover:shadow-md active:scale-[0.98]">
+                  <Calendar className="w-4 h-4" />
+                  View Open House
                 </button>
               </Link>
             )}
