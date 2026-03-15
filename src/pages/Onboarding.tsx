@@ -203,11 +203,27 @@ const OTHER_STEPS: OnboardingStep[] = ["pick-type", "done"];
 
 export default function Onboarding() {
   const navigate = useNavigate();
-  const { user, updateProfile, refreshProfile } = useAuth();
+  const { user, profile, updateProfile, refreshProfile } = useAuth();
+
+  // If bio already has __type: set (e.g. from signup role picker), skip straight to done
+  const presetType = profile?.bio?.match(/^__type:(\w+)/)?.[1] ?? null;
 
   const [step, setStep] = useState<OnboardingStep>("pick-type");
   const [selected, setSelected] = useState<ParticipantType | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Auto-advance past pick-type when type already set
+  useEffect(() => {
+    if (!presetType) return;
+    const p = participants.find(x => x.id === presetType);
+    if (!p) return;
+    setSelected(p);
+    if (p.isPro) {
+      setStep("pro-category");
+    } else {
+      setStep("done");
+    }
+  }, [presetType]);
 
   const [proCategory, setProCategory] = useState("");
   const [professionalId, setProfessionalId] = useState<string | null>(null);
