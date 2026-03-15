@@ -1236,6 +1236,34 @@ export type Database = {
         | "valuer"
         | "interior_designer"
         | "financial_advisor"
+        | "real_estate_agent"
+        | "insurance_broker"
+        | "utility_certification_provider"
+        | "esg_sustainability_consultant"
+        | "relocation_immigration_consultant"
+        | "facility_manager"
+        | "short_term_rental_operator"
+        | "hotel_hospitality_operator"
+        | "marketing_agency"
+        | "crm_listing_data_provider"
+        | "concrete_contractor"
+        | "steel_structure_contractor"
+        | "carpenter"
+        | "tile_installer"
+        | "painter"
+        | "building_permit_consultant"
+        | "urban_planning_consultant"
+        | "legalization_specialist"
+        | "energy_certificate_inspector"
+        | "building_regulation_consultant"
+        | "fire_protection_consultant"
+        | "drywall_installer"
+        | "waterproofing_specialist"
+        | "insulation_contractor"
+        | "roofing_contractor"
+        | "window_aluminum_installer"
+        | "elevator_installer"
+        | "smart_home_installer"
       property_type:
         | "apartment"
         | "house"
@@ -1384,17 +1412,17 @@ export const Constants = {
       listing_type: ["sale", "rent", "auction", "firesale"],
       message_status: ["sent", "read"],
       professional_category: [
-        "architect",
-        "civil_engineer",
-        "lawyer",
-        "notary",
-        "electrician",
-        "plumber",
-        "contractor",
-        "property_manager",
-        "valuer",
-        "interior_designer",
-        "financial_advisor",
+        "architect", "civil_engineer", "lawyer", "notary", "electrician", "plumber",
+        "contractor", "property_manager", "valuer", "interior_designer", "financial_advisor",
+        "real_estate_agent", "insurance_broker", "utility_certification_provider",
+        "esg_sustainability_consultant", "relocation_immigration_consultant", "facility_manager",
+        "short_term_rental_operator", "hotel_hospitality_operator", "marketing_agency",
+        "crm_listing_data_provider", "concrete_contractor", "steel_structure_contractor",
+        "carpenter", "tile_installer", "painter", "building_permit_consultant",
+        "urban_planning_consultant", "legalization_specialist", "energy_certificate_inspector",
+        "building_regulation_consultant", "fire_protection_consultant", "drywall_installer",
+        "waterproofing_specialist", "insulation_contractor", "roofing_contractor",
+        "window_aluminum_installer", "elevator_installer", "smart_home_installer",
       ],
       property_type: [
         "apartment",
