@@ -23,6 +23,7 @@ import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { isAiUsageLimitError } from "@/lib/aiErrorUtils";
 import { toast } from "sonner";
 
 const steps = [
@@ -254,7 +255,7 @@ export default function Firesale() {
     // Try edge function for a better estimate (non-blocking)
     setAiLoading(true);
     try {
-      const { data } = await supabase.functions.invoke("property-valuation", {
+      const { data, error: fnErr } = await supabase.functions.invoke("property-valuation", {
         body: {
           property_type: form.propertyType,
           sqm: Number(form.sqm),
@@ -262,9 +263,11 @@ export default function Firesale() {
       });
       if (data?.estimated_value) {
         setAiEstimate(Math.round(data.estimated_value * 0.95));
+      } else if (isAiUsageLimitError(fnErr, data)) {
+        toast.error("AI estimate is temporarily unavailable due to usage limits.");
       }
-    } catch {
-      // keep the local estimate
+    } catch (e) {
+      if (isAiUsageLimitError(e, null)) toast.error("AI estimate is temporarily unavailable due to usage limits.");
     } finally {
       setAiLoading(false);
     }

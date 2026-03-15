@@ -17,8 +17,15 @@ Deno.serve(async (req) => {
       );
     }
 
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+    const useGemini = !!GEMINI_API_KEY;
+    if (!useGemini && !LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+    const apiKey = (useGemini ? GEMINI_API_KEY : LOVABLE_API_KEY)!;
+    const aiUrl = useGemini
+      ? `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`
+      : "https://ai.gateway.lovable.dev/v1/chat/completions";
+    const aiModel = "google/gemini-2.5-flash";
 
     const locationStr = [address, city, region, "Greece"].filter(Boolean).join(", ");
     const coordStr = lat && lng ? ` (coords: ${lat}, ${lng})` : "";
@@ -76,17 +83,17 @@ Rules:
 - All numbers must be realistic for the Greek market
 - Only return the JSON object`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const response = await fetch(aiUrl, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
+        ...(useGemini ? {} : { Authorization: `Bearer ${apiKey}` }),
       },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.5,
-      }),
+      body: JSON.stringify(
+        useGemini
+          ? { contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.5 } }
+          : { model: aiModel, messages: [{ role: "user", content: prompt }], temperature: 0.5 }
+      ),
     });
 
     if (!response.ok) {
@@ -97,7 +104,7 @@ Rules:
     }
 
     const aiData = await response.json();
-    const raw = (aiData.choices?.[0]?.message?.content ?? "")
+    const raw = (useGemini ? aiData.candidates?.[0]?.content?.parts?.[0]?.text ?? "" : aiData.choices?.[0]?.message?.content ?? "")
       .replace(/```json\s*/gi, "").replace(/```\s*/gi, "").trim();
 
     // Extract only the outermost JSON object

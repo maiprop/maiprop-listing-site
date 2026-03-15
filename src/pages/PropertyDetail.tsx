@@ -32,6 +32,7 @@ import { HEATING_TYPES, CONDITION_OPTIONS } from "@/lib/filterConfig";
 import AIAssistantWidget from "@/components/AIAssistantWidget";
 import { AuctionAlertModal } from "@/components/AuctionAlertModal";
 import { getStreetViewProxyUrl } from "@/lib/config";
+import { isAiUsageLimitError } from "@/lib/aiErrorUtils";
 
 // ─── Energy class data ──────────────────────────────────────────────────────
 const ENERGY_SCALE = [
@@ -251,7 +252,7 @@ export default function PropertyDetail() {
             return;
           }
         }
-        const { data } = await supabaseClient.functions.invoke("property-valuation", {
+        const { data, error: fnErr } = await supabaseClient.functions.invoke("property-valuation", {
           body: {
             title: dbListing.title,
             city: dbListing.city,
@@ -291,8 +292,12 @@ export default function PropertyDetail() {
             marketComparison: data.marketComparison ?? "at_market",
             confidenceLabel: data.confidenceLabel ?? "Medium"
           });
+        } else if (isAiUsageLimitError(fnErr, data)) {
+          toast.error("AI insights are temporarily unavailable due to usage limits. Please try again later.");
         }
-      } catch {/* silently fail */} finally {
+      } catch (e) {
+        if (isAiUsageLimitError(e, null)) toast.error("AI insights are temporarily unavailable due to usage limits. Please try again later.");
+      } finally {
         setAiInsightsLoading(false);
       }
     };

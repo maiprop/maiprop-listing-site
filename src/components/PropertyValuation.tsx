@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import { getAiErrorMessage } from "@/lib/aiErrorUtils";
 import { toast } from "sonner";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -198,12 +199,12 @@ export default function PropertyValuation(props: PropertyValuationProps) {
         }
       }
       const { data, error } = await supabase.functions.invoke("property-valuation", { body: valuationProps });
-      if (error) throw new Error(error.message);
+      if (error) throw error;
       if (data?.error) throw new Error(data.error);
       setResult(data as ValuationResult);
       setExpanded(true);
-    } catch (e: any) {
-      toast.error(e.message || "Valuation failed");
+    } catch (e: unknown) {
+      toast.error(getAiErrorMessage(e, null, "Valuation failed"));
     } finally {
       setLoading(false);
     }

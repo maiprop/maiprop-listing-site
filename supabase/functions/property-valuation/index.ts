@@ -230,8 +230,16 @@ Deno.serve(async (req) => {
       );
     }
 
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+    const useGemini = !!GEMINI_API_KEY;
+    if (!useGemini && !LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+    const apiKey = (useGemini ? GEMINI_API_KEY : LOVABLE_API_KEY)!;
+
+    const aiUrl = useGemini
+      ? `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`
+      : "https://ai.gateway.lovable.dev/v1/chat/completions";
+    const aiModel = "google/gemini-2.5-flash";
 
     // ── Key property specifics (construction year, condition, heating) for valuation ──
     const keySpecifics = [
@@ -360,18 +368,25 @@ Rules:
 - Range width: ±6-10% urban apartment strong data; ±15-25% villa/land; ±20-40% island/hotel/plot
 - liquidityScore: 80-100 = standard urban apartment; 60-80 = suburban/commercial; 40-60 = villa/vacation; 20-40 = island/land/industrial; 0-20 = hotel/special`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const response = await fetch(aiUrl, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
+        ...(useGemini ? {} : { Authorization: `Bearer ${apiKey}` }),
       },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.15,
-        max_tokens: 2000,
-      }),
+      body: JSON.stringify(
+        useGemini
+          ? {
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: { temperature: 0.15, maxOutputTokens: 2000 },
+            }
+          : {
+              model: aiModel,
+              messages: [{ role: "user", content: prompt }],
+              temperature: 0.15,
+              max_tokens: 2000,
+            }
+      ),
     });
 
     if (!response.ok) {
@@ -381,7 +396,9 @@ Rules:
     }
 
     const aiData = await response.json();
-    let raw = aiData.choices?.[0]?.message?.content || "";
+    let raw = useGemini
+      ? aiData.candidates?.[0]?.content?.parts?.[0]?.text ?? ""
+      : aiData.choices?.[0]?.message?.content ?? "";
 
     // Step 1: strip markdown code fences (greedy to capture full JSON)
     const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]+?)```\s*$/);
