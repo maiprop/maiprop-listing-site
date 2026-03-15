@@ -158,7 +158,8 @@ The **Dashboard** (`/dashboard`) shows different sidebar items and overview cont
 |------|------------------|----------------|
 | **individual** | Overview, Saved, Saved Searches, Messages, Viewings, Auction Alerts, Profile, Settings | Saved properties & auction alerts; CTA: Browse Listings |
 | **seller_landlord** | Overview, My Listings, Saved, Messages, Viewings, Profile, Settings | My listings, views, viewings; CTA: New Listing; Pro upsell card |
-| **agent** | Overview, My Listings, Analytics, Saved, Saved Searches, Messages, Viewings, Auction Alerts, OS Sync, Admin, Profile, Settings | Listings and leads; CTA: New Listing |
+| **agent** | Overview, My Listings, Analytics, Saved, Saved Searches, Messages, Viewings, Auction Alerts, Contacts, Projects, Portfolios, Profile, Settings | Listings and leads; CTA: New Listing |
+| **platform admin** | Admin nav (firesale, subscribers, pricing) shown only when `is_platform_admin` | Single admin; only admin can grant admin |
 | **professional** | Overview, My Services, Messages, Viewings, Profile, Settings | Services count and upcoming viewings; CTA: My Services |
 
 ---
@@ -179,7 +180,7 @@ The **Dashboard** (`/dashboard`) shows different sidebar items and overview cont
 - **agent**  
   - **Real estate agents are one category by themselves** in onboarding (section “Real estate agents”).  
   - Can create and manage listings (e.g. Create Listing).  
-  - Admin-style access in some flows (e.g. `InvestorDashboard` checks `profile?.role === "agent"` for admin).  
+  - **Platform admin** is separate: only one user has `is_platform_admin`; only admin can grant admin. See `docs/PARTICIPANT_RIGHTS.md`.  
   - No multi-step “pro” onboarding; no row in `professionals` unless added by another path.
 
 - **professional**  

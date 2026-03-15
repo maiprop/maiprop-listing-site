@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { AdminRoute } from "@/components/AdminRoute";
 import AIAssistantWidget from "@/components/AIAssistantWidget";
 import Index from "./pages/Index";
 import Listings from "./pages/Listings";
@@ -89,14 +90,7 @@ const App = () => (
               <Route path="/ai-assistant" element={<AIAssistantPage />} />
               <Route path="/pricing" element={<Pricing />} />
               <Route path="/pricing/firesale-investors" element={<FiresalePricing />} />
-              <Route
-                path="/admin/pricing"
-                element={
-                  <ProtectedRoute>
-                    <AdminPricing />
-                  </ProtectedRoute>
-                }
-              />
+              <Route path="/admin/pricing" element={<AdminRoute><AdminPricing /></AdminRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
             <GlobalAIWidget />

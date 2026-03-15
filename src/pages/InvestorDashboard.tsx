@@ -9,7 +9,7 @@ import {
   ChevronDown, FileText, Save, LayoutGrid, ShieldCheck,
   Calendar, Ban, ArrowUpCircle, UserCheck, CreditCard,
   SendHorizonal, ThumbsUp, ThumbsDown, MessageCircle, Trophy, X as XIcon, ArrowLeftRight,
-  ExternalLink, Target
+  ExternalLink, Target, Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -38,6 +38,45 @@ function daysUntilExpiry(expiresAt: string | null): number | null {
   if (!expiresAt) return null;
   const diff = new Date(expiresAt).getTime() - Date.now();
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
+}
+
+function TransferAdminForm({ onSuccess }: { onSuccess: () => Promise<void> }) {
+  const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
+  const handleTransfer = async () => {
+    const trimmed = email.trim().toLowerCase();
+    if (!trimmed) {
+      toast.error("Enter the new admin's email");
+      return;
+    }
+    setLoading(true);
+    try {
+      const { error } = await supabase.rpc("grant_platform_admin_by_email", { target_email: trimmed });
+      if (error) throw error;
+      toast.success("Admin rights transferred. You will be redirected.");
+      await onSuccess();
+      window.location.href = "/dashboard";
+    } catch (e: unknown) {
+      toast.error((e as Error)?.message || "Transfer failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+  return (
+    <div className="flex gap-2 flex-wrap">
+      <input
+        type="email"
+        placeholder="new-admin@example.com"
+        value={email}
+        onChange={e => setEmail(e.target.value)}
+        className="flex-1 min-w-[200px] h-9 px-3 rounded-lg border border-border bg-background text-sm outline-none focus:border-primary"
+      />
+      <Button size="sm" className="h-9 gap-1.5" onClick={handleTransfer} disabled={loading}>
+        {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowLeftRight className="w-3.5 h-3.5" />}
+        Transfer admin
+      </Button>
+    </div>
+  );
 }
 
 // ─── Subscription tiers ───────────────────────────────────────────────────────
@@ -608,15 +647,15 @@ function AdminDealRow({ deal, onUpdate }: AdminDealRowProps) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function InvestorDashboard() {
-  const { user, profile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState<"deals" | "admin" | "subscribers">("deals");
 
   // Participant type from bio (agent, developer, institutional, etc.)
   const participantType = profile?.bio?.match(/^__type:(\w+)/)?.[1] || "";
-  // Admin (firesale pipeline, subscriber management) only for real estate agents, not developer/institutional
-  const isAdmin = profile?.role === "agent" && participantType === "agent";
+  // Platform admin: only one user; only admin can grant admin
+  const isAdmin = !!profile?.is_platform_admin;
 
   // Subscription state (loaded from DB)
   const [subscription, setSubscription] = useState<Subscription | null>(null);
@@ -1328,6 +1367,17 @@ export default function InvestorDashboard() {
           {/* ─────────────── SUBSCRIBERS TAB ─────────────── */}
           {activeTab === "subscribers" && isAdmin && (
             <div className="space-y-6">
+              {/* Transfer platform admin — only current admin can grant */}
+              <div className="glass-card rounded-xl border border-primary/30 p-4 space-y-3">
+                <p className="font-display font-semibold text-sm flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-primary" /> Transfer platform admin
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Only one platform admin exists. Transferring will revoke your admin rights and grant them to the user with the given email.
+                </p>
+                <TransferAdminForm onSuccess={refreshProfile} />
+              </div>
+
               {/* Sub KPI strip */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {[
