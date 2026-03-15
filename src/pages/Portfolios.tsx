@@ -99,32 +99,32 @@ function Portfolios() {
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Navbar />
-      <main className="flex-1 container max-w-5xl mx-auto px-4 py-10">
+      <main className="flex-1 container max-w-5xl mx-auto px-4 pt-16 pb-10">
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="font-display text-2xl font-bold">Portfolios</h1>
             <p className="text-sm text-muted-foreground mt-1">Group properties for bulk analysis and tracking</p>
           </div>
-          <Button onClick={() => setShowCreate(true)} className="gap-2">
+          <Button onClick={() => setShowCreate(true)} className="bg-gradient-primary border-0 text-primary-foreground gap-2">
             <Plus className="w-4 h-4" /> New Portfolio
           </Button>
         </div>
 
         {showCreate && (
           <div className="glass-card rounded-xl p-6 mb-6 border border-border">
-            <h3 className="font-semibold mb-4">Create portfolio</h3>
+            <h3 className="font-display font-semibold mb-4">Create portfolio</h3>
             <div className="flex gap-3">
               <input
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 placeholder="e.g. Athens Buy-to-Let"
-                className="flex-1 bg-secondary border border-border rounded-lg px-3 py-2 text-sm"
+                className="flex-1 bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
               />
-              <Button onClick={handleCreate} disabled={createPortfolio.isPending}>
+              <Button onClick={handleCreate} disabled={createPortfolio.isPending} className="bg-gradient-primary border-0 text-primary-foreground">
                 {createPortfolio.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                 Create
               </Button>
-              <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
+              <Button variant="outline" className="border-border" onClick={() => setShowCreate(false)}>Cancel</Button>
             </div>
           </div>
         )}
@@ -138,7 +138,7 @@ function Portfolios() {
             <FolderOpen className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
             <h2 className="font-semibold">No portfolios yet</h2>
             <p className="text-sm text-muted-foreground mt-2">Create a portfolio to group properties for analysis</p>
-            <Button className="mt-4" onClick={() => setShowCreate(true)}>Create your first portfolio</Button>
+            <Button className="mt-4 bg-gradient-primary border-0 text-primary-foreground" onClick={() => setShowCreate(true)}>Create your first portfolio</Button>
           </div>
         ) : (
           <div className="space-y-8">
@@ -168,7 +168,7 @@ function Portfolios() {
         )}
 
         <div className="mt-8">
-          <Button variant="outline" asChild>
+          <Button variant="outline" className="border-border" asChild>
             <Link to="/dashboard" className="gap-2">
               <ChevronRight className="w-4 h-4 rotate-180" /> Back to Dashboard
             </Link>
@@ -237,10 +237,10 @@ function PortfolioDetail({
               <input
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
-                className="bg-secondary border rounded-lg px-3 py-1.5 text-sm font-semibold"
+                className="bg-secondary border border-border rounded-xl px-3 py-2 text-sm font-semibold text-foreground outline-none focus:border-primary transition-colors"
               />
-              <Button size="sm" onClick={() => onSaveRename(portfolioData.id)}>Save</Button>
-              <Button size="sm" variant="outline" onClick={onCancelEdit}>Cancel</Button>
+              <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground" onClick={() => onSaveRename(portfolioData.id)}>Save</Button>
+              <Button size="sm" variant="outline" className="border-border" onClick={onCancelEdit}>Cancel</Button>
             </div>
           ) : (
             <>
@@ -279,7 +279,7 @@ function PortfolioDetail({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="absolute top-2 right-2 bg-background/80"
+                  className="absolute top-2 right-2 bg-background/80 backdrop-blur-sm"
                   onClick={() => handleRemove(l.id)}
                 >
                   Remove

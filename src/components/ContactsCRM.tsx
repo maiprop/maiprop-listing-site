@@ -49,7 +49,7 @@ export default function ContactsCRM() {
           <p className="text-sm text-muted-foreground mt-1">CRM — manage your leads and contacts.</p>
         </div>
         <Button
-          className="gap-2"
+          className="bg-gradient-primary border-0 text-primary-foreground gap-2"
           onClick={() => {
             setAdding(true);
             setForm({ name: "", email: "", phone: "", source: "", notes: "" });
@@ -62,44 +62,44 @@ export default function ContactsCRM() {
       {/* Add/Edit form */}
       {(adding || editing) && (
         <div className="glass-card rounded-xl p-5 border border-primary/20">
-          <h3 className="font-semibold text-sm mb-4">{editing ? "Edit Contact" : "New Contact"}</h3>
+          <h3 className="font-display font-semibold text-sm mb-4">{editing ? "Edit Contact" : "New Contact"}</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <input
               placeholder="Name *"
               value={form.name}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              className="px-3 py-2 rounded-lg border border-border bg-background text-sm"
+              className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
             />
             <input
               placeholder="Email"
               value={form.email}
               onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-              className="px-3 py-2 rounded-lg border border-border bg-background text-sm"
+              className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
             />
             <input
               placeholder="Phone"
               value={form.phone}
               onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
-              className="px-3 py-2 rounded-lg border border-border bg-background text-sm"
+              className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
             />
             <input
               placeholder="Source"
               value={form.source}
               onChange={(e) => setForm((f) => ({ ...f, source: e.target.value }))}
-              className="px-3 py-2 rounded-lg border border-border bg-background text-sm"
+              className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
             />
           </div>
           <textarea
             placeholder="Notes"
             value={form.notes}
             onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-            className="w-full mt-3 px-3 py-2 rounded-lg border border-border bg-background text-sm min-h-[60px]"
+            className="w-full mt-3 bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm min-h-[60px] text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors resize-none"
           />
           <div className="flex gap-2 mt-4">
-            <Button size="sm" onClick={handleSave}>
+            <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground" onClick={handleSave}>
               Save
             </Button>
-            <Button size="sm" variant="outline" onClick={resetForm}>
+            <Button size="sm" variant="outline" className="border-border" onClick={resetForm}>
               Cancel
             </Button>
           </div>
@@ -115,7 +115,7 @@ export default function ContactsCRM() {
           <Users className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
           <p className="font-semibold">No contacts yet</p>
           <p className="text-sm text-muted-foreground mt-1">Add contacts to manage your pipeline.</p>
-          <Button className="mt-4" onClick={() => setAdding(true)}>
+          <Button className="mt-4 bg-gradient-primary border-0 text-primary-foreground" onClick={() => setAdding(true)}>
             <Plus className="w-4 h-4 mr-2" /> Add Contact
           </Button>
         </div>
@@ -156,7 +156,7 @@ export default function ContactsCRM() {
                       notes: c.notes || "",
                     });
                   }}
-                  className="p-2 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground"
+                  className="p-2 rounded-xl hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
                 >
                   <Edit2 className="w-4 h-4" />
                 </button>
@@ -164,7 +164,7 @@ export default function ContactsCRM() {
                   onClick={() => {
                     if (confirm("Delete this contact?")) deleteContact.mutate(c.id);
                   }}
-                  className="p-2 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                  className="p-2 rounded-xl hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>

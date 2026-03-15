@@ -84,55 +84,55 @@ function Projects() {
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Navbar />
-      <main className="flex-1 container max-w-5xl mx-auto px-4 py-10">
+      <main className="flex-1 container max-w-5xl mx-auto px-4 pt-16 pb-10">
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="font-display text-2xl font-bold">Projects</h1>
             <p className="text-sm text-muted-foreground mt-1">Showcase development projects and link listings</p>
           </div>
-          <Button onClick={() => setShowCreate(true)} className="gap-2">
+          <Button onClick={() => setShowCreate(true)} className="bg-gradient-primary border-0 text-primary-foreground gap-2">
             <Plus className="w-4 h-4" /> New Project
           </Button>
         </div>
 
         {showCreate && (
           <div className="glass-card rounded-xl p-6 mb-6 border border-border">
-            <h3 className="font-semibold mb-4">Create project</h3>
+            <h3 className="font-display font-semibold mb-4">Create project</h3>
             <div className="space-y-4">
               <div>
-                <label className="text-xs text-muted-foreground block mb-1">Name *</label>
+                <label className="text-xs text-muted-foreground block mb-1.5">Name *</label>
                 <input
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   placeholder="e.g. Marina Heights"
-                  className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm"
+                  className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors"
                 />
               </div>
               <div>
-                <label className="text-xs text-muted-foreground block mb-1">Description</label>
+                <label className="text-xs text-muted-foreground block mb-1.5">Description</label>
                 <textarea
                   value={newDesc}
                   onChange={(e) => setNewDesc(e.target.value)}
                   placeholder="Brief description..."
                   rows={2}
-                  className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm resize-none"
+                  className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm resize-none text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
                 />
               </div>
               <div>
-                <label className="text-xs text-muted-foreground block mb-1">City</label>
+                <label className="text-xs text-muted-foreground block mb-1.5">City</label>
                 <input
                   value={newCity}
                   onChange={(e) => setNewCity(e.target.value)}
                   placeholder="e.g. Athens"
-                  className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm"
+                  className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors"
                 />
               </div>
               <div className="flex gap-2">
-                <Button onClick={handleCreate} disabled={createProject.isPending}>
+                <Button onClick={handleCreate} disabled={createProject.isPending} className="bg-gradient-primary border-0 text-primary-foreground">
                   {createProject.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                   Create
                 </Button>
-                <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
+                <Button variant="outline" className="border-border" onClick={() => setShowCreate(false)}>Cancel</Button>
               </div>
             </div>
           </div>
@@ -147,7 +147,7 @@ function Projects() {
             <FolderOpen className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
             <h2 className="font-semibold">No projects yet</h2>
             <p className="text-sm text-muted-foreground mt-2">Create a project to group and showcase your listings</p>
-            <Button className="mt-4" onClick={() => setShowCreate(true)}>Create your first project</Button>
+            <Button className="mt-4 bg-gradient-primary border-0 text-primary-foreground" onClick={() => setShowCreate(true)}>Create your first project</Button>
           </div>
         ) : (
           <div className="space-y-6">
@@ -165,14 +165,14 @@ function Projects() {
                             defaultValue={p.name}
                             onBlur={(e) => handleUpdate(p.id, { name: e.target.value })}
                             placeholder="Project name"
-                            className="w-full bg-secondary border rounded-lg px-3 py-1.5 text-sm font-semibold"
+                            className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-sm font-semibold text-foreground outline-none focus:border-primary transition-colors"
                             aria-label="Project name"
                           />
                           <input
                             defaultValue={p.description || ""}
                             onBlur={(e) => handleUpdate(p.id, { description: e.target.value })}
                             placeholder="Description"
-                            className="w-full bg-secondary border rounded-lg px-3 py-1.5 text-sm"
+                            className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-sm text-foreground outline-none focus:border-primary transition-colors"
                             aria-label="Project description"
                           />
                         </div>
@@ -182,7 +182,7 @@ function Projects() {
                             <h3 className="font-display font-semibold text-lg">{p.name}</h3>
                             <span className={`text-[10px] px-2 py-0.5 rounded-full ${
                               p.status === "active" ? "bg-primary/10 text-primary" :
-                              p.status === "completed" ? "bg-green-500/10 text-green-600" :
+                              p.status === "completed" ? "bg-brand-emerald/20 text-brand-emerald" :
                               "bg-muted text-muted-foreground"
                             }`}>
                               {p.status}
@@ -229,7 +229,7 @@ function Projects() {
                         {listings.map((l: any) => (
                           <div
                             key={l.id}
-                            className="flex items-center gap-2 bg-secondary rounded-lg px-3 py-2 text-sm"
+                            className="flex items-center gap-2 bg-secondary border border-border rounded-xl px-3 py-2 text-sm"
                           >
                             {l.cover_image_url && (
                               <img src={l.cover_image_url} alt="" className="w-10 h-10 rounded object-cover" />
@@ -282,7 +282,7 @@ function Projects() {
         )}
 
         <div className="mt-8">
-          <Button variant="outline" asChild>
+          <Button variant="outline" className="border-border" asChild>
             <Link to="/dashboard" className="gap-2">
               <ChevronRight className="w-4 h-4 rotate-180" /> Back to Dashboard
             </Link>

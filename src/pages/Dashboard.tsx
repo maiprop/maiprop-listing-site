@@ -661,9 +661,10 @@ export default function Dashboard() {
 
           {/* ── MESSAGES ─────────────────────────────────────────────────── */}
           {activeSection === "messages" && navItems.some(i => i.key === "messages") && (
-            <div className="space-y-4">
+            <div className="space-y-6">
               <h1 className="font-display text-2xl font-bold">Messages</h1>
-              <Button className="bg-gradient-primary border-0 text-primary-foreground" asChild>
+              <p className="text-sm text-muted-foreground -mt-2">Chat with agents and property owners.</p>
+              <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" asChild>
                 <Link to="/messages">Open Full Inbox</Link>
               </Button>
             </div>
@@ -880,7 +881,7 @@ export default function Dashboard() {
 
           {/* ── PROFILE ──────────────────────────────────────────────────── */}
           {activeSection === "profile" && navItems.some(i => i.key === "profile") && (
-            <ProfileEditor profile={profile} onUpdate={updateProfile} />
+            <ProfileEditor profile={profile} onUpdate={updateProfile} onSwitchToSettings={() => setActiveSection("settings")} />
           )}
 
           {/* ── MY SERVICES — professional ───────────────────────────────── */}
@@ -1162,13 +1163,12 @@ function AnalyticsSection({
 }
 
 // ── Profile editor ─────────────────────────────────────────────────────────────
-function ProfileEditor({ profile, onUpdate }: { profile: any; onUpdate: any }) {
+function ProfileEditor({ profile, onUpdate, onSwitchToSettings }: { profile: any; onUpdate: any; onSwitchToSettings?: () => void }) {
   const [form, setForm] = useState({
     display_name: profile?.display_name || "",
     first_name: profile?.first_name || "",
     last_name: profile?.last_name || "",
     phone: profile?.phone || "",
-    bio: profile?.bio || "",
     city: profile?.city || "",
     website_url: profile?.website_url || "",
     video_link: profile?.video_link || "",
@@ -1203,11 +1203,12 @@ function ProfileEditor({ profile, onUpdate }: { profile: any; onUpdate: any }) {
               className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors" />
           </div>
         ))}
-        <div>
-          <label className="text-xs text-muted-foreground block mb-1.5">Bio</label>
-          <textarea value={form.bio} rows={3} onChange={e => setForm(f => ({ ...f, bio: e.target.value }))}
-            className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors resize-none" />
-        </div>
+        {onSwitchToSettings && (
+          <p className="text-xs text-muted-foreground">
+            To change your participant type (buyer, seller, agent, etc.), go to{" "}
+            <button type="button" onClick={onSwitchToSettings} className="text-primary hover:underline font-medium">Settings</button> and use &quot;Switch Participant Type&quot;.
+          </p>
+        )}
         <Button className="bg-gradient-primary border-0 text-primary-foreground w-full" disabled={saving} onClick={handleSave}>
           {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
           Save Changes
@@ -1338,7 +1339,7 @@ function SettingsSection({
               <span><strong className="text-foreground">No refunds on downgrade.</strong> If you switch to a lower-tier type mid-billing cycle, the remaining period is non-refundable per our Terms of Service.</span>
             </li>
             <li className="flex items-start gap-2">
-              <span className="text-green-400 shrink-0 mt-0.5">▸</span>
+              <span className="text-brand-emerald shrink-0 mt-0.5">▸</span>
               <span><strong className="text-foreground">Access rights will change.</strong> Choosing a superior participant type may unlock additional features and data access (e.g. admin panel, deal flow, leads). These are granted server-side upon plan activation.</span>
             </li>
             <li className="flex items-start gap-2">
