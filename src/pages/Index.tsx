@@ -986,14 +986,46 @@ export default function Index() {
             .order("auction_date", { ascending: true, nullsFirst: false })
             .limit(6);
           if (fallback.error) throw fallback.error;
-          return fallback.data || [];
+          const list = fallback.data || [];
+          return list.sort((a: any, b: any) => {
+            const aHasImg = !!(a.cover_image_url || a.listing_images?.length);
+            const bHasImg = !!(b.cover_image_url || b.listing_images?.length);
+            return (bHasImg ? 1 : 0) - (aHasImg ? 1 : 0);
+          });
         }
-        return data || [];
+        return (data || []).sort((a: any, b: any) => {
+          const aHasImg = !!(a.cover_image_url || a.listing_images?.length);
+          const bHasImg = !!(b.cover_image_url || b.listing_images?.length);
+          return (bHasImg ? 1 : 0) - (aHasImg ? 1 : 0);
+        });
       };
       return queryTimeout(run(), 12_000);
     },
     staleTime: 5 * 60 * 1000,
     retry: 1,
+  });
+
+  const { data: openHouseListings = [] } = useQuery({
+    queryKey: ["homepage-open-houses"],
+    queryFn: async () => {
+      const now = new Date().toISOString();
+      const { data, error } = await supabase
+        .from("listings")
+        .select("id, title, address, city, price, price_per_sqm, bedrooms, bathrooms, sqm, floor, total_floors, year_built, energy_class, cover_image_url, property_type, listing_type, ai_score, views_count, tags, open_house_date, latitude, longitude, listing_images(url, sort_order)")
+        .eq("status", "active")
+        .eq("listing_type", "open_house")
+        .gte("open_house_date", now)
+        .order("open_house_date", { ascending: true })
+        .limit(6);
+      if (error) return [];
+      const list = (data || []).sort((a: any, b: any) => {
+        const aHasImg = !!(a.cover_image_url || a.listing_images?.length);
+        const bHasImg = !!(b.cover_image_url || b.listing_images?.length);
+        return (bHasImg ? 1 : 0) - (aHasImg ? 1 : 0);
+      });
+      return list;
+    },
+    staleTime: 2 * 60 * 1000,
   });
 
   const listingTypeMap: Record<string, string> = {
@@ -1293,11 +1325,12 @@ export default function Index() {
             </Link>
           </div>
 
-          {/* ── ROW 3: Commercial subtypes — Retail Shop, Office, Mixed-Use (big icons) */}
-          <div className={`mt-5 grid grid-cols-3 gap-3 reveal reveal-delay-2 ${browseInView ? "in-view" : ""}`}>
+          {/* ── ROW 3: Commercial subtypes + Open House + Auctions */}
+          <div className={`mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3 reveal reveal-delay-2 ${browseInView ? "in-view" : ""}`}>
             {[
             { label: "Retail Shop", emoji: "🛍️", sub: "shop", bg: "bg-accent/10", animated: true },
             { label: "Mixed-Use", emoji: "🔀", sub: "mixed_use", bg: "bg-primary/10", animated: true },
+            { label: "Open House", emoji: "🚪", sub: null, bg: "bg-emerald-500/10", animated: true, href: "/open-houses" },
             { label: "Auctions", emoji: "🔨", sub: null, bg: "bg-brand-gold/10", animated: true, href: "/auctions" }].
             map((item) =>
             <Link key={item.label} to={item.href ?? `/listings?type=commercial&subtype=${item.sub}`}>
@@ -1445,6 +1478,44 @@ export default function Index() {
               );
             })}
           </div>
+
+          {/* ── Upcoming Open Houses (1x3 grid under Greek Auctions) ───────── */}
+          {openHouseListings.length > 0 && (
+            <div className="mt-10 pt-10 border-t border-border">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <span className="text-xs font-semibold text-emerald-600 uppercase tracking-widest">Open Houses</span>
+                  <h3 className="font-display text-lg font-bold">Upcoming Open Houses</h3>
+                </div>
+                <Button variant="outline" size="sm" className="border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10 text-xs" asChild>
+                  <Link to="/open-houses">View All <ArrowRight className="w-3 h-3 ml-1" /></Link>
+                </Button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {openHouseListings.slice(0, 3).map((l: any) => {
+                  const imgs: string[] = l.cover_image_url ? [l.cover_image_url] : [];
+                  if (!imgs.length && l.listing_images?.length) {
+                    const sorted = [...l.listing_images].sort((a: any, b: any) => a.sort_order - b.sort_order);
+                    sorted.forEach((img: any) => imgs.push(img.url));
+                  }
+                  const svFallback = l.latitude != null && l.longitude != null ? getStreetViewProxyUrl({ lat: Number(l.latitude), lng: Number(l.longitude) }) : null;
+                  if (!imgs.length && svFallback) imgs.push(svFallback);
+                  return (
+                    <PropertyCard key={l.id} property={{
+                      id: l.id, title: l.title, address: l.address || l.city, city: l.city,
+                      price: Number(l.price), pricePerSqm: l.price_per_sqm ? Number(l.price_per_sqm) : undefined,
+                      bedrooms: l.bedrooms, bathrooms: l.bathrooms, sqm: Number(l.sqm),
+                      floor: l.floor, totalFloors: l.total_floors, yearBuilt: l.year_built,
+                      energyClass: l.energy_class, images: imgs,
+                      type: l.property_type, listingType: "open_house",
+                      auctionDate: l.open_house_date ? new Date(l.open_house_date).toLocaleDateString("en-GB") : undefined,
+                      aiScore: l.ai_score, views: l.views_count, tags: l.tags || [],
+                    }} />
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </section>
 
