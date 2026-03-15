@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Building2, Plus, Loader2, MapPin, Edit2, Trash2, ChevronRight,
   FolderOpen, ExternalLink
@@ -13,7 +13,10 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
 function Projects() {
-  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { user, profile } = useAuth();
+  const participantType = profile?.bio?.match(/^__type:(\w+)/)?.[1] || "";
+  const isDeveloper = participantType === "developer";
   const { data: projects = [], isLoading } = useProjects(user?.id);
   const { data: myListings = [] } = useMyListings();
   const createProject = useCreateProject();
@@ -33,13 +36,16 @@ function Projects() {
       return;
     }
     createProject.mutate(
-      { name: newName.trim(), description: newDesc.trim() || undefined, city: newCity.trim() || undefined },
+      { name: newName.trim(), description: newDesc.trim() || undefined, city: newCity.trim() || undefined, address: newAddress.trim() || undefined, building_permit_number: newPermit.trim() || undefined },
       {
-        onSuccess: () => {
+        onSuccess: (data) => {
           setNewName("");
           setNewDesc("");
           setNewCity("");
+          setNewAddress("");
+          setNewPermit("");
           setShowCreate(false);
+          if (data?.id) navigate(`/projects/${data.id}`);
         },
       }
     );
@@ -90,9 +96,16 @@ function Projects() {
             <h1 className="font-display text-2xl font-bold">Projects</h1>
             <p className="text-sm text-muted-foreground mt-1">Showcase development projects and link listings</p>
           </div>
-          <Button onClick={() => setShowCreate(true)} className="bg-gradient-primary border-0 text-primary-foreground gap-2">
-            <Plus className="w-4 h-4" /> New Project
-          </Button>
+          <div className="flex gap-2">
+            {isDeveloper && (
+              <Button variant="outline" className="border-border" asChild>
+                <Link to="/listings/new-building">New Building Listing</Link>
+              </Button>
+            )}
+            <Button onClick={() => setShowCreate(true)} className="bg-gradient-primary border-0 text-primary-foreground gap-2">
+              <Plus className="w-4 h-4" /> New Project
+            </Button>
+          </div>
         </div>
 
         {showCreate && (
@@ -124,6 +137,24 @@ function Projects() {
                   value={newCity}
                   onChange={(e) => setNewCity(e.target.value)}
                   placeholder="e.g. Athens"
+                  className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground block mb-1.5">Address</label>
+                <input
+                  value={newAddress}
+                  onChange={(e) => setNewAddress(e.target.value)}
+                  placeholder="Street, number"
+                  className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground block mb-1.5">Αριθμός Οικοδομικής Άδειας (Building permit) *</label>
+                <input
+                  value={newPermit}
+                  onChange={(e) => setNewPermit(e.target.value)}
+                  placeholder="e.g. 12345/2024"
                   className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors"
                 />
               </div>
@@ -159,6 +190,11 @@ function Projects() {
                 <div key={p.id} className="glass-card rounded-xl overflow-hidden border border-border">
                   <div className="p-5 flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Link to={`/projects/${p.id}`} className="font-display font-semibold text-lg hover:text-primary transition-colors">
+                          {p.name}
+                        </Link>
+                      </div>
                       {isEditing ? (
                         <div className="space-y-2">
                           <input
@@ -178,19 +214,18 @@ function Projects() {
                         </div>
                       ) : (
                         <>
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-display font-semibold text-lg">{p.name}</h3>
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className={`text-[10px] px-2 py-0.5 rounded-full ${
                               p.status === "active" ? "bg-primary/10 text-primary" :
                               p.status === "completed" ? "bg-brand-emerald/20 text-brand-emerald" :
                               "bg-muted text-muted-foreground"
-                            }`}>
-                              {p.status}
-                            </span>
+                            }`}>{p.status}</span>
+                            {p.building_permit_number && <span className="text-xs text-muted-foreground">Permit: {p.building_permit_number}</span>}
                           </div>
-                          {(p.description || p.city) && (
+                          {(p.description || p.city || p.developer_company) && (
                             <p className="text-sm text-muted-foreground mt-1">
                               {p.description}
+                              {p.developer_company && <span className="ml-2">· {p.developer_company}</span>}
                               {p.city && (
                                 <span className="inline-flex items-center gap-1 ml-2">
                                   <MapPin className="w-3 h-3" /> {p.city}
@@ -202,11 +237,14 @@ function Projects() {
                       )}
                     </div>
                     <div className="flex items-center gap-1">
+                      <Button variant="outline" size="sm" className="border-border" asChild>
+                        <Link to={`/projects/${p.id}`}>Edit full</Link>
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"
                         onClick={() => setEditingId(isEditing ? null : p.id)}
-                        aria-label={isEditing ? "Done editing" : "Edit project"}
+                        aria-label={isEditing ? "Done editing" : "Quick edit"}
                       >
                         <Edit2 className="w-4 h-4" />
                       </Button>

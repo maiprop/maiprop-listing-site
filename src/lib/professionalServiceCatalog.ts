@@ -27,6 +27,38 @@ export const CATEGORY_LABELS: Record<string, string> = {
   valuer: "Valuer",
   interior_designer: "Interior Designer",
   financial_advisor: "Financial Advisor",
+  // Insurance & Advisory
+  insurance_broker: "Insurance Broker / Insurer",
+  utility_certification_provider: "Utility & Technical Certification",
+  esg_sustainability_consultant: "ESG / Sustainability Consultant",
+  relocation_immigration_consultant: "Relocation / Immigration Consultant",
+  // Facility & Hospitality
+  facility_manager: "Facility Manager",
+  short_term_rental_operator: "Short-Term Rental Operator",
+  hotel_hospitality_operator: "Hotel / Hospitality Operator",
+  // Marketing & Tech
+  marketing_agency: "Marketing Agency / Photographer / Media",
+  crm_listing_data_provider: "CRM / Listing Portal / Data Provider",
+  // Construction Contractors
+  concrete_contractor: "Concrete Contractor",
+  steel_structure_contractor: "Steel Structure Contractor",
+  carpenter: "Carpenter",
+  tile_installer: "Tile Installer",
+  painter: "Painter",
+  drywall_installer: "Drywall Installer",
+  waterproofing_specialist: "Waterproofing Specialist",
+  insulation_contractor: "Insulation Contractor",
+  roofing_contractor: "Roofing Contractor",
+  window_aluminum_installer: "Window / Aluminum Installer",
+  elevator_installer: "Elevator Installer",
+  smart_home_installer: "Smart Home Systems Installer",
+  // Consultants & Compliance
+  building_permit_consultant: "Building Permit Consultant",
+  urban_planning_consultant: "Urban Planning Consultant",
+  legalization_specialist: "Legalization of Illegal Structures Specialist",
+  energy_certificate_inspector: "Energy Certificate Inspector (ΠΕΑ)",
+  building_regulation_consultant: "Building Regulation Compliance Consultant",
+  fire_protection_consultant: "Fire Protection Consultant",
 };
 
 export const SERVICE_CATALOG: Record<string, ServiceTemplate[]> = {
@@ -788,6 +820,168 @@ export const SERVICE_CATALOG: Record<string, ServiceTemplate[]> = {
       videoAvailable: true,
       isPremiumFeature: false,
     },
+  ],
+
+  // ── Insurance Broker ────────────────────────────────────────────────────────
+  insurance_broker: [
+    { key: "property_insurance", name: "Property Insurance", description: "Buildings, contents, and landlord insurance for residential and commercial properties.", defaultPricing: "fixed", suggestedRate: 200, videoAvailable: true, isPremiumFeature: false },
+    { key: "construction_insurance", name: "Construction Insurance", description: "Cover for new builds, renovations, and contractor works.", defaultPricing: "fixed", suggestedRate: 350, videoAvailable: true, isPremiumFeature: false },
+    { key: "liability_insurance", name: "Liability Insurance", description: "Professional indemnity and public liability for property professionals.", defaultPricing: "fixed", suggestedRate: 400, videoAvailable: true, isPremiumFeature: false },
+  ],
+
+  // ── Utility & Technical Certification ───────────────────────────────────────
+  utility_certification_provider: [
+    { key: "utility_connection", name: "Utility Connection Certification", description: "DEI/DEDDIE compliance, electrical and gas connection certificates.", defaultPricing: "fixed", suggestedRate: 150, videoAvailable: false, isPremiumFeature: false },
+    { key: "technical_inspection", name: "Technical Building Inspection", description: "Pre-purchase or periodic technical condition reports.", defaultPricing: "fixed", suggestedRate: 300, videoAvailable: false, isPremiumFeature: false },
+  ],
+
+  // ── ESG / Sustainability Consultant ────────────────────────────────────────
+  esg_sustainability_consultant: [
+    { key: "sustainability_audit", name: "Sustainability Audit", description: "ESG assessment and improvement roadmap for buildings.", defaultPricing: "fixed", suggestedRate: 1500, videoAvailable: true, isPremiumFeature: false },
+    { key: "green_certification", name: "Green Certification", description: "LEED, BREEAM, or local sustainability certification support.", defaultPricing: "fixed", suggestedRate: 2500, videoAvailable: true, isPremiumFeature: true },
+  ],
+
+  // ── Relocation / Immigration Consultant ───────────────────────────────────────
+  relocation_immigration_consultant: [
+    { key: "relocation_package", name: "Full Relocation Package", description: "Visa support, housing search, school enrolment, utilities setup.", defaultPricing: "fixed", suggestedRate: 1500, videoAvailable: true, isPremiumFeature: false },
+    { key: "golden_visa_assist", name: "Golden Visa Assistance", description: "Application support, document preparation, and property liaison for residency by investment.", defaultPricing: "fixed", suggestedRate: 2000, videoAvailable: true, isPremiumFeature: false },
+  ],
+
+  // ── Facility Manager ───────────────────────────────────────────────────────
+  facility_manager: [
+    { key: "facility_ops", name: "Facility Operations", description: "Day-to-day building operations, maintenance scheduling, vendor management.", defaultPricing: "fixed", suggestedRate: 500, videoAvailable: true, isPremiumFeature: false },
+    { key: "commercial_fm", name: "Commercial Facility Management", description: "Office buildings, retail, mixed-use — full lifecycle management.", defaultPricing: "fixed", suggestedRate: 800, videoAvailable: true, isPremiumFeature: false },
+  ],
+
+  // ── Short-Term Rental Operator ──────────────────────────────────────────────
+  short_term_rental_operator: [
+    { key: "str_management", name: "Short-Term Rental Management", description: "Airbnb / Booking.com full management — listings, pricing, operations.", defaultPricing: "fixed", suggestedRate: 200, videoAvailable: true, isPremiumFeature: false },
+    { key: "str_setup", name: "STR Setup & Optimisation", description: "Listing creation, photos, pricing strategy, and channel setup.", defaultPricing: "fixed", suggestedRate: 500, videoAvailable: true, isPremiumFeature: false },
+  ],
+
+  // ── Hotel / Hospitality Operator ──────────────────────────────────────────
+  hotel_hospitality_operator: [
+    { key: "hotel_ops", name: "Hotel Operations", description: "Guest services, housekeeping, F&B, reservations management.", defaultPricing: "fixed", suggestedRate: 0, videoAvailable: true, isPremiumFeature: false },
+    { key: "hospitality_consult", name: "Hospitality Consulting", description: "Revenue management, branding, and operational improvements.", defaultPricing: "hourly", suggestedRate: 120, estimatedHours: 10, videoAvailable: true, isPremiumFeature: true },
+  ],
+
+  // ── Marketing Agency / Photographer / Media ──────────────────────────────────
+  marketing_agency: [
+    { key: "property_photography", name: "Property Photography", description: "Professional photos for listings — interiors, exteriors, drone.", defaultPricing: "fixed", suggestedRate: 250, videoAvailable: false, isPremiumFeature: false },
+    { key: "listing_marketing", name: "Listing Marketing", description: "Copy, visuals, social media, and ad campaigns for property sales.", defaultPricing: "fixed", suggestedRate: 600, videoAvailable: true, isPremiumFeature: false },
+    { key: "virtual_tour", name: "Virtual Tour & Video", description: "3D virtual tours, walkthrough videos, and promotional content.", defaultPricing: "fixed", suggestedRate: 450, videoAvailable: true, isPremiumFeature: true },
+  ],
+
+  // ── CRM / Listing Portal / Data Provider ─────────────────────────────────────
+  crm_listing_data_provider: [
+    { key: "crm_setup", name: "CRM Setup for Agents", description: "Implementation and training for property CRM systems.", defaultPricing: "fixed", suggestedRate: 800, videoAvailable: true, isPremiumFeature: false },
+    { key: "listing_syndication", name: "Listing Syndication", description: "Multi-portal listing distribution and data feed management.", defaultPricing: "fixed", suggestedRate: 200, videoAvailable: true, isPremiumFeature: false },
+  ],
+
+  // ── Concrete Contractor ────────────────────────────────────────────────────
+  concrete_contractor: [
+    { key: "foundation_concrete", name: "Foundation & Structural Concrete", description: "Foundations, slabs, structural concrete works.", defaultPricing: "fixed", suggestedRate: 0, videoAvailable: false, isPremiumFeature: false },
+    { key: "concrete_finishing", name: "Concrete Finishing", description: "Polished floors, stamped concrete, decorative surfaces.", defaultPricing: "daily", suggestedRate: 350, videoAvailable: false, isPremiumFeature: false },
+  ],
+
+  // ── Steel Structure Contractor ────────────────────────────────────────────────
+  steel_structure_contractor: [
+    { key: "structural_steel", name: "Structural Steel Works", description: "Steel frames, beams, columns for buildings and extensions.", defaultPricing: "fixed", suggestedRate: 0, videoAvailable: false, isPremiumFeature: false },
+  ],
+
+  // ── Carpenter ───────────────────────────────────────────────────────────────
+  carpenter: [
+    { key: "custom_joinery", name: "Custom Joinery & Cabinetry", description: "Built-in cupboards, wardrobes, kitchen units.", defaultPricing: "fixed", suggestedRate: 2500, videoAvailable: false, isPremiumFeature: false },
+    { key: "wood_floors", name: "Wood Flooring", description: "Parquet, solid wood, engineered wood installation.", defaultPricing: "fixed", suggestedRate: 1800, videoAvailable: false, isPremiumFeature: false },
+  ],
+
+  // ── Tile Installer ──────────────────────────────────────────────────────────
+  tile_installer: [
+    { key: "floor_tiling", name: "Floor Tiling", description: "Ceramic, porcelain, natural stone floor installation.", defaultPricing: "fixed", suggestedRate: 35, videoAvailable: false, isPremiumFeature: false },
+    { key: "wall_tiling", name: "Wall Tiling", description: "Bathroom, kitchen, and feature wall tiling.", defaultPricing: "fixed", suggestedRate: 40, videoAvailable: false, isPremiumFeature: false },
+  ],
+
+  // ── Painter ──────────────────────────────────────────────────────────────────
+  painter: [
+    { key: "interior_painting", name: "Interior Painting", description: "Walls, ceilings, woodwork — full interior paint finishes.", defaultPricing: "daily", suggestedRate: 280, videoAvailable: false, isPremiumFeature: false },
+    { key: "exterior_painting", name: "Exterior Painting", description: "Facade painting, waterproof coatings, decorative finishes.", defaultPricing: "daily", suggestedRate: 350, videoAvailable: false, isPremiumFeature: false },
+  ],
+
+  // ── Building Permit Consultant ──────────────────────────────────────────────
+  building_permit_consultant: [
+    { key: "permit_application", name: "Building Permit Application", description: "Preparation and submission of permit dossier to municipality.", defaultPricing: "fixed", suggestedRate: 800, videoAvailable: true, isPremiumFeature: false },
+    { key: "permit_expediting", name: "Permit Expediting", description: "Tracking, follow-ups, and liaison with authorities.", defaultPricing: "hourly", suggestedRate: 60, estimatedHours: 10, videoAvailable: true, isPremiumFeature: false },
+  ],
+
+  // ── Urban Planning Consultant ───────────────────────────────────────────────
+  urban_planning_consultant: [
+    { key: "zoning_analysis", name: "Zoning & Land Use Analysis", description: "Permitted uses, building coefficients, zoning compliance.", defaultPricing: "fixed", suggestedRate: 400, videoAvailable: true, isPremiumFeature: false },
+    { key: "planning_permit", name: "Planning Permit (ΠΟΛ)", description: "Planning permission applications and amendments.", defaultPricing: "fixed", suggestedRate: 1200, videoAvailable: true, isPremiumFeature: false },
+  ],
+
+  // ── Legalization Specialist ──────────────────────────────────────────────────
+  legalization_specialist: [
+    { key: "illegal_structure", name: "Illegal Structure Legalization", description: "Process for legalizing unlicensed or arbitrary constructions.", defaultPricing: "fixed", suggestedRate: 1500, videoAvailable: true, isPremiumFeature: false },
+    { key: "retroactive_permit", name: "Retroactive Permit", description: "Documentation and application for retroactive building permits.", defaultPricing: "fixed", suggestedRate: 2000, videoAvailable: true, isPremiumFeature: false },
+  ],
+
+  // ── Energy Certificate Inspector (ΠΕΑ) ──────────────────────────────────────
+  energy_certificate_inspector: [
+    { key: "pea_issuance", name: "Energy Performance Certificate (ΠΕΑ)", description: "Issuance of mandatory Energy Performance Certificate.", defaultPricing: "fixed", suggestedRate: 250, videoAvailable: false, isPremiumFeature: false },
+    { key: "energy_upgrade", name: "Energy Upgrade Recommendations", description: "Recommendations for improving energy class.", defaultPricing: "fixed", suggestedRate: 150, videoAvailable: true, isPremiumFeature: false },
+  ],
+
+  // ── Building Regulation Compliance ───────────────────────────────────────────
+  building_regulation_consultant: [
+    { key: "compliance_audit", name: "Building Compliance Audit", description: "Review of building against current regulations and codes.", defaultPricing: "fixed", suggestedRate: 600, videoAvailable: true, isPremiumFeature: false },
+    { key: "remediation_plan", name: "Remediation Plan", description: "Plan and documentation for bringing building into compliance.", defaultPricing: "fixed", suggestedRate: 1000, videoAvailable: true, isPremiumFeature: false },
+  ],
+
+  // ── Fire Protection Consultant ──────────────────────────────────────────────
+  fire_protection_consultant: [
+    { key: "fire_safety_report", name: "Fire Safety Report", description: "Fire safety assessment and certification for buildings.", defaultPricing: "fixed", suggestedRate: 800, videoAvailable: false, isPremiumFeature: false },
+    { key: "fire_systems", name: "Fire Systems Design", description: "Design of fire detection, alarm, and suppression systems.", defaultPricing: "fixed", suggestedRate: 1500, videoAvailable: true, isPremiumFeature: false },
+  ],
+
+  // ── Drywall Installer ────────────────────────────────────────────────────────
+  drywall_installer: [
+    { key: "drywall_partitions", name: "Drywall Partitions", description: "Gypsum board partitions, ceiling systems, sound insulation.", defaultPricing: "fixed", suggestedRate: 45, videoAvailable: false, isPremiumFeature: false },
+  ],
+
+  // ── Waterproofing Specialist ─────────────────────────────────────────────────
+  waterproofing_specialist: [
+    { key: "basement_waterproofing", name: "Basement & Tanking", description: "Below-grade waterproofing and tanking systems.", defaultPricing: "fixed", suggestedRate: 2500, videoAvailable: false, isPremiumFeature: false },
+    { key: "terrace_waterproofing", name: "Terrace & Roof Waterproofing", description: "Flat roof, terrace, and balcony waterproofing.", defaultPricing: "fixed", suggestedRate: 3500, videoAvailable: false, isPremiumFeature: false },
+  ],
+
+  // ── Insulation Contractor ────────────────────────────────────────────────────
+  insulation_contractor: [
+    { key: "thermal_insulation", name: "Thermal Insulation", description: "External and internal insulation, energy upgrade works.", defaultPricing: "fixed", suggestedRate: 35, videoAvailable: false, isPremiumFeature: false },
+    { key: "acoustic_insulation", name: "Acoustic Insulation", description: "Soundproofing for floors, walls, ceilings.", defaultPricing: "fixed", suggestedRate: 40, videoAvailable: false, isPremiumFeature: false },
+  ],
+
+  // ── Roofing Contractor ──────────────────────────────────────────────────────
+  roofing_contractor: [
+    { key: "roof_replacement", name: "Roof Replacement", description: "Tile or flat roof replacement and repair.", defaultPricing: "fixed", suggestedRate: 3500, videoAvailable: false, isPremiumFeature: false },
+    { key: "roof_maintenance", name: "Roof Maintenance", description: "Inspections, leak repair, gutter maintenance.", defaultPricing: "fixed", suggestedRate: 400, videoAvailable: false, isPremiumFeature: false },
+  ],
+
+  // ── Window / Aluminum Installer ──────────────────────────────────────────────
+  window_aluminum_installer: [
+    { key: "window_install", name: "Window & Door Installation", description: "Aluminum, PVC, wooden windows and doors.", defaultPricing: "fixed", suggestedRate: 0, videoAvailable: false, isPremiumFeature: false },
+    { key: "shutter_install", name: "Shutter & Pergola", description: "Roller shutters, awnings, pergolas.", defaultPricing: "fixed", suggestedRate: 800, videoAvailable: false, isPremiumFeature: false },
+  ],
+
+  // ── Elevator Installer ─────────────────────────────────────────────────────
+  elevator_installer: [
+    { key: "elevator_install", name: "Elevator Installation", description: "New elevator installation and modernisation.", defaultPricing: "fixed", suggestedRate: 0, videoAvailable: false, isPremiumFeature: false },
+    { key: "elevator_service", name: "Elevator Service & Maintenance", description: "Annual inspections, repairs, modernisation.", defaultPricing: "fixed", suggestedRate: 500, videoAvailable: false, isPremiumFeature: false },
+  ],
+
+  // ── Smart Home Installer ─────────────────────────────────────────────────────
+  smart_home_installer: [
+    { key: "smart_installation", name: "Smart Home Installation", description: "Lighting, climate, security, and automation systems.", defaultPricing: "daily", suggestedRate: 300, videoAvailable: true, isPremiumFeature: true },
+    { key: "integration", name: "System Integration", description: "Integration of multiple smart systems (KNX, etc.).", defaultPricing: "fixed", suggestedRate: 1500, videoAvailable: true, isPremiumFeature: true },
   ],
 };
 

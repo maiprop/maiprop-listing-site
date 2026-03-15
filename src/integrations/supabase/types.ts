@@ -855,6 +855,8 @@ export type Database = {
       }
       professionals: {
         Row: {
+          average_deal_size: string | null
+          average_portfolio_asset_size: string | null
           avatar_url: string | null
           bio: string | null
           calendar_notes: string | null
@@ -880,6 +882,8 @@ export type Database = {
           website_url: string | null
         }
         Insert: {
+          average_deal_size?: string | null
+          average_portfolio_asset_size?: string | null
           avatar_url?: string | null
           bio?: string | null
           calendar_notes?: string | null
@@ -905,6 +909,8 @@ export type Database = {
           website_url?: string | null
         }
         Update: {
+          average_deal_size?: string | null
+          average_portfolio_asset_size?: string | null
           avatar_url?: string | null
           bio?: string | null
           calendar_notes?: string | null

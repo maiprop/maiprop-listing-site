@@ -5,7 +5,8 @@ import {
   ChevronLeft, Clock, Users, Briefcase, MessageSquare,
   Calendar, Shield, Loader2, Languages, ChevronRight,
   Phone, Euro, FileText, ThumbsUp, Zap, Building2, Video,
-  Sparkles, Brain, ArrowRight, X, Lock
+  Search, Lock, BarChart3, List, Mail, TrendingUp, LayoutDashboard,
+  Target, Megaphone, Home, ArrowUpCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -17,10 +18,12 @@ import SendMessageModal from "@/components/SendMessageModal";
 import BookConsultationModal from "@/components/BookConsultationModal";
 import RequestCallbackModal from "@/components/RequestCallbackModal";
 import OnlineViewingModal from "@/components/OnlineViewingModal";
+import { AIServiceMatchModal } from "@/components/AIServiceMatchModal";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 
 const categoryLabels: Record<string, { label: string; emoji: string; description: string }> = {
+  real_estate_agent: { label: "Real Estate Agent", emoji: "🏠", description: "Buy, sell, rent — licensed agents & agencies" },
   architect: { label: "Licensed Architect", emoji: "🏛️", description: "Building design, planning permits, renovation oversight" },
   civil_engineer: { label: "Civil Engineer", emoji: "⚙️", description: "Structural analysis, static reports, building compliance" },
   lawyer: { label: "Real Estate Lawyer", emoji: "⚖️", description: "Conveyancing, title checks, contract review, Golden Visa" },
@@ -32,12 +35,39 @@ const categoryLabels: Record<string, { label: string; emoji: string; description
   valuer: { label: "Property Valuer", emoji: "📊", description: "Market appraisal, mortgage valuations, investment analysis" },
   interior_designer: { label: "Interior Designer", emoji: "🎨", description: "Space planning, styling, full renovation coordination" },
   financial_advisor: { label: "Financial Advisor", emoji: "💼", description: "Mortgage advice, investment strategy, tax planning" },
+  insurance_broker: { label: "Insurance Broker / Insurer", emoji: "🛡️", description: "Property, construction, and liability insurance" },
+  utility_certification_provider: { label: "Utility & Technical Certification", emoji: "📄", description: "DEI, electrical, gas certification" },
+  esg_sustainability_consultant: { label: "ESG / Sustainability", emoji: "🌱", description: "Green certification, sustainability audits" },
+  relocation_immigration_consultant: { label: "Relocation / Immigration", emoji: "✈️", description: "Golden Visa, relocation, housing" },
+  facility_manager: { label: "Facility Manager", emoji: "🔑", description: "Building operations, commercial facility management" },
+  short_term_rental_operator: { label: "Short-Term Rental Operator", emoji: "🏡", description: "Airbnb, Booking.com management" },
+  hotel_hospitality_operator: { label: "Hotel / Hospitality Operator", emoji: "🏨", description: "Hotel operations, hospitality consulting" },
+  marketing_agency: { label: "Marketing / Photographer / Media", emoji: "📸", description: "Property photos, virtual tours, listing marketing" },
+  crm_listing_data_provider: { label: "CRM / Listing Portal / Data", emoji: "📊", description: "CRM setup, listing syndication" },
+  concrete_contractor: { label: "Concrete Contractor", emoji: "🧱", description: "Foundations, structural concrete, finishing" },
+  steel_structure_contractor: { label: "Steel Structure Contractor", emoji: "🔩", description: "Steel frames, beams, columns" },
+  carpenter: { label: "Carpenter", emoji: "🪚", description: "Joinery, cabinetry, wood flooring" },
+  tile_installer: { label: "Tile Installer", emoji: "🔲", description: "Floor and wall tiling" },
+  painter: { label: "Painter", emoji: "🖌️", description: "Interior and exterior painting" },
+  building_permit_consultant: { label: "Building Permit Consultant", emoji: "📝", description: "Permit applications, expediting" },
+  urban_planning_consultant: { label: "Urban Planning Consultant", emoji: "🗺️", description: "Zoning, planning permits" },
+  legalization_specialist: { label: "Legalization Specialist", emoji: "📜", description: "Illegal structure legalization" },
+  energy_certificate_inspector: { label: "Energy Certificate Inspector (ΠΕΑ)", emoji: "⚡", description: "Energy performance certificates" },
+  building_regulation_consultant: { label: "Regulation Compliance", emoji: "✔️", description: "Building compliance audits" },
+  fire_protection_consultant: { label: "Fire Protection Consultant", emoji: "🔥", description: "Fire safety, certification" },
+  drywall_installer: { label: "Drywall Installer", emoji: "📐", description: "Gypsum partitions, ceilings" },
+  waterproofing_specialist: { label: "Waterproofing Specialist", emoji: "💧", description: "Basement, terrace, roof waterproofing" },
+  insulation_contractor: { label: "Insulation Contractor", emoji: "🧊", description: "Thermal and acoustic insulation" },
+  roofing_contractor: { label: "Roofing Contractor", emoji: "🏠", description: "Roof replacement and maintenance" },
+  window_aluminum_installer: { label: "Window / Aluminum Installer", emoji: "🪟", description: "Windows, doors, shutters" },
+  elevator_installer: { label: "Elevator Installer", emoji: "🛗", description: "Elevator installation and service" },
+  smart_home_installer: { label: "Smart Home Installer", emoji: "📱", description: "Automation, smart systems" },
 };
 
 const servicesByCategory: Record<string, string[]> = {
   architect: ["Architectural Plans", "Building Permits", "Renovation Design", "Interior Design", "Site Supervision", "Energy Certificate"],
   civil_engineer: ["Static Reports", "Structural Analysis", "Seismic Assessment", "Building Compliance", "Construction Supervision"],
-  lawyer: ["Title Search", "Contract Review", "Conveyancing", "Golden Visa Applications", "Auction Representation", "Dispute Resolution"],
+  lawyer: ["Title Search", "Contract Review", "Conveyancing", "Golden Visa", "Auction Representation", "Dispute Resolution"],
   notary: ["Property Transfer Deeds", "Mortgage Deeds", "Company Incorporation", "Wills & Inheritance", "Authenticated Contracts"],
   electrician: ["Electrical Installation", "Panel Upgrades", "Smart Home", "Solar Panels", "EV Charging", "Energy Audit"],
   plumber: ["Pipe Installation", "Bathroom Remodel", "Boiler Install", "Drain Cleaning", "Water Heaters"],
@@ -46,6 +76,33 @@ const servicesByCategory: Record<string, string[]> = {
   valuer: ["Market Appraisal", "Mortgage Valuation", "Investment Analysis", "Portfolio Review", "Insurance Valuation"],
   interior_designer: ["Space Planning", "FF&E Specification", "3D Visualisation", "Site Coordination", "Staging for Sale"],
   financial_advisor: ["Mortgage Advice", "Investment Strategy", "Tax Planning", "Golden Visa Finance", "Portfolio Management"],
+  insurance_broker: ["Property Insurance", "Construction Insurance", "Liability Insurance"],
+  utility_certification_provider: ["Utility Connection", "Technical Inspection"],
+  esg_sustainability_consultant: ["Sustainability Audit", "Green Certification"],
+  relocation_immigration_consultant: ["Relocation Package", "Golden Visa Assistance"],
+  facility_manager: ["Facility Operations", "Commercial FM"],
+  short_term_rental_operator: ["STR Management", "STR Setup"],
+  hotel_hospitality_operator: ["Hotel Operations", "Hospitality Consulting"],
+  marketing_agency: ["Property Photography", "Listing Marketing", "Virtual Tour"],
+  crm_listing_data_provider: ["CRM Setup", "Listing Syndication"],
+  concrete_contractor: ["Foundation & Structural Concrete", "Concrete Finishing"],
+  steel_structure_contractor: ["Structural Steel Works"],
+  carpenter: ["Custom Joinery", "Wood Flooring"],
+  tile_installer: ["Floor Tiling", "Wall Tiling"],
+  painter: ["Interior Painting", "Exterior Painting"],
+  building_permit_consultant: ["Permit Application", "Permit Expediting"],
+  urban_planning_consultant: ["Zoning Analysis", "Planning Permit"],
+  legalization_specialist: ["Illegal Structure Legalization", "Retroactive Permit"],
+  energy_certificate_inspector: ["ΠΕΑ Issuance", "Energy Upgrade"],
+  building_regulation_consultant: ["Compliance Audit", "Remediation Plan"],
+  fire_protection_consultant: ["Fire Safety Report", "Fire Systems Design"],
+  drywall_installer: ["Drywall Partitions"],
+  waterproofing_specialist: ["Basement Waterproofing", "Terrace Waterproofing"],
+  insulation_contractor: ["Thermal Insulation", "Acoustic Insulation"],
+  roofing_contractor: ["Roof Replacement", "Roof Maintenance"],
+  window_aluminum_installer: ["Window & Door Install", "Shutter & Pergola"],
+  elevator_installer: ["Elevator Installation", "Elevator Service"],
+  smart_home_installer: ["Smart Home Installation", "System Integration"],
 };
 
 function StarRating({ rating, max = 5 }: { rating: number; max?: number }) {
@@ -64,187 +121,39 @@ const mockReviews = [
   { name: "Nikos A.", rating: 4, text: "Great service, very professional. Delivered on time and within budget. Minor communication delays but overall excellent.", date: "2 months ago", avatar: "N", project: "Golden Visa Application" },
 ];
 
-// ── Urgency badge colours ──────────────────────────────────────────────────────
-const urgencyStyle: Record<string, string> = {
-  high: "bg-destructive/15 text-destructive border-destructive/30",
-  medium: "bg-brand-gold/15 text-brand-gold border-brand-gold/30",
-  low: "bg-brand-emerald/15 text-brand-emerald border-brand-emerald/30",
-};
-
 const categoryEmoji: Record<string, string> = {
-  lawyer: "⚖️", notary: "📜", architect: "🏛️", civil_engineer: "⚙️",
-  contractor: "🏗️", interior_designer: "🎨", electrician: "⚡",
-  plumber: "🔧", financial_advisor: "💼", valuer: "📊", property_manager: "🏢",
+  real_estate_agent: "🏠", lawyer: "⚖️", notary: "📜", architect: "🏛️", civil_engineer: "⚙️",
+  contractor: "🏗️", interior_designer: "🎨", electrician: "⚡", plumber: "🔧",
+  financial_advisor: "💼", valuer: "📊", property_manager: "🏢", insurance_broker: "🛡️",
+  utility_certification_provider: "📄", esg_sustainability_consultant: "🌱",
+  relocation_immigration_consultant: "✈️", facility_manager: "🔑", short_term_rental_operator: "🏡",
+  hotel_hospitality_operator: "🏨", marketing_agency: "📸", crm_listing_data_provider: "📊",
+  concrete_contractor: "🧱", steel_structure_contractor: "🔩", carpenter: "🪚", tile_installer: "🔲",
+  painter: "🖌️", building_permit_consultant: "📝", urban_planning_consultant: "🗺️",
+  legalization_specialist: "📜", energy_certificate_inspector: "⚡", building_regulation_consultant: "✔️",
+  fire_protection_consultant: "🔥", drywall_installer: "📐", waterproofing_specialist: "💧",
+  insulation_contractor: "🧊", roofing_contractor: "🏠", window_aluminum_installer: "🪟",
+  elevator_installer: "🛗", smart_home_installer: "📱",
 };
 const categoryLabel: Record<string, string> = {
-  lawyer: "Real Estate Lawyer", notary: "Notary Public", architect: "Architect",
-  civil_engineer: "Civil Engineer", contractor: "Contractor", interior_designer: "Interior Designer",
-  electrician: "Electrician", plumber: "Plumber", financial_advisor: "Financial Advisor",
-  valuer: "Property Valuer", property_manager: "Property Manager",
+  real_estate_agent: "Real Estate Agent", lawyer: "Real Estate Lawyer", notary: "Notary Public",
+  architect: "Architect", civil_engineer: "Civil Engineer", contractor: "Contractor",
+  interior_designer: "Interior Designer", electrician: "Electrician", plumber: "Plumber",
+  financial_advisor: "Financial Advisor", valuer: "Property Valuer", property_manager: "Property Manager",
+  insurance_broker: "Insurance Broker", utility_certification_provider: "Utility & Certification",
+  esg_sustainability_consultant: "ESG / Sustainability", relocation_immigration_consultant: "Relocation / Immigration",
+  facility_manager: "Facility Manager", short_term_rental_operator: "Short-Term Rental",
+  hotel_hospitality_operator: "Hotel / Hospitality", marketing_agency: "Marketing / Media",
+  crm_listing_data_provider: "CRM / Data Provider", concrete_contractor: "Concrete Contractor",
+  steel_structure_contractor: "Steel Structure", carpenter: "Carpenter", tile_installer: "Tile Installer",
+  painter: "Painter", building_permit_consultant: "Building Permit", urban_planning_consultant: "Urban Planning",
+  legalization_specialist: "Legalization Specialist", energy_certificate_inspector: "Energy Certificate (ΠΕΑ)",
+  building_regulation_consultant: "Regulation Compliance", fire_protection_consultant: "Fire Protection",
+  drywall_installer: "Drywall Installer", waterproofing_specialist: "Waterproofing",
+  insulation_contractor: "Insulation", roofing_contractor: "Roofing",
+  window_aluminum_installer: "Window / Aluminum", elevator_installer: "Elevator Installer",
+  smart_home_installer: "Smart Home",
 };
-
-interface MatchResult {
-  category: string;
-  services: string[];
-  explanation: string;
-  urgency: "low" | "medium" | "high";
-  follow_up_question?: string;
-}
-
-function AIServiceMatchModal({ onClose, onNavigate }: { onClose: () => void; onNavigate: (cat: string) => void }) {
-  const [need, setNeed] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<MatchResult | null>(null);
-
-  const handleMatch = async () => {
-    if (!need.trim() || loading) return;
-    setLoading(true);
-    setResult(null);
-    try {
-      const resp = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-service-match`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-          body: JSON.stringify({ need }),
-        }
-      );
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.error || "Matching failed");
-      setResult(data as MatchResult);
-    } catch (e: any) {
-      toast.error(e.message || "AI matching failed");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const EXAMPLES = [
-    "I want to buy an apartment in Athens — what do I need?",
-    "My electrical panel is outdated and needs replacing",
-    "I need a mortgage for a €400K property",
-    "I want to convert my property to Airbnb",
-    "I need to check if a property has clear title",
-  ];
-
-  return (
-    <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center sm:p-4 bg-background/70 backdrop-blur-sm"
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="w-full sm:max-w-lg bg-card border border-border sm:rounded-2xl shadow-elevated overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center gap-3 px-5 py-4 border-b border-border"
-          style={{ background: "linear-gradient(135deg, hsl(var(--primary) / 0.08), hsl(var(--accent) / 0.06))" }}>
-          <div className="w-9 h-9 rounded-xl bg-gradient-primary flex items-center justify-center shrink-0">
-            <Brain className="w-4.5 h-4.5 text-primary-foreground" />
-          </div>
-          <div className="flex-1">
-            <p className="font-display font-semibold text-sm">AI Service Matcher</p>
-            <p className="text-[11px] text-muted-foreground">Describe your need — AI will find the right professional</p>
-          </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-secondary transition-colors">
-            <X className="w-4 h-4 text-muted-foreground" />
-          </button>
-        </div>
-
-        <div className="p-5 space-y-4">
-          {/* Input */}
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 block">
-              Describe your need
-            </label>
-            <div className="flex gap-2">
-              <textarea
-                value={need}
-                onChange={e => setNeed(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleMatch(); } }}
-                placeholder="e.g. I want to buy a flat in Athens, I need someone to check the title is clean and handle the contracts..."
-                rows={3}
-                className="flex-1 bg-secondary border border-border rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none resize-none focus:border-primary transition-colors"
-              />
-            </div>
-          </div>
-
-          {/* Quick examples */}
-          {!result && (
-            <div className="flex flex-wrap gap-1.5">
-              {EXAMPLES.map(ex => (
-                <button key={ex} onClick={() => setNeed(ex)}
-                  className="text-[11px] px-2.5 py-1 rounded-lg bg-secondary border border-border text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors text-left">
-                  {ex}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Match button */}
-          <Button
-            className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2"
-            onClick={handleMatch}
-            disabled={!need.trim() || loading}
-          >
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-            {loading ? "Analysing your need…" : "Find my professional"}
-          </Button>
-
-          {/* Result */}
-          {result && (
-            <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-3">
-              {/* Match header */}
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="text-2xl">{categoryEmoji[result.category] ?? "👤"}</div>
-                  <div>
-                    <div className="font-display font-bold text-sm">{categoryLabel[result.category] ?? result.category}</div>
-                    <div className="text-[11px] text-muted-foreground">Best match for your need</div>
-                  </div>
-                </div>
-                <span className={`text-[10px] px-2 py-1 rounded-full border font-semibold uppercase tracking-wide ${urgencyStyle[result.urgency]}`}>
-                  {result.urgency} urgency
-                </span>
-              </div>
-
-              {/* Explanation */}
-              <p className="text-sm text-muted-foreground leading-relaxed">{result.explanation}</p>
-
-              {/* Services */}
-              <div className="flex flex-wrap gap-1.5">
-                {result.services.map(s => (
-                  <span key={s} className="text-xs px-2.5 py-1 rounded-full bg-card border border-border text-foreground font-medium">
-                    {s}
-                  </span>
-                ))}
-              </div>
-
-              {/* Follow-up question */}
-              {result.follow_up_question && (
-                <div className="flex items-start gap-2 bg-secondary rounded-lg px-3 py-2">
-                  <Sparkles className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
-                  <p className="text-xs text-muted-foreground italic">{result.follow_up_question}</p>
-                </div>
-              )}
-
-              {/* Actions */}
-              <div className="flex gap-2 pt-1">
-                <Button size="sm" className="flex-1 bg-gradient-primary border-0 text-primary-foreground gap-1.5"
-                  onClick={() => { onNavigate(result.category); onClose(); }}>
-                  Find {categoryLabel[result.category] ?? "Professionals"}
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Button>
-                <Button size="sm" variant="outline" className="border-border"
-                  onClick={() => { setResult(null); setNeed(""); }}>
-                  Try Again
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 const PRICING_LABELS: Record<string, string> = { hourly: "/hr", daily: "/day", fixed: " fixed" };
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -267,6 +176,7 @@ export default function ProfessionalProfile() {
   const professionalIsPro = (pro?.subscription_tier || "").toLowerCase() === "pro";
 
   const catInfo = pro ? categoryLabels[pro.category] || { label: pro.category, emoji: "👤", description: "" } : null;
+  const isRealEstateAgent = pro?.category === "real_estate_agent";
   // Fallback static list if no DB services yet
   const fallbackServices = pro ? servicesByCategory[pro.category] || [] : [];
 
@@ -384,7 +294,7 @@ export default function ProfessionalProfile() {
                       <Video className="w-4 h-4" /> Video Meeting
                     </Button>
                     <Button variant="outline" className="border-primary/40 text-primary hover:bg-primary/10 gap-2 w-full" onClick={() => setAiMatchOpen(true)}>
-                      <Sparkles className="w-4 h-4" /> AI-Powered Request
+                      <Search className="w-4 h-4" /> Find matching professional
                     </Button>
                     {pro.website_url && (
                       <a href={pro.website_url} target="_blank" rel="noopener noreferrer"
@@ -409,14 +319,24 @@ export default function ProfessionalProfile() {
             </div>
 
             {/* ── Stats bar ── */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-3 mt-6 sm:mt-8 pt-5 sm:pt-6 border-t border-border">
-              {[
-                { icon: Star, label: "Rating", value: rating > 0 ? `${rating.toFixed(1)} / 5.0` : "New", color: "text-brand-gold" },
-                { icon: Briefcase, label: "Projects Done", value: pro.projects_count || 0, color: "text-primary" },
-                { icon: Users, label: "Client Reviews", value: pro.reviews_count || 0, color: "text-accent" },
-                { icon: Clock, label: "Experience", value: pro.experience_years ? `${pro.experience_years} yrs` : "—", color: "text-brand-emerald" },
-                { icon: Euro, label: "From (per hr)", value: pro.hourly_rate ? `€${pro.hourly_rate}` : "On Request", color: "text-brand-gold" },
-              ].map(stat => (
+            <div className={`grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 mt-6 sm:mt-8 pt-5 sm:pt-6 border-t border-border ${isRealEstateAgent ? "md:grid-cols-4 lg:grid-cols-6" : "md:grid-cols-5"}`}>
+              {(isRealEstateAgent
+                ? [
+                    { icon: Star, label: "Rating", value: rating > 0 ? `${rating.toFixed(1)} / 5.0` : "New", color: "text-brand-gold" },
+                    { icon: Zap, label: "Expertise", value: pro.specialties?.length ? pro.specialties.slice(0, 2).join(", ") : "Multi-market", color: "text-primary" },
+                    { icon: Euro, label: "Avg Deal Size", value: pro.average_deal_size || "—", color: "text-brand-gold" },
+                    { icon: Building2, label: "Avg Portfolio", value: pro.average_portfolio_asset_size || "—", color: "text-accent" },
+                    { icon: Briefcase, label: "Deals Done", value: pro.projects_count || 0, color: "text-primary" },
+                    { icon: Clock, label: "Experience", value: pro.experience_years ? `${pro.experience_years} yrs` : "—", color: "text-brand-emerald" },
+                  ]
+                : [
+                    { icon: Star, label: "Rating", value: rating > 0 ? `${rating.toFixed(1)} / 5.0` : "New", color: "text-brand-gold" },
+                    { icon: Briefcase, label: "Projects Done", value: pro.projects_count || 0, color: "text-primary" },
+                    { icon: Users, label: "Client Reviews", value: pro.reviews_count || 0, color: "text-accent" },
+                    { icon: Clock, label: "Experience", value: pro.experience_years ? `${pro.experience_years} yrs` : "—", color: "text-brand-emerald" },
+                    { icon: Euro, label: "From (per hr)", value: pro.hourly_rate ? `€${pro.hourly_rate}` : "On Request", color: "text-brand-gold" },
+                  ]
+              ).map(stat => (
                 <div key={stat.label} className="glass-card rounded-xl p-3 flex items-center gap-3">
                   <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center shrink-0">
                     <stat.icon className={`w-4 h-4 ${stat.color}`} />
@@ -523,6 +443,49 @@ export default function ProfessionalProfile() {
                       )}
                     </div>
                   </div>
+
+                  {/* ── Agent Platform Benefits (Real Estate Agents only) ── */}
+                  {isRealEstateAgent && (
+                    <div className="glass-card rounded-xl p-6 border border-primary/10">
+                      <h2 className="font-display font-semibold mb-4 flex items-center gap-2 text-primary">
+                        <Target className="w-4 h-4" /> Platform Tools & Benefits
+                      </h2>
+                      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div className="space-y-3">
+                          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-2">
+                            <List className="w-3.5 h-3.5 text-primary" /> Listings & Leads
+                          </h3>
+                          <ul className="space-y-1.5 text-sm text-muted-foreground">
+                            <li className="flex items-center gap-2"><CheckCircle className="w-3.5 h-3.5 text-brand-emerald shrink-0" /> Publish listings</li>
+                            <li className="flex items-center gap-2"><CheckCircle className="w-3.5 h-3.5 text-brand-emerald shrink-0" /> Receive leads</li>
+                            <li className="flex items-center gap-2"><CheckCircle className="w-3.5 h-3.5 text-brand-emerald shrink-0" /> Listing management</li>
+                            <li className="flex items-center gap-2"><CheckCircle className="w-3.5 h-3.5 text-brand-emerald shrink-0" /> Lead management</li>
+                          </ul>
+                        </div>
+                        <div className="space-y-3">
+                          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-2">
+                            <BarChart3 className="w-3.5 h-3.5 text-primary" /> Analytics & CRM
+                          </h3>
+                          <ul className="space-y-1.5 text-sm text-muted-foreground">
+                            <li className="flex items-center gap-2"><CheckCircle className="w-3.5 h-3.5 text-brand-emerald shrink-0" /> Analytics dashboard</li>
+                            <li className="flex items-center gap-2"><CheckCircle className="w-3.5 h-3.5 text-brand-emerald shrink-0" /> CRM tools</li>
+                            <li className="flex items-center gap-2"><CheckCircle className="w-3.5 h-3.5 text-brand-emerald shrink-0" /> AI descriptions</li>
+                          </ul>
+                        </div>
+                        <div className="space-y-3">
+                          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-2">
+                            <Megaphone className="w-3.5 h-3.5 text-primary" /> Promotion
+                          </h3>
+                          <ul className="space-y-1.5 text-sm text-muted-foreground">
+                            <li className="flex items-center gap-2"><CheckCircle className="w-3.5 h-3.5 text-brand-emerald shrink-0" /> Promote properties</li>
+                            <li className="flex items-center gap-2"><CheckCircle className="w-3.5 h-3.5 text-brand-emerald shrink-0" /> Featured property</li>
+                            <li className="flex items-center gap-2"><CheckCircle className="w-3.5 h-3.5 text-brand-emerald shrink-0" /> Homepage exposure</li>
+                            <li className="flex items-center gap-2"><CheckCircle className="w-3.5 h-3.5 text-brand-emerald shrink-0" /> Top-of-search placement</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Specialties */}
                   {pro.specialties && pro.specialties.length > 0 && (

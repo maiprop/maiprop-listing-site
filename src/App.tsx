@@ -22,13 +22,16 @@ import Login from "./pages/Login";
 import Onboarding from "./pages/Onboarding";
 import Messages from "./pages/Messages";
 import CreateListing from "./pages/CreateListing";
+import CreateNewBuildingListing from "./pages/CreateNewBuildingListing";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 import MarketIntelligence from "./pages/MarketIntelligence";
 import Projects from "./pages/Projects";
+import ProjectDetail from "./pages/ProjectDetail";
 import Portfolios from "./pages/Portfolios";
 import FiresalePricing from "./pages/FiresalePricing";
 import Pricing from "./pages/Pricing";
+import AdminDashboard from "./pages/AdminDashboard";
 import AdminPricing from "./pages/AdminPricing";
 import AIAssistantPage from "./pages/AIAssistantPage";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
@@ -66,6 +69,7 @@ const App = () => (
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/listings/new" element={<ProtectedRoute><CreateListing /></ProtectedRoute>} />
+              <Route path="/listings/new-building" element={<ProtectedRoute><CreateNewBuildingListing /></ProtectedRoute>} />
               <Route path="/listings" element={<Listings />} />
               <Route path="/property/:id" element={<PropertyDetail />} />
               <Route path="/auction/:id" element={<PropertyDetail />} />
@@ -86,10 +90,12 @@ const App = () => (
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/market-intelligence" element={<MarketIntelligence />} />
               <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
+              <Route path="/projects/:id" element={<ProtectedRoute><ProjectDetail /></ProtectedRoute>} />
               <Route path="/portfolios" element={<ProtectedRoute><Portfolios /></ProtectedRoute>} />
               <Route path="/ai-assistant" element={<AIAssistantPage />} />
               <Route path="/pricing" element={<Pricing />} />
               <Route path="/pricing/firesale-investors" element={<FiresalePricing />} />
+              <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
               <Route path="/admin/pricing" element={<AdminRoute><AdminPricing /></AdminRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
