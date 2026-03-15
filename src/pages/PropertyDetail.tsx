@@ -577,26 +577,27 @@ export default function PropertyDetail() {
                 {images.length > 1 &&
                 <>
                     <button
-                    className="absolute left-3 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-background/70 backdrop-blur-md hover:bg-background/90 transition-all shadow-lg opacity-0 group-hover:opacity-100"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 min-h-[44px] min-w-[44px] flex items-center justify-center p-2.5 rounded-full bg-background/70 backdrop-blur-md hover:bg-background/90 transition-all shadow-lg opacity-100 md:opacity-0 md:group-hover:opacity-100"
                     onClick={() => setCurrentImage((currentImage - 1 + images.length) % images.length)}>
                       <ChevronLeft className="w-4 h-4" />
                     </button>
                     <button
-                    className="absolute right-3 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-background/70 backdrop-blur-md hover:bg-background/90 transition-all shadow-lg opacity-0 group-hover:opacity-100"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 min-h-[44px] min-w-[44px] flex items-center justify-center p-2.5 rounded-full bg-background/70 backdrop-blur-md hover:bg-background/90 transition-all shadow-lg opacity-100 md:opacity-0 md:group-hover:opacity-100"
                     onClick={() => setCurrentImage((currentImage + 1) % images.length)}>
                       <ChevronRight className="w-4 h-4" />
                     </button>
                   </>
                 }
 
-                {/* Top right actions */}
+                {/* Top right actions — 44px touch targets for mobile */}
                 <div className="absolute top-4 right-4 flex gap-2">
                   <button
-                    className={`p-2.5 rounded-full backdrop-blur-md shadow transition-all ${isFavorited ? "bg-destructive text-white" : "bg-background/70 hover:bg-background/90"}`}
-                    onClick={handleFavorite}>
+                    className={`min-h-[44px] min-w-[44px] flex items-center justify-center rounded-full backdrop-blur-md shadow transition-all ${isFavorited ? "bg-destructive text-white" : "bg-background/70 hover:bg-background/90"}`}
+                    onClick={handleFavorite}
+                    aria-label={isFavorited ? "Remove from saved" : "Save property"}>
                     <Heart className={`w-4 h-4 ${isFavorited ? "fill-white" : ""}`} />
                   </button>
-                  <button onClick={handleShare} className="p-2.5 rounded-full bg-background/70 backdrop-blur-md hover:bg-background/90 shadow transition-all" aria-label="Share property">
+                  <button onClick={handleShare} className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-full bg-background/70 backdrop-blur-md hover:bg-background/90 shadow transition-all" aria-label="Share property">
                     <Share2 className="w-4 h-4" />
                   </button>
                 </div>
@@ -621,7 +622,7 @@ export default function PropertyDetail() {
               <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-0.5">
                   {images.map((img, i) =>
                 <button key={i} onClick={() => setCurrentImage(i)}
-                className={`shrink-0 w-16 h-11 rounded-lg overflow-hidden transition-all duration-200 ${
+                className={`shrink-0 min-h-[44px] min-w-[44px] w-16 h-11 rounded-lg overflow-hidden transition-all duration-200 ${
                 currentImage === i ?
                 "ring-2 ring-primary ring-offset-2 ring-offset-background opacity-100" :
                 "opacity-50 hover:opacity-80"}`
