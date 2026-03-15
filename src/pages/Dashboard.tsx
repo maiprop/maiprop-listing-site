@@ -164,8 +164,8 @@ const NAV_BY_TYPE: Record<string, NavKey[]> = {
   seller:        ["overview", "listings", "saved", "messages", "viewings", "profile", "settings"],
   investor:      ["overview", "deal-flow", "saved", "saved-searches", "messages", "viewings", "auctions", "profile", "settings"],
   agent:         ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "contacts", "projects", "portfolios", "admin", "profile", "settings"],
-  institutional: ["overview", "deal-flow", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "contacts", "projects", "portfolios", "admin", "profile", "settings"],
-  developer:     ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "contacts", "projects", "portfolios", "admin", "profile", "settings"],
+  institutional: ["overview", "deal-flow", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "contacts", "projects", "portfolios", "profile", "settings"],
+  developer:     ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "contacts", "projects", "portfolios", "profile", "settings"],
   professional:  ["overview", "services", "leads", "messages", "viewings", "profile", "settings"],
 };
 
