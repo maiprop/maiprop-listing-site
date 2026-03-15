@@ -19,6 +19,7 @@ import { useViewings, useUpdateViewing } from "@/hooks/useViewings";
 import { useSavedSearches, useDeleteSavedSearch, useToggleSavedSearchAlert } from "@/hooks/useSavedSearches";
 import { useAuctionAlerts, useDeleteAuctionAlert, useUpdateAuctionAlert } from "@/hooks/useAuctionAlerts";
 import { useMyProfessional, useProfessionalServices, useUpdateProfessional } from "@/hooks/useProfessionalServices";
+import { useStartConversation } from "@/hooks/useMessages";
 import { AuctionAlertModal } from "@/components/AuctionAlertModal";
 import { PropertyCard } from "@/components/PropertyCard";
 import ProfessionalServicesEditor from "@/components/ProfessionalServicesEditor";
@@ -111,7 +112,7 @@ function useUpdateLeadStatus() {
 // ── Nav key type ───────────────────────────────────────────────────────────────
 type NavKey =
   | "overview" | "listings" | "analytics" | "saved" | "saved-searches"
-  | "messages" | "viewings" | "auctions" | "services" | "leads"
+  | "messages" | "viewings" | "auctions" | "services" | "booking" | "leads"
   | "deal-flow" | "contacts" | "projects" | "portfolios"
   | "profile" | "settings";
 
@@ -128,6 +129,7 @@ const ALL_NAV_ITEMS: { icon: React.ElementType; label: string; key: NavKey }[] =
   { icon: Calendar,      label: "Viewings",         key: "viewings"       },
   { icon: Gavel,         label: "Auction Alerts",   key: "auctions"       },
   { icon: Wrench,        label: "My Services",      key: "services"       },
+  { icon: FolderKanban,  label: "Booking",          key: "booking"        },
   { icon: Briefcase,     label: "Leads",            key: "leads"          },
   { icon: Users,         label: "Contacts",         key: "contacts"       },
   { icon: Globe2,        label: "Projects",         key: "projects"       },
@@ -144,7 +146,7 @@ const NAV_BY_TYPE: Record<string, NavKey[]> = {
   agent:         ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "contacts", "projects", "portfolios", "profile", "settings"],
   institutional: ["overview", "deal-flow", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "contacts", "projects", "portfolios", "profile", "settings"],
   developer:     ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "contacts", "projects", "portfolios", "profile", "settings"],
-  professional:  ["overview", "services", "leads", "messages", "viewings", "profile", "settings"],
+  professional:  ["overview", "services", "booking", "leads", "messages", "viewings", "profile", "settings"],
 };
 
 function getNavItemsForBioType(bioType: string | null, role: DashboardRole) {
@@ -206,6 +208,7 @@ export default function Dashboard() {
   const toggleAuctionAlert = useUpdateAuctionAlert();
   const updateLeadStatus = useUpdateLeadStatus();
   const updateViewing = useUpdateViewing();
+  const startConversation = useStartConversation();
 
   const handleSignOut = async () => { await signOut(); navigate("/"); };
   const toggleListingStatus = (id: string, currentStatus: string) => {
@@ -573,9 +576,57 @@ export default function Dashboard() {
                 </Button>
               </div>
 
+              {/* Advanced lead analytics — funnel stats */}
+              {(leads as any[]).length > 0 && leadFunnel && leadFunnel.total > 0 && (
+                <div className="glass-card rounded-xl p-4 border border-border">
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">Lead Analytics</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                    <div className="rounded-lg bg-brand-gold/10 border border-brand-gold/20 px-3 py-2">
+                      <div className="text-[10px] uppercase text-muted-foreground">Pending</div>
+                      <div className="font-display text-lg font-bold text-brand-gold">{leadFunnel.pending}</div>
+                    </div>
+                    <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 px-3 py-2">
+                      <div className="text-[10px] uppercase text-muted-foreground">Reviewed</div>
+                      <div className="font-display text-lg font-bold text-blue-500">{leadFunnel.reviewed}</div>
+                    </div>
+                    <div className="rounded-lg bg-brand-emerald/10 border border-brand-emerald/20 px-3 py-2">
+                      <div className="text-[10px] uppercase text-muted-foreground">Confirmed</div>
+                      <div className="font-display text-lg font-bold text-brand-emerald">{leadFunnel.confirmed}</div>
+                    </div>
+                    <div className="rounded-lg bg-muted/50 border border-border px-3 py-2">
+                      <div className="text-[10px] uppercase text-muted-foreground">Cancelled</div>
+                      <div className="font-display text-lg font-bold text-muted-foreground">{leadFunnel.cancelled}</div>
+                    </div>
+                    <div className="rounded-lg bg-primary/10 border border-primary/20 px-3 py-2">
+                      <div className="text-[10px] uppercase text-muted-foreground">Conversion</div>
+                      <div className="font-display text-lg font-bold text-primary">{leadFunnel.conversionRate}%</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Status filter tabs */}
               {(leads as any[]).length > 0 && (
-                <LeadsSection leads={leads as any[]} onUpdateStatus={(id, status) => updateLeadStatus.mutate({ id, status })} />
+                <LeadsSection
+                  leads={leads as any[]}
+                  onUpdateStatus={(id, status) => updateLeadStatus.mutate({ id, status })}
+                  onMessage={async (lead) => {
+                    if (!lead.requester_id) {
+                      toast.info("This lead came from a guest. Ask them to create an account to message.");
+                      return;
+                    }
+                    try {
+                      const convId = await startConversation.mutateAsync({
+                        other_user_id: lead.requester_id,
+                        listing_id: undefined,
+                      });
+                      navigate("/messages", { state: { openConversationId: convId } });
+                    } catch {
+                      toast.error("Could not start conversation");
+                    }
+                  }}
+                  startConversationLoading={startConversation.isPending}
+                />
               )}
 
               {leadsLoading ? (
@@ -873,6 +924,25 @@ export default function Dashboard() {
           {/* ── MY SERVICES — professional ───────────────────────────────── */}
           {activeSection === "services" && navItems.some(i => i.key === "services") && <ProfessionalServicesEditor />}
 
+          {/* ── BOOKING / CALENDAR — professional ───────────────────────── */}
+          {activeSection === "booking" && navItems.some(i => i.key === "booking") && (
+            <div className="space-y-6">
+              <div>
+                <h1 className="font-display text-2xl font-bold flex items-center gap-2">
+                  <FolderKanban className="w-6 h-6 text-primary" /> Booking &amp; Calendar
+                </h1>
+                <p className="text-sm text-muted-foreground mt-1">Your consultations and scheduled viewings in one place.</p>
+              </div>
+              <BookingCalendarSection
+                viewings={ownViewings}
+                leads={leads as any[]}
+                onGoToLeads={() => setActiveSection("leads")}
+                onGoToViewings={() => setActiveSection("viewings")}
+                onGoToServices={() => setActiveSection("services")}
+              />
+            </div>
+          )}
+
           {/* ── CONTACTS CRM ───────────────────────────────────────────── */}
           {activeSection === "contacts" && navItems.some(i => i.key === "contacts") && <ContactsCRM />}
 
@@ -928,8 +998,112 @@ export default function Dashboard() {
   );
 }
 
+// ── Booking / Calendar section (professional) ───────────────────────────────────
+function BookingCalendarSection({
+  viewings,
+  leads,
+  onGoToLeads,
+  onGoToViewings,
+  onGoToServices,
+}: {
+  viewings: any[];
+  leads: any[];
+  onGoToLeads: () => void;
+  onGoToViewings: () => void;
+  onGoToServices: () => void;
+}) {
+  type AgendaItem = { type: "viewing"; date: string; item: any } | { type: "lead"; date: string; item: any };
+  const items: AgendaItem[] = [
+    ...viewings
+      .filter((v: any) => v.scheduled_at && ["pending", "confirmed"].includes(v.status))
+      .map((v: any) => ({ type: "viewing" as const, date: new Date(v.scheduled_at).toISOString().split("T")[0], item: v })),
+    ...leads
+      .filter((l: any) => l.preferred_date && ["pending", "reviewed", "confirmed"].includes(l.status))
+      .map((l: any) => ({ type: "lead" as const, date: l.preferred_date, item: l })),
+  ];
+  const byDate = items.reduce((acc: Record<string, AgendaItem[]>, it) => {
+    if (!acc[it.date]) acc[it.date] = [];
+    acc[it.date].push(it);
+    return acc;
+  }, {});
+  const sortedDates = Object.keys(byDate).sort((a, b) => a.localeCompare(b));
+
+  return (
+    <div className="space-y-6">
+      <div className="flex gap-2 flex-wrap">
+        <Button variant="outline" size="sm" className="border-primary/40 text-primary" onClick={onGoToLeads}>
+          View Leads
+        </Button>
+        <Button variant="outline" size="sm" className="border-border" onClick={onGoToViewings}>
+          View Viewings
+        </Button>
+        <Button variant="outline" size="sm" className="border-border" onClick={onGoToServices}>
+          Set Availability
+        </Button>
+      </div>
+      {sortedDates.length === 0 ? (
+        <div className="glass-card rounded-xl p-12 text-center">
+          <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+          <p className="font-semibold">No scheduled items</p>
+          <p className="text-sm text-muted-foreground mt-1 mb-4">Consultation requests and viewings will appear here when scheduled.</p>
+          <Button variant="outline" className="border-primary/40 text-primary" onClick={onGoToLeads}>
+            View Leads
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {sortedDates.map((dateStr) => (
+            <div key={dateStr}>
+              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">
+                {new Date(dateStr).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
+              </p>
+              <div className="space-y-2">
+                {byDate[dateStr].map((it, idx) => (
+                  <div key={`${it.type}-${it.item.id}-${idx}`} className="glass-card rounded-xl p-4 flex items-center gap-4">
+                    {it.type === "viewing" ? (
+                      <>
+                        <div className="w-2 h-10 rounded-full bg-primary shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-sm">{it.item.listings?.title || "Viewing"}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(it.item.scheduled_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · {it.item.viewing_type === "video" ? "Video" : "In-person"}
+                          </p>
+                          <span className={`text-xs px-2 py-0.5 rounded-full mt-1 inline-block ${it.item.status === "confirmed" ? "bg-brand-emerald/20 text-brand-emerald" : "bg-brand-gold/20 text-brand-gold"}`}>{it.item.status}</span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="w-2 h-10 rounded-full bg-brand-gold shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-sm">{it.item.requester_name}</p>
+                          <p className="text-xs text-muted-foreground">{it.item.service || "Consultation"} · {it.item.request_type}</p>
+                          <span className={`text-xs px-2 py-0.5 rounded-full mt-1 inline-block capitalize ${LEAD_STATUS_COLORS[it.item.status] ?? "bg-secondary text-muted-foreground"}`}>{it.item.status}</span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Leads section ──────────────────────────────────────────────────────────────
-function LeadsSection({ leads, onUpdateStatus }: { leads: any[]; onUpdateStatus: (id: string, status: string) => void }) {
+function LeadsSection({
+  leads,
+  onUpdateStatus,
+  onMessage,
+  startConversationLoading,
+}: {
+  leads: any[];
+  onUpdateStatus: (id: string, status: string) => void;
+  onMessage?: (lead: any) => void;
+  startConversationLoading?: boolean;
+}) {
   const [statusFilter, setStatusFilter] = useState("all");
   const statuses = ["all", "pending", "reviewed", "confirmed", "cancelled"];
   const filtered = statusFilter === "all" ? leads : leads.filter(l => l.status === statusFilter);
@@ -972,7 +1146,13 @@ function LeadsSection({ leads, onUpdateStatus }: { leads: any[]; onUpdateStatus:
                 {lead.callback_time && <span>Callback: {lead.callback_time}</span>}
               </div>
             </div>
-            <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+            <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto flex-wrap">
+              {onMessage && (
+                <Button size="sm" variant="outline" className="border-primary/40 text-primary hover:bg-primary/10 text-xs gap-1"
+                  onClick={() => onMessage(lead)} disabled={startConversationLoading}>
+                  {startConversationLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <MessageSquare className="w-3 h-3" />} Message
+                </Button>
+              )}
               {lead.status === "pending" && (
                 <>
                   <Button size="sm" variant="outline" className="border-brand-emerald/40 text-brand-emerald hover:bg-brand-emerald/10 text-xs gap-1"

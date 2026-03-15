@@ -37,6 +37,7 @@ import AIAssistantPage from "./pages/AIAssistantPage";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
 import CookiePolicy from "./pages/CookiePolicy";
+import BrandedVideoRoom from "./pages/BrandedVideoRoom";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -78,6 +79,7 @@ const App = () => (
               <Route path="/investor-dashboard" element={<ProtectedRoute><InvestorDashboard /></ProtectedRoute>} />
               <Route path="/professionals" element={<Professionals />} />
               <Route path="/professionals/:id" element={<ProfessionalProfile />} />
+              <Route path="/video-room/:professionalId" element={<BrandedVideoRoom />} />
               <Route path="/signup" element={<Signup />} />
               <Route path="/login" element={<Login />} />
               <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />

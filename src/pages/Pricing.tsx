@@ -52,13 +52,11 @@ const BUYER_FREE_LIST = [
 ];
 const BUYER_PRO: PlanFeature[] = [
   { label: "Full AI Property Valuation", icon: BarChart2, free: false, paid: true },
-  { label: "Capital Growth Forecasts", icon: TrendingUp, free: false, paid: "5-year" },
   { label: "Ownership Status Filters", icon: Filter, free: false, paid: true },
   { label: "Auction Round Filters", icon: Gavel, free: false, paid: true },
   { label: "Expected Yield Filters", icon: TrendingUp, free: false, paid: true },
   { label: "Priority Auction Alerts", icon: Bell, free: false, paid: "Real-time" },
   { label: "Unlimited Saved Searches", icon: Star, free: "3 max", paid: "Unlimited" },
-  { label: "Legal Status Check", icon: Shield, free: false, paid: true },
   { label: "Comparable Sales Data", icon: BarChart2, free: false, paid: true },
 ];
 
@@ -92,13 +90,9 @@ const INVESTOR_FREE_LIST = [
 const INVESTOR_PRO: PlanFeature[] = [
   { label: "Full AI Deal Scoring", icon: BarChart2, free: false, paid: true },
   { label: "Investor Dashboard (deal pipeline)", icon: FolderKanban, free: false, paid: true },
-  { label: "5-year Capital Growth Forecasts", icon: TrendingUp, free: false, paid: true },
   { label: "Full AI Property Valuation", icon: BarChart2, free: false, paid: true },
   { label: "Due Diligence Checklist", icon: Shield, free: false, paid: true },
-  { label: "NDA-based off-market deal flow", icon: Eye, free: "Basic", paid: "Full" },
-  { label: "Export & API access", icon: FileText, free: false, paid: true },
-  { label: "Priority deal allocations", icon: Flame, free: false, paid: true },
-  { label: "Market intelligence reports", icon: BarChart2, free: false, paid: true },
+  { label: "Comparable Sales Data", icon: BarChart2, free: false, paid: true },
 ];
 
 // AGENT
@@ -136,7 +130,6 @@ const INSTITUTIONAL_PRO: PlanFeature[] = [
   { label: "CRM & contacts (full)", icon: Users, free: false, paid: true },
   { label: "Projects & portfolios", icon: FolderKanban, free: false, paid: true },
   { label: "Admin pipeline (Firesale & OS sync)", icon: Shield, free: false, paid: true },
-  { label: "Market intelligence reports", icon: BarChart2, free: false, paid: true },
   { label: "Priority support & onboarding", icon: Crown, free: false, paid: true },
   { label: "Due diligence hub", icon: FileText, free: false, paid: true },
 ];

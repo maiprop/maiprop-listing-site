@@ -137,6 +137,8 @@ export function dbListingToCard(
     tags: filterDisplayTags ? displayTags : (tags.filter(Boolean) as string[]),
     hasVideo: l.has_video_tour,
     hasVirtualTour: l.has_virtual_tour,
+    isFeatured: !!(l as any).is_featured,
+    priorityPlacement: Number((l as any).priority_placement) || 0,
   };
 
   if (includeOwnership) {

@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { Gavel, TrendingUp, Bell, ExternalLink, AlertCircle, Loader2, MapPin, Calendar, Euro, Map, List, Clock, SlidersHorizontal, X, Lock, Star, Heart, Share2, Flag, Building2, ChevronDown, Zap } from "lucide-react";
+import { Gavel, TrendingUp, Bell, ExternalLink, AlertCircle, Loader2, MapPin, Calendar, Euro, Map, List, Clock, SlidersHorizontal, X, Lock, Star, Heart, Share2, Flag, Building2, ChevronDown, Zap, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
@@ -15,7 +15,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { useToggleFavorite } from "@/hooks/useFavorites";
 import { toast } from "sonner";
 
-const AUCTION_SELECT_CORE = "id, title, city, address, price, auction_starting_bid, auction_date, auction_court, property_type, cover_image_url, sqm, bedrooms, bathrooms, latitude, longitude, tags, year_built, construction_status, website_url, region";
+const AUCTION_SELECT_CORE = "id, title, city, address, price, auction_starting_bid, auction_date, auction_court, property_type, cover_image_url, sqm, bedrooms, bathrooms, latitude, longitude, tags, year_built, construction_status, website_url, region, is_featured, priority_placement";
 const QUERY_TIMEOUT_MS = 15_000;
 const AUCTION_FETCH_LIMIT = 500;
 const PAGE_SIZE = 20;
@@ -54,12 +54,25 @@ function useAuctionListings() {
       };
 
       const run = async () => {
+        let result: any[];
         try {
-          return await fetchAll(true);
+          result = await fetchAll(true);
         } catch {
-          // Fallback when relation/RLS for listing_images is not available
-          return await fetchAll(false);
+          result = await fetchAll(false);
         }
+        // Priority placement: featured first, then priority_placement, then auction_date
+        result.sort((a, b) => {
+          const aFeatured = a.is_featured ? 1 : 0;
+          const bFeatured = b.is_featured ? 1 : 0;
+          if (bFeatured !== aFeatured) return bFeatured - aFeatured;
+          const aPri = Number(a.priority_placement ?? 0);
+          const bPri = Number(b.priority_placement ?? 0);
+          if (bPri !== aPri) return bPri - aPri;
+          const aDate = a.auction_date ? new Date(a.auction_date).getTime() : 0;
+          const bDate = b.auction_date ? new Date(b.auction_date).getTime() : 0;
+          return aDate - bDate; // earlier auction dates first
+        });
+        return result;
       };
 
       return Promise.race([
@@ -333,12 +346,19 @@ function AuctionCard({ a, favoritedIds, onToggleFav
             <Gavel className="w-10 h-10 text-muted-foreground/20" />
           </div>
         }
-        {a.auction_date &&
-        <div className="absolute top-2 left-2 flex items-center gap-1 bg-background/90 backdrop-blur-sm border border-border rounded-full px-2 py-0.5 text-[10px] font-semibold">
-            <Calendar className="w-3 h-3 text-brand-gold" />
-            {format(new Date(a.auction_date), "dd MMM yyyy")}
-          </div>
-        }
+        <div className="absolute top-2 left-2 flex items-center gap-1.5 flex-wrap">
+          {a.is_featured && (
+            <span className="inline-flex items-center gap-1 bg-brand-gold/90 text-background text-[10px] font-bold px-2 py-0.5 rounded-full">
+              <Crown className="w-2.5 h-2.5" /> Featured
+            </span>
+          )}
+          {a.auction_date && (
+            <div className="flex items-center gap-1 bg-background/90 backdrop-blur-sm border border-border rounded-full px-2 py-0.5 text-[10px] font-semibold">
+              <Calendar className="w-3 h-3 text-brand-gold" />
+              {format(new Date(a.auction_date), "dd MMM yyyy")}
+            </div>
+          )}
+        </div>
         <div className="absolute top-2 right-2 bg-brand-gold/90 text-background text-[10px] font-bold px-2 py-0.5 rounded-full">
           {PROPERTY_TYPE_GR[a.property_type] ?? a.property_type}
         </div>
@@ -547,7 +567,7 @@ export default function Auctions() {
         if (a.year_built < min || a.year_built > max) return false;
       }
       if (filterOwnership && !ownershipMatches(filterOwnership, a.tags)) return false;
-      if (filterRound && isPro) {
+      if (filterRound) {
         const round = getAuctionRound(a.tags);
         if (filterRound === "3plus") {
           if (!round || round < 3) return false;
@@ -556,7 +576,7 @@ export default function Auctions() {
           if (!round || round !== target) return false;
         }
       }
-      if (filterYield && isPro) {
+      if (filterYield) {
         const range = yieldRange(filterYield);
         if (range) {
           const est = estimateYield(a);
@@ -565,7 +585,7 @@ export default function Auctions() {
       }
       return true;
     });
-  }, [cappedAuctions, selectedCity, filterType, filterBidRange, filterYearRange, filterOwnership, filterRound, filterYield, isPro]);
+  }, [cappedAuctions, selectedCity, filterType, filterBidRange, filterYearRange, filterOwnership, filterRound, filterYield]);
 
   const totalPages = Math.max(1, Math.ceil(visibleFiltered.length / PAGE_SIZE));
   const paginated = useMemo(() => {
@@ -811,101 +831,39 @@ export default function Auctions() {
                 </div>{/* end grid */}
               </div>{/* end standard filters */}
 
-              {/* Pro filters */}
-              <div className="pt-4 border-t border-brand-gold/30 bg-brand-gold/5 -mx-5 px-5 pb-1 rounded-b-2xl">
-                <div className="flex items-center gap-2 mb-3">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Pro Filters</p>
-                  {!isPro && <PremiumBadge />}
-                  {isPro &&
-                <span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/25">
-                      ✓ Unlocked
-                    </span>
-                }
-                </div>
+              {/* Auction filters: Ownership, Round, Yield */}
+              <div className="pt-4 border-t border-border -mx-5 px-5 pb-1 rounded-b-2xl">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">More Filters</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {/* Ownership Status */}
-                  {isPro ?
-                <div>
-                      <label className="text-xs text-muted-foreground font-medium block mb-1.5">Ownership Status</label>
-                      <select value={filterOwnership} onChange={(e) => setFilterOwnership(e.target.value)} className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none">
-                        {OWNERSHIP_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-                      </select>
-                    </div> :
-
-                <div className="relative cursor-pointer group/pf" onClick={() => navigate("/pricing")}>
-                      <label className="text-xs text-muted-foreground font-medium flex items-center gap-1.5 mb-1.5 pointer-events-none">Ownership Status <PremiumBadge /></label>
-                      <select disabled className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-muted-foreground outline-none appearance-none opacity-60 pointer-events-none"><option>All</option></select>
-                    </div>
-                }
-                  {/* Auction Round */}
-                  {isPro ?
-                <div>
-                      <label className="text-xs text-muted-foreground font-medium block mb-1.5">Auction Round</label>
-                      <select value={filterRound} onChange={(e) => setFilterRound(e.target.value)} className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none">
-                        {roundOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                      </select>
-                    </div> :
-
-                <div className="relative cursor-pointer group/pf" onClick={() => navigate("/pricing")}>
-                      <label className="text-xs text-muted-foreground font-medium flex items-center gap-1.5 mb-1.5 pointer-events-none">Auction Round <PremiumBadge /></label>
-                      <select disabled className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-muted-foreground outline-none appearance-none opacity-60 pointer-events-none"><option>All</option></select>
-                    </div>
-                }
-
-
-                  {/* Expected rental yield */}
-                  {isPro ?
-                <div>
-                      <label className="text-xs text-muted-foreground font-medium block mb-1.5">
-                        Est. Rental Yield
-                        <span className="ml-1.5 text-[10px] text-muted-foreground/60">(city benchmark × sqm / bid)</span>
-                      </label>
-                      <select
-                    value={filterYield}
-                    onChange={(e) => setFilterYield(e.target.value)}
-                    className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none">
-                    
-                        <option value="">Any Yield</option>
-                        <option value="low">Under 3% — Low yield</option>
-                        <option value="medium">3% – 6% — Average</option>
-                        <option value="high">6% – 9% — Good</option>
-                        <option value="very_high">9%+ — High yield opportunity</option>
-                      </select>
-                    </div> :
-
-                <div className="relative cursor-pointer group/pf" onClick={() => navigate("/pricing")}>
-                      <label className="text-xs text-muted-foreground font-medium flex items-center gap-1.5 mb-1.5 pointer-events-none">
-                        Est. Rental Yield <PremiumBadge />
-                      </label>
-                      <select disabled className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-muted-foreground outline-none appearance-none opacity-60 pointer-events-none">
-                        <option>Any Yield</option>
-                        <option>Under 3%</option>
-                        <option>3% – 6%</option>
-                        <option>6% – 9%</option>
-                        <option>9%+</option>
-                      </select>
-                      <div className="absolute -top-1 left-1/2 -translate-x-1/2 -translate-y-full opacity-0 group-hover/pf:opacity-100 transition-opacity z-20 pointer-events-none">
-                        <div className="bg-card border border-brand-gold/30 rounded-xl px-3 py-2 shadow-elevated text-center whitespace-nowrap">
-                          <p className="text-[10px] font-bold text-brand-gold flex items-center gap-1 justify-center"><Zap className="w-2.5 h-2.5" /> Upgrade to Pro</p>
-                          <p className="text-[10px] text-muted-foreground">Filter by estimated rental yield</p>
-                        </div>
-                      </div>
-                    </div>
-                }
-                </div>
-
-                {/* Upsell — only show for non-Pro */}
-                {!isPro &&
-              <div className="mt-4 flex items-center justify-between p-3 rounded-xl bg-brand-gold/5 border border-brand-gold/20">
-                    <div className="flex items-center gap-2">
-                      <Star className="w-4 h-4 text-brand-gold" />
-                      <span className="text-xs font-medium">Unlock Pro filters — Auction Round &amp; Rental Yield</span>
-                    </div>
-                    <Button size="sm" className="bg-gradient-gold border-0 text-background font-semibold text-xs" asChild>
-                      <Link to="/pricing">Upgrade to Pro</Link>
-                    </Button>
+                  <div>
+                    <label className="text-xs text-muted-foreground font-medium block mb-1.5">Ownership Status</label>
+                    <select value={filterOwnership} onChange={(e) => setFilterOwnership(e.target.value)} className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none">
+                      {OWNERSHIP_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                    </select>
                   </div>
-              }
+                  <div>
+                    <label className="text-xs text-muted-foreground font-medium block mb-1.5">Auction Round</label>
+                    <select value={filterRound} onChange={(e) => setFilterRound(e.target.value)} className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none">
+                      {roundOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground font-medium block mb-1.5">
+                      Est. Rental Yield
+                      <span className="ml-1.5 text-[10px] text-muted-foreground/60">(city benchmark × sqm / bid)</span>
+                    </label>
+                    <select
+                      value={filterYield}
+                      onChange={(e) => setFilterYield(e.target.value)}
+                      className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none">
+                      <option value="">Any Yield</option>
+                      <option value="low">Under 3% — Low yield</option>
+                      <option value="medium">3% – 6% — Average</option>
+                      <option value="high">6% – 9% — Good</option>
+                      <option value="very_high">9%+ — High yield opportunity</option>
+                    </select>
+                  </div>
+                </div>
               </div>
             </div>
           }
