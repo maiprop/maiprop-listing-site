@@ -232,18 +232,7 @@ export default function Professionals() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none" />
-              
             </div>
-            {!selectedGroup &&
-            <div className="flex gap-2 flex-wrap">
-                {categoryGroups.map((g) =>
-              <button key={g.id} onClick={() => setSelectedGroup(g.id)}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all ${g.border} ${g.bg} ${g.color}`}>
-                    {g.emoji} {g.label}
-                  </button>
-              )}
-              </div>
-            }
           </div>
 
           {/* ── Results ──────────────────────────────────────────────── */}

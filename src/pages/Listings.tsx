@@ -24,10 +24,8 @@ import {
   ENERGY_CLASSES, HEATING_TYPES, CONSTRUCTION_STATUSES, ROAD_TYPES, SLOPE_TYPES,
 } from "@/lib/filterConfig";
 import { useSmartFilters } from "@/hooks/useSmartFilters";
-import { getOwnerParticipantType } from "@/lib/participantConfig";
+import { dbListingToCard } from "@/lib/listingUtils";
 import { toast } from "sonner";
-
-
 
 // Price ranges adapt to listing type — buy uses purchase price, rent uses monthly rent
 const buyPriceRanges = [
@@ -67,67 +65,14 @@ const sortOptions = [
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function dbListingToCard(l: any) {
-  const ownerParticipantType = getOwnerParticipantType(l.profiles ?? null);
-  // Parse ownership from tags array (e.g. "ownership:full", "ownership_pct:50")
-  const tags: string[] = l.tags || [];
-  const ownershipTag = tags.find((t: string) => t.startsWith("ownership:") && !t.startsWith("ownership_pct:"));
-  const ownershipPctTag = tags.find((t: string) => t.startsWith("ownership_pct:"));
-  const ownershipStatus = ownershipTag ? ownershipTag.split(":")[1] : undefined;
-  const ownershipPercentage = ownershipPctTag ? Number(ownershipPctTag.split(":")[1]) : undefined;
-
-  // Filter out internal/system tags — only show human-readable feature tags
-  const SYSTEM_TAG_PREFIXES = ["ownership:", "ownership_pct:", "round:", "posted", "status:", "source:"];
-  const cleanTags = tags.filter((t: string) => !SYSTEM_TAG_PREFIXES.some(p => t.startsWith(p)) && !t.toLowerCase().startsWith("posted"));
-  const displayTags = cleanTags.filter(Boolean).length > 0
-    ? cleanTags
-    : [
-        l.has_parking && "Parking",
-        l.has_pool && "Pool",
-        l.has_elevator && "Elevator",
-        l.has_garden && "Garden",
-        l.has_smart_home && "Smart Home",
-      ].filter(Boolean) as string[];
-
-  return {
-    id: l.id,
-    title: l.title,
-    address: l.address || l.city,
-    city: l.city,
-    price: Number(l.price),
-    pricePerSqm: l.price_per_sqm ? Number(l.price_per_sqm) : undefined,
-    bedrooms: l.bedrooms ?? undefined,
-    bathrooms: l.bathrooms ?? undefined,
-    sqm: Number(l.sqm),
-    floor: l.floor != null ? Number(l.floor) : undefined,
-    totalFloors: l.total_floors != null ? Number(l.total_floors) : undefined,
-    yearBuilt: l.year_built ?? undefined,
-    energyClass: l.energy_class ?? undefined,
-    ownershipStatus,
-    ownershipPercentage,
-    latitude: l.latitude,
-    longitude: l.longitude,
-    images: [
-      ...(l.cover_image_url ? [l.cover_image_url] : []),
-      ...(l.listing_images?.map((img: any) => img.url) || []),
-    ].filter(Boolean).slice(0, 3),
-    type: l.property_type as any,
-    listingType: l.listing_type as any,
-    auctionDate: l.auction_date ? new Date(l.auction_date).toLocaleDateString("en-GB") : undefined,
-    auctionStartingBid: l.auction_starting_bid ? Number(l.auction_starting_bid) : undefined,
-    aiScore: l.ai_score ?? undefined,
-    views: l.views_count ?? undefined,
-    agent: l.profiles ? {
-      name: l.profiles.display_name || "Owner",
-      verified: l.profiles.verified || false,
-      avatar: l.profiles.avatar_url,
-    } : undefined,
-    ownerParticipantType,
-    tags: displayTags,
-    hasVideo: l.has_video_tour,
-    hasVirtualTour: l.has_virtual_tour,
-    _raw: l,
-  };
+function listingToCard(l: any) {
+  return dbListingToCard(l, {
+    includeOwnership: true,
+    includeCoordinates: true,
+    filterDisplayTags: true,
+    includeRaw: true,
+    maxImages: 3,
+  });
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -496,7 +441,7 @@ export default function Listings() {
   });
 
   const hasActiveFilters = !!(searchQuery || selectedListingType || selectedType);
-  const sourceListings = dbListings.map(dbListingToCard);
+  const sourceListings = dbListings.map(listingToCard);
 
   // Client-side filtering
   let filtered = sourceListings.filter((p: any) => {

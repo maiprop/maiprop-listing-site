@@ -16,16 +16,17 @@ Each participant type has **fixed, non-upgradable** rights. Users cannot escalat
 |---------------|------------------|--------|
 | **buyer**     | individual       | Browse listings, save, viewings, auction alerts |
 | **seller**    | seller_landlord  | Create & manage own listings, viewings |
-| **investor**  | individual       | Deal flow (with subscription), saved searches, auctions |
-| **agent**     | agent            | Listings, analytics, contacts, projects, portfolios, OS sync (business) |
-| **developer** | agent            | Listings, analytics, contacts, projects, portfolios — no admin |
-| **institutional** | agent        | Deal flow, listings, analytics, contacts, projects, portfolios — no admin |
+| **investor**  | investor         | Deal flow (with subscription), saved searches, auctions |
+| **agent**     | agent            | Listings, analytics, contacts, projects, portfolios — no admin; agent is a market professional role |
+| **developer** | developer        | Listings, analytics, contacts, projects, portfolios — no admin |
+| **institutional** | institutional | Deal flow, listings, analytics, contacts, projects, portfolios — no admin |
 | **professional** | professional   | Professional directory, services, leads, messages |
 
 ## Role escalation rules
 
-- Users **cannot** set their own `role` to `agent` (platform admin only).
-- Users **can** upgrade to `professional` or `seller_landlord` via onboarding; charges apply per plan.
+- Users **can** self-assign `agent`, `investor`, `institutional`, `developer` via onboarding (participant types with no admin rights).
+- Users **cannot** set their own `role` to `professional` (platform admin only; requires pro verification).
+- Users **can** upgrade to `seller_landlord` via onboarding; charges apply per plan.
 - First-time onboarding can set `individual`, `seller_landlord`, or `professional`.
 - **Switch Participant Type** (Settings): Changes how the dashboard is organised; does not grant admin. Users can switch between buyer, seller, investor, agent, etc. within allowed plans.
 - Switching participant type clears `bio` and sends user to onboarding; within-role switches allowed.

@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMyListings, useUpdateListing, useDeleteListing } from "@/hooks/useListings";
+import { useListingViewTrends, useLeadFunnel } from "@/hooks/useAnalytics";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useViewings, useUpdateViewing } from "@/hooks/useViewings";
 import { useSavedSearches, useDeleteSavedSearch, useToggleSavedSearchAlert } from "@/hooks/useSavedSearches";
@@ -25,29 +26,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { getParticipantTypeFromProfile, getOwnerParticipantType, PARTICIPANT_LABELS } from "@/lib/participantConfig";
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function dbListingToCard(l: any) {
-  const ownerParticipantType = getOwnerParticipantType(l.profiles ?? null);
-  return {
-    id: l.id, title: l.title, address: l.address || l.city, city: l.city,
-    price: Number(l.price), pricePerSqm: l.price_per_sqm ? Number(l.price_per_sqm) : undefined,
-    bedrooms: l.bedrooms ?? undefined, bathrooms: l.bathrooms ?? undefined,
-    sqm: Number(l.sqm), floor: l.floor ?? undefined, totalFloors: l.total_floors ?? undefined,
-    yearBuilt: l.year_built ?? undefined, energyClass: l.energy_class ?? undefined,
-    images: [...(l.cover_image_url ? [l.cover_image_url] : []), ...(l.listing_images?.map((img: any) => img.url) || [])].filter(Boolean),
-    type: l.property_type as any, listingType: l.listing_type as any,
-    auctionDate: l.auction_date ? new Date(l.auction_date).toLocaleDateString("en-GB") : undefined,
-    auctionStartingBid: l.auction_starting_bid ? Number(l.auction_starting_bid) : undefined,
-    aiScore: l.ai_score ?? undefined, views: l.views_count ?? undefined,
-    agent: l.profiles ? { name: l.profiles.display_name || "Owner", verified: l.profiles.verified || false, avatar: l.profiles.avatar_url } : undefined,
-    ownerParticipantType,
-    tags: (l.tags || []).filter(Boolean) as string[],
-    hasVideo: l.has_video_tour, hasVirtualTour: l.has_virtual_tour,
-  };
-}
+import { getParticipantTypeFromProfile, getOwnerParticipantType } from "@/lib/participantConfig";
+import { dbListingToCard } from "@/lib/listingUtils";
 
 const SAVED_TABS = [
   { label: "All", value: "" }, { label: "Sale", value: "sale" },
@@ -135,7 +115,7 @@ type NavKey =
   | "deal-flow" | "contacts" | "projects" | "portfolios"
   | "profile" | "settings";
 
-type DashboardRole = "individual" | "seller_landlord" | "agent" | "professional";
+type DashboardRole = "individual" | "seller_landlord" | "agent" | "professional" | "investor" | "institutional" | "developer";
 
 const ALL_NAV_ITEMS: { icon: React.ElementType; label: string; key: NavKey }[] = [
   { icon: Home,          label: "Overview",       key: "overview"       },
@@ -159,16 +139,16 @@ const ALL_NAV_ITEMS: { icon: React.ElementType; label: string; key: NavKey }[] =
 // ── Nav per bio-type (spec-accurate) ──────────────────────────────────────────
 const NAV_BY_TYPE: Record<string, NavKey[]> = {
   buyer:         ["overview", "saved", "saved-searches", "messages", "viewings", "auctions", "profile", "settings"],
-  seller:        ["overview", "listings", "saved", "messages", "viewings", "profile", "settings"],
+  seller:        ["overview", "listings", "saved", "saved-searches", "messages", "viewings", "profile", "settings"],
   investor:      ["overview", "deal-flow", "saved", "saved-searches", "messages", "viewings", "auctions", "profile", "settings"],
   agent:         ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "contacts", "projects", "portfolios", "profile", "settings"],
   institutional: ["overview", "deal-flow", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "contacts", "projects", "portfolios", "profile", "settings"],
   developer:     ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "contacts", "projects", "portfolios", "profile", "settings"],
-  professional:  ["overview", "services", "leads", "messages", "profile", "settings"],
+  professional:  ["overview", "services", "leads", "messages", "viewings", "profile", "settings"],
 };
 
 function getNavItemsForBioType(bioType: string | null, role: DashboardRole) {
-  const key = bioType ?? (role === "seller_landlord" ? "seller" : role === "professional" ? "professional" : role === "agent" ? "agent" : "buyer");
+  const key = bioType ?? (role === "seller_landlord" ? "seller" : role === "professional" ? "professional" : role === "agent" ? "agent" : role === "investor" ? "investor" : role === "institutional" ? "institutional" : role === "developer" ? "developer" : "buyer");
   const keys = NAV_BY_TYPE[key] ?? NAV_BY_TYPE.buyer;
   return ALL_NAV_ITEMS.filter(i => keys.includes(i.key));
 }
@@ -213,6 +193,9 @@ export default function Dashboard() {
   const { data: savedSearches = [], isLoading: savedSearchesLoading } = useSavedSearches();
   const { data: auctionAlerts = [], isLoading: alertsLoading } = useAuctionAlerts();
   const { data: myProfessional } = useMyProfessional();
+  const listingIds = myListings.map((l: any) => l.id).filter(Boolean);
+  const { data: viewTrends = [] } = useListingViewTrends(listingIds);
+  const { data: leadFunnel } = useLeadFunnel(myProfessional?.id);
   const { data: professionalServices = [] } = useProfessionalServices(myProfessional?.id || "");
   const { data: leads = [], isLoading: leadsLoading } = useMyLeads(myProfessional?.id);
   const updateListing = useUpdateListing();
@@ -231,22 +214,19 @@ export default function Dashboard() {
 
   const displayName = profile?.display_name || profile?.first_name || user?.email?.split("@")[0] || "User";
   const roleLabel = (() => {
-    if (role === "seller_landlord") return "Seller / Landlord";
-    if (role === "agent") {
-      if (bioType === "institutional") return "Institutional";
-      if (bioType === "developer") return "Developer";
-      return "Agent";
-    }
-    if (role === "individual") {
-      if (bioType === "investor") return "Investor";
-      if (bioType === "buyer") return "Buyer / Renter";
-      return "Individual";
-    }
-    return role;
+    if (role === "seller_landlord" || bioType === "seller") return "Seller / Landlord";
+    if (role === "agent" || bioType === "agent") return "Agent";
+    if (role === "professional" || bioType === "professional") return "Professional";
+    if (role === "investor" || bioType === "investor") return "Investor";
+    if (role === "institutional" || bioType === "institutional") return "Institutional";
+    if (role === "developer" || bioType === "developer") return "Developer";
+    if (bioType === "buyer") return "Buyer / Renter";
+    return "Buyer / Renter";
   })();
 
-  const isInvestorLike = bioType === "investor" || bioType === "institutional";
-  const isAgentLike    = role === "agent";
+  const isInvestorLike = bioType === "investor" || bioType === "institutional" || role === "investor" || role === "institutional";
+  const isSellSide = role === "agent" || role === "institutional" || role === "developer";
+  const isSellerLike = role === "seller_landlord" || bioType === "seller" || isSellSide;
   const upcomingViewingsCount = viewings.filter((v: any) => v.status === "confirmed" || v.status === "pending").length;
   const ownViewingsCount = ownViewings.filter((v: any) => v.status === "confirmed" || v.status === "pending").length;
   const pendingLeadsCount = (leads as any[]).filter(l => l.status === "pending").length;
@@ -260,7 +240,7 @@ export default function Dashboard() {
     developer:     [{ label: "Active Listings", value: myListings.filter(l => l.status === "active").length, icon: Building2, color: "text-primary" }, { label: "Total Views", value: myListings.reduce((s, l) => s + (l.views_count || 0), 0), icon: Eye, color: "text-brand-emerald" }, { label: "Saved", value: favorites.length, icon: Heart, color: "text-destructive" }, { label: "Viewings", value: upcomingViewingsCount + ownViewingsCount, icon: Calendar, color: "text-brand-gold" }],
     professional:  [{ label: "Services", value: professionalServices.length, icon: Wrench, color: "text-primary" }, { label: "Pending Leads", value: pendingLeadsCount, icon: Briefcase, color: "text-brand-gold" }, { label: "Total Leads", value: (leads as any[]).length, icon: Users, color: "text-primary" }],
   };
-  const statsKey = bioType ?? (role === "seller_landlord" ? "seller" : role === "professional" ? "professional" : role === "agent" ? "agent" : "buyer");
+  const statsKey = bioType ?? (role === "seller_landlord" ? "seller" : role === "professional" ? "professional" : role === "agent" ? "agent" : role === "investor" ? "investor" : role === "institutional" ? "institutional" : role === "developer" ? "developer" : "buyer");
   const stats = statsByType[statsKey] ?? statsByType.buyer;
 
   return (
@@ -340,13 +320,16 @@ export default function Dashboard() {
                   <h1 className="font-display text-2xl font-bold">Good morning, {displayName} 👋</h1>
                   <p className="text-muted-foreground text-sm mt-1">
                     {isInvestorLike ? "Your investment pipeline and deal opportunities." :
-                     role === "seller_landlord" ? "Manage your listings and viewings." :
-                     isAgentLike ? "Here's what's happening with your listings and leads." :
+                     role === "developer" ? "Manage your project listings and showcases." :
+                     role === "institutional" ? "Your portfolio, deal flow, and listings." :
+                     role === "seller_landlord" || bioType === "seller" ? "Manage your listings and viewings." :
+                     isSellSide ? "Here's what's happening with your listings and leads." :
                      role === "professional" ? "Your services and incoming client leads." :
+                     role === "investor" ? "Your deal pipeline and investment opportunities." :
                      "Here's your search activity and alerts."}
                   </p>
                 </div>
-                {(role === "seller_landlord" || isAgentLike) && (
+                {isSellerLike && (
                   <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" onClick={() => setActiveSection("listings")}>
                     <Plus className="w-4 h-4" /> New Listing
                   </Button>
@@ -361,7 +344,7 @@ export default function Dashboard() {
                     <Briefcase className="w-4 h-4" /> View Leads {pendingLeadsCount > 0 && `(${pendingLeadsCount})`}
                   </Button>
                 )}
-                {!isInvestorLike && !isAgentLike && role === "individual" && (
+                {!isInvestorLike && !isSellerLike && (role === "individual" || bioType === "buyer") && (
                   <Button variant="outline" className="border-border gap-2" asChild>
                     <Link to="/listings"><Search className="w-4 h-4" /> Browse Listings</Link>
                   </Button>
@@ -414,7 +397,7 @@ export default function Dashboard() {
               )}
 
               {/* Buyer overview */}
-              {role === "individual" && !isInvestorLike && (
+              {(role === "individual" || bioType === "buyer") && !isInvestorLike && !isSellerLike && (
                 <div className="grid md:grid-cols-2 gap-6">
                   <div className="glass-card rounded-xl p-6">
                     <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Heart className="w-4 h-4 text-destructive" /> Saved Properties</h2>
@@ -432,7 +415,7 @@ export default function Dashboard() {
               )}
 
               {/* Seller / Agent overview */}
-              {(role === "seller_landlord" || isAgentLike) && (
+              {isSellerLike && (
                 <>
                   {myListings.length > 0 ? (
                     <div>
@@ -464,7 +447,7 @@ export default function Dashboard() {
                       </Button>
                     </div>
                   )}
-                  {role === "seller_landlord" && (
+                  {(role === "seller_landlord" || bioType === "seller") && (
                     <div className="glass-card rounded-xl p-4 border border-primary/20 bg-primary/5 flex items-center justify-between flex-wrap gap-3">
                       <div>
                         <p className="font-semibold text-sm">Upgrade to Pro</p>
@@ -923,12 +906,14 @@ export default function Dashboard() {
               leads={leads as any[]}
               role={role}
               listingsLoading={listingsLoading}
+              viewTrends={viewTrends}
+              leadFunnel={leadFunnel}
             />
           )}
 
           {/* ── SETTINGS ─────────────────────────────────────────────── */}
           {activeSection === "settings" && navItems.some(i => i.key === "settings") && (
-            <SettingsSection bioType={bioType} roleLabel={roleLabel} onUpdate={updateProfile} refreshProfile={refreshProfile} />
+            <SettingsSection roleLabel={roleLabel} onUpdate={updateProfile} refreshProfile={refreshProfile} />
           )}
 
         </main>
@@ -1071,27 +1056,35 @@ function LinkSection({
   );
 }
 
-// ── Analytics section (minimal listing & lead analytics) ───────────────────────
+// ── Analytics section (listing trends, lead funnel, conversion) ─────────────────
 function AnalyticsSection({
   myListings,
   leads,
   role,
   listingsLoading,
+  viewTrends = [],
+  leadFunnel,
 }: {
   myListings: any[];
   leads: any[];
   role: string;
   listingsLoading: boolean;
+  viewTrends?: { date: string; count: number }[];
+  leadFunnel?: { pending: number; reviewed: number; confirmed: number; cancelled: number; total: number; conversionRate: number };
 }) {
   const totalViews = myListings.reduce((s, l) => s + (l.views_count || 0), 0);
   const activeCount = myListings.filter(l => l.status === "active").length;
   const pendingLeads = leads.filter(l => l.status === "pending").length;
   const totalLeads = leads.length;
+  const maxTrendCount = Math.max(1, ...viewTrends.map(t => t.count));
 
   const stats: { label: string; value: number; color: string }[] = [
     { label: "Active Listings", value: activeCount, color: "text-primary" },
     { label: "Total Views", value: totalViews, color: "text-brand-emerald" },
-    ...(role === "professional" ? [
+    ...(role === "professional" && leadFunnel ? [
+      { label: "Conversion Rate", value: leadFunnel.conversionRate, color: "text-brand-emerald" },
+      { label: "Total Leads", value: totalLeads, color: "text-primary" },
+    ] : role === "professional" ? [
       { label: "Pending Leads", value: pendingLeads, color: "text-brand-gold" },
       { label: "Total Leads", value: totalLeads, color: "text-primary" },
     ] : []),
@@ -1105,7 +1098,7 @@ function AnalyticsSection({
             <BarChart2 className="w-6 h-6 text-primary" /> Analytics
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {role === "professional" ? "Lead and consultation analytics." : "Listing performance overview."}
+            {role === "professional" ? "Lead funnel & conversion metrics." : "Listing performance & view trends."}
           </p>
         </div>
         <Button variant="outline" className="border-border gap-2" asChild>
@@ -1121,10 +1114,54 @@ function AnalyticsSection({
             {stats.map(s => (
               <div key={s.label} className="glass-card rounded-xl p-4">
                 <span className="text-xs text-muted-foreground">{s.label}</span>
-                <div className={cn("font-display text-2xl font-bold mt-1", s.color)}>{s.value}</div>
+                <div className={cn("font-display text-2xl font-bold mt-1", s.color)}>
+                  {s.label.includes("Conversion") ? `${s.value}%` : s.value}
+                </div>
               </div>
             ))}
           </div>
+
+          {/* Lead funnel (professionals) */}
+          {role === "professional" && leadFunnel && leadFunnel.total > 0 && (
+            <div>
+              <h2 className="font-display font-semibold mb-3">Lead Funnel</h2>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  { key: "pending", label: "Pending", count: leadFunnel.pending, color: "bg-brand-gold/20 text-brand-gold border-brand-gold/30" },
+                  { key: "reviewed", label: "Reviewed", count: leadFunnel.reviewed, color: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
+                  { key: "confirmed", label: "Confirmed", count: leadFunnel.confirmed, color: "bg-brand-emerald/20 text-brand-emerald border-brand-emerald/30" },
+                  { key: "cancelled", label: "Cancelled", count: leadFunnel.cancelled, color: "bg-muted text-muted-foreground border-border" },
+                ].map(({ key, label, count, color }) => (
+                  <div key={key} className={cn("glass-card rounded-xl p-3 border", color)}>
+                    <span className="text-xs font-medium">{label}</span>
+                    <div className="font-display text-xl font-bold mt-0.5">{count}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* View trends (sellers/agents/developers) */}
+          {role !== "professional" && viewTrends.length > 0 && (
+            <div>
+              <h2 className="font-display font-semibold mb-3">Views (last 14 days)</h2>
+              <div className="glass-card rounded-xl p-4">
+                <div className="flex items-end gap-1 h-24">
+                  {viewTrends.map((t, i) => (
+                    <div key={t.date} className="flex-1 flex flex-col items-center gap-1" title={`${t.date}: ${t.count} views`}>
+                      <div
+                        className="w-full min-w-[4px] rounded-t bg-primary/60 transition-all hover:bg-primary"
+                        style={{ height: `${Math.max(4, (t.count / maxTrendCount) * 80)}%` }}
+                      />
+                      <span className="text-[10px] text-muted-foreground truncate w-full text-center">
+                        {new Date(t.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
           {myListings.length > 0 && (
             <div>
@@ -1343,19 +1380,24 @@ function ProfileEditor({ profile, onUpdate, onSwitchToSettings }: { profile: any
 
 
 const ROLE_PERMISSIONS: Record<string, { label: string; can: string[] }> = {
-  individual:      { label: "Individual",       can: ["Browse listings", "Save properties", "Request viewings", "Auction alerts"] },
-  seller_landlord: { label: "Seller/Landlord",  can: ["Create & manage listings", "Receive viewing requests", "AI listing assist"] },
+  buyer_renter:    { label: "Buyer / Renter",   can: ["Browse listings", "Save properties", "Request viewings", "Auction alerts"] },
+  seller_landlord: { label: "Seller / Landlord", can: ["Create & manage listings", "Receive viewing requests", "AI listing assist"] },
   agent:           { label: "Agent",            can: ["Unlimited listings", "OS sync", "Lead management", "Analytics"] },
+  investor:        { label: "Investor",         can: ["Deal flow", "Saved deals", "Auction alerts", "ROI calculator"] },
+  institutional:   { label: "Institutional",   can: ["Deal flow", "Listings", "Portfolios", "CRM", "Analytics"] },
+  developer:       { label: "Developer",       can: ["Listings", "Projects", "Portfolios", "Analytics"] },
   professional:    { label: "Professional",     can: ["Professional directory", "Service catalog", "Client leads", "Verified badge"] },
 };
 
+function toRoleKey(label: string): string {
+  return label.toLowerCase().replace(/ \/ /g, "_").replace(/ /g, "_").replace(/\s+/g, "_");
+}
+
 function SettingsSection({
-  bioType,
   roleLabel,
   onUpdate,
   refreshProfile,
 }: {
-  bioType: string | null;
   roleLabel: string;
   onUpdate: (updates: any) => Promise<{ error: Error | null }>;
   refreshProfile: () => Promise<void>;
@@ -1382,8 +1424,6 @@ function SettingsSection({
     navigate("/onboarding");
   };
 
-  const currentBioLabel = bioType ? (PARTICIPANT_LABELS[bioType as keyof typeof PARTICIPANT_LABELS] ?? bioType) : "Not set";
-
   return (
     <div className="space-y-6 max-w-xl">
       <h1 className="font-display text-2xl font-bold">Settings</h1>
@@ -1392,38 +1432,45 @@ function SettingsSection({
       <div className="glass-card rounded-xl p-6 space-y-4">
         <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Account</h2>
 
-        <div className="flex items-center justify-between py-2 border-b border-border">
+        <div className="flex items-center justify-between py-2">
           <div>
             <p className="text-sm font-medium">Account Type</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Your permission level — cannot be changed by yourself</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Shown in sidebar — switch below to change</p>
           </div>
           <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-primary/10 text-primary border border-primary/20">
             {roleLabel}
           </span>
         </div>
-
-        <div className="flex items-center justify-between py-2">
-          <div>
-            <p className="text-sm font-medium">Dashboard View</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Currently configured as <strong>{currentBioLabel}</strong></p>
-          </div>
-          <span className="text-xs px-2.5 py-1 rounded-full bg-secondary border border-border text-foreground">
-            {currentBioLabel}
-          </span>
-        </div>
       </div>
 
       {/* What your role can do */}
-      {ROLE_PERMISSIONS[roleLabel.toLowerCase().replace(/ \/ /g, "_").replace(/ /g, "_")] ? null : (
-        <div className="glass-card rounded-xl p-5 border border-primary/10">
-          <h2 className="font-semibold text-sm mb-3 flex items-center gap-2">
-            <Shield className="w-4 h-4 text-primary" /> Your Permissions
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            Your access rights are determined server-side and cannot be changed from here.
-          </p>
-        </div>
-      )}
+      {(() => {
+        const perm = ROLE_PERMISSIONS[toRoleKey(roleLabel)];
+        if (perm) {
+          return (
+            <div className="glass-card rounded-xl p-5 border border-primary/10">
+              <h2 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                <Shield className="w-4 h-4 text-primary" /> Your Permissions
+              </h2>
+              <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
+                {perm.can.map((c) => (
+                  <li key={c}>{c}</li>
+                ))}
+              </ul>
+            </div>
+          );
+        }
+        return (
+          <div className="glass-card rounded-xl p-5 border border-primary/10">
+            <h2 className="font-semibold text-sm mb-3 flex items-center gap-2">
+              <Shield className="w-4 h-4 text-primary" /> Your Permissions
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              Your access rights are determined server-side and cannot be changed from here.
+            </p>
+          </div>
+        );
+      })()}
 
       {/* Security notice */}
       <div className="glass-card rounded-xl p-5 border border-amber-500/20 bg-amber-500/5">
@@ -1480,7 +1527,7 @@ function SettingsSection({
           <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 space-y-3">
             <p className="text-sm font-semibold text-destructive">Confirm switch</p>
             <p className="text-xs text-muted-foreground">
-              Your current setup (<strong>{currentBioLabel}</strong>) will be cleared and you'll go through onboarding again.
+              Your current setup (<strong>{roleLabel}</strong>) will be cleared and you'll go through onboarding again.
               Your listings, saved properties, and messages won't be affected. By proceeding you acknowledge the billing &amp; access notes above.
             </p>
             <div className="flex gap-2">

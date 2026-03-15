@@ -21,7 +21,7 @@ import {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type RoleKey = "individual" | "seller_landlord" | "agent" | "professional";
+type RoleKey = "individual" | "seller_landlord" | "agent" | "professional" | "investor" | "institutional" | "developer";
 type OnboardingStep =
   | "pick-type"
   | "pro-category"
@@ -89,7 +89,7 @@ const participants: ParticipantType[] = [
     section: "Private",
   },
   {
-    id: "investor", role: "individual", icon: TrendingUp, color: "emerald",
+    id: "investor", role: "investor", icon: TrendingUp, color: "emerald",
     label: "Private Investor", tagline: "Grow your portfolio",
     desc: "Buying to invest, flip, or generate rental yield",
     features: [
@@ -117,7 +117,7 @@ const participants: ParticipantType[] = [
     section: "Real estate agents",
   },
   {
-    id: "institutional", role: "agent", icon: Globe2, color: "amber",
+    id: "institutional", role: "institutional", icon: Globe2, color: "amber",
     label: "Institutional / Fund", tagline: "Portfolio at scale",
     desc: "Investment fund, REIT, or institutional buyer",
     features: [
@@ -146,7 +146,7 @@ const participants: ParticipantType[] = [
     section: "Services",
   },
   {
-    id: "developer", role: "agent", icon: Briefcase, color: "orange",
+    id: "developer", role: "developer", icon: Briefcase, color: "orange",
     label: "Developer / Builder", tagline: "Showcase new projects",
     desc: "Real estate developer launching projects",
     features: [

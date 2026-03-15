@@ -80,8 +80,12 @@ export function useListing(id: string) {
         .eq("id", id)
         .single();
       if (error) throw error;
-      // Increment view count (fire-and-forget)
-      supabase.from("listings").update({ views_count: (data?.views_count || 0) + 1 }).eq("id", id);
+      // Increment view count and log event for trends (fire-and-forget)
+      const { data: { user } } = await supabase.auth.getUser();
+      Promise.all([
+        supabase.from("listings").update({ views_count: (data?.views_count || 0) + 1 }).eq("id", id),
+        supabase.from("listing_view_events").insert({ listing_id: id, viewer_id: user?.id ?? null }),
+      ]).catch(() => {});
       // Fetch owner profile and Pro status (Pro owners can receive messages and calendar)
       let profiles = null;
       let ownerIsPro = false;
@@ -95,10 +99,10 @@ export function useListing(id: string) {
         profiles = profilePublic ?? null;
         ownerIsPro = !!(invSub?.status === "active" && (invSub?.tier || "").toLowerCase() === "pro");
         if (profileFull) {
-          ownerParticipantType = profileFull.role === "agent" ? "agent"
+          ownerParticipantType = ["agent", "institutional", "developer"].includes(profileFull.role || "") ? "agent"
             : profileFull.role === "seller_landlord" ? "seller"
             : (profileFull.bio ?? "").startsWith("__type:seller") ? "seller"
-            : (profileFull.bio ?? "").startsWith("__type:agent") ? "agent"
+            : (profileFull.bio ?? "").startsWith("__type:agent") || (profileFull.bio ?? "").startsWith("__type:institutional") || (profileFull.bio ?? "").startsWith("__type:developer") ? "agent"
             : null;
         }
       }

@@ -1,10 +1,13 @@
 import { useState, useRef, useEffect } from "react";
-import { Search, Send, Phone, Video, MoreVertical, Paperclip, Loader2, MessageSquare, ArrowLeft } from "lucide-react";
+import { Search, Send, Phone, Video, MoreVertical, Paperclip, Loader2, MessageSquare, ArrowLeft, Check, CheckCheck } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
-import { useConversations, useMessages, useSendMessage } from "@/hooks/useMessages";
+import { useConversations, useMessages, useSendMessage, useMarkMessagesRead } from "@/hooks/useMessages";
 import { useAuth } from "@/contexts/AuthContext";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { MessageContent } from "@/lib/messageContent";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 function getOtherProfile(conv: any, userId: string) {
   if (!conv) return null;
@@ -24,12 +27,16 @@ export default function Messages() {
   const [activeConvId, setActiveConvId] = useState<string>("");
   const [input, setInput] = useState("");
   const [search, setSearch] = useState("");
+  const [pendingFiles, setPendingFiles] = useState<{ path: string; filename: string; mime_type: string }[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   // Mobile: show list or chat pane
   const [mobileView, setMobileView] = useState<"list" | "chat">("list");
 
   const { data: messages = [], isLoading: msgsLoading } = useMessages(activeConvId);
   const sendMessage = useSendMessage();
+  const markAsRead = useMarkMessagesRead(activeConvId);
 
   const activeConv = conversations.find((c: any) => c.id === activeConvId);
   const otherProfile = getOtherProfile(activeConv, user?.id || "");
@@ -55,10 +62,49 @@ export default function Messages() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleSend = () => {
-    if (!input.trim() || !activeConvId) return;
-    sendMessage.mutate({ conversation_id: activeConvId, content: input.trim() });
+  // Mark messages as read when viewing; only if there are unread from other person
+  const hasUnreadFromOther = messages.some((m: any) => m.sender_id !== user?.id && m.status === "sent");
+  useEffect(() => {
+    if (activeConvId && hasUnreadFromOther && !markAsRead.isPending) {
+      markAsRead.mutate();
+    }
+  }, [activeConvId, hasUnreadFromOther]);
+
+  const handleSend = async () => {
+    if ((!input.trim() && pendingFiles.length === 0) || !activeConvId) return;
+    const content = input.trim() || (pendingFiles.length > 0 ? "📎" : "");
+    sendMessage.mutate({
+      conversation_id: activeConvId,
+      content,
+      attachmentPaths: pendingFiles.length > 0 ? pendingFiles : undefined,
+    });
     setInput("");
+    setPendingFiles([]);
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files?.length || !activeConvId || !user) return;
+    setUploading(true);
+    try {
+      const uploaded: { path: string; filename: string; mime_type: string }[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const f = files[i];
+        const ext = (f.name.split(".").pop() || "bin").toLowerCase();
+        const path = `${activeConvId}/${user.id}/${Date.now()}-${i}.${ext}`;
+        const { error } = await supabase.storage.from("message-attachments").upload(path, f, {
+          contentType: f.type || "application/octet-stream",
+        });
+        if (error) throw error;
+        uploaded.push({ path, filename: f.name, mime_type: f.type || "" });
+      }
+      setPendingFiles((prev) => [...prev, ...uploaded]);
+    } catch (err: any) {
+      toast.error(err?.message || "Upload failed");
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
   };
 
   const handleSelectConv = (id: string) => {
@@ -218,7 +264,9 @@ export default function Messages() {
                 ) : (
                   messages.map((msg: any) => {
                     const isMe = msg.sender_id === user?.id;
-                    return (
+                    const isRead = msg.status === "read";
+                          const attachments = msg.message_attachments || [];
+                            return (
                       <div key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"} gap-2`}>
                         {!isMe && (
                           <div className="w-7 h-7 rounded-full bg-gradient-primary flex items-center justify-center text-xs font-bold text-primary-foreground shrink-0 mt-1 overflow-hidden">
@@ -230,9 +278,27 @@ export default function Messages() {
                           </div>
                         )}
                         <div className={`max-w-[75%] sm:max-w-[60%] px-4 py-3 text-sm leading-relaxed ${isMe ? "chat-bubble-sent" : "chat-bubble-received"}`}>
-                          {msg.content}
-                          <div className={`text-[10px] mt-1 ${isMe ? "text-primary-foreground/60" : "text-muted-foreground"} text-right`}>
+                          {msg.content ? <MessageContent content={msg.content} /> : null}
+                          {attachments.length > 0 && (
+                            <div className="mt-2 space-y-1">
+                              {attachments.map((a: any) => {
+                                const url = supabase.storage.from("message-attachments").getPublicUrl(a.storage_path).data.publicUrl;
+                                const isImage = /^image\//.test(a.mime_type || "");
+                                return isImage ? (
+                                  <a key={a.storage_path} href={url} target="_blank" rel="noopener noreferrer" className="block">
+                                    <img src={url} alt={a.filename} className="max-w-full max-h-48 rounded-lg object-cover" />
+                                  </a>
+                                ) : (
+                                  <a key={a.storage_path} href={url} target="_blank" rel="noopener noreferrer" className="text-primary/80 underline text-xs block truncate">
+                                    {a.filename}
+                                  </a>
+                                );
+                              })}
+                            </div>
+                          )}
+                          <div className={`text-[10px] mt-1 flex items-center justify-end gap-1 ${isMe ? "text-primary-foreground/60" : "text-muted-foreground"}`}>
                             {new Date(msg.created_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                            {isMe && (isRead ? <CheckCheck className="w-3 h-3" /> : <Check className="w-3 h-3" />)}
                           </div>
                         </div>
                       </div>
@@ -244,9 +310,43 @@ export default function Messages() {
 
               {/* Input */}
               <div className="p-3 sm:p-4 bg-card border-t border-border shrink-0 pb-safe">
+                {pendingFiles.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mb-2">
+                    {pendingFiles.map((f, i) => (
+                      <span
+                        key={i}
+                        className="text-xs px-2 py-1 rounded-lg bg-primary/10 text-primary flex items-center gap-1"
+                      >
+                        {f.filename}
+                        <button
+                          type="button"
+                          onClick={() => setPendingFiles((p) => p.filter((_, j) => j !== i))}
+                          className="hover:text-destructive"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
                 <div className="flex items-center gap-2 sm:gap-3">
-                  <button className="hidden sm:block p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
-                    <Paperclip className="w-4 h-4" />
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*,.pdf,.doc,.docx"
+                    multiple
+                    className="hidden"
+                    onChange={handleFileSelect}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
+                    className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors disabled:opacity-50"
+                    title="Attach file"
+                    aria-label="Attach file"
+                  >
+                    {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
                   </button>
                   <input
                     type="text"
@@ -258,7 +358,7 @@ export default function Messages() {
                   />
                   <button
                     onClick={handleSend}
-                    disabled={!input.trim() || sendMessage.isPending}
+                    disabled={(!input.trim() && pendingFiles.length === 0) || sendMessage.isPending}
                     className="p-2.5 rounded-xl bg-gradient-primary text-primary-foreground disabled:opacity-50 transition-opacity hover:opacity-90 shrink-0"
                   >
                     {sendMessage.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
