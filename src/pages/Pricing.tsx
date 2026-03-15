@@ -355,6 +355,38 @@ export default function Pricing() {
   const [activeTab, setActiveTab] = useState<AudienceId>("buyer");
   const [hasAutoSelected, setHasAutoSelected] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+
+  const PLAN_KEYS: Record<AudienceId, string> = {
+    buyer: "pro",
+    seller: "pro",
+    investor: "investor_analyst",
+    agent: "agent_basic",
+    institutional: "investor_institutional",
+    developer: "agent_basic",
+    professional: "professional_basic",
+  };
+
+  const handleCheckout = async () => {
+    if (!user) {
+      navigate("/signup");
+      return;
+    }
+    setCheckoutLoading(true);
+    try {
+      const planKey = PLAN_KEYS[activeTab];
+      const { data, error } = await supabase.functions.invoke("create-checkout", {
+        body: { plan: planKey },
+      });
+      if (error || !data?.url) throw new Error(error?.message ?? data?.error ?? "Checkout failed");
+      window.location.href = data.url;
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Could not start checkout";
+      toast.error(msg);
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
 
   const handleManageSubscription = async () => {
     setPortalLoading(true);
@@ -518,11 +550,12 @@ export default function Pricing() {
                 ) : (
                   <Button
                     className="w-full h-11 font-bold gap-2 bg-gradient-primary border-0 text-primary-foreground"
-                    onClick={() => navigate(plan.paidHref)}
+                    onClick={handleCheckout}
+                    disabled={checkoutLoading}
                   >
-                    <Zap className="w-4 h-4" />
-                    {user ? plan.paidCTA : "Get Started"}
-                    <ArrowRight className="w-4 h-4" />
+                    {checkoutLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                    {user ? (checkoutLoading ? "Redirecting…" : plan.paidCTA) : "Get Started"}
+                    {!checkoutLoading && <ArrowRight className="w-4 h-4" />}
                   </Button>
                 )}
                 <p className="text-[11px] text-muted-foreground text-center">

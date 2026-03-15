@@ -23,10 +23,10 @@ Each participant type has **fixed, non-upgradable** rights. Users cannot escalat
 
 ## Role escalation rules
 
-- Users **cannot** set their own `role` to `agent` or `professional` via onboarding or settings.
-- Only the **platform admin** can assign `agent` or `professional` role (via DB or future admin UI).
-- First-time onboarding can set `individual` or `seller_landlord` (buyer, seller, investor).
-- Switching participant type clears `bio` and sends user to onboarding; they can only pick types that don't require role escalation.
+- Users **cannot** set their own `role` to `agent` (platform admin only).
+- Users **can** upgrade to `professional` or `seller_landlord` via onboarding; charges apply per plan.
+- First-time onboarding can set `individual`, `seller_landlord`, or `professional`.
+- Switching participant type clears `bio` and sends user to onboarding; within-role switches allowed.
 
 ## Dashboard nav by type
 
