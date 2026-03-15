@@ -166,16 +166,16 @@ function Section({ children, className = "" }: {children: React.ReactNode;classN
 }
 
 function SectionHeader({ icon: Icon, title, badge }: {icon?: any;title: string;badge?: React.ReactNode;}) {
-  return (
-    <div className="flex items-center gap-3 px-6 py-4 border-b border-border bg-card/50">
-      {Icon &&
-      <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-          <Icon className="w-3.5 h-3.5 text-primary" />
-        </div>
-      }
-      <h3 className="font-display font-semibold text-sm">{title}</h3>
-      {badge && <div className="ml-auto">{badge}</div>}
-    </div>);
+  return;
+
+
+
+
+
+
+
+
+
 
 }
 
