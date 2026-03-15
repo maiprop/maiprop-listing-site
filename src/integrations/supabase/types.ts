@@ -107,6 +107,42 @@ export type Database = {
         }
         Relationships: []
       }
+      contacts: {
+        Row: {
+          created_at: string
+          email: string | null
+          id: string
+          name: string
+          notes: string | null
+          phone: string | null
+          source: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          phone?: string | null
+          source?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          source?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       conversations: {
         Row: {
           created_at: string
@@ -142,23 +178,65 @@ export type Database = {
           },
         ]
       }
+      deal_checklists: {
+        Row: {
+          created_at: string
+          entity_id: string
+          entity_type: string
+          id: string
+          items: Json
+          status: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          entity_id: string
+          entity_type: string
+          id?: string
+          items?: Json
+          status?: string
+          title?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          entity_id?: string
+          entity_type?: string
+          id?: string
+          items?: Json
+          status?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       favorites: {
         Row: {
           created_at: string
           id: string
           listing_id: string
+          price_alert: boolean
+          price_when_saved: number | null
           user_id: string
         }
         Insert: {
           created_at?: string
           id?: string
           listing_id: string
+          price_alert?: boolean
+          price_when_saved?: number | null
           user_id: string
         }
         Update: {
           created_at?: string
           id?: string
           listing_id?: string
+          price_alert?: boolean
+          price_when_saved?: number | null
           user_id?: string
         }
         Relationships: [
@@ -664,6 +742,33 @@ export type Database = {
           },
         ]
       }
+      portfolios: {
+        Row: {
+          created_at: string
+          id: string
+          listing_ids: string[]
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          listing_ids?: string[]
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          listing_ids?: string[]
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       professional_availability: {
         Row: {
           created_at: string
@@ -836,6 +941,7 @@ export type Database = {
           display_name: string | null
           first_name: string | null
           id: string
+          is_platform_admin: boolean
           last_name: string | null
           phone: string | null
           role: Database["public"]["Enums"]["user_role"]
@@ -853,6 +959,7 @@ export type Database = {
           display_name?: string | null
           first_name?: string | null
           id?: string
+          is_platform_admin?: boolean
           last_name?: string | null
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
@@ -870,6 +977,7 @@ export type Database = {
           display_name?: string | null
           first_name?: string | null
           id?: string
+          is_platform_admin?: boolean
           last_name?: string | null
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
