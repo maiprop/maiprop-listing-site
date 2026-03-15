@@ -3,12 +3,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
+const projectsClient = supabase as any;
+
 export function useProjects(ownerId?: string) {
   const { user } = useAuth();
   return useQuery({
     queryKey: ["projects", user?.id, ownerId],
     queryFn: async () => {
-      let query = supabase
+      let query = projectsClient
         .from("projects")
         .select("*, listings(id, title, city, price, cover_image_url)")
         .order("updated_at", { ascending: false });
@@ -26,7 +28,7 @@ export function useProject(id: string | undefined) {
     queryKey: ["project", id],
     queryFn: async () => {
       if (!id) return null;
-      const { data, error } = await supabase
+      const { data, error } = await projectsClient
         .from("projects")
         .select("*, listings(id, title, city, price, sqm, cover_image_url, listing_type)")
         .eq("id", id)
@@ -43,7 +45,7 @@ export function useCreateProject() {
   const { user } = useAuth();
   return useMutation({
     mutationFn: async (project: { name: string; description?: string; city?: string; address?: string }) => {
-      const { data, error } = await supabase
+      const { data, error } = await projectsClient
         .from("projects")
         .insert({ ...project, owner_id: user!.id })
         .select()
@@ -63,7 +65,7 @@ export function useUpdateProject() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Record<string, unknown> }) => {
-      const { data, error } = await supabase
+      const { data, error } = await projectsClient
         .from("projects")
         .update(updates)
         .eq("id", id)
@@ -85,7 +87,7 @@ export function useDeleteProject() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("projects").delete().eq("id", id);
+      const { error } = await projectsClient.from("projects").delete().eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
