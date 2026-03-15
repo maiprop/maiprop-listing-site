@@ -988,6 +988,45 @@ export type Database = {
         }
         Relationships: []
       }
+      projects: {
+        Row: {
+          address: string | null
+          city: string | null
+          cover_image_url: string | null
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          owner_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          cover_image_url?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          owner_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          cover_image_url?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          owner_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       saved_searches: {
         Row: {
           created_at: string
@@ -1156,6 +1195,10 @@ export type Database = {
       get_my_role: {
         Args: never
         Returns: Database["public"]["Enums"]["user_role"]
+      }
+      grant_platform_admin_by_email: {
+        Args: { target_email: string }
+        Returns: undefined
       }
       has_role: {
         Args: {
