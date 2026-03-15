@@ -246,9 +246,9 @@ async function requireAgent(
       status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-  const { data: profile } = await sb.from("profiles").select("role").eq("user_id", user.id).single();
-  if (profile?.role !== "agent") {
-    return new Response(JSON.stringify({ error: "Agent role required" }), {
+  const { data: profile } = await sb.from("profiles").select("is_platform_admin").eq("user_id", user.id).single();
+  if (!profile?.is_platform_admin) {
+    return new Response(JSON.stringify({ error: "Platform admin required" }), {
       status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

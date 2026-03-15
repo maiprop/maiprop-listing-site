@@ -26,8 +26,6 @@ type PricingConfig = {
   metadata: Record<string, unknown>;
 };
 
-const OWNER_EMAILS = ["kr@maiprop.co", "kr@maiprop.com"].map(e => e.toLowerCase());
-
 /** Predefined sections so admin can manage all pricings: users, professionals, agents, valuation, firesale, ad-hoc */
 const PRICING_SECTIONS = [
   { key: "users", label: "Users (consumers)", module: "user_subscription", audience: "user" },
@@ -89,10 +87,9 @@ function usePricingConfigs() {
 }
 
 export default function AdminPricing() {
-  const { user } = useAuth();
+  const { profile } = useAuth();
   const qc = useQueryClient();
-  const email = (user?.email || "").toLowerCase();
-  const isOwner = !!user && OWNER_EMAILS.includes(email);
+  const isAdmin = !!profile?.is_platform_admin;
 
   const { data: configs = [], isLoading } = usePricingConfigs();
   const mutation = useMutation({
@@ -161,7 +158,7 @@ export default function AdminPricing() {
   const [addModule, setAddModule] = useState<string>(PRICING_SECTIONS[0].module);
   const [addAudience, setAddAudience] = useState<string>(PRICING_SECTIONS[0].audience);
 
-  if (!isOwner) {
+  if (!isAdmin) {
     return (
       <div className="min-h-screen bg-background">
         <Navbar />
@@ -172,8 +169,7 @@ export default function AdminPricing() {
           </div>
           <h1 className="font-display text-2xl font-bold mb-2">Access restricted</h1>
           <p className="text-sm text-muted-foreground">
-            This page is only available to mAI Prop owners. If you believe you should have access, please contact the
-            team.
+            This page is only available to platform admins. Contact the current admin to request access.
           </p>
         </div>
         <Footer />
