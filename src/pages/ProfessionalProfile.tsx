@@ -5,8 +5,7 @@ import {
   ChevronLeft, Clock, Users, Briefcase, MessageSquare,
   Calendar, Shield, Loader2, Languages, ChevronRight,
   Phone, Euro, FileText, ThumbsUp, Zap, Building2, Video,
-  Search, Lock, BarChart3, List, Mail, TrendingUp, LayoutDashboard,
-  Target, Megaphone, Home, ArrowUpCircle
+  Search, Lock, BarChart3, List, Target, Megaphone
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -19,8 +18,6 @@ import BookConsultationModal from "@/components/BookConsultationModal";
 import RequestCallbackModal from "@/components/RequestCallbackModal";
 import OnlineViewingModal from "@/components/OnlineViewingModal";
 import { AIServiceMatchModal } from "@/components/AIServiceMatchModal";
-import { toast } from "sonner";
-import ReactMarkdown from "react-markdown";
 
 const categoryLabels: Record<string, { label: string; emoji: string; description: string }> = {
   real_estate_agent: { label: "Real Estate Agent", emoji: "🏠", description: "Buy, sell, rent — licensed agents & agencies" },

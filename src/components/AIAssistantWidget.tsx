@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback, forwardRef } from "react";
 import { Sparkles, X, Send, Loader2, Bot, User, ChevronDown, RotateCcw } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/config";
 
 export interface PropertyContext {
   title?: string;
@@ -101,14 +102,11 @@ const AIAssistantWidget = forwardRef<HTMLDivElement, AIAssistantWidgetProps>(fun
 
     try {
       abortRef.current = new AbortController();
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-
-      const resp = await fetch(`${supabaseUrl}/functions/v1/property-chat`, {
+      const resp = await fetch(`${SUPABASE_URL}/functions/v1/property-chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${anonKey}`,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
         },
         body: JSON.stringify({ messages: history, propertyContext }),
         signal: abortRef.current.signal,

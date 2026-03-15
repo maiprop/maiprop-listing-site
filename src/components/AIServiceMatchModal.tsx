@@ -3,6 +3,7 @@ import { Brain, Loader2, Sparkles, X, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { CATEGORY_LABELS } from "@/lib/professionalServiceCatalog";
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/config";
 
 const urgencyStyle: Record<string, string> = {
   high: "bg-destructive/15 text-destructive border-destructive/30",
@@ -49,12 +50,12 @@ export function AIServiceMatchModal({ onClose, onNavigate }: AIServiceMatchModal
     setResult(null);
     try {
       const resp = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-service-match`,
+        `${SUPABASE_URL}/functions/v1/ai-service-match`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
           },
           body: JSON.stringify({ need }),
         }
