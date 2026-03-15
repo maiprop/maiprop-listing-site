@@ -142,10 +142,10 @@ Onboarding is complete: `bio` starts with `__type:`, so `needsOnboarding` is fal
 |--------------------------------|------------------|------------------------|--------|
 | Home Buyer / Renter             | individual       | __type:buyer           | pick-type → done |
 | Private Seller / Landlord       | seller_landlord  | __type:seller          | pick-type → done (eligible for Pro selling addons) |
-| Private Investor                | individual       | __type:investor        | pick-type → done |
+| Private Investor                | investor         | __type:investor        | pick-type → done |
 | Real Estate Agent / Agency      | agent            | __type:agent           | pick-type → done |
-| Institutional / Fund            | agent            | __type:institutional   | pick-type → done |
-| Developer / Builder             | agent            | __type:developer       | pick-type → done |
+| Institutional / Fund            | institutional    | __type:institutional   | pick-type → done |
+| Developer / Builder             | developer        | __type:developer       | pick-type → done |
 | Service Professional            | professional     | __type:professional    | pick-type → pro-category → … → done |
 
 ---
@@ -159,6 +159,9 @@ The **Dashboard** (`/dashboard`) shows different sidebar items and overview cont
 | **individual** | Overview, Saved, Saved Searches, Messages, Viewings, Auction Alerts, Profile, Settings | Saved properties & auction alerts; CTA: Browse Listings |
 | **seller_landlord** | Overview, My Listings, Saved, Messages, Viewings, Profile, Settings | My listings, views, viewings; CTA: New Listing; Pro upsell card |
 | **agent** | Overview, My Listings, Analytics, Saved, Saved Searches, Messages, Viewings, Auction Alerts, Contacts, Projects, Portfolios, Profile, Settings | Listings and leads; CTA: New Listing |
+| **investor** | Overview, Deal Flow, Saved, Saved Searches, Messages, Viewings, Auction Alerts, Profile, Settings | Deal pipeline, saved deals; CTA: Investor Dashboard |
+| **institutional** | Overview, Deal Flow, My Listings, Analytics, Saved, Saved Searches, Messages, Viewings, Auction Alerts, Contacts, Projects, Portfolios, Profile, Settings | Buy-side + sell-side; listings and deal flow |
+| **developer** | Overview, My Listings, Analytics, Saved, Saved Searches, Messages, Viewings, Contacts, Projects, Portfolios, Profile, Settings | Listings and project showcases |
 | **platform admin** | Admin nav (firesale, subscribers, pricing) shown only when `is_platform_admin` | Single admin; only admin can grant admin |
 | **professional** | Overview, My Services, Messages, Viewings, Profile, Settings | Services count and upcoming viewings; CTA: My Services |
 
@@ -183,6 +186,15 @@ The **Dashboard** (`/dashboard`) shows different sidebar items and overview cont
   - **Platform admin** is separate: only one user has `is_platform_admin`; only admin can grant admin. See `docs/PARTICIPANT_RIGHTS.md`.  
   - No multi-step “pro” onboarding; no row in `professionals` unless added by another path.
 
+- **investor**  
+  - **Buy-side:** Private investors. Deal flow, Investor Dashboard, saved searches, auction alerts.
+
+- **institutional**  
+  - **Buy-side + sell-side:** Institutions/funds. Can list properties and access deal flow (Investor Dashboard).
+
+- **developer**  
+  - **Sell-side:** Developers/builders. Can create listings and manage project showcases.
+
 - **professional**  
   - Has a row in `professionals` and appears in the **Professionals** directory.  
   - Can have `professional_services` and `professional_availability`.  
@@ -193,7 +205,7 @@ The **Dashboard** (`/dashboard`) shows different sidebar items and overview cont
 
 ## 7. Signup defaults
 
-- **Email signup** (`Signup.tsx`): `signUp(..., { role: "individual" })`. So new users start as `individual`; onboarding can change them to `seller_landlord`, `agent`, or `professional` and set `bio` to `__type:<id>`.
+- **Email signup** (`Signup.tsx`): `signUp(..., { role: "individual" })`. So new users start as `individual`; onboarding can change them to `seller_landlord`, `agent`, `investor`, `institutional`, `developer`, or `professional` and set `bio` to `__type:<id>`.
 - **Google signup:** Redirect to `/onboarding`; no role is set until they complete step 1 (and for pros, step 3 sets `professional`).
 
 ---

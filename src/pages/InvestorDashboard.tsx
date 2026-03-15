@@ -145,7 +145,7 @@ export default function InvestorDashboard() {
   const subscribed = subscription?.status === "active" || subscription?.status === "trial";
 
   // Deal flow is for investors only — not real estate agents.
-  const isInvestorType = ["investor", "institutional", "developer", "buyer"].includes(participantType);
+  const isInvestorType = ["investor", "institutional"].includes(participantType) || ["investor", "institutional"].includes(profile?.role || "");
   const isRealEstateAgent = profile?.role === "agent" || participantType === "agent";
   const canAccessDealFlow = subscribed && isInvestorType;
   const [showGate, setShowGate] = useState(false);
@@ -177,7 +177,7 @@ export default function InvestorDashboard() {
       return;
     }
     if (isRealEstateAgent) {
-      toast.error("This deal flow is for investors. As an agent, use the Admin Dashboard to manage requests.");
+      toast.error("This deal flow is for investors. As an agent, use the main Dashboard to manage your listings.");
       return;
     }
     const { error } = await supabase
@@ -609,9 +609,9 @@ export default function InvestorDashboard() {
                       {isRealEstateAgent ? (
                         <>
                           <h4 className="font-display font-bold text-sm mb-1">Deal Flow for Investors</h4>
-                          <p className="text-xs text-muted-foreground mb-3 leading-relaxed">This dashboard is for investors and institutional buyers. As a real estate agent, use the <strong>Admin Dashboard</strong> to manage firesale requests.</p>
+                          <p className="text-xs text-muted-foreground mb-3 leading-relaxed">This dashboard is for investors and institutional buyers. As a real estate agent, use the main <strong>Dashboard</strong> to manage your listings. Firesale requests are managed by platform admins.</p>
                           <Button className="w-full bg-primary/10 border border-primary/30 text-primary text-xs h-9" asChild>
-                            <Link to="/admin">Go to Admin Dashboard</Link>
+                            <Link to="/dashboard">Go to Dashboard</Link>
                           </Button>
                         </>
                       ) : (

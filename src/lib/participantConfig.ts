@@ -26,20 +26,25 @@ export function getParticipantTypeFromProfile(
   if (bio.startsWith("__type:developer")) return "developer";
   if (bio.startsWith("__type:seller")) return "seller";
   if (bio.startsWith("__type:professional")) return "professional";
+  if (bio.startsWith("__type:agent")) return "agent";
+  if (bio.startsWith("__type:buyer")) return "buyer";
   if (profile.role === "agent") return "agent";
   if (profile.role === "professional") return "professional";
   if (profile.role === "seller_landlord") return "seller";
+  if (profile.role === "investor") return "investor";
+  if (profile.role === "institutional") return "institutional";
+  if (profile.role === "developer") return "developer";
   return "buyer";
 }
 
 /** Derive owner type for listing display: agent vs private seller/landlord */
 export function getOwnerParticipantType(profile: { role?: string; bio?: string | null } | null): "agent" | "seller" | null {
   if (!profile) return null;
-  if (profile.role === "agent") return "agent";
+  if (["agent", "institutional", "developer"].includes(profile.role || "")) return "agent";
   if (profile.role === "seller_landlord") return "seller";
   const bio = profile.bio ?? "";
   if (bio.startsWith("__type:seller")) return "seller";
-  if (bio.startsWith("__type:agent")) return "agent";
+  if (bio.startsWith("__type:agent") || bio.startsWith("__type:institutional") || bio.startsWith("__type:developer")) return "agent";
   return null;
 }
 

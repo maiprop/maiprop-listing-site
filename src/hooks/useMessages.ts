@@ -47,7 +47,7 @@ export function useMessages(conversation_id: string) {
     queryFn: async () => {
       const { data: msgs, error } = await supabase
         .from("messages")
-        .select("id, content, created_at, sender_id, conversation_id, status")
+        .select("id, content, created_at, sender_id, conversation_id, status, message_attachments(storage_path, filename, mime_type)")
         .eq("conversation_id", conversation_id)
         .order("created_at", { ascending: true });
       if (error) throw error;
@@ -65,7 +65,7 @@ export function useMessages(conversation_id: string) {
       }));
     },
     enabled: !!conversation_id,
-    refetchInterval: 5000, // Poll every 5 seconds for new messages
+    refetchInterval: 5000,
   });
 }
 
@@ -73,7 +73,15 @@ export function useSendMessage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   return useMutation({
-    mutationFn: async ({ conversation_id, content }: { conversation_id: string; content: string }) => {
+    mutationFn: async ({
+      conversation_id,
+      content,
+      attachmentPaths,
+    }: {
+      conversation_id: string;
+      content: string;
+      attachmentPaths?: { path: string; filename: string; mime_type?: string }[];
+    }) => {
       if (!user) throw new Error("Must be logged in");
       const { data, error } = await supabase
         .from("messages")
@@ -81,6 +89,16 @@ export function useSendMessage() {
         .select()
         .single();
       if (error) throw error;
+      if (attachmentPaths?.length) {
+        await supabase.from("message_attachments").insert(
+          attachmentPaths.map((a) => ({
+            message_id: data.id,
+            storage_path: a.path,
+            filename: a.filename,
+            mime_type: a.mime_type,
+          }))
+        );
+      }
       await supabase
         .from("conversations")
         .update({ last_message_at: new Date().toISOString() })
@@ -92,6 +110,30 @@ export function useSendMessage() {
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
     },
     onError: (err: Error) => toast.error(err.message),
+  });
+}
+
+export function useMarkMessagesRead(conversationId: string) {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  return useMutation({
+    mutationFn: async () => {
+      if (!user || !conversationId) return;
+      const { data: msgs } = await supabase
+        .from("messages")
+        .select("id")
+        .eq("conversation_id", conversationId)
+        .neq("sender_id", user.id)
+        .eq("status", "sent");
+      if (!msgs?.length) return;
+      await supabase
+        .from("messages")
+        .update({ status: "read" })
+        .in("id", msgs.map((m) => m.id));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
+    },
   });
 }
 

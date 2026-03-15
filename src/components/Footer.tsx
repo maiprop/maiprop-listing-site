@@ -27,13 +27,11 @@ export function Footer() {
               {[
               { label: "Buy Property", to: "/listings?listing_type=sale" },
               { label: "Rent Property", to: "/listings?listing_type=rent" },
-              { label: "Sell Property", to: "/firesale" },
               { label: "Greek Auctions", to: "/auctions" },
               { label: "Quick Sale™", to: "/firesale" },
               { label: "Professionals", to: "/professionals" },
               { label: "Pricing", to: "/pricing" },
-              { label: "Market Intelligence", to: "/market-intelligence" },
-              { label: "AI Reports", to: "/listings" }].
+              { label: "Market Intelligence", to: "/market-intelligence" }].
               map((item) =>
               <li key={item.label}>
                   <Link to={item.to} className="text-sm text-muted-foreground hover:text-foreground transition-colors">{item.label}</Link>
@@ -47,12 +45,14 @@ export function Footer() {
             <h4 className="font-display font-semibold text-sm mb-3">Professionals</h4>
             <ul className="space-y-2">
               {[
-              { label: "Agent Directory", to: "/professionals" },
-              { label: "Legal Experts", to: "/professionals?category=lawyer" },
-              { label: "Architects", to: "/professionals?category=architect" },
-              { label: "Contractors", to: "/professionals?category=contractor" },
-              { label: "Property Managers", to: "/professionals?category=property_manager" },
-              { label: "Valuers", to: "/professionals?category=valuer" },
+              { label: "Real Estate Agents", to: "/professionals?category=real_estate_agent" },
+              { label: "Legal & Title", to: "/professionals?category=lawyer" },
+              { label: "Finance & Insurance", to: "/professionals?category=financial_advisor" },
+              { label: "Design & Planning", to: "/professionals?category=architect" },
+              { label: "Construction & Trades", to: "/professionals?category=contractor" },
+              { label: "Consultants & Compliance", to: "/professionals?category=utility_certification_provider" },
+              { label: "Property & Hospitality", to: "/professionals?category=property_manager" },
+              { label: "Advisory & Tech", to: "/professionals?category=relocation_immigration_consultant" },
               { label: "Join as Pro", to: "/signup" }].
               map((item) =>
               <li key={item.label}>

@@ -29,6 +29,8 @@ function Projects() {
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [newCity, setNewCity] = useState("");
+  const [newAddress, setNewAddress] = useState("");
+  const [newPermit, setNewPermit] = useState("");
 
   const handleCreate = () => {
     if (!newName.trim()) {

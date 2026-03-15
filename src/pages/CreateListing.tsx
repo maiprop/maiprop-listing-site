@@ -226,13 +226,13 @@ export default function CreateListing() {
   const { user, profile } = useAuth();
 
   const participantType = profile?.bio?.match(/^__type:(\w+)/)?.[1] || "";
-  const canCreateListing = ["seller", "agent"].includes(participantType) || profile?.role === "agent";
+  const canCreateListing = ["seller", "agent", "institutional", "developer"].includes(participantType) || ["agent", "institutional", "developer", "seller_landlord"].includes(profile?.role || "");
 
   const redirectedRef = useRef(false);
   useEffect(() => {
     if (!user || !profile || canCreateListing || redirectedRef.current) return;
     redirectedRef.current = true;
-    toast.error("Creating listings is for sellers and agents. Switch your participant type in Settings.");
+    toast.error("Creating listings is for sellers, agents, institutions, and developers. Switch your participant type in Settings.");
     navigate("/dashboard/settings", { replace: true });
   }, [user, profile, canCreateListing, navigate]);
 

@@ -11,30 +11,8 @@ import { PropertyCard } from "@/components/PropertyCard";
 import { usePortfolios, usePortfolio, useCreatePortfolio, useUpdatePortfolio, useDeletePortfolio } from "@/hooks/usePortfolios";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useAuth } from "@/contexts/AuthContext";
-import { getOwnerParticipantType } from "@/lib/participantConfig";
+import { dbListingToCard } from "@/lib/listingUtils";
 import { toast } from "sonner";
-
-function dbListingToCard(l: any) {
-  return {
-    id: l.id,
-    title: l.title,
-    address: l.address || l.city,
-    city: l.city,
-    price: Number(l.price),
-    pricePerSqm: l.price_per_sqm ? Number(l.price_per_sqm) : undefined,
-    bedrooms: l.bedrooms ?? undefined,
-    bathrooms: l.bathrooms ?? undefined,
-    sqm: Number(l.sqm),
-    images: [
-      ...(l.cover_image_url ? [l.cover_image_url] : []),
-      ...(l.listing_images?.map((img: any) => img.url) || []),
-    ].filter(Boolean),
-    type: l.property_type as any,
-    listingType: l.listing_type as any,
-    ownerParticipantType: getOwnerParticipantType(l.profiles ?? null),
-    agent: l.profiles ? { name: l.profiles.display_name || "Owner", verified: l.profiles.verified || false, avatar: l.profiles.avatar_url } : undefined,
-  };
-}
 
 function Portfolios() {
   const { user } = useAuth();
