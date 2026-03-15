@@ -96,7 +96,6 @@ const participants: ParticipantType[] = [
       "ROI calculator & deal scoring",
       "Investor dashboard (deal pipeline)",
       "Auction access & firesale deals",
-      "Market intelligence reports",
       "Due diligence checklist",
       "Saved searches + price alerts",
     ],
@@ -123,7 +122,6 @@ const participants: ParticipantType[] = [
     features: [
       "Investor dashboard & deal flow",
       "Firesale off-market deals",
-      "Market intelligence reports",
       "CRM, analytics & portfolio tools",
       "Due diligence hub",
       "Priority support & onboarding",

@@ -3,7 +3,7 @@ import { useNavigate, Navigate } from "react-router-dom";
 import {
   ChevronLeft, ChevronRight, Check, Upload, X, Loader2,
   Home, Building2, Zap, MapPin, DollarSign, Image as ImageIcon,
-  Info, GripVertical, Star, Sparkles, TrendingUp, RefreshCw, AlertCircle, CheckCircle2
+  Info, GripVertical, Star, Sparkles, TrendingUp, RefreshCw, AlertCircle, CheckCircle2, Crown
 } from "lucide-react";
 import { PROPERTY_TYPES as PROP_TYPES, PROPERTY_TYPE_MAP, type PropertyTypeKey } from "@/lib/propertyTypes";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { useCreateListingConnections } from "@/hooks/useCreateListingConnections";
+import { useSubscription } from "@/hooks/useSubscription";
 import { GOOGLE_MAPS_API_KEY } from "@/lib/config";
 import { HEATING_TYPES, CONDITION_OPTIONS } from "@/lib/filterConfig";
 
@@ -260,6 +261,7 @@ export default function CreateListing() {
 
   // Connection verification (Supabase, Storage, location API)
   const connections = useCreateListingConnections();
+  const { isPro } = useSubscription();
 
   // Location autocomplete: Nominatim suggestions or Google Places
   type NominatimHit = { display_name: string; address?: { road?: string; house_number?: string; city?: string; town?: string; village?: string; state?: string; postcode?: string } };
@@ -319,6 +321,8 @@ export default function CreateListing() {
     pets_allowed: false, short_term_rental: false, available_from: "", min_rental_months: "",
     is_pre_sale: false,
     is_off_market: false,
+    is_featured: false,
+    priority_placement: 0,
   });
 
   const set = (key: string, value: unknown) => {
@@ -733,6 +737,8 @@ export default function CreateListing() {
         has_structured_cabling: form.has_structured_cabling, has_equipped: form.has_equipped,
         is_pre_sale: form.is_pre_sale,
         is_off_market: form.is_off_market,
+        is_featured: form.is_featured ?? false,
+        priority_placement: Number(form.priority_placement) || 0,
       };
 
       const { data, error } = await supabase
@@ -1408,6 +1414,33 @@ export default function CreateListing() {
                     <div><FieldLabel>Auction Date & Time</FieldLabel><Input type="datetime-local" value={form.auction_date} onChange={e => set("auction_date", e.target.value)} /></div>
                     <div><FieldLabel>Court / Platform</FieldLabel><Input placeholder="e.g. Athens Court of First Instance" value={form.auction_court} onChange={e => set("auction_court", e.target.value)} /></div>
                   </>
+                )}
+
+                {isPro && (
+                  <div className="rounded-xl border border-brand-gold/30 bg-brand-gold/5 p-4">
+                    <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2">
+                      <Crown className="w-4 h-4 text-brand-gold" /> Featured Listing (Pro)
+                    </div>
+                    <p className="text-xs text-muted-foreground mb-3">Get priority placement in search with a featured badge.</p>
+                    <div className="flex flex-wrap gap-3">
+                      <ToggleChip active={form.is_featured} onClick={() => set("is_featured", !form.is_featured)}>
+                        <Crown className="w-3 h-3 inline" /> Featured badge
+                      </ToggleChip>
+                      {form.is_featured && (
+                        <div className="flex items-center gap-2">
+                          <FieldLabel>Priority (0–10)</FieldLabel>
+                          <input
+                            type="number"
+                            min={0}
+                            max={10}
+                            value={form.priority_placement}
+                            onChange={e => set("priority_placement", Number(e.target.value) || 0)}
+                            className="w-16 px-2 py-1 rounded-lg border border-border bg-secondary text-sm"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 )}
               </div>
             )}

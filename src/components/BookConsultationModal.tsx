@@ -162,7 +162,7 @@ export default function BookConsultationModal({ open, onClose, professional }: B
               {pricingLabel && <div className="flex justify-between"><span className="text-muted-foreground">Rate</span><span className="font-medium">{pricingLabel}</span></div>}
             </div>
             {bookingType === "video" && professional.video_link && (
-              <a href={professional.video_link} target="_blank" rel="noopener noreferrer"
+              <a href={professional.id ? `/video-room/${professional.id}` : professional.video_link} target="_blank" rel="noopener noreferrer"
                 className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-primary/10 border border-primary/20 text-primary text-sm font-medium hover:bg-primary/20 transition-colors">
                 <Video className="w-4 h-4" /> Join Video Call
               </a>

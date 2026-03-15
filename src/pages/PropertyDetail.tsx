@@ -7,7 +7,7 @@ import {
   Shield, FileText, Zap, ExternalLink, Lock, BarChart2, Eye,
   Home, Clock, Check, Gavel, Download, Loader2, CheckCircle,
   Thermometer, Wrench, TreePine, Flame, Wifi, Car, Building2,
-  Info, ChevronDown, ChevronUp, Euro, Tag, Layers, LayoutGrid, Bell, Globe } from
+  Info, ChevronDown, ChevronUp, Euro, Tag, Layers, LayoutGrid, Bell, Globe, Scale } from
 "lucide-react";
 import { getSubtypeLabel, PROPERTY_TYPE_MAP, type PropertyTypeKey } from "@/lib/propertyTypes";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,8 @@ import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { PropertyCard } from "@/components/PropertyCard";
 import ViewingDialog from "@/components/ViewingDialog";
-import { useListing, useListings } from "@/hooks/useListings";
+import { useListing } from "@/hooks/useListings";
+import { useSimilarListings } from "@/hooks/useSimilarListings";
 import { useFavorites, useToggleFavorite } from "@/hooks/useFavorites";
 import { useStartConversation } from "@/hooks/useMessages";
 import { useAuth } from "@/contexts/AuthContext";
@@ -32,6 +33,7 @@ import { HEATING_TYPES, CONDITION_OPTIONS } from "@/lib/filterConfig";
 import AIAssistantWidget from "@/components/AIAssistantWidget";
 import { AuctionAlertModal } from "@/components/AuctionAlertModal";
 import { getStreetViewProxyUrl } from "@/lib/config";
+import { dbListingToCard } from "@/lib/listingUtils";
 import { isAiUsageLimitError } from "@/lib/aiErrorUtils";
 
 // ─── Energy class data ──────────────────────────────────────────────────────
@@ -200,7 +202,14 @@ export default function PropertyDetail() {
   // Video viewing: Pro users or retailers (individuals) get access; others must upgrade
   const isRetailer = profile?.role === "individual";
   const canVideoView = isPro || isRetailer;
-  const { data: dbSimilar = [] } = useListings({ city: dbListing?.city, property_type: dbListing?.property_type });
+  const { data: similarFromDb = [] } = useSimilarListings({
+    excludeId: id ?? dbListing?.id,
+    city: dbListing?.city,
+    propertyType: dbListing?.property_type,
+    listingType: dbListing?.listing_type,
+    price: dbListing ? Number(dbListing.price) : undefined,
+    limit: 8,
+  });
 
   // Redirect: if auction opened via /property/:id, send to /auction/:id
   useEffect(() => {
@@ -475,14 +484,9 @@ export default function PropertyDetail() {
 
   const hasAnyFeatures = internalFeatures.length + externalFeatures.length + constructionFeatures.length + suitabilityFeatures.length > 0;
 
-  const similarListings = (dbSimilar as any[]).
-  filter((l: any) => l.id !== id && (isAuction ? l.listing_type === "auction" : l.listing_type !== "auction")).
-  sort((a, b) => {
-    const aMatch = subtype && a.commercial_subtype === subtype ? 1 : 0;
-    const bMatch = subtype && b.commercial_subtype === subtype ? 1 : 0;
-    return bMatch - aMatch;
-  }).
-  slice(0, 4);
+  const similarListings = (similarFromDb as any[])
+    .filter((l: any) => l.id !== id)
+    .slice(0, 6);
 
   // Build property details rows grouped
   const detailRows: {label: string;value: string;}[] = [
@@ -1341,6 +1345,25 @@ export default function PropertyDetail() {
                 </div>
               </Section>
 
+              {/* Professional add-ons — valuation & legal */}
+              <div className="glass-card rounded-2xl border border-border overflow-hidden">
+                <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-border">
+                  <div className="w-7 h-7 rounded-lg bg-brand-gold/10 flex items-center justify-center">
+                    <Scale className="w-3.5 h-3.5 text-brand-gold" />
+                  </div>
+                  <h4 className="font-display font-semibold text-sm">Professional Add-ons</h4>
+                </div>
+                <div className="p-5">
+                  <p className="text-xs text-muted-foreground mb-3">Formal valuation reports, legal due diligence, and building legality checks — book accredited professionals in your area.</p>
+                  <Link
+                    to={`/professionals${city ? `?search=${encodeURIComponent(city)}` : ""}`}
+                    className="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline"
+                  >
+                    Find valuers &amp; lawyers in {city || "Greece"} <ExternalLink className="w-3.5 h-3.5" />
+                  </Link>
+                </div>
+              </div>
+
               {/* ⑤ Verified listing badge — hidden for auctions */}
               {!isAuction
 
@@ -1420,6 +1443,24 @@ export default function PropertyDetail() {
 
           </div>
         </div>
+
+        {/* Similar Listings / Similar Deals */}
+        {similarListings.length > 0 && (
+          <div className="container pb-16">
+            <h2 className="font-display text-xl font-bold mb-4 flex items-center gap-2">
+              <LayoutGrid className="w-5 h-5 text-primary" />
+              {isAuction ? "Similar Deals" : "Similar Listings"}
+            </h2>
+            <p className="text-sm text-muted-foreground mb-5">
+              {isAuction ? "More auctions from the OS database" : "Related properties you might like"}
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {similarListings.map((l: any) => (
+                <PropertyCard key={l.id} property={dbListingToCard(l, { includeOwnership: true, includeRaw: true, maxImages: 3 })} />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <Footer />

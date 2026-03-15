@@ -476,10 +476,26 @@ export default function Listings() {
     return true;
   });
 
-  if (selectedSort === "price-asc") filtered = [...filtered].sort((a: any, b: any) => a.price - b.price);
-  if (selectedSort === "price-desc") filtered = [...filtered].sort((a: any, b: any) => b.price - a.price);
-  if (selectedSort === "ai-score") filtered = [...filtered].sort((a: any, b: any) => (b.aiScore || 0) - (a.aiScore || 0));
-  if (selectedSort === "views") filtered = [...filtered].sort((a: any, b: any) => (b.views || 0) - (a.views || 0));
+  // User sort must NOT override paid prioritization: promoted listings always appear first
+  const isPromoted = (p: any) => !!(p.isFeatured || (p.priorityPlacement ?? 0) > 0);
+  const byUserSort = (a: any, b: any) => {
+    if (selectedSort === "price-asc") return a.price - b.price;
+    if (selectedSort === "price-desc") return b.price - a.price;
+    if (selectedSort === "ai-score") return (b.aiScore || 0) - (a.aiScore || 0);
+    if (selectedSort === "views") return (b.views || 0) - (a.views || 0);
+    return 0;
+  };
+  filtered = [...filtered].sort((a, b) => {
+    const aPromo = isPromoted(a);
+    const bPromo = isPromoted(b);
+    if (aPromo && !bPromo) return -1;
+    if (!aPromo && bPromo) return 1;
+    if (aPromo && bPromo) {
+      const pri = (b.priorityPlacement ?? 0) - (a.priorityPlacement ?? 0);
+      if (pri !== 0) return pri;
+    }
+    return byUserSort(a, b);
+  });
 
   const activeFilterCount = [
     selectedType, selectedSubtype, selectedPrice,

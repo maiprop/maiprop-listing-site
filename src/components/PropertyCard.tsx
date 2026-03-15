@@ -4,7 +4,7 @@ import {
   MapPin, Bed, Bath, Square, Heart, Gavel, Flame,
   Eye, TrendingUp, Video, Zap, CheckCircle,
   Home, Calendar, Layers, MessageCircle,
-  Share2, Flag,
+  Share2, Flag, Crown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getSubtypeLabel, PROPERTY_TYPE_MAP, type PropertyTypeKey } from "@/lib/propertyTypes";
@@ -125,7 +125,7 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
   };
 
   const badge = getBadge();
-  const badges = badge ? [badge] : [];
+  const badges = [...(badge ? [badge] : []), ...(property.isFeatured ? [{ label: "Featured", cls: "bg-brand-gold/90 text-white flex items-center gap-1" }] : [])];
   const discountPct = property.listingType === "auction" && property.auctionStartingBid
     ? Math.round((1 - property.auctionStartingBid / property.price) * 100)
     : null;
@@ -142,7 +142,10 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
           )}
           <div className="absolute top-1 left-1 flex gap-1 flex-wrap">
             {badges.map((b) => (
-              <span key={b.label} className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${b.cls}`}>{b.label}</span>
+              <span key={b.label} className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${b.cls} ${b.label === "Featured" ? "inline-flex items-center gap-0.5" : ""}`}>
+                {b.label === "Featured" && <Crown className="w-2 h-2" />}
+                {b.label}
+              </span>
             ))}
           </div>
         </div>
@@ -186,7 +189,8 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
         {/* Badges top-left */}
         <div className="absolute top-3 left-3 flex gap-1.5 flex-wrap max-w-[70%]">
           {badges.map((b) => (
-            <span key={b.label} className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wide shadow-sm ${b.cls}`}>
+            <span key={b.label} className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wide shadow-sm ${b.cls} ${b.label === "Featured" ? "inline-flex items-center gap-1" : ""}`}>
+              {b.label === "Featured" && <Crown className="w-2.5 h-2.5" />}
               {b.label}
             </span>
           ))}

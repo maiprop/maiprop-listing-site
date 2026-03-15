@@ -53,6 +53,18 @@ export function useListings(filters?: {
         from += FETCH_LIMIT;
       }
       if (allData.length === 0) return allData;
+      // Priority placement: featured first, then by priority_placement, then created_at
+      allData.sort((a: any, b: any) => {
+        const aFeatured = a.is_featured ? 1 : 0;
+        const bFeatured = b.is_featured ? 1 : 0;
+        if (bFeatured !== aFeatured) return bFeatured - aFeatured;
+        const aPri = Number(a.priority_placement ?? 0);
+        const bPri = Number(b.priority_placement ?? 0);
+        if (bPri !== aPri) return bPri - aPri;
+        const aDate = new Date(a.created_at || 0).getTime();
+        const bDate = new Date(b.created_at || 0).getTime();
+        return bDate - aDate;
+      });
       const ownerIds = [...new Set(allData.map((r: any) => r.owner_id).filter(Boolean))];
       const { data: ownerProfiles = [] } = await supabase
         .from("profiles")
