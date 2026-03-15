@@ -996,25 +996,25 @@ export default function PropertyDetail() {
               {websiteUrl &&
               <Section>
                   <SectionHeader icon={Globe} title="Official Website" />
-                  <div className="p-5">
-                    
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
                   
-                  </div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                
                 </Section>
               }
 
