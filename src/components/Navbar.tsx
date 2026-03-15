@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import logoImg from "@/assets/logo.png";
 import logoDarkImg from "@/assets/logo-dark.png";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Bell, MessageSquare, User, Menu, X, ChevronDown, Plus, LogOut, LayoutDashboard, Building2, Sun, Moon, Home, List, Gavel, Flame, Zap, Sparkles, Euro } from "lucide-react";
+import { Bell, MessageSquare, User, Menu, X, ChevronDown, Plus, LogOut, LayoutDashboard, Building2, Sun, Moon, Home, List, Gavel, Flame, Zap, Sparkles, Euro, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useTheme } from "next-themes";
@@ -28,6 +28,8 @@ export function Navbar() {
   const { isPro } = useSubscription();
   const { theme, setTheme } = useTheme();
 
+  const participantType = profile?.bio?.match(/^__type:(\w+)/)?.[1] || "";
+  const isDeveloper = participantType === "developer";
   const hasDarkHero = DARK_HERO_ROUTES.includes(location.pathname);
   // When transparent AND over a dark hero, force white text; otherwise use semantic tokens
   const isTransparent = !scrolled;
@@ -209,6 +211,13 @@ export function Navbar() {
                       <Euro className="w-3.5 h-3.5" /> Pricing
                     </Link>
                   </DropdownMenuItem>
+                  {profile?.is_platform_admin && (
+                    <DropdownMenuItem asChild>
+                      <Link to="/admin" className="flex items-center gap-2 cursor-pointer">
+                        <Shield className="w-3.5 h-3.5" /> Admin
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     onClick={handleSignOut}
@@ -219,9 +228,27 @@ export function Navbar() {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground hover:opacity-90 gap-1.5" asChild>
-                <Link to="/listings/new"><Plus className="w-3.5 h-3.5" /> List Property</Link>
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground hover:opacity-90 gap-1.5">
+                    <Plus className="w-3.5 h-3.5" /> List Property <ChevronDown className="w-3 h-3 opacity-80" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem asChild>
+                    <Link to="/listings/new" className="flex items-center gap-2 cursor-pointer">
+                      <Home className="w-3.5 h-3.5" /> Regular Listing
+                    </Link>
+                  </DropdownMenuItem>
+                  {isDeveloper && (
+                    <DropdownMenuItem asChild>
+                      <Link to="/listings/new-building" className="flex items-center gap-2 cursor-pointer">
+                        <Building2 className="w-3.5 h-3.5" /> New Building
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
               {/* Pro badge / CTA */}
               {isPro ? (
                 <Link

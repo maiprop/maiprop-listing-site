@@ -1274,8 +1274,8 @@ export default function Index() {
               </Link>
             )}
 
-            {/* New Development — featured card */}
-            <Link to="/listings?construction_status=new_build">
+            {/* New Development — featured card (off-plan / pre-sale only) */}
+            <Link to="/listings?pre_sale=1">
               <div className="relative glass-card rounded-xl p-4 flex flex-col items-center text-center hover:border-primary/50 hover:bg-primary/8 transition-all group gap-2 cursor-pointer overflow-hidden border-primary/20">
                 <span className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-primary/40 animate-pulse" />
                 {/* NEW badge */}

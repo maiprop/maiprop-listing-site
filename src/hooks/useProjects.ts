@@ -30,7 +30,7 @@ export function useProject(id: string | undefined) {
       if (!id) return null;
       const { data, error } = await projectsClient
         .from("projects")
-        .select("*, listings(id, title, city, price, sqm, cover_image_url, listing_type)")
+        .select("*, listings(id, title, city, price, sqm, cover_image_url, listing_type), project_media(*), project_units(*)")
         .eq("id", id)
         .single();
       if (error) throw error;
@@ -40,11 +40,30 @@ export function useProject(id: string | undefined) {
   });
 }
 
+export type ProjectInsert = {
+  name: string;
+  description?: string;
+  city?: string;
+  address?: string;
+  building_permit_number?: string;
+  developer_company?: string;
+  architect_group?: string;
+  construction_company?: string;
+  municipality?: string;
+  latitude?: number;
+  longitude?: number;
+  area_description?: string;
+  permit_approval_date?: string;
+  construction_start_date?: string;
+  structural_completion_date?: string;
+  delivery_date?: string;
+};
+
 export function useCreateProject() {
   const qc = useQueryClient();
   const { user } = useAuth();
   return useMutation({
-    mutationFn: async (project: { name: string; description?: string; city?: string; address?: string }) => {
+    mutationFn: async (project: ProjectInsert) => {
       const { data, error } = await projectsClient
         .from("projects")
         .insert({ ...project, owner_id: user!.id })

@@ -6,9 +6,8 @@ import {
   Loader2, Calendar, Trash2, ToggleLeft, ToggleRight, Bookmark,
   Search, Activity, Wrench, Shield, MapPin, Euro, Edit2,
   FolderKanban, Users, Briefcase, TrendingUp, Globe2, Flame,
-  ArrowRight, Clock, CheckCircle2, AlertCircle, Phone, ExternalLink,
+  ArrowRight, Clock, CheckCircle2, AlertCircle, Phone, ExternalLink, Star,
 } from "lucide-react";
-import AdminPanel from "@/components/AdminPanel";
 import ContactsCRM from "@/components/ContactsCRM";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -18,7 +17,7 @@ import { useFavorites } from "@/hooks/useFavorites";
 import { useViewings, useUpdateViewing } from "@/hooks/useViewings";
 import { useSavedSearches, useDeleteSavedSearch, useToggleSavedSearchAlert } from "@/hooks/useSavedSearches";
 import { useAuctionAlerts, useDeleteAuctionAlert, useUpdateAuctionAlert } from "@/hooks/useAuctionAlerts";
-import { useMyProfessional, useProfessionalServices } from "@/hooks/useProfessionalServices";
+import { useMyProfessional, useProfessionalServices, useUpdateProfessional } from "@/hooks/useProfessionalServices";
 import { AuctionAlertModal } from "@/components/AuctionAlertModal";
 import { PropertyCard } from "@/components/PropertyCard";
 import ProfessionalServicesEditor from "@/components/ProfessionalServicesEditor";
@@ -133,7 +132,7 @@ function useUpdateLeadStatus() {
 type NavKey =
   | "overview" | "listings" | "analytics" | "saved" | "saved-searches"
   | "messages" | "viewings" | "auctions" | "services" | "leads"
-  | "deal-flow" | "contacts" | "projects" | "portfolios" | "admin"
+  | "deal-flow" | "contacts" | "projects" | "portfolios"
   | "profile" | "settings";
 
 type DashboardRole = "individual" | "seller_landlord" | "agent" | "professional";
@@ -153,7 +152,6 @@ const ALL_NAV_ITEMS: { icon: React.ElementType; label: string; key: NavKey }[] =
   { icon: Users,         label: "Contacts",         key: "contacts"       },
   { icon: Globe2,        label: "Projects",         key: "projects"       },
   { icon: TrendingUp,    label: "Portfolios",       key: "portfolios"     },
-  { icon: Shield,        label: "Admin",            key: "admin"          },
   { icon: User,          label: "Profile",          key: "profile"        },
   { icon: Settings,      label: "Settings",         key: "settings"       },
 ];
@@ -166,7 +164,7 @@ const NAV_BY_TYPE: Record<string, NavKey[]> = {
   agent:         ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "contacts", "projects", "portfolios", "profile", "settings"],
   institutional: ["overview", "deal-flow", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "contacts", "projects", "portfolios", "profile", "settings"],
   developer:     ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "contacts", "projects", "portfolios", "profile", "settings"],
-  professional:  ["overview", "services", "leads", "messages", "viewings", "profile", "settings"],
+  professional:  ["overview", "services", "leads", "messages", "profile", "settings"],
 };
 
 function getNavItemsForBioType(bioType: string | null, role: DashboardRole) {
@@ -197,11 +195,7 @@ export default function Dashboard() {
   const role: DashboardRole = (profile?.role as DashboardRole) || "individual";
   const bioType = getParticipantTypeFromProfile(profile);
 
-  const baseNav = getNavItemsForBioType(bioType, role);
-  const adminItem = ALL_NAV_ITEMS.find(i => i.key === "admin");
-  const navItems = profile?.is_platform_admin && adminItem
-    ? [...baseNav, adminItem]
-    : baseNav;
+  const navItems = getNavItemsForBioType(bioType, role);
   const defaultSection = navItems[0]?.key ?? "overview";
   const [activeSection, setActiveSection] = useState<NavKey>((section as NavKey) || defaultSection);
   const [alertModalOpen, setAlertModalOpen] = useState(false);
@@ -264,7 +258,7 @@ export default function Dashboard() {
     agent:         [{ label: "Active Listings", value: myListings.filter(l => l.status === "active").length, icon: Building2, color: "text-primary" }, { label: "Total Views", value: myListings.reduce((s, l) => s + (l.views_count || 0), 0), icon: Eye, color: "text-brand-emerald" }, { label: "Saved", value: favorites.length, icon: Heart, color: "text-destructive" }, { label: "Viewings", value: upcomingViewingsCount + ownViewingsCount, icon: Calendar, color: "text-brand-gold" }],
     institutional: [{ label: "Active Listings", value: myListings.filter(l => l.status === "active").length, icon: Building2, color: "text-primary" }, { label: "Saved Deals", value: favorites.length, icon: Heart, color: "text-destructive" }, { label: "Auction Alerts", value: auctionAlerts.filter((a: any) => a.active).length, icon: Gavel, color: "text-brand-gold" }, { label: "Viewings", value: upcomingViewingsCount + ownViewingsCount, icon: Calendar, color: "text-brand-gold" }],
     developer:     [{ label: "Active Listings", value: myListings.filter(l => l.status === "active").length, icon: Building2, color: "text-primary" }, { label: "Total Views", value: myListings.reduce((s, l) => s + (l.views_count || 0), 0), icon: Eye, color: "text-brand-emerald" }, { label: "Saved", value: favorites.length, icon: Heart, color: "text-destructive" }, { label: "Viewings", value: upcomingViewingsCount + ownViewingsCount, icon: Calendar, color: "text-brand-gold" }],
-    professional:  [{ label: "Services", value: professionalServices.length, icon: Wrench, color: "text-primary" }, { label: "Pending Leads", value: pendingLeadsCount, icon: Briefcase, color: "text-brand-gold" }, { label: "Viewings", value: ownViewingsCount, icon: Calendar, color: "text-brand-gold" }, { label: "Total Leads", value: (leads as any[]).length, icon: Users, color: "text-primary" }],
+    professional:  [{ label: "Services", value: professionalServices.length, icon: Wrench, color: "text-primary" }, { label: "Pending Leads", value: pendingLeadsCount, icon: Briefcase, color: "text-brand-gold" }, { label: "Total Leads", value: (leads as any[]).length, icon: Users, color: "text-primary" }],
   };
   const statsKey = bioType ?? (role === "seller_landlord" ? "seller" : role === "professional" ? "professional" : role === "agent" ? "agent" : "buyer");
   const stats = statsByType[statsKey] ?? statsByType.buyer;
@@ -484,7 +478,7 @@ export default function Dashboard() {
 
               {/* Professional overview */}
               {role === "professional" && (
-                <div className="grid md:grid-cols-2 gap-5">
+                <div className="grid md:grid-cols-3 gap-5">
                   <div className="glass-card rounded-xl p-6">
                     <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Wrench className="w-4 h-4 text-primary" /> My Services</h2>
                     <p className="text-sm text-muted-foreground mb-3">{professionalServices.length > 0 ? `${professionalServices.length} service(s) configured.` : "Add the services you offer so clients can find and book you."}</p>
@@ -502,6 +496,13 @@ export default function Dashboard() {
                     <p className="text-sm text-muted-foreground mb-3">{(leads as any[]).length > 0 ? `${(leads as any[]).length} total request(s).` : "Client consultation and callback requests will appear here."}</p>
                     <Button variant="outline" size="sm" className="border-brand-gold/40 text-brand-gold hover:bg-brand-gold/10" onClick={() => setActiveSection("leads")}>
                       View Leads <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
+                    </Button>
+                  </div>
+                  <div className="glass-card rounded-xl p-6 border border-primary/20">
+                    <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Calendar className="w-4 h-4 text-primary" /> Calendar & Calls</h2>
+                    <p className="text-sm text-muted-foreground mb-3">Manage your availability, video links, and calendar sync for client bookings.</p>
+                    <Button variant="outline" size="sm" className="border-primary/40 text-primary hover:bg-primary/10" onClick={() => setActiveSection("services")}>
+                      Configure <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
                     </Button>
                   </div>
                 </div>
@@ -881,14 +882,13 @@ export default function Dashboard() {
 
           {/* ── PROFILE ──────────────────────────────────────────────────── */}
           {activeSection === "profile" && navItems.some(i => i.key === "profile") && (
-            <ProfileEditor profile={profile} onUpdate={updateProfile} onSwitchToSettings={() => setActiveSection("settings")} />
+            role === "professional"
+              ? <ProfessionalProfileEditor onSwitchToSettings={() => setActiveSection("settings")} />
+              : <ProfileEditor profile={profile} onUpdate={updateProfile} onSwitchToSettings={() => setActiveSection("settings")} />
           )}
 
           {/* ── MY SERVICES — professional ───────────────────────────────── */}
           {activeSection === "services" && navItems.some(i => i.key === "services") && <ProfessionalServicesEditor />}
-
-          {/* ── ADMIN — agent, institutional, developer ──────────────────── */}
-          {activeSection === "admin" && navItems.some(i => i.key === "admin") && <AdminPanel />}
 
           {/* ── CONTACTS CRM ───────────────────────────────────────────── */}
           {activeSection === "contacts" && navItems.some(i => i.key === "contacts") && <ContactsCRM />}
@@ -1162,6 +1162,129 @@ function AnalyticsSection({
   );
 }
 
+// ── Professional profile editor ─────────────────────────────────────────────────
+function ProfessionalProfileEditor({ onSwitchToSettings }: { onSwitchToSettings?: () => void }) {
+  const { data: pro, isLoading } = useMyProfessional();
+  const updatePro = useUpdateProfessional();
+  const [form, setForm] = useState({
+    title: "", bio: "", city: "", hourly_rate: "", license_number: "",
+    experience_years: "", website_url: "", specialties: "", languages: "",
+  });
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (pro) {
+      setForm({
+        title: pro.title || "",
+        bio: pro.bio || "",
+        city: pro.city || "",
+        hourly_rate: pro.hourly_rate ? String(pro.hourly_rate) : "",
+        license_number: pro.license_number || "",
+        experience_years: pro.experience_years ? String(pro.experience_years) : "",
+        website_url: pro.website_url || "",
+        specialties: Array.isArray(pro.specialties) ? pro.specialties.join(", ") : "",
+        languages: Array.isArray(pro.languages) ? pro.languages.join(", ") : "",
+      });
+    }
+  }, [pro]);
+
+  const handleSave = async () => {
+    if (!pro) return;
+    setSaving(true);
+    await updatePro.mutateAsync({
+      id: pro.id,
+      updates: {
+        title: form.title || pro.title,
+        bio: form.bio || null,
+        city: form.city || null,
+        hourly_rate: form.hourly_rate ? parseFloat(form.hourly_rate) : null,
+        license_number: form.license_number || null,
+        experience_years: form.experience_years ? parseInt(form.experience_years, 10) : null,
+        website_url: form.website_url || null,
+        specialties: form.specialties ? form.specialties.split(",").map((s: string) => s.trim()).filter(Boolean) : null,
+        languages: form.languages ? form.languages.split(",").map((s: string) => s.trim()).filter(Boolean) : null,
+      },
+    });
+    setSaving(false);
+  };
+
+  if (isLoading || !pro) {
+    return (
+      <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
+    );
+  }
+
+  const rating = Number(pro.rating) || 0;
+  const reviewsCount = pro.reviews_count || 0;
+
+  return (
+    <div className="space-y-6 max-w-2xl">
+      <div className="flex items-center justify-between">
+        <h1 className="font-display text-2xl font-bold">Professional Profile</h1>
+        <Button variant="outline" size="sm" asChild><Link to={`/professionals/${pro.id}`}>View public profile</Link></Button>
+      </div>
+
+      {/* Professional details — match ProfessionalProfile page */}
+      <div className="glass-card rounded-xl p-6 space-y-4">
+        <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Profile details</h2>
+        {[
+          ["Professional Title", "title", "e.g. Licensed Architect"],
+          ["City", "city", "e.g. Athens"],
+          ["Bio / About", "bio", "Brief description for clients", "textarea"],
+          ["Hourly Rate (€)", "hourly_rate", "e.g. 80", "number"],
+          ["License Number", "license_number", ""],
+          ["Years of Experience", "experience_years", "e.g. 10", "number"],
+          ["Specialties (comma-separated)", "specialties", "e.g. Renovation, Permits"],
+          ["Languages (comma-separated)", "languages", "e.g. English, Greek"],
+          ["Website URL", "website_url", "https://..."],
+        ].map(([label, key, placeholder, type]) => (
+          <div key={key}>
+            <label className="text-xs font-medium text-muted-foreground block mb-1.5">{label}</label>
+            {type === "textarea" ? (
+              <textarea value={(form as any)[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} rows={4}
+                placeholder={placeholder} className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm resize-none" />
+            ) : (
+              <input type={type || "text"} value={(form as any)[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+                placeholder={placeholder} className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm" />
+            )}
+          </div>
+        ))}
+        {onSwitchToSettings && (
+          <p className="text-xs text-muted-foreground">To change participant type, go to <button type="button" onClick={onSwitchToSettings} className="text-primary hover:underline">Settings</button> → Switch Participant Type.</p>
+        )}
+        <Button className="bg-gradient-primary border-0 text-primary-foreground w-full" disabled={saving} onClick={handleSave}>
+          {saving || updatePro.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+          Save Changes
+        </Button>
+      </div>
+
+      {/* Reviews section */}
+      <div className="glass-card rounded-xl p-6">
+        <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-4">Reviews</h2>
+        <div className="flex items-start gap-6">
+          <div className="text-center shrink-0">
+            <div className="font-display text-4xl font-bold text-brand-gold">{rating > 0 ? rating.toFixed(1) : "—"}</div>
+            <div className="flex gap-0.5 justify-center mt-1">
+              {[1, 2, 3, 4, 5].map(i => (
+                <Star key={i} className={`w-4 h-4 ${i <= Math.floor(rating) ? "fill-brand-gold text-brand-gold" : "text-muted-foreground/30"}`} />
+              ))}
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">{reviewsCount} review{reviewsCount !== 1 ? "s" : ""}</div>
+          </div>
+          <div className="flex-1">
+            <p className="text-sm text-muted-foreground">
+              {reviewsCount > 0 ? "Client reviews from completed consultations appear here." : "Reviews from clients will appear here once you complete consultations."}
+            </p>
+            <Button variant="outline" size="sm" className="mt-3 border-border" asChild>
+              <Link to={`/professionals/${pro.id}`}>View your public profile</Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Profile editor ─────────────────────────────────────────────────────────────
 function ProfileEditor({ profile, onUpdate, onSwitchToSettings }: { profile: any; onUpdate: any; onSwitchToSettings?: () => void }) {
   const [form, setForm] = useState({
@@ -1222,7 +1345,7 @@ function ProfileEditor({ profile, onUpdate, onSwitchToSettings }: { profile: any
 const ROLE_PERMISSIONS: Record<string, { label: string; can: string[] }> = {
   individual:      { label: "Individual",       can: ["Browse listings", "Save properties", "Request viewings", "Auction alerts"] },
   seller_landlord: { label: "Seller/Landlord",  can: ["Create & manage listings", "Receive viewing requests", "AI listing assist"] },
-  agent:           { label: "Agent",            can: ["Unlimited listings", "OS sync & admin", "Lead management", "Analytics"] },
+  agent:           { label: "Agent",            can: ["Unlimited listings", "OS sync", "Lead management", "Analytics"] },
   professional:    { label: "Professional",     can: ["Professional directory", "Service catalog", "Client leads", "Verified badge"] },
 };
 
@@ -1340,7 +1463,7 @@ function SettingsSection({
             </li>
             <li className="flex items-start gap-2">
               <span className="text-brand-emerald shrink-0 mt-0.5">▸</span>
-              <span><strong className="text-foreground">Access rights will change.</strong> Choosing a superior participant type may unlock additional features and data access (e.g. admin panel, deal flow, leads). These are granted server-side upon plan activation.</span>
+              <span><strong className="text-foreground">Access rights will change.</strong> Choosing a superior participant type may unlock additional features and data access (e.g. deal flow, leads). Admin features live only at /admin and require platform admin. These are granted server-side upon plan activation.</span>
             </li>
             <li className="flex items-start gap-2">
               <span className="text-primary shrink-0 mt-0.5">▸</span>

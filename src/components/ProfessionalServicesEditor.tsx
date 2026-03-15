@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import {
   Wrench, Plus, Trash2, Video, Briefcase, Calendar,
-  Clock, Save, ChevronDown, ChevronUp, Loader2, Check, Link as LinkIcon
+  Clock, Save, ChevronDown, ChevronUp, Loader2, Check, Link as LinkIcon,
+  Phone, CalendarDays, RefreshCw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -56,6 +57,8 @@ export default function ProfessionalServicesEditor() {
   const [calendarNotes, setCalendarNotes] = useState("");
   const [expandedService, setExpandedService] = useState<string | null>(null);
   const [activePanel, setActivePanel] = useState<"services" | "availability" | "video">("services");
+  const [showCustomService, setShowCustomService] = useState(false);
+  const [customService, setCustomService] = useState({ name: "", description: "", pricingModel: "hourly" as PricingModel, rate: "", videoEnabled: false });
   const [initialized, setInitialized] = useState(false);
 
   // Initialize from existing data
@@ -69,11 +72,10 @@ export default function ProfessionalServicesEditor() {
       const catalog = getServicesForCategory(pro.category);
       const map: Record<string, SelectedService> = {};
       existingServices.forEach(svc => {
-        const template = catalog.find(t => t.key === svc.service_key) ?? {
-          key: svc.service_key, name: svc.service_name, description: svc.description ?? "",
-          defaultPricing: svc.pricing_model as PricingModel, suggestedRate: svc.rate_amount ?? 0,
-          videoAvailable: svc.video_enabled, isPremiumFeature: svc.is_premium,
-        };
+        const isCustom = svc.service_key.startsWith("custom_");
+        const template = isCustom
+          ? { key: svc.service_key, name: svc.service_name, description: svc.description ?? "", defaultPricing: svc.pricing_model as PricingModel, suggestedRate: svc.rate_amount ?? 0, videoAvailable: svc.video_enabled, isPremiumFeature: false }
+          : catalog.find(t => t.key === svc.service_key) ?? { key: svc.service_key, name: svc.service_name, description: svc.description ?? "", defaultPricing: svc.pricing_model as PricingModel, suggestedRate: svc.rate_amount ?? 0, videoAvailable: svc.video_enabled, isPremiumFeature: svc.is_premium };
         map[svc.service_key] = {
           template,
           pricingModel: svc.pricing_model as PricingModel,
@@ -177,13 +179,13 @@ export default function ProfessionalServicesEditor() {
       </div>
 
       {/* Panel tabs */}
-      <div className="flex gap-1 bg-secondary rounded-xl p-1 w-fit">
+      <div className="flex gap-1 bg-secondary rounded-xl p-1 w-fit flex-wrap">
         {(["services", "availability", "video"] as const).map(panel => (
           <button key={panel} onClick={() => setActivePanel(panel)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all capitalize ${
               activePanel === panel ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
             }`}>
-            {panel === "services" ? `Services (${selectedCount})` : panel === "availability" ? "Availability" : "Video & Calendar"}
+            {panel === "services" ? `Services (${selectedCount})` : panel === "availability" ? "Availability" : "Calls, Video & Calendar"}
           </button>
         ))}
       </div>
@@ -285,6 +287,79 @@ export default function ProfessionalServicesEditor() {
               );
             })}
           </div>
+
+          {/* Custom services (not in catalog) */}
+          {Object.entries(selectedServices)
+            .filter(([k]) => k.startsWith("custom_"))
+            .map(([key, config]) => (
+              <div key={key} className="glass-card rounded-xl border border-primary/20 p-4 flex items-center justify-between gap-4">
+                <div>
+                  <span className="font-semibold text-sm">{config.template.name}</span>
+                  <p className="text-xs text-muted-foreground mt-0.5">{config.rate ? `€${config.rate}` : "—"}{PRICING_DISPLAY[config.pricingModel]} {config.videoEnabled && "· Video"}</p>
+                </div>
+                <Button size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10" onClick={() => {
+                  const next = { ...selectedServices }; delete next[key]; setSelectedServices(next);
+                  const rows = Object.values(next).map(s => ({ professional_id: pro!.id, service_key: s.template.key, service_name: s.template.name, description: s.template.description, category: pro!.category, pricing_model: s.pricingModel, rate_amount: parseFloat(s.rate) || null, currency: "EUR", video_enabled: s.videoEnabled, is_premium: s.template.isPremiumFeature, is_active: true }));
+                  upsertServices.mutate({ professionalId: pro!.id, services: rows as any });
+                }}><Trash2 className="w-4 h-4" /></Button>
+              </div>
+            ))}
+
+          {/* Add your own Service */}
+          <div className="glass-card rounded-xl border border-dashed border-primary/30 p-4">
+            {!showCustomService ? (
+              <button onClick={() => setShowCustomService(true)} className="w-full flex items-center justify-center gap-2 py-3 text-primary hover:bg-primary/5 rounded-lg transition-colors font-medium">
+                <Plus className="w-4 h-4" /> Add your own Service
+              </button>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <p className="font-semibold text-sm">Add custom service</p>
+                  <button onClick={() => { setShowCustomService(false); setCustomService({ name: "", description: "", pricingModel: "hourly", rate: "", videoEnabled: false }); }} className="text-xs text-muted-foreground hover:text-foreground">Cancel</button>
+                </div>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1">Service name</label>
+                    <input value={customService.name} onChange={e => setCustomService(s => ({ ...s, name: e.target.value }))} placeholder="e.g. Bespoke Consultation" className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1">Pricing</label>
+                    <select value={customService.pricingModel} onChange={e => setCustomService(s => ({ ...s, pricingModel: e.target.value as PricingModel }))} className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm">
+                      {PRICING_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1">Rate (€)</label>
+                    <input type="number" value={customService.rate} onChange={e => setCustomService(s => ({ ...s, rate: e.target.value }))} placeholder="80" className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm" />
+                  </div>
+                  <label className="flex items-center gap-2 cursor-pointer self-end">
+                    <input type="checkbox" checked={customService.videoEnabled} onChange={e => setCustomService(s => ({ ...s, videoEnabled: e.target.checked }))} className="rounded border-border" />
+                    <span className="text-xs flex items-center gap-1"><Video className="w-3.5 h-3.5" /> Video call available</span>
+                  </label>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground block mb-1">Description (optional)</label>
+                  <textarea value={customService.description} onChange={e => setCustomService(s => ({ ...s, description: e.target.value }))} placeholder="Brief description for clients" rows={2} className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm resize-none" />
+                </div>
+                <Button size="sm" className="bg-primary text-primary-foreground gap-1.5" disabled={!customService.name.trim() || upsertServices.isPending}
+                  onClick={async () => {
+                    const key = `custom_${Date.now()}`;
+                    const template = { key, name: customService.name.trim(), description: customService.description.trim(), defaultPricing: customService.pricingModel, suggestedRate: parseFloat(customService.rate) || 0, videoAvailable: customService.videoEnabled, isPremiumFeature: false };
+                    const newSelected = { ...selectedServices, [key]: { template, pricingModel: customService.pricingModel, rate: customService.rate, videoEnabled: customService.videoEnabled } };
+                    setSelectedServices(newSelected);
+                    setCustomService({ name: "", description: "", pricingModel: "hourly", rate: "", videoEnabled: false });
+                    setShowCustomService(false);
+                    const rows = Object.values(newSelected).map(s => ({ professional_id: pro!.id, service_key: s.template.key, service_name: s.template.name, description: s.template.description, category: pro!.category, pricing_model: s.pricingModel, rate_amount: parseFloat(s.rate) || null, currency: "EUR", video_enabled: s.videoEnabled, is_premium: s.template.isPremiumFeature, is_active: true }));
+                    await upsertServices.mutateAsync({ professionalId: pro!.id, services: rows as any });
+                  }}>
+                  {upsertServices.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />} Add & Save
+                </Button>
+              </div>
+            )}
+          </div>
+
           <Button onClick={handleSaveServices} disabled={upsertServices.isPending}
             className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2">
             {upsertServices.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -346,9 +421,54 @@ export default function ProfessionalServicesEditor() {
         </div>
       )}
 
-      {/* ── Video & Calendar panel ── */}
+      {/* ── Calls, Video & Calendar panel ── */}
       {activePanel === "video" && (
         <div className="space-y-5">
+          {/* Manage calls and video through the app */}
+          <div className="glass-card rounded-xl p-5 space-y-4 border border-primary/20">
+            <h2 className="font-display font-semibold flex items-center gap-2">
+              <Phone className="w-4 h-4 text-primary" /> Calls & Video through the app
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Clients can book and join calls or video consultations directly through maiProp. No need to share external links — sessions are managed in-app.
+            </p>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div className="flex items-center gap-3 p-4 rounded-xl bg-secondary/50 border border-border">
+                <Phone className="w-5 h-5 text-primary" />
+                <div>
+                  <p className="font-semibold text-sm">Voice calls</p>
+                  <p className="text-xs text-muted-foreground">Accept in-app voice calls from booked clients</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 p-4 rounded-xl bg-secondary/50 border border-border">
+                <Video className="w-5 h-5 text-primary" />
+                <div>
+                  <p className="font-semibold text-sm">Video calls</p>
+                  <p className="text-xs text-muted-foreground">Video consultations via the app (or use your link below)</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Calendar sync */}
+          <div className="glass-card rounded-xl p-5 space-y-4 border border-brand-emerald/20">
+            <h2 className="font-display font-semibold flex items-center gap-2">
+              <CalendarDays className="w-4 h-4 text-brand-emerald" /> Calendar Sync
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Connect your calendar so clients see your real availability when booking. Prevents double-booking.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <Button variant="outline" className="border-border gap-2" disabled>
+                <RefreshCw className="w-4 h-4" /> Connect Google Calendar
+              </Button>
+              <Button variant="outline" className="border-border gap-2" disabled>
+                <RefreshCw className="w-4 h-4" /> Connect Outlook
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">Calendar sync coming soon. Your weekly availability above is used for now.</p>
+          </div>
+
           <div className="glass-card rounded-xl p-5 space-y-4">
             <h2 className="font-display font-semibold flex items-center gap-2">
               <Video className="w-4 h-4 text-primary" /> Video Consultation Link
