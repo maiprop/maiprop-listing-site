@@ -192,18 +192,18 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
         {/* Badges top-left */}
         <div className="absolute top-3 left-3 flex gap-1.5 flex-wrap max-w-[70%]">
           {badges.map((b) => (
-            <span key={b.label} className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wide shadow-sm ${b.cls} ${b.label === "Featured" ? "inline-flex items-center gap-1" : ""}`}>
+            <span key={b.label} className={`text-xs font-bold px-2.5 py-1 rounded-full uppercase tracking-wide shadow-sm ${b.cls} ${b.label === "Featured" ? "inline-flex items-center gap-1" : ""}`}>
               {b.label === "Featured" && <Crown className="w-2.5 h-2.5" />}
               {b.label}
             </span>
           ))}
           {property.subtype && (
-            <span className="text-[10px] font-semibold px-2.5 py-1 rounded-full bg-accent/90 text-accent-foreground shadow-sm capitalize">
+            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-accent/90 text-accent-foreground shadow-sm capitalize">
               {getSubtypeLabel(property.type, property.subtype)}
             </span>
           )}
           {discountPct !== null && discountPct > 0 && (
-            <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-destructive/90 text-white shadow-sm">
+            <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-destructive/90 text-white shadow-sm">
               -{discountPct}% off
             </span>
           )}
@@ -212,16 +212,16 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
         {/* Top-right controls */}
         <div className="absolute top-3 right-3 flex flex-col gap-1.5 items-end">
           {property.hasVirtualTour && (
-            <span className="bg-black/60 backdrop-blur-sm px-2 py-1 rounded-full text-[10px] text-white font-semibold">360°</span>
+            <span className="bg-black/60 backdrop-blur-sm px-2 py-1 rounded-full text-xs text-white font-semibold">360°</span>
           )}
           {property.hasVideo && (
             <span className="bg-black/60 backdrop-blur-sm p-1.5 rounded-full text-white">
               <Video className="w-3 h-3" />
             </span>
           )}
-          {/* Favorite button */}
+          {/* Favorite button — 44px touch target on mobile */}
           <button
-            className={`w-9 h-9 rounded-full flex items-center justify-center shadow-lg transition-all duration-200 active:scale-90 ${
+            className={`min-h-[44px] min-w-[44px] w-11 h-11 md:w-9 md:h-9 rounded-full flex items-center justify-center shadow-lg transition-all duration-200 active:scale-90 ${
               isFavorited
                 ? "bg-rose-500 text-white scale-110"
                 : "bg-white/90 backdrop-blur-sm text-foreground hover:bg-white hover:scale-105"
@@ -244,12 +244,12 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
                 </span>
               </div>
               {property.pricePerSqm && (
-                <div className="text-[11px] sm:text-[11px] text-white/70 mt-1 ml-1">€{property.pricePerSqm}/m²</div>
+                <div className="text-xs text-white/70 mt-1 ml-1">€{property.pricePerSqm}/m²</div>
               )}
             </div>
             <div className="flex flex-col items-end gap-1">
               {property.priceChange !== undefined && (
-                <div className={`flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full backdrop-blur-sm ${
+                <div className={`flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full backdrop-blur-sm ${
                   property.priceChange > 0
                     ? "bg-brand-emerald/25 text-brand-emerald"
                     : "bg-destructive/25 text-red-400"
@@ -259,7 +259,7 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
                 </div>
               )}
               {!!property.views && property.views > 0 && (
-                <div className="flex items-center gap-1 text-[11px] text-white/60">
+                <div className="flex items-center gap-1 text-xs text-white/60">
                   <Eye className="w-3 h-3" /> {property.views}
                 </div>
               )}

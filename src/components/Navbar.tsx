@@ -121,7 +121,7 @@ export function Navbar() {
               {link.accent === "flame" && <span className="text-sm">🔥</span>}
               {link.label}
               {link.badge && (
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold animate-pulse ${
+                <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold animate-pulse ${
                   forceLight ? "bg-white/20 text-white" : "bg-brand-gold/20 text-brand-gold"
                 }`}>
                   {link.badge}
@@ -286,12 +286,13 @@ export function Navbar() {
           )}
         </div>
 
-        {/* Mobile menu button */}
+        {/* Mobile menu button — 44px touch target */}
         <button
-          className={`lg:hidden p-2 rounded-lg transition-colors ${
+          className={`lg:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg transition-colors ${
             forceLight ? "text-white/80 hover:text-white" : "text-muted-foreground hover:text-foreground"
           }`}
           onClick={() => setMobileOpen(!mobileOpen)}
+          aria-label={mobileOpen ? "Close menu" : "Open menu"}
         >
           {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </button>
@@ -304,7 +305,7 @@ export function Navbar() {
             <Link
               key={link.href}
               to={link.href}
-              className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+              className={`flex items-center gap-2 min-h-[44px] px-3 py-2.5 rounded-lg text-sm transition-colors ${
                 link.accent === "flame"
                   ? "text-destructive/80 hover:text-destructive hover:bg-destructive/10"
                   : link.accent === "subtle"
@@ -316,7 +317,7 @@ export function Navbar() {
               {link.accent === "flame" && <span>🔥</span>}
               {link.label}
               {link.badge && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold font-semibold">{link.badge}</span>
+                <span className="text-xs px-1.5 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold font-semibold">{link.badge}</span>
               )}
               {link.accent === "subtle" && <span className="w-1.5 h-1.5 rounded-full bg-accent/60" />}
             </Link>
@@ -355,9 +356,9 @@ export function Navbar() {
       )}
     </header>
 
-      {/* ── Mobile Bottom Nav ─────────────────────────────────────────── */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 backdrop-blur-xl bg-card/60 border-t border-border/40 pb-safe">
-        <div className="flex items-stretch h-16">
+      {/* ── Mobile Bottom Nav — 44px touch targets, text-xs for readability ─ */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 backdrop-blur-xl bg-card/60 border-t border-border/40 pb-safe" aria-label="Main navigation">
+        <div className="flex items-stretch min-h-[64px]">
           {[
             { to: "/", icon: Home, label: "Home" },
             { to: "/listings", icon: List, label: "Listings" },
@@ -369,11 +370,16 @@ export function Navbar() {
           ].map(({ to, icon: Icon, label, accent }) => {
             const active = location.pathname === to || (to !== "/" && location.pathname.startsWith(to));
             return (
-              <Link key={to} to={to} className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-colors ${
-                active ? "text-primary" : accent || "text-muted-foreground hover:text-foreground"
-              }`}>
-                <Icon className="w-5 h-5" />
-                {label}
+              <Link
+                key={to}
+                to={to}
+                className={`flex-1 flex flex-col items-center justify-center gap-1 min-h-[44px] min-w-[44px] py-2 text-xs font-semibold transition-colors active:opacity-80 ${
+                  active ? "text-primary" : accent || "text-muted-foreground hover:text-foreground"
+                }`}
+                aria-current={active ? "page" : undefined}
+              >
+                <Icon className="w-5 h-5 shrink-0" />
+                <span className="leading-tight">{label}</span>
               </Link>
             );
           })}

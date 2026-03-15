@@ -127,7 +127,7 @@ function CompareModal({ listings, onRemove }: { listings: Listing[]; onRemove: (
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-border">
               <h2 className="font-display font-bold text-xl">Property Comparison</h2>
-              <button onClick={() => setOpen(false)} className="p-2 rounded-lg hover:bg-secondary transition-colors">
+              <button onClick={() => setOpen(false)} className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg hover:bg-secondary transition-colors" aria-label="Close">
                 <X className="w-5 h-5" />
               </button>
             </div>

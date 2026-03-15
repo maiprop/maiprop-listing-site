@@ -12,11 +12,14 @@ export function Footer() {
               Greece's most advanced real estate platform. Data-driven listings, Greek auctions, instant offers, and AI-powered market insights.
             </p>
             <div className="flex items-center gap-2">
-              {[Facebook, Twitter, Instagram, Linkedin, Youtube].map((Icon, i) =>
-              <button key={i} className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
+              {["Facebook", "Twitter", "Instagram", "LinkedIn", "YouTube"].map((name, i) => {
+              const Icon = [Facebook, Twitter, Instagram, Linkedin, Youtube][i];
+              return (
+              <button key={i} className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors" aria-label={`Follow us on ${name}`}>
                   <Icon className="w-4 h-4" />
                 </button>
-              )}
+              );
+              })}
             </div>
           </div>
 
