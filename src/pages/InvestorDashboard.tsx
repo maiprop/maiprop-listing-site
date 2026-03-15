@@ -51,7 +51,7 @@ function TransferAdminForm({ onSuccess }: { onSuccess: () => Promise<void> }) {
     }
     setLoading(true);
     try {
-      const { error } = await supabase.rpc("grant_platform_admin_by_email", { target_email: trimmed });
+      const { error } = await (supabase.rpc as any)("grant_platform_admin_by_email", { target_email: trimmed });
       if (error) throw error;
       toast.success("Admin rights transferred. You will be redirected.");
       await onSuccess();

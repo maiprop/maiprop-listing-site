@@ -25,7 +25,7 @@ export function DealChecklist({ entityType, entityId }: DealChecklistProps) {
   const [newItem, setNewItem] = useState("");
   const items: { label: string; done: boolean }[] =
     checklist?.items && Array.isArray(checklist.items)
-      ? checklist.items
+      ? (checklist.items as { label: string; done: boolean }[])
       : DEFAULT_ITEMS;
 
   const doneCount = items.filter((i) => i.done).length;

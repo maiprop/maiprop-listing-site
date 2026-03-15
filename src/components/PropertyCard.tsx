@@ -125,6 +125,7 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
   };
 
   const badge = getBadge();
+  const badges = badge ? [badge] : [];
   const discountPct = property.listingType === "auction" && property.auctionStartingBid
     ? Math.round((1 - property.auctionStartingBid / property.price) * 100)
     : null;

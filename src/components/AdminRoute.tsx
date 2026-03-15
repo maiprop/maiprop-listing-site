@@ -22,7 +22,7 @@ function AdminGate({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!profile.is_platform_admin) {
+  if (!(profile as any).is_platform_admin) {
     return <Navigate to="/dashboard" replace />;
   }
 
