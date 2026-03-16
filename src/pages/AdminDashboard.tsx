@@ -22,12 +22,12 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
   const tabParam = searchParams.get("tab") as AdminTab | null;
   const [activeTab, setActiveTab] = useState<AdminTab>(
-    tabParam && ["pipeline", "subscribers", "pricing", "os-sync"].includes(tabParam) ? tabParam : "pipeline"
+    tabParam && ["pipeline", "subscribers", "pricing", "os-sync", "open-houses"].includes(tabParam) ? tabParam : "pipeline"
   );
 
   useEffect(() => {
     const t = searchParams.get("tab") as AdminTab | null;
-    if (t && ["pipeline", "subscribers", "pricing", "os-sync"].includes(t)) {
+    if (t && ["pipeline", "subscribers", "pricing", "os-sync", "open-houses"].includes(t)) {
       setActiveTab(t);
     }
   }, [searchParams]);
