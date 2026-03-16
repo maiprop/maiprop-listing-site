@@ -1825,7 +1825,7 @@ function AnalyticsSection({
                   <p className="text-xs text-muted-foreground mt-1">Leads that became confirmed</p>
                 </div>
               </div>
-              <ProfessionalProfileCompletion myProfessional={myProfessional} />
+              <ProfessionalProfileCompletion myProfessional={myProfessional} onGoToProfile={onGoToProfile} onGoToServices={onGoToServices} />
             </div>
           )}
 
