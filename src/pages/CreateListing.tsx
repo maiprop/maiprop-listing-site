@@ -852,29 +852,18 @@ export default function CreateListing() {
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="checkbox"
-                        checked={form.is_pre_sale}
-                        onChange={() => toggle("is_pre_sale")}
-                        className="rounded border-border"
+                        checked={false}
+                        onChange={() => {}}
+                        disabled
+                        className="rounded border-border opacity-40"
                       />
-                      <span className="text-sm font-medium">Pre-sale / Off-plan</span>
-                      <span className="text-xs text-muted-foreground">New development before completion</span>
+                      <span className="text-sm font-medium opacity-40">Pre-sale / Off-plan</span>
+                      <span className="text-xs text-muted-foreground">Use New Building listing for off-plan projects</span>
                     </label>
                   </div>
                 )}
 
-                {/* Off-market — not publicly advertised */}
-                <div>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={form.is_off_market}
-                      onChange={() => toggle("is_off_market")}
-                      className="rounded border-border"
-                    />
-                    <span className="text-sm font-medium">Off-market</span>
-                    <span className="text-xs text-muted-foreground">Visible only to subscribed investors</span>
-                  </label>
-                </div>
+                {/* Off-market — removed: column not in schema */}
 
                 {/* Property type — rich cards */}
                 <div>
