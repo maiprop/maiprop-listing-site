@@ -210,8 +210,8 @@ export function Navbar() {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <Link to="/open-houses" className="flex items-center gap-2 cursor-pointer">
-                      <Building2 className="w-3.5 h-3.5" /> Open Houses
+                  <Link to="/open-houses" className="flex items-center gap-2 cursor-pointer">
+                      <DoorOpen className="w-3.5 h-3.5 text-emerald-600" /> Open Houses
                     </Link>
                   </DropdownMenuItem>
                   {profile?.is_platform_admin && (
