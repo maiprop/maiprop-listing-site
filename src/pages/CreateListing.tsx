@@ -310,6 +310,7 @@ export default function CreateListing() {
     has_virtual_tour: false, has_video_tour: false,
     suitable_student: false, suitable_holiday: false, suitable_investment: false, suitable_commercial_use: false,
     has_three_phase_power: false, has_loading_dock: false, has_structured_cabling: false, has_equipped: false,
+    is_pre_sale: false, is_off_market: false,
     is_buildable: false, within_city_plan: false, within_settlement: false,
     has_water_supply: false, has_electricity_supply: false, has_land_concession: false,
     coverage_ratio: "", building_allowance: "", facade_length: "", plot_depth: "",
