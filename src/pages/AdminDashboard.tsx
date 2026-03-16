@@ -15,7 +15,7 @@ import { AdminPricingContent } from "@/pages/AdminPricing";
 import OpenHouseAssetControlPanel from "@/components/OpenHouseAssetControlPanel";
 import { Button } from "@/components/ui/button";
 
-type AdminTab = "pipeline" | "subscribers" | "pricing" | "os-sync";
+type AdminTab = "pipeline" | "subscribers" | "pricing" | "os-sync" | "open-houses";
 
 export default function AdminDashboard() {
   const [searchParams] = useSearchParams();
