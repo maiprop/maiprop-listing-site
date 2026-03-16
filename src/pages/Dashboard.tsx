@@ -7,6 +7,7 @@ import {
   Search, Activity, Wrench, Shield, MapPin, Euro, Edit2,
   FolderKanban, Users, Briefcase, TrendingUp, Globe2, Flame,
   ArrowRight, Clock, CheckCircle2, AlertCircle, Phone, ExternalLink, Star, Crown,
+  FolderOpen, LayoutGrid,
 } from "lucide-react";
 import ContactsCRM from "@/components/ContactsCRM";
 import OpenHouseDashboardSection from "@/components/OpenHouseDashboardSection";
@@ -30,6 +31,8 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getParticipantTypeFromProfile, getOwnerParticipantType } from "@/lib/participantConfig";
 import { dbListingToCard } from "@/lib/listingUtils";
+import { useProjects, useCreateProject, useUpdateProject, useDeleteProject } from "@/hooks/useProjects";
+import { usePortfolios, usePortfolio, useCreatePortfolio, useUpdatePortfolio, useDeletePortfolio } from "@/hooks/usePortfolios";
 
 const SAVED_TABS = [
   { label: "All", value: "" }, { label: "Sale", value: "sale" },
@@ -215,6 +218,16 @@ export default function Dashboard() {
   const updateLeadStatus = useUpdateLeadStatus();
   const updateViewing = useUpdateViewing();
   const startConversation = useStartConversation();
+
+  // Projects & Portfolios (developer)
+  const { data: myProjects = [], isLoading: projectsLoading } = useProjects(user?.id);
+  const createProject = useCreateProject();
+  const updateProject = useUpdateProject();
+  const deleteProject = useDeleteProject();
+  const { data: portfolios = [], isLoading: portfoliosLoading } = usePortfolios();
+  const createPortfolio = useCreatePortfolio();
+  const updatePortfolio = useUpdatePortfolio();
+  const deletePortfolio = useDeletePortfolio();
 
   const handleSignOut = async () => { await signOut(); navigate("/"); };
   const toggleListingStatus = (id: string, currentStatus: string) => {
@@ -1021,26 +1034,28 @@ export default function Dashboard() {
             <OpenHouseDashboardSection myListings={myListings} />
           )}
 
-          {/* ── PROJECTS — link to full page ───────────────────────────── */}
+          {/* ── PROJECTS — inline section ─────────────────────────────── */}
           {activeSection === "projects" && navItems.some(i => i.key === "projects") && (
-            <LinkSection
-              icon={Globe2}
-              title="Projects"
-              desc="Showcase your development projects and pre-sale listings."
-              href="/projects"
-              cta="Manage Projects"
-              stats={myListings.filter(l => l.project_id).length > 0 ? [{ label: "Listings in projects", value: myListings.filter(l => l.project_id).length }] : undefined}
+            <DashboardProjectsSection
+              projects={myProjects}
+              isLoading={projectsLoading}
+              myListings={myListings}
+              createProject={createProject}
+              updateProject={updateProject}
+              deleteProject={deleteProject}
+              updateListing={updateListing}
             />
           )}
 
-          {/* ── PORTFOLIOS — link to full page ─────────────────────────── */}
+          {/* ── PORTFOLIOS — inline section ──────────────────────────────── */}
           {activeSection === "portfolios" && navItems.some(i => i.key === "portfolios") && (
-            <LinkSection
-              icon={TrendingUp}
-              title="Portfolios"
-              desc="Track your property portfolio, valuations, and performance."
-              href="/portfolios"
-              cta="Manage Portfolios"
+            <DashboardPortfoliosSection
+              portfolios={portfolios}
+              isLoading={portfoliosLoading}
+              favorites={favorites}
+              createPortfolio={createPortfolio}
+              updatePortfolio={updatePortfolio}
+              deletePortfolio={deletePortfolio}
             />
           )}
 
@@ -1260,7 +1275,285 @@ function LeadsSection({
   );
 }
 
-// ── Link section (Projects, Portfolios) ────────────────────────────────────────
+// ── Inline Projects section ────────────────────────────────────────────────────
+function DashboardProjectsSection({
+  projects, isLoading, myListings, createProject, updateProject, deleteProject, updateListing,
+}: {
+  projects: any[];
+  isLoading: boolean;
+  myListings: any[];
+  createProject: ReturnType<typeof useCreateProject>;
+  updateProject: ReturnType<typeof useUpdateProject>;
+  deleteProject: ReturnType<typeof useDeleteProject>;
+  updateListing: ReturnType<typeof useUpdateListing>;
+}) {
+  const navigate = useNavigate();
+  const [showCreate, setShowCreate] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newDesc, setNewDesc] = useState("");
+  const [newCity, setNewCity] = useState("");
+  const [newPermit, setNewPermit] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const handleCreate = () => {
+    if (!newName.trim()) { toast.error("Project name is required"); return; }
+    createProject.mutate(
+      { name: newName.trim(), description: newDesc.trim() || undefined, city: newCity.trim() || undefined, building_permit_number: newPermit.trim() || undefined },
+      { onSuccess: (data: any) => { setNewName(""); setNewDesc(""); setNewCity(""); setNewPermit(""); setShowCreate(false); if (data?.id) navigate(`/projects/${data.id}`); } }
+    );
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="font-display text-2xl font-bold flex items-center gap-2">
+            <Globe2 className="w-6 h-6 text-primary" /> Projects
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">Showcase development projects and link listings</p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" className="border-border gap-2" asChild>
+            <Link to="/projects"><ExternalLink className="w-4 h-4" /> Full View</Link>
+          </Button>
+          <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" onClick={() => setShowCreate(true)}>
+            <Plus className="w-4 h-4" /> New Project
+          </Button>
+        </div>
+      </div>
+
+      {showCreate && (
+        <div className="glass-card rounded-xl p-6 border border-border">
+          <h3 className="font-display font-semibold mb-4">Create project</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1.5">Name *</label>
+              <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="e.g. Marina Heights"
+                className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1.5">City</label>
+              <input value={newCity} onChange={e => setNewCity(e.target.value)} placeholder="e.g. Athens"
+                className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors" />
+            </div>
+            <div className="md:col-span-2">
+              <label className="text-xs text-muted-foreground block mb-1.5">Description</label>
+              <textarea value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="Brief description..." rows={2}
+                className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm resize-none text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1.5">Building Permit #</label>
+              <input value={newPermit} onChange={e => setNewPermit(e.target.value)} placeholder="e.g. 12345/2024"
+                className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors" />
+            </div>
+          </div>
+          <div className="flex gap-2 mt-4">
+            <Button onClick={handleCreate} disabled={createProject.isPending} className="bg-gradient-primary border-0 text-primary-foreground">
+              {createProject.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Create
+            </Button>
+            <Button variant="outline" className="border-border" onClick={() => setShowCreate(false)}>Cancel</Button>
+          </div>
+        </div>
+      )}
+
+      {isLoading ? (
+        <div className="flex justify-center py-16"><Loader2 className="w-7 h-7 animate-spin text-primary" /></div>
+      ) : projects.length === 0 ? (
+        <div className="glass-card rounded-xl p-12 text-center">
+          <FolderOpen className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+          <h2 className="font-semibold">No projects yet</h2>
+          <p className="text-sm text-muted-foreground mt-2 mb-4">Create a project to group and showcase your listings</p>
+          <Button className="bg-gradient-primary border-0 text-primary-foreground" onClick={() => setShowCreate(true)}>Create your first project</Button>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {projects.map((p: any) => {
+            const isEditing = editingId === p.id;
+            return (
+              <div key={p.id} className="glass-card rounded-xl border border-border overflow-hidden">
+                <div className="p-5 flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <Link to={`/projects/${p.id}`} className="font-display font-semibold hover:text-primary transition-colors">{p.name}</Link>
+                      <span className={cn("text-[10px] px-2 py-0.5 rounded-full",
+                        p.status === "active" ? "bg-primary/10 text-primary" : p.status === "completed" ? "bg-brand-emerald/20 text-brand-emerald" : "bg-muted text-muted-foreground"
+                      )}>{p.status}</span>
+                    </div>
+                    {p.city && <p className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="w-3 h-3" />{p.city}</p>}
+                    {p.description && <p className="text-sm text-muted-foreground mt-1 line-clamp-1">{p.description}</p>}
+                    {p.building_permit_number && <p className="text-xs text-muted-foreground mt-0.5">Permit: {p.building_permit_number}</p>}
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button variant="outline" size="sm" className="border-border text-xs" asChild>
+                      <Link to={`/projects/${p.id}`}><Edit2 className="w-3 h-3 mr-1" />Edit</Link>
+                    </Button>
+                    <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => {
+                      if (confirm("Delete this project?")) deleteProject.mutate(p.id);
+                    }}>
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+                {Array.isArray(p.listings) && p.listings.length > 0 && (
+                  <div className="border-t border-border px-5 py-3 bg-muted/20">
+                    <p className="text-xs text-muted-foreground mb-2">{p.listings.length} linked listing(s)</p>
+                    <div className="flex flex-wrap gap-2">
+                      {p.listings.map((l: any) => (
+                        <Link key={l.id} to={`/property/${l.id}`}
+                          className="text-xs px-2 py-1 bg-secondary rounded-lg border border-border hover:border-primary/40 transition-colors truncate max-w-[180px]">
+                          {l.title}
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Inline Portfolios section ──────────────────────────────────────────────────
+function DashboardPortfoliosSection({
+  portfolios, isLoading, favorites, createPortfolio, updatePortfolio, deletePortfolio,
+}: {
+  portfolios: any[];
+  isLoading: boolean;
+  favorites: any[];
+  createPortfolio: ReturnType<typeof useCreatePortfolio>;
+  updatePortfolio: ReturnType<typeof useUpdatePortfolio>;
+  deletePortfolio: ReturnType<typeof useDeletePortfolio>;
+}) {
+  const [showCreate, setShowCreate] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+
+  const handleCreate = () => {
+    if (!newName.trim()) { toast.error("Portfolio name is required"); return; }
+    createPortfolio.mutate(newName.trim(), { onSuccess: () => { setNewName(""); setShowCreate(false); } });
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="font-display text-2xl font-bold flex items-center gap-2">
+            <TrendingUp className="w-6 h-6 text-primary" /> Portfolios
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">Group properties for bulk analysis and tracking</p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" className="border-border gap-2" asChild>
+            <Link to="/portfolios"><ExternalLink className="w-4 h-4" /> Full View</Link>
+          </Button>
+          <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" onClick={() => setShowCreate(true)}>
+            <Plus className="w-4 h-4" /> New Portfolio
+          </Button>
+        </div>
+      </div>
+
+      {showCreate && (
+        <div className="glass-card rounded-xl p-6 border border-border">
+          <h3 className="font-display font-semibold mb-4">Create portfolio</h3>
+          <div className="flex gap-3">
+            <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="e.g. Athens Buy-to-Let"
+              className="flex-1 bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors" />
+            <Button onClick={handleCreate} disabled={createPortfolio.isPending} className="bg-gradient-primary border-0 text-primary-foreground">
+              {createPortfolio.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Create
+            </Button>
+            <Button variant="outline" className="border-border" onClick={() => setShowCreate(false)}>Cancel</Button>
+          </div>
+        </div>
+      )}
+
+      {isLoading ? (
+        <div className="flex justify-center py-16"><Loader2 className="w-7 h-7 animate-spin text-primary" /></div>
+      ) : portfolios.length === 0 ? (
+        <div className="glass-card rounded-xl p-12 text-center">
+          <LayoutGrid className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+          <h2 className="font-semibold">No portfolios yet</h2>
+          <p className="text-sm text-muted-foreground mt-2 mb-4">Create a portfolio to group properties for analysis</p>
+          <Button className="bg-gradient-primary border-0 text-primary-foreground" onClick={() => setShowCreate(true)}>Create your first portfolio</Button>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {portfolios.map((p: any) => {
+            const listingIds: string[] = p.listing_ids || [];
+            const totalValue = (p.listings || []).reduce((s: number, l: any) => s + Number(l?.price || 0), 0);
+            const isEditing = editingId === p.id;
+            return (
+              <div key={p.id} className="glass-card rounded-xl border border-border overflow-hidden">
+                <div className="p-5 flex items-center justify-between gap-4">
+                  {isEditing ? (
+                    <div className="flex items-center gap-2 flex-1">
+                      <input value={editName} onChange={e => setEditName(e.target.value)}
+                        className="flex-1 bg-secondary border border-border rounded-xl px-3 py-2 text-sm font-semibold text-foreground outline-none focus:border-primary transition-colors" />
+                      <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground" onClick={() => {
+                        if (!editName.trim()) return;
+                        updatePortfolio.mutate({ id: p.id, updates: { name: editName.trim() } }, { onSuccess: () => { setEditingId(null); setEditName(""); } });
+                      }}>Save</Button>
+                      <Button size="sm" variant="outline" className="border-border" onClick={() => { setEditingId(null); setEditName(""); }}>Cancel</Button>
+                    </div>
+                  ) : (
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-display font-semibold">{p.name}</h3>
+                      <p className="text-sm text-muted-foreground mt-0.5">
+                        {listingIds.length} properties{totalValue > 0 && ` · €${totalValue.toLocaleString()} total`}
+                      </p>
+                    </div>
+                  )}
+                  {!isEditing && (
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button variant="ghost" size="icon" onClick={() => { setEditingId(p.id); setEditName(p.name); }} aria-label="Rename">
+                        <Edit2 className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => {
+                        if (confirm("Delete this portfolio?")) deletePortfolio.mutate(p.id);
+                      }}>
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+                {(p.listings || []).length > 0 && (
+                  <div className="border-t border-border px-5 py-3 bg-muted/20">
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                      {(p.listings || []).map((l: any) => (
+                        <div key={l.id} className="relative">
+                          <PropertyCard property={dbListingToCard(l)} />
+                          <Button variant="ghost" size="sm"
+                            className="absolute top-2 right-2 bg-background/80 backdrop-blur-sm text-xs"
+                            onClick={() => {
+                              const ids = listingIds.filter((id: string) => id !== l.id);
+                              updatePortfolio.mutate({ id: p.id, updates: { listing_ids: ids } });
+                            }}>
+                            Remove
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="border-t border-border px-5 py-3 bg-muted/30">
+                  <p className="text-xs text-muted-foreground">
+                    Add properties from <button onClick={() => {}} className="text-primary underline underline-offset-2">saved listings</button> via{" "}
+                    <Link to="/portfolios" className="text-primary underline underline-offset-2">full portfolio view</Link>.
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Link section (legacy — kept for potential reuse) ───────────────────────────
 function LinkSection({
   icon: Icon,
   title,

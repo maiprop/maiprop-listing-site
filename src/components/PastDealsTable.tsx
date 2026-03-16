@@ -51,7 +51,7 @@ export function PastDealsTable({ listingId }: PastDealsTableProps) {
     queryKey: ["past-deals", listingId],
     queryFn: async (): Promise<PastDeal[]> => {
       const { data: session } = await supabase.auth.getSession();
-      const token = session?.data?.session?.access_token;
+      const token = session?.session?.access_token;
       if (!token) throw new Error("Not authenticated");
 
       const { data: res, error: fnErr } = await supabase.functions.invoke(
