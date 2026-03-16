@@ -1651,6 +1651,44 @@ function AnalyticsSection({
             </div>
           )}
 
+          {/* Visibility & KPI breakdown (professionals — always show) */}
+          {role === "professional" && (
+            <div className="space-y-4">
+              <h2 className="font-display font-semibold">Profile Visibility & KPIs</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="glass-card rounded-xl p-4 border border-border">
+                  <p className="text-xs text-muted-foreground uppercase tracking-widest mb-1">Profile Views</p>
+                  <p className="font-display text-2xl font-bold text-primary">{myProfessional?.projects_count ?? 0}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Clients who viewed your profile</p>
+                </div>
+                <div className="glass-card rounded-xl p-4 border border-border">
+                  <p className="text-xs text-muted-foreground uppercase tracking-widest mb-1">Avg. Rating</p>
+                  <p className="font-display text-2xl font-bold text-brand-gold">{myProfessional?.rating ? Number(myProfessional.rating).toFixed(1) : "—"}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{myProfessional?.reviews_count ?? 0} review(s) from clients</p>
+                </div>
+                <div className="glass-card rounded-xl p-4 border border-border">
+                  <p className="text-xs text-muted-foreground uppercase tracking-widest mb-1">Conversion Rate</p>
+                  <p className="font-display text-2xl font-bold text-brand-emerald">{leadFunnel?.conversionRate ?? 0}%</p>
+                  <p className="text-xs text-muted-foreground mt-1">Leads that became confirmed</p>
+                </div>
+              </div>
+              <div className="glass-card rounded-xl p-4 border border-border">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold">Improve Your Visibility</h3>
+                </div>
+                <ul className="space-y-2 text-sm text-muted-foreground">
+                  {!myProfessional?.avatar_url && <li className="flex items-center gap-2"><AlertCircle className="w-3.5 h-3.5 text-brand-gold shrink-0" /> Add a profile photo — profiles with photos get 3× more views</li>}
+                  {!myProfessional?.bio && <li className="flex items-center gap-2"><AlertCircle className="w-3.5 h-3.5 text-brand-gold shrink-0" /> Write a bio to describe your expertise</li>}
+                  {(!myProfessional?.specialties || myProfessional.specialties.length === 0) && <li className="flex items-center gap-2"><AlertCircle className="w-3.5 h-3.5 text-brand-gold shrink-0" /> Add specialties to appear in filtered searches</li>}
+                  {!myProfessional?.hourly_rate && <li className="flex items-center gap-2"><AlertCircle className="w-3.5 h-3.5 text-brand-gold shrink-0" /> Set your hourly rate so clients know what to expect</li>}
+                  {myProfessional?.avatar_url && myProfessional?.bio && myProfessional?.hourly_rate && (myProfessional?.specialties?.length ?? 0) > 0 && (
+                    <li className="flex items-center gap-2 text-brand-emerald"><CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> Your profile is fully optimised!</li>
+                  )}
+                </ul>
+              </div>
+            </div>
+          )}
+
           {/* View trends (sellers/agents/developers) */}
           {role !== "professional" && viewTrends.length > 0 && (
             <div>
