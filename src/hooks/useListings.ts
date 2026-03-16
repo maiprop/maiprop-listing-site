@@ -12,8 +12,6 @@ export function useListings(filters?: {
   owner_id?: string;
   includeAuctions?: boolean;
   limit?: number;
-  pre_sale_only?: boolean;
-  off_market_only?: boolean;
 }) {
   return useQuery({
     queryKey: ["listings", filters],
