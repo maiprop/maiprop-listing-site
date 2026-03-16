@@ -1428,44 +1428,6 @@ export default function Index() {
                 })
             }
           </div>
-
-          {/* Open Houses — 1x3 grid under Featured Properties */}
-          {openHouseListings.length > 0 && (
-            <div className={`mt-10 pt-10 border-t border-border reveal reveal-delay-1 ${featuredInView ? "in-view" : ""}`}>
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <span className="text-xs font-semibold text-emerald-600 uppercase tracking-widest">Open Houses</span>
-                  <h3 className="font-display text-lg font-bold">Upcoming Open Houses</h3>
-                </div>
-                <Button variant="outline" size="sm" className="border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10 text-xs" asChild>
-                  <Link to="/open-houses">View All <ArrowRight className="w-3 h-3 ml-1" /></Link>
-                </Button>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {openHouseListings.slice(0, 3).map((l: any) => {
-                  const imgs: string[] = l.cover_image_url ? [l.cover_image_url] : [];
-                  if (!imgs.length && l.listing_images?.length) {
-                    const sorted = [...l.listing_images].sort((a: any, b: any) => a.sort_order - b.sort_order);
-                    sorted.forEach((img: any) => imgs.push(img.url));
-                  }
-                  const svFallback = l.latitude != null && l.longitude != null ? getStreetViewProxyUrl({ lat: Number(l.latitude), lng: Number(l.longitude) }) : null;
-                  if (!imgs.length && svFallback) imgs.push(svFallback);
-                  return (
-                    <PropertyCard key={l.id} property={{
-                      id: l.id, title: l.title, address: l.address || l.city, city: l.city,
-                      price: Number(l.price), pricePerSqm: l.price_per_sqm ? Number(l.price_per_sqm) : undefined,
-                      bedrooms: l.bedrooms, bathrooms: l.bathrooms, sqm: Number(l.sqm),
-                      floor: l.floor, totalFloors: l.total_floors, yearBuilt: l.year_built,
-                      energyClass: l.energy_class, images: imgs,
-                      type: l.property_type, listingType: "open_house",
-                      auctionDate: l.open_house_date ? new Date(l.open_house_date).toLocaleDateString("en-GB") : undefined,
-                      aiScore: l.ai_score, views: l.views_count, tags: l.tags || [],
-                    }} />
-                  );
-                })}
-              </div>
-            </div>
-          )}
         </div>
       </section>
 
