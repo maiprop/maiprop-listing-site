@@ -5,13 +5,14 @@
 
 import { useState, useEffect } from "react";
 import { Link, useSearchParams, useNavigate } from "react-router-dom";
-import { Shield, Flame, Users, Wifi, SlidersHorizontal, ArrowLeft } from "lucide-react";
+import { Shield, Flame, Users, Wifi, SlidersHorizontal, ArrowLeft, DoorOpen } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import AdminFiresalePipeline from "@/components/AdminFiresalePipeline";
 import AdminSubscribers from "@/components/AdminSubscribers";
 import AdminPanel from "@/components/AdminPanel";
 import { AdminPricingContent } from "@/pages/AdminPricing";
+import OpenHouseAssetControlPanel from "@/components/OpenHouseAssetControlPanel";
 import { Button } from "@/components/ui/button";
 
 type AdminTab = "pipeline" | "subscribers" | "pricing" | "os-sync";
