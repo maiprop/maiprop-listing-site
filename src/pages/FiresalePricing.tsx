@@ -39,7 +39,7 @@ function useInvestorFiresalePricing() {
   return useQuery({
     queryKey: ["pricing", "firesale_investors"],
     queryFn: async (): Promise<PricingItem[]> => {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from("pricing_configs")
         .select("*")
         .eq("audience", "investor")

@@ -50,20 +50,28 @@ const MODULES = [
 
 const AUDIENCES = ["user", "professional", "agent", "investor"] as const;
 
-/** Default rows to seed when admin clicks "Seed default pricing" */
+/** Default rows to seed when admin clicks "Seed default pricing" — aligned with Pricing page plans */
 const DEFAULT_SEED: Omit<PricingConfig, "id" | "created_at" | "updated_at">[] = [
+  // User / Buyer / Seller (Pricing page)
   { key: "free", label: "Free", description: "Basic search & limited features", audience: "user", module: "user_subscription", unit: "monthly", currency: "EUR", amount: 0, is_active: true, sort_order: 1, metadata: {} },
-  { key: "pro", label: "Pro", description: "Unlimited listings, AI tools", audience: "user", module: "user_subscription", unit: "monthly", currency: "EUR", amount: 19, is_active: true, sort_order: 2, metadata: {} },
-  { key: "professional_basic", label: "Basic", description: "For individual pros", audience: "professional", module: "professional_subscription", unit: "monthly", currency: "EUR", amount: 49, is_active: true, sort_order: 1, metadata: {} },
+  { key: "pro", label: "mAI Prop Pro (Buyer)", description: "AI-powered investor intelligence", audience: "user", module: "user_subscription", unit: "monthly", currency: "EUR", amount: 29, is_active: true, sort_order: 2, metadata: {} },
+  { key: "seller_pro", label: "Seller Pro", description: "Unlimited listings, AI assist & analytics", audience: "user", module: "user_subscription", unit: "monthly", currency: "EUR", amount: 19, is_active: true, sort_order: 3, metadata: {} },
+  // Professionals (Pricing page)
+  { key: "professional_basic", label: "Pro Plan", description: "Priority leads, booking page & AI tools", audience: "professional", module: "professional_subscription", unit: "monthly", currency: "EUR", amount: 49, is_active: true, sort_order: 1, metadata: {} },
   { key: "professional_premium", label: "Premium", description: "Full pro tools & API", audience: "professional", module: "professional_subscription", unit: "monthly", currency: "EUR", amount: 149, is_active: true, sort_order: 2, metadata: {} },
-  { key: "agent_basic", label: "Agent Basic", description: "Listings & CRM", audience: "agent", module: "agent_subscription", unit: "monthly", currency: "EUR", amount: 79, is_active: true, sort_order: 1, metadata: {} },
+  // Agents (Pricing page: Agency Pro, Developer Pro)
+  { key: "agent_basic", label: "Agency Pro", description: "Unlimited listings, CRM & analytics", audience: "agent", module: "agent_subscription", unit: "monthly", currency: "EUR", amount: 89, is_active: true, sort_order: 1, metadata: {} },
   { key: "agent_plus", label: "Agent Plus", description: "Unlimited listings & valuation", audience: "agent", module: "agent_subscription", unit: "monthly", currency: "EUR", amount: 199, is_active: true, sort_order: 2, metadata: {} },
+  // Valuation reports
   { key: "valuation_single", label: "Single report", description: "One-off valuation report", audience: "user", module: "valuation_reports", unit: "per_report", currency: "EUR", amount: 29, is_active: true, sort_order: 1, metadata: {} },
   { key: "valuation_bundle", label: "Bundle (5 reports)", description: "5 reports pack", audience: "user", module: "valuation_reports", unit: "bundle", currency: "EUR", amount: 99, is_active: true, sort_order: 2, metadata: {} },
-  { key: "investor_private", label: "Private", description: "Deal flow visibility", audience: "investor", module: "firesale_dashboard", unit: "monthly", currency: "EUR", amount: 490, is_active: true, sort_order: 1, metadata: {} },
-  { key: "investor_institutional", label: "Institutional", description: "Full access for funds", audience: "investor", module: "firesale_dashboard", unit: "monthly", currency: "EUR", amount: 1490, is_active: true, sort_order: 2, metadata: {} },
-  { key: "investor_developer", label: "Developer", description: "Custom / white-glove", audience: "investor", module: "firesale_dashboard", unit: "custom", currency: "EUR", amount: 0, is_active: true, sort_order: 3, metadata: {} },
-  // Ad-hoc charges (extra listings, featured, premium, etc.)
+  // Firesale / Investor (Pricing page + FiresalePricing page)
+  { key: "firesale_investor_basic", label: "Investor – Quick Sale Access", description: "Access to Quick Sale™ deal feed with basic filters", audience: "investor", module: "firesale_dashboard", unit: "monthly", currency: "EUR", amount: 0, is_active: true, sort_order: 0, metadata: {} },
+  { key: "firesale_investor_pro", label: "Investor – Firesale Pro", description: "Full Firesale dashboard, live pipeline, AI scoring", audience: "investor", module: "firesale_dashboard", unit: "monthly", currency: "EUR", amount: 79, is_active: true, sort_order: 1, metadata: {} },
+  { key: "investor_private", label: "Investor Pro", description: "Full deal pipeline, AI scoring & intelligence", audience: "investor", module: "firesale_dashboard", unit: "monthly", currency: "EUR", amount: 79, is_active: true, sort_order: 2, metadata: {} },
+  { key: "investor_institutional", label: "Institutional Pro", description: "Full deal flow, portfolio tools & priority support", audience: "investor", module: "firesale_dashboard", unit: "monthly", currency: "EUR", amount: 149, is_active: true, sort_order: 3, metadata: {} },
+  { key: "investor_developer", label: "Developer", description: "Custom / white-glove", audience: "investor", module: "firesale_dashboard", unit: "custom", currency: "EUR", amount: 0, is_active: true, sort_order: 4, metadata: {} },
+  // Ad-hoc charges
   { key: "extra_listing", label: "Extra ad listing", description: "Additional listing beyond plan limit", audience: "user", module: "adhoc_charges", unit: "per_listing", currency: "EUR", amount: 9, is_active: true, sort_order: 1, metadata: {} },
   { key: "featured_listing", label: "Featured listing", description: "Highlight listing in search / homepage", audience: "user", module: "adhoc_charges", unit: "per_listing", currency: "EUR", amount: 19, is_active: true, sort_order: 2, metadata: {} },
   { key: "premium_ad", label: "Premium ad", description: "Premium placement for a listing", audience: "user", module: "adhoc_charges", unit: "per_listing", currency: "EUR", amount: 29, is_active: true, sort_order: 3, metadata: {} },
@@ -74,7 +82,7 @@ function usePricingConfigs() {
   return useQuery<PricingConfig[]>({
     queryKey: ["admin-pricing-configs"],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from("pricing_configs")
         .select("*")
         .order("module", { ascending: true })
@@ -99,11 +107,13 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
         id,
         ...rest,
       }));
-      const { error } = await (supabase as any).from("pricing_configs").upsert(payload, { onConflict: "id" });
+      const { error } = await supabase.from("pricing_configs").upsert(payload, { onConflict: "id" });
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-pricing-configs"] });
+      qc.invalidateQueries({ queryKey: ["pricing-configs-public"] });
+      qc.invalidateQueries({ queryKey: ["pricing", "firesale_investors"] });
       toast.success("Pricing configuration saved.");
     },
     onError: (e: any) => {
@@ -113,7 +123,7 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await (supabase as any).from("pricing_configs").delete().eq("id", id);
+      const { error } = await supabase.from("pricing_configs").delete().eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -132,11 +142,13 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
         created_at: now,
         updated_at: now,
       }));
-      const { error } = await (supabase as any).from("pricing_configs").upsert(rows, { onConflict: "id" });
+      const { error } = await supabase.from("pricing_configs").upsert(rows, { onConflict: "id" });
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-pricing-configs"] });
+      qc.invalidateQueries({ queryKey: ["pricing-configs-public"] });
+      qc.invalidateQueries({ queryKey: ["pricing", "firesale_investors"] });
       toast.success("Default pricing seeded. You can adjust amounts and save.");
     },
     onError: (e: any) => toast.error(e.message || "Failed to seed default pricing."),
@@ -229,6 +241,16 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
     );
   };
 
+  const handleMetadataChange = (id: string, key: string, value: string) => {
+    qc.setQueryData<PricingConfig[]>(["admin-pricing-configs"], (prev = []) =>
+      prev.map((row) => {
+        if (row.id !== id) return row;
+        const meta = { ...(row.metadata || {}), [key]: value || undefined };
+        return { ...row, metadata: meta };
+      }),
+    );
+  };
+
   const content = (
         <>
         <div className="space-y-8">
@@ -316,6 +338,7 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
                             <th className="text-left py-2 pr-3">Active</th>
                             <th className="text-left py-2 pr-3">Sort</th>
                             <th className="text-left py-2 pr-3">Description</th>
+                            <th className="text-left py-2 pr-3">Stripe Price ID</th>
                             <th className="py-2 pl-2 text-right">Actions</th>
                           </tr>
                         </thead>
@@ -385,6 +408,14 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
                                   className="w-full bg-transparent border border-border rounded px-2 py-1 text-xs"
                                   value={row.description ?? ""}
                                   onChange={(e) => handleFieldChange(row.id, "description", e.target.value)}
+                                />
+                              </td>
+                              <td className="py-2 pr-3">
+                                <input
+                                  className="w-28 bg-transparent border border-border rounded px-2 py-1 text-xs font-mono"
+                                  placeholder="price_xxx"
+                                  value={(row.metadata as Record<string, string> | undefined)?.stripe_price_id ?? ""}
+                                  onChange={(e) => handleMetadataChange(row.id, "stripe_price_id", e.target.value)}
                                 />
                               </td>
                               <td className="py-2 pl-2 text-right">

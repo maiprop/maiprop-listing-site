@@ -219,11 +219,6 @@ export function Navbar() {
                       <MessageSquare className="w-3.5 h-3.5" /> Messages
                     </Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to="/open-houses" className="flex items-center gap-2 cursor-pointer">
-                      <DoorOpen className="w-3.5 h-3.5 text-emerald-600" /> Open Houses
-                    </Link>
-                  </DropdownMenuItem>
                   {(participantType === "investor" || participantType === "institutional") && (
                     <DropdownMenuItem asChild>
                       <Link to="/investor-dashboard" className="flex items-center gap-2 cursor-pointer">

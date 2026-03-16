@@ -21,7 +21,10 @@ const timeoutFetch: typeof fetch = async (input, init) => {
   const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
   const isFunctionInvoke = url.includes("/functions/v1/");
   const timeoutMs = isFunctionInvoke ? FUNCTION_TIMEOUT_MS : DEFAULT_TIMEOUT_MS;
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const timer = setTimeout(
+    () => controller.abort(new DOMException(`Request timed out after ${Math.round(timeoutMs / 1000)}s`, "AbortError")),
+    timeoutMs
+  );
   try {
     return await fetch(input, { ...init, signal: controller.signal });
   } catch (error: any) {
