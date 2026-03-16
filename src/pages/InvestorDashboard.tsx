@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
-import { ROICalculator } from "@/components/ROICalculator";
 import { Footer } from "@/components/Footer";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -540,7 +539,6 @@ export default function InvestorDashboard() {
 
               {/* Right sidebar analytics */}
               <div className="space-y-4 lg:sticky lg:top-24 self-start">
-                <ROICalculator defaultPrice={200000} defaultSqm={80} />
                 <div className="glass-card rounded-2xl border border-border p-5">
                   <div className="flex items-center gap-2 mb-4">
                     <MapPin className="w-3.5 h-3.5 text-primary" />
