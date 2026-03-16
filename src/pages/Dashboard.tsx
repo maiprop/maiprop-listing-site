@@ -1606,12 +1606,14 @@ function AnalyticsSection({
             <BarChart2 className="w-6 h-6 text-primary" /> Analytics
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {role === "professional" ? "Lead funnel & conversion metrics." : "Listing performance & view trends."}
+            {role === "professional" ? "Visibility, lead funnel & conversion KPIs." : "Listing performance & view trends."}
           </p>
         </div>
-        <Button variant="outline" className="border-border gap-2" asChild>
-          <Link to="/market-intelligence"><ArrowRight className="w-4 h-4" /> Market Intelligence</Link>
-        </Button>
+        {role !== "professional" && (
+          <Button variant="outline" className="border-border gap-2" asChild>
+            <Link to="/listings"><Search className="w-4 h-4" /> Browse Listings</Link>
+          </Button>
+        )}
       </div>
 
       {listingsLoading ? (
