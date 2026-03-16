@@ -322,8 +322,6 @@ export default function CreateListing() {
     pets_allowed: false, short_term_rental: false, available_from: "", min_rental_months: "",
     is_pre_sale: false,
     is_off_market: false,
-    is_featured: false,
-    priority_placement: 0,
   });
 
   const set = (key: string, value: unknown) => {
@@ -742,8 +740,6 @@ export default function CreateListing() {
         has_structured_cabling: form.has_structured_cabling, has_equipped: form.has_equipped,
         is_pre_sale: form.is_pre_sale,
         is_off_market: form.is_off_market,
-        is_featured: form.is_featured ?? false,
-        priority_placement: Number(form.priority_placement) || 0,
       };
 
       const { data, error } = await supabase
@@ -1433,25 +1429,7 @@ export default function CreateListing() {
                     <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2">
                       <Crown className="w-4 h-4 text-brand-gold" /> Featured Listing (Pro)
                     </div>
-                    <p className="text-xs text-muted-foreground mb-3">Get priority placement in search with a featured badge.</p>
-                    <div className="flex flex-wrap gap-3">
-                      <ToggleChip active={form.is_featured} onClick={() => set("is_featured", !form.is_featured)}>
-                        <Crown className="w-3 h-3 inline" /> Featured badge
-                      </ToggleChip>
-                      {form.is_featured && (
-                        <div className="flex items-center gap-2">
-                          <FieldLabel>Priority (0–10)</FieldLabel>
-                          <input
-                            type="number"
-                            min={0}
-                            max={10}
-                            value={form.priority_placement}
-                            onChange={e => set("priority_placement", Number(e.target.value) || 0)}
-                            className="w-16 px-2 py-1 rounded-lg border border-border bg-secondary text-sm"
-                          />
-                        </div>
-                      )}
-                    </div>
+                    <p className="text-xs text-muted-foreground mb-3">Get priority placement in search with a featured badge. Available in a future update.</p>
                   </div>
                 )}
               </div>

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import {
   MapPin, Bed, Bath, Square, Calendar, ChevronLeft, Eye,
-  Pencil, Pause, Play, Trash2, Loader2, MessageCircle, Euro, Users
+  Pencil, Pause, Play, Trash2, Loader2, MessageCircle, Euro, Users, LayoutDashboard
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -178,7 +178,7 @@ export default function OpenHouseDetail() {
             <ChevronLeft className="w-4 h-4" /> Back to Open Houses
           </Link>
 
-          {/* Owner quick actions */}
+              {/* Owner quick actions */}
           {isOwner && (
             <div className="flex flex-wrap gap-2 mb-6 p-4 rounded-xl bg-card border border-border">
               <span className="text-xs font-semibold text-muted-foreground uppercase self-center mr-2">Manage</span>
@@ -316,6 +316,20 @@ export default function OpenHouseDetail() {
                   <Button className="w-full mt-4 gap-2" asChild>
                     <Link to="/login">Sign in to contact</Link>
                   </Button>
+                )}
+
+                {/* Owner: dashboard shortcut */}
+                {isOwner && (
+                  <div className="mt-4 space-y-2">
+                    <Button className="w-full gap-2" asChild>
+                      <Link to="/dashboard?tab=open-houses">
+                        <LayoutDashboard className="w-4 h-4" /> Manage in Dashboard
+                      </Link>
+                    </Button>
+                    <p className="text-xs text-muted-foreground text-center">
+                      View registrations, approve visitors & manage sealed offers
+                    </p>
+                  </div>
                 )}
 
                 {/* Mock listing: explain the flow without hitting backend */}

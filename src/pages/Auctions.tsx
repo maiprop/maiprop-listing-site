@@ -15,7 +15,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { useToggleFavorite } from "@/hooks/useFavorites";
 import { toast } from "sonner";
 
-const AUCTION_SELECT_CORE = "id, title, city, address, price, auction_starting_bid, auction_date, auction_court, property_type, cover_image_url, sqm, bedrooms, bathrooms, latitude, longitude, tags, year_built, construction_status, website_url, region, is_featured, priority_placement";
+const AUCTION_SELECT_CORE = "id, title, city, address, price, auction_starting_bid, auction_date, auction_court, property_type, cover_image_url, sqm, bedrooms, bathrooms, latitude, longitude, tags, year_built, construction_status, website_url, region";
 const QUERY_TIMEOUT_MS = 15_000;
 const AUCTION_FETCH_LIMIT = 500;
 const PAGE_SIZE = 20;
