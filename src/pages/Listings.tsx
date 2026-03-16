@@ -54,6 +54,7 @@ const listingTypeOptions = [
 
 const sortOptions = [
   { label: "Most Relevant", value: "relevant" },
+  { label: "⭐ Featured First", value: "featured" },
   { label: "Price: Low → High", value: "price-asc" },
   { label: "Price: High → Low", value: "price-desc" },
   { label: "Newest First", value: "newest" },
