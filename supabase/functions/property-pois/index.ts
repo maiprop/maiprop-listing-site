@@ -69,14 +69,14 @@ Rules:
       const status = response.status;
       if (status === 429) {
         return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: "AI features are temporarily unavailable due to usage limits. Please try again later or contact support." }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       if (status === 402) {
         return new Response(
-          JSON.stringify({ error: "Usage limit reached. Please add credits to your workspace." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: "AI features are temporarily unavailable due to usage limits. Please try again later or contact support." }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       const text = await response.text();

@@ -98,8 +98,9 @@ Rules:
 
     if (!response.ok) {
       const status = response.status;
-      if (status === 429) return new Response(JSON.stringify({ error: "Rate limit exceeded." }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      if (status === 402) return new Response(JSON.stringify({ error: "Usage limit reached." }), { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      const usageLimitMsg = "AI features are temporarily unavailable due to usage limits. Please try again later or contact support.";
+      if (status === 429) return new Response(JSON.stringify({ error: usageLimitMsg }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      if (status === 402) return new Response(JSON.stringify({ error: usageLimitMsg }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       throw new Error(`AI gateway error: ${status}`);
     }
 
