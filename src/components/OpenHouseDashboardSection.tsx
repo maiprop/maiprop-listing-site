@@ -144,6 +144,18 @@ function ParticipantRegistrationCard({ reg }: { reg: any }) {
   const listing = reg.listings;
   const StatusIcon = REG_STATUS_ICONS[reg.status] || Timer;
   const countdown = listing?.open_house_date ? getCountdown(listing.open_house_date) : null;
+  const ohDate = listing?.open_house_date ? new Date(listing.open_house_date) : null;
+  const ohDatePassed = ohDate ? ohDate < new Date() : false;
+  const canSubmitOffer = reg.status === "attended" && ohDatePassed;
+
+  let offerEligibilityLabel: string | null = null;
+  if (reg.status === "attended") {
+    offerEligibilityLabel = ohDatePassed ? "You can submit an offer" : `Offer opens after ${ohDate?.toLocaleDateString("en-GB")} ${ohDate?.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`;
+  } else if (reg.status === "approved") {
+    offerEligibilityLabel = "Attend the open house to unlock offer submission";
+  } else if (reg.status === "pending") {
+    offerEligibilityLabel = "Awaiting approval — contact unlocks after approval";
+  }
 
   return (
     <Link to={`/open-house/${reg.listing_id}`} className="glass-card rounded-xl p-4 flex gap-3 hover:border-primary/40 transition-colors">
@@ -179,6 +191,15 @@ function ParticipantRegistrationCard({ reg }: { reg: any }) {
             <span className="text-xs text-muted-foreground">Slot #{reg.timeslot_index + 1}</span>
           )}
         </div>
+        {offerEligibilityLabel && (
+          <p className={cn(
+            "text-[11px] mt-1",
+            canSubmitOffer ? "text-emerald-600 font-medium" : "text-muted-foreground"
+          )}>
+            {canSubmitOffer && <Euro className="w-3 h-3 inline mr-0.5" />}
+            {offerEligibilityLabel}
+          </p>
+        )}
       </div>
       <ArrowRight className="w-4 h-4 text-muted-foreground self-center shrink-0" />
     </Link>

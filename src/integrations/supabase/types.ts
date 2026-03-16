@@ -1644,7 +1644,7 @@ export type Database = {
         | "land"
         | "commercial"
         | "office"
-      user_role: "individual" | "agent" | "professional" | "seller_landlord"
+      user_role: "individual" | "agent" | "professional" | "seller_landlord" | "investor" | "institutional" | "developer" | "admin"
       viewing_status: "pending" | "confirmed" | "cancelled" | "completed"
       viewing_type: "in_person" | "video"
     }
@@ -1848,7 +1848,7 @@ export const Constants = {
         "commercial",
         "office",
       ],
-      user_role: ["individual", "agent", "professional", "seller_landlord"],
+      user_role: ["individual", "agent", "professional", "seller_landlord", "investor", "institutional", "developer", "admin"],
       viewing_status: ["pending", "confirmed", "cancelled", "completed"],
       viewing_type: ["in_person", "video"],
     },

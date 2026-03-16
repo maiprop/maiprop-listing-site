@@ -51,7 +51,7 @@ function TransferAdminForm({ onSuccess }: { onSuccess: () => Promise<void> }) {
 type Subscription = {
   id: string;
   user_id: string;
-  tier: "analyst" | "institutional" | "sovereign";
+  tier: "private" | "institutional" | "developer";
   status: "active" | "cancelled" | "expired" | "trial";
   started_at: string;
   expires_at: string | null;
@@ -105,9 +105,9 @@ export default function AdminSubscribers() {
 
   const filtered = allSubs.filter(s => subsFilter === "all" || s.status === subsFilter);
   const tierConfig: Record<string, { color: string; price: string }> = {
-    analyst: { color: "text-primary border-primary/20 bg-primary/10", price: "€490/mo" },
+    private: { color: "text-primary border-primary/20 bg-primary/10", price: "€490/mo" },
     institutional: { color: "text-accent border-accent/20 bg-accent/10", price: "€1,490/mo" },
-    sovereign: { color: "text-brand-gold border-brand-gold/20 bg-brand-gold/10", price: "Custom" },
+    developer: { color: "text-brand-gold border-brand-gold/20 bg-brand-gold/10", price: "Custom" },
   };
   const statusColor: Record<string, string> = {
     active: "text-brand-emerald border-brand-emerald/20 bg-brand-emerald/10",
@@ -146,7 +146,7 @@ export default function AdminSubscribers() {
         <div>
           <p className="text-xs text-muted-foreground mb-1">Estimated MRR</p>
           <p className="font-display font-black text-2xl text-primary">
-            €{(allSubs.filter(s => s.status === "active" && s.tier === "analyst").length * 490 + allSubs.filter(s => s.status === "active" && s.tier === "institutional").length * 1490).toLocaleString()}
+            €{(allSubs.filter(s => s.status === "active" && s.tier === "private").length * 490 + allSubs.filter(s => s.status === "active" && s.tier === "institutional").length * 1490).toLocaleString()}
           </p>
         </div>
         <Button size="sm" variant="outline" className="border-border text-xs h-8 gap-1.5" onClick={loadAllSubs}><RefreshCw className={`w-3 h-3 ${subsLoading ? "animate-spin" : ""}`} /> Refresh</Button>
@@ -188,9 +188,9 @@ export default function AdminSubscribers() {
                       <div>
                         <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5 block">Tier</label>
                         <select value={editTier} onChange={e => setEditTier(e.target.value)} className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-xs text-foreground outline-none focus:border-primary">
-                          <option value="analyst">Analyst — €490/mo</option>
+                          <option value="private">Private — €490/mo</option>
                           <option value="institutional">Institutional — €1,490/mo</option>
-                          <option value="sovereign">Sovereign — Custom</option>
+                          <option value="developer">Developer — Custom</option>
                         </select>
                       </div>
                       <div>

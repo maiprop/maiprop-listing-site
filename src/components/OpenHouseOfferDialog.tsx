@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Euro, Loader2, Clock } from "lucide-react";
+import { Euro, Loader2, Clock, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useAuth } from "@/contexts/AuthContext";
@@ -16,6 +16,10 @@ interface Props {
   listingId: string;
   listingTitle: string;
   listingPrice: number;
+  /** If false, user cannot submit (not attended / OH date not passed) */
+  canSubmit?: boolean;
+  /** Shown when canSubmit is false */
+  offerBlockedReason?: string;
 }
 
 export default function OpenHouseOfferDialog({
@@ -24,6 +28,8 @@ export default function OpenHouseOfferDialog({
   listingId,
   listingTitle,
   listingPrice,
+  canSubmit = true,
+  offerBlockedReason,
 }: Props) {
   const { user } = useAuth();
   const { data: settings } = useOpenHouseSettings(listingId);
@@ -36,6 +42,7 @@ export default function OpenHouseOfferDialog({
   const myOffer = offers.find((o: any) => o.bidder_id === user?.id);
   const offerDeadline = settings?.offer_deadline ? new Date(settings.offer_deadline) : null;
   const isExpired = offerDeadline ? offerDeadline < new Date() : false;
+  const isBlocked = !canSubmit;
 
   const [tick, setTick] = useState(0);
   useEffect(() => {
@@ -90,6 +97,13 @@ export default function OpenHouseOfferDialog({
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">{listingTitle}</p>
 
+          {isBlocked && offerBlockedReason && (
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-500/10 text-amber-700 border border-amber-500/25">
+              <Lock className="w-4 h-4 shrink-0" />
+              <span className="text-sm font-medium">{offerBlockedReason}</span>
+            </div>
+          )}
+
           {offerDeadline && (
             <div className={`flex items-center justify-between gap-2 p-3 rounded-xl ${isExpired ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary"}`}>
               <span className="flex items-center gap-2 text-sm font-medium">
@@ -116,7 +130,7 @@ export default function OpenHouseOfferDialog({
                   onChange={(e) => setAmount(e.target.value)}
                   placeholder={String(listingPrice)}
                   className="w-full px-4 py-3 rounded-xl border border-border bg-background text-lg font-semibold"
-                  disabled={isExpired}
+                  disabled={isExpired || isBlocked}
                 />
               </div>
               <div>
@@ -126,13 +140,13 @@ export default function OpenHouseOfferDialog({
                   onChange={(e) => setMessage(e.target.value)}
                   placeholder="Add any conditions or notes..."
                   className="w-full px-3 py-2 rounded-xl border border-border bg-background text-sm resize-none h-20"
-                  disabled={isExpired}
+                  disabled={isExpired || isBlocked}
                 />
               </div>
               <Button
                 className="w-full gap-2"
                 onClick={handleSubmit}
-                disabled={submitOffer.isPending || isExpired}
+                disabled={submitOffer.isPending || isExpired || isBlocked}
               >
                 {submitOffer.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Euro className="w-4 h-4" />}
                 Submit Sealed Offer

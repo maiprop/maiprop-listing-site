@@ -23,7 +23,7 @@ import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
 type Subscription = {
   id: string;
   user_id: string;
-  tier: "analyst" | "institutional" | "sovereign";
+  tier: "private" | "institutional" | "developer";
   status: "active" | "cancelled" | "expired" | "trial";
   started_at: string;
   expires_at: string | null;
@@ -39,8 +39,8 @@ function daysUntilExpiry(expiresAt: string | null): number | null {
 // ─── Subscription tiers ───────────────────────────────────────────────────────
 const TIERS = [
   {
-    id: "analyst",
-    name: "Analyst",
+    id: "private",
+    name: "Private",
     price: "€490",
     period: "/mo",
     desc: "Deal flow visibility for active allocators",
@@ -61,7 +61,7 @@ const TIERS = [
     period: "/mo",
     desc: "Full access for family offices & funds",
     features: [
-      "Everything in Analyst",
+      "Everything in Private",
       "Unlimited deal access",
       "Seller contact details",
       "Priority deal alerts",
@@ -73,11 +73,11 @@ const TIERS = [
     highlight: true,
   },
   {
-    id: "sovereign",
-    name: "Sovereign",
+    id: "developer",
+    name: "Developer",
     price: "Custom",
     period: "",
-    desc: "White-glove for mandates €10M+",
+    desc: "White-glove for development mandates",
     features: [
       "Everything in Institutional",
       "Co-investment pipeline",
@@ -180,7 +180,7 @@ export default function InvestorDashboard() {
     }
     const { error } = await supabase
       .from("investor_subscriptions" as any)
-      .upsert({ user_id: user.id, tier: tierId, status: tierId === "sovereign" ? "trial" : "active" }, { onConflict: "user_id" });
+      .upsert({ user_id: user.id, tier: tierId, status: tierId === "developer" ? "trial" : "active" }, { onConflict: "user_id" });
     if (error) {
       toast.error("Please complete your subscription at the pricing page");
       setShowGate(false);

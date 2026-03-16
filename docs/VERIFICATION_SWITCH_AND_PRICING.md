@@ -13,8 +13,7 @@
 | Layer | What it does |
 |-------|--------------|
 | **RLS** (20260311232309) | `WITH CHECK (role = (SELECT role FROM profiles WHERE user_id = auth.uid()))` — any `role` change is rejected |
-| **Trigger** (20260326120000) | `profiles_guard_admin_and_role` — reverts `role` to `agent`/`professional` unless `has_platform_admin(auth.uid())` |
-| **Trigger** (20260326120000) | Blocks `is_platform_admin` changes unless caller is platform admin |
+| **Trigger** (20260413120000) | `profiles_guard_admin_and_role` — only admin can set `role='admin'`; only admin can escalate to `agent`/`professional` |
 
 ### Result
 - **Role cannot change** via normal profile updates (RLS).
@@ -40,7 +39,7 @@
 
 | Layer | What it does |
 |-------|--------------|
-| **AdminRoute** | Redirects to `/dashboard` if `!profile?.is_platform_admin` |
+| **AdminRoute** | Redirects to `/dashboard` if `!isPlatformAdmin(profile)` (checks `role === 'admin'`) |
 | **AdminPricing** | Renders "Access restricted" if `!isAdmin` (backup) |
 | **RLS** (20260326120000) | `pricing_configs` INSERT/UPDATE/DELETE require `has_platform_admin(auth.uid())` |
 | **RLS** (20260316100000) | `pricing_configs` SELECT: `USING (true)` — anyone can read |
@@ -62,6 +61,6 @@
 |-------|--------|
 | Participant switch cannot escalate role | ✅ RLS + trigger |
 | Only platform admin can change `agent`/`professional` | ✅ Trigger |
-| Admin nav only for `is_platform_admin` | ✅ Frontend |
+| Admin nav only for `role='admin'` | ✅ Frontend (isPlatformAdmin) |
 | Pricing updates only by platform admin | ✅ AdminRoute + RLS |
 | Pricing reads remain public | ✅ SELECT `USING (true)` |

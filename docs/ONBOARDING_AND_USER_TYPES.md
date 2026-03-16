@@ -162,7 +162,7 @@ The **Dashboard** (`/dashboard`) shows different sidebar items and overview cont
 | **investor** | Overview, Deal Flow, Saved, Saved Searches, Messages, Viewings, Auction Alerts, Profile, Settings | Deal pipeline, saved deals; CTA: Investor Dashboard |
 | **institutional** | Overview, Deal Flow, My Listings, Analytics, Saved, Saved Searches, Messages, Viewings, Auction Alerts, Contacts, Projects, Portfolios, Profile, Settings | Buy-side + sell-side; listings and deal flow |
 | **developer** | Overview, My Listings, Analytics, Saved, Saved Searches, Messages, Viewings, Contacts, Projects, Portfolios, Profile, Settings | Listings and project showcases |
-| **platform admin** | Admin nav (firesale, subscribers, pricing) shown only when `is_platform_admin` | Single admin; only admin can grant admin |
+| **admin** | Admin nav (firesale, subscribers, pricing, OS sync) when `role='admin'` | Single admin; only admin can grant admin |
 | **professional** | Overview, My Services, Messages, Viewings, Profile, Settings | Services count and upcoming viewings; CTA: My Services |
 
 ---
@@ -183,7 +183,7 @@ The **Dashboard** (`/dashboard`) shows different sidebar items and overview cont
 - **agent**  
   - **Real estate agents are one category by themselves** in onboarding (section “Real estate agents”).  
   - Can create and manage listings (e.g. Create Listing).  
-  - **Platform admin** is separate: only one user has `is_platform_admin`; only admin can grant admin. See `docs/PARTICIPANT_RIGHTS.md`.  
+  - **Platform admin** is separate: only one user has `role='admin'`; only admin can grant admin. See `docs/PARTICIPANT_RIGHTS.md`.  
   - No multi-step “pro” onboarding; no row in `professionals` unless added by another path.
 
 - **investor**  

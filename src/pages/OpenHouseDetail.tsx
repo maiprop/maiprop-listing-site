@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import {
-  MapPin, Bed, Bath, Square, Calendar, ChevronLeft, Eye,
-  Pencil, Pause, Play, Trash2, Loader2, MessageCircle, Euro, Users, LayoutDashboard
+  MapPin, Bed, Bath, Square, Calendar, ChevronLeft, ChevronRight, Eye, Zap,
+  Pencil, Pause, Play, Trash2, Loader2, MessageCircle, Euro, Users, LayoutDashboard,
+  Home, Wrench, Lock, ExternalLink
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -10,11 +11,26 @@ import { Footer } from "@/components/Footer";
 import OpenHouseRegistrationDialog from "@/components/OpenHouseRegistrationDialog";
 import OpenHouseAssetControlPanel from "@/components/OpenHouseAssetControlPanel";
 import OpenHouseOfferDialog from "@/components/OpenHouseOfferDialog";
+import PropertyMiniMap from "@/components/PropertyMiniMap";
+import PropertyValuation from "@/components/PropertyValuation";
+import NeighbourhoodReport from "@/components/NeighbourhoodReport";
 import { useListing } from "@/hooks/useListings";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUpdateListing, useDeleteListing } from "@/hooks/useListings";
 import { useOpenHouseSettings, useOpenHouseRegistrations, useOpenHouseOffers } from "@/hooks/useOpenHouseAssetControl";
+import { useStartConversation } from "@/hooks/useMessages";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { HEATING_TYPES, CONDITION_OPTIONS } from "@/lib/filterConfig";
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-start justify-between py-2.5 border-b border-border/50 last:border-0 gap-4">
+      <span className="text-xs text-muted-foreground shrink-0">{label}</span>
+      <span className="text-xs font-semibold text-right capitalize">{value}</span>
+    </div>
+  );
+}
 
 /**
  * Open House detail page — clean, fast UI for NPL managers (ad owners).
@@ -32,11 +48,16 @@ export default function OpenHouseDetail() {
   const [offerOpen, setOfferOpen] = useState(false);
   const [editingDate, setEditingDate] = useState(false);
   const [dateInput, setDateInput] = useState("");
+  const [currentImage, setCurrentImage] = useState(0);
 
   const { data: assetSettings } = useOpenHouseSettings(id || undefined);
   const { data: registrations = [] } = useOpenHouseRegistrations(id || undefined, false);
   const { data: offers = [] } = useOpenHouseOffers(id || undefined);
   const hasAssetControl = !!assetSettings;
+  const startConversation = useStartConversation();
+
+  const [aiInsightsData, setAiInsightsData] = useState<{ vsMarket: number; rentalYield: number; estimatedValue: number; marketComparison: string; confidenceLabel: string } | null>(null);
+  const [aiInsightsLoading, setAiInsightsLoading] = useState(false);
 
   const mockListing = useMemo(() => {
     if (!isMock || !id) return null;
@@ -108,6 +129,55 @@ export default function OpenHouseDetail() {
   const myOffer = offers.find((o: any) => o.bidder_id === user?.id);
   const isOwner = !isMock && user?.id && db?.owner_id === user.id;
 
+  // UX: Contact only after approval; Offer only after attended + open house date passed
+  const openHouseDate = db?.open_house_date ? new Date(db.open_house_date) : null;
+  const ohDatePassed = openHouseDate ? openHouseDate < new Date() : false;
+  const canContact = !!myReg && ["approved", "attended"].includes(myReg.status);
+  const canSubmitOffer = !!myReg && myReg.status === "attended" && ohDatePassed;
+
+  const handleContact = async () => {
+    const ownerId = db?.owner_id;
+    if (!user || !ownerId || !id) return;
+    try {
+      const convId = await startConversation.mutateAsync({ other_user_id: ownerId, listing_id: id });
+      navigate("/messages", { state: { openConversationId: convId } });
+    } catch {
+      toast.error("Could not start conversation");
+    }
+  };
+
+  useEffect(() => {
+    if (!db || isMock) return;
+    setAiInsightsLoading(true);
+    supabase.functions.invoke("property-valuation", {
+      body: {
+        title: db.title,
+        city: db.city,
+        address: db.address,
+        price: Number(db.price),
+        sqm: Number(db.sqm),
+        bedrooms: db.bedrooms,
+        bathrooms: db.bathrooms,
+        propertyType: db.property_type,
+        listingType: "sale",
+        floor: db.floor,
+        yearBuilt: db.year_built,
+        energyClass: db.energy_class,
+        pricePerSqm: db.price_per_sqm ? Number(db.price_per_sqm) : undefined,
+      },
+    }).then(({ data }) => {
+      if (data && !data.error) {
+        setAiInsightsData({
+          vsMarket: data.marketComparisonPct ?? 0,
+          rentalYield: data.rentalYieldEstimate ?? 0,
+          estimatedValue: data.estimatedValue ?? Number(db.price),
+          marketComparison: data.marketComparison ?? "at_market",
+          confidenceLabel: data.confidenceLabel ?? "Medium",
+        });
+      }
+    }).finally(() => setAiInsightsLoading(false));
+  }, [db?.id, isMock]);
+
   useEffect(() => {
     if (isMock) return;
     if (db?.listing_type === "open_house") return;
@@ -166,7 +236,19 @@ export default function OpenHouseDetail() {
     const sorted = [...db.listing_images].sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0));
     sorted.forEach((img: any) => imgs.push(img.url));
   }
-  const openHouseDate = db.open_house_date ? new Date(db.open_house_date) : null;
+
+  const pricePerSqm = sqm > 0 ? Math.round(price / sqm) : null;
+  const detailRows: { label: string; value: string }[] = [
+    { label: "Price", value: `€${price.toLocaleString()}` },
+    { label: "Price / m²", value: pricePerSqm ? `€${pricePerSqm.toLocaleString()}` : "—" },
+    { label: "Surface", value: `${sqm} m²` },
+    ...(db.year_built ? [{ label: "Year Built", value: String(db.year_built) }] : []),
+    ...(db.floor != null ? [{ label: "Floor", value: db.floor === 0 ? "Ground" : `${db.floor}${db.total_floors ? ` of ${db.total_floors}` : ""}` }] : []),
+    ...(db.heating_system ? [{ label: "Heating", value: HEATING_TYPES.find((h) => h.value === db.heating_system)?.label ?? db.heating_system.replace(/_/g, " ") }] : []),
+    ...(db.energy_class ? [{ label: "Energy Class", value: db.energy_class }] : []),
+    ...(db.construction_status ? [{ label: "Condition", value: CONDITION_OPTIONS.find((c) => c.value === db.construction_status)?.label ?? db.construction_status.replace(/_/g, " ") }] : []),
+  ];
+  const city = db.city || "";
 
   return (
     <div className="min-h-screen bg-background">
@@ -223,10 +305,30 @@ export default function OpenHouseDetail() {
           <div className="grid md:grid-cols-3 gap-6">
             {/* Main content */}
             <div className="md:col-span-2 space-y-6">
-              {/* Image */}
-              <div className="aspect-[4/3] rounded-xl overflow-hidden bg-secondary">
+              {/* Gallery */}
+              <div className="relative aspect-[4/3] rounded-xl overflow-hidden bg-secondary group">
                 {imgs[0] ? (
-                  <img src={imgs[0]} alt={db.title} className="w-full h-full object-cover" />
+                  <>
+                    <img src={imgs[currentImage] || imgs[0]} alt={db.title} className="w-full h-full object-cover" />
+                    {imgs.length > 1 && (
+                      <>
+                        <button
+                          className="absolute left-3 top-1/2 -translate-y-1/2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-full bg-background/70 backdrop-blur-md hover:bg-background/90"
+                          onClick={() => setCurrentImage((prev) => (prev - 1 + imgs.length) % imgs.length)}
+                          aria-label="Previous"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <button
+                          className="absolute right-3 top-1/2 -translate-y-1/2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-full bg-background/70 backdrop-blur-md hover:bg-background/90"
+                          onClick={() => setCurrentImage((prev) => (prev + 1) % imgs.length)}
+                          aria-label="Next"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </>
+                    )}
+                  </>
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-muted-foreground">
                     <MapPin className="w-12 h-12 opacity-30" />
@@ -267,6 +369,99 @@ export default function OpenHouseDetail() {
               {db.description && (
                 <p className="text-sm text-muted-foreground leading-relaxed">{db.description}</p>
               )}
+
+              {/* Property specifics */}
+              {detailRows.length > 0 && (
+                <div className="glass-card rounded-xl border border-border overflow-hidden">
+                  <div className="flex items-center gap-2 px-5 py-3.5 border-b border-border">
+                    <Home className="w-5 h-5 text-primary" />
+                    <h4 className="font-display font-semibold text-sm">Property specifics</h4>
+                  </div>
+                  <div className="p-5 space-y-0">
+                    {detailRows.map((r) => (
+                      <DetailRow key={r.label} label={r.label} value={r.value} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* AI Market Insights */}
+              {!isMock && (
+                <div className="glass-card rounded-xl border border-border overflow-hidden">
+                  <div className="flex items-center gap-2 px-5 py-3.5 border-b border-border">
+                    <Zap className="w-5 h-5 text-primary" />
+                    <h4 className="font-display font-semibold text-sm">AI Market Insights</h4>
+                    {aiInsightsLoading && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
+                  </div>
+                  <div className="p-5">
+                    {aiInsightsData ? (
+                      <div className="space-y-4">
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-muted-foreground">vs market</span>
+                          <span className={`text-sm font-bold ${aiInsightsData.vsMarket > 0 ? "text-emerald-600" : aiInsightsData.vsMarket < 0 ? "text-amber-600" : "text-muted-foreground"}`}>
+                            {aiInsightsData.vsMarket > 0 ? "+" : ""}{aiInsightsData.vsMarket}%
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-muted-foreground">Est. value</span>
+                          <span className="text-sm font-semibold">€{aiInsightsData.estimatedValue.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-muted-foreground">Rental yield (est.)</span>
+                          <span className="text-sm font-semibold">{aiInsightsData.rentalYield.toFixed(1)}%</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">Insights will appear when available.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Neighbourhood & Map */}
+              {db.address && (
+                <>
+                  <NeighbourhoodReport address={db.address} city={city} />
+                  <PropertyMiniMap address={db.address} city={city} />
+                </>
+              )}
+
+              {/* AI Valuation */}
+              {!isMock && id && (
+                <PropertyValuation
+                  listingId={id}
+                  title={db.title}
+                  city={city}
+                  address={db.address}
+                  price={price}
+                  sqm={sqm}
+                  bedrooms={db.bedrooms}
+                  bathrooms={db.bathrooms}
+                  propertyType={db.property_type}
+                  yearBuilt={db.year_built}
+                  energyClass={db.energy_class}
+                  floor={db.floor}
+                  totalFloors={db.total_floors}
+                  heatingSystem={db.heating_system}
+                />
+              )}
+
+              {/* Professionals */}
+              <div className="glass-card rounded-xl border border-border overflow-hidden">
+                <div className="flex items-center gap-2 px-5 py-3.5 border-b border-border">
+                  <Wrench className="w-5 h-5 text-primary" />
+                  <h4 className="font-display font-semibold text-sm">Professional Add-ons</h4>
+                </div>
+                <div className="p-5">
+                  <p className="text-xs text-muted-foreground mb-3">Formal valuation reports, legal due diligence, and building legality checks.</p>
+                  <Link
+                    to={`/professionals${city ? `?search=${encodeURIComponent(city)}` : ""}`}
+                    className="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline"
+                  >
+                    Find professionals <ExternalLink className="w-4 h-4" />
+                  </Link>
+                </div>
+              </div>
             </div>
 
           {/* Sidebar */}
@@ -277,17 +472,25 @@ export default function OpenHouseDetail() {
                 </div>
                 {sqm > 0 && <p className="text-xs text-muted-foreground">€{Math.round(price / sqm).toLocaleString()}/m²</p>}
 
-                {/* Real listing: full registration / offer flow */}
+                {/* Real listing: full registration / offer flow — gate by approval & attendance */}
                 {!isMock && !isOwner && user && (
                   <div className="mt-4 space-y-2">
                     {myReg && (
                       <div className={`rounded-lg px-3 py-2 text-xs font-medium ${
-                        myReg.status === "approved" ? "bg-emerald-500/15 text-emerald-700" :
+                        myReg.status === "attended" ? "bg-emerald-500/15 text-emerald-700" :
+                        myReg.status === "approved" ? "bg-emerald-500/10 text-emerald-600" :
                         myReg.status === "pending" ? "bg-amber-500/15 text-amber-700" :
                         "bg-muted text-muted-foreground"
                       }`}>
-                        {myReg.status === "approved" ? "✓ Approved to attend" : myReg.status === "pending" ? "⏳ Registration pending" : `Status: ${myReg.status}`}
+                        {myReg.status === "attended" ? "✓ Attended — you can submit an offer" :
+                          myReg.status === "approved" ? "✓ Approved — attend the open house to unlock offers" :
+                          myReg.status === "pending" ? "⏳ Awaiting approval" : `Status: ${myReg.status}`}
                       </div>
+                    )}
+                    {!canSubmitOffer && myReg?.status === "attended" && !ohDatePassed && openHouseDate && (
+                      <p className="text-[11px] text-muted-foreground">
+                        Offer submission opens after {openHouseDate.toLocaleDateString("en-GB")} {openHouseDate.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                      </p>
                     )}
                     <Button className="w-full gap-2" onClick={() => setRegOpen(true)} variant={myReg ? "outline" : "default"}>
                       <Users className="w-4 h-4" /> {myReg ? "View registration" : "Pre-register for Open House"}
@@ -301,15 +504,27 @@ export default function OpenHouseDetail() {
                         Your offer: {myOffer.status === "submitted" ? "Sealed" : `€${Number(myOffer.amount).toLocaleString()}`} · View
                       </button>
                     ) : (
-                      <Button variant="outline" className="w-full gap-2" onClick={() => setOfferOpen(true)}>
+                      <Button
+                        variant="outline"
+                        className="w-full gap-2"
+                        onClick={() => setOfferOpen(true)}
+                        disabled={!canSubmitOffer}
+                      >
                         <Euro className="w-4 h-4" /> Submit Offer
+                        {!canSubmitOffer && (myReg?.status !== "attended" || !ohDatePassed) && <Lock className="w-3 h-3 opacity-50" />}
                       </Button>
                     )}
-                    <Button variant="outline" className="w-full gap-2" asChild>
-                      <Link to={`/messages`} state={{ openConversationId: null }}>
-                        <MessageCircle className="w-4 h-4" /> Contact
-                      </Link>
-                    </Button>
+                    {canContact ? (
+                      <Button variant="outline" className="w-full gap-2" onClick={handleContact} disabled={startConversation.isPending}>
+                        {startConversation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageCircle className="w-4 h-4" />}
+                        Contact
+                      </Button>
+                    ) : (
+                      <div className="rounded-lg px-3 py-2 text-[11px] text-muted-foreground border border-border bg-muted/30 flex items-center gap-1.5">
+                        <Lock className="w-3 h-3 shrink-0" />
+                        {!myReg ? "Pre-register first to contact" : myReg.status === "pending" ? "Contact unlocks after approval" : "Attend first to contact"}
+                      </div>
+                    )}
                   </div>
                 )}
                 {!isMock && !isOwner && !user && (
@@ -369,6 +584,13 @@ export default function OpenHouseDetail() {
         listingId={id!}
         listingTitle={db.title}
         listingPrice={price}
+        canSubmit={canSubmitOffer}
+        offerBlockedReason={
+          !myReg ? "Pre-register and get approved first" :
+          myReg.status === "pending" ? "Awaiting approval" :
+          myReg.status !== "attended" ? "Attend the open house to unlock offer submission" :
+          !ohDatePassed ? `Offers open after ${openHouseDate?.toLocaleString("en-GB")}` : undefined
+        }
       />
 
       <Footer />

@@ -6,8 +6,8 @@ import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { isPlatformAdmin } from "@/lib/authUtils";
 import { SlidersHorizontal, Save, Plus, Loader2, Shield, Euro, Trash2, Sparkles, X as XIcon } from "lucide-react";
-import type { Tables } from "@/integrations/supabase/types";
 
 type PricingConfig = {
   id: string;
@@ -60,9 +60,9 @@ const DEFAULT_SEED: Omit<PricingConfig, "id" | "created_at" | "updated_at">[] = 
   { key: "agent_plus", label: "Agent Plus", description: "Unlimited listings & valuation", audience: "agent", module: "agent_subscription", unit: "monthly", currency: "EUR", amount: 199, is_active: true, sort_order: 2, metadata: {} },
   { key: "valuation_single", label: "Single report", description: "One-off valuation report", audience: "user", module: "valuation_reports", unit: "per_report", currency: "EUR", amount: 29, is_active: true, sort_order: 1, metadata: {} },
   { key: "valuation_bundle", label: "Bundle (5 reports)", description: "5 reports pack", audience: "user", module: "valuation_reports", unit: "bundle", currency: "EUR", amount: 99, is_active: true, sort_order: 2, metadata: {} },
-  { key: "investor_analyst", label: "Analyst", description: "Deal flow visibility", audience: "investor", module: "firesale_dashboard", unit: "monthly", currency: "EUR", amount: 490, is_active: true, sort_order: 1, metadata: {} },
+  { key: "investor_private", label: "Private", description: "Deal flow visibility", audience: "investor", module: "firesale_dashboard", unit: "monthly", currency: "EUR", amount: 490, is_active: true, sort_order: 1, metadata: {} },
   { key: "investor_institutional", label: "Institutional", description: "Full access for funds", audience: "investor", module: "firesale_dashboard", unit: "monthly", currency: "EUR", amount: 1490, is_active: true, sort_order: 2, metadata: {} },
-  { key: "investor_sovereign", label: "Sovereign", description: "Custom / white-glove", audience: "investor", module: "firesale_dashboard", unit: "custom", currency: "EUR", amount: 0, is_active: true, sort_order: 3, metadata: {} },
+  { key: "investor_developer", label: "Developer", description: "Custom / white-glove", audience: "investor", module: "firesale_dashboard", unit: "custom", currency: "EUR", amount: 0, is_active: true, sort_order: 3, metadata: {} },
   // Ad-hoc charges (extra listings, featured, premium, etc.)
   { key: "extra_listing", label: "Extra ad listing", description: "Additional listing beyond plan limit", audience: "user", module: "adhoc_charges", unit: "per_listing", currency: "EUR", amount: 9, is_active: true, sort_order: 1, metadata: {} },
   { key: "featured_listing", label: "Featured listing", description: "Highlight listing in search / homepage", audience: "user", module: "adhoc_charges", unit: "per_listing", currency: "EUR", amount: 19, is_active: true, sort_order: 2, metadata: {} },
@@ -86,10 +86,11 @@ function usePricingConfigs() {
   });
 }
 
-export default function AdminPricing() {
+/** Embeddable pricing content — use in AdminDashboard tab. Skips Navbar/Footer and access check when embed=true. */
+export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
   const { profile } = useAuth();
   const qc = useQueryClient();
-  const isAdmin = !!profile?.is_platform_admin;
+  const isAdmin = isPlatformAdmin(profile);
 
   const { data: configs = [], isLoading } = usePricingConfigs();
   const mutation = useMutation({
@@ -158,7 +159,7 @@ export default function AdminPricing() {
   const [addModule, setAddModule] = useState<string>(PRICING_SECTIONS[0].module);
   const [addAudience, setAddAudience] = useState<string>(PRICING_SECTIONS[0].audience);
 
-  if (!isAdmin) {
+  if (!embed && !isAdmin) {
     return (
       <div className="min-h-screen bg-background">
         <Navbar />
@@ -228,11 +229,9 @@ export default function AdminPricing() {
     );
   };
 
-  return (
-    <div className="min-h-screen bg-background">
-      <Navbar />
-      <div className="pt-16">
-        <div className="container max-w-6xl py-10 space-y-8">
+  const content = (
+        <>
+        <div className="space-y-8">
           <header className="flex items-center justify-between gap-4 flex-wrap">
             <div>
               <h1 className="font-display text-2xl font-bold flex items-center gap-2">
@@ -414,9 +413,8 @@ export default function AdminPricing() {
             </div>
           )}
         </div>
-      </div>
 
-      {/* Add item modal: choose module + audience */}
+        {/* Add item modal: choose module + audience */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4" onClick={() => setShowAddModal(false)}>
           <div className="glass-card rounded-2xl border border-border w-full max-w-md p-6 shadow-elevated space-y-4" onClick={e => e.stopPropagation()}>
@@ -462,9 +460,26 @@ export default function AdminPricing() {
           </div>
         </div>
       )}
+        </>
+  );
 
+  if (embed) {
+    return <div className="space-y-8">{content}</div>;
+  }
+  return (
+    <div className="min-h-screen bg-background">
+      <Navbar />
+      <div className="pt-16">
+        <div className="container max-w-6xl py-10">
+          {content}
+        </div>
+      </div>
       <Footer />
     </div>
   );
+}
+
+export default function AdminPricing() {
+  return <AdminPricingContent />;
 }
 
