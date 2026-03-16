@@ -217,7 +217,7 @@ export default function InvestorDashboard() {
         const { data } = await supabase
           .from("firesale_requests")
           .select("*")
-          .eq("published_to_investors", true)
+          .neq("status", "pending")
           .order("created_at", { ascending: false })
           .limit(50);
 

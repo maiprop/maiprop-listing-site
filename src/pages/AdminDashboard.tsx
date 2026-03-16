@@ -9,6 +9,7 @@ import { Shield, Flame, Users, Wifi, SlidersHorizontal, ArrowLeft, DoorOpen, Fol
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import AdminFiresalePipeline from "@/components/AdminFiresalePipeline";
+import AdminInvestorScreening from "@/components/AdminInvestorScreening";
 import AdminSubscribers from "@/components/AdminSubscribers";
 import AdminPanel from "@/components/AdminPanel";
 import { AdminPricingContent } from "@/pages/AdminPricing";
