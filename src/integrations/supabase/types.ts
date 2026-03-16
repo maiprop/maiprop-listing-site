@@ -537,7 +537,9 @@ export type Database = {
           is_corner: boolean | null
           is_featured: boolean
           is_neoclassical: boolean | null
+          is_off_market: boolean
           is_penthouse: boolean | null
+          is_pre_sale: boolean
           is_preserved: boolean | null
           kitchens: number | null
           land_use: string | null
@@ -649,7 +651,9 @@ export type Database = {
           is_corner?: boolean | null
           is_featured?: boolean
           is_neoclassical?: boolean | null
+          is_off_market?: boolean
           is_penthouse?: boolean | null
+          is_pre_sale?: boolean
           is_preserved?: boolean | null
           kitchens?: number | null
           land_use?: string | null
@@ -761,7 +765,9 @@ export type Database = {
           is_corner?: boolean | null
           is_featured?: boolean
           is_neoclassical?: boolean | null
+          is_off_market?: boolean
           is_penthouse?: boolean | null
+          is_pre_sale?: boolean
           is_preserved?: boolean | null
           kitchens?: number | null
           land_use?: string | null
