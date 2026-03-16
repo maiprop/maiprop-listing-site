@@ -23,7 +23,7 @@ type PricingConfig = {
   amount: number;
   is_active: boolean;
   sort_order: number;
-  metadata: Record<string, unknown>;
+  metadata: Record<string, unknown> | null;
 };
 
 /** Predefined sections so admin can manage all pricings: users, professionals, agents, valuation, firesale, ad-hoc */
@@ -106,8 +106,9 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
       const payload = items.map(({ id, created_at, updated_at, ...rest }) => ({
         id,
         ...rest,
+        metadata: (rest.metadata ?? {}) as any,
       }));
-      const { error } = await supabase.from("pricing_configs").upsert(payload, { onConflict: "id" });
+      const { error } = await supabase.from("pricing_configs").upsert(payload as any, { onConflict: "id" });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -142,7 +143,7 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
         created_at: now,
         updated_at: now,
       }));
-      const { error } = await supabase.from("pricing_configs").upsert(rows, { onConflict: "id" });
+      const { error } = await supabase.from("pricing_configs").upsert(rows as any, { onConflict: "id" });
       if (error) throw error;
     },
     onSuccess: () => {

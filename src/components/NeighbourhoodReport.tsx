@@ -182,6 +182,7 @@ function isOsNeighbourhoodReport(r: unknown): r is NeighbourhoodData {
 }
 
 export default function NeighbourhoodReport({ city, address, region, propertyType, lat, lng, listingId }: NeighbourhoodReportProps) {
+  const { user } = useAuth();
   const [data, setData] = useState<NeighbourhoodData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
