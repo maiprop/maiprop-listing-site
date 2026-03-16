@@ -268,6 +268,19 @@ export default function OpenHouses() {
         latitude: 40.6401, longitude: 22.9444,
       },
     },
+    {
+      listing: { id: "mock-open-4", city: "Athens", property_type: "apartment", open_house_date: new Date(Date.now() + 96 * 3600_000).toISOString(), price: 265000, sqm: 63, latitude: 37.9755, longitude: 23.7388 },
+      card: {
+        id: "mock-open-4", title: "Renovated Studio in Kolonaki", address: "Kolonaki Square", city: "Athens",
+        price: 265000, pricePerSqm: 4200, bedrooms: 1, bathrooms: 1, sqm: 63,
+        floor: 3, totalFloors: 6, yearBuilt: 1960, energyClass: "B",
+        images: ["https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800&q=60"],
+        type: "apartment" as const, listingType: "open_house" as const,
+        auctionDate: "Fri 25 Apr · 10:00", openHouseDateIso: new Date(Date.now() + 96 * 3600_000).toISOString(),
+        aiScore: 79, views: 98, tags: ["Terrace", "Storage"],
+        latitude: 37.9755, longitude: 23.7388,
+      },
+    },
   ];
 
   const isEmpty = listings.length === 0;
