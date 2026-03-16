@@ -535,6 +535,7 @@ export type Database = {
           id: string
           is_buildable: boolean | null
           is_corner: boolean | null
+          is_featured: boolean
           is_neoclassical: boolean | null
           is_penthouse: boolean | null
           is_preserved: boolean | null
@@ -555,6 +556,7 @@ export type Database = {
           postal_code: string | null
           price: number
           price_per_sqm: number | null
+          priority_placement: number
           property_type: Database["public"]["Enums"]["property_type"]
           region: string | null
           road_type: string | null
@@ -645,6 +647,7 @@ export type Database = {
           id?: string
           is_buildable?: boolean | null
           is_corner?: boolean | null
+          is_featured?: boolean
           is_neoclassical?: boolean | null
           is_penthouse?: boolean | null
           is_preserved?: boolean | null
@@ -665,6 +668,7 @@ export type Database = {
           postal_code?: string | null
           price: number
           price_per_sqm?: number | null
+          priority_placement?: number
           property_type: Database["public"]["Enums"]["property_type"]
           region?: string | null
           road_type?: string | null
@@ -755,6 +759,7 @@ export type Database = {
           id?: string
           is_buildable?: boolean | null
           is_corner?: boolean | null
+          is_featured?: boolean
           is_neoclassical?: boolean | null
           is_penthouse?: boolean | null
           is_preserved?: boolean | null
@@ -775,6 +780,7 @@ export type Database = {
           postal_code?: string | null
           price?: number
           price_per_sqm?: number | null
+          priority_placement?: number
           property_type?: Database["public"]["Enums"]["property_type"]
           region?: string | null
           road_type?: string | null
