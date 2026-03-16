@@ -170,7 +170,11 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
   const mainImage = property.images?.[0];
 
   return (
-    <div className="property-card rounded-2xl overflow-hidden group flex flex-col bg-card border border-border">
+    <div className={`property-card rounded-2xl overflow-hidden group flex flex-col bg-card transition-shadow duration-300 ${
+      property.isFeatured
+        ? "border-2 border-amber-400/70 shadow-[0_0_0_1px_rgba(251,191,36,0.15),0_4px_24px_rgba(251,191,36,0.22)] hover:shadow-[0_0_0_1px_rgba(251,191,36,0.25),0_8px_32px_rgba(251,191,36,0.35)]"
+        : "border border-border"
+    }`}>
       {/* Image — taller on mobile (4/3) for better thumbnail, 3/2 on larger screens */}
       <div className="relative overflow-hidden bg-secondary aspect-[4/3] sm:aspect-[3/2]">
         {mainImage ? (
