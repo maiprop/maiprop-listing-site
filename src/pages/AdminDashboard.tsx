@@ -12,7 +12,8 @@ import AdminFiresalePipeline from "@/components/AdminFiresalePipeline";
 import AdminSubscribers from "@/components/AdminSubscribers";
 import AdminPanel from "@/components/AdminPanel";
 import { AdminPricingContent } from "@/pages/AdminPricing";
-import OpenHouseAssetControlPanel from "@/components/OpenHouseAssetControlPanel";
+import OpenHouseDashboardSection from "@/components/OpenHouseDashboardSection";
+import { useMyListings } from "@/hooks/useListings";
 import { Button } from "@/components/ui/button";
 
 type AdminTab = "pipeline" | "subscribers" | "pricing" | "os-sync" | "open-houses";
