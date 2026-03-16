@@ -1115,7 +1115,8 @@ export default function Index() {
               willChange: "transform",
               transform: "translateZ(0)",
               animation: "hero-zoom 30s ease-in-out infinite alternate",
-              objectPosition: "center 30%",
+              // Shift focal point slightly right so foreground content doesn't cover key part of the video
+              objectPosition: "60% 30%",
             }}
           >
             {heroVideoSrc && <source src={heroVideoSrc} type="video/mp4" />}

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import {
   MapPin, Bed, Bath, Square, Calendar, ChevronLeft, Eye,
@@ -24,7 +24,8 @@ export default function OpenHouseDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { data: listing, isLoading } = useListing(id || "");
+  const isMock = !!id && ["mock-open-1", "mock-open-2", "mock-open-3"].includes(id);
+  const { data: listing, isLoading } = useListing(isMock ? "" : (id || ""));
   const updateListing = useUpdateListing();
   const deleteListing = useDeleteListing();
   const [regOpen, setRegOpen] = useState(false);
@@ -36,17 +37,84 @@ export default function OpenHouseDetail() {
   const { data: registrations = [] } = useOpenHouseRegistrations(id || undefined, false);
   const { data: offers = [] } = useOpenHouseOffers(id || undefined);
   const hasAssetControl = !!assetSettings;
-  const db = listing as any;
+
+  const mockListing = useMemo(() => {
+    if (!isMock || !id) return null;
+    const base = {
+      listing_type: "open_house",
+      status: "active",
+      views_count: 132,
+      bedrooms: 2,
+      bathrooms: 2,
+      sqm: 135,
+      year_built: 2015,
+      description: "Bright modern apartment with large balcony, close to Kifisia center and metro. Ideal for couples or small families looking for quiet living with quick access to the city.",
+    };
+    if (id === "mock-open-1") {
+      return {
+        id,
+        title: "Modern 2BR in Kifisia",
+        address: "Kifisia Center",
+        city: "Athens",
+        price: 420000,
+        cover_image_url: "https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=800&q=60",
+        open_house_date: new Date().toISOString(),
+        ...base,
+      };
+    }
+    if (id === "mock-open-2") {
+      return {
+        id,
+        title: "Sea-view Villa in Vouliagmeni",
+        address: "Panorama Vouliagmeni",
+        city: "Athens Riviera",
+        price: 1450000,
+        cover_image_url: "https://images.unsplash.com/photo-1507089947368-19c1da9775ae?w=800&q=60",
+        open_house_date: new Date().toISOString(),
+        bedrooms: 4,
+        bathrooms: 4,
+        sqm: 280,
+        year_built: 2020,
+        views_count: 89,
+        description: "Luxury villa with unobstructed sea views, infinity pool, and generous outdoor spaces — perfect for entertaining and weekend escapes.",
+        listing_type: "open_house",
+        status: "active",
+      };
+    }
+    if (id === "mock-open-3") {
+      return {
+        id,
+        title: "Loft Near Aristotelous Square",
+        address: "City Center",
+        city: "Thessaloniki",
+        price: 310000,
+        cover_image_url: "https://images.unsplash.com/photo-1502672023488-70e25813eb80?w=800&q=60",
+        open_house_date: new Date().toISOString(),
+        bedrooms: 1,
+        bathrooms: 1,
+        sqm: 107,
+        year_built: 2010,
+        views_count: 54,
+        description: "Industrial-style loft a short walk from Aristotelous Square — ideal pied-à-terre or investment in Thessaloniki's city center.",
+        listing_type: "open_house",
+        status: "active",
+      };
+    }
+    return null;
+  }, [id, isMock]);
+
+  const db = (isMock ? mockListing : listing) as any;
   const myReg = registrations.find((r: any) => r.requester_id === user?.id);
   const myOffer = offers.find((o: any) => o.bidder_id === user?.id);
-  const isOwner = user?.id && db?.owner_id === user.id;
+  const isOwner = !isMock && user?.id && db?.owner_id === user.id;
 
   useEffect(() => {
+    if (isMock) return;
     if (db?.listing_type === "open_house") return;
     if (db?.listing_type && db.listing_type !== "open_house") {
       navigate(`/property/${id}`, { replace: true });
     }
-  }, [db?.listing_type, id, navigate]);
+  }, [db?.listing_type, id, navigate, isMock]);
 
   useEffect(() => {
     if (db?.open_house_date) {
@@ -83,7 +151,7 @@ export default function OpenHouseDetail() {
     navigate("/open-houses");
   };
 
-  if (isLoading || !db) {
+  if (!isMock && (isLoading || !db)) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -201,7 +269,7 @@ export default function OpenHouseDetail() {
               )}
             </div>
 
-            {/* Sidebar */}
+          {/* Sidebar */}
             <div className="space-y-4">
               <div className="glass-card rounded-xl p-5 border border-border">
                 <div className="font-display text-2xl font-bold text-primary mb-1">
@@ -209,7 +277,8 @@ export default function OpenHouseDetail() {
                 </div>
                 {sqm > 0 && <p className="text-xs text-muted-foreground">€{Math.round(price / sqm).toLocaleString()}/m²</p>}
 
-                {!isOwner && user && (
+                {/* Real listing: full registration / offer flow */}
+                {!isMock && !isOwner && user && (
                   <div className="mt-4 space-y-2">
                     {myReg && (
                       <div className={`rounded-lg px-3 py-2 text-xs font-medium ${
@@ -243,10 +312,29 @@ export default function OpenHouseDetail() {
                     </Button>
                   </div>
                 )}
-                {!isOwner && !user && (
+                {!isMock && !isOwner && !user && (
                   <Button className="w-full mt-4 gap-2" asChild>
                     <Link to="/login">Sign in to contact</Link>
                   </Button>
+                )}
+
+                {/* Mock listing: explain the flow without hitting backend */}
+                {isMock && (
+                  <div className="mt-4 space-y-2 text-xs text-muted-foreground">
+                    <p className="font-semibold text-foreground">Demo only</p>
+                    <p>
+                      This is a sample open house property page. In a real listing you would see:
+                    </p>
+                    <ul className="list-disc list-inside space-y-1">
+                      <li>Buttons to pre-register for a timeslot</li>
+                      <li>The status of your registration and offer</li>
+                      <li>Actions to submit a sealed offer after the visit</li>
+                      <li>A direct messaging link with the listing agent or owner</li>
+                    </ul>
+                    <p className="mt-1">
+                      Use the Open Houses dashboard section to test the full asset control, registrations, and offers flow on real data.
+                    </p>
+                  </div>
                 )}
               </div>
             </div>
