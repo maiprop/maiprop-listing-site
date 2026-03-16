@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useSearchParams, Link } from "react-router-dom";
 import {
   Search, SlidersHorizontal, MapPin, LayoutGrid, Map, ChevronDown,
-  X, Gavel, ArrowUpDown, Loader2, Building2, Check, Bookmark, GitCompare,
+  X, ArrowUpDown, Loader2, Building2, Check, Bookmark, GitCompare,
   Columns2, Sparkles, Lock, Store
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -1152,13 +1152,6 @@ export default function Listings() {
                   {compareList.length} selected to compare
                 </div>
               )}
-              <div className="hidden md:flex items-center gap-2 px-3 py-2 rounded-xl bg-brand-gold/10 border border-brand-gold/20">
-                <Gavel className="w-4 h-4 text-brand-gold" />
-                <span className="text-sm text-brand-gold font-medium">47 auctions this week</span>
-                <Button size="sm" variant="ghost" className="text-brand-gold hover:bg-brand-gold/10 h-6 px-2 text-xs" asChild>
-                  <Link to="/auctions">View →</Link>
-                </Button>
-              </div>
               <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground gap-1.5" asChild>
                 <Link to="/listings/new"><Building2 className="w-3.5 h-3.5" /> Post Listing</Link>
               </Button>

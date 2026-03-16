@@ -52,6 +52,7 @@ function generateTimeSlots(startTime: string, endTime: string) {
 interface BookConsultationModalProps {
   open: boolean;
   onClose: () => void;
+  allowVideoCall?: boolean;
   professional: {
     id: string;
     user_id: string;
@@ -63,7 +64,7 @@ interface BookConsultationModalProps {
   };
 }
 
-export default function BookConsultationModal({ open, onClose, professional }: BookConsultationModalProps) {
+export default function BookConsultationModal({ open, onClose, allowVideoCall = true, professional }: BookConsultationModalProps) {
   const { user, profile } = useAuth();
   const submitConsultation = useSubmitConsultation();
 
@@ -161,7 +162,7 @@ export default function BookConsultationModal({ open, onClose, professional }: B
               {selectedDate && <div className="flex justify-between"><span className="text-muted-foreground">Date & Time</span><span className="font-medium">{selectedDate} at {selectedTime}</span></div>}
               {pricingLabel && <div className="flex justify-between"><span className="text-muted-foreground">Rate</span><span className="font-medium">{pricingLabel}</span></div>}
             </div>
-            {bookingType === "video" && professional.video_link && (
+            {allowVideoCall && bookingType === "video" && professional.video_link && (
               <a href={professional.id ? `/video-room/${professional.id}` : professional.video_link} target="_blank" rel="noopener noreferrer"
                 className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-primary/10 border border-primary/20 text-primary text-sm font-medium hover:bg-primary/20 transition-colors">
                 <Video className="w-4 h-4" /> Join Video Call
@@ -173,20 +174,27 @@ export default function BookConsultationModal({ open, onClose, professional }: B
           <div className="space-y-5">
             {/* Step indicator */}
             <div className="flex items-center gap-1.5">
-              {([1, 2, 3, 4] as const).map(s => (
-                <div key={s} className="flex items-center gap-1.5 flex-1">
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-all ${
-                    step === s ? "bg-primary text-primary-foreground" :
-                    step > s ? "bg-brand-emerald/20 text-brand-emerald" : "bg-secondary text-muted-foreground"
-                  }`}>
-                    {step > s ? "✓" : s}
+              {(allowVideoCall ? [1, 2, 3, 4] : [1, 2, 3]).map((s, idx) => {
+                const actualStep = allowVideoCall ? s : (s === 1 ? 1 : s === 2 ? 3 : 4);
+                const isActive = step === actualStep;
+                const isDone = step > actualStep;
+                return (
+                  <div key={s} className="flex items-center gap-1.5 flex-1">
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-all ${
+                      isActive ? "bg-primary text-primary-foreground" :
+                      isDone ? "bg-brand-emerald/20 text-brand-emerald" : "bg-secondary text-muted-foreground"
+                    }`}>
+                      {isDone ? "✓" : idx + 1}
+                    </div>
+                    <span className={`text-[11px] hidden sm:block ${isActive ? "text-foreground font-medium" : "text-muted-foreground"}`}>
+                      {allowVideoCall
+                        ? (s === 1 ? "Service" : s === 2 ? "Type" : s === 3 ? "Schedule" : "Details")
+                        : (s === 1 ? "Service" : s === 2 ? "Schedule" : "Details")}
+                    </span>
+                    {idx < (allowVideoCall ? 4 : 3) - 1 && <div className="flex-1 h-px bg-border" />}
                   </div>
-                  <span className={`text-[11px] hidden sm:block ${step === s ? "text-foreground font-medium" : "text-muted-foreground"}`}>
-                    {s === 1 ? "Service" : s === 2 ? "Type" : s === 3 ? "Schedule" : "Details"}
-                  </span>
-                  {s < 4 && <div className="flex-1 h-px bg-border" />}
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Step 1: Service selection */}
@@ -248,7 +256,7 @@ export default function BookConsultationModal({ open, onClose, professional }: B
                     </div>
                     <Button className="w-full bg-gradient-primary border-0 text-primary-foreground"
                       disabled={!selectedService}
-                      onClick={() => setStep(2)}>
+                      onClick={() => setStep(allowVideoCall ? 2 : 3)}>
                       Continue
                     </Button>
                   </>
@@ -256,8 +264,8 @@ export default function BookConsultationModal({ open, onClose, professional }: B
               </div>
             )}
 
-            {/* Step 2: In-person vs Video */}
-            {step === 2 && (
+            {/* Step 2: In-person vs Video (skipped when allowVideoCall=false) */}
+            {allowVideoCall && step === 2 && (
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground">How would you like to meet?</p>
                 <div className="grid grid-cols-2 gap-3">
@@ -343,7 +351,7 @@ export default function BookConsultationModal({ open, onClose, professional }: B
                 )}
 
                 <div className="flex gap-2">
-                  <Button variant="outline" className="border-border" onClick={() => setStep(2)}>Back</Button>
+                  <Button variant="outline" className="border-border" onClick={() => setStep(allowVideoCall ? 2 : 1)}>Back</Button>
                   <Button className="flex-1 bg-gradient-primary border-0 text-primary-foreground"
                     disabled={availableDays.length > 0 && (!selectedDate || !selectedTime)}
                     onClick={() => setStep(4)}>

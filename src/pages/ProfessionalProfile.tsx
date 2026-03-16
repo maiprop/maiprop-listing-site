@@ -15,6 +15,9 @@ import { useProfessionalServices, useProfessionalAvailability } from "@/hooks/us
 import { useNavigate } from "react-router-dom";
 import SendMessageModal from "@/components/SendMessageModal";
 import BookConsultationModal from "@/components/BookConsultationModal";
+import { useStartConversation } from "@/hooks/useMessages";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 import RequestCallbackModal from "@/components/RequestCallbackModal";
 import OnlineViewingModal from "@/components/OnlineViewingModal";
 import { AIServiceMatchModal } from "@/components/AIServiceMatchModal";
@@ -165,9 +168,10 @@ export default function ProfessionalProfile() {
   const [msgOpen, setMsgOpen] = useState(false);
   const [consultOpen, setConsultOpen] = useState(false);
   const [callbackOpen, setCallbackOpen] = useState(false);
-  const [videoOpen, setVideoOpen] = useState(false);
   const [aiMatchOpen, setAiMatchOpen] = useState(false);
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const startConversation = useStartConversation();
 
   // Only Pro professionals can receive in-app messages and calendar bookings
   const professionalIsPro = (pro?.subscription_tier || "").toLowerCase() === "pro";
@@ -178,6 +182,19 @@ export default function ProfessionalProfile() {
   const fallbackServices = pro ? servicesByCategory[pro.category] || [] : [];
 
   const displayName = pro?.display_name || "Professional";
+
+  const handleOpenChat = async () => {
+    if (!user || !pro?.user_id) {
+      setMsgOpen(true);
+      return;
+    }
+    try {
+      const convId = await startConversation.mutateAsync({ other_user_id: pro.user_id });
+      navigate("/messages", { state: { openConversationId: convId } });
+    } catch {
+      toast.error("Could not open chat.");
+    }
+  };
 
   if (isLoading) return (
     <div className="min-h-screen bg-background flex items-center justify-center">
@@ -277,8 +294,12 @@ export default function ProfessionalProfile() {
                   <div className="flex flex-col gap-2 w-full sm:shrink-0 sm:min-w-[160px]">
                     {professionalIsPro ? (
                       <>
-                        <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2 w-full" onClick={() => setMsgOpen(true)}>
-                          <MessageSquare className="w-4 h-4" /> Send Message
+                        <Button
+                          className="bg-gradient-primary border-0 text-primary-foreground gap-2 w-full"
+                          onClick={handleOpenChat}
+                          disabled={startConversation.isPending}
+                        >
+                          {startConversation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />} {user ? "Chat" : "Send Message"}
                         </Button>
                         <Button variant="outline" className="border-border gap-2 w-full" onClick={() => setConsultOpen(true)}>
                           <Calendar className="w-4 h-4" /> Book Consultation
@@ -709,8 +730,12 @@ export default function ProfessionalProfile() {
                 <div className="space-y-2.5">
                   {professionalIsPro ? (
                     <>
-                      <Button className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2" onClick={() => setMsgOpen(true)}>
-                        <MessageSquare className="w-4 h-4" /> Send Message
+                      <Button
+                        className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2"
+                        onClick={handleOpenChat}
+                        disabled={startConversation.isPending}
+                      >
+                        {startConversation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />} {user ? "Chat" : "Send Message"}
                       </Button>
                       <Button variant="outline" className="w-full border-border gap-2" onClick={() => setConsultOpen(true)}>
                         <Calendar className="w-4 h-4" /> Book Consultation
@@ -803,16 +828,12 @@ export default function ProfessionalProfile() {
       <BookConsultationModal
         open={consultOpen}
         onClose={() => setConsultOpen(false)}
+        allowVideoCall={false}
         professional={{ id: pro.id, user_id: pro.user_id, display_name: pro.display_name, title: pro.title, category: pro.category, hourly_rate: pro.hourly_rate, video_link: pro.video_link }}
       />
       <RequestCallbackModal
         open={callbackOpen}
         onClose={() => setCallbackOpen(false)}
-        professional={{ id: pro.id, display_name: pro.display_name, title: pro.title }}
-      />
-      <OnlineViewingModal
-        open={videoOpen}
-        onClose={() => setVideoOpen(false)}
         professional={{ id: pro.id, display_name: pro.display_name, title: pro.title }}
       />
     </div>
