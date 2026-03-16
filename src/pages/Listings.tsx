@@ -514,7 +514,7 @@ export default function Listings() {
     bedsRange[0], bedsRange[1], bathsRange[0], bathsRange[1],
     floorRange[0], floorRange[1], yearRange[0], yearRange[1],
     minSqm, maxSqm, selectedHeating, selectedConstruction,
-    preSaleOnly, offMarketOnly,
+    preSaleOnly,
     ...selectedEnergyClasses, ...selectedFeatures,
   ].filter(Boolean).length;
 
