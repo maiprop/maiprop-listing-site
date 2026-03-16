@@ -60,7 +60,7 @@ export function Navbar() {
     { label: "Rent", href: "/listings?listing_type=rent" },
     { label: "Auctions", href: "/auctions", badge: "Live" },
     { label: "Quick Sale™", href: "/firesale", accent: "flame" },
-    { label: "Open Houses", href: "/open-houses" },
+    { label: "Open Houses", href: "/open-houses", accent: "dooropen" },
     { label: "Professionals", href: "/professionals", accent: "subtle" },
   ];
 
