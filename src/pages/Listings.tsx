@@ -445,6 +445,8 @@ export default function Listings() {
   // Client-side filtering
   let filtered = sourceListings.filter((p: any) => {
     const raw = p._raw || p;
+    if (preSaleOnly && !raw.is_pre_sale) return false;
+    if (offMarketOnly && !raw.is_off_market) return false;
     if (selectedPrice) {
       const [min, max] = selectedPrice.split("-").map(Number);
       if (p.price < min || p.price > max) return false;
