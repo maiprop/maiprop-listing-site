@@ -1192,7 +1192,6 @@ export default function Index() {
                     { label: "Buy", emoji: "🏠", color: "" },
                     { label: "Rent", emoji: "🔑", color: "" },
                     { label: "Auctions", emoji: "⚖️", color: "" },
-                    { label: "Quick Sale", emoji: "⚡", color: "text-destructive" },
                     { label: "Professionals", emoji: "👔", color: "text-cyan-400" }].
                     map(({ label, emoji, color }) =>
                     <button
