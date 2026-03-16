@@ -28,7 +28,6 @@ import CreateListing from "./pages/CreateListing";
 import CreateNewBuildingListing from "./pages/CreateNewBuildingListing";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
-import MarketIntelligence from "./pages/MarketIntelligence";
 import Projects from "./pages/Projects";
 import ProjectDetail from "./pages/ProjectDetail";
 import Portfolios from "./pages/Portfolios";
@@ -97,7 +96,6 @@ const App = () => (
               <Route path="/terms-of-service" element={<TermsOfService />} />
               <Route path="/cookie-policy" element={<CookiePolicy />} />
               <Route path="/reset-password" element={<ResetPassword />} />
-              <Route path="/market-intelligence" element={<MarketIntelligence />} />
               <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
               <Route path="/projects/:id" element={<ProtectedRoute><ProjectDetail /></ProtectedRoute>} />
               <Route path="/portfolios" element={<ProtectedRoute><Portfolios /></ProtectedRoute>} />

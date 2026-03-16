@@ -5,28 +5,31 @@
 
 import { useState, useEffect } from "react";
 import { Link, useSearchParams, useNavigate } from "react-router-dom";
-import { Shield, Flame, Users, Wifi, SlidersHorizontal, ArrowLeft } from "lucide-react";
+import { Shield, Flame, Users, Wifi, SlidersHorizontal, ArrowLeft, DoorOpen } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import AdminFiresalePipeline from "@/components/AdminFiresalePipeline";
 import AdminSubscribers from "@/components/AdminSubscribers";
 import AdminPanel from "@/components/AdminPanel";
 import { AdminPricingContent } from "@/pages/AdminPricing";
+import OpenHouseDashboardSection from "@/components/OpenHouseDashboardSection";
+import { useMyListings } from "@/hooks/useListings";
 import { Button } from "@/components/ui/button";
 
-type AdminTab = "pipeline" | "subscribers" | "pricing" | "os-sync";
+type AdminTab = "pipeline" | "subscribers" | "pricing" | "os-sync" | "open-houses";
 
 export default function AdminDashboard() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { data: myListings = [] } = useMyListings();
   const tabParam = searchParams.get("tab") as AdminTab | null;
   const [activeTab, setActiveTab] = useState<AdminTab>(
-    tabParam && ["pipeline", "subscribers", "pricing", "os-sync"].includes(tabParam) ? tabParam : "pipeline"
+    tabParam && ["pipeline", "subscribers", "pricing", "os-sync", "open-houses"].includes(tabParam) ? tabParam : "pipeline"
   );
 
   useEffect(() => {
     const t = searchParams.get("tab") as AdminTab | null;
-    if (t && ["pipeline", "subscribers", "pricing", "os-sync"].includes(t)) {
+    if (t && ["pipeline", "subscribers", "pricing", "os-sync", "open-houses"].includes(t)) {
       setActiveTab(t);
     }
   }, [searchParams]);
@@ -38,6 +41,7 @@ export default function AdminDashboard() {
 
   const tabs: { key: AdminTab; label: string; icon: React.ElementType }[] = [
     { key: "pipeline", label: "Pipeline", icon: Flame },
+    { key: "open-houses", label: "Open Houses", icon: DoorOpen },
     { key: "subscribers", label: "Subscribers", icon: Users },
     { key: "pricing", label: "Pricing", icon: SlidersHorizontal },
     { key: "os-sync", label: "OS Sync", icon: Wifi },
@@ -81,6 +85,17 @@ export default function AdminDashboard() {
           </div>
 
           {activeTab === "pipeline" && <AdminFiresalePipeline />}
+          {activeTab === "open-houses" && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="font-display text-lg font-semibold flex items-center gap-2">
+                  <DoorOpen className="w-5 h-5 text-emerald-500" /> Open House Management
+                </h2>
+                <p className="text-sm text-muted-foreground mt-1">All open house registrations, offers, and controls for your listings.</p>
+              </div>
+              <OpenHouseDashboardSection myListings={myListings} />
+            </div>
+          )}
           {activeTab === "subscribers" && <AdminSubscribers />}
           {activeTab === "pricing" && <AdminPricingContent embed />}
           {activeTab === "os-sync" && <AdminPanel />}
