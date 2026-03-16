@@ -143,7 +143,7 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
         created_at: now,
         updated_at: now,
       }));
-      const { error } = await supabase.from("pricing_configs").upsert(rows, { onConflict: "id" });
+      const { error } = await supabase.from("pricing_configs").upsert(rows as any, { onConflict: "id" });
       if (error) throw error;
     },
     onSuccess: () => {
