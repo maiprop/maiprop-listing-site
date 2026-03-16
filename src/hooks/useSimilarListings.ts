@@ -23,13 +23,13 @@ export function useSimilarListings(params: {
       let query = supabase
         .from("listings")
         .select(`*, listing_images(url, sort_order)`)
-        .eq("status", "active")
+        .eq("status", "active" as any)
         .limit(200);
 
       if (excludeId) query = query.neq("id", excludeId);
       if (city) query = query.ilike("city", `%${city}%`);
-      if (propertyType) query = query.eq("property_type", propertyType);
-      if (listingType) query = query.eq("listing_type", listingType);
+      if (propertyType) query = query.eq("property_type", propertyType as any);
+      if (listingType) query = query.eq("listing_type", listingType as any);
 
       const { data, error } = await query;
       if (error) throw error;

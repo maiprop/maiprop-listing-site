@@ -166,11 +166,17 @@ function Section({ children, className = "" }: {children: React.ReactNode;classN
 }
 
 function SectionHeader({ icon: Icon, title, badge }: {icon?: any;title: string;badge?: React.ReactNode;}) {
-  return;
-
-
-
-
+  return (
+    <div className="flex items-center gap-2.5 px-5 py-4 border-b border-border">
+      {Icon && (
+        <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+          <Icon className="w-3.5 h-3.5 text-primary" />
+        </div>
+      )}
+      <h4 className="font-display font-semibold text-sm">{title}</h4>
+      {badge && <span className="ml-auto">{badge}</span>}
+    </div>
+  );
 
 
 
@@ -1323,11 +1329,11 @@ export default function PropertyDetail() {
                         Deep-dive: Area trends, comparable sales, property specifics analysis, and charts.
                       </p>
                       <div className="grid grid-cols-2 gap-2 mb-4">
-                        {["Cadastre Verification", "5-Year Price History", "Comparable Sales", "Investment Projection", "Legal Status Check", "Neighborhood Score"].map((item) => {}
-
-
-
-                        )}
+                        {["Cadastre Verification", "5-Year Price History", "Comparable Sales", "Investment Projection", "Legal Status Check", "Neighborhood Score"].map((item) => (
+                          <div key={item} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <Check className="w-3 h-3 text-primary shrink-0" />{item}
+                          </div>
+                        ))}
                       </div>
                       {!reportPurchased ?
                       <div className="flex items-center gap-3 flex-wrap">

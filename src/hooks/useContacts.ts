@@ -40,10 +40,16 @@ export function useCreateContact() {
       const { data, error } = await supabase
         .from("contacts")
         .insert({
-          ...contact,
-          user_id: user!.id,
+          name: contact.name,
+          email: contact.email,
+          phone: contact.phone,
+          source: contact.source,
+          notes: contact.notes,
           deal_stage: contact.deal_stage || "new",
-        } as Record<string, unknown>)
+          follow_up_at: contact.follow_up_at,
+          listing_id: contact.listing_id,
+          user_id: user!.id,
+        })
         .select()
         .single();
       if (error) throw error;
