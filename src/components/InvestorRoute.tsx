@@ -1,9 +1,9 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { isBuySideRole } from "@/lib/authUtils";
+import { isBuySideRole, isPlatformAdmin } from "@/lib/authUtils";
 import { ProtectedRoute } from "./ProtectedRoute";
 
-/** Protects investor dashboard. Only buy-side roles (investor, institutional) can access. */
+/** Protects investor dashboard. Buy-side roles (investor, institutional) or platform admin can access. */
 export function InvestorRoute({ children }: { children: React.ReactNode }) {
   return (
     <ProtectedRoute>
@@ -23,7 +23,7 @@ function InvestorGate({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!isBuySideRole(profile)) {
+  if (!isBuySideRole(profile) && !isPlatformAdmin(profile)) {
     return <Navigate to="/dashboard" replace />;
   }
 

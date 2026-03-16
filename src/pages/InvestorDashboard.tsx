@@ -19,6 +19,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
+import { isPlatformAdmin } from "@/lib/authUtils";
 
 type Subscription = {
   id: string;
@@ -145,7 +146,7 @@ export default function InvestorDashboard() {
 
   const isInvestorType = ["investor", "institutional"].includes(participantType);
   const isRealEstateAgent = participantType === "agent";
-  const canAccessDealFlow = subscribed && isInvestorType;
+  const canAccessDealFlow = isPlatformAdmin(profile) || (subscribed && isInvestorType);
   const [showGate, setShowGate] = useState(false);
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
 
@@ -208,7 +209,7 @@ export default function InvestorDashboard() {
   const [liveDeals, setLiveDeals] = useState<LiveDeal[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Load investor feed — real DB data only
+  // Load investor feed — only deals admin has published to main dashboard
   useEffect(() => {
     const loadDeals = async () => {
       setLoading(true);
@@ -216,6 +217,7 @@ export default function InvestorDashboard() {
         const { data } = await supabase
           .from("firesale_requests")
           .select("*")
+          .eq("published_to_investors", true)
           .order("created_at", { ascending: false })
           .limit(50);
 

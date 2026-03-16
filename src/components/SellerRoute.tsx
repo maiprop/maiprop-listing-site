@@ -1,9 +1,9 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { isSellSideRole } from "@/lib/authUtils";
+import { isSellSideRole, isPlatformAdmin } from "@/lib/authUtils";
 import { ProtectedRoute } from "./ProtectedRoute";
 
-/** Protects listing-creation routes. Only sell-side roles (agent, seller_landlord, developer, institutional) can access. */
+/** Protects listing-creation routes. Sell-side roles (agent, seller_landlord, developer, institutional) or platform admin can access. */
 export function SellerRoute({ children }: { children: React.ReactNode }) {
   return (
     <ProtectedRoute>
@@ -23,7 +23,7 @@ function SellerGate({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!isSellSideRole(profile)) {
+  if (!isSellSideRole(profile) && !isPlatformAdmin(profile)) {
     return <Navigate to="/dashboard" replace />;
   }
 

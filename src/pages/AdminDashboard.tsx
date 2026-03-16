@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from "react";
 import { Link, useSearchParams, useNavigate } from "react-router-dom";
-import { Shield, Flame, Users, Wifi, SlidersHorizontal, ArrowLeft, DoorOpen } from "lucide-react";
+import { Shield, Flame, Users, Wifi, SlidersHorizontal, ArrowLeft, DoorOpen, FolderKanban } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import AdminFiresalePipeline from "@/components/AdminFiresalePipeline";
@@ -16,7 +16,7 @@ import OpenHouseDashboardSection from "@/components/OpenHouseDashboardSection";
 import { useMyListings } from "@/hooks/useListings";
 import { Button } from "@/components/ui/button";
 
-type AdminTab = "pipeline" | "subscribers" | "pricing" | "os-sync" | "open-houses";
+type AdminTab = "pipeline" | "investor-screening" | "subscribers" | "pricing" | "os-sync" | "open-houses";
 
 export default function AdminDashboard() {
   const [searchParams] = useSearchParams();
@@ -24,12 +24,12 @@ export default function AdminDashboard() {
   const { data: myListings = [] } = useMyListings();
   const tabParam = searchParams.get("tab") as AdminTab | null;
   const [activeTab, setActiveTab] = useState<AdminTab>(
-    tabParam && ["pipeline", "subscribers", "pricing", "os-sync", "open-houses"].includes(tabParam) ? tabParam : "pipeline"
+    tabParam && ["pipeline", "investor-screening", "subscribers", "pricing", "os-sync", "open-houses"].includes(tabParam) ? tabParam : "pipeline"
   );
 
   useEffect(() => {
     const t = searchParams.get("tab") as AdminTab | null;
-    if (t && ["pipeline", "subscribers", "pricing", "os-sync", "open-houses"].includes(t)) {
+    if (t && ["pipeline", "investor-screening", "subscribers", "pricing", "os-sync", "open-houses"].includes(t)) {
       setActiveTab(t);
     }
   }, [searchParams]);
@@ -41,6 +41,7 @@ export default function AdminDashboard() {
 
   const tabs: { key: AdminTab; label: string; icon: React.ElementType }[] = [
     { key: "pipeline", label: "Pipeline", icon: Flame },
+    { key: "investor-screening", label: "Investor Screening", icon: FolderKanban },
     { key: "open-houses", label: "Open Houses", icon: DoorOpen },
     { key: "subscribers", label: "Subscribers", icon: Users },
     { key: "pricing", label: "Pricing", icon: SlidersHorizontal },
@@ -85,6 +86,7 @@ export default function AdminDashboard() {
           </div>
 
           {activeTab === "pipeline" && <AdminFiresalePipeline />}
+          {activeTab === "investor-screening" && <AdminInvestorScreening />}
           {activeTab === "open-houses" && (
             <div className="space-y-6">
               <div>

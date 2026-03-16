@@ -122,9 +122,9 @@ type NavKey =
 
 type DashboardRole = "individual" | "seller_landlord" | "agent" | "professional" | "investor" | "institutional" | "developer" | "admin";
 
-const ALL_NAV_ITEMS: { icon: React.ElementType; label: string; key: NavKey }[] = [
+const ALL_NAV_ITEMS: { icon: React.ElementType; label: string; key: NavKey; href?: string }[] = [
   { icon: Home,          label: "Overview",       key: "overview"       },
-  { icon: FolderKanban,  label: "Deal Flow",       key: "deal-flow"      },
+  { icon: FolderKanban,  label: "Investor Dashboard", key: "deal-flow", href: "/investor-dashboard" },
   { icon: Building2,     label: "My Listings",     key: "listings"       },
   { icon: BarChart2,     label: "Analytics",       key: "analytics"      },
   { icon: Heart,         label: "Saved",           key: "saved"          },
@@ -152,7 +152,7 @@ const NAV_BY_TYPE: Record<string, NavKey[]> = {
   institutional: ["overview", "deal-flow", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "contacts", "profile", "settings"],
   developer:     ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "contacts", "projects", "portfolios", "profile", "settings"],
   professional:  ["overview", "services", "booking", "leads", "messages", "viewings", "profile", "settings"],
-  admin:         ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "contacts", "profile", "settings"],
+  admin:         ["overview", "deal-flow", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "open-houses", "services", "booking", "leads", "contacts", "projects", "portfolios", "profile", "settings"],
 };
 
 function getNavItemsForBioType(bioType: string | null, role: DashboardRole) {
@@ -186,16 +186,17 @@ export default function Dashboard() {
   const bioType = getParticipantTypeFromProfile(profile);
 
   const navItems = getNavItemsForBioType(bioType, role);
-  const defaultSection = navItems[0]?.key ?? "overview";
+  const sectionNavItems = navItems.filter(i => !("href" in i && i.href));
+  const defaultSection = (sectionNavItems[0]?.key ?? "overview") as NavKey;
   const [activeSection, setActiveSection] = useState<NavKey>((section as NavKey) || defaultSection);
   const [listingFilter, setListingFilter] = useState<"all" | "off_market" | "pre_sale">("all");
   const [alertModalOpen, setAlertModalOpen] = useState(false);
   const [editingAlert, setEditingAlert] = useState<any>(null);
 
   useEffect(() => {
-    const valid = navItems.some(i => i.key === activeSection);
-    if (!valid && navItems.length) setActiveSection(navItems[0].key);
-  }, [role, bioType, activeSection, navItems]);
+    const valid = sectionNavItems.some(i => i.key === activeSection);
+    if (!valid && sectionNavItems.length) setActiveSection(sectionNavItems[0].key as NavKey);
+  }, [role, bioType, activeSection, sectionNavItems]);
 
   const { data: myListings = [], isLoading: listingsLoading } = useMyListings();
   const { data: favorites = [], isLoading: favLoading } = useFavorites();
@@ -293,16 +294,26 @@ export default function Dashboard() {
           </div>
           <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
             {navItems.map(item => (
-              <button key={item.key} onClick={() => setActiveSection(item.key)}
-                className={cn("w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors relative",
-                  activeSection === item.key ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:text-foreground hover:bg-secondary"
-                )}>
-                <item.icon className="w-4 h-4 shrink-0" />
-                {item.label}
-                {item.key === "leads" && pendingLeadsCount > 0 && (
-                  <span className="ml-auto text-[10px] font-bold bg-brand-gold text-background rounded-full px-1.5 py-0.5 min-w-[18px] text-center">{pendingLeadsCount}</span>
-                )}
-              </button>
+              "href" in item && item.href ? (
+                <Link key={item.key} to={item.href}
+                  className={cn("w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors relative",
+                    "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                  )}>
+                  <item.icon className="w-4 h-4 shrink-0" />
+                  {item.label}
+                </Link>
+              ) : (
+                <button key={item.key} onClick={() => setActiveSection(item.key)}
+                  className={cn("w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors relative",
+                    activeSection === item.key ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                  )}>
+                  <item.icon className="w-4 h-4 shrink-0" />
+                  {item.label}
+                  {item.key === "leads" && pendingLeadsCount > 0 && (
+                    <span className="ml-auto text-[10px] font-bold bg-brand-gold text-background rounded-full px-1.5 py-0.5 min-w-[18px] text-center">{pendingLeadsCount}</span>
+                  )}
+                </button>
+              )
             ))}
           </nav>
           <div className="p-3 border-t border-border">
@@ -316,16 +327,24 @@ export default function Dashboard() {
         <div className="md:hidden fixed bottom-16 left-0 right-0 z-40 bg-card/95 backdrop-blur-xl border-t border-border overflow-x-auto scrollbar-none">
           <div className="flex items-stretch h-11 min-w-max">
             {navItems.map(item => (
-              <button key={item.key} onClick={() => setActiveSection(item.key)}
-                className={cn("flex flex-col items-center justify-center gap-0.5 px-3.5 text-[9px] font-semibold transition-colors whitespace-nowrap min-w-[56px] relative",
-                  activeSection === item.key ? "text-primary border-b-2 border-primary" : "text-muted-foreground"
-                )}>
-                <item.icon className="w-3.5 h-3.5" />
-                {item.label}
-                {item.key === "leads" && pendingLeadsCount > 0 && (
-                  <span className="absolute top-0.5 right-1.5 text-[8px] font-bold bg-brand-gold text-background rounded-full w-3.5 h-3.5 flex items-center justify-center">{pendingLeadsCount}</span>
-                )}
-              </button>
+              "href" in item && item.href ? (
+                <Link key={item.key} to={item.href}
+                  className="flex flex-col items-center justify-center gap-0.5 px-3.5 text-[9px] font-semibold transition-colors whitespace-nowrap min-w-[56px] relative text-muted-foreground hover:text-foreground">
+                  <item.icon className="w-3.5 h-3.5" />
+                  {item.label}
+                </Link>
+              ) : (
+                <button key={item.key} onClick={() => setActiveSection(item.key)}
+                  className={cn("flex flex-col items-center justify-center gap-0.5 px-3.5 text-[9px] font-semibold transition-colors whitespace-nowrap min-w-[56px] relative",
+                    activeSection === item.key ? "text-primary border-b-2 border-primary" : "text-muted-foreground"
+                  )}>
+                  <item.icon className="w-3.5 h-3.5" />
+                  {item.label}
+                  {item.key === "leads" && pendingLeadsCount > 0 && (
+                    <span className="absolute top-0.5 right-1.5 text-[8px] font-bold bg-brand-gold text-background rounded-full w-3.5 h-3.5 flex items-center justify-center">{pendingLeadsCount}</span>
+                  )}
+                </button>
+              )
             ))}
             <button onClick={handleSignOut} className="flex flex-col items-center justify-center gap-0.5 px-3.5 text-[9px] font-semibold text-muted-foreground whitespace-nowrap min-w-[56px]">
               <LogOut className="w-3.5 h-3.5" /> Sign Out
@@ -376,23 +395,14 @@ export default function Dashboard() {
                 ))}
               </div>
 
-              {/* Admin overview — Quick Sale Pipeline */}
+              {/* Admin overview — unified Admin Dashboard */}
               {role === "admin" && (
-                <div className="grid md:grid-cols-2 gap-5">
-                  <div className="glass-card rounded-xl p-5 border border-destructive/20 bg-destructive/5">
-                    <h2 className="font-display font-semibold mb-1 flex items-center gap-2 text-destructive"><Flame className="w-4 h-4" /> Quick Sale Pipeline</h2>
-                    <p className="text-sm text-muted-foreground mb-3">Manage Quick Sale™ requests, send offers, and track deal flow.</p>
-                    <Button size="sm" className="bg-destructive/20 border border-destructive/40 text-destructive hover:bg-destructive/30 gap-1.5" asChild>
-                      <Link to="/admin?tab=pipeline"><Flame className="w-3.5 h-3.5" /> Manage Pipeline</Link>
-                    </Button>
-                  </div>
-                  <div className="glass-card rounded-xl p-5 border border-primary/20 bg-primary/5">
-                    <h2 className="font-display font-semibold mb-1 flex items-center gap-2 text-primary"><Shield className="w-4 h-4" /> Admin Dashboard</h2>
-                    <p className="text-sm text-muted-foreground mb-3">Subscribers, pricing, OS sync, and full platform admin.</p>
-                    <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground gap-1.5" asChild>
-                      <Link to="/admin"><Shield className="w-3.5 h-3.5" /> Open Admin</Link>
-                    </Button>
-                  </div>
+                <div className="glass-card rounded-xl p-5 border border-primary/20 bg-primary/5">
+                  <h2 className="font-display font-semibold mb-1 flex items-center gap-2 text-primary"><Shield className="w-4 h-4" /> Admin Dashboard</h2>
+                  <p className="text-sm text-muted-foreground mb-3">Quick Sale™ pipeline, subscribers, pricing, OS sync, and open house management.</p>
+                  <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground gap-1.5" asChild>
+                    <Link to="/admin"><Shield className="w-3.5 h-3.5" /> Open Admin</Link>
+                  </Button>
                 </div>
               )}
 
@@ -522,68 +532,6 @@ export default function Dashboard() {
                   </div>
                 </div>
               )}
-            </div>
-          )}
-
-          {/* ── DEAL FLOW — investor, institutional ────────────────────────── */}
-          {activeSection === "deal-flow" && navItems.some(i => i.key === "deal-flow") && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between flex-wrap gap-3">
-                <div>
-                  <h1 className="font-display text-2xl font-bold flex items-center gap-2">
-                    <FolderKanban className="w-6 h-6 text-brand-gold" /> Deal Flow
-                  </h1>
-                  <p className="text-sm text-muted-foreground mt-1">Your private investment pipeline — off-market opportunities and Quick Sale™ deals.</p>
-                </div>
-                <Button className="bg-gradient-gold border-0 text-background font-semibold gap-2" asChild>
-                  <Link to="/investor-dashboard"><ArrowRight className="w-4 h-4" /> Open Full Dashboard</Link>
-                </Button>
-              </div>
-
-              {/* Quick links */}
-              <div className="grid sm:grid-cols-3 gap-4">
-                {[
-                  { icon: FolderKanban, label: "Investor Dashboard", desc: "Full deal pipeline with status tracking", href: "/investor-dashboard", accent: "text-brand-gold", border: "border-amber-500/20", bg: "bg-amber-500/5" },
-                  { icon: Flame, label: "Firesale Deals", desc: "Off-market Quick Sale™ properties", href: "/firesale", accent: "text-destructive", border: "border-destructive/20", bg: "bg-destructive/5" },
-                  { icon: Gavel, label: "Live Auctions", desc: "Court auctions below market value", href: "/auctions", accent: "text-primary", border: "border-primary/20", bg: "bg-primary/5" },
-                ].map(item => (
-                  <Link key={item.href} to={item.href}
-                    className={cn("glass-card rounded-xl p-5 border flex flex-col gap-3 hover:scale-[1.02] transition-all", item.border, item.bg)}>
-                    <div className={cn("flex items-center gap-2 font-semibold text-sm", item.accent)}>
-                      <item.icon className="w-4 h-4" /> {item.label}
-                    </div>
-                    <p className="text-xs text-muted-foreground leading-relaxed">{item.desc}</p>
-                    <div className={cn("flex items-center gap-1 text-xs font-medium", item.accent)}>
-                      Open <ArrowRight className="w-3 h-3" />
-                    </div>
-                  </Link>
-                ))}
-              </div>
-
-              {/* Saved deals preview */}
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="font-display font-semibold">Saved Deals</h2>
-                  <Button variant="outline" size="sm" className="border-border gap-1.5" onClick={() => setActiveSection("saved")}>
-                    View All <ArrowRight className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
-                {favorites.length === 0 ? (
-                  <div className="glass-card rounded-xl p-10 text-center">
-                    <Heart className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
-                    <p className="text-sm font-semibold">No saved deals yet</p>
-                    <p className="text-xs text-muted-foreground mt-1 mb-4">Browse firesale and auction listings to build your pipeline</p>
-                    <div className="flex gap-2 justify-center flex-wrap">
-                      <Button size="sm" variant="outline" className="border-border" asChild><Link to="/auctions">Browse Auctions</Link></Button>
-                      <Button size="sm" variant="outline" className="border-border" asChild><Link to="/firesale">Firesale Deals</Link></Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                    {favorites.slice(0, 6).map((f: any) => f.listings && <PropertyCard key={f.id} property={dbListingToCard(f.listings)} />)}
-                  </div>
-                )}
-              </div>
             </div>
           )}
 
