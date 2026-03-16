@@ -1028,6 +1028,7 @@ export default function Dashboard() {
               listingsLoading={listingsLoading}
               viewTrends={viewTrends}
               leadFunnel={leadFunnel}
+              myProfessional={myProfessional}
             />
           )}
 
