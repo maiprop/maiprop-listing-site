@@ -1501,10 +1501,37 @@ function DashboardPortfoliosSection({
                   </div>
                 )}
                 <div className="border-t border-border px-5 py-3 bg-muted/30">
-                  <p className="text-xs text-muted-foreground">
-                    Add properties from <button onClick={() => {}} className="text-primary underline underline-offset-2">saved listings</button> via{" "}
-                    <Link to="/portfolios" className="text-primary underline underline-offset-2">full portfolio view</Link>.
-                  </p>
+                  {addFromSavedPortfolioId === p.id ? (
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold text-foreground mb-2">Add from Saved Properties:</p>
+                      {favorites.filter((f: any) => f.listings && !listingIds.includes(f.listings.id)).length === 0 ? (
+                        <p className="text-xs text-muted-foreground">No saved properties available to add.</p>
+                      ) : (
+                        <div className="flex flex-wrap gap-2">
+                          {favorites.filter((f: any) => f.listings && !listingIds.includes(f.listings.id)).map((f: any) => (
+                            <button key={f.listings.id}
+                              className="text-xs px-2.5 py-1.5 bg-secondary border border-border rounded-lg hover:border-primary/50 hover:bg-primary/10 transition-colors truncate max-w-[200px]"
+                              onClick={() => {
+                                const newIds = [...listingIds, f.listings.id];
+                                updatePortfolio.mutate({ id: p.id, updates: { listing_ids: newIds } }, {
+                                  onSuccess: () => toast.success("Added to portfolio"),
+                                });
+                              }}>
+                              + {f.listings.title || f.listings.city}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <button onClick={() => setAddFromSavedPortfolioId(null)} className="text-xs text-muted-foreground hover:text-foreground mt-1 underline underline-offset-2">
+                        Close
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setAddFromSavedPortfolioId(p.id)}
+                      className="text-xs text-primary underline underline-offset-2 hover:opacity-80 transition-opacity">
+                      + Add from saved properties
+                    </button>
+                  )}
                 </div>
               </div>
             );
