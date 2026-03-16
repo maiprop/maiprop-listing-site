@@ -729,22 +729,34 @@ export default function Listings() {
         {showFilters && (
           <div className="bg-card/95 backdrop-blur-sm border-b border-border shadow-lg">
             <div className="container py-7">
-              {/* Pre-sale filter (sale listings only) — client-side only, no DB column */}
+              {/* Listing status quick toggles: Off-market & Pre-sale */}
               {(selectedListingType === "sale" || !selectedListingType) && (
                 <div className="mb-6 pb-5 border-b border-border">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={preSaleOnly}
-                      onChange={e => setParam("pre_sale", e.target.checked ? "1" : "")}
-                      className="rounded border-border"
-                    />
-                    <span className="text-sm font-medium">Pre-sale only</span>
-                    <span className="text-xs text-muted-foreground">New developments before completion</span>
-                  </label>
+                  <p className="text-xs font-semibold text-foreground/60 uppercase tracking-wider mb-3">Listing Status</p>
+                  <div className="flex flex-wrap gap-3">
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={offMarketOnly}
+                        onChange={e => setParam("off_market", e.target.checked ? "1" : "")}
+                        className="rounded border-border accent-primary"
+                      />
+                      <span className="text-sm font-medium">🔒 Off-market only</span>
+                      <span className="text-xs text-muted-foreground hidden sm:inline">Exclusive, not publicly advertised</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={preSaleOnly}
+                        onChange={e => setParam("pre_sale", e.target.checked ? "1" : "")}
+                        className="rounded border-border accent-primary"
+                      />
+                      <span className="text-sm font-medium">🏗️ Pre-sale only</span>
+                      <span className="text-xs text-muted-foreground hidden sm:inline">New developments before completion</span>
+                    </label>
+                  </div>
                 </div>
               )}
-
 
               {/* Panel header */}
               <div className="flex items-center justify-between mb-6">
