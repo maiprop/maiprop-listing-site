@@ -63,6 +63,7 @@ export function Navbar() {
     { label: "Auctions", href: "/auctions", badge: "Live" },
     { label: "Quick Sale™", href: "/firesale", accent: "flame" },
     { label: "Open Houses", href: "/open-houses", accent: "dooropen" },
+    { label: "Market Intel", href: "/market-intelligence", accent: "subtle" },
     { label: "Professionals", href: "/professionals", accent: "subtle" },
   ];
 
