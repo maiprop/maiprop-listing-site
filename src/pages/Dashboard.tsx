@@ -647,74 +647,69 @@ export default function Dashboard() {
           )}
 
           {/* ── MY LISTINGS ──────────────────────────────────────────────── */}
-          {activeSection === "listings" && navItems.some(i => i.key === "listings") && (() => {
-            const offMarket = myListings.filter((l: any) => l.is_off_market);
-            const preSale   = myListings.filter((l: any) => l.is_pre_sale);
-            const listingFilter = (searchParams?.get?.("lf") || "all");
-            const visible = listingFilter === "off_market" ? offMarket
-              : listingFilter === "pre_sale" ? preSale
-              : myListings;
-            const isAgentOrSeller = role === "agent" || role === "seller_landlord";
-            return (
-              <div className="space-y-6">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <h1 className="font-display text-2xl font-bold">My Listings</h1>
-                  <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" asChild>
-                    <Link to="/listings/new"><Plus className="w-4 h-4" /> Create Listing</Link>
-                  </Button>
-                </div>
-                {isAgentOrSeller && (offMarket.length > 0 || preSale.length > 0) && (
-                  <div className="flex gap-2 flex-wrap text-xs">
-                    {(["all","off_market","pre_sale"] as const).map(f => {
-                      const labels: Record<string,string> = { all: `All (${myListings.length})`, off_market: `🔒 Off-market (${offMarket.length})`, pre_sale: `🏗️ Pre-sale (${preSale.length})` };
-                      return (
-                        <button key={f}
-                          onClick={() => { const sp = new URLSearchParams(window.location.search); if (f === "all") sp.delete("lf"); else sp.set("lf", f); window.history.replaceState(null, "", "?" + sp.toString()); window.dispatchEvent(new Event("popstate")); }}
-                          className={`px-3 py-1.5 rounded-full border font-medium transition-colors ${listingFilter === f ? "border-primary bg-primary/10 text-primary" : "border-border bg-secondary text-muted-foreground hover:text-foreground"}`}
-                        >{labels[f]}</button>
-                      );
-                    })}
-                  </div>
-                )}
-                {listingsLoading ? (
-                  <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
-                ) : visible.length === 0 ? (
-                  <div className="glass-card rounded-xl p-12 text-center">
-                    <Building2 className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-                    <p className="font-semibold">No listings yet</p>
-                    <p className="text-sm text-muted-foreground mt-1">Start by creating your first property listing</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {visible.map((l: any) => (
-                      <div key={l.id} className="glass-card rounded-xl p-4 flex items-center gap-4">
-                        <img src={l.cover_image_url || "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=200&q=60"} alt="" className="w-16 h-16 rounded-lg object-cover shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="font-semibold text-sm truncate">{l.title}</p>
-                            {l.is_featured && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-400/20 text-amber-600 border border-amber-400/30">⭐ Featured</span>}
-                            {l.is_off_market && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-secondary border border-border text-muted-foreground">🔒 Off-market</span>}
-                            {l.is_pre_sale && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">🏗️ Pre-sale</span>}
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-0.5">{l.city} · €{Number(l.price).toLocaleString()} · {l.sqm}m²</p>
-                          <span className={`text-xs px-2 py-0.5 rounded-full mt-1 inline-block ${l.status === "active" ? "bg-brand-emerald/20 text-brand-emerald" : "bg-secondary text-muted-foreground"}`}>{l.status}</span>
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <span className="text-xs text-muted-foreground mr-2">{l.views_count} views</span>
-                          <button onClick={() => toggleListingStatus(l.id, l.status)} className="p-2 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground">
-                            {l.status === "active" ? <ToggleRight className="w-4 h-4 text-primary" /> : <ToggleLeft className="w-4 h-4" />}
-                          </button>
-                          <button onClick={() => { if (confirm("Delete this listing?")) deleteListing.mutate(l.id); }} className="p-2 rounded-lg hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+          {activeSection === "listings" && navItems.some(i => i.key === "listings") && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <h1 className="font-display text-2xl font-bold">My Listings</h1>
+                <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" asChild>
+                  <Link to="/listings/new"><Plus className="w-4 h-4" /> Create Listing</Link>
+                </Button>
               </div>
-            );
-          })()}
+              {(role === "agent" || role === "seller_landlord") && myListings.some((l: any) => l.is_off_market || l.is_pre_sale) && (
+                <div className="flex gap-2 flex-wrap text-xs">
+                  {[
+                    { key: "all", label: `All (${myListings.length})` },
+                    { key: "off_market", label: `🔒 Off-market (${myListings.filter((l:any) => l.is_off_market).length})` },
+                    { key: "pre_sale",  label: `🏗️ Pre-sale (${myListings.filter((l:any) => l.is_pre_sale).length})` },
+                  ].map(f => (
+                    <button key={f.key}
+                      onClick={() => setListingFilter(f.key as any)}
+                      className={`px-3 py-1.5 rounded-full border font-medium transition-colors ${listingFilter === f.key ? "border-primary bg-primary/10 text-primary" : "border-border bg-secondary text-muted-foreground hover:text-foreground"}`}
+                    >{f.label}</button>
+                  ))}
+                </div>
+              )}
+              {listingsLoading ? (
+                <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
+              ) : myListings.length === 0 ? (
+                <div className="glass-card rounded-xl p-12 text-center">
+                  <Building2 className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+                  <p className="font-semibold">No listings yet</p>
+                  <p className="text-sm text-muted-foreground mt-1">Start by creating your first property listing</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {(listingFilter === "off_market" ? myListings.filter((l:any) => l.is_off_market)
+                    : listingFilter === "pre_sale" ? myListings.filter((l:any) => l.is_pre_sale)
+                    : myListings
+                  ).map((l: any) => (
+                    <div key={l.id} className="glass-card rounded-xl p-4 flex items-center gap-4">
+                      <img src={l.cover_image_url || "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=200&q=60"} alt="" className="w-16 h-16 rounded-lg object-cover shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-semibold text-sm truncate">{l.title}</p>
+                          {l.is_featured && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-400/20 text-amber-600 border border-amber-400/30">⭐ Featured</span>}
+                          {l.is_off_market && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-secondary border border-border text-muted-foreground">🔒 Off-market</span>}
+                          {l.is_pre_sale && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">🏗️ Pre-sale</span>}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">{l.city} · €{Number(l.price).toLocaleString()} · {l.sqm}m²</p>
+                        <span className={`text-xs px-2 py-0.5 rounded-full mt-1 inline-block ${l.status === "active" ? "bg-brand-emerald/20 text-brand-emerald" : "bg-secondary text-muted-foreground"}`}>{l.status}</span>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <span className="text-xs text-muted-foreground mr-2">{l.views_count} views</span>
+                        <button onClick={() => toggleListingStatus(l.id, l.status)} className="p-2 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground">
+                          {l.status === "active" ? <ToggleRight className="w-4 h-4 text-primary" /> : <ToggleLeft className="w-4 h-4" />}
+                        </button>
+                        <button onClick={() => { if (confirm("Delete this listing?")) deleteListing.mutate(l.id); }} className="p-2 rounded-lg hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ── SAVED ────────────────────────────────────────────────────── */}
           {activeSection === "saved" && navItems.some(i => i.key === "saved") && (
