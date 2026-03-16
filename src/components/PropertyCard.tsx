@@ -282,8 +282,18 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
             className="flex items-center gap-1 mt-1.5 text-muted-foreground text-xs group/addr hover:text-primary transition-colors w-fit max-w-full"
           >
             <MapPin className="w-3.5 h-3.5 sm:w-3 sm:h-3 shrink-0 text-primary/70 group-hover/addr:text-primary transition-colors" />
-            <span className="truncate underline-offset-2 group-hover/addr:underline text-xs sm:text-xs">{property.address}, {property.city}</span>
+            <span className="truncate underline-offset-2 group-hover/addr:underline text-xs sm:text-xs">
+              {property.address}, {property.city}
+            </span>
           </Link>
+          {property.ownerParticipantType && (
+            <div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-secondary/80 border border-border/60">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                {property.ownerParticipantType === "agent" ? "Agent listing" : "Private seller"}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Key specs */}
