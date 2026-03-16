@@ -121,7 +121,12 @@ const PROPERTY_TYPE_GR: Record<string, string> = {
 
 /** Label for property type pill — includes subtypes like Plot with Building, Land with Building */
 function getPropertyTypeLabel(a: { property_type?: string; tags?: string[] | null }): string {
-  const base = a.property_type || "";
+  let base = a.property_type || "";
+  // Derive base from tags when property_type is missing (e.g. OS-synced data)
+  if (!base && a.tags?.length) {
+    if (a.tags.some((t) => t.startsWith("land_type:"))) base = "land";
+    else if (a.tags.some((t) => t.startsWith("commercial_type:"))) base = "commercial";
+  }
   if (base === "land" && a.tags?.length) {
     const landTag = a.tags.find((t) => t.startsWith("land_type:"));
     if (landTag) {
@@ -151,6 +156,7 @@ function getPropertyTypeLabel(a: { property_type?: string; tags?: string[] | nul
       if (mapping[subtype]) return mapping[subtype];
     }
   }
+  if (!base) return "";
   return PROPERTY_TYPE_GR[base] ?? base.split("_").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ") ?? base;
 }
 
@@ -394,9 +400,11 @@ function AuctionCard({ a, favoritedIds, onToggleFav
             </div>
           )}
         </div>
-        <div className="absolute top-2 right-2 bg-brand-gold/90 text-background text-[10px] font-bold px-2 py-0.5 rounded-full">
-          {getPropertyTypeLabel(a)}
-        </div>
+        {getPropertyTypeLabel(a) && (
+          <div className="absolute top-2 right-2 bg-brand-gold/90 text-background text-[10px] font-bold px-2 py-0.5 rounded-full">
+            {getPropertyTypeLabel(a)}
+          </div>
+        )}
         {badge &&
         <div className={`absolute bottom-2 right-2 flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${badge.cls}`}>
             <Clock className="w-3 h-3" />
@@ -416,6 +424,13 @@ function AuctionCard({ a, favoritedIds, onToggleFav
           <MapPin className="w-3 h-3 shrink-0" />
           <span className="truncate">{a.address ? `${a.address}, ` : ""}{a.city}</span>
         </div>
+
+        {/* Property type pill */}
+        {getPropertyTypeLabel(a) && (
+          <span className="inline-flex items-center gap-1 bg-brand-gold/15 text-brand-gold border border-brand-gold/30 text-[10px] font-semibold px-2 py-0.5 rounded-full w-fit">
+            {getPropertyTypeLabel(a)}
+          </span>
+        )}
 
         {/* Ownership status badge */}
         {ownershipBadge &&

@@ -49,6 +49,38 @@ function priceLabel(p: number) {
   return `€${p}`;
 }
 
+const PROPERTY_TYPE_LABELS: Record<string, string> = {
+  apartment: "Apartment", house: "House", villa: "Villa", land: "Land",
+  commercial: "Commercial", office: "Office",
+};
+
+function getPropertyTypeLabel(raw: any): string {
+  let base = raw?.property_type || "";
+  const tags: string[] = raw?.tags ?? [];
+  if (!base && tags.length) {
+    if (tags.some((t) => t.startsWith("land_type:"))) base = "land";
+    else if (tags.some((t) => t.startsWith("commercial_type:"))) base = "commercial";
+  }
+  if (!base) return "";
+  if (base === "land" && tags.length) {
+    const landTag = tags.find((t) => t.startsWith("land_type:"));
+    if (landTag) {
+      const subtype = landTag.replace("land_type:", "");
+      const map: Record<string, string> = { plot_with_building: "Plot w/ Building", land_with_building: "Land w/ Building", land: "Land", plot: "Plot" };
+      if (map[subtype]) return map[subtype];
+    }
+  }
+  if (base === "commercial" && tags.length) {
+    const commTag = tags.find((t) => t.startsWith("commercial_type:"));
+    if (commTag) {
+      const subtype = commTag.replace("commercial_type:", "");
+      const map: Record<string, string> = { store: "Store", warehouse: "Warehouse", industrial: "Industrial", storeroom: "Storeroom", parking: "Parking", hotel: "Hotel" };
+      if (map[subtype]) return map[subtype];
+    }
+  }
+  return PROPERTY_TYPE_LABELS[base] ?? base.split("_").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ") ?? base;
+}
+
 /** Extract ownership status tag */
 function getOwnershipStatus(tags?: string[] | null): string | null {
   if (!tags) return null;
@@ -315,6 +347,16 @@ function PropertyPopup({ listing, onClose }: { listing: MapListing; onClose: () 
         <p className="font-semibold text-[11px] leading-tight line-clamp-2 text-foreground">
           {listing.title}
         </p>
+
+        {/* Property type pill */}
+        {getPropertyTypeLabel(raw) && (
+          <span
+            className="inline-flex w-fit px-1.5 py-0.5 rounded-md text-[10px] font-semibold"
+            style={{ background: "rgba(245,197,24,0.15)", color: "#e5a800", border: "1px solid rgba(245,197,24,0.4)" }}
+          >
+            {getPropertyTypeLabel(raw)}
+          </span>
+        )}
 
         {/* Price */}
         <p style={{ color: typeColour(listing.listingType) }} className="font-bold text-sm">
