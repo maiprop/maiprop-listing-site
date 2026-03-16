@@ -1021,6 +1021,8 @@ export default function Dashboard() {
               viewTrends={viewTrends}
               leadFunnel={leadFunnel}
               myProfessional={myProfessional}
+              onGoToProfile={() => setActiveSection("profile")}
+              onGoToServices={() => setActiveSection("services")}
             />
           )}
 
