@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
+import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
 
 // Pages that have a full-width dark hero image at the top
 const DARK_HERO_ROUTES = ["/"];
@@ -28,7 +29,7 @@ export function Navbar() {
   const { isPro } = useSubscription();
   const { theme, setTheme } = useTheme();
 
-  const participantType = profile?.bio?.match(/^__type:(\w+)/)?.[1] || "";
+  const participantType = getParticipantTypeFromProfile(profile);
   const isDeveloper = participantType === "developer";
   const hasDarkHero = DARK_HERO_ROUTES.includes(location.pathname);
   // When transparent AND over a dark hero, force white text; otherwise use semantic tokens

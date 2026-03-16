@@ -11,11 +11,12 @@ import { useProjects, useCreateProject, useUpdateProject, useDeleteProject } fro
 import { useMyListings, useUpdateListing } from "@/hooks/useListings";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
 
 function Projects() {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
-  const participantType = profile?.bio?.match(/^__type:(\w+)/)?.[1] || "";
+  const participantType = getParticipantTypeFromProfile(profile);
   const isDeveloper = participantType === "developer";
   const { data: projects = [], isLoading } = useProjects(user?.id);
   const { data: myListings = [] } = useMyListings();
