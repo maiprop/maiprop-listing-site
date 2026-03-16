@@ -7,7 +7,7 @@ import {
   Shield, FileText, Zap, ExternalLink, Lock, BarChart2, Eye,
   Home, Clock, Check, Gavel, Download, Loader2, CheckCircle,
   Thermometer, Wrench, TreePine, Flame, Wifi, Car, Building2,
-  Info, ChevronDown, ChevronUp, Euro, Tag, Layers, LayoutGrid, Bell, Globe, Scale } from
+  Info, ChevronDown, ChevronUp, Euro, Tag, Layers, LayoutGrid, Bell, Globe, Scale, History } from
 "lucide-react";
 import { getSubtypeLabel, PROPERTY_TYPE_MAP, type PropertyTypeKey } from "@/lib/propertyTypes";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,7 @@ import { walkScoreLabel, walkScoreColour } from "@/lib/walkScore";
 import { HEATING_TYPES, CONDITION_OPTIONS } from "@/lib/filterConfig";
 import AIAssistantWidget from "@/components/AIAssistantWidget";
 import { AuctionAlertModal } from "@/components/AuctionAlertModal";
+import { PastDealsTable } from "@/components/PastDealsTable";
 import { getStreetViewProxyUrl } from "@/lib/config";
 import { dbListingToCard } from "@/lib/listingUtils";
 import { isAiUsageLimitError } from "@/lib/aiErrorUtils";
@@ -854,6 +855,16 @@ export default function PropertyDetail() {
                       <Bell className="w-4 h-4" />
                       Set Auction Alert
                     </Button>
+
+                    {/* Past Deals table — premium only */}
+                    {isPro && (
+                      <div className="pt-4 border-t border-border mt-4">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-2">
+                          <History className="w-3.5 h-3.5" /> Past Deals (OS)
+                        </p>
+                        <PastDealsTable listingId={id!} />
+                      </div>
+                    )}
                   </div>
                 </Section>
               }
