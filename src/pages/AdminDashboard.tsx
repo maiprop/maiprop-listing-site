@@ -93,7 +93,7 @@ export default function AdminDashboard() {
                 </h2>
                 <p className="text-sm text-muted-foreground mt-1">All open house registrations, offers, and controls for your listings.</p>
               </div>
-              <AdminOpenHousePanel />
+              <OpenHouseDashboardSection myListings={myListings} />
             </div>
           )}
           {activeTab === "subscribers" && <AdminSubscribers />}
