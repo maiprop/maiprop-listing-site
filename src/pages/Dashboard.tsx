@@ -327,8 +327,8 @@ export default function Dashboard() {
                   <h1 className="font-display text-2xl font-bold">Good morning, {displayName} 👋</h1>
                   <p className="text-muted-foreground text-sm mt-1">
                     {isInvestorLike ? "Your investment pipeline and deal opportunities." :
-                     (bioType === "developer" || role as string === "developer") ? "Manage your project listings and showcases." :
-                     (bioType === "institutional" || role as string === "institutional") ? "Your portfolio, deal flow, and listings." :
+                     (bioType === "developer") ? "Manage your project listings and showcases." :
+                     (bioType === "institutional") ? "Your portfolio, deal flow, and listings." :
                      role === "seller_landlord" || bioType === "seller" ? "Manage your listings and viewings." :
                      isSellSide ? "Here's what's happening with your listings and leads." :
                      role === "professional" ? "Your services and incoming client leads." :
