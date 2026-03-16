@@ -1450,7 +1450,7 @@ export default function Index() {
           {/* 1×4 grid — show up to 4 listings */}
           <div
             className={`grid grid-cols-2 lg:grid-cols-4 gap-4 reveal reveal-delay-1 ${auctionsInView ? "in-view" : ""}`}>
-            {auctionListings.slice(0, 3).map((l: any) => {
+            {auctionListings.slice(0, 4).map((l: any) => {
               const svFallback = l.latitude != null && l.longitude != null
                 ? getStreetViewProxyUrl({ lat: Number(l.latitude), lng: Number(l.longitude) })
                 : null;
