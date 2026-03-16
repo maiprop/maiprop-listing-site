@@ -7,8 +7,11 @@ import {
   Search, Activity, Wrench, Shield, MapPin, Euro, Edit2,
   FolderKanban, Users, Briefcase, TrendingUp, Globe2, Flame,
   ArrowRight, Clock, CheckCircle2, AlertCircle, Phone, ExternalLink, Star, Crown,
-  FolderOpen, LayoutGrid,
+  FolderOpen, LayoutGrid, Lock, Zap,
 } from "lucide-react";
+import { useSubscription } from "@/hooks/useSubscription";
+import { useProfessionalAvailability } from "@/hooks/useProfessionalServices";
+import { Progress } from "@/components/ui/progress";
 import ContactsCRM from "@/components/ContactsCRM";
 import OpenHouseDashboardSection from "@/components/OpenHouseDashboardSection";
 import { Button } from "@/components/ui/button";
