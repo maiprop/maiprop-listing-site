@@ -10,7 +10,7 @@
 
 ## Participant types & fixed rights
 
-Each participant type has **fixed, non-upgradable** rights. Users cannot escalate their own rights by switching participant type. **Switching participant type** (Settings → Switch Participant Type) changes dashboard layout and feature visibility, but does **not** grant admin; only `is_platform_admin` does.
+Each participant type has **fixed, non-upgradable** rights. Users cannot escalate their own rights by switching participant type. **Switching participant type** (Settings → Switch Participant Type) changes dashboard layout and feature visibility, but does **not** grant admin; only `role='admin'` does.
 
 | Participant   | DB role          | Rights |
 |---------------|------------------|--------|
@@ -43,5 +43,5 @@ Each participant type has **fixed, non-upgradable** rights. Users cannot escalat
 
 ## Admin access
 
-- **Admin Dashboard** at `/admin`: Firesale pipeline, Subscribers, OS sync, link to Pricing. Accessible only when `is_platform_admin = true`.
-- Navbar dropdown shows "Admin" link when `is_platform_admin = true`.
+- **Admin Dashboard** at `/admin`: Firesale pipeline, Subscribers, Pricing, OS sync. Accessible only when `role = 'admin'`.
+- Navbar dropdown shows "Admin" badge and link when `role = 'admin'`.

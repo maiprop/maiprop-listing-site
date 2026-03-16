@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -32,7 +32,6 @@ import Portfolios from "./pages/Portfolios";
 import FiresalePricing from "./pages/FiresalePricing";
 import Pricing from "./pages/Pricing";
 import AdminDashboard from "./pages/AdminDashboard";
-import AdminPricing from "./pages/AdminPricing";
 import AIAssistantPage from "./pages/AIAssistantPage";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
@@ -102,7 +101,7 @@ const App = () => (
               <Route path="/pricing" element={<Pricing />} />
               <Route path="/pricing/firesale-investors" element={<FiresalePricing />} />
               <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
-              <Route path="/admin/pricing" element={<AdminRoute><AdminPricing /></AdminRoute>} />
+              <Route path="/admin/pricing" element={<AdminRoute><Navigate to="/admin?tab=pricing" replace /></AdminRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
             <GlobalAIWidget />

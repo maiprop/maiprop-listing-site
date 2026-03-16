@@ -346,7 +346,7 @@ export default function Pricing() {
   const PLAN_KEYS: Record<AudienceId, string> = {
     buyer: "pro",
     seller: "pro",
-    investor: "investor_analyst",
+    investor: "investor_private",
     agent: "agent_basic",
     institutional: "investor_institutional",
     developer: "agent_basic",

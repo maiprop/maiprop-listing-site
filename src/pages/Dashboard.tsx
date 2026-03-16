@@ -115,9 +115,9 @@ type NavKey =
   | "overview" | "listings" | "analytics" | "saved" | "saved-searches"
   | "messages" | "viewings" | "auctions" | "open-houses" | "services" | "booking" | "leads"
   | "deal-flow" | "contacts" | "projects" | "portfolios"
-  | "profile" | "settings";
+  | "profile" | "settings" | "admin-dashboard";
 
-type DashboardRole = "individual" | "seller_landlord" | "agent" | "professional" | "investor" | "institutional" | "developer";
+type DashboardRole = "individual" | "seller_landlord" | "agent" | "professional" | "investor" | "institutional" | "developer" | "admin";
 
 const ALL_NAV_ITEMS: { icon: React.ElementType; label: string; key: NavKey }[] = [
   { icon: Home,          label: "Overview",       key: "overview"       },
@@ -138,6 +138,7 @@ const ALL_NAV_ITEMS: { icon: React.ElementType; label: string; key: NavKey }[] =
   { icon: TrendingUp,    label: "Portfolios",       key: "portfolios"     },
   { icon: User,          label: "Profile",          key: "profile"        },
   { icon: Settings,      label: "Settings",         key: "settings"       },
+  { icon: Shield,        label: "Admin Dashboard",  key: "admin-dashboard" },
 ];
 
 // ── Nav per bio-type (spec-accurate) ──────────────────────────────────────────
@@ -149,10 +150,11 @@ const NAV_BY_TYPE: Record<string, NavKey[]> = {
   institutional: ["overview", "deal-flow", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "open-houses", "auctions", "contacts", "profile", "settings"],
   developer:     ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "open-houses", "contacts", "projects", "portfolios", "profile", "settings"],
   professional:  ["overview", "services", "booking", "leads", "messages", "viewings", "open-houses", "profile", "settings"],
+  admin:         ["overview", "admin-dashboard", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "open-houses", "auctions", "contacts", "profile", "settings"],
 };
 
 function getNavItemsForBioType(bioType: string | null, role: DashboardRole) {
-  const key = bioType ?? (role === "seller_landlord" ? "seller" : role === "professional" ? "professional" : role === "agent" ? "agent" : role === "investor" ? "investor" : role === "institutional" ? "institutional" : role === "developer" ? "developer" : "buyer");
+  const key = bioType ?? (role === "admin" ? "admin" : role === "seller_landlord" ? "seller" : role === "professional" ? "professional" : role === "agent" ? "agent" : role === "investor" ? "investor" : role === "institutional" ? "institutional" : role === "developer" ? "developer" : "buyer");
   const keys = NAV_BY_TYPE[key] ?? NAV_BY_TYPE.buyer;
   return ALL_NAV_ITEMS.filter(i => keys.includes(i.key));
 }
@@ -220,6 +222,7 @@ export default function Dashboard() {
 
   const displayName = profile?.display_name || profile?.first_name || user?.email?.split("@")[0] || "User";
   const roleLabel = (() => {
+    if (role === "admin") return "Admin";
     if (role === "seller_landlord" || bioType === "seller") return "Seller / Landlord";
     if (role === "agent" || bioType === "agent") return "Agent";
     if (role === "professional" || bioType === "professional") return "Professional";
@@ -245,8 +248,9 @@ export default function Dashboard() {
     institutional: [{ label: "Active Listings", value: myListings.filter(l => l.status === "active").length, icon: Building2, color: "text-primary" }, { label: "Saved Deals", value: favorites.length, icon: Heart, color: "text-destructive" }, { label: "Auction Alerts", value: auctionAlerts.filter((a: any) => a.active).length, icon: Gavel, color: "text-brand-gold" }, { label: "Viewings", value: upcomingViewingsCount + ownViewingsCount, icon: Calendar, color: "text-brand-gold" }],
     developer:     [{ label: "Active Listings", value: myListings.filter(l => l.status === "active").length, icon: Building2, color: "text-primary" }, { label: "Total Views", value: myListings.reduce((s, l) => s + (l.views_count || 0), 0), icon: Eye, color: "text-brand-emerald" }, { label: "Saved", value: favorites.length, icon: Heart, color: "text-destructive" }, { label: "Viewings", value: upcomingViewingsCount + ownViewingsCount, icon: Calendar, color: "text-brand-gold" }],
     professional:  [{ label: "Services", value: professionalServices.length, icon: Wrench, color: "text-primary" }, { label: "Pending Leads", value: pendingLeadsCount, icon: Briefcase, color: "text-brand-gold" }, { label: "Total Leads", value: (leads as any[]).length, icon: Users, color: "text-primary" }],
+    admin:         [{ label: "Active Listings", value: myListings.filter(l => l.status === "active").length, icon: Building2, color: "text-primary" }, { label: "Total Views", value: myListings.reduce((s, l) => s + (l.views_count || 0), 0), icon: Eye, color: "text-brand-emerald" }, { label: "Saved", value: favorites.length, icon: Heart, color: "text-destructive" }, { label: "Viewings", value: upcomingViewingsCount + ownViewingsCount, icon: Calendar, color: "text-brand-gold" }],
   };
-  const statsKey = bioType ?? (role === "seller_landlord" ? "seller" : role === "professional" ? "professional" : role === "agent" ? "agent" : role === "investor" ? "investor" : role === "institutional" ? "institutional" : role === "developer" ? "developer" : "buyer");
+  const statsKey = bioType ?? (role === "admin" ? "admin" : role === "seller_landlord" ? "seller" : role === "professional" ? "professional" : role === "agent" ? "agent" : role === "investor" ? "investor" : role === "institutional" ? "institutional" : role === "developer" ? "developer" : "buyer");
   const stats = statsByType[statsKey] ?? statsByType.buyer;
 
   return (
@@ -1038,6 +1042,17 @@ export default function Dashboard() {
             />
           )}
 
+          {/* ── ADMIN DASHBOARD ───────────────────────────────────────── */}
+          {activeSection === "admin-dashboard" && navItems.some(i => i.key === "admin-dashboard") && (
+            <div className="space-y-6">
+              <h1 className="font-display text-2xl font-bold">Admin Dashboard</h1>
+              <p className="text-muted-foreground text-sm">Platform administration, subscribers, pricing, and OS sync.</p>
+              <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" asChild>
+                <Link to="/admin"><Shield className="w-4 h-4" /> Go to Admin Dashboard <ExternalLink className="w-4 h-4" /></Link>
+              </Button>
+            </div>
+          )}
+
           {/* ── SETTINGS ─────────────────────────────────────────────── */}
           {activeSection === "settings" && navItems.some(i => i.key === "settings") && (
             <SettingsSection roleLabel={roleLabel} onUpdate={updateProfile} refreshProfile={refreshProfile} />
@@ -1620,6 +1635,7 @@ const ROLE_PERMISSIONS: Record<string, { label: string; can: string[] }> = {
   buyer_renter:    { label: "Buyer / Renter",   can: ["Browse listings", "Save properties", "Request viewings", "Auction alerts"] },
   seller_landlord: { label: "Seller / Landlord", can: ["Create & manage listings", "Receive viewing requests", "AI listing assist"] },
   agent:           { label: "Agent",            can: ["Unlimited listings", "OS sync", "Lead management", "Analytics"] },
+  admin:           { label: "Admin",            can: ["Platform admin", "Subscribers", "Pricing", "OS sync", "All dashboards"] },
   investor:        { label: "Investor",         can: ["Deal flow", "Saved deals", "Auction alerts", "ROI calculator"] },
   institutional:   { label: "Institutional",   can: ["Deal flow", "Listings", "Portfolios", "CRM", "Analytics"] },
   developer:       { label: "Developer",       can: ["Listings", "Projects", "Portfolios", "Analytics"] },

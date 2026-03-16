@@ -112,7 +112,7 @@ export default function OpenHouseRegistrationDialog({
     setLoading(true);
     try {
       await updateReg.mutateAsync({
-        id: myReg.id,
+        id: regId,
         updates: {
           waiver_signed_at: new Date().toISOString(),
           waiver_url: `signed_${Date.now()}`,

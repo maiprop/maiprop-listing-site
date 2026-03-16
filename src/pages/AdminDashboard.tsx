@@ -3,24 +3,43 @@
  * Accessible only at /admin, protected by AdminRoute.
  */
 
-import { useState } from "react";
-import { Link } from "react-router-dom";
-import { Shield, Flame, Users, Wifi, Euro, ArrowLeft } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Link, useSearchParams, useNavigate } from "react-router-dom";
+import { Shield, Flame, Users, Wifi, SlidersHorizontal, ArrowLeft } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import AdminFiresalePipeline from "@/components/AdminFiresalePipeline";
 import AdminSubscribers from "@/components/AdminSubscribers";
 import AdminPanel from "@/components/AdminPanel";
+import { AdminPricingContent } from "@/pages/AdminPricing";
 import { Button } from "@/components/ui/button";
 
-type AdminTab = "pipeline" | "subscribers" | "os-sync";
+type AdminTab = "pipeline" | "subscribers" | "pricing" | "os-sync";
 
 export default function AdminDashboard() {
-  const [activeTab, setActiveTab] = useState<AdminTab>("pipeline");
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const tabParam = searchParams.get("tab") as AdminTab | null;
+  const [activeTab, setActiveTab] = useState<AdminTab>(
+    tabParam && ["pipeline", "subscribers", "pricing", "os-sync"].includes(tabParam) ? tabParam : "pipeline"
+  );
+
+  useEffect(() => {
+    const t = searchParams.get("tab") as AdminTab | null;
+    if (t && ["pipeline", "subscribers", "pricing", "os-sync"].includes(t)) {
+      setActiveTab(t);
+    }
+  }, [searchParams]);
+
+  const setTab = (key: AdminTab) => {
+    setActiveTab(key);
+    navigate(`/admin?tab=${key}`, { replace: true });
+  };
 
   const tabs: { key: AdminTab; label: string; icon: React.ElementType }[] = [
     { key: "pipeline", label: "Pipeline", icon: Flame },
     { key: "subscribers", label: "Subscribers", icon: Users },
+    { key: "pricing", label: "Pricing", icon: SlidersHorizontal },
     { key: "os-sync", label: "OS Sync", icon: Wifi },
   ];
 
@@ -44,18 +63,13 @@ export default function AdminDashboard() {
                 </div>
               </div>
             </div>
-            <Link to="/admin/pricing">
-              <Button variant="outline" size="sm" className="gap-2 border-primary/30">
-                <Euro className="w-4 h-4" /> Pricing
-              </Button>
-            </Link>
           </div>
 
           <div className="flex items-center gap-2 mb-6 flex-wrap">
             {tabs.map(({ key, label, icon: Icon }) => (
               <button
                 key={key}
-                onClick={() => setActiveTab(key)}
+                onClick={() => setTab(key)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                   activeTab === key ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-secondary"
                 }`}
@@ -68,6 +82,7 @@ export default function AdminDashboard() {
 
           {activeTab === "pipeline" && <AdminFiresalePipeline />}
           {activeTab === "subscribers" && <AdminSubscribers />}
+          {activeTab === "pricing" && <AdminPricingContent embed />}
           {activeTab === "os-sync" && <AdminPanel />}
         </div>
       </div>

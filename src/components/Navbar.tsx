@@ -16,6 +16,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
+import { isPlatformAdmin } from "@/lib/authUtils";
 
 // Pages that have a full-width dark hero image at the top
 const DARK_HERO_ROUTES = ["/"];
@@ -191,7 +192,7 @@ export function Navbar() {
                   <div className="px-3 py-2 border-b border-border">
                     <p className="text-xs font-semibold truncate">{displayName}</p>
                     <p className="text-xs text-muted-foreground capitalize">
-                    {(profile?.role as string) === "seller_landlord" ? "Seller / Landlord" : (profile?.role as string) === "agent" ? "Agent" : (profile?.role as string) === "professional" ? "Professional" : (profile?.role as string) === "investor" ? "Investor" : (profile?.role as string) === "institutional" ? "Institutional" : (profile?.role as string) === "developer" ? "Developer" : (profile?.role as string) === "individual" ? "Buyer / Renter" : (profile?.role || "Buyer / Renter")}
+                    {isPlatformAdmin(profile) ? "Admin" : (profile?.role as string) === "seller_landlord" ? "Seller / Landlord" : (profile?.role as string) === "agent" ? "Agent" : (profile?.role as string) === "professional" ? "Professional" : (profile?.role as string) === "investor" ? "Investor" : (profile?.role as string) === "institutional" ? "Institutional" : (profile?.role as string) === "developer" ? "Developer" : (profile?.role as string) === "individual" ? "Buyer / Renter" : (profile?.role || "Buyer / Renter")}
                   </p>
                   </div>
                   <DropdownMenuItem asChild>
@@ -214,7 +215,7 @@ export function Navbar() {
                       <DoorOpen className="w-3.5 h-3.5 text-emerald-600" /> Open Houses
                     </Link>
                   </DropdownMenuItem>
-                  {profile?.is_platform_admin && (
+                  {isPlatformAdmin(profile) && (
                     <DropdownMenuItem asChild>
                       <Link to="/admin" className="flex items-center gap-2 cursor-pointer">
                         <Shield className="w-3.5 h-3.5" /> Admin

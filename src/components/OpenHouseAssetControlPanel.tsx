@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
 import {
-  Users, Euro, ChevronDown, ChevronUp, Check, X, Loader2, Settings, Calendar, TrendingUp
+  Users, Euro, ChevronDown, ChevronUp, Check, X, Loader2, Settings, Calendar, TrendingUp,
+  FileCheck, FileText, Wallet, Shield
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   useOpenHouseSettings,
@@ -130,7 +132,19 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner }: Props
           {registrationsOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
         </button>
         {registrationsOpen && (
-          <div className="border-t border-border max-h-64 overflow-y-auto">
+          <div className="border-t border-border">
+            {/* Pipeline: track where each application stands */}
+            <div className="flex items-center gap-2 px-4 py-3 bg-muted/30 border-b border-border text-xs">
+              <span className="font-semibold text-muted-foreground">Pipeline:</span>
+              <span className="flex items-center gap-1">
+                <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 font-medium">{pendingCount} Pending</span>
+                <span className="text-muted-foreground">→</span>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700 font-medium">{approvedCount} Approved</span>
+                <span className="text-muted-foreground">→</span>
+                <span className="px-2 py-0.5 rounded-full bg-primary/20 text-primary font-medium">{attendedCount} Attended</span>
+              </span>
+            </div>
+            <div className="max-h-64 overflow-y-auto">
             {regLoading ? (
               <div className="p-8 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto text-muted-foreground" /></div>
             ) : registrations.length === 0 ? (
@@ -138,13 +152,34 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner }: Props
             ) : (
               <div className="divide-y divide-border">
                 {registrations.map((r: any) => (
-                  <div key={r.id} className="p-4 flex items-center justify-between gap-4">
-                    <div>
+                  <div key={r.id} className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div className="min-w-0 flex-1">
                       <div className="font-medium">
-                        {r.profiles?.display_name || r.profiles?.first_name || "Visitor"}
+                        {r.profiles?.display_name || [r.profiles?.first_name, r.profiles?.last_name].filter(Boolean).join(" ") || "Visitor"}
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        {STATUS_LABELS[r.status] || r.status} • {r.id_doc_url ? "ID uploaded" : "—"} • {r.waiver_signed_at ? "Waiver signed" : "—"}
+                      <div className="flex flex-wrap gap-2 mt-2 text-[11px]">
+                        <span className={cn(
+                          "inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-medium capitalize",
+                          r.status === "pending" ? "bg-amber-500/15 text-amber-700" :
+                          r.status === "approved" ? "bg-emerald-500/15 text-emerald-700" :
+                          r.status === "attended" ? "bg-primary/15 text-primary" :
+                          r.status === "rejected" ? "bg-destructive/15 text-destructive" :
+                          "bg-muted text-muted-foreground"
+                        )}>
+                          {STATUS_LABELS[r.status] || r.status}
+                        </span>
+                        <span className={cn("inline-flex items-center gap-0.5", r.id_doc_url ? "text-emerald-600" : "text-muted-foreground")}>
+                          <FileCheck className="w-3 h-3" /> {r.id_doc_url ? "ID ✓" : "ID —"}
+                        </span>
+                        <span className={cn("inline-flex items-center gap-0.5", r.waiver_signed_at ? "text-emerald-600" : "text-muted-foreground")}>
+                          <FileText className="w-3 h-3" /> {r.waiver_signed_at ? "Waiver ✓" : "Waiver —"}
+                        </span>
+                        <span className={cn("inline-flex items-center gap-0.5", r.proof_of_funds_url ? "text-emerald-600" : "text-muted-foreground")}>
+                          <Wallet className="w-3 h-3" /> {r.proof_of_funds_url ? (r.proof_amount ? `€${Number(r.proof_amount).toLocaleString()} ✓` : "POF ✓") : "POF —"}
+                        </span>
+                        <span className={cn("inline-flex items-center gap-0.5", r.investor_declaration_signed_at ? "text-emerald-600" : "text-muted-foreground")}>
+                          <Shield className="w-3 h-3" /> {r.investor_declaration_signed_at ? "Investor ✓" : "Investor —"}
+                        </span>
                       </div>
                     </div>
                     {r.status === "pending" && (
@@ -169,6 +204,7 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner }: Props
                 ))}
               </div>
             )}
+            </div>
           </div>
         )}
       </div>

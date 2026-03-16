@@ -28,7 +28,7 @@ export function getParticipantTypeFromProfile(
   if (bio.startsWith("__type:professional")) return "professional";
   if (bio.startsWith("__type:agent")) return "agent";
   if (bio.startsWith("__type:buyer")) return "buyer";
-  if (profile.role === "agent") return "agent";
+  if (profile.role === "admin" || profile.role === "agent") return "agent";
   if (profile.role === "professional") return "professional";
   if (profile.role === "seller_landlord") return "seller";
   if (profile.role === "investor") return "investor";
@@ -40,7 +40,7 @@ export function getParticipantTypeFromProfile(
 /** Derive owner type for listing display: agent vs private seller/landlord */
 export function getOwnerParticipantType(profile: { role?: string; bio?: string | null } | null): "agent" | "seller" | null {
   if (!profile) return null;
-  if (["agent", "institutional", "developer"].includes(profile.role || "")) return "agent";
+  if (["admin", "agent", "institutional", "developer"].includes(profile.role || "")) return "agent";
   if (profile.role === "seller_landlord") return "seller";
   const bio = profile.bio ?? "";
   if (bio.startsWith("__type:seller")) return "seller";

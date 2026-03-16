@@ -1,8 +1,9 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { isPlatformAdmin } from "@/lib/authUtils";
 import { ProtectedRoute } from "./ProtectedRoute";
 
-/** Protects admin-only routes. Only platform admin (is_platform_admin) can access. */
+/** Protects admin-only routes. Only users with role='admin' can access. */
 export function AdminRoute({ children }: { children: React.ReactNode }) {
   return (
     <ProtectedRoute>
@@ -22,7 +23,7 @@ function AdminGate({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!(profile as any).is_platform_admin) {
+  if (!isPlatformAdmin(profile)) {
     return <Navigate to="/dashboard" replace />;
   }
 
