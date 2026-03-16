@@ -810,7 +810,15 @@ export default function Onboarding() {
               </div>
             ))}
           </div>
-          <Button variant="outline" size="sm" className="w-full border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300">
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300"
+            onClick={() => {
+              toast.success("We'll notify you when Pro launches!");
+              try { localStorage.setItem("pro_launch_interest", "true"); } catch (_) {}
+            }}
+          >
             <Crown className="w-3.5 h-3.5 mr-1.5" /> Notify me when Pro launches
           </Button>
         </div>
@@ -841,8 +849,8 @@ export default function Onboarding() {
       investor:      { primary: { label: "Investor Dashboard",     href: "/investor-dashboard" },  secondary: [{ label: "Browse Auctions", href: "/auctions" }, { label: "Firesale Deals", href: "/firesale" }],  subtitle: "Your deal pipeline is ready." },
       agent:         { primary: { label: "Create First Listing",   href: "/listings/new" },        secondary: [{ label: "Browse Listings", href: "/listings" }, { label: "Go to Dashboard", href: "/dashboard" }], subtitle: "Start listing properties for your clients." },
       institutional: { primary: { label: "Investor Dashboard",     href: "/investor-dashboard" },  secondary: [{ label: "Browse Listings", href: "/listings" }, { label: "Go to Dashboard", href: "/dashboard" }], subtitle: "Manage your portfolio and deal flow." },
-      developer:     { primary: { label: "Create First Listing",   href: "/listings/new" },        secondary: [{ label: "Browse Listings", href: "/listings" }, { label: "Go to Dashboard", href: "/dashboard" }], subtitle: "Showcase your projects to buyers." },
-      professional:  { primary: { label: "View My Profile",        href: "/professionals" },       secondary: [{ label: "Explore Dashboard", href: "/dashboard" }], subtitle: "Your profile is live in the directory." },
+      developer:     { primary: { label: "Create First Building", href: "/listings/new-building" }, secondary: [{ label: "Regular Listing", href: "/listings/new" }, { label: "Go to Dashboard", href: "/dashboard" }], subtitle: "Showcase your projects to buyers." },
+      professional:  { primary: { label: "View My Profile",        href: "/professionals/me" },    secondary: [{ label: "Explore Dashboard", href: "/dashboard" }, { label: "Directory", href: "/professionals" }], subtitle: "Your profile is live in the directory." },
     };
 
     const actions = PARTICIPANT_ACTIONS[participantId] ?? PARTICIPANT_ACTIONS.buyer;

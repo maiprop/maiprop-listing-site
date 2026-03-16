@@ -150,7 +150,10 @@ export default function Messages() {
               <div className="p-6 text-center">
                 <MessageSquare className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
                 <p className="text-sm text-muted-foreground">No conversations yet</p>
-                <p className="text-xs text-muted-foreground mt-1">Contact an agent from a property listing to start chatting</p>
+                <p className="text-xs text-muted-foreground mt-1 mb-4">Contact an agent from a property listing to start chatting</p>
+                <Button variant="outline" size="sm" className="border-border" asChild>
+                  <Link to="/listings">Browse Listings</Link>
+                </Button>
               </div>
             ) : (
               filteredConvs.map((conv: any) => {

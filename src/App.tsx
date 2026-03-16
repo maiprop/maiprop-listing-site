@@ -16,6 +16,7 @@ import Firesale from "./pages/Firesale";
 import InvestorDashboard from "./pages/InvestorDashboard";
 import Professionals from "./pages/Professionals";
 import ProfessionalProfile from "./pages/ProfessionalProfile";
+import ProfessionalProfileMe from "./pages/ProfessionalProfileMe";
 import Dashboard from "./pages/Dashboard";
 import Signup from "./pages/Signup";
 import Login from "./pages/Login";
@@ -79,6 +80,7 @@ const App = () => (
               <Route path="/firesale" element={<Firesale />} />
               <Route path="/investor-dashboard" element={<ProtectedRoute><InvestorDashboard /></ProtectedRoute>} />
               <Route path="/professionals" element={<Professionals />} />
+              <Route path="/professionals/me" element={<ProtectedRoute><ProfessionalProfileMe /></ProtectedRoute>} />
               <Route path="/professionals/:id" element={<ProfessionalProfile />} />
               <Route path="/video-room/:professionalId" element={<BrandedVideoRoom />} />
               <Route path="/open-houses" element={<OpenHouses />} />

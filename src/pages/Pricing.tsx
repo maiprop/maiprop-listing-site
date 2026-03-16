@@ -300,7 +300,7 @@ const PLANS: Record<AudienceId, {
   },
   professional: {
     freeLabel: "Free", freePrice: "€0", freeDesc: "Join the directory & receive basic leads", freeCTA: "Register Free", freeHref: "/signup",
-    paidLabel: "Pro Plan", paidPrice: "€39", paidPriceUnit: "/ month", paidDesc: "Priority leads, booking page & AI tools", paidCTA: "Get Pro Plan", paidHref: "/pricing",
+    paidLabel: "Pro Plan", paidPrice: "€49", paidPriceUnit: "/ month", paidDesc: "Priority leads, booking page & AI tools", paidCTA: "Get Pro Plan", paidHref: "/pricing",
     freeList: PROFESSIONAL_FREE_LIST, features: PROFESSIONAL_PRO,
     accent: "text-rose-400", accentBg: "bg-rose-500/10", accentBorder: "border-rose-500/40",
   },

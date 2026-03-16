@@ -32,3 +32,20 @@ export function useProfessional(id: string) {
     enabled: !!id,
   });
 }
+
+export function useProfessionalByUserId(userId: string | undefined) {
+  return useQuery({
+    queryKey: ["professional-by-user", userId],
+    queryFn: async () => {
+      if (!userId) return null;
+      const { data, error } = await supabase
+        .from("professionals")
+        .select("id")
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!userId,
+  });
+}
