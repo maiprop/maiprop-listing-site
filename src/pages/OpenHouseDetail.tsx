@@ -318,6 +318,20 @@ export default function OpenHouseDetail() {
                   </Button>
                 )}
 
+                {/* Owner: dashboard shortcut */}
+                {isOwner && (
+                  <div className="mt-4 space-y-2">
+                    <Button className="w-full gap-2" asChild>
+                      <Link to="/dashboard?tab=open-houses">
+                        <LayoutDashboard className="w-4 h-4" /> Manage in Dashboard
+                      </Link>
+                    </Button>
+                    <p className="text-xs text-muted-foreground text-center">
+                      View registrations, approve visitors & manage sealed offers
+                    </p>
+                  </div>
+                )}
+
                 {/* Mock listing: explain the flow without hitting backend */}
                 {isMock && (
                   <div className="mt-4 space-y-2 text-xs text-muted-foreground">
