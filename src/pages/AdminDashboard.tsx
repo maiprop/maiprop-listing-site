@@ -39,6 +39,7 @@ export default function AdminDashboard() {
 
   const tabs: { key: AdminTab; label: string; icon: React.ElementType }[] = [
     { key: "pipeline", label: "Pipeline", icon: Flame },
+    { key: "open-houses", label: "Open Houses", icon: DoorOpen },
     { key: "subscribers", label: "Subscribers", icon: Users },
     { key: "pricing", label: "Pricing", icon: SlidersHorizontal },
     { key: "os-sync", label: "OS Sync", icon: Wifi },
