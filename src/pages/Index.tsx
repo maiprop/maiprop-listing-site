@@ -1099,9 +1099,9 @@ export default function Index() {
       )}
 
       {/* ══ HERO ══════════════════════════════════════════════════════════════ */}
-      <section className="relative min-h-[100svh] flex items-center overflow-hidden pt-14 sm:pt-16">
-        {/* Background */}
-        <div className="absolute inset-0 overflow-hidden">
+      <section className="relative min-h-[100svh] flex items-center overflow-hidden">
+        {/* Background — sits behind everything, no pt offset so video starts at top under the transparent navbar */}
+        <div className="absolute inset-0 z-0 overflow-hidden">
           {/* Video background */}
           <video
             autoPlay
@@ -1110,18 +1110,17 @@ export default function Index() {
             playsInline
             preload="auto"
             poster="/hero-poster.jpg"
-            className="hero-video w-full h-full object-cover opacity-100 dark:opacity-70"
+            className="hero-video absolute inset-0 w-full h-full object-cover opacity-100 dark:opacity-70"
             style={{
               willChange: "transform",
               transform: "translateZ(0)",
               animation: "hero-zoom 30s ease-in-out infinite alternate",
-              // Shift focal point slightly right so foreground content doesn't cover key part of the video
               objectPosition: "60% 30%",
             }}
           >
             {heroVideoSrc && <source src={heroVideoSrc} type="video/mp4" />}
           </video>
-          {/* Both modes: strong dark overlay — heavier on mobile for readability */}
+          {/* Strong dark overlay for text readability */}
           <div
             className="absolute inset-0"
             style={{
