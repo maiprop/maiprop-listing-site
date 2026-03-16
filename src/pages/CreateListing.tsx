@@ -742,6 +742,8 @@ export default function CreateListing() {
         has_structured_cabling: form.has_structured_cabling, has_equipped: form.has_equipped,
         is_pre_sale: form.is_pre_sale,
         is_off_market: form.is_off_market,
+        is_featured: form.is_featured ?? false,
+        priority_placement: Number(form.priority_placement) || 0,
       };
 
       const { data, error } = await supabase
