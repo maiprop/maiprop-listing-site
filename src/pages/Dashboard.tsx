@@ -1018,7 +1018,7 @@ export default function Dashboard() {
 
           {/* ── OPEN HOUSES ─────────────────────────────────────────────── */}
           {activeSection === "open-houses" && navItems.some(i => i.key === "open-houses") && (
-            <OpenHouseDashboardSection />
+            <OpenHouseDashboardSection myListings={myListings} />
           )}
 
           {/* ── PROJECTS — link to full page ───────────────────────────── */}
