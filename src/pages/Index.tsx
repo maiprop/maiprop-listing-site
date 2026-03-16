@@ -1033,7 +1033,6 @@ export default function Index() {
     Buy: "sale",
     Rent: "rent",
     Auctions: "auction",
-    "Quick Sale": "firesale"
   };
 
   const handleSearch = () => {
