@@ -475,16 +475,29 @@ export default function Listings() {
     return true;
   });
 
-  // User sort must NOT override paid prioritization: promoted listings always appear first
+  // User sort must NOT override paid prioritization unless "featured" is explicitly chosen.
+  // "featured" sort: featured → priority → rest. All other sorts: promoted always lead.
   const isPromoted = (p: any) => !!(p.isFeatured || (p.priorityPlacement ?? 0) > 0);
   const byUserSort = (a: any, b: any) => {
+    if (selectedSort === "featured") {
+      const aF = a.isFeatured ? 1 : 0;
+      const bF = b.isFeatured ? 1 : 0;
+      if (bF !== aF) return bF - aF;
+      const aPri = Number(a.priorityPlacement ?? 0);
+      const bPri = Number(b.priorityPlacement ?? 0);
+      if (bPri !== aPri) return bPri - aPri;
+      return new Date(b._raw?.created_at || 0).getTime() - new Date(a._raw?.created_at || 0).getTime();
+    }
     if (selectedSort === "price-asc") return a.price - b.price;
     if (selectedSort === "price-desc") return b.price - a.price;
+    if (selectedSort === "newest") return new Date(b._raw?.created_at || 0).getTime() - new Date(a._raw?.created_at || 0).getTime();
     if (selectedSort === "ai-score") return (b.aiScore || 0) - (a.aiScore || 0);
     if (selectedSort === "views") return (b.views || 0) - (a.views || 0);
     return 0;
   };
   filtered = [...filtered].sort((a, b) => {
+    // "Featured First" sort: explicit featured ordering, skip automatic promo-first
+    if (selectedSort === "featured") return byUserSort(a, b);
     const aPromo = isPromoted(a);
     const bPromo = isPromoted(b);
     if (aPromo && !bPromo) return -1;
