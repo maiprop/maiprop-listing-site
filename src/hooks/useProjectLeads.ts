@@ -2,6 +2,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
+const db = supabase as any;
+
 export type ProjectLeadInsert = {
   project_id: string;
   name: string;
@@ -20,7 +22,7 @@ export function useProjectLeads(projectId: string | undefined) {
     queryKey: ["project_leads", projectId],
     queryFn: async () => {
       if (!projectId) return [];
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from("project_leads")
         .select("*")
         .eq("project_id", projectId)
@@ -36,7 +38,7 @@ export function useCreateProjectLead() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (lead: ProjectLeadInsert) => {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from("project_leads")
         .insert(lead)
         .select()
@@ -44,7 +46,7 @@ export function useCreateProjectLead() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (_, { project_id }) => {
+    onSuccess: (_: any, { project_id }: ProjectLeadInsert) => {
       qc.invalidateQueries({ queryKey: ["project_leads", project_id] });
       toast.success("Lead added");
     },
@@ -56,7 +58,7 @@ export function useUpdateProjectLead() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, projectId, updates }: { id: string; projectId: string; updates: ProjectLeadUpdate }) => {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from("project_leads")
         .update(updates)
         .eq("id", id)
@@ -65,7 +67,7 @@ export function useUpdateProjectLead() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (_, { projectId }) => {
+    onSuccess: (_: any, { projectId }: { id: string; projectId: string; updates: ProjectLeadUpdate }) => {
       qc.invalidateQueries({ queryKey: ["project_leads", projectId] });
       toast.success("Lead updated");
     },
@@ -76,11 +78,11 @@ export function useUpdateProjectLead() {
 export function useDeleteProjectLead() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, projectId }: { id: string; projectId: string }) => {
-      const { error } = await supabase.from("project_leads").delete().eq("id", id);
+    mutationFn: async ({ id }: { id: string; projectId: string }) => {
+      const { error } = await db.from("project_leads").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: (_, { projectId }) => {
+    onSuccess: (_: any, { projectId }: { id: string; projectId: string }) => {
       qc.invalidateQueries({ queryKey: ["project_leads", projectId] });
       toast.success("Lead removed");
     },
