@@ -66,7 +66,7 @@ const energyColors: Record<string, string> = {
 // Internal/system tag prefixes that should never be shown to users
 const SYSTEM_TAG_PREFIXES = [
   "os_auction:", "source:", "auction_status:", "ownership:", "ownership_pct:",
-  "round:", "status:", "posted", "sync:",
+  "round:", "status:", "posted", "sync:", "land_type:", "commercial_type:",
 ];
 
 export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(function PropertyCard({ property, compact = false }, _ref) {

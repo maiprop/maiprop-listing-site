@@ -445,6 +445,8 @@ export default function Listings() {
   // Client-side filtering
   let filtered = sourceListings.filter((p: any) => {
     const raw = p._raw || p;
+    if (preSaleOnly && !raw.is_pre_sale) return false;
+    if (offMarketOnly && !raw.is_off_market) return false;
     if (selectedPrice) {
       const [min, max] = selectedPrice.split("-").map(Number);
       if (p.price < min || p.price > max) return false;
@@ -514,7 +516,8 @@ export default function Listings() {
     bedsRange[0], bedsRange[1], bathsRange[0], bathsRange[1],
     floorRange[0], floorRange[1], yearRange[0], yearRange[1],
     minSqm, maxSqm, selectedHeating, selectedConstruction,
-    preSaleOnly,
+    preSaleOnly || undefined,
+    offMarketOnly || undefined,
     ...selectedEnergyClasses, ...selectedFeatures,
   ].filter(Boolean).length;
 
@@ -715,7 +718,8 @@ export default function Listings() {
                 })}
                 {selectedHeating && <button onClick={() => setParam("heating", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">Heating: {HEATING_TYPES.find(h => h.value === selectedHeating)?.label || selectedHeating} <X className="w-3 h-3" /></button>}
                 {selectedConstruction && <button onClick={() => setParam("construction", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">{CONSTRUCTION_STATUSES.find(s => s.value === selectedConstruction)?.label || selectedConstruction} <X className="w-3 h-3" /></button>}
-                {preSaleOnly && <button onClick={() => setParam("pre_sale", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">Pre-sale only <X className="w-3 h-3" /></button>}
+                {offMarketOnly && <button onClick={() => setParam("off_market", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">🔒 Off-market <X className="w-3 h-3" /></button>}
+                {preSaleOnly && <button onClick={() => setParam("pre_sale", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">🏗️ Pre-sale <X className="w-3 h-3" /></button>}
                 <button onClick={clearAllFilters} className="text-xs text-muted-foreground hover:text-foreground ml-1 shrink-0">Clear all</button>
               </div>
             )}
@@ -726,22 +730,34 @@ export default function Listings() {
         {showFilters && (
           <div className="bg-card/95 backdrop-blur-sm border-b border-border shadow-lg">
             <div className="container py-7">
-              {/* Pre-sale filter (sale listings only) — client-side only, no DB column */}
+              {/* Listing status quick toggles: Off-market & Pre-sale */}
               {(selectedListingType === "sale" || !selectedListingType) && (
                 <div className="mb-6 pb-5 border-b border-border">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={preSaleOnly}
-                      onChange={e => setParam("pre_sale", e.target.checked ? "1" : "")}
-                      className="rounded border-border"
-                    />
-                    <span className="text-sm font-medium">Pre-sale only</span>
-                    <span className="text-xs text-muted-foreground">New developments before completion</span>
-                  </label>
+                  <p className="text-xs font-semibold text-foreground/60 uppercase tracking-wider mb-3">Listing Status</p>
+                  <div className="flex flex-wrap gap-3">
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={offMarketOnly}
+                        onChange={e => setParam("off_market", e.target.checked ? "1" : "")}
+                        className="rounded border-border accent-primary"
+                      />
+                      <span className="text-sm font-medium">🔒 Off-market only</span>
+                      <span className="text-xs text-muted-foreground hidden sm:inline">Exclusive, not publicly advertised</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={preSaleOnly}
+                        onChange={e => setParam("pre_sale", e.target.checked ? "1" : "")}
+                        className="rounded border-border accent-primary"
+                      />
+                      <span className="text-sm font-medium">🏗️ Pre-sale only</span>
+                      <span className="text-xs text-muted-foreground hidden sm:inline">New developments before completion</span>
+                    </label>
+                  </div>
                 </div>
               )}
-
 
               {/* Panel header */}
               <div className="flex items-center justify-between mb-6">
