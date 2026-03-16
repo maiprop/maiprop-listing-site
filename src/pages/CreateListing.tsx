@@ -322,8 +322,6 @@ export default function CreateListing() {
     pets_allowed: false, short_term_rental: false, available_from: "", min_rental_months: "",
     is_pre_sale: false,
     is_off_market: false,
-    is_featured: false,
-    priority_placement: 0,
   });
 
   const set = (key: string, value: unknown) => {
