@@ -1034,26 +1034,28 @@ export default function Dashboard() {
             <OpenHouseDashboardSection myListings={myListings} />
           )}
 
-          {/* ── PROJECTS — link to full page ───────────────────────────── */}
+          {/* ── PROJECTS — inline section ─────────────────────────────── */}
           {activeSection === "projects" && navItems.some(i => i.key === "projects") && (
-            <LinkSection
-              icon={Globe2}
-              title="Projects"
-              desc="Showcase your development projects and pre-sale listings."
-              href="/projects"
-              cta="Manage Projects"
-              stats={myListings.filter(l => l.project_id).length > 0 ? [{ label: "Listings in projects", value: myListings.filter(l => l.project_id).length }] : undefined}
+            <DashboardProjectsSection
+              projects={myProjects}
+              isLoading={projectsLoading}
+              myListings={myListings}
+              createProject={createProject}
+              updateProject={updateProject}
+              deleteProject={deleteProject}
+              updateListing={updateListing}
             />
           )}
 
-          {/* ── PORTFOLIOS — link to full page ─────────────────────────── */}
+          {/* ── PORTFOLIOS — inline section ──────────────────────────────── */}
           {activeSection === "portfolios" && navItems.some(i => i.key === "portfolios") && (
-            <LinkSection
-              icon={TrendingUp}
-              title="Portfolios"
-              desc="Track your property portfolio, valuations, and performance."
-              href="/portfolios"
-              cta="Manage Portfolios"
+            <DashboardPortfoliosSection
+              portfolios={portfolios}
+              isLoading={portfoliosLoading}
+              favorites={favorites}
+              createPortfolio={createPortfolio}
+              updatePortfolio={updatePortfolio}
+              deletePortfolio={deletePortfolio}
             />
           )}
 
