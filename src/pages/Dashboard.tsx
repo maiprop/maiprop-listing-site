@@ -219,6 +219,16 @@ export default function Dashboard() {
   const updateViewing = useUpdateViewing();
   const startConversation = useStartConversation();
 
+  // Projects & Portfolios (developer)
+  const { data: myProjects = [], isLoading: projectsLoading } = useProjects(user?.id);
+  const createProject = useCreateProject();
+  const updateProject = useUpdateProject();
+  const deleteProject = useDeleteProject();
+  const { data: portfolios = [], isLoading: portfoliosLoading } = usePortfolios();
+  const createPortfolio = useCreatePortfolio();
+  const updatePortfolio = useUpdatePortfolio();
+  const deletePortfolio = useDeletePortfolio();
+
   const handleSignOut = async () => { await signOut(); navigate("/"); };
   const toggleListingStatus = (id: string, currentStatus: string) => {
     updateListing.mutate({ id, updates: { status: currentStatus === "active" ? "paused" : "active" } });
