@@ -7,6 +7,7 @@ import {
   Search, Activity, Wrench, Shield, MapPin, Euro, Edit2,
   FolderKanban, Users, Briefcase, TrendingUp, Globe2, Flame,
   ArrowRight, Clock, CheckCircle2, AlertCircle, Phone, ExternalLink, Star, Crown,
+  FolderOpen, LayoutGrid, BarChart2 as BarChart2Icon,
 } from "lucide-react";
 import ContactsCRM from "@/components/ContactsCRM";
 import OpenHouseDashboardSection from "@/components/OpenHouseDashboardSection";
@@ -30,6 +31,8 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getParticipantTypeFromProfile, getOwnerParticipantType } from "@/lib/participantConfig";
 import { dbListingToCard } from "@/lib/listingUtils";
+import { useProjects, useCreateProject, useUpdateProject, useDeleteProject } from "@/hooks/useProjects";
+import { usePortfolios, usePortfolio, useCreatePortfolio, useUpdatePortfolio, useDeletePortfolio } from "@/hooks/usePortfolios";
 
 const SAVED_TABS = [
   { label: "All", value: "" }, { label: "Sale", value: "sale" },
