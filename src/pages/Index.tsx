@@ -1476,7 +1476,7 @@ export default function Index() {
             })}
             {/* Fill remaining slots with skeleton placeholders when loading */}
             {auctionsLoading && auctionListings.length === 0 &&
-              Array.from({ length: 3 }).map((_, i) => (
+              Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="glass-card rounded-2xl border border-border overflow-hidden animate-pulse">
                   <div className="bg-muted h-52 w-full" />
                   <div className="p-4 space-y-3">
