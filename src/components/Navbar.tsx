@@ -99,27 +99,34 @@ export function Navbar() {
             <Link
               key={link.href}
               to={link.href}
-              className={`relative px-3 py-2 text-sm font-medium rounded-md transition-colors flex items-center gap-2
+              className={`relative px-3 py-2 text-sm font-medium rounded-md transition-colors flex items-center gap-1.5
                 ${isActive(link.href)
                   ? link.accent === "flame"
                     ? "text-destructive bg-destructive/10"
-                    : forceLight
-                      ? "text-white bg-white/20"
-                      : "text-primary bg-primary/10"
+                    : link.accent === "dooropen"
+                      ? forceLight ? "text-white bg-white/20" : "text-emerald-600 bg-emerald-500/10"
+                      : forceLight
+                        ? "text-white bg-white/20"
+                        : "text-primary bg-primary/10"
                   : link.accent === "flame"
                     ? forceLight
                       ? "text-orange-300 hover:text-orange-200 hover:bg-white/10"
                       : "text-destructive/80 hover:text-destructive hover:bg-destructive/10"
-                    : link.accent === "subtle"
+                    : link.accent === "dooropen"
                       ? forceLight
-                        ? "text-white/80 hover:text-white hover:bg-white/10"
-                        : "text-accent/90 hover:text-accent hover:bg-accent/10"
-                      : forceLight
+                        ? "text-emerald-200 hover:text-white hover:bg-white/10"
+                        : "text-emerald-600/80 hover:text-emerald-600 hover:bg-emerald-500/10"
+                      : link.accent === "subtle"
+                        ? forceLight
                           ? "text-white/80 hover:text-white hover:bg-white/10"
-                          : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                          : "text-accent/90 hover:text-accent hover:bg-accent/10"
+                        : forceLight
+                            ? "text-white/80 hover:text-white hover:bg-white/10"
+                            : "text-muted-foreground hover:text-foreground hover:bg-secondary"
                 }`}
             >
               {link.accent === "flame" && <span className="text-sm">🔥</span>}
+              {link.accent === "dooropen" && <DoorOpen className="w-3.5 h-3.5 shrink-0" />}
               {link.label}
               {link.badge && (
                 <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold animate-pulse ${
