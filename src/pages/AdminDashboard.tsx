@@ -21,6 +21,7 @@ type AdminTab = "pipeline" | "subscribers" | "pricing" | "os-sync" | "open-house
 export default function AdminDashboard() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { data: myListings = [] } = useMyListings();
   const tabParam = searchParams.get("tab") as AdminTab | null;
   const [activeTab, setActiveTab] = useState<AdminTab>(
     tabParam && ["pipeline", "subscribers", "pricing", "os-sync", "open-houses"].includes(tabParam) ? tabParam : "pipeline"
