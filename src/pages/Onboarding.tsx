@@ -320,7 +320,7 @@ export default function Onboarding() {
           setStep("pro-category");
         } else {
           setLoading(true);
-          await updateProfile({ role: p.role });
+          await updateProfile({ role: p.role as any });
           await supabase.from("profiles").update({ bio: `__type:${p.id}` }).eq("user_id", user.id);
           await refreshProfile();
           setLoading(false);
