@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import {
   MapPin, Bed, Bath, Square, Calendar, ChevronLeft, Eye,
-  Pencil, Pause, Play, Trash2, Loader2, MessageCircle, Euro, Users
+  Pencil, Pause, Play, Trash2, Loader2, MessageCircle, Euro, Users, LayoutDashboard
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
