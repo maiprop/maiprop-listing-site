@@ -1,33 +1,19 @@
--- Unify role scheme: add 'admin' to user_role enum, use role as single source of truth.
+-- Unify role scheme: use role='admin' as single source of truth.
 -- Platform admin = role='admin'. Deprecate is_platform_admin (keep column for backward compat).
+-- Prerequisite: 20260413115500_add_admin_enum.sql must run first (adds enum value).
 
--- 1. Add 'admin' to user_role enum
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_enum e
-    JOIN pg_type t ON e.enumtypid = t.oid
-    WHERE t.typname = 'user_role' AND e.enumlabel = 'admin'
-  ) THEN
-    ALTER TYPE public.user_role ADD VALUE 'admin';
-  END IF;
-EXCEPTION
-  WHEN duplicate_object THEN NULL; -- enum value already exists
-END
-$$;
-
--- 2. Migrate: set role='admin' for current platform admins, clear is_platform_admin
+-- 1. Migrate: set role='admin' for current platform admins, clear is_platform_admin
 UPDATE public.profiles
 SET role = 'admin'::public.user_role,
     is_platform_admin = false
 WHERE is_platform_admin = true;
 
--- 3. Drop old single-admin constraint, add new one on role
+-- 2. Drop old single-admin constraint, add new one on role
 DROP INDEX IF EXISTS public.idx_profiles_single_admin;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_single_admin
   ON public.profiles ((true)) WHERE role = 'admin';
 
--- 4. has_platform_admin() now checks role='admin' (unified)
+-- 3. has_platform_admin() now checks role='admin' (unified)
 CREATE OR REPLACE FUNCTION public.has_platform_admin(_user_id uuid DEFAULT auth.uid())
 RETURNS boolean
 LANGUAGE sql
@@ -41,7 +27,7 @@ AS $$
   );
 $$;
 
--- 5. grant_platform_admin: use role instead of is_platform_admin
+-- 4. grant_platform_admin: use role instead of is_platform_admin
 CREATE OR REPLACE FUNCTION public.grant_platform_admin(target_user_id uuid)
 RETURNS void
 LANGUAGE plpgsql
@@ -58,7 +44,7 @@ BEGIN
 END;
 $$;
 
--- 6. grant_platform_admin_by_email: same
+-- 5. grant_platform_admin_by_email: same
 CREATE OR REPLACE FUNCTION public.grant_platform_admin_by_email(target_email text)
 RETURNS void
 LANGUAGE plpgsql
@@ -82,7 +68,7 @@ BEGIN
 END;
 $$;
 
--- 7. profiles_guard: only admin can set role='admin'; simplify (no is_platform_admin guard)
+-- 6. profiles_guard: only admin can set role='admin'; simplify (no is_platform_admin guard)
 CREATE OR REPLACE FUNCTION public.profiles_guard_admin_and_role()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -115,7 +101,7 @@ BEGIN
 END;
 $$;
 
--- 8. Auto-grant admin role (not agent) for kr@maiprop.co on signup
+-- 7. Auto-grant admin role (not agent) for kr@maiprop.co on signup
 CREATE OR REPLACE FUNCTION public.auto_grant_owner_privileges()
 RETURNS trigger
 LANGUAGE plpgsql
