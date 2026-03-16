@@ -105,10 +105,8 @@ const AGENT_FREE_LIST = [
 const AGENT_PRO: PlanFeature[] = [
   { label: "Unlimited property listings", icon: Layers, free: "5 max", paid: "Unlimited" },
   { label: "AI Listing Assistant", icon: Sparkles, free: false, paid: true },
-  { label: "OS Sync integration", icon: ArrowRight, free: false, paid: true },
   { label: "CRM & contacts management", icon: Users, free: false, paid: true },
   { label: "Performance analytics", icon: BarChart2, free: "Basic", paid: "Advanced" },
-  { label: "Firesale admin pipeline", icon: Flame, free: false, paid: true },
   { label: "Auction alerts (create & manage)", icon: Gavel, free: false, paid: true },
   { label: "Projects & portfolios", icon: FolderKanban, free: false, paid: true },
   { label: "Priority listing placement", icon: Star, free: false, paid: true },
@@ -129,7 +127,6 @@ const INSTITUTIONAL_PRO: PlanFeature[] = [
   { label: "Advanced portfolio analytics", icon: TrendingUp, free: false, paid: true },
   { label: "CRM & contacts (full)", icon: Users, free: false, paid: true },
   { label: "Projects & portfolios", icon: FolderKanban, free: false, paid: true },
-  { label: "Admin pipeline (Firesale & OS sync)", icon: Shield, free: false, paid: true },
   { label: "Priority support & onboarding", icon: Crown, free: false, paid: true },
   { label: "Due diligence hub", icon: FileText, free: false, paid: true },
 ];
@@ -145,7 +142,6 @@ const DEVELOPER_PRO: PlanFeature[] = [
   { label: "Project showcase pages", icon: Building2, free: false, paid: true },
   { label: "Pre-sale listing management", icon: Eye, free: false, paid: true },
   { label: "AI Listing Assistant", icon: Sparkles, free: false, paid: true },
-  { label: "OS Sync integration", icon: ArrowRight, free: false, paid: true },
   { label: "Bulk inquiry management", icon: MessageSquare, free: false, paid: true },
   { label: "Performance analytics", icon: BarChart2, free: "Basic", paid: "Advanced" },
   { label: "Priority listing placement", icon: Star, free: false, paid: true },
@@ -282,7 +278,7 @@ const PLANS: Record<AudienceId, {
   },
   agent: {
     freeLabel: "Starter", freePrice: "€0", freeDesc: "List a few properties & test the platform", freeCTA: "Start Free", freeHref: "/signup",
-    paidLabel: "Agency Pro", paidPrice: "€89", paidPriceUnit: "/ month", paidDesc: "Unlimited listings, CRM, OS sync & analytics", paidCTA: "Get Agency Pro", paidHref: "/pricing",
+    paidLabel: "Agency Pro", paidPrice: "€89", paidPriceUnit: "/ month", paidDesc: "Unlimited listings, CRM & analytics", paidCTA: "Get Agency Pro", paidHref: "/pricing",
     freeList: AGENT_FREE_LIST, features: AGENT_PRO,
     accent: "text-cyan-400", accentBg: "bg-cyan-500/10", accentBorder: "border-cyan-500/40",
   },

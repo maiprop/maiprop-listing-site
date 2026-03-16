@@ -108,10 +108,8 @@ const participants: ParticipantType[] = [
     features: [
       "Unlimited property listings",
       "CRM & contacts management",
-      "OS sync integration",
       "Inquiry & lead management",
       "Analytics & performance dashboard",
-      "Firesale admin pipeline",
     ],
     section: "Real estate agents",
   },
@@ -151,7 +149,6 @@ const participants: ParticipantType[] = [
       "Unlimited property listings",
       "Project showcase pages",
       "Pre-sale listing management",
-      "OS sync integration",
       "Bulk inquiry management",
       "Performance analytics",
     ],

@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   Calendar, MapPin, Loader2, DoorOpen, SlidersHorizontal, X,
-  ChevronDown, Clock, Flame, Search, BedDouble, LayoutGrid, Map as MapIcon,
+  ChevronDown, Search, BedDouble, LayoutGrid, Map as MapIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -16,16 +16,6 @@ import { cn } from "@/lib/utils";
 import { ENERGY_CLASSES, FEATURES_RESIDENTIAL } from "@/lib/filterConfig";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-function getCountdown(dateStr: string): { label: string; urgent: boolean } | null {
-  const diff = new Date(dateStr).getTime() - Date.now();
-  if (diff <= 0) return null;
-  const hours = Math.floor(diff / 3_600_000);
-  const mins = Math.floor((diff % 3_600_000) / 60_000);
-  if (hours > 48) return null;
-  if (hours === 0) return { label: `${mins}m`, urgent: true };
-  return { label: `${hours}h ${mins}m`, urgent: hours < 6 };
-}
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-GB", {
@@ -89,42 +79,9 @@ function RangeInput({
   );
 }
 
-// ── Open House Card wrapper ───────────────────────────────────────────────────
-function OpenHouseCard({ listing, card }: { listing: any; card: any }) {
-  const countdown = listing.open_house_date ? getCountdown(listing.open_house_date) : null;
-
-  return (
-    <div className="relative group">
-      {/* Countdown badge */}
-      {countdown && (
-        <div
-          className={cn(
-            "absolute top-3 left-3 z-10 flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold shadow-md",
-            countdown.urgent
-              ? "bg-destructive text-destructive-foreground"
-              : "bg-brand-gold text-background"
-          )}
-        >
-          {countdown.urgent ? <Flame className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
-          {countdown.label}
-        </div>
-      )}
-
-      <PropertyCard property={card} />
-
-      {/* Date/time banner below card */}
-      {listing.open_house_date && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-b-xl -mt-1 bg-emerald-500/10 border border-emerald-500/20 border-t-0">
-          <Calendar className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-          <span className="text-xs font-semibold text-emerald-700">
-            {fmtDate(listing.open_house_date)} · {fmtTime(listing.open_house_date)}
-          </span>
-          <MapPin className="w-3 h-3 text-muted-foreground ml-auto shrink-0" />
-          <span className="text-xs text-muted-foreground truncate">{listing.city}</span>
-        </div>
-      )}
-    </div>
-  );
+// ── Open House card: uses PropertyCard (same as buy/rent) with openHouseDateIso for countdown ─
+function OpenHouseCard({ card }: { listing: any; card: any }) {
+  return <PropertyCard property={card} />;
 }
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
@@ -141,10 +98,20 @@ export default function OpenHouses() {
   const [propertyType, setPropertyType] = useState("");
   const [bedroomsMin, setBedroomsMin] = useState<number | null>(null);
   const [energyClass, setEnergyClass] = useState("");
+  const [filterYearRange, setFilterYearRange] = useState("");
   const [selectedFeatures, setSelectedFeatures] = useState<string[]>([]);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [cityInput, setCityInput] = useState(cityParam);
   const [viewMode, setViewMode] = useState<"grid" | "map">("grid");
+
+  const YEAR_RANGES = [
+    { label: "Any Year", value: "" },
+    { label: "Pre-1980", value: "0-1979" },
+    { label: "1980–2000", value: "1980-2000" },
+    { label: "2000–2010", value: "2000-2010" },
+    { label: "2010–2020", value: "2010-2020" },
+    { label: "Post-2020", value: "2020-2100" },
+  ];
 
   const PROPERTY_TYPES = [
     { value: "", label: "All types" },
@@ -188,22 +155,28 @@ export default function OpenHouses() {
       if (maxSqm && Number(l.sqm) > Number(maxSqm)) return false;
       if (bedroomsMin !== null && (l.bedrooms == null || l.bedrooms < bedroomsMin)) return false;
       if (energyClass && l.energy_class !== energyClass) return false;
+      if (filterYearRange) {
+        const [minY, maxY] = filterYearRange.split("-").map(Number);
+        const y = l.year_built != null ? Number(l.year_built) : null;
+        if (y == null) return false;
+        if (y < minY || y > maxY) return false;
+      }
       for (const feat of selectedFeatures) {
         if (!l[feat]) return false;
       }
       return true;
     });
-  }, [listings, cityFilter, propertyType, minPrice, maxPrice, minSqm, maxSqm, bedroomsMin, energyClass, selectedFeatures]);
+  }, [listings, cityFilter, propertyType, minPrice, maxPrice, minSqm, maxSqm, bedroomsMin, energyClass, filterYearRange, selectedFeatures]);
 
   const hasActiveFilters =
     !!cityFilter || !!propertyType || !!minPrice || !!maxPrice || !!minSqm ||
-    !!maxSqm || bedroomsMin !== null || !!energyClass || selectedFeatures.length > 0;
+    !!maxSqm || bedroomsMin !== null || !!energyClass || !!filterYearRange || selectedFeatures.length > 0;
 
   function clearFilters() {
     setCityFilter(""); setCityInput("");
     setPropertyType(""); setMinPrice(""); setMaxPrice("");
     setMinSqm(""); setMaxSqm(""); setBedroomsMin(null);
-    setEnergyClass(""); setSelectedFeatures([]);
+    setEnergyClass(""); setFilterYearRange(""); setSelectedFeatures([]);
   }
 
   function toggleFeature(key: string) {
@@ -245,6 +218,7 @@ export default function OpenHouses() {
         auctionDate: l.open_house_date
           ? `${fmtDate(l.open_house_date)} · ${fmtTime(l.open_house_date)}`
           : undefined,
+        openHouseDateIso: l.open_house_date || undefined,
         aiScore: l.ai_score,
         views: l.views_count,
         tags: l.tags || [],
@@ -263,7 +237,8 @@ export default function OpenHouses() {
         floor: 2, totalFloors: 4, yearBuilt: 2015, energyClass: "A",
         images: ["https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=800&q=60"],
         type: "apartment" as const, listingType: "open_house" as const,
-        auctionDate: "Sat 19 Apr · 11:00", aiScore: 87, views: 132, tags: ["Balcony", "Parking"],
+        auctionDate: "Sat 19 Apr · 11:00", openHouseDateIso: new Date(Date.now() + 3 * 3600_000).toISOString(),
+        aiScore: 87, views: 132, tags: ["Balcony", "Parking"],
         latitude: 37.9838, longitude: 23.7275,
       },
     },
@@ -275,7 +250,8 @@ export default function OpenHouses() {
         floor: 0, totalFloors: 2, yearBuilt: 2020, energyClass: "A+",
         images: ["https://images.unsplash.com/photo-1507089947368-19c1da9775ae?w=800&q=60"],
         type: "house" as const, listingType: "open_house" as const,
-        auctionDate: "Sun 20 Apr · 17:00", aiScore: 92, views: 89, tags: ["Pool", "Garden", "Parking"],
+        auctionDate: "Sun 20 Apr · 17:00", openHouseDateIso: new Date(Date.now() + 30 * 3600_000).toISOString(),
+        aiScore: 92, views: 89, tags: ["Pool", "Garden", "Parking"],
         latitude: 37.8113, longitude: 23.7742,
       },
     },
@@ -287,7 +263,8 @@ export default function OpenHouses() {
         floor: 5, totalFloors: 7, yearBuilt: 2010, energyClass: "B+",
         images: ["https://images.unsplash.com/photo-1502672023488-70e25813eb80?w=800&q=60"],
         type: "apartment" as const, listingType: "open_house" as const,
-        auctionDate: "Thu 24 Apr · 19:30", aiScore: 84, views: 54, tags: ["City view", "Elevator"],
+        auctionDate: "Thu 24 Apr · 19:30", openHouseDateIso: new Date(Date.now() + 72 * 3600_000).toISOString(),
+        aiScore: 84, views: 54, tags: ["City view", "Elevator"],
         latitude: 40.6401, longitude: 22.9444,
       },
     },
@@ -417,7 +394,7 @@ export default function OpenHouses() {
                   Filters
                   {hasActiveFilters && (
                     <span className="ml-1 bg-primary text-primary-foreground text-[10px] px-1.5 rounded-full">
-                      {[cityFilter, propertyType, minPrice, maxPrice, minSqm, maxSqm, bedroomsMin !== null ? "1" : "", energyClass, ...selectedFeatures].filter(Boolean).length}
+                      {[cityFilter, propertyType, minPrice, maxPrice, minSqm, maxSqm, bedroomsMin !== null ? "1" : "", energyClass, filterYearRange, ...selectedFeatures].filter(Boolean).length}
                     </span>
                   )}
                   <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", showAdvanced && "rotate-180")} />
@@ -469,6 +446,20 @@ export default function OpenHouses() {
                       </button>
                     ))}
                   </div>
+                </div>
+
+                {/* Construction year */}
+                <div className="space-y-1">
+                  <span className="text-xs text-muted-foreground font-medium">Construction Year</span>
+                  <select
+                    value={filterYearRange}
+                    onChange={(e) => setFilterYearRange(e.target.value)}
+                    className="w-full px-2 py-1.5 text-xs rounded-lg border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                  >
+                    {YEAR_RANGES.map((r) => (
+                      <option key={r.value} value={r.value}>{r.label}</option>
+                    ))}
+                  </select>
                 </div>
 
                 {/* Energy class */}
