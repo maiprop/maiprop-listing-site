@@ -60,8 +60,8 @@ export function Navbar() {
     { label: "Rent", href: "/listings?listing_type=rent" },
     { label: "Auctions", href: "/auctions", badge: "Live" },
     { label: "Quick Sale™", href: "/firesale", accent: "flame" },
-    { label: "Professionals", href: "/professionals", accent: "subtle" },
     { label: "Open Houses", href: "/open-houses" },
+    { label: "Professionals", href: "/professionals", accent: "subtle" },
   ];
 
   const displayName = profile?.display_name || profile?.first_name || user?.email?.split("@")[0] || "Account";
