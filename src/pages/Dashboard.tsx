@@ -113,7 +113,7 @@ function useUpdateLeadStatus() {
 // ── Nav key type ───────────────────────────────────────────────────────────────
 type NavKey =
   | "overview" | "listings" | "analytics" | "saved" | "saved-searches"
-  | "messages" | "viewings" | "auctions" | "services" | "booking" | "leads"
+  | "messages" | "viewings" | "auctions" | "open-houses" | "services" | "booking" | "leads"
   | "deal-flow" | "contacts" | "projects" | "portfolios"
   | "profile" | "settings";
 
