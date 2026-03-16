@@ -182,6 +182,7 @@ export default function Dashboard() {
   const navItems = getNavItemsForBioType(bioType, role);
   const defaultSection = navItems[0]?.key ?? "overview";
   const [activeSection, setActiveSection] = useState<NavKey>((section as NavKey) || defaultSection);
+  const [listingFilter, setListingFilter] = useState<"all" | "off_market" | "pre_sale">("all");
   const [alertModalOpen, setAlertModalOpen] = useState(false);
   const [editingAlert, setEditingAlert] = useState<any>(null);
 
