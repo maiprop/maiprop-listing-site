@@ -1447,10 +1447,10 @@ export default function Index() {
               </Link>
             </Button>
           </div>
-          {/* 1×3 grid — show up to 3 listings */}
+          {/* 1×4 grid — show up to 4 listings */}
           <div
-            className={`grid grid-cols-1 md:grid-cols-3 gap-4 reveal reveal-delay-1 ${auctionsInView ? "in-view" : ""}`}>
-            {auctionListings.slice(0, 3).map((l: any) => {
+            className={`grid grid-cols-2 lg:grid-cols-4 gap-4 reveal reveal-delay-1 ${auctionsInView ? "in-view" : ""}`}>
+            {auctionListings.slice(0, 4).map((l: any) => {
               const svFallback = l.latitude != null && l.longitude != null
                 ? getStreetViewProxyUrl({ lat: Number(l.latitude), lng: Number(l.longitude) })
                 : null;
@@ -1476,7 +1476,7 @@ export default function Index() {
             })}
             {/* Fill remaining slots with skeleton placeholders when loading */}
             {auctionsLoading && auctionListings.length === 0 &&
-              Array.from({ length: 3 }).map((_, i) => (
+              Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="glass-card rounded-2xl border border-border overflow-hidden animate-pulse">
                   <div className="bg-muted h-52 w-full" />
                   <div className="p-4 space-y-3">
@@ -1508,8 +1508,8 @@ export default function Index() {
               </Link>
             </Button>
           </div>
-          <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 reveal reveal-delay-1 ${auctionsInView ? "in-view" : ""}`}>
-            {openHouseListings.slice(0, 3).map((l: any) => {
+          <div className={`grid grid-cols-2 lg:grid-cols-4 gap-4 reveal reveal-delay-1 ${auctionsInView ? "in-view" : ""}`}>
+            {openHouseListings.slice(0, 4).map((l: any) => {
               const imgs: string[] = l.cover_image_url ? [l.cover_image_url] : [];
               if (!imgs.length && l.listing_images?.length) {
                 const sorted = [...l.listing_images].sort((a: any, b: any) => a.sort_order - b.sort_order);
@@ -1535,6 +1535,7 @@ export default function Index() {
               { id: "mock-oh-1", title: "Modern 2BR in Kifisia", address: "Kifisia Center", city: "Athens", price: 420000, pricePerSqm: 3100, bedrooms: 2, bathrooms: 2, sqm: 135, floor: 2, totalFloors: 4, yearBuilt: 2015, energyClass: "A", images: ["https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=800&q=60"], type: "apartment" as const, listingType: "open_house" as const, auctionDate: "Sat 19 Apr · 11:00", aiScore: 87, views: 132, tags: ["Balcony", "Parking"] },
               { id: "mock-oh-2", title: "Sea-view Villa, Vouliagmeni", address: "Panorama Vouliagmeni", city: "Athens Riviera", price: 1450000, pricePerSqm: 5200, bedrooms: 4, bathrooms: 4, sqm: 280, floor: 0, totalFloors: 2, yearBuilt: 2020, energyClass: "A+", images: ["https://images.unsplash.com/photo-1507089947368-19c1da9775ae?w=800&q=60"], type: "house" as const, listingType: "open_house" as const, auctionDate: "Sun 20 Apr · 17:00", aiScore: 92, views: 89, tags: ["Pool", "Garden"] },
               { id: "mock-oh-3", title: "Loft near Aristotelous Sq.", address: "City Center", city: "Thessaloniki", price: 310000, pricePerSqm: 2900, bedrooms: 1, bathrooms: 1, sqm: 107, floor: 5, totalFloors: 7, yearBuilt: 2010, energyClass: "B+", images: ["https://images.unsplash.com/photo-1502672023488-70e25813eb80?w=800&q=60"], type: "apartment" as const, listingType: "open_house" as const, auctionDate: "Thu 24 Apr · 19:30", aiScore: 84, views: 54, tags: ["City view"] },
+              { id: "mock-oh-4", title: "Garden Townhouse, Glyfada", address: "Glyfada", city: "Athens Riviera", price: 680000, pricePerSqm: 3800, bedrooms: 3, bathrooms: 2, sqm: 179, floor: 0, totalFloors: 2, yearBuilt: 2018, energyClass: "A", images: ["https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800&q=60"], type: "house" as const, listingType: "open_house" as const, auctionDate: "Fri 25 Apr · 10:00", aiScore: 89, views: 71, tags: ["Garden", "Parking"] },
             ].map((p) => <PropertyCard key={p.id} property={p} />)}
           </div>
         </div>
