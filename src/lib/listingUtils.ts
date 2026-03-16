@@ -14,6 +14,8 @@ const SYSTEM_TAG_PREFIXES = [
   "os_auction:",
   "auction_status:",
   "sync:",
+  "land_type:",
+  "commercial_type:",
 ];
 
 export interface DbListingToCardOptions {
