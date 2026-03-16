@@ -33,6 +33,7 @@ import { AuctionAlertModal } from "@/components/AuctionAlertModal";
 import { getStreetViewProxyUrl } from "@/lib/config";
 import { dbListingToCard } from "@/lib/listingUtils";
 import { isAiUsageLimitError } from "@/lib/aiErrorUtils";
+import { SignInForAI } from "@/components/SignInForAI";
 
 // ─── Energy class data ──────────────────────────────────────────────────────
 const ENERGY_SCALE = [
@@ -174,7 +175,7 @@ export default function PropertyDetail() {
   const [aiInsightsLoaded, setAiInsightsLoaded] = useState(false);
 
   useEffect(() => {
-    if (!dbListing || aiInsightsLoaded) return;
+    if (!dbListing || aiInsightsLoaded || !user) return;
     setAiInsightsLoaded(true);
     setAiInsightsLoading(true);
     const listingId = id ?? dbListing.id;
@@ -248,7 +249,7 @@ export default function PropertyDetail() {
       }
     };
     invokeValuation();
-  }, [dbListing, aiInsightsLoaded]);
+  }, [dbListing, aiInsightsLoaded, user]);
 
   const { data: favorites = [] } = useFavorites();
   const toggleFav = useToggleFavorite();
@@ -707,13 +708,14 @@ export default function PropertyDetail() {
                 <span className="text-[10px] text-muted-foreground">Powered by mAI Prop OS</span>
                 } />
                 <div className="p-5 space-y-4">
-                  {aiInsightsLoading &&
+                  {!user && <SignInForAI feature="AI Market Insights" />}
+                  {user && aiInsightsLoading &&
                   <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground">
                       <Loader2 className="w-4 h-4 animate-spin" />
                       <span className="text-xs">Analysing market data…</span>
                     </div>
                   }
-                  {!aiInsightsLoading && aiInsightsData && (() => {
+                  {user && !aiInsightsLoading && aiInsightsData && (() => {
                     const cmpCfg: Record<string, {label: string;color: string;bg: string;}> = {
                       below_market: { label: "Below Market", color: "text-emerald-400", bg: "bg-emerald-400/10 border-emerald-400/20" },
                       at_market: { label: "At Market", color: "text-yellow-400", bg: "bg-yellow-400/10 border-yellow-400/20" },
@@ -750,7 +752,7 @@ export default function PropertyDetail() {
                       </div>);
 
                   })()}
-                  {!aiInsightsLoading && !aiInsightsData &&
+                  {user && !aiInsightsLoading && !aiInsightsData &&
                   <p className="text-xs text-muted-foreground text-center py-4">Market analysis unavailable</p>
                   }
                 </div>

@@ -6,6 +6,8 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { getAiErrorMessage } from "@/lib/aiErrorUtils";
+import { useAuth } from "@/contexts/AuthContext";
+import { SignInForAI } from "@/components/SignInForAI";
 import { toast } from "sonner";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -185,6 +187,7 @@ export default function NeighbourhoodReport({ city, address, region, propertyTyp
   const [error, setError] = useState<string | null>(null);
 
   const load = async () => {
+    if (!user) return;
     setLoading(true);
     setError(null);
     try {
@@ -213,7 +216,7 @@ export default function NeighbourhoodReport({ city, address, region, propertyTyp
     }
   };
 
-  useEffect(() => { load(); }, []); // eslint-disable-line
+  useEffect(() => { if (user) load(); }, [user]); // eslint-disable-line
 
   const noiseColour = (s: number) => s <= 3 ? "#22c55e" : s <= 6 ? "#eab308" : "#ef4444";
   const safeColour  = (s: number) => s >= 75 ? "#22c55e" : s >= 50 ? "#eab308" : "#ef4444";
@@ -233,16 +236,15 @@ export default function NeighbourhoodReport({ city, address, region, propertyTyp
       </div>
 
       <div className="p-5">
-        {/* Loading */}
-        {loading && (
+        {!user && <SignInForAI feature="Neighbourhood Report" />}
+        {user && loading && (
           <div className="flex flex-col items-center gap-3 py-8">
             <Loader2 className="w-7 h-7 animate-spin text-primary" />
             <p className="text-xs text-muted-foreground">AI is analysing the neighbourhood…</p>
           </div>
         )}
 
-        {/* Error */}
-        {error && !loading && (
+        {user && error && !loading && (
           <div className="flex items-center justify-between gap-3 px-3 py-3 rounded-xl bg-destructive/10 border border-destructive/20">
             <div className="flex items-center gap-2">
               <AlertCircle className="w-4 h-4 text-destructive shrink-0" />
@@ -252,8 +254,7 @@ export default function NeighbourhoodReport({ city, address, region, propertyTyp
           </div>
         )}
 
-        {/* Data */}
-        {data && !loading && (
+        {user && data && !loading && (
           <div className="space-y-6">
 
             {/* Highlights */}

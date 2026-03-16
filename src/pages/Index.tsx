@@ -41,6 +41,8 @@ import { CookieConsentBanner } from "@/components/CookieConsentBanner";
 
 import { PROPERTY_TYPES, PROPERTY_GROUPS, PROPERTY_TYPE_MAP, type PropertyTypeKey } from "@/lib/propertyTypes";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { SignInForAI } from "@/components/SignInForAI";
 import { toast } from "sonner";
 import heroBg from "@/assets/hero-bg.jpg";
 import thessalonikiLandmark from "@/assets/thessaloniki-landmark.jpg";
@@ -217,6 +219,7 @@ function AISearchModal({
   onFiltersApplied: (f: Record<string, any>) => void;
   onClose: () => void;
 }) {
+  const { user } = useAuth();
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -225,6 +228,7 @@ function AISearchModal({
   }, []);
 
   const handleSearch = async (q?: string) => {
+    if (!user) return;
     const searchQuery = (q ?? query).trim();
     if (!searchQuery) return;
     setLoading(true);
@@ -260,6 +264,10 @@ function AISearchModal({
           </button>
         </div>
         <div className="p-4">
+          {!user ? (
+            <SignInForAI feature="AI Search" />
+          ) : (
+          <>
           <div className="flex items-center gap-2 bg-secondary rounded-xl px-4 py-3 border border-border focus-within:border-primary transition-colors">
             <input
               ref={inputRef}
@@ -305,6 +313,8 @@ function AISearchModal({
               ))}
             </div>
           </div>
+          </>
+          )}
         </div>
       </div>
     </div>

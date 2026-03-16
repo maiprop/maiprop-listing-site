@@ -7,6 +7,8 @@ import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AdminRoute } from "@/components/AdminRoute";
+import { SellerRoute } from "@/components/SellerRoute";
+import { InvestorRoute } from "@/components/InvestorRoute";
 import AIAssistantWidget from "@/components/AIAssistantWidget";
 import Index from "./pages/Index";
 import Listings from "./pages/Listings";
@@ -78,7 +80,7 @@ const App = () => (
               <Route path="/auction/:id" element={<PropertyDetail />} />
               <Route path="/auctions" element={<Auctions />} />
               <Route path="/firesale" element={<Firesale />} />
-              <Route path="/investor-dashboard" element={<ProtectedRoute><InvestorDashboard /></ProtectedRoute>} />
+              <Route path="/investor-dashboard" element={<InvestorRoute><InvestorDashboard /></InvestorRoute>} />
               <Route path="/professionals" element={<Professionals />} />
               <Route path="/professionals/me" element={<ProtectedRoute><ProfessionalProfileMe /></ProtectedRoute>} />
               <Route path="/professionals/:id" element={<ProfessionalProfile />} />

@@ -24,6 +24,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { HEATING_TYPES, CONDITION_OPTIONS } from "@/lib/filterConfig";
 import { getStreetViewProxyUrl } from "@/lib/config";
+import { SignInForAI } from "@/components/SignInForAI";
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
@@ -174,7 +175,7 @@ export default function OpenHouseDetail() {
   };
 
   useEffect(() => {
-    if (!db || isMock) return;
+    if (!db || isMock || !user) return;
     setAiInsightsLoading(true);
     supabase.functions.invoke("property-valuation", {
       body: {
@@ -203,7 +204,7 @@ export default function OpenHouseDetail() {
         });
       }
     }).finally(() => setAiInsightsLoading(false));
-  }, [db?.id, isMock]);
+  }, [db?.id, isMock, user]);
 
   useEffect(() => {
     if (isMock) return;
@@ -472,7 +473,7 @@ export default function OpenHouseDetail() {
                         </div>
                       </div>
                     )}
-                    {!aiInsightsLoading && !aiInsightsData && <p className="text-xs text-muted-foreground text-center py-4">Market analysis unavailable</p>}
+                    {user && !aiInsightsLoading && !aiInsightsData && <p className="text-xs text-muted-foreground text-center py-4">Market analysis unavailable</p>}
                   </div>
                 </Section>
               )}

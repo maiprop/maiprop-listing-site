@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 export interface SmartFilterConfig {
   sections: string[];
@@ -35,6 +36,7 @@ const DEFAULT_CONFIG: SmartFilterConfig = {
 };
 
 export function useSmartFilters(type: string, subtype: string, listingType: string) {
+  const { user } = useAuth();
   const cacheKey = `${type}|${subtype}|${listingType}`;
   const [config, setConfig] = useState<SmartFilterConfig>(
     () => cache.get(cacheKey) ?? DEFAULT_CONFIG
@@ -45,6 +47,13 @@ export function useSmartFilters(type: string, subtype: string, listingType: stri
   useEffect(() => {
     // If no type selected, use default
     if (!type) {
+      setConfig(DEFAULT_CONFIG);
+      setLoading(false);
+      return;
+    }
+
+    // Skip AI call when not logged in — use default config
+    if (!user) {
       setConfig(DEFAULT_CONFIG);
       setLoading(false);
       return;
@@ -79,7 +88,7 @@ export function useSmartFilters(type: string, subtype: string, listingType: stri
       });
 
     return () => abortRef.current?.abort();
-  }, [cacheKey, type]);
+  }, [cacheKey, type, user]);
 
   return { config, loading };
 }

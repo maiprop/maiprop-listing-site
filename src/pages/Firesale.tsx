@@ -252,7 +252,11 @@ export default function Firesale() {
     const estimate = Math.round(base * 0.92);
     setAiEstimate(estimate);
 
-    // Try edge function for a better estimate (non-blocking)
+    // Try edge function for a better estimate (non-blocking, requires auth)
+    if (!user) {
+      setAiLoading(false);
+      return;
+    }
     setAiLoading(true);
     try {
       const { data, error: fnErr } = await supabase.functions.invoke("property-valuation", {

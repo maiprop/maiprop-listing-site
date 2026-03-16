@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { MAPBOX_TOKEN } from "@/lib/config";
 import { getAiErrorMessage } from "@/lib/aiErrorUtils";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { SignInForAI } from "@/components/SignInForAI";
 import "mapbox-gl/dist/mapbox-gl.css";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -100,6 +102,7 @@ interface PropertyMiniMapProps {
 export default function PropertyMiniMap({
   latitude, longitude, address, city, title, onWalkScoreChange,
 }: PropertyMiniMapProps) {
+  const { user } = useAuth();
   const mapRef = useRef<MapRef>(null);
   const lat = latitude ? Number(latitude) : null;
   const lng = longitude ? Number(longitude) : null;
@@ -110,9 +113,9 @@ export default function PropertyMiniMap({
   const [activeCategory, setActiveCategory] = useState<POI["category"] | "all">("all");
   const [mapLoaded, setMapLoaded] = useState(false);
 
-  // Auto-load POIs when coords are available
+  // Auto-load POIs when coords are available (requires auth)
   const loadPOIs = useCallback(async () => {
-    if (!lat || !lng) return;
+    if (!lat || !lng || !user) return;
     setLoadingPOIs(true);
     setPoiError(null);
     try {
@@ -126,11 +129,11 @@ export default function PropertyMiniMap({
     } finally {
       setLoadingPOIs(false);
     }
-  }, [address, city, lat, lng]);
+  }, [address, city, lat, lng, user]);
 
   useEffect(() => {
-    if (lat && lng) loadPOIs();
-  }, [lat, lng]); // eslint-disable-line
+    if (lat && lng && user) loadPOIs();
+  }, [lat, lng, user]); // eslint-disable-line
 
   const filteredPOIs = pois
     ? (activeCategory === "all" ? pois : pois.filter(p => p.category === activeCategory))
@@ -262,6 +265,10 @@ export default function PropertyMiniMap({
 
       {/* AI POIs section */}
       <div className="p-4">
+        {!user ? (
+          <SignInForAI feature="AI Nearby Places" />
+        ) : (
+        <>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <Zap className="w-3.5 h-3.5 text-primary" />
@@ -376,6 +383,8 @@ export default function PropertyMiniMap({
               AI estimates based on property location — distances are approximate walking distances
             </p>
           </>
+        )}
+        </>
         )}
       </div>
     </div>

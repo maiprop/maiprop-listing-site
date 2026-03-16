@@ -14,16 +14,19 @@ Deno.serve(async (req) => {
   );
 
   const WEBHOOK_SECRET = Deno.env.get("MAIPROP_OS_WEBHOOK_SECRET");
+  if (!WEBHOOK_SECRET) {
+    console.error("MAIPROP_OS_WEBHOOK_SECRET is not set — rejecting webhook for security");
+    return new Response(JSON.stringify({ error: "Webhook not configured" }), {
+      status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 
   try {
-    // Validate webhook signature if secret is configured
-    if (WEBHOOK_SECRET) {
-      const signature = req.headers.get("x-os-signature");
-      if (!signature || signature !== WEBHOOK_SECRET) {
-        return new Response(JSON.stringify({ error: "Unauthorized: invalid signature" }), {
-          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+    const signature = req.headers.get("x-os-signature");
+    if (!signature || signature !== WEBHOOK_SECRET) {
+      return new Response(JSON.stringify({ error: "Unauthorized: invalid signature" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const body = await req.json();

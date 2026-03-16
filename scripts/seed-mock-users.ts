@@ -400,7 +400,39 @@ async function main() {
   }
   console.log(`  ✓ ${ohConvos.length} open house conversations with messages`);
 
-  console.log("\n✅ Seed complete. 21 accounts across 7 types with full cross-type interactions including open house.");
+  // ── Firesale (Quick Sale) requests ───────────────────────────────────────────
+  console.log("\nCreating firesale (Quick Sale) requests...");
+  const sellerIds = INDICES.seller.map((i) => userIds[i]);
+  const firesaleReqs = [
+    { userIdx: 3, address: "Aristotelous 42", city: "Thessaloniki", property_type: "apartment", sqm: 95, bedrooms: 3, condition: "good", asking_price: 145000, ai_estimate: 162000, offer_price: null, status: "pending", contact_email: MOCK_USERS[3].email, contact_phone: "+30 231 555 1001", notes: "Need quick sale due to relocation. Property in good condition.", admin_notes: null },
+    { userIdx: 4, address: "Ermou 18", city: "Athens", property_type: "apartment", sqm: 72, bedrooms: 2, condition: "fair", asking_price: 98000, ai_estimate: 115000, offer_price: null, status: "pending", contact_email: MOCK_USERS[4].email, contact_phone: "+30 210 555 2002", notes: "Inherited property, want to sell fast.", admin_notes: null },
+    { userIdx: 5, address: "Papagou 7", city: "Athens", property_type: "house", sqm: 140, bedrooms: 4, condition: "excellent", asking_price: 285000, ai_estimate: 320000, offer_price: null, status: "reviewed", contact_email: MOCK_USERS[5].email, contact_phone: "+30 210 555 3003", notes: "Renovated 2 years ago. Motivated seller.", admin_notes: "Strong candidate. Schedule valuation visit." },
+    { userIdx: 3, address: "Tsimiski 88", city: "Thessaloniki", property_type: "commercial", sqm: 55, bedrooms: null, condition: "good", asking_price: 88000, ai_estimate: 95000, offer_price: 82000, status: "offer_sent", contact_email: MOCK_USERS[3].email, contact_phone: null, notes: "Small office unit in prime location.", admin_notes: "Terms: Subject to survey. Valid until: 2025-04-15" },
+    { userIdx: 4, address: "Kifissias 210", city: "Marousi", property_type: "apartment", sqm: 110, bedrooms: 3, condition: "good", asking_price: 195000, ai_estimate: 220000, offer_price: 185000, status: "closed", contact_email: MOCK_USERS[4].email, contact_phone: "+30 210 555 2002", notes: "Corner unit, lots of light.", admin_notes: "[SELLER:ACCEPTED] Deal closed same day." },
+    { userIdx: null, address: "Stratigou Dimitriou 5", city: "Patras", property_type: "apartment", sqm: 68, bedrooms: 2, condition: "fair", asking_price: 72000, ai_estimate: 85000, offer_price: null, status: "pending", contact_email: "anonymous.seller@example.com", contact_phone: "+30 261 555 4004", notes: "Anonymous submission for Quick Sale.", admin_notes: null },
+  ];
+  for (const r of firesaleReqs) {
+    await supabase.from("firesale_requests").insert({
+      user_id: r.userIdx !== null ? userIds[r.userIdx] : null,
+      address: r.address,
+      city: r.city,
+      property_type: r.property_type,
+      sqm: r.sqm,
+      bedrooms: r.bedrooms,
+      condition: r.condition,
+      asking_price: r.asking_price,
+      ai_estimate: r.ai_estimate,
+      offer_price: r.offer_price,
+      status: r.status,
+      contact_email: r.contact_email,
+      contact_phone: r.contact_phone,
+      notes: r.notes,
+      admin_notes: r.admin_notes,
+    });
+  }
+  console.log(`  ✓ ${firesaleReqs.length} firesale (Quick Sale) requests`);
+
+  console.log("\n✅ Seed complete. 21 accounts across 7 types with full cross-type interactions including open house and firesale pipeline.");
   console.log("\nPassword for all: Demo2025!");
   console.log("\nAccounts by type:");
   ROLES.forEach((r) => {

@@ -7,6 +7,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { getAiErrorMessage } from "@/lib/aiErrorUtils";
+import { useAuth } from "@/contexts/AuthContext";
+import { SignInForAI } from "@/components/SignInForAI";
 import { toast } from "sonner";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -178,6 +180,7 @@ function ScoreBar({ label, score, invert = false, icon }: { label: string; score
 // ── Main component ─────────────────────────────────────────────────────────────
 
 export default function PropertyValuation(props: PropertyValuationProps) {
+  const { user } = useAuth();
   const [result, setResult] = useState<ValuationResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -185,6 +188,7 @@ export default function PropertyValuation(props: PropertyValuationProps) {
   const { listingId, ...valuationProps } = props;
 
   const runValuation = async () => {
+    if (!user) return;
     setLoading(true);
     try {
       if (listingId) {
@@ -226,8 +230,8 @@ export default function PropertyValuation(props: PropertyValuationProps) {
       </div>
 
       <div className="p-5">
-        {/* ── CTA state ── */}
-        {!result && (
+        {!user && <SignInForAI feature="AI Property Valuation" />}
+        {user && !result && (
           <div className="text-center space-y-3">
             <p className="text-xs text-muted-foreground leading-relaxed">
               Type-specific AI valuation — price range, confidence, liquidity, and Greek legal/tax overlay (legal cleanliness, planning certainty, transfer readiness).
@@ -245,8 +249,7 @@ export default function PropertyValuation(props: PropertyValuationProps) {
           </div>
         )}
 
-        {/* ── Result state ── */}
-        {result && (
+        {user && result && (
           <div className="space-y-4">
 
             {/* Estimated value + score rings */}
