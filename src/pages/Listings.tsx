@@ -436,8 +436,6 @@ export default function Listings() {
     city: searchQuery || undefined,
     listing_type: preSaleOnly ? "sale" : (selectedListingType || undefined),
     property_type: selectedType || undefined,
-    pre_sale_only: preSaleOnly || undefined,
-    off_market_only: offMarketOnly || undefined,
   });
 
   const hasActiveFilters = !!(searchQuery || selectedListingType || selectedType);

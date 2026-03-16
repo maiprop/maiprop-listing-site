@@ -738,8 +738,6 @@ export default function CreateListing() {
         has_electricity_supply: form.has_electricity_supply, has_land_concession: form.has_land_concession,
         has_three_phase_power: form.has_three_phase_power, has_loading_dock: form.has_loading_dock,
         has_structured_cabling: form.has_structured_cabling, has_equipped: form.has_equipped,
-        is_pre_sale: form.is_pre_sale,
-        is_off_market: form.is_off_market,
         is_featured: form.is_featured ?? false,
         priority_placement: Number(form.priority_placement) || 0,
       };
