@@ -392,6 +392,10 @@ Rules:
     if (!response.ok) {
       const txt = await response.text();
       console.error("AI gateway error:", response.status, txt);
+      const usageLimitMsg = "AI features are temporarily unavailable due to usage limits. Please try again later or contact support.";
+      if (response.status === 402 || response.status === 429) {
+        return new Response(JSON.stringify({ error: usageLimitMsg }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
       throw new Error(`AI gateway error: ${response.status}`);
     }
 
