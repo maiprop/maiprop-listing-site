@@ -7,7 +7,7 @@ import {
   Search, Activity, Wrench, Shield, MapPin, Euro, Edit2,
   FolderKanban, Users, Briefcase, TrendingUp, Globe2, Flame,
   ArrowRight, Clock, CheckCircle2, AlertCircle, Phone, ExternalLink, Star, Crown,
-  FolderOpen, LayoutGrid, BarChart2 as BarChart2Icon,
+  FolderOpen, LayoutGrid,
 } from "lucide-react";
 import ContactsCRM from "@/components/ContactsCRM";
 import OpenHouseDashboardSection from "@/components/OpenHouseDashboardSection";
