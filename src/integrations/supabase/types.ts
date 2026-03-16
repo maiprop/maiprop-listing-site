@@ -1140,51 +1140,51 @@ export type Database = {
       }
       pricing_configs: {
         Row: {
+          amount: number
+          audience: string
+          created_at: string
+          currency: string
+          description: string | null
           id: string
+          is_active: boolean
           key: string
           label: string
-          description: string | null
-          audience: string
+          metadata: Json | null
           module: string
-          unit: string
-          currency: string
-          amount: number
-          is_active: boolean
           sort_order: number
-          metadata: Json
-          created_at: string
+          unit: string
           updated_at: string
         }
         Insert: {
+          amount?: number
+          audience: string
+          created_at?: string
+          currency?: string
+          description?: string | null
           id?: string
+          is_active?: boolean
           key: string
           label: string
-          description?: string | null
-          audience: string
+          metadata?: Json | null
           module: string
-          unit?: string
-          currency?: string
-          amount?: number
-          is_active?: boolean
           sort_order?: number
-          metadata?: Json
-          created_at?: string
+          unit?: string
           updated_at?: string
         }
         Update: {
+          amount?: number
+          audience?: string
+          created_at?: string
+          currency?: string
+          description?: string | null
           id?: string
+          is_active?: boolean
           key?: string
           label?: string
-          description?: string | null
-          audience?: string
+          metadata?: Json | null
           module?: string
-          unit?: string
-          currency?: string
-          amount?: number
-          is_active?: boolean
           sort_order?: number
-          metadata?: Json
-          created_at?: string
+          unit?: string
           updated_at?: string
         }
         Relationships: []
