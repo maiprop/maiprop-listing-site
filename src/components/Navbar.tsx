@@ -316,13 +316,16 @@ export function Navbar() {
               className={`flex items-center gap-2 min-h-[44px] px-3 py-2.5 rounded-lg text-sm transition-colors ${
                 link.accent === "flame"
                   ? "text-destructive/80 hover:text-destructive hover:bg-destructive/10"
-                  : link.accent === "subtle"
-                    ? "text-accent/80 hover:text-accent hover:bg-accent/10"
-                    : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                  : link.accent === "dooropen"
+                    ? "text-emerald-600/80 hover:text-emerald-600 hover:bg-emerald-500/10"
+                    : link.accent === "subtle"
+                      ? "text-accent/80 hover:text-accent hover:bg-accent/10"
+                      : "text-muted-foreground hover:text-foreground hover:bg-secondary"
               }`}
               onClick={() => setMobileOpen(false)}
             >
               {link.accent === "flame" && <span>🔥</span>}
+              {link.accent === "dooropen" && <DoorOpen className="w-4 h-4 shrink-0" />}
               {link.label}
               {link.badge && (
                 <span className="text-xs px-1.5 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold font-semibold">{link.badge}</span>
