@@ -145,13 +145,13 @@ const ALL_NAV_ITEMS: { icon: React.ElementType; label: string; key: NavKey; href
 
 // ── Nav per bio-type (spec-accurate) ──────────────────────────────────────────
 const NAV_BY_TYPE: Record<string, NavKey[]> = {
-  buyer:         ["overview", "saved", "saved-searches", "messages", "viewings", "auctions", "profile", "settings"],
+  buyer:         ["overview", "saved", "saved-searches", "open-houses", "messages", "viewings", "auctions", "profile", "settings"],
   seller:        ["overview", "listings", "saved", "saved-searches", "messages", "viewings", "open-houses", "profile", "settings"],
-  investor:      ["overview", "deal-flow", "saved", "saved-searches", "messages", "viewings", "auctions", "profile", "settings"],
+  investor:      ["overview", "deal-flow", "saved", "saved-searches", "messages", "viewings", "auctions", "open-houses", "profile", "settings"],
   agent:         ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "open-houses", "contacts", "profile", "settings"],
-  institutional: ["overview", "deal-flow", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "contacts", "profile", "settings"],
+  institutional: ["overview", "deal-flow", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "open-houses", "contacts", "profile", "settings"],
   developer:     ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "contacts", "projects", "portfolios", "profile", "settings"],
-  professional:  ["overview", "services", "booking", "leads", "messages", "viewings", "profile", "settings"],
+  professional:  ["overview", "services", "booking", "leads", "analytics", "messages", "viewings", "profile", "settings"],
   admin:         ["overview", "deal-flow", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "open-houses", "services", "booking", "leads", "contacts", "projects", "portfolios", "profile", "settings"],
 };
 
