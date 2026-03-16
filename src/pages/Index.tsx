@@ -1133,21 +1133,19 @@ export default function Index() {
         </div>
         {/* Grid overlay */}
         <div
-          className="absolute inset-0 opacity-[0.03]"
+          className="absolute inset-0 z-0 opacity-[0.03]"
           style={{
             backgroundImage:
             "linear-gradient(hsl(192 100% 50%) 1px, transparent 1px), linear-gradient(90deg, hsl(192 100% 50%) 1px, transparent 1px)",
             backgroundSize: "60px 60px"
           }} />
-        
 
         {/* Glow orb */}
         <div
-          className="absolute top-1/4 right-1/4 w-[500px] h-[500px] rounded-full blur-[120px] opacity-10"
+          className="absolute top-1/4 right-1/4 w-[500px] h-[500px] rounded-full blur-[120px] opacity-10 z-0"
           style={{ background: "radial-gradient(hsl(192 100% 50%), hsl(270 75% 62%), transparent 70%)" }} />
-        
 
-        <div className="container relative z-10 py-8 sm:py-16 lg:pl-16 xl:pl-24">
+        <div className="container relative z-10 pt-24 pb-8 sm:pt-28 sm:pb-16 lg:pl-16 xl:pl-24">
           <div className="grid lg:grid-cols-[1fr_360px] xl:grid-cols-[1fr_400px] gap-8 lg:gap-12 items-center">
             {/* ── LEFT: Copy + Search ── */}
             <div className="text-white">
