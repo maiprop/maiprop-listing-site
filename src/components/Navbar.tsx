@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import logoImg from "@/assets/logo.png";
 import logoDarkImg from "@/assets/logo-dark.png";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Bell, MessageSquare, User, Menu, X, ChevronDown, Plus, LogOut, LayoutDashboard, Building2, Sun, Moon, Home, List, Gavel, Flame, Zap, Sparkles, Shield } from "lucide-react";
+import { Bell, MessageSquare, User, Menu, X, ChevronDown, Plus, LogOut, LayoutDashboard, Building2, Sun, Moon, Home, List, Gavel, Flame, Zap, Sparkles, Shield, DoorOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useTheme } from "next-themes";
@@ -60,7 +60,7 @@ export function Navbar() {
     { label: "Rent", href: "/listings?listing_type=rent" },
     { label: "Auctions", href: "/auctions", badge: "Live" },
     { label: "Quick Sale™", href: "/firesale", accent: "flame" },
-    { label: "Open Houses", href: "/open-houses" },
+    { label: "Open Houses", href: "/open-houses", accent: "dooropen" },
     { label: "Professionals", href: "/professionals", accent: "subtle" },
   ];
 
@@ -99,27 +99,34 @@ export function Navbar() {
             <Link
               key={link.href}
               to={link.href}
-              className={`relative px-3 py-2 text-sm font-medium rounded-md transition-colors flex items-center gap-2
+              className={`relative px-3 py-2 text-sm font-medium rounded-md transition-colors flex items-center gap-1.5
                 ${isActive(link.href)
                   ? link.accent === "flame"
                     ? "text-destructive bg-destructive/10"
-                    : forceLight
-                      ? "text-white bg-white/20"
-                      : "text-primary bg-primary/10"
+                    : link.accent === "dooropen"
+                      ? forceLight ? "text-white bg-white/20" : "text-emerald-600 bg-emerald-500/10"
+                      : forceLight
+                        ? "text-white bg-white/20"
+                        : "text-primary bg-primary/10"
                   : link.accent === "flame"
                     ? forceLight
                       ? "text-orange-300 hover:text-orange-200 hover:bg-white/10"
                       : "text-destructive/80 hover:text-destructive hover:bg-destructive/10"
-                    : link.accent === "subtle"
+                    : link.accent === "dooropen"
                       ? forceLight
-                        ? "text-white/80 hover:text-white hover:bg-white/10"
-                        : "text-accent/90 hover:text-accent hover:bg-accent/10"
-                      : forceLight
+                        ? "text-emerald-200 hover:text-white hover:bg-white/10"
+                        : "text-emerald-600/80 hover:text-emerald-600 hover:bg-emerald-500/10"
+                      : link.accent === "subtle"
+                        ? forceLight
                           ? "text-white/80 hover:text-white hover:bg-white/10"
-                          : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                          : "text-accent/90 hover:text-accent hover:bg-accent/10"
+                        : forceLight
+                            ? "text-white/80 hover:text-white hover:bg-white/10"
+                            : "text-muted-foreground hover:text-foreground hover:bg-secondary"
                 }`}
             >
               {link.accent === "flame" && <span className="text-sm">🔥</span>}
+              {link.accent === "dooropen" && <DoorOpen className="w-3.5 h-3.5 shrink-0" />}
               {link.label}
               {link.badge && (
                 <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold animate-pulse ${
@@ -204,7 +211,7 @@ export function Navbar() {
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link to="/open-houses" className="flex items-center gap-2 cursor-pointer">
-                      <Building2 className="w-3.5 h-3.5" /> Open Houses
+                      <DoorOpen className="w-3.5 h-3.5 text-emerald-600" /> Open Houses
                     </Link>
                   </DropdownMenuItem>
                   {profile?.is_platform_admin && (
@@ -309,13 +316,16 @@ export function Navbar() {
               className={`flex items-center gap-2 min-h-[44px] px-3 py-2.5 rounded-lg text-sm transition-colors ${
                 link.accent === "flame"
                   ? "text-destructive/80 hover:text-destructive hover:bg-destructive/10"
-                  : link.accent === "subtle"
-                    ? "text-accent/80 hover:text-accent hover:bg-accent/10"
-                    : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                  : link.accent === "dooropen"
+                    ? "text-emerald-600/80 hover:text-emerald-600 hover:bg-emerald-500/10"
+                    : link.accent === "subtle"
+                      ? "text-accent/80 hover:text-accent hover:bg-accent/10"
+                      : "text-muted-foreground hover:text-foreground hover:bg-secondary"
               }`}
               onClick={() => setMobileOpen(false)}
             >
               {link.accent === "flame" && <span>🔥</span>}
+              {link.accent === "dooropen" && <DoorOpen className="w-4 h-4 shrink-0" />}
               {link.label}
               {link.badge && (
                 <span className="text-xs px-1.5 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold font-semibold">{link.badge}</span>
@@ -365,7 +375,7 @@ export function Navbar() {
             { to: "/listings", icon: List, label: "Listings" },
             { to: "/auctions", icon: Gavel, label: "Auctions" },
             { to: "/firesale", icon: Flame, label: "Quick Sale", accent: "text-destructive" },
-            { to: "/open-houses", icon: Building2, label: "Open Houses" },
+            { to: "/open-houses", icon: DoorOpen, label: "Open Houses", accent: "text-emerald-600" },
             { to: "/ai-assistant", icon: Sparkles, label: "AI" },
             { to: user ? "/dashboard" : "/login", icon: user ? LayoutDashboard : User, label: user ? "Dashboard" : "Sign In" },
           ].map(({ to, icon: Icon, label, accent }) => {

@@ -16,7 +16,6 @@ import { useMyListings, useUpdateListing, useDeleteListing } from "@/hooks/useLi
 import { useListingViewTrends, useLeadFunnel } from "@/hooks/useAnalytics";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useViewings, useUpdateViewing } from "@/hooks/useViewings";
-import { useMyOpenHouseRegistrations, useMyOpenHouseOffers } from "@/hooks/useOpenHouseAssetControl";
 import OpenHouseDashboardSection from "@/components/OpenHouseDashboardSection";
 import { useSavedSearches, useDeleteSavedSearch, useToggleSavedSearchAlert } from "@/hooks/useSavedSearches";
 import { useAuctionAlerts, useDeleteAuctionAlert, useUpdateAuctionAlert } from "@/hooks/useAuctionAlerts";
@@ -203,7 +202,6 @@ export default function Dashboard() {
   const { data: leadFunnel } = useLeadFunnel(myProfessional?.id);
   const { data: professionalServices = [] } = useProfessionalServices(myProfessional?.id || "");
   const { data: leads = [], isLoading: leadsLoading } = useMyLeads(myProfessional?.id);
-  // myOHRegistrations and myOHOffers are handled inside OpenHouseDashboardSection
   const updateListing = useUpdateListing();
   const deleteListing = useDeleteListing();
   const deleteSavedSearch = useDeleteSavedSearch();
