@@ -145,13 +145,13 @@ const ALL_NAV_ITEMS: { icon: React.ElementType; label: string; key: NavKey; href
 
 // ── Nav per bio-type (spec-accurate) ──────────────────────────────────────────
 const NAV_BY_TYPE: Record<string, NavKey[]> = {
-  buyer:         ["overview", "saved", "saved-searches", "messages", "viewings", "auctions", "profile", "settings"],
+  buyer:         ["overview", "saved", "saved-searches", "open-houses", "messages", "viewings", "auctions", "profile", "settings"],
   seller:        ["overview", "listings", "saved", "saved-searches", "messages", "viewings", "open-houses", "profile", "settings"],
-  investor:      ["overview", "deal-flow", "saved", "saved-searches", "messages", "viewings", "auctions", "profile", "settings"],
+  investor:      ["overview", "deal-flow", "saved", "saved-searches", "messages", "viewings", "auctions", "open-houses", "profile", "settings"],
   agent:         ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "open-houses", "contacts", "profile", "settings"],
-  institutional: ["overview", "deal-flow", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "contacts", "profile", "settings"],
+  institutional: ["overview", "deal-flow", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "open-houses", "contacts", "profile", "settings"],
   developer:     ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "contacts", "projects", "portfolios", "profile", "settings"],
-  professional:  ["overview", "services", "booking", "leads", "messages", "viewings", "profile", "settings"],
+  professional:  ["overview", "services", "booking", "leads", "analytics", "messages", "viewings", "profile", "settings"],
   admin:         ["overview", "deal-flow", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "open-houses", "services", "booking", "leads", "contacts", "projects", "portfolios", "profile", "settings"],
 };
 
@@ -416,11 +416,11 @@ export default function Dashboard() {
                       <Link to="/investor-dashboard"><FolderKanban className="w-3.5 h-3.5" /> Open Dashboard</Link>
                     </Button>
                   </div>
-                  <div className="glass-card rounded-xl p-5 border border-destructive/20 bg-destructive/5">
-                    <h2 className="font-display font-semibold mb-1 flex items-center gap-2 text-destructive"><Flame className="w-4 h-4" /> Quick-Sale Deals</h2>
-                    <p className="text-sm text-muted-foreground mb-3">Off-market properties at discounted prices — motivated sellers only.</p>
-                    <Button size="sm" variant="outline" className="border-destructive/40 text-destructive hover:bg-destructive/10 gap-1.5" asChild>
-                      <Link to="/firesale"><Activity className="w-3.5 h-3.5" /> View Firesale</Link>
+                  <div className="glass-card rounded-xl p-5 border border-brand-emerald/20 bg-brand-emerald/5">
+                    <h2 className="font-display font-semibold mb-1 flex items-center gap-2 text-brand-emerald"><Calendar className="w-4 h-4" /> Open Houses</h2>
+                    <p className="text-sm text-muted-foreground mb-3">Register for exclusive property open houses and submit sealed bids.</p>
+                    <Button size="sm" variant="outline" className="border-brand-emerald/40 text-brand-emerald hover:bg-brand-emerald/10 gap-1.5" onClick={() => setActiveSection("open-houses")}>
+                      <ExternalLink className="w-3.5 h-3.5" /> My Open Houses
                     </Button>
                   </div>
                   <div className="glass-card rounded-xl p-5">
@@ -451,6 +451,18 @@ export default function Dashboard() {
                     <p className="text-sm text-muted-foreground mb-3">Get notified when new auctions match your criteria.</p>
                     <Button variant="outline" size="sm" className="border-brand-gold/40 text-brand-gold" onClick={() => setActiveSection("auctions")}>
                       {auctionAlerts.length > 0 ? "Manage Alerts" : "Create Alert"}
+                    </Button>
+                  </div>
+                  <div className="glass-card rounded-xl p-6 border border-emerald-500/20 bg-emerald-500/5 md:col-span-2">
+                    <h2 className="font-display font-semibold mb-3 flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-brand-emerald" /> Open Houses
+                    </h2>
+                    <p className="text-sm text-muted-foreground mb-3">
+                      Attend curated property open houses. Register and attend in person or virtually.
+                      <span className="ml-1 text-xs text-primary font-medium">AI insights &amp; similar deals require Pro.</span>
+                    </p>
+                    <Button variant="outline" size="sm" className="border-brand-emerald/40 text-brand-emerald hover:bg-brand-emerald/10 gap-1.5" onClick={() => setActiveSection("open-houses")}>
+                      <ExternalLink className="w-3.5 h-3.5" /> Browse Open Houses
                     </Button>
                   </div>
                 </div>
@@ -1016,6 +1028,7 @@ export default function Dashboard() {
               listingsLoading={listingsLoading}
               viewTrends={viewTrends}
               leadFunnel={leadFunnel}
+              myProfessional={myProfessional}
             />
           )}
 
@@ -1379,6 +1392,7 @@ function DashboardPortfoliosSection({
   const [newName, setNewName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
+  const [addFromSavedPortfolioId, setAddFromSavedPortfolioId] = useState<string | null>(null);
 
   const handleCreate = () => {
     if (!newName.trim()) { toast.error("Portfolio name is required"); return; }
@@ -1487,10 +1501,37 @@ function DashboardPortfoliosSection({
                   </div>
                 )}
                 <div className="border-t border-border px-5 py-3 bg-muted/30">
-                  <p className="text-xs text-muted-foreground">
-                    Add properties from <button onClick={() => {}} className="text-primary underline underline-offset-2">saved listings</button> via{" "}
-                    <Link to="/portfolios" className="text-primary underline underline-offset-2">full portfolio view</Link>.
-                  </p>
+                  {addFromSavedPortfolioId === p.id ? (
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold text-foreground mb-2">Add from Saved Properties:</p>
+                      {favorites.filter((f: any) => f.listings && !listingIds.includes(f.listings.id)).length === 0 ? (
+                        <p className="text-xs text-muted-foreground">No saved properties available to add.</p>
+                      ) : (
+                        <div className="flex flex-wrap gap-2">
+                          {favorites.filter((f: any) => f.listings && !listingIds.includes(f.listings.id)).map((f: any) => (
+                            <button key={f.listings.id}
+                              className="text-xs px-2.5 py-1.5 bg-secondary border border-border rounded-lg hover:border-primary/50 hover:bg-primary/10 transition-colors truncate max-w-[200px]"
+                              onClick={() => {
+                                const newIds = [...listingIds, f.listings.id];
+                                updatePortfolio.mutate({ id: p.id, updates: { listing_ids: newIds } }, {
+                                  onSuccess: () => toast.success("Added to portfolio"),
+                                });
+                              }}>
+                              + {f.listings.title || f.listings.city}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <button onClick={() => setAddFromSavedPortfolioId(null)} className="text-xs text-muted-foreground hover:text-foreground mt-1 underline underline-offset-2">
+                        Close
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setAddFromSavedPortfolioId(p.id)}
+                      className="text-xs text-primary underline underline-offset-2 hover:opacity-80 transition-opacity">
+                      + Add from saved properties
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -1560,6 +1601,7 @@ function AnalyticsSection({
   listingsLoading,
   viewTrends = [],
   leadFunnel,
+  myProfessional,
 }: {
   myListings: any[];
   leads: any[];
@@ -1567,6 +1609,7 @@ function AnalyticsSection({
   listingsLoading: boolean;
   viewTrends?: { date: string; count: number }[];
   leadFunnel?: { pending: number; reviewed: number; confirmed: number; cancelled: number; total: number; conversionRate?: number };
+  myProfessional?: any;
 }) {
   const totalViews = myListings.reduce((s, l) => s + (l.views_count || 0), 0);
   const activeCount = myListings.filter(l => l.status === "active").length;
@@ -1574,16 +1617,14 @@ function AnalyticsSection({
   const totalLeads = leads.length;
   const maxTrendCount = Math.max(1, ...viewTrends.map(t => t.count));
 
-  const stats: { label: string; value: number; color: string }[] = [
+  const stats: { label: string; value: number; color: string }[] = role === "professional" ? [
+    { label: "Total Leads", value: totalLeads, color: "text-primary" },
+    { label: "Pending Leads", value: pendingLeads, color: "text-brand-gold" },
+    { label: "Confirmed", value: leadFunnel?.confirmed ?? 0, color: "text-brand-emerald" },
+    { label: "Conversion Rate", value: leadFunnel?.conversionRate ?? 0, color: "text-brand-emerald" },
+  ] : [
     { label: "Active Listings", value: activeCount, color: "text-primary" },
     { label: "Total Views", value: totalViews, color: "text-brand-emerald" },
-    ...(role === "professional" && leadFunnel ? [
-      { label: "Conversion Rate", value: leadFunnel.conversionRate, color: "text-brand-emerald" },
-      { label: "Total Leads", value: totalLeads, color: "text-primary" },
-    ] : role === "professional" ? [
-      { label: "Pending Leads", value: pendingLeads, color: "text-brand-gold" },
-      { label: "Total Leads", value: totalLeads, color: "text-primary" },
-    ] : []),
   ];
 
   return (
@@ -1594,12 +1635,14 @@ function AnalyticsSection({
             <BarChart2 className="w-6 h-6 text-primary" /> Analytics
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {role === "professional" ? "Lead funnel & conversion metrics." : "Listing performance & view trends."}
+            {role === "professional" ? "Visibility, lead funnel & conversion KPIs." : "Listing performance & view trends."}
           </p>
         </div>
-        <Button variant="outline" className="border-border gap-2" asChild>
-          <Link to="/market-intelligence"><ArrowRight className="w-4 h-4" /> Market Intelligence</Link>
-        </Button>
+        {role !== "professional" && (
+          <Button variant="outline" className="border-border gap-2" asChild>
+            <Link to="/listings"><Search className="w-4 h-4" /> Browse Listings</Link>
+          </Button>
+        )}
       </div>
 
       {listingsLoading ? (
@@ -1633,6 +1676,44 @@ function AnalyticsSection({
                     <div className="font-display text-xl font-bold mt-0.5">{count}</div>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Visibility & KPI breakdown (professionals — always show) */}
+          {role === "professional" && (
+            <div className="space-y-4">
+              <h2 className="font-display font-semibold">Profile Visibility & KPIs</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="glass-card rounded-xl p-4 border border-border">
+                  <p className="text-xs text-muted-foreground uppercase tracking-widest mb-1">Profile Views</p>
+                  <p className="font-display text-2xl font-bold text-primary">{myProfessional?.projects_count ?? 0}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Clients who viewed your profile</p>
+                </div>
+                <div className="glass-card rounded-xl p-4 border border-border">
+                  <p className="text-xs text-muted-foreground uppercase tracking-widest mb-1">Avg. Rating</p>
+                  <p className="font-display text-2xl font-bold text-brand-gold">{myProfessional?.rating ? Number(myProfessional.rating).toFixed(1) : "—"}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{myProfessional?.reviews_count ?? 0} review(s) from clients</p>
+                </div>
+                <div className="glass-card rounded-xl p-4 border border-border">
+                  <p className="text-xs text-muted-foreground uppercase tracking-widest mb-1">Conversion Rate</p>
+                  <p className="font-display text-2xl font-bold text-brand-emerald">{leadFunnel?.conversionRate ?? 0}%</p>
+                  <p className="text-xs text-muted-foreground mt-1">Leads that became confirmed</p>
+                </div>
+              </div>
+              <div className="glass-card rounded-xl p-4 border border-border">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold">Improve Your Visibility</h3>
+                </div>
+                <ul className="space-y-2 text-sm text-muted-foreground">
+                  {!myProfessional?.avatar_url && <li className="flex items-center gap-2"><AlertCircle className="w-3.5 h-3.5 text-brand-gold shrink-0" /> Add a profile photo — profiles with photos get 3× more views</li>}
+                  {!myProfessional?.bio && <li className="flex items-center gap-2"><AlertCircle className="w-3.5 h-3.5 text-brand-gold shrink-0" /> Write a bio to describe your expertise</li>}
+                  {(!myProfessional?.specialties || myProfessional.specialties.length === 0) && <li className="flex items-center gap-2"><AlertCircle className="w-3.5 h-3.5 text-brand-gold shrink-0" /> Add specialties to appear in filtered searches</li>}
+                  {!myProfessional?.hourly_rate && <li className="flex items-center gap-2"><AlertCircle className="w-3.5 h-3.5 text-brand-gold shrink-0" /> Set your hourly rate so clients know what to expect</li>}
+                  {myProfessional?.avatar_url && myProfessional?.bio && myProfessional?.hourly_rate && (myProfessional?.specialties?.length ?? 0) > 0 && (
+                    <li className="flex items-center gap-2 text-brand-emerald"><CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> Your profile is fully optimised!</li>
+                  )}
+                </ul>
               </div>
             </div>
           )}

@@ -17,6 +17,8 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   closed:      { label: "Closed",      color: "bg-brand-emerald/15 text-brand-emerald border-brand-emerald/20" },
 };
 
+// "published" = status === "reviewed" or "offer_sent" or "closed" (admin has actioned it)
+// "unpublished" = status === "pending"
 type ScreeningDeal = {
   id: string;
   address: string;
@@ -28,7 +30,6 @@ type ScreeningDeal = {
   asking_price: number | null;
   status: string;
   created_at: string;
-  published_to_investors: boolean;
 };
 
 function timeAgo(iso: string) {
@@ -49,10 +50,10 @@ export default function AdminInvestorScreening() {
     try {
       const { data, error } = await supabase
         .from("firesale_requests")
-        .select("id, address, city, property_type, sqm, bedrooms, ai_estimate, asking_price, status, created_at, published_to_investors")
+        .select("id, address, city, property_type, sqm, bedrooms, ai_estimate, asking_price, status, created_at")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      setDeals((data || []) as ScreeningDeal[]);
+      setDeals((data || []) as unknown as ScreeningDeal[]);
     } catch {
       toast.error("Could not load deals.");
     } finally {
@@ -62,34 +63,30 @@ export default function AdminInvestorScreening() {
 
   useEffect(() => { loadDeals(); }, []);
 
-  const unpublished = deals.filter(d => !d.published_to_investors);
-  const published = deals.filter(d => d.published_to_investors);
+  // "pending" = not yet reviewed by admin → show in "Pending screening"
+  // any other status = admin has actioned → show in "Published"
+  const unpublished = deals.filter(d => d.status === "pending");
+  const published = deals.filter(d => d.status !== "pending");
   const displayList = filter === "unpublished" ? unpublished : published;
 
   const handlePublish = async (id: string) => {
     const { error } = await supabase
       .from("firesale_requests")
-      .update({ published_to_investors: true })
+      .update({ status: "reviewed" })
       .eq("id", id);
-    if (error) {
-      toast.error("Failed to publish");
-      return;
-    }
-    setDeals(prev => prev.map(d => d.id === id ? { ...d, published_to_investors: true } : d));
-    toast.success("Published to Investor Dashboard");
+    if (error) { toast.error("Failed to publish"); return; }
+    setDeals(prev => prev.map(d => d.id === id ? { ...d, status: "reviewed" } : d));
+    toast.success("Marked as reviewed — visible to investors");
   };
 
   const handleUnpublish = async (id: string) => {
     const { error } = await supabase
       .from("firesale_requests")
-      .update({ published_to_investors: false })
+      .update({ status: "pending" })
       .eq("id", id);
-    if (error) {
-      toast.error("Failed to unpublish");
-      return;
-    }
-    setDeals(prev => prev.map(d => d.id === id ? { ...d, published_to_investors: false } : d));
-    toast.success("Removed from Investor Dashboard");
+    if (error) { toast.error("Failed to unpublish"); return; }
+    setDeals(prev => prev.map(d => d.id === id ? { ...d, status: "pending" } : d));
+    toast.success("Returned to pending screening");
   };
 
   return (
