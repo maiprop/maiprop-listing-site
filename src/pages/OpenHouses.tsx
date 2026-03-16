@@ -531,8 +531,7 @@ export default function OpenHouses() {
             mapListings.length > 0 ? (
               <MapView
                 listings={mapListings}
-                onListingClick={(id) => window.location.href = `/open-houses/${id}`}
-                className="w-full h-full"
+                height="100%"
               />
             ) : (
               <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
