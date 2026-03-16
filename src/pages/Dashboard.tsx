@@ -7,8 +7,11 @@ import {
   Search, Activity, Wrench, Shield, MapPin, Euro, Edit2,
   FolderKanban, Users, Briefcase, TrendingUp, Globe2, Flame,
   ArrowRight, Clock, CheckCircle2, AlertCircle, Phone, ExternalLink, Star, Crown,
-  FolderOpen, LayoutGrid,
+  FolderOpen, LayoutGrid, Lock, Zap,
 } from "lucide-react";
+import { useSubscription } from "@/hooks/useSubscription";
+import { useProfessionalAvailability } from "@/hooks/useProfessionalServices";
+import { Progress } from "@/components/ui/progress";
 import ContactsCRM from "@/components/ContactsCRM";
 import OpenHouseDashboardSection from "@/components/OpenHouseDashboardSection";
 import { Button } from "@/components/ui/button";
@@ -453,18 +456,7 @@ export default function Dashboard() {
                       {auctionAlerts.length > 0 ? "Manage Alerts" : "Create Alert"}
                     </Button>
                   </div>
-                  <div className="glass-card rounded-xl p-6 border border-emerald-500/20 bg-emerald-500/5 md:col-span-2">
-                    <h2 className="font-display font-semibold mb-3 flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-brand-emerald" /> Open Houses
-                    </h2>
-                    <p className="text-sm text-muted-foreground mb-3">
-                      Attend curated property open houses. Register and attend in person or virtually.
-                      <span className="ml-1 text-xs text-primary font-medium">AI insights &amp; similar deals require Pro.</span>
-                    </p>
-                    <Button variant="outline" size="sm" className="border-brand-emerald/40 text-brand-emerald hover:bg-brand-emerald/10 gap-1.5" onClick={() => setActiveSection("open-houses")}>
-                      <ExternalLink className="w-3.5 h-3.5" /> Browse Open Houses
-                    </Button>
-                  </div>
+                  <BuyerOpenHousesCard onOpen={() => setActiveSection("open-houses")} />
                 </div>
               )}
 
@@ -1029,6 +1021,8 @@ export default function Dashboard() {
               viewTrends={viewTrends}
               leadFunnel={leadFunnel}
               myProfessional={myProfessional}
+              onGoToProfile={() => setActiveSection("profile")}
+              onGoToServices={() => setActiveSection("services")}
             />
           )}
 
@@ -1593,6 +1587,132 @@ function LinkSection({
   );
 }
 
+// ── Buyer Open Houses card (with Pro-gating for AI insights) ─────────────────────
+function BuyerOpenHousesCard({ onOpen }: { onOpen: () => void }) {
+  const { isPro } = useSubscription();
+  return (
+    <div className="glass-card rounded-xl border border-brand-emerald/20 bg-brand-emerald/5 md:col-span-2 overflow-hidden">
+      <div className="p-6">
+        <h2 className="font-display font-semibold mb-3 flex items-center gap-2">
+          <Calendar className="w-4 h-4 text-brand-emerald" /> Open Houses
+        </h2>
+        <p className="text-sm text-muted-foreground mb-4">
+          Attend curated property open houses. Register and attend in person or virtually.
+        </p>
+
+        {/* Pro-gated AI features preview */}
+        <div className="relative mb-4">
+          <div className={cn("grid grid-cols-2 sm:grid-cols-3 gap-2 transition-all", !isPro && "blur-sm pointer-events-none select-none")}>
+            {[
+              { label: "AI Price Insight", value: "Market −8%", color: "text-brand-emerald" },
+              { label: "Similar Deals", value: "4 nearby", color: "text-primary" },
+              { label: "Predicted ROI", value: "6.2% / yr", color: "text-brand-gold" },
+            ].map(item => (
+              <div key={item.label} className="glass-card rounded-lg p-3 border border-border">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">{item.label}</p>
+                <p className={cn("font-display text-base font-bold mt-0.5", item.color)}>{item.value}</p>
+              </div>
+            ))}
+          </div>
+          {!isPro && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-xl bg-background/60 backdrop-blur-[2px]">
+              <Lock className="w-5 h-5 text-primary" />
+              <p className="text-xs font-semibold text-center px-2">AI insights require Pro</p>
+              <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground h-7 px-3 text-xs gap-1.5" asChild>
+                <Link to="/pricing"><Zap className="w-3 h-3" /> Upgrade to Pro</Link>
+              </Button>
+            </div>
+          )}
+        </div>
+
+        <Button variant="outline" size="sm" className="border-brand-emerald/40 text-brand-emerald hover:bg-brand-emerald/10 gap-1.5" onClick={onOpen}>
+          <ExternalLink className="w-3.5 h-3.5" /> Browse Open Houses
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ── Professional profile completion score card ───────────────────────────────────
+function ProfessionalProfileCompletion({ myProfessional, onGoToProfile, onGoToServices }: {
+  myProfessional?: any;
+  onGoToProfile?: () => void;
+  onGoToServices?: () => void;
+}) {
+  const { data: availability = [] } = useProfessionalAvailability(myProfessional?.id ?? "");
+  const hasAvailability = availability.length > 0;
+
+  const fields = [
+    { key: "photo",        label: "Profile photo",       done: !!myProfessional?.avatar_url,                         hint: "3× more profile views",   action: "profile" },
+    { key: "bio",          label: "Bio / About",          done: !!(myProfessional?.bio && myProfessional.bio.length > 20), hint: "Builds trust with clients", action: "profile" },
+    { key: "rate",         label: "Hourly rate",          done: !!myProfessional?.hourly_rate,                        hint: "Clients need pricing info",action: "profile" },
+    { key: "specialties",  label: "Specialties",          done: (myProfessional?.specialties?.length ?? 0) > 0,       hint: "Appear in filtered searches", action: "profile" },
+    { key: "availability", label: "Availability schedule",done: hasAvailability,                                      hint: "Enable direct booking",    action: "services" },
+  ];
+
+  const completedCount = fields.filter(f => f.done).length;
+  const score = Math.round((completedCount / fields.length) * 100);
+  const isComplete = score === 100;
+
+  return (
+    <div className={cn(
+      "glass-card rounded-xl p-5 border",
+      isComplete ? "border-brand-emerald/30 bg-brand-emerald/5" : "border-brand-gold/20 bg-brand-gold/5"
+    )}>
+      {/* Header + score */}
+      <div className="flex items-center justify-between mb-1">
+        <h3 className="text-sm font-semibold flex items-center gap-2">
+          {isComplete
+            ? <><CheckCircle2 className="w-4 h-4 text-brand-emerald" /> Profile Complete!</>
+            : <><AlertCircle className="w-4 h-4 text-brand-gold" /> Profile Completion</>
+          }
+        </h3>
+        <span className={cn("font-display text-lg font-bold", isComplete ? "text-brand-emerald" : score >= 60 ? "text-brand-gold" : "text-destructive")}>
+          {score}%
+        </span>
+      </div>
+
+      {/* Progress bar */}
+      <Progress
+        value={score}
+        className={cn("h-2 mb-4", isComplete ? "[&>div]:bg-brand-emerald" : score >= 60 ? "[&>div]:bg-brand-gold" : "[&>div]:bg-destructive")}
+      />
+
+      {/* Field checklist with edit shortcuts */}
+      <ul className="space-y-2">
+        {fields.map(f => (
+          <li key={f.key} className="flex items-center gap-3 text-sm">
+            {f.done
+              ? <CheckCircle2 className="w-4 h-4 text-brand-emerald shrink-0" />
+              : <AlertCircle className="w-4 h-4 text-brand-gold shrink-0" />
+            }
+            <span className={cn("flex-1 truncate", f.done ? "text-muted-foreground line-through" : "text-foreground")}>{f.label}</span>
+            {!f.done && (
+              <span className="text-[10px] text-muted-foreground hidden sm:inline truncate max-w-[140px]">{f.hint}</span>
+            )}
+            {!f.done && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 px-2 text-[10px] font-semibold text-primary border border-primary/20 hover:bg-primary/10 shrink-0"
+                onClick={f.action === "services" ? onGoToServices : onGoToProfile}
+              >
+                <Edit2 className="w-3 h-3 mr-1" /> Fix
+              </Button>
+            )}
+          </li>
+        ))}
+      </ul>
+
+      {isComplete && (
+        <p className="text-xs text-brand-emerald mt-3">
+          🎉 You're fully optimised — your profile appears prominently in client searches.
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ── Analytics section (listing trends, lead funnel, conversion) ─────────────────
 function AnalyticsSection({
   myListings,
@@ -1602,6 +1722,8 @@ function AnalyticsSection({
   viewTrends = [],
   leadFunnel,
   myProfessional,
+  onGoToProfile,
+  onGoToServices,
 }: {
   myListings: any[];
   leads: any[];
@@ -1610,6 +1732,8 @@ function AnalyticsSection({
   viewTrends?: { date: string; count: number }[];
   leadFunnel?: { pending: number; reviewed: number; confirmed: number; cancelled: number; total: number; conversionRate?: number };
   myProfessional?: any;
+  onGoToProfile?: () => void;
+  onGoToServices?: () => void;
 }) {
   const totalViews = myListings.reduce((s, l) => s + (l.views_count || 0), 0);
   const activeCount = myListings.filter(l => l.status === "active").length;
@@ -1701,20 +1825,7 @@ function AnalyticsSection({
                   <p className="text-xs text-muted-foreground mt-1">Leads that became confirmed</p>
                 </div>
               </div>
-              <div className="glass-card rounded-xl p-4 border border-border">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold">Improve Your Visibility</h3>
-                </div>
-                <ul className="space-y-2 text-sm text-muted-foreground">
-                  {!myProfessional?.avatar_url && <li className="flex items-center gap-2"><AlertCircle className="w-3.5 h-3.5 text-brand-gold shrink-0" /> Add a profile photo — profiles with photos get 3× more views</li>}
-                  {!myProfessional?.bio && <li className="flex items-center gap-2"><AlertCircle className="w-3.5 h-3.5 text-brand-gold shrink-0" /> Write a bio to describe your expertise</li>}
-                  {(!myProfessional?.specialties || myProfessional.specialties.length === 0) && <li className="flex items-center gap-2"><AlertCircle className="w-3.5 h-3.5 text-brand-gold shrink-0" /> Add specialties to appear in filtered searches</li>}
-                  {!myProfessional?.hourly_rate && <li className="flex items-center gap-2"><AlertCircle className="w-3.5 h-3.5 text-brand-gold shrink-0" /> Set your hourly rate so clients know what to expect</li>}
-                  {myProfessional?.avatar_url && myProfessional?.bio && myProfessional?.hourly_rate && (myProfessional?.specialties?.length ?? 0) > 0 && (
-                    <li className="flex items-center gap-2 text-brand-emerald"><CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> Your profile is fully optimised!</li>
-                  )}
-                </ul>
-              </div>
+              <ProfessionalProfileCompletion myProfessional={myProfessional} onGoToProfile={onGoToProfile} onGoToServices={onGoToServices} />
             </div>
           )}
 
