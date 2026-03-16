@@ -648,7 +648,7 @@ export default function Dashboard() {
 
           {/* ── MY LISTINGS ──────────────────────────────────────────────── */}
           {activeSection === "listings" && navItems.some(i => i.key === "listings") && (
-            <MyListingsSection
+            <MyListingsSection_inline
               myListings={myListings}
               listingsLoading={listingsLoading}
               toggleListingStatus={toggleListingStatus}
