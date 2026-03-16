@@ -328,11 +328,9 @@ export default function Dashboard() {
                   <p className="text-muted-foreground text-sm mt-1">
                     {isInvestorLike ? "Your investment pipeline and deal opportunities." :
                      bioType === "developer" ? "Manage your project listings and showcases." :
-                     bioType === "institutional" ? "Your portfolio, deal flow, and listings." :
                      role === "seller_landlord" || bioType === "seller" ? "Manage your listings and viewings." :
                      isSellSide ? "Here's what's happening with your listings and leads." :
                      role === "professional" ? "Your services and incoming client leads." :
-                     bioType === "investor" ? "Your deal pipeline and investment opportunities." :
                      "Here's your search activity and alerts."}
                   </p>
                 </div>
