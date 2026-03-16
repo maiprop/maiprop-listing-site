@@ -16,7 +16,6 @@ import { useMyListings, useUpdateListing, useDeleteListing } from "@/hooks/useLi
 import { useListingViewTrends, useLeadFunnel } from "@/hooks/useAnalytics";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useViewings, useUpdateViewing } from "@/hooks/useViewings";
-import OpenHouseDashboardSection from "@/components/OpenHouseDashboardSection";
 import { useSavedSearches, useDeleteSavedSearch, useToggleSavedSearchAlert } from "@/hooks/useSavedSearches";
 import { useAuctionAlerts, useDeleteAuctionAlert, useUpdateAuctionAlert } from "@/hooks/useAuctionAlerts";
 import { useMyProfessional, useProfessionalServices, useUpdateProfessional } from "@/hooks/useProfessionalServices";
@@ -113,9 +112,9 @@ function useUpdateLeadStatus() {
 // ── Nav key type ───────────────────────────────────────────────────────────────
 type NavKey =
   | "overview" | "listings" | "analytics" | "saved" | "saved-searches"
-  | "messages" | "viewings" | "auctions" | "open-houses" | "services" | "booking" | "leads"
+  | "messages" | "viewings" | "auctions" | "services" | "booking" | "leads"
   | "deal-flow" | "contacts" | "projects" | "portfolios"
-  | "profile" | "settings" | "admin-dashboard";
+  | "profile" | "settings";
 
 type DashboardRole = "individual" | "seller_landlord" | "agent" | "professional" | "investor" | "institutional" | "developer" | "admin";
 
@@ -129,7 +128,6 @@ const ALL_NAV_ITEMS: { icon: React.ElementType; label: string; key: NavKey }[] =
   { icon: MessageSquare, label: "Messages",         key: "messages"       },
   { icon: Calendar,      label: "Viewings",         key: "viewings"       },
   { icon: Gavel,         label: "Auction Alerts",   key: "auctions"       },
-  { icon: Building2,     label: "Open Houses",       key: "open-houses"    },
   { icon: Wrench,        label: "My Services",      key: "services"       },
   { icon: FolderKanban,  label: "Booking",          key: "booking"        },
   { icon: Briefcase,     label: "Leads",            key: "leads"          },
@@ -138,19 +136,18 @@ const ALL_NAV_ITEMS: { icon: React.ElementType; label: string; key: NavKey }[] =
   { icon: TrendingUp,    label: "Portfolios",       key: "portfolios"     },
   { icon: User,          label: "Profile",          key: "profile"        },
   { icon: Settings,      label: "Settings",         key: "settings"       },
-  { icon: Shield,        label: "Admin Dashboard",  key: "admin-dashboard" },
 ];
 
 // ── Nav per bio-type (spec-accurate) ──────────────────────────────────────────
 const NAV_BY_TYPE: Record<string, NavKey[]> = {
-  buyer:         ["overview", "saved", "saved-searches", "messages", "viewings", "open-houses", "auctions", "profile", "settings"],
-  seller:        ["overview", "listings", "saved", "saved-searches", "messages", "viewings", "open-houses", "profile", "settings"],
-  investor:      ["overview", "deal-flow", "saved", "saved-searches", "messages", "viewings", "open-houses", "auctions", "profile", "settings"],
-  agent:         ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "open-houses", "auctions", "contacts", "profile", "settings"],
-  institutional: ["overview", "deal-flow", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "open-houses", "auctions", "contacts", "profile", "settings"],
-  developer:     ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "open-houses", "contacts", "projects", "portfolios", "profile", "settings"],
-  professional:  ["overview", "services", "booking", "leads", "messages", "viewings", "open-houses", "profile", "settings"],
-  admin:         ["overview", "admin-dashboard", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "open-houses", "auctions", "contacts", "profile", "settings"],
+  buyer:         ["overview", "saved", "saved-searches", "messages", "viewings", "auctions", "profile", "settings"],
+  seller:        ["overview", "listings", "saved", "saved-searches", "messages", "viewings", "profile", "settings"],
+  investor:      ["overview", "deal-flow", "saved", "saved-searches", "messages", "viewings", "auctions", "profile", "settings"],
+  agent:         ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "contacts", "profile", "settings"],
+  institutional: ["overview", "deal-flow", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "contacts", "profile", "settings"],
+  developer:     ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "contacts", "projects", "portfolios", "profile", "settings"],
+  professional:  ["overview", "services", "booking", "leads", "messages", "viewings", "profile", "settings"],
+  admin:         ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "contacts", "profile", "settings"],
 };
 
 function getNavItemsForBioType(bioType: string | null, role: DashboardRole) {
@@ -918,11 +915,6 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* ── OPEN HOUSES ───────────────────────────────────────────────── */}
-          {activeSection === "open-houses" && navItems.some(i => i.key === "open-houses") && (
-            <OpenHouseDashboardSection myListings={myListings} />
-          )}
-
           {/* ── AUCTION ALERTS ───────────────────────────────────────────── */}
           {activeSection === "auctions" && navItems.some(i => i.key === "auctions") && (
             <div className="space-y-6">
@@ -1055,22 +1047,6 @@ export default function Dashboard() {
               viewTrends={viewTrends}
               leadFunnel={leadFunnel}
             />
-          )}
-
-          {/* ── ADMIN DASHBOARD ───────────────────────────────────────── */}
-          {activeSection === "admin-dashboard" && navItems.some(i => i.key === "admin-dashboard") && (
-            <div className="space-y-6">
-              <h1 className="font-display text-2xl font-bold">Admin Dashboard</h1>
-              <p className="text-muted-foreground text-sm">Quick Sale pipeline, subscribers, pricing, and OS sync.</p>
-              <div className="flex flex-wrap gap-3">
-                <Button className="bg-destructive/20 border border-destructive/40 text-destructive hover:bg-destructive/30 gap-2" asChild>
-                  <Link to="/admin?tab=pipeline"><Flame className="w-4 h-4" /> Quick Sale Pipeline</Link>
-                </Button>
-                <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" asChild>
-                  <Link to="/admin"><Shield className="w-4 h-4" /> Full Admin <ExternalLink className="w-4 h-4" /></Link>
-                </Button>
-              </div>
-            </div>
           )}
 
           {/* ── SETTINGS ─────────────────────────────────────────────── */}
