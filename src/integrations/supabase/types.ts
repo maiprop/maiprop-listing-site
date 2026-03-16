@@ -341,7 +341,6 @@ export type Database = {
           notes: string | null
           offer_price: number | null
           property_type: Database["public"]["Enums"]["property_type"] | null
-          published_to_investors: boolean
           sqm: number
           status: string
           updated_at: string
@@ -362,7 +361,6 @@ export type Database = {
           notes?: string | null
           offer_price?: number | null
           property_type?: Database["public"]["Enums"]["property_type"] | null
-          published_to_investors?: boolean
           sqm: number
           status?: string
           updated_at?: string
@@ -383,7 +381,6 @@ export type Database = {
           notes?: string | null
           offer_price?: number | null
           property_type?: Database["public"]["Enums"]["property_type"] | null
-          published_to_investors?: boolean
           sqm?: number
           status?: string
           updated_at?: string
