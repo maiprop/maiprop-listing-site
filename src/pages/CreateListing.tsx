@@ -735,6 +735,7 @@ export default function CreateListing() {
         suitable_student: form.suitable_student, suitable_holiday: form.suitable_holiday,
         suitable_investment: form.suitable_investment, suitable_commercial_use: form.suitable_commercial_use,
         is_buildable: form.is_buildable, within_city_plan: form.within_city_plan,
+        is_pre_sale: form.is_pre_sale, is_off_market: form.is_off_market,
         within_settlement: form.within_settlement, has_water_supply: form.has_water_supply,
         has_electricity_supply: form.has_electricity_supply, has_land_concession: form.has_land_concession,
         has_three_phase_power: form.has_three_phase_power, has_loading_dock: form.has_loading_dock,
