@@ -106,8 +106,9 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
       const payload = items.map(({ id, created_at, updated_at, ...rest }) => ({
         id,
         ...rest,
+        metadata: (rest.metadata ?? {}) as any,
       }));
-      const { error } = await supabase.from("pricing_configs").upsert(payload, { onConflict: "id" });
+      const { error } = await supabase.from("pricing_configs").upsert(payload as any, { onConflict: "id" });
       if (error) throw error;
     },
     onSuccess: () => {
