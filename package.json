@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "seed:users": "npx tsx scripts/seed-mock-users.ts",
     "db:push": "supabase db push",
     "build": "vite build",
     "build:dev": "vite build --mode development",
