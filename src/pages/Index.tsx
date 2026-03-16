@@ -1561,11 +1561,11 @@ export default function Index() {
               </Link>
             </Button>
           </div>
-          {/* 1×3 grid — show up to 3 listings */}
+          {/* 1×4 grid — show up to 4 listings */}
           <div
-            className={`grid grid-cols-1 md:grid-cols-3 gap-4 reveal reveal-delay-1 ${auctionsInView ? "in-view" : ""}`}
+            className={`grid grid-cols-1 md:grid-cols-4 gap-4 reveal reveal-delay-1 ${auctionsInView ? "in-view" : ""}`}
           >
-            {auctionListings.slice(0, 3).map((l: any) => {
+            {auctionListings.slice(0, 4).map((l: any) => {
               const svFallback =
                 l.latitude != null && l.longitude != null
                   ? getStreetViewProxyUrl({ lat: Number(l.latitude), lng: Number(l.longitude) })
@@ -1608,7 +1608,7 @@ export default function Index() {
             {/* Fill remaining slots with skeleton placeholders when loading */}
             {auctionsLoading &&
               auctionListings.length === 0 &&
-              Array.from({ length: 3 }).map((_, i) => (
+              Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="glass-card rounded-2xl border border-border overflow-hidden animate-pulse">
                   <div className="bg-muted h-52 w-full" />
                   <div className="p-4 space-y-3">
@@ -1644,9 +1644,9 @@ export default function Index() {
             </Button>
           </div>
           <div
-            className={`grid grid-cols-1 md:grid-cols-3 gap-4 reveal reveal-delay-1 ${auctionsInView ? "in-view" : ""}`}
+            className={`grid grid-cols-1 md:grid-cols-4 gap-4 reveal reveal-delay-1 ${auctionsInView ? "in-view" : ""}`}
           >
-            {openHouseListings.slice(0, 3).map((l: any) => {
+            {openHouseListings.slice(0, 4).map((l: any) => {
               const imgs: string[] = l.cover_image_url ? [l.cover_image_url] : [];
               if (!imgs.length && l.listing_images?.length) {
                 const sorted = [...l.listing_images].sort((a: any, b: any) => a.sort_order - b.sort_order);
@@ -1761,6 +1761,28 @@ export default function Index() {
                   aiScore: 84,
                   views: 54,
                   tags: ["City view"],
+                },
+                {
+                  id: "mock-oh-4",
+                  title: "Renovated Studio in Kolonaki",
+                  address: "Kolonaki Square",
+                  city: "Athens",
+                  price: 265000,
+                  pricePerSqm: 4200,
+                  bedrooms: 1,
+                  bathrooms: 1,
+                  sqm: 63,
+                  floor: 3,
+                  totalFloors: 6,
+                  yearBuilt: 1960,
+                  energyClass: "B",
+                  images: ["https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800&q=60"],
+                  type: "apartment" as const,
+                  listingType: "open_house" as const,
+                  auctionDate: "Fri 25 Apr · 10:00",
+                  aiScore: 79,
+                  views: 98,
+                  tags: ["Terrace", "Storage"],
                 },
               ].map((p) => <PropertyCard key={p.id} property={p} />)}
           </div>

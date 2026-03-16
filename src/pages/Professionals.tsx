@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Search, Star, MapPin, CheckCircle, Loader2, MessageSquare, ArrowRight } from "lucide-react";
+import { Search, Star, MapPin, CheckCircle, Loader2, MessageSquare, ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
@@ -77,6 +77,14 @@ export default function Professionals() {
   });
   const [search, setSearch] = useState(searchFromUrl);
   const [aiMatchOpen, setAiMatchOpen] = useState(false);
+  const categoryScrollRef = useRef<HTMLDivElement>(null);
+
+  const scrollCategories = (dir: "left" | "right") => {
+    const el = categoryScrollRef.current;
+    if (!el) return;
+    const step = 280;
+    el.scrollBy({ left: dir === "left" ? -step : step, behavior: "smooth" });
+  };
 
   useEffect(() => {
     if (categoryFromUrl) {
@@ -172,8 +180,20 @@ export default function Professionals() {
         {/* ── Category Groups ─────────────────────────────────────────── */}
         <div className="bg-card/40 border-b border-border">
           <div className="container py-4 sm:py-6">
-            {/* Horizontally scrollable on mobile */}
-            <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1">
+            <div className="relative flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                className="shrink-0 h-9 w-9 rounded-full border-border hover:bg-secondary hidden sm:flex"
+                onClick={() => scrollCategories("left")}
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              {/* Slider — horizontally scrollable */}
+              <div
+                ref={categoryScrollRef}
+                className="flex gap-2 overflow-x-auto scrollbar-none pb-1 flex-1 min-w-0 scroll-smooth snap-x snap-mandatory"
+              >
               <button
                 onClick={() => { setSelectedGroup(null); setSearchParams((p) => { const n = new URLSearchParams(p); n.delete("category"); return n; }); }}
                 className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-sm font-medium border transition-all shrink-0 ${
@@ -188,7 +208,7 @@ export default function Professionals() {
                   if (selectedGroup === "agents") { setSelectedGroup(null); setSearchParams((p) => { const n = new URLSearchParams(p); n.delete("category"); return n; }); }
                   else { setSelectedGroup("agents"); setSearchParams((p) => { const n = new URLSearchParams(p); n.set("category", "real_estate_agent"); return n; }); }
                 }}
-                className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-sm font-semibold border transition-all shrink-0 ${
+                className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-sm font-semibold border transition-all shrink-0 snap-start ${
                 selectedGroup === "agents" ?
                 "bg-cyan-500/10 border-cyan-500/20 text-cyan-400" :
                 "border-border bg-secondary/50 text-muted-foreground hover:text-foreground"}`}
@@ -207,7 +227,7 @@ export default function Professionals() {
                     setSearchParams((p) => { const n = new URLSearchParams(p); if (cat) n.set("category", cat); else n.delete("category"); return n; });
                   }
                 }}
-                className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-sm font-semibold border transition-all shrink-0 ${
+                className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-sm font-semibold border transition-all shrink-0 snap-start ${
                 selectedGroup === group.id ?
                 `${group.bg} ${group.border} ${group.color}` :
                 "border-border bg-secondary/50 text-muted-foreground hover:text-foreground"}`
@@ -216,6 +236,15 @@ export default function Professionals() {
                   <span>{group.label}</span>
                 </button>
               )}
+              </div>
+              <Button
+                variant="outline"
+                size="icon"
+                className="shrink-0 h-9 w-9 rounded-full border-border hover:bg-secondary hidden sm:flex"
+                onClick={() => scrollCategories("right")}
+              >
+                <ChevronRight className="w-4 h-4" />
+              </Button>
             </div>
           </div>
         </div>

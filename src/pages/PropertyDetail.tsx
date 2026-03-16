@@ -25,8 +25,6 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { toast } from "sonner";
 import PropertyMiniMap from "@/components/PropertyMiniMap";
 import PropertyValuation from "@/components/PropertyValuation";
-import { ROICalculator } from "@/components/ROICalculator";
-import { DealChecklist } from "@/components/DealChecklist";
 import NeighbourhoodReport from "@/components/NeighbourhoodReport";
 import { walkScoreLabel, walkScoreColour } from "@/lib/walkScore";
 import { HEATING_TYPES, CONDITION_OPTIONS } from "@/lib/filterConfig";
@@ -59,73 +57,6 @@ const ENERGY_COLORS: Record<string, string> = {
   "F": "bg-[#e84020] text-white",
   "G": "bg-[#cc1414] text-white"
 };
-
-// ─── Mortgage calculator ──────────────────────────────────────────────────────
-function MortgageCalculator({ price }: {price: number;}) {
-  const [downPct, setDownPct] = useState(20);
-  const [rate, setRate] = useState(3.8);
-  const [years, setYears] = useState(20);
-
-  const down = Math.round(price * (downPct / 100));
-  const loan = price - down;
-  const monthly = loan > 0 ?
-  Math.round(loan * (rate / 1200) / (1 - Math.pow(1 + rate / 1200, -years * 12))) :
-  0;
-  const totalPaid = monthly * years * 12;
-  const totalInterest = totalPaid - loan;
-
-  return (
-    <div className="glass-card rounded-2xl overflow-hidden border border-border">
-      <div className="flex items-center gap-2.5 px-5 py-4 border-b border-border">
-        <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
-          <Euro className="w-3.5 h-3.5 text-primary" />
-        </div>
-        <h4 className="font-display font-semibold text-sm">Mortgage Calculator</h4>
-        <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium border border-border">Indicative</span>
-      </div>
-
-      <div className="p-5 space-y-5">
-        {[
-        { label: "Down Payment", value: `${downPct}%`, sub: `€${down.toLocaleString()}`, min: 10, max: 50, step: 5, val: downPct, set: setDownPct },
-        { label: "Interest Rate", value: `${rate.toFixed(1)}%`, sub: "p.a.", min: 2, max: 8, step: 0.1, val: rate, set: setRate },
-        { label: "Loan Term", value: `${years} yrs`, sub: `${years * 12} payments`, min: 5, max: 30, step: 5, val: years, set: setYears }].
-        map((s) =>
-        <div key={s.label} className="space-y-2">
-            <div className="flex justify-between items-center">
-              <span className="text-xs text-muted-foreground">{s.label}</span>
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-sm font-bold text-foreground">{s.value}</span>
-                <span className="text-[10px] text-muted-foreground">{s.sub}</span>
-              </div>
-            </div>
-            <input type="range" min={s.min} max={s.max} step={s.step} value={s.val}
-          onChange={(e) => s.set(Number(e.target.value))}
-          className="w-full h-1 rounded-full appearance-none cursor-pointer accent-primary bg-border" />
-          </div>
-        )}
-
-        <div className="rounded-xl bg-primary/8 border border-primary/15 p-4 text-center">
-          <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1.5">Est. Monthly Payment</p>
-          <p className="font-display font-black text-4xl text-primary">€{monthly.toLocaleString()}</p>
-          <div className="grid grid-cols-2 gap-3 mt-4 pt-3 border-t border-primary/10 text-xs">
-            <div className="space-y-0.5">
-              <p className="text-muted-foreground">Loan Amount</p>
-              <p className="font-semibold">€{loan.toLocaleString()}</p>
-            </div>
-            <div className="space-y-0.5">
-              <p className="text-muted-foreground">Total Interest</p>
-              <p className="font-semibold text-destructive">€{totalInterest.toLocaleString()}</p>
-            </div>
-          </div>
-        </div>
-
-        <p className="text-[10px] text-muted-foreground leading-relaxed">
-          Indicative only. Final rate subject to credit assessment. Includes 0.12% annual levy (Law 128/75).
-        </p>
-      </div>
-    </div>);
-
-}
 
 // ─── Feature chip ────────────────────────────────────────────────────────────
 function FeatureChip({ icon: Icon, label }: {icon?: any;label: string;}) {
@@ -1391,53 +1322,6 @@ export default function PropertyDetail() {
 
 
 
-              }
-
-              {/* ⑥ Mortgage Calculator — hidden for auctions and rentals */}
-              {!isAuction && listingType !== "rent" && <MortgageCalculator price={price} />}
-
-              {/* ROI Calculator — for investors */}
-              {!isAuction &&
-              <ROICalculator defaultPrice={price} defaultSqm={sqm ?? 80} />
-              }
-
-              {/* Due diligence checklist — for logged-in users */}
-              {user && !isAuction &&
-              <DealChecklist entityType="listing" entityId={id} />
-              }
-
-              {/* Rental Summary */}
-              {listingType === "rent" &&
-              <div className="glass-card rounded-2xl border border-border overflow-hidden">
-                  <div className="flex items-center gap-2.5 px-5 py-4 border-b border-border">
-                    <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
-                      <Euro className="w-3.5 h-3.5 text-primary" />
-                    </div>
-                    <h4 className="font-display font-semibold text-sm">Rental Summary</h4>
-                  </div>
-                  <div className="p-5 space-y-2.5 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground text-xs">Monthly Rent</span>
-                      <span className="font-semibold text-sm">€{price.toLocaleString()}</span>
-                    </div>
-                    {(db as any)?.monthly_expenses &&
-                  <div className="flex justify-between">
-                        <span className="text-muted-foreground text-xs">Shared Expenses</span>
-                        <span className="text-sm">€{(db as any).monthly_expenses}</span>
-                      </div>
-                  }
-                    {(db as any)?.deposit_months &&
-                  <div className="flex justify-between">
-                        <span className="text-muted-foreground text-xs">Deposit</span>
-                        <span className="text-sm">{(db as any).deposit_months}mo · €{(price * (db as any).deposit_months).toLocaleString()}</span>
-                      </div>
-                  }
-                    <div className="pt-2.5 border-t border-border flex justify-between font-semibold">
-                      <span className="text-xs text-muted-foreground">Total Move-in Cost</span>
-                      <span className="text-primary">€{(price * (1 + ((db as any)?.deposit_months || 0))).toLocaleString()}</span>
-                    </div>
-                  </div>
-                </div>
               }
 
               {/* Report error */}
