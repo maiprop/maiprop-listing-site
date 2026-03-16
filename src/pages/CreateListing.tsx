@@ -1432,6 +1432,8 @@ export default function CreateListing() {
                     <p className="text-xs text-muted-foreground mb-3">Get priority placement in search with a featured badge. Available in a future update.</p>
                   </div>
                 )}
+              </div>
+            )}
 
             {/* ── STEP 6: Photos ── */}
             {step === 6 && (
