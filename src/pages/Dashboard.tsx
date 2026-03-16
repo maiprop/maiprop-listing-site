@@ -1739,20 +1739,7 @@ function AnalyticsSection({
                   <p className="text-xs text-muted-foreground mt-1">Leads that became confirmed</p>
                 </div>
               </div>
-              <div className="glass-card rounded-xl p-4 border border-border">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold">Improve Your Visibility</h3>
-                </div>
-                <ul className="space-y-2 text-sm text-muted-foreground">
-                  {!myProfessional?.avatar_url && <li className="flex items-center gap-2"><AlertCircle className="w-3.5 h-3.5 text-brand-gold shrink-0" /> Add a profile photo — profiles with photos get 3× more views</li>}
-                  {!myProfessional?.bio && <li className="flex items-center gap-2"><AlertCircle className="w-3.5 h-3.5 text-brand-gold shrink-0" /> Write a bio to describe your expertise</li>}
-                  {(!myProfessional?.specialties || myProfessional.specialties.length === 0) && <li className="flex items-center gap-2"><AlertCircle className="w-3.5 h-3.5 text-brand-gold shrink-0" /> Add specialties to appear in filtered searches</li>}
-                  {!myProfessional?.hourly_rate && <li className="flex items-center gap-2"><AlertCircle className="w-3.5 h-3.5 text-brand-gold shrink-0" /> Set your hourly rate so clients know what to expect</li>}
-                  {myProfessional?.avatar_url && myProfessional?.bio && myProfessional?.hourly_rate && (myProfessional?.specialties?.length ?? 0) > 0 && (
-                    <li className="flex items-center gap-2 text-brand-emerald"><CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> Your profile is fully optimised!</li>
-                  )}
-                </ul>
-              </div>
+              <ProfessionalProfileCompletion myProfessional={myProfessional} />
             </div>
           )}
 
