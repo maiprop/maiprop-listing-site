@@ -18,6 +18,7 @@ import { Footer } from "@/components/Footer";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
 
 type Subscription = {
   id: string;
@@ -136,17 +137,14 @@ export default function InvestorDashboard() {
 
   const [activeTab] = useState<"deals">("deals");
 
-  // Participant type from bio (agent, developer, institutional, etc.)
-  const participantType = profile?.bio?.match(/^__type:(\w+)/)?.[1] || "";
+  const participantType = getParticipantTypeFromProfile(profile);
 
-  // Subscription state (loaded from DB)
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [subLoading, setSubLoading] = useState(true);
   const subscribed = subscription?.status === "active" || subscription?.status === "trial";
 
-  // Deal flow is for investors only — not real estate agents.
-  const isInvestorType = ["investor", "institutional"].includes(participantType) || ["investor", "institutional"].includes(profile?.role || "");
-  const isRealEstateAgent = profile?.role === "agent" || participantType === "agent";
+  const isInvestorType = ["investor", "institutional"].includes(participantType);
+  const isRealEstateAgent = participantType === "agent";
   const canAccessDealFlow = subscribed && isInvestorType;
   const [showGate, setShowGate] = useState(false);
   const [selectedTier, setSelectedTier] = useState<string | null>(null);

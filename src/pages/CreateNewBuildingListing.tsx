@@ -12,6 +12,7 @@ import { type ProjectUnitInsert } from "@/hooks/useProjectUnits";
 import { useAddProjectMedia, type ProjectMediaType } from "@/hooks/useProjectMedia";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
 
 const INPUT_CLS = "w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors";
 const LABEL_CLS = "text-xs text-muted-foreground block mb-1.5 font-medium";
@@ -44,7 +45,7 @@ export default function CreateNewBuildingListing() {
   const { user, profile } = useAuth();
   const addMedia = useAddProjectMedia();
 
-  const participantType = profile?.bio?.match(/^__type:(\w+)/)?.[1] || "";
+  const participantType = getParticipantTypeFromProfile(profile);
   const canCreateListing = participantType === "developer";
 
   const [step, setStep] = useState(1);

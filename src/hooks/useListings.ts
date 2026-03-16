@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { getOwnerParticipantType } from "@/lib/participantConfig";
 
 export function useListings(filters?: {
   city?: string;
@@ -105,11 +106,7 @@ export function useListing(id: string) {
         profiles = profilePublic ?? null;
         ownerIsPro = !!(invSub?.status === "active" && (invSub?.tier || "").toLowerCase() === "pro");
         if (profileFull) {
-          ownerParticipantType = ["agent", "institutional", "developer"].includes(profileFull.role || "") ? "agent"
-            : profileFull.role === "seller_landlord" ? "seller"
-            : (profileFull.bio ?? "").startsWith("__type:seller") ? "seller"
-            : (profileFull.bio ?? "").startsWith("__type:agent") || (profileFull.bio ?? "").startsWith("__type:institutional") || (profileFull.bio ?? "").startsWith("__type:developer") ? "agent"
-            : null;
+          ownerParticipantType = getOwnerParticipantType(profileFull);
         }
       }
       return { ...data, profiles, ownerIsPro, ownerParticipantType };

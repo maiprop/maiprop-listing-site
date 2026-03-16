@@ -13,6 +13,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { useCreateListingConnections } from "@/hooks/useCreateListingConnections";
 import { useSubscription } from "@/hooks/useSubscription";
+import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
 import { GOOGLE_MAPS_API_KEY } from "@/lib/config";
 import { HEATING_TYPES, CONDITION_OPTIONS } from "@/lib/filterConfig";
 
@@ -226,8 +227,8 @@ export default function CreateListing() {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
 
-  const participantType = profile?.bio?.match(/^__type:(\w+)/)?.[1] || "";
-  const canCreateListing = ["seller", "agent", "institutional", "developer"].includes(participantType) || ["agent", "institutional", "developer", "seller_landlord"].includes(profile?.role || "");
+  const participantType = getParticipantTypeFromProfile(profile);
+  const canCreateListing = ["seller", "agent", "institutional", "developer"].includes(participantType);
 
   const redirectedRef = useRef(false);
   useEffect(() => {

@@ -18,6 +18,7 @@ import { useMyListings, useUpdateListing } from "@/hooks/useListings";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
 
 const INPUT_CLS = "w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors";
 const LABEL_CLS = "text-xs text-muted-foreground block mb-1.5 font-medium";
@@ -54,7 +55,7 @@ export default function ProjectDetail() {
   const { id } = useParams();
   const qc = useQueryClient();
   const { user, profile } = useAuth();
-  const participantType = profile?.bio?.match(/^__type:(\w+)/)?.[1] || "";
+  const participantType = getParticipantTypeFromProfile(profile);
   const isDeveloper = participantType === "developer";
   const { data: project, isLoading } = useProject(id);
   const { data: units = [] } = useProjectUnits(id);
