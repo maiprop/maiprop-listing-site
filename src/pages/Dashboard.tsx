@@ -129,6 +129,7 @@ const ALL_NAV_ITEMS: { icon: React.ElementType; label: string; key: NavKey }[] =
   { icon: MessageSquare, label: "Messages",         key: "messages"       },
   { icon: Calendar,      label: "Viewings",         key: "viewings"       },
   { icon: Gavel,         label: "Auction Alerts",   key: "auctions"       },
+  { icon: Calendar,      label: "Open Houses",      key: "open-houses"    },
   { icon: Wrench,        label: "My Services",      key: "services"       },
   { icon: FolderKanban,  label: "Booking",          key: "booking"        },
   { icon: Briefcase,     label: "Leads",            key: "leads"          },
