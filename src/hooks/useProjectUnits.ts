@@ -2,6 +2,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
+const db = supabase as any;
+
 export type ProjectUnitInsert = {
   project_id: string;
   unit_id?: string;
@@ -36,7 +38,7 @@ export function useProjectUnits(projectId: string | undefined) {
     queryKey: ["project_units", projectId],
     queryFn: async () => {
       if (!projectId) return [];
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from("project_units")
         .select("*")
         .eq("project_id", projectId)
@@ -53,7 +55,7 @@ export function useCreateProjectUnit() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (unit: ProjectUnitInsert) => {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from("project_units")
         .insert(unit)
         .select()
@@ -61,7 +63,7 @@ export function useCreateProjectUnit() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (_, { project_id }) => {
+    onSuccess: (_: any, { project_id }: ProjectUnitInsert) => {
       qc.invalidateQueries({ queryKey: ["project_units", project_id] });
       qc.invalidateQueries({ queryKey: ["projects"] });
       toast.success("Unit added");
@@ -74,7 +76,7 @@ export function useUpdateProjectUnit() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, projectId, updates }: { id: string; projectId: string; updates: ProjectUnitUpdate }) => {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from("project_units")
         .update(updates)
         .eq("id", id)
@@ -83,7 +85,7 @@ export function useUpdateProjectUnit() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (_, { projectId }) => {
+    onSuccess: (_: any, { projectId }: { id: string; projectId: string; updates: ProjectUnitUpdate }) => {
       qc.invalidateQueries({ queryKey: ["project_units", projectId] });
       qc.invalidateQueries({ queryKey: ["projects"] });
       toast.success("Unit updated");
@@ -96,10 +98,10 @@ export function useDeleteProjectUnit() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, projectId }: { id: string; projectId: string }) => {
-      const { error } = await supabase.from("project_units").delete().eq("id", id);
+      const { error } = await db.from("project_units").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: (_, { projectId }) => {
+    onSuccess: (_: any, { projectId }: { id: string; projectId: string }) => {
       qc.invalidateQueries({ queryKey: ["project_units", projectId] });
       qc.invalidateQueries({ queryKey: ["projects"] });
       toast.success("Unit removed");

@@ -2,6 +2,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
+const db = supabase as any;
+
 export type ProjectMediaType =
   | "rendering"
   | "floor_plan"
@@ -17,7 +19,7 @@ export function useProjectMedia(projectId: string | undefined) {
     queryKey: ["project_media", projectId],
     queryFn: async () => {
       if (!projectId) return [];
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from("project_media")
         .select("*")
         .eq("project_id", projectId)
@@ -46,7 +48,7 @@ export function useAddProjectMedia() {
       title?: string;
       sort_order?: number;
     }) => {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from("project_media")
         .insert({ project_id, url, media_type, title: title || null, sort_order: sort_order ?? 0 })
         .select()
@@ -54,7 +56,7 @@ export function useAddProjectMedia() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (_, { project_id }) => {
+    onSuccess: (_: any, { project_id }: { project_id: string; url: string; media_type: ProjectMediaType; title?: string; sort_order?: number }) => {
       qc.invalidateQueries({ queryKey: ["project_media", project_id] });
       qc.invalidateQueries({ queryKey: ["projects"] });
       toast.success("Media added");
@@ -66,11 +68,11 @@ export function useAddProjectMedia() {
 export function useDeleteProjectMedia() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, projectId }: { id: string; projectId: string }) => {
-      const { error } = await supabase.from("project_media").delete().eq("id", id);
+    mutationFn: async ({ id }: { id: string; projectId: string }) => {
+      const { error } = await db.from("project_media").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: (_, { projectId }) => {
+    onSuccess: (_: any, { projectId }: { id: string; projectId: string }) => {
       qc.invalidateQueries({ queryKey: ["project_media", projectId] });
       qc.invalidateQueries({ queryKey: ["projects"] });
       toast.success("Media removed");
