@@ -145,8 +145,8 @@ const NAV_BY_TYPE: Record<string, NavKey[]> = {
   buyer:         ["overview", "saved", "saved-searches", "messages", "viewings", "open-houses", "auctions", "profile", "settings"],
   seller:        ["overview", "listings", "saved", "saved-searches", "messages", "viewings", "open-houses", "profile", "settings"],
   investor:      ["overview", "deal-flow", "saved", "saved-searches", "messages", "viewings", "open-houses", "auctions", "profile", "settings"],
-  agent:         ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "open-houses", "auctions", "contacts", "projects", "portfolios", "profile", "settings"],
-  institutional: ["overview", "deal-flow", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "open-houses", "auctions", "contacts", "projects", "portfolios", "profile", "settings"],
+  agent:         ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "open-houses", "auctions", "contacts", "profile", "settings"],
+  institutional: ["overview", "deal-flow", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "open-houses", "auctions", "contacts", "profile", "settings"],
   developer:     ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "open-houses", "contacts", "projects", "portfolios", "profile", "settings"],
   professional:  ["overview", "services", "booking", "leads", "messages", "viewings", "open-houses", "profile", "settings"],
 };
