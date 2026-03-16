@@ -1589,16 +1589,14 @@ function AnalyticsSection({
   const totalLeads = leads.length;
   const maxTrendCount = Math.max(1, ...viewTrends.map(t => t.count));
 
-  const stats: { label: string; value: number; color: string }[] = [
+  const stats: { label: string; value: number; color: string }[] = role === "professional" ? [
+    { label: "Total Leads", value: totalLeads, color: "text-primary" },
+    { label: "Pending Leads", value: pendingLeads, color: "text-brand-gold" },
+    { label: "Confirmed", value: leadFunnel?.confirmed ?? 0, color: "text-brand-emerald" },
+    { label: "Conversion Rate", value: leadFunnel?.conversionRate ?? 0, color: "text-brand-emerald" },
+  ] : [
     { label: "Active Listings", value: activeCount, color: "text-primary" },
     { label: "Total Views", value: totalViews, color: "text-brand-emerald" },
-    ...(role === "professional" && leadFunnel ? [
-      { label: "Conversion Rate", value: leadFunnel.conversionRate, color: "text-brand-emerald" },
-      { label: "Total Leads", value: totalLeads, color: "text-primary" },
-    ] : role === "professional" ? [
-      { label: "Pending Leads", value: pendingLeads, color: "text-brand-gold" },
-      { label: "Total Leads", value: totalLeads, color: "text-primary" },
-    ] : []),
   ];
 
   return (
