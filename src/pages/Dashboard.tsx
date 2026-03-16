@@ -456,18 +456,7 @@ export default function Dashboard() {
                       {auctionAlerts.length > 0 ? "Manage Alerts" : "Create Alert"}
                     </Button>
                   </div>
-                  <div className="glass-card rounded-xl p-6 border border-emerald-500/20 bg-emerald-500/5 md:col-span-2">
-                    <h2 className="font-display font-semibold mb-3 flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-brand-emerald" /> Open Houses
-                    </h2>
-                    <p className="text-sm text-muted-foreground mb-3">
-                      Attend curated property open houses. Register and attend in person or virtually.
-                      <span className="ml-1 text-xs text-primary font-medium">AI insights &amp; similar deals require Pro.</span>
-                    </p>
-                    <Button variant="outline" size="sm" className="border-brand-emerald/40 text-brand-emerald hover:bg-brand-emerald/10 gap-1.5" onClick={() => setActiveSection("open-houses")}>
-                      <ExternalLink className="w-3.5 h-3.5" /> Browse Open Houses
-                    </Button>
-                  </div>
+                  <BuyerOpenHousesCard onOpen={() => setActiveSection("open-houses")} />
                 </div>
               )}
 
