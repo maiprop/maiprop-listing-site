@@ -30,7 +30,7 @@ export function useProject(id: string | undefined) {
       if (!id) return null;
       const { data, error } = await projectsClient
         .from("projects")
-        .select("*, listings(id, title, city, price, sqm, cover_image_url, listing_type), project_media(*), project_units(*)")
+        .select("*")
         .eq("id", id)
         .single();
       if (error) throw error;
