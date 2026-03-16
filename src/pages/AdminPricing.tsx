@@ -23,7 +23,7 @@ type PricingConfig = {
   amount: number;
   is_active: boolean;
   sort_order: number;
-  metadata: Record<string, unknown>;
+  metadata: Record<string, unknown> | null;
 };
 
 /** Predefined sections so admin can manage all pricings: users, professionals, agents, valuation, firesale, ad-hoc */
