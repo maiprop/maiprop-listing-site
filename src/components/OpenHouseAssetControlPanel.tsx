@@ -150,7 +150,7 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner }: Props
                     {r.status === "pending" && (
                       <div className="flex gap-2">
                         <Button size="sm" variant="outline" className="gap-1 text-emerald-600 border-emerald-500/40"
-                          onClick={() => updateReg.mutate({ id: r.id, updates: { status: "approved", approved_at: new Date().toISOString(), approved_by: user?.id } })}>
+                          onClick={() => updateReg.mutate({ id: r.id, updates: { status: "approved", approved_at: new Date().toISOString() } })}>
                           <Check className="w-3.5 h-3.5" /> Approve
                         </Button>
                         <Button size="sm" variant="outline" className="gap-1 text-destructive border-destructive/40"

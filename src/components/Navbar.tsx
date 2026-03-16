@@ -183,7 +183,7 @@ export function Navbar() {
                   <div className="px-3 py-2 border-b border-border">
                     <p className="text-xs font-semibold truncate">{displayName}</p>
                     <p className="text-xs text-muted-foreground capitalize">
-                    {profile?.role === "seller_landlord" ? "Seller / Landlord" : profile?.role === "agent" ? "Agent" : profile?.role === "professional" ? "Professional" : profile?.role === "investor" ? "Investor" : profile?.role === "institutional" ? "Institutional" : profile?.role === "developer" ? "Developer" : profile?.role === "individual" ? "Buyer / Renter" : (profile?.role || "Buyer / Renter")}
+                    {(profile?.role as string) === "seller_landlord" ? "Seller / Landlord" : (profile?.role as string) === "agent" ? "Agent" : (profile?.role as string) === "professional" ? "Professional" : (profile?.role as string) === "investor" ? "Investor" : (profile?.role as string) === "institutional" ? "Institutional" : (profile?.role as string) === "developer" ? "Developer" : (profile?.role as string) === "individual" ? "Buyer / Renter" : (profile?.role || "Buyer / Renter")}
                   </p>
                   </div>
                   <DropdownMenuItem asChild>

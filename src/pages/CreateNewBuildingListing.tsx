@@ -303,7 +303,7 @@ export default function CreateNewBuildingListing() {
         cooling_system: unit.cooling_system || undefined,
       };
 
-      const { data: createdUnit, error: unitErr } = await supabase
+      const { data: createdUnit, error: unitErr } = await (supabase as any)
         .from("project_units")
         .insert(unitPayload)
         .select()

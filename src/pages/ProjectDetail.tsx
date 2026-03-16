@@ -196,7 +196,7 @@ export default function ProjectDetail() {
       for (const u of availableUnits) {
         const newPrice = Math.round(Number(u.price) * (1 + pct / 100));
         const newPricePerSqm = u.internal_sqm ? newPrice / Number(u.internal_sqm) : undefined;
-        const { error } = await supabase.from("project_units").update({ price: newPrice, price_per_sqm: newPricePerSqm }).eq("id", u.id);
+        const { error } = await (supabase as any).from("project_units").update({ price: newPrice, price_per_sqm: newPricePerSqm }).eq("id", u.id);
         if (error) throw error;
       }
       qc.invalidateQueries({ queryKey: ["project_units", id] });
