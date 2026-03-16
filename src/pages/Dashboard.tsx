@@ -17,6 +17,7 @@ import { useListingViewTrends, useLeadFunnel } from "@/hooks/useAnalytics";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useViewings, useUpdateViewing } from "@/hooks/useViewings";
 import { useMyOpenHouseRegistrations, useMyOpenHouseOffers } from "@/hooks/useOpenHouseAssetControl";
+import OpenHouseDashboardSection from "@/components/OpenHouseDashboardSection";
 import { useSavedSearches, useDeleteSavedSearch, useToggleSavedSearchAlert } from "@/hooks/useSavedSearches";
 import { useAuctionAlerts, useDeleteAuctionAlert, useUpdateAuctionAlert } from "@/hooks/useAuctionAlerts";
 import { useMyProfessional, useProfessionalServices, useUpdateProfessional } from "@/hooks/useProfessionalServices";
