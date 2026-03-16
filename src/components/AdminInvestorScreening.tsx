@@ -17,6 +17,8 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   closed:      { label: "Closed",      color: "bg-brand-emerald/15 text-brand-emerald border-brand-emerald/20" },
 };
 
+// "published" = status === "reviewed" or "offer_sent" or "closed" (admin has actioned it)
+// "unpublished" = status === "pending"
 type ScreeningDeal = {
   id: string;
   address: string;
@@ -28,7 +30,6 @@ type ScreeningDeal = {
   asking_price: number | null;
   status: string;
   created_at: string;
-  published_to_investors: boolean;
 };
 
 function timeAgo(iso: string) {
