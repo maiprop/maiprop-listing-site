@@ -310,6 +310,7 @@ export default function CreateListing() {
     has_virtual_tour: false, has_video_tour: false,
     suitable_student: false, suitable_holiday: false, suitable_investment: false, suitable_commercial_use: false,
     has_three_phase_power: false, has_loading_dock: false, has_structured_cabling: false, has_equipped: false,
+    is_pre_sale: false, is_off_market: false,
     is_buildable: false, within_city_plan: false, within_settlement: false,
     has_water_supply: false, has_electricity_supply: false, has_land_concession: false,
     coverage_ratio: "", building_allowance: "", facade_length: "", plot_depth: "",
@@ -734,6 +735,7 @@ export default function CreateListing() {
         suitable_student: form.suitable_student, suitable_holiday: form.suitable_holiday,
         suitable_investment: form.suitable_investment, suitable_commercial_use: form.suitable_commercial_use,
         is_buildable: form.is_buildable, within_city_plan: form.within_city_plan,
+        is_pre_sale: form.is_pre_sale, is_off_market: form.is_off_market,
         within_settlement: form.within_settlement, has_water_supply: form.has_water_supply,
         has_electricity_supply: form.has_electricity_supply, has_land_concession: form.has_land_concession,
         has_three_phase_power: form.has_three_phase_power, has_loading_dock: form.has_loading_dock,
@@ -846,24 +848,19 @@ export default function CreateListing() {
                   </div>
                 </div>
 
-                {/* Pre-sale — for sale listings (new developments) */}
-                {lt === "sale" && (
-                  <div>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={false}
-                        onChange={() => {}}
-                        disabled
-                        className="rounded border-border opacity-40"
-                      />
-                      <span className="text-sm font-medium opacity-40">Pre-sale / Off-plan</span>
-                      <span className="text-xs text-muted-foreground">Use New Building listing for off-plan projects</span>
-                    </label>
-                  </div>
+                {/* Pre-sale / Off-market flags — backed by DB columns */}
+                {(lt === "sale" || !lt) && (
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={form.is_pre_sale} onChange={() => toggle("is_pre_sale")} className="rounded border-border" />
+                    <span className="text-sm font-medium">🏗️ Pre-sale / Off-plan</span>
+                    <span className="text-xs text-muted-foreground">New development before completion</span>
+                  </label>
                 )}
-
-                {/* Off-market — removed: column not in schema */}
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={form.is_off_market} onChange={() => toggle("is_off_market")} className="rounded border-border" />
+                  <span className="text-sm font-medium">🔒 Off-market</span>
+                  <span className="text-xs text-muted-foreground">Exclusive — not publicly advertised</span>
+                </label>
 
                 {/* Property type — rich cards */}
                 <div>

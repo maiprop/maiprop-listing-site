@@ -182,6 +182,7 @@ export default function Dashboard() {
   const navItems = getNavItemsForBioType(bioType, role);
   const defaultSection = navItems[0]?.key ?? "overview";
   const [activeSection, setActiveSection] = useState<NavKey>((section as NavKey) || defaultSection);
+  const [listingFilter, setListingFilter] = useState<"all" | "off_market" | "pre_sale">("all");
   const [alertModalOpen, setAlertModalOpen] = useState(false);
   const [editingAlert, setEditingAlert] = useState<any>(null);
 
@@ -649,12 +650,26 @@ export default function Dashboard() {
           {/* ── MY LISTINGS ──────────────────────────────────────────────── */}
           {activeSection === "listings" && navItems.some(i => i.key === "listings") && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <h1 className="font-display text-2xl font-bold">My Listings</h1>
                 <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" asChild>
                   <Link to="/listings/new"><Plus className="w-4 h-4" /> Create Listing</Link>
                 </Button>
               </div>
+              {(role === "agent" || role === "seller_landlord") && myListings.some((l: any) => l.is_off_market || l.is_pre_sale) && (
+                <div className="flex gap-2 flex-wrap text-xs">
+                  {[
+                    { key: "all", label: `All (${myListings.length})` },
+                    { key: "off_market", label: `🔒 Off-market (${myListings.filter((l:any) => l.is_off_market).length})` },
+                    { key: "pre_sale",  label: `🏗️ Pre-sale (${myListings.filter((l:any) => l.is_pre_sale).length})` },
+                  ].map(f => (
+                    <button key={f.key}
+                      onClick={() => setListingFilter(f.key as any)}
+                      className={`px-3 py-1.5 rounded-full border font-medium transition-colors ${listingFilter === f.key ? "border-primary bg-primary/10 text-primary" : "border-border bg-secondary text-muted-foreground hover:text-foreground"}`}
+                    >{f.label}</button>
+                  ))}
+                </div>
+              )}
               {listingsLoading ? (
                 <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
               ) : myListings.length === 0 ? (
@@ -665,12 +680,20 @@ export default function Dashboard() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {myListings.map(l => (
+                  {(listingFilter === "off_market" ? myListings.filter((l:any) => l.is_off_market)
+                    : listingFilter === "pre_sale" ? myListings.filter((l:any) => l.is_pre_sale)
+                    : myListings
+                  ).map((l: any) => (
                     <div key={l.id} className="glass-card rounded-xl p-4 flex items-center gap-4">
                       <img src={l.cover_image_url || "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=200&q=60"} alt="" className="w-16 h-16 rounded-lg object-cover shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-sm truncate">{l.title}</p>
-                        <p className="text-xs text-muted-foreground">{l.city} · €{Number(l.price).toLocaleString()} · {l.sqm}m²</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-semibold text-sm truncate">{l.title}</p>
+                          {l.is_featured && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-400/20 text-amber-600 border border-amber-400/30">⭐ Featured</span>}
+                          {l.is_off_market && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-secondary border border-border text-muted-foreground">🔒 Off-market</span>}
+                          {l.is_pre_sale && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">🏗️ Pre-sale</span>}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">{l.city} · €{Number(l.price).toLocaleString()} · {l.sqm}m²</p>
                         <span className={`text-xs px-2 py-0.5 rounded-full mt-1 inline-block ${l.status === "active" ? "bg-brand-emerald/20 text-brand-emerald" : "bg-secondary text-muted-foreground"}`}>{l.status}</span>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
