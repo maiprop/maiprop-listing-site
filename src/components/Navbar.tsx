@@ -32,6 +32,7 @@ export function Navbar() {
 
   const participantType = getParticipantTypeFromProfile(profile);
   const isDeveloper = participantType === "developer";
+  const canListProperty = ["seller", "agent", "institutional", "developer"].includes(participantType);
   const hasDarkHero = DARK_HERO_ROUTES.includes(location.pathname);
   // When transparent AND over a dark hero, force white text; otherwise use semantic tokens
   const isTransparent = !scrolled;
@@ -168,13 +169,19 @@ export function Navbar() {
                   <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-primary" />
                 </button>
               </Link>
-              <button className={`relative p-2 rounded-lg transition-colors ${
-                forceLight
-                  ? "text-white/80 hover:text-white hover:bg-white/10"
-                  : "text-muted-foreground hover:text-foreground hover:bg-secondary"
-              }`}>
-                <Bell className="w-4 h-4" />
-              </button>
+              <DropdownMenu>
+                <DropdownMenuTrigger className={`relative p-2 rounded-lg transition-colors outline-none ${
+                  forceLight
+                    ? "text-white/80 hover:text-white hover:bg-white/10"
+                    : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                }`} title="Notifications">
+                  <Bell className="w-4 h-4" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-72 bg-card border-border p-4">
+                  <p className="text-sm font-medium mb-1">Notifications</p>
+                  <p className="text-xs text-muted-foreground">No notifications yet. Activity alerts and updates coming soon.</p>
+                </DropdownMenuContent>
+              </DropdownMenu>
 
               <DropdownMenu>
                 <DropdownMenuTrigger className={`flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors outline-none ${
@@ -200,11 +207,13 @@ export function Navbar() {
                       <LayoutDashboard className="w-3.5 h-3.5" /> Dashboard
                     </Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to="/dashboard/listings" className="flex items-center gap-2 cursor-pointer">
-                      <Building2 className="w-3.5 h-3.5" /> My Listings
-                    </Link>
-                  </DropdownMenuItem>
+                  {canListProperty && (
+                    <DropdownMenuItem asChild>
+                      <Link to="/dashboard/listings" className="flex items-center gap-2 cursor-pointer">
+                        <Building2 className="w-3.5 h-3.5" /> My Listings
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem asChild>
                     <Link to="/messages" className="flex items-center gap-2 cursor-pointer">
                       <MessageSquare className="w-3.5 h-3.5" /> Messages
@@ -215,6 +224,13 @@ export function Navbar() {
                       <DoorOpen className="w-3.5 h-3.5 text-emerald-600" /> Open Houses
                     </Link>
                   </DropdownMenuItem>
+                  {(participantType === "investor" || participantType === "institutional") && (
+                    <DropdownMenuItem asChild>
+                      <Link to="/investor-dashboard" className="flex items-center gap-2 cursor-pointer">
+                        <Flame className="w-3.5 h-3.5" /> Investor Dashboard
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
                   {isPlatformAdmin(profile) && (
                     <DropdownMenuItem asChild>
                       <Link to="/admin" className="flex items-center gap-2 cursor-pointer">
@@ -232,27 +248,29 @@ export function Navbar() {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground hover:opacity-90 gap-1.5">
-                    <Plus className="w-3.5 h-3.5" /> List Property <ChevronDown className="w-3 h-3 opacity-80" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
-                  <DropdownMenuItem asChild>
-                    <Link to="/listings/new" className="flex items-center gap-2 cursor-pointer">
-                      <Home className="w-3.5 h-3.5" /> Regular Listing
-                    </Link>
-                  </DropdownMenuItem>
-                  {isDeveloper && (
+              {canListProperty && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground hover:opacity-90 gap-1.5">
+                      <Plus className="w-3.5 h-3.5" /> List Property <ChevronDown className="w-3 h-3 opacity-80" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
                     <DropdownMenuItem asChild>
-                      <Link to="/listings/new-building" className="flex items-center gap-2 cursor-pointer">
-                        <Building2 className="w-3.5 h-3.5" /> New Building
+                      <Link to="/listings/new" className="flex items-center gap-2 cursor-pointer">
+                        <Home className="w-3.5 h-3.5" /> Regular Listing
                       </Link>
                     </DropdownMenuItem>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
+                    {isDeveloper && (
+                      <DropdownMenuItem asChild>
+                        <Link to="/listings/new-building" className="flex items-center gap-2 cursor-pointer">
+                          <Building2 className="w-3.5 h-3.5" /> New Building
+                        </Link>
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
               {/* Pro badge / CTA */}
               {isPro ? (
                 <Link
@@ -378,7 +396,7 @@ export function Navbar() {
             { to: "/firesale", icon: Flame, label: "Quick Sale", accent: "text-destructive" },
             { to: "/open-houses", icon: DoorOpen, label: "Open Houses", accent: "text-emerald-600" },
             { to: "/ai-assistant", icon: Sparkles, label: "AI" },
-            { to: user ? "/dashboard" : "/login", icon: user ? LayoutDashboard : User, label: user ? "Dashboard" : "Sign In" },
+            { to: user ? "/dashboard" : "/signup", icon: user ? LayoutDashboard : User, label: user ? "Dashboard" : "Get Started" },
           ].map(({ to, icon: Icon, label, accent }) => {
             const active = location.pathname === to || (to !== "/" && location.pathname.startsWith(to));
             return (

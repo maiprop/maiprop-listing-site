@@ -680,7 +680,10 @@ export default function Dashboard() {
                 <div className="glass-card rounded-xl p-12 text-center">
                   <Building2 className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
                   <p className="font-semibold">No listings yet</p>
-                  <p className="text-sm text-muted-foreground mt-1">Start by creating your first property listing</p>
+                  <p className="text-sm text-muted-foreground mt-1 mb-4">Start by creating your first property listing</p>
+                  <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" asChild>
+                    <Link to={bioType === "developer" ? "/listings/new-building" : "/listings/new"}><Plus className="w-4 h-4" /> Create First Listing</Link>
+                  </Button>
                 </div>
               ) : (
                 <div className="space-y-3">

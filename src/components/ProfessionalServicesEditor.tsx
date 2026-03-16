@@ -466,7 +466,7 @@ export default function ProfessionalServicesEditor() {
                 <RefreshCw className="w-4 h-4" /> Connect Outlook
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">Calendar sync coming soon. Your weekly availability above is used for now.</p>
+            <p className="text-xs text-muted-foreground">Calendar sync (Google/Outlook) is on our roadmap for Q2 2025. Your weekly availability above is used for bookings until then.</p>
           </div>
 
           <div className="glass-card rounded-xl p-5 space-y-4">
