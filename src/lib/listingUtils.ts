@@ -128,7 +128,7 @@ export function dbListingToCard(
     images,
     type: l.property_type,
     listingType: l.listing_type,
-    auctionDate: l.auction_date ? new Date(l.auction_date).toLocaleDateString("en-GB") : undefined,
+    openHouseDateIso: l.listing_type === "open_house" && l.open_house_date ? l.open_house_date : undefined,
     auctionStartingBid: l.auction_starting_bid ? Number(l.auction_starting_bid) : undefined,
     aiScore: l.ai_score ?? undefined,
     views: l.views_count ?? undefined,

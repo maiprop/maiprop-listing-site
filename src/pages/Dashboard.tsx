@@ -1016,6 +1016,11 @@ export default function Dashboard() {
           {/* ── CONTACTS CRM ───────────────────────────────────────────── */}
           {activeSection === "contacts" && navItems.some(i => i.key === "contacts") && <ContactsCRM />}
 
+          {/* ── OPEN HOUSES ─────────────────────────────────────────────── */}
+          {activeSection === "open-houses" && navItems.some(i => i.key === "open-houses") && (
+            <OpenHouseDashboardSection />
+          )}
+
           {/* ── PROJECTS — link to full page ───────────────────────────── */}
           {activeSection === "projects" && navItems.some(i => i.key === "projects") && (
             <LinkSection
