@@ -83,6 +83,17 @@ export default function AdminDashboard() {
           </div>
 
           {activeTab === "pipeline" && <AdminFiresalePipeline />}
+          {activeTab === "open-houses" && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="font-display text-lg font-semibold flex items-center gap-2">
+                  <DoorOpen className="w-5 h-5 text-emerald-500" /> Open House Management
+                </h2>
+                <p className="text-sm text-muted-foreground mt-1">Manage all open house registrations, offers, and access controls across all listings.</p>
+              </div>
+              <OpenHouseAssetControlPanel listingId="__admin__" isOwner={true} />
+            </div>
+          )}
           {activeTab === "subscribers" && <AdminSubscribers />}
           {activeTab === "pricing" && <AdminPricingContent embed />}
           {activeTab === "os-sync" && <AdminPanel />}
