@@ -54,6 +54,7 @@ const listingTypeOptions = [
 
 const sortOptions = [
   { label: "Most Relevant", value: "relevant" },
+  { label: "⭐ Featured First", value: "featured" },
   { label: "Price: Low → High", value: "price-asc" },
   { label: "Price: High → Low", value: "price-desc" },
   { label: "Newest First", value: "newest" },
@@ -436,8 +437,6 @@ export default function Listings() {
     city: searchQuery || undefined,
     listing_type: preSaleOnly ? "sale" : (selectedListingType || undefined),
     property_type: selectedType || undefined,
-    pre_sale_only: preSaleOnly || undefined,
-    off_market_only: offMarketOnly || undefined,
   });
 
   const hasActiveFilters = !!(searchQuery || selectedListingType || selectedType);
@@ -476,16 +475,29 @@ export default function Listings() {
     return true;
   });
 
-  // User sort must NOT override paid prioritization: promoted listings always appear first
+  // User sort must NOT override paid prioritization unless "featured" is explicitly chosen.
+  // "featured" sort: featured → priority → rest. All other sorts: promoted always lead.
   const isPromoted = (p: any) => !!(p.isFeatured || (p.priorityPlacement ?? 0) > 0);
   const byUserSort = (a: any, b: any) => {
+    if (selectedSort === "featured") {
+      const aF = a.isFeatured ? 1 : 0;
+      const bF = b.isFeatured ? 1 : 0;
+      if (bF !== aF) return bF - aF;
+      const aPri = Number(a.priorityPlacement ?? 0);
+      const bPri = Number(b.priorityPlacement ?? 0);
+      if (bPri !== aPri) return bPri - aPri;
+      return new Date(b._raw?.created_at || 0).getTime() - new Date(a._raw?.created_at || 0).getTime();
+    }
     if (selectedSort === "price-asc") return a.price - b.price;
     if (selectedSort === "price-desc") return b.price - a.price;
+    if (selectedSort === "newest") return new Date(b._raw?.created_at || 0).getTime() - new Date(a._raw?.created_at || 0).getTime();
     if (selectedSort === "ai-score") return (b.aiScore || 0) - (a.aiScore || 0);
     if (selectedSort === "views") return (b.views || 0) - (a.views || 0);
     return 0;
   };
   filtered = [...filtered].sort((a, b) => {
+    // "Featured First" sort: explicit featured ordering, skip automatic promo-first
+    if (selectedSort === "featured") return byUserSort(a, b);
     const aPromo = isPromoted(a);
     const bPromo = isPromoted(b);
     if (aPromo && !bPromo) return -1;
@@ -502,7 +514,7 @@ export default function Listings() {
     bedsRange[0], bedsRange[1], bathsRange[0], bathsRange[1],
     floorRange[0], floorRange[1], yearRange[0], yearRange[1],
     minSqm, maxSqm, selectedHeating, selectedConstruction,
-    preSaleOnly, offMarketOnly,
+    preSaleOnly,
     ...selectedEnergyClasses, ...selectedFeatures,
   ].filter(Boolean).length;
 
@@ -704,7 +716,6 @@ export default function Listings() {
                 {selectedHeating && <button onClick={() => setParam("heating", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">Heating: {HEATING_TYPES.find(h => h.value === selectedHeating)?.label || selectedHeating} <X className="w-3 h-3" /></button>}
                 {selectedConstruction && <button onClick={() => setParam("construction", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">{CONSTRUCTION_STATUSES.find(s => s.value === selectedConstruction)?.label || selectedConstruction} <X className="w-3 h-3" /></button>}
                 {preSaleOnly && <button onClick={() => setParam("pre_sale", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">Pre-sale only <X className="w-3 h-3" /></button>}
-                {offMarketOnly && <button onClick={() => setParam("off_market", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">Off-market only <X className="w-3 h-3" /></button>}
                 <button onClick={clearAllFilters} className="text-xs text-muted-foreground hover:text-foreground ml-1 shrink-0">Clear all</button>
               </div>
             )}
@@ -715,7 +726,7 @@ export default function Listings() {
         {showFilters && (
           <div className="bg-card/95 backdrop-blur-sm border-b border-border shadow-lg">
             <div className="container py-7">
-              {/* Pre-sale filter (sale listings only) */}
+              {/* Pre-sale filter (sale listings only) — client-side only, no DB column */}
               {(selectedListingType === "sale" || !selectedListingType) && (
                 <div className="mb-6 pb-5 border-b border-border">
                   <label className="flex items-center gap-2 cursor-pointer">
@@ -731,19 +742,6 @@ export default function Listings() {
                 </div>
               )}
 
-              {/* Off-market filter */}
-              <div className="mb-6 pb-5 border-b border-border">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={offMarketOnly}
-                    onChange={e => setParam("off_market", e.target.checked ? "1" : "")}
-                    className="rounded border-border"
-                  />
-                  <span className="text-sm font-medium">Off-market only</span>
-                  <span className="text-xs text-muted-foreground">Exclusive listings not publicly advertised</span>
-                </label>
-              </div>
 
               {/* Panel header */}
               <div className="flex items-center justify-between mb-6">
