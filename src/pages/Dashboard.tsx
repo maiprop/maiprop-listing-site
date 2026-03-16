@@ -327,12 +327,10 @@ export default function Dashboard() {
                   <h1 className="font-display text-2xl font-bold">Good morning, {displayName} 👋</h1>
                   <p className="text-muted-foreground text-sm mt-1">
                     {isInvestorLike ? "Your investment pipeline and deal opportunities." :
-                     role === "developer" ? "Manage your project listings and showcases." :
-                     role === "institutional" ? "Your portfolio, deal flow, and listings." :
+                     bioType === "developer" ? "Manage your project listings and showcases." :
                      role === "seller_landlord" || bioType === "seller" ? "Manage your listings and viewings." :
                      isSellSide ? "Here's what's happening with your listings and leads." :
                      role === "professional" ? "Your services and incoming client leads." :
-                     role === "investor" ? "Your deal pipeline and investment opportunities." :
                      "Here's your search activity and alerts."}
                   </p>
                 </div>
@@ -1337,7 +1335,7 @@ function AnalyticsSection({
   role: string;
   listingsLoading: boolean;
   viewTrends?: { date: string; count: number }[];
-  leadFunnel?: { pending: number; reviewed: number; confirmed: number; cancelled: number; total: number; conversionRate: number };
+  leadFunnel?: { pending: number; reviewed: number; confirmed: number; cancelled: number; total: number; conversionRate?: number };
 }) {
   const totalViews = myListings.reduce((s, l) => s + (l.views_count || 0), 0);
   const activeCount = myListings.filter(l => l.status === "active").length;

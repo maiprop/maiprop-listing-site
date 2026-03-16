@@ -63,8 +63,8 @@ export function dbListingToCard(
   energyClass?: string;
   ownershipStatus?: string;
   ownershipPercentage?: number;
-  latitude?: number;
-  longitude?: number;
+  isFeatured?: boolean;
+  priorityPlacement?: number;
   _raw?: any;
 } {
   const {
