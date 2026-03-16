@@ -239,6 +239,21 @@ export type Database = {
           },
         ]
       }
+      cron_config: {
+        Row: {
+          key: string
+          value: string
+        }
+        Insert: {
+          key: string
+          value: string
+        }
+        Update: {
+          key?: string
+          value?: string
+        }
+        Relationships: []
+      }
       deal_checklists: {
         Row: {
           created_at: string
@@ -1562,10 +1577,15 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["user_role"]
       }
+      grant_platform_admin: {
+        Args: { target_user_id: string }
+        Returns: undefined
+      }
       grant_platform_admin_by_email: {
         Args: { target_email: string }
         Returns: undefined
       }
+      has_platform_admin: { Args: { _user_id?: string }; Returns: boolean }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["user_role"]
@@ -1644,7 +1664,15 @@ export type Database = {
         | "land"
         | "commercial"
         | "office"
-      user_role: "individual" | "agent" | "professional" | "seller_landlord" | "investor" | "institutional" | "developer" | "admin"
+      user_role:
+        | "individual"
+        | "agent"
+        | "professional"
+        | "seller_landlord"
+        | "investor"
+        | "institutional"
+        | "developer"
+        | "admin"
       viewing_status: "pending" | "confirmed" | "cancelled" | "completed"
       viewing_type: "in_person" | "video"
     }
@@ -1848,7 +1876,16 @@ export const Constants = {
         "commercial",
         "office",
       ],
-      user_role: ["individual", "agent", "professional", "seller_landlord", "investor", "institutional", "developer", "admin"],
+      user_role: [
+        "individual",
+        "agent",
+        "professional",
+        "seller_landlord",
+        "investor",
+        "institutional",
+        "developer",
+        "admin",
+      ],
       viewing_status: ["pending", "confirmed", "cancelled", "completed"],
       viewing_type: ["in_person", "video"],
     },
