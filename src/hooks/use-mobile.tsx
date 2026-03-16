@@ -1,7 +1,11 @@
 import * as React from "react";
 
-/** Matches Tailwind lg (1024px) — aligns with Navbar mobile layout */
-const MOBILE_BREAKPOINT = 1024;
+/**
+ * Treat "mobile" as <768px for sidebar/shell components.
+ * This keeps the dashboard sidebar expanded on tablets,
+ * while Navbar still controls its own layout at lg (1024px).
+ */
+const MOBILE_BREAKPOINT = 768;
 
 export function useIsMobile() {
   const [isMobile, setIsMobile] = React.useState<boolean | undefined>(undefined);

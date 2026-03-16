@@ -52,8 +52,8 @@ export const PARTICIPANT_LABELS: Record<ParticipantId, string> = {
   buyer: "Buyer / Renter",
   seller: "Seller / Landlord",
   investor: "Investor",
-  agent: "Real Estate Agent",
-  institutional: "Institutional",
+  agent: "Agent",
+  institutional: "Institutional / Fund",
   developer: "Developer",
   professional: "Professional",
 };

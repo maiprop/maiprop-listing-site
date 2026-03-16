@@ -583,12 +583,12 @@ export default function PropertyDetail() {
                 {images.length > 1 &&
                 <>
                     <button
-                    className="absolute left-3 top-1/2 -translate-y-1/2 min-h-[44px] min-w-[44px] flex items-center justify-center p-2.5 rounded-full bg-background/70 backdrop-blur-md hover:bg-background/90 transition-all shadow-lg opacity-100 md:opacity-0 md:group-hover:opacity-100"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 min-h-[44px] min-w-[44px] flex items-center justify-center p-2.5 rounded-full bg-background/70 backdrop-blur-md hover:bg-background/90 transition-all shadow-lg opacity-100 lg:opacity-0 lg:group-hover:opacity-100"
                     onClick={() => setCurrentImage((currentImage - 1 + images.length) % images.length)}>
                       <ChevronLeft className="w-4 h-4" />
                     </button>
                     <button
-                    className="absolute right-3 top-1/2 -translate-y-1/2 min-h-[44px] min-w-[44px] flex items-center justify-center p-2.5 rounded-full bg-background/70 backdrop-blur-md hover:bg-background/90 transition-all shadow-lg opacity-100 md:opacity-0 md:group-hover:opacity-100"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 min-h-[44px] min-w-[44px] flex items-center justify-center p-2.5 rounded-full bg-background/70 backdrop-blur-md hover:bg-background/90 transition-all shadow-lg opacity-100 lg:opacity-0 lg:group-hover:opacity-100"
                     onClick={() => setCurrentImage((currentImage + 1) % images.length)}>
                       <ChevronRight className="w-4 h-4" />
                     </button>
