@@ -1720,6 +1720,8 @@ function AnalyticsSection({
   viewTrends = [],
   leadFunnel,
   myProfessional,
+  onGoToProfile,
+  onGoToServices,
 }: {
   myListings: any[];
   leads: any[];
@@ -1728,6 +1730,8 @@ function AnalyticsSection({
   viewTrends?: { date: string; count: number }[];
   leadFunnel?: { pending: number; reviewed: number; confirmed: number; cancelled: number; total: number; conversionRate?: number };
   myProfessional?: any;
+  onGoToProfile?: () => void;
+  onGoToServices?: () => void;
 }) {
   const totalViews = myListings.reduce((s, l) => s + (l.views_count || 0), 0);
   const activeCount = myListings.filter(l => l.status === "active").length;
