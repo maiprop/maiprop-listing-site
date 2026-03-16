@@ -416,11 +416,11 @@ export default function Dashboard() {
                       <Link to="/investor-dashboard"><FolderKanban className="w-3.5 h-3.5" /> Open Dashboard</Link>
                     </Button>
                   </div>
-                  <div className="glass-card rounded-xl p-5 border border-destructive/20 bg-destructive/5">
-                    <h2 className="font-display font-semibold mb-1 flex items-center gap-2 text-destructive"><Flame className="w-4 h-4" /> Quick-Sale Deals</h2>
-                    <p className="text-sm text-muted-foreground mb-3">Off-market properties at discounted prices — motivated sellers only.</p>
-                    <Button size="sm" variant="outline" className="border-destructive/40 text-destructive hover:bg-destructive/10 gap-1.5" asChild>
-                      <Link to="/firesale"><Activity className="w-3.5 h-3.5" /> View Firesale</Link>
+                  <div className="glass-card rounded-xl p-5 border border-brand-emerald/20 bg-brand-emerald/5">
+                    <h2 className="font-display font-semibold mb-1 flex items-center gap-2 text-brand-emerald"><Calendar className="w-4 h-4" /> Open Houses</h2>
+                    <p className="text-sm text-muted-foreground mb-3">Register for exclusive property open houses and submit sealed bids.</p>
+                    <Button size="sm" variant="outline" className="border-brand-emerald/40 text-brand-emerald hover:bg-brand-emerald/10 gap-1.5" onClick={() => setActiveSection("open-houses")}>
+                      <ExternalLink className="w-3.5 h-3.5" /> My Open Houses
                     </Button>
                   </div>
                   <div className="glass-card rounded-xl p-5">
