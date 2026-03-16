@@ -4,7 +4,7 @@ import {
   MapPin, Bed, Bath, Square, Heart, Gavel, Flame,
   Eye, TrendingUp, Video, Zap, CheckCircle,
   Home, Calendar, Layers, MessageCircle,
-  Share2, Flag, Crown,
+  Share2, Flag, Crown, Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getSubtypeLabel, PROPERTY_TYPE_MAP, type PropertyTypeKey } from "@/lib/propertyTypes";
@@ -50,6 +50,8 @@ export interface Property {
   energyClass?: string;
   ownershipStatus?: string;
   ownershipPercentage?: number;
+  /** ISO date string for open house — used for countdown badge */
+  openHouseDateIso?: string;
 }
 
 interface PropertyCardProps {
@@ -129,6 +131,15 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
 
   const badge = getBadge();
   const badges = [...(badge ? [badge] : []), ...(property.isFeatured ? [{ label: "Featured", cls: "bg-brand-gold/90 text-white flex items-center gap-1" }] : [])];
+  const countdown = property.listingType === "open_house" && property.openHouseDateIso ? (() => {
+    const diff = new Date(property.openHouseDateIso).getTime() - Date.now();
+    if (diff <= 0) return null;
+    const hours = Math.floor(diff / 3_600_000);
+    const mins = Math.floor((diff % 3_600_000) / 60_000);
+    if (hours > 48) return null;
+    if (hours === 0) return { label: `${mins}m`, urgent: true };
+    return { label: `${hours}h ${mins}m`, urgent: hours < 6 };
+  })() : null;
   const discountPct = property.listingType === "auction" && property.auctionStartingBid
     ? Math.round((1 - property.auctionStartingBid / property.price) * 100)
     : null;
@@ -195,6 +206,14 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
 
         {/* Badges top-left */}
         <div className="absolute top-3 left-3 flex gap-1.5 flex-wrap max-w-[70%]">
+          {countdown && (
+            <span className={`text-xs font-bold px-2.5 py-1 rounded-full shadow-sm flex items-center gap-1 ${
+              countdown.urgent ? "bg-destructive/90 text-white" : "bg-brand-gold text-background"
+            }`}>
+              {countdown.urgent ? <Flame className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+              {countdown.label}
+            </span>
+          )}
           {badges.map((b) => (
             <span key={b.label} className={`text-xs font-bold px-2.5 py-1 rounded-full uppercase tracking-wide shadow-sm ${b.cls} ${b.label === "Featured" ? "inline-flex items-center gap-1" : ""}`}>
               {b.label === "Featured" && <Crown className="w-2.5 h-2.5" />}

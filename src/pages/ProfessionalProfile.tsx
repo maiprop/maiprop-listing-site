@@ -287,12 +287,6 @@ export default function ProfessionalProfile() {
                     ) : (
                       <p className="text-xs text-muted-foreground py-1">In-app messaging and booking available for Pro professionals.</p>
                     )}
-                    <Button variant="outline" className="border-border gap-2 text-muted-foreground w-full" onClick={() => setVideoOpen(true)}>
-                      <Video className="w-4 h-4" /> Video Meeting
-                    </Button>
-                    <Button variant="outline" className="border-primary/40 text-primary hover:bg-primary/10 gap-2 w-full" onClick={() => setAiMatchOpen(true)}>
-                      <Search className="w-4 h-4" /> Find matching professional
-                    </Button>
                     {pro.website_url && (
                       <a href={pro.website_url} target="_blank" rel="noopener noreferrer"
                         className="flex items-center justify-center gap-2 text-xs text-muted-foreground hover:text-primary transition-colors py-1">
@@ -727,9 +721,6 @@ export default function ProfessionalProfile() {
                   )}
                   <Button variant="outline" className="w-full border-border gap-2 text-muted-foreground" onClick={() => setCallbackOpen(true)}>
                     <Phone className="w-4 h-4" /> Request Callback
-                  </Button>
-                  <Button variant="outline" className="w-full border-border gap-2 text-muted-foreground" onClick={() => setVideoOpen(true)}>
-                    <Video className="w-4 h-4" /> Video Meeting
                   </Button>
                   {pro.hourly_rate && (
                     <div className="text-center text-xs text-muted-foreground pt-1">

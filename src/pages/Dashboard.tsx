@@ -337,16 +337,6 @@ export default function Dashboard() {
                      "Here's your search activity and alerts."}
                   </p>
                 </div>
-                {isSellerLike && (
-                  <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" onClick={() => setActiveSection("listings")}>
-                    <Plus className="w-4 h-4" /> New Listing
-                  </Button>
-                )}
-                {isInvestorLike && (
-                  <Button className="bg-gradient-gold border-0 text-background font-semibold gap-2" asChild>
-                    <Link to="/investor-dashboard"><FolderKanban className="w-4 h-4" /> Deal Flow</Link>
-                  </Button>
-                )}
                 {role === "professional" && (
                   <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" onClick={() => setActiveSection("leads")}>
                     <Briefcase className="w-4 h-4" /> View Leads {pendingLeadsCount > 0 && `(${pendingLeadsCount})`}
@@ -1637,7 +1627,7 @@ function ProfileEditor({ profile, onUpdate, onSwitchToSettings }: { profile: any
 const ROLE_PERMISSIONS: Record<string, { label: string; can: string[] }> = {
   buyer_renter:    { label: "Buyer / Renter",   can: ["Browse listings", "Save properties", "Request viewings", "Auction alerts"] },
   seller_landlord: { label: "Seller / Landlord", can: ["Create & manage listings", "Receive viewing requests", "AI listing assist"] },
-  agent:           { label: "Agent",            can: ["Unlimited listings", "OS sync", "Lead management", "Analytics"] },
+  agent:           { label: "Agent",            can: ["Unlimited listings", "Lead management", "Analytics"] },
   admin:           { label: "Admin",            can: ["Platform admin", "Subscribers", "Pricing", "OS sync", "All dashboards"] },
   investor:        { label: "Investor",         can: ["Deal flow", "Saved deals", "Auction alerts", "ROI calculator"] },
   institutional:   { label: "Institutional",   can: ["Deal flow", "Listings", "Portfolios", "CRM", "Analytics"] },

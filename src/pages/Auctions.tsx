@@ -119,6 +119,41 @@ const PROPERTY_TYPE_GR: Record<string, string> = {
   office: "Γραφείο"
 };
 
+/** Label for property type pill — includes subtypes like Plot with Building, Land with Building */
+function getPropertyTypeLabel(a: { property_type?: string; tags?: string[] | null }): string {
+  const base = a.property_type || "";
+  if (base === "land" && a.tags?.length) {
+    const landTag = a.tags.find((t) => t.startsWith("land_type:"));
+    if (landTag) {
+      const subtype = landTag.replace("land_type:", "");
+      const mapping: Record<string, string> = {
+        plot_with_building: "Plot with Building",
+        land_with_building: "Land with Building",
+        land: "Land (no building)",
+        plot: "Agricultural plot",
+      };
+      if (mapping[subtype]) return mapping[subtype];
+    }
+  }
+  if (base === "commercial" && a.tags?.length) {
+    const commTag = a.tags.find((t) => t.startsWith("commercial_type:"));
+    if (commTag) {
+      const subtype = commTag.replace("commercial_type:", "");
+      const mapping: Record<string, string> = {
+        store: "Store / Retail",
+        warehouse: "Warehouse",
+        industrial: "Industrial",
+        storeroom: "Storeroom",
+        parking: "Parking",
+        hotel: "Hotel",
+        other_business_space: "Other business space",
+      };
+      if (mapping[subtype]) return mapping[subtype];
+    }
+  }
+  return PROPERTY_TYPE_GR[base] ?? base.split("_").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ") ?? base;
+}
+
 const BID_RANGES = [
 { label: "Any Price", value: "" },
 { label: "Under €20k", value: "0-20000" },
@@ -360,7 +395,7 @@ function AuctionCard({ a, favoritedIds, onToggleFav
           )}
         </div>
         <div className="absolute top-2 right-2 bg-brand-gold/90 text-background text-[10px] font-bold px-2 py-0.5 rounded-full">
-          {PROPERTY_TYPE_GR[a.property_type] ?? a.property_type}
+          {getPropertyTypeLabel(a)}
         </div>
         {badge &&
         <div className={`absolute bottom-2 right-2 flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${badge.cls}`}>
@@ -566,26 +601,29 @@ export default function Auctions() {
         const [min, max] = filterYearRange.split("-").map(Number);
         if (a.year_built < min || a.year_built > max) return false;
       }
-      if (filterOwnership && !ownershipMatches(filterOwnership, a.tags)) return false;
-      if (filterRound) {
-        const round = getAuctionRound(a.tags);
-        if (filterRound === "3plus") {
-          if (!round || round < 3) return false;
-        } else {
-          const target = Number(filterRound);
-          if (!round || round !== target) return false;
+      // Premium filters: only apply when user is Pro
+      if (isPro || isMaiPropOsUser) {
+        if (filterOwnership && !ownershipMatches(filterOwnership, a.tags)) return false;
+        if (filterRound) {
+          const round = getAuctionRound(a.tags);
+          if (filterRound === "3plus") {
+            if (!round || round < 3) return false;
+          } else {
+            const target = Number(filterRound);
+            if (!round || round !== target) return false;
+          }
         }
-      }
-      if (filterYield) {
-        const range = yieldRange(filterYield);
-        if (range) {
-          const est = estimateYield(a);
-          if (est === null || est < range[0] || est > range[1]) return false;
+        if (filterYield) {
+          const range = yieldRange(filterYield);
+          if (range) {
+            const est = estimateYield(a);
+            if (est === null || est < range[0] || est > range[1]) return false;
+          }
         }
       }
       return true;
     });
-  }, [cappedAuctions, selectedCity, filterType, filterBidRange, filterYearRange, filterOwnership, filterRound, filterYield]);
+  }, [cappedAuctions, selectedCity, filterType, filterBidRange, filterYearRange, filterOwnership, filterRound, filterYield, isPro, isMaiPropOsUser]);
 
   const totalPages = Math.max(1, Math.ceil(visibleFiltered.length / PAGE_SIZE));
   const paginated = useMemo(() => {
@@ -601,7 +639,12 @@ export default function Auctions() {
     if (currentPage > totalPages) setCurrentPage(totalPages);
   }, [currentPage, totalPages]);
 
-  const activeFilterCount = [filterType, filterBidRange, filterYearRange, filterOwnership, filterRound, filterYield].filter(Boolean).length;
+  const activeFilterCount = [
+    filterType,
+    filterBidRange,
+    filterYearRange,
+    ...(isPro || isMaiPropOsUser ? [filterOwnership, filterRound, filterYield] : []),
+  ].filter(Boolean).length;
 
   const clearFilters = () => {
     setFilterType("");
@@ -831,39 +874,55 @@ export default function Auctions() {
                 </div>{/* end grid */}
               </div>{/* end standard filters */}
 
-              {/* Auction filters: Ownership, Round, Yield */}
+              {/* Auction filters: Ownership, Round, Yield — Pro only */}
               <div className="pt-4 border-t border-border -mx-5 px-5 pb-1 rounded-b-2xl">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">More Filters</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <div>
-                    <label className="text-xs text-muted-foreground font-medium block mb-1.5">Ownership Status</label>
-                    <select value={filterOwnership} onChange={(e) => setFilterOwnership(e.target.value)} className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none">
-                      {OWNERSHIP_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-                    </select>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
+                  More Filters
+                  {!isPro && !isMaiPropOsUser && <PremiumBadge />}
+                </p>
+                {isPro || isMaiPropOsUser ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div>
+                      <label className="text-xs text-muted-foreground font-medium block mb-1.5">Ownership Status</label>
+                      <select value={filterOwnership} onChange={(e) => setFilterOwnership(e.target.value)} className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none">
+                        {OWNERSHIP_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground font-medium block mb-1.5">Auction Round</label>
+                      <select value={filterRound} onChange={(e) => setFilterRound(e.target.value)} className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none">
+                        {roundOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground font-medium block mb-1.5">
+                        Est. Rental Yield
+                        <span className="ml-1.5 text-[10px] text-muted-foreground/60">(city benchmark × sqm / bid)</span>
+                      </label>
+                      <select
+                        value={filterYield}
+                        onChange={(e) => setFilterYield(e.target.value)}
+                        className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none">
+                        <option value="">Any Yield</option>
+                        <option value="low">Under 3% — Low yield</option>
+                        <option value="medium">3% – 6% — Average</option>
+                        <option value="high">6% – 9% — Good</option>
+                        <option value="very_high">9%+ — High yield opportunity</option>
+                      </select>
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground font-medium block mb-1.5">Auction Round</label>
-                    <select value={filterRound} onChange={(e) => setFilterRound(e.target.value)} className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none">
-                      {roundOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                    </select>
+                ) : (
+                  <div className="flex items-center gap-3 p-4 rounded-xl bg-secondary/50 border border-border">
+                    <Lock className="w-5 h-5 text-muted-foreground shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium">Ownership Status, Auction Round & Est. Rental Yield</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Upgrade to Pro to unlock these filters.</p>
+                    </div>
+                    <Button size="sm" variant="outline" className="border-brand-gold/40 text-brand-gold hover:bg-brand-gold/10 shrink-0" asChild>
+                      <Link to="/pricing">Upgrade to Pro</Link>
+                    </Button>
                   </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground font-medium block mb-1.5">
-                      Est. Rental Yield
-                      <span className="ml-1.5 text-[10px] text-muted-foreground/60">(city benchmark × sqm / bid)</span>
-                    </label>
-                    <select
-                      value={filterYield}
-                      onChange={(e) => setFilterYield(e.target.value)}
-                      className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none">
-                      <option value="">Any Yield</option>
-                      <option value="low">Under 3% — Low yield</option>
-                      <option value="medium">3% – 6% — Average</option>
-                      <option value="high">6% – 9% — Good</option>
-                      <option value="very_high">9%+ — High yield opportunity</option>
-                    </select>
-                  </div>
-                </div>
+                )}
               </div>
             </div>
           }
@@ -875,9 +934,9 @@ export default function Auctions() {
               {filterType && <button onClick={() => setFilterType("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors capitalize">{filterType} <X className="w-3 h-3" /></button>}
               {filterBidRange && <button onClick={() => setFilterBidRange("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{BID_RANGES.find((r) => r.value === filterBidRange)?.label} <X className="w-3 h-3" /></button>}
               {filterYearRange && <button onClick={() => setFilterYearRange("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{YEAR_RANGES.find((r) => r.value === filterYearRange)?.label} <X className="w-3 h-3" /></button>}
-              {filterOwnership && <button onClick={() => setFilterOwnership("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-sky-500/10 border border-sky-500/20 text-xs text-sky-400 hover:bg-sky-500/20 transition-colors">{OWNERSHIP_STATUSES.find((s) => s.value === filterOwnership)?.label} <X className="w-3 h-3" /></button>}
-              {filterRound && <button onClick={() => setFilterRound("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-brand-gold/10 border border-brand-gold/20 text-xs text-brand-gold hover:bg-brand-gold/20 transition-colors">{roundOptions.find((o) => o.value === filterRound)?.label || `Round ${filterRound}`} <X className="w-3 h-3" /></button>}
-              {filterYield && <button onClick={() => setFilterYield("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-brand-gold/10 border border-brand-gold/20 text-xs text-brand-gold hover:bg-brand-gold/20 transition-colors">Yield: {filterYield.replace("_", " ")} <X className="w-3 h-3" /></button>}
+              {(isPro || isMaiPropOsUser) && filterOwnership && <button onClick={() => setFilterOwnership("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-sky-500/10 border border-sky-500/20 text-xs text-sky-400 hover:bg-sky-500/20 transition-colors">{OWNERSHIP_STATUSES.find((s) => s.value === filterOwnership)?.label} <X className="w-3 h-3" /></button>}
+              {(isPro || isMaiPropOsUser) && filterRound && <button onClick={() => setFilterRound("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-brand-gold/10 border border-brand-gold/20 text-xs text-brand-gold hover:bg-brand-gold/20 transition-colors">{roundOptions.find((o) => o.value === filterRound)?.label || `Round ${filterRound}`} <X className="w-3 h-3" /></button>}
+              {(isPro || isMaiPropOsUser) && filterYield && <button onClick={() => setFilterYield("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-brand-gold/10 border border-brand-gold/20 text-xs text-brand-gold hover:bg-brand-gold/20 transition-colors">Yield: {filterYield.replace("_", " ")} <X className="w-3 h-3" /></button>}
               <button onClick={clearFilters} className="text-xs text-muted-foreground hover:text-foreground ml-1">Clear all</button>
             </div>
           }
