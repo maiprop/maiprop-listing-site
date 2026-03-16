@@ -648,45 +648,13 @@ export default function Dashboard() {
 
           {/* ── MY LISTINGS ──────────────────────────────────────────────── */}
           {activeSection === "listings" && navItems.some(i => i.key === "listings") && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h1 className="font-display text-2xl font-bold">My Listings</h1>
-                <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" asChild>
-                  <Link to="/listings/new"><Plus className="w-4 h-4" /> Create Listing</Link>
-                </Button>
-              </div>
-              {listingsLoading ? (
-                <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
-              ) : myListings.length === 0 ? (
-                <div className="glass-card rounded-xl p-12 text-center">
-                  <Building2 className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-                  <p className="font-semibold">No listings yet</p>
-                  <p className="text-sm text-muted-foreground mt-1">Start by creating your first property listing</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {myListings.map(l => (
-                    <div key={l.id} className="glass-card rounded-xl p-4 flex items-center gap-4">
-                      <img src={l.cover_image_url || "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=200&q=60"} alt="" className="w-16 h-16 rounded-lg object-cover shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-sm truncate">{l.title}</p>
-                        <p className="text-xs text-muted-foreground">{l.city} · €{Number(l.price).toLocaleString()} · {l.sqm}m²</p>
-                        <span className={`text-xs px-2 py-0.5 rounded-full mt-1 inline-block ${l.status === "active" ? "bg-brand-emerald/20 text-brand-emerald" : "bg-secondary text-muted-foreground"}`}>{l.status}</span>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <span className="text-xs text-muted-foreground mr-2">{l.views_count} views</span>
-                        <button onClick={() => toggleListingStatus(l.id, l.status)} className="p-2 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground">
-                          {l.status === "active" ? <ToggleRight className="w-4 h-4 text-primary" /> : <ToggleLeft className="w-4 h-4" />}
-                        </button>
-                        <button onClick={() => { if (confirm("Delete this listing?")) deleteListing.mutate(l.id); }} className="p-2 rounded-lg hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <MyListingsSection
+              myListings={myListings}
+              listingsLoading={listingsLoading}
+              toggleListingStatus={toggleListingStatus}
+              deleteListing={deleteListing}
+              role={role}
+            />
           )}
 
           {/* ── SAVED ────────────────────────────────────────────────────── */}
