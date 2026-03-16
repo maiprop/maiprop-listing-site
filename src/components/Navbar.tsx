@@ -375,7 +375,7 @@ export function Navbar() {
             { to: "/listings", icon: List, label: "Listings" },
             { to: "/auctions", icon: Gavel, label: "Auctions" },
             { to: "/firesale", icon: Flame, label: "Quick Sale", accent: "text-destructive" },
-            { to: "/open-houses", icon: Building2, label: "Open Houses" },
+            { to: "/open-houses", icon: DoorOpen, label: "Open Houses", accent: "text-emerald-600" },
             { to: "/ai-assistant", icon: Sparkles, label: "AI" },
             { to: user ? "/dashboard" : "/login", icon: user ? LayoutDashboard : User, label: user ? "Dashboard" : "Sign In" },
           ].map(({ to, icon: Icon, label, accent }) => {
