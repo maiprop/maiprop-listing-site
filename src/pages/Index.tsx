@@ -1033,7 +1033,6 @@ export default function Index() {
     Buy: "sale",
     Rent: "rent",
     Auctions: "auction",
-    "Quick Sale": "firesale"
   };
 
   const handleSearch = () => {
@@ -1099,9 +1098,9 @@ export default function Index() {
       )}
 
       {/* ══ HERO ══════════════════════════════════════════════════════════════ */}
-      <section className="relative min-h-[100svh] flex items-center overflow-hidden pt-14 sm:pt-16">
-        {/* Background */}
-        <div className="absolute inset-0 overflow-hidden">
+      <section className="relative min-h-[100svh] flex items-center overflow-hidden">
+        {/* Background — sits behind everything, no pt offset so video starts at top under the transparent navbar */}
+        <div className="absolute inset-0 z-0 overflow-hidden">
           {/* Video background */}
           <video
             autoPlay
@@ -1110,18 +1109,17 @@ export default function Index() {
             playsInline
             preload="auto"
             poster="/hero-poster.jpg"
-            className="hero-video w-full h-full object-cover opacity-100 dark:opacity-70"
+            className="hero-video absolute inset-0 w-full h-full object-cover opacity-100 dark:opacity-70"
             style={{
               willChange: "transform",
               transform: "translateZ(0)",
               animation: "hero-zoom 30s ease-in-out infinite alternate",
-              // Shift focal point slightly right so foreground content doesn't cover key part of the video
               objectPosition: "60% 30%",
             }}
           >
             {heroVideoSrc && <source src={heroVideoSrc} type="video/mp4" />}
           </video>
-          {/* Both modes: strong dark overlay — heavier on mobile for readability */}
+          {/* Strong dark overlay for text readability */}
           <div
             className="absolute inset-0"
             style={{
@@ -1134,21 +1132,19 @@ export default function Index() {
         </div>
         {/* Grid overlay */}
         <div
-          className="absolute inset-0 opacity-[0.03]"
+          className="absolute inset-0 z-0 opacity-[0.03]"
           style={{
             backgroundImage:
             "linear-gradient(hsl(192 100% 50%) 1px, transparent 1px), linear-gradient(90deg, hsl(192 100% 50%) 1px, transparent 1px)",
             backgroundSize: "60px 60px"
           }} />
-        
 
         {/* Glow orb */}
         <div
-          className="absolute top-1/4 right-1/4 w-[500px] h-[500px] rounded-full blur-[120px] opacity-10"
+          className="absolute top-1/4 right-1/4 w-[500px] h-[500px] rounded-full blur-[120px] opacity-10 z-0"
           style={{ background: "radial-gradient(hsl(192 100% 50%), hsl(270 75% 62%), transparent 70%)" }} />
-        
 
-        <div className="container relative z-10 py-8 sm:py-16 lg:pl-16 xl:pl-24">
+        <div className="container relative z-10 pt-24 pb-8 sm:pt-28 sm:pb-16 lg:pl-16 xl:pl-24">
           <div className="grid lg:grid-cols-[1fr_360px] xl:grid-cols-[1fr_400px] gap-8 lg:gap-12 items-center">
             {/* ── LEFT: Copy + Search ── */}
             <div className="text-white">
@@ -1195,7 +1191,6 @@ export default function Index() {
                     { label: "Buy", emoji: "🏠", color: "" },
                     { label: "Rent", emoji: "🔑", color: "" },
                     { label: "Auctions", emoji: "⚖️", color: "" },
-                    { label: "Quick Sale", emoji: "⚡", color: "text-destructive" },
                     { label: "Professionals", emoji: "👔", color: "text-cyan-400" }].
                     map(({ label, emoji, color }) =>
                     <button
@@ -1432,44 +1427,6 @@ export default function Index() {
                 })
             }
           </div>
-
-          {/* Open Houses — 1x3 grid under Featured Properties */}
-          {openHouseListings.length > 0 && (
-            <div className={`mt-10 pt-10 border-t border-border reveal reveal-delay-1 ${featuredInView ? "in-view" : ""}`}>
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <span className="text-xs font-semibold text-emerald-600 uppercase tracking-widest">Open Houses</span>
-                  <h3 className="font-display text-lg font-bold">Upcoming Open Houses</h3>
-                </div>
-                <Button variant="outline" size="sm" className="border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10 text-xs" asChild>
-                  <Link to="/open-houses">View All <ArrowRight className="w-3 h-3 ml-1" /></Link>
-                </Button>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {openHouseListings.slice(0, 3).map((l: any) => {
-                  const imgs: string[] = l.cover_image_url ? [l.cover_image_url] : [];
-                  if (!imgs.length && l.listing_images?.length) {
-                    const sorted = [...l.listing_images].sort((a: any, b: any) => a.sort_order - b.sort_order);
-                    sorted.forEach((img: any) => imgs.push(img.url));
-                  }
-                  const svFallback = l.latitude != null && l.longitude != null ? getStreetViewProxyUrl({ lat: Number(l.latitude), lng: Number(l.longitude) }) : null;
-                  if (!imgs.length && svFallback) imgs.push(svFallback);
-                  return (
-                    <PropertyCard key={l.id} property={{
-                      id: l.id, title: l.title, address: l.address || l.city, city: l.city,
-                      price: Number(l.price), pricePerSqm: l.price_per_sqm ? Number(l.price_per_sqm) : undefined,
-                      bedrooms: l.bedrooms, bathrooms: l.bathrooms, sqm: Number(l.sqm),
-                      floor: l.floor, totalFloors: l.total_floors, yearBuilt: l.year_built,
-                      energyClass: l.energy_class, images: imgs,
-                      type: l.property_type, listingType: "open_house",
-                      auctionDate: l.open_house_date ? new Date(l.open_house_date).toLocaleDateString("en-GB") : undefined,
-                      aiScore: l.ai_score, views: l.views_count, tags: l.tags || [],
-                    }} />
-                  );
-                })}
-              </div>
-            </div>
-          )}
         </div>
       </section>
 
@@ -1490,10 +1447,10 @@ export default function Index() {
               </Link>
             </Button>
           </div>
+          {/* 1×3 grid — show up to 3 listings */}
           <div
-            className={`grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 reveal reveal-delay-1 ${auctionsInView ? "in-view" : ""}`}>
-            
-            {auctionListings.map((l: any) => {
+            className={`grid grid-cols-1 md:grid-cols-3 gap-4 reveal reveal-delay-1 ${auctionsInView ? "in-view" : ""}`}>
+            {auctionListings.slice(0, 3).map((l: any) => {
               const svFallback = l.latitude != null && l.longitude != null
                 ? getStreetViewProxyUrl({ lat: Number(l.latitude), lng: Number(l.longitude) })
                 : null;
@@ -1504,21 +1461,82 @@ export default function Index() {
               }
               if (!imgs.length && svFallback) imgs.push(svFallback);
               return (
-              <PropertyCard key={l.id} property={{
-                id: l.id, title: l.title, address: l.address || l.city, city: l.city,
-                price: Number(l.price), pricePerSqm: l.price_per_sqm ? Number(l.price_per_sqm) : undefined,
-                bedrooms: l.bedrooms, bathrooms: l.bathrooms, sqm: Number(l.sqm),
-                floor: l.floor, totalFloors: l.total_floors, yearBuilt: l.year_built,
-                energyClass: l.energy_class, images: imgs,
-                type: l.property_type, listingType: l.listing_type,
-                auctionDate: l.auction_date ? new Date(l.auction_date).toLocaleDateString("en-GB") : undefined,
-                auctionStartingBid: l.auction_starting_bid ? Number(l.auction_starting_bid) : undefined,
-                aiScore: l.ai_score, views: l.views_count, tags: l.tags || [],
-              }} />
+                <PropertyCard key={l.id} property={{
+                  id: l.id, title: l.title, address: l.address || l.city, city: l.city,
+                  price: Number(l.price), pricePerSqm: l.price_per_sqm ? Number(l.price_per_sqm) : undefined,
+                  bedrooms: l.bedrooms, bathrooms: l.bathrooms, sqm: Number(l.sqm),
+                  floor: l.floor, totalFloors: l.total_floors, yearBuilt: l.year_built,
+                  energyClass: l.energy_class, images: imgs,
+                  type: l.property_type, listingType: l.listing_type,
+                  auctionDate: l.auction_date ? new Date(l.auction_date).toLocaleDateString("en-GB") : undefined,
+                  auctionStartingBid: l.auction_starting_bid ? Number(l.auction_starting_bid) : undefined,
+                  aiScore: l.ai_score, views: l.views_count, tags: l.tags || [],
+                }} />
               );
             })}
+            {/* Fill remaining slots with skeleton placeholders when loading */}
+            {auctionsLoading && auctionListings.length === 0 &&
+              Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="glass-card rounded-2xl border border-border overflow-hidden animate-pulse">
+                  <div className="bg-muted h-52 w-full" />
+                  <div className="p-4 space-y-3">
+                    <div className="h-4 bg-muted rounded-md w-3/4" />
+                    <div className="h-3 bg-muted rounded-md w-1/2" />
+                    <div className="h-5 bg-muted rounded-md w-1/3" />
+                  </div>
+                </div>
+              ))
+            }
           </div>
+        </div>
+      </section>
 
+      {/* ══ OPEN HOUSES ══════════════════════════════════════════════════════ */}
+      <section className="py-10 sm:py-16 bg-background">
+        <div className="container">
+          <div className={`flex items-center justify-between mb-6 sm:mb-8 reveal ${auctionsInView ? "in-view" : ""}`}>
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs font-semibold text-emerald-600 uppercase tracking-widest">Open Houses</span>
+              </div>
+              <h2 className="font-display text-xl sm:text-2xl font-bold">Upcoming Open Houses</h2>
+              <p className="text-sm text-muted-foreground mt-1">Scheduled viewings — no appointment needed</p>
+            </div>
+            <Button variant="outline" size="sm" className="border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10 text-xs" asChild>
+              <Link to="/open-houses">
+                All Open Houses <ArrowRight className="w-3 h-3 ml-1" />
+              </Link>
+            </Button>
+          </div>
+          <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 reveal reveal-delay-1 ${auctionsInView ? "in-view" : ""}`}>
+            {openHouseListings.slice(0, 3).map((l: any) => {
+              const imgs: string[] = l.cover_image_url ? [l.cover_image_url] : [];
+              if (!imgs.length && l.listing_images?.length) {
+                const sorted = [...l.listing_images].sort((a: any, b: any) => a.sort_order - b.sort_order);
+                sorted.forEach((img: any) => imgs.push(img.url));
+              }
+              const svFallback = l.latitude != null && l.longitude != null ? getStreetViewProxyUrl({ lat: Number(l.latitude), lng: Number(l.longitude) }) : null;
+              if (!imgs.length && svFallback) imgs.push(svFallback);
+              return (
+                <PropertyCard key={l.id} property={{
+                  id: l.id, title: l.title, address: l.address || l.city, city: l.city,
+                  price: Number(l.price), pricePerSqm: l.price_per_sqm ? Number(l.price_per_sqm) : undefined,
+                  bedrooms: l.bedrooms, bathrooms: l.bathrooms, sqm: Number(l.sqm),
+                  floor: l.floor, totalFloors: l.total_floors, yearBuilt: l.year_built,
+                  energyClass: l.energy_class, images: imgs,
+                  type: l.property_type, listingType: "open_house",
+                  auctionDate: l.open_house_date ? new Date(l.open_house_date).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : undefined,
+                  aiScore: l.ai_score, views: l.views_count, tags: l.tags || [],
+                }} />
+              );
+            })}
+            {/* Mock cards when no open houses are live yet */}
+            {openHouseListings.length === 0 && [
+              { id: "mock-oh-1", title: "Modern 2BR in Kifisia", address: "Kifisia Center", city: "Athens", price: 420000, pricePerSqm: 3100, bedrooms: 2, bathrooms: 2, sqm: 135, floor: 2, totalFloors: 4, yearBuilt: 2015, energyClass: "A", images: ["https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=800&q=60"], type: "apartment" as const, listingType: "open_house" as const, auctionDate: "Sat 19 Apr · 11:00", aiScore: 87, views: 132, tags: ["Balcony", "Parking"] },
+              { id: "mock-oh-2", title: "Sea-view Villa, Vouliagmeni", address: "Panorama Vouliagmeni", city: "Athens Riviera", price: 1450000, pricePerSqm: 5200, bedrooms: 4, bathrooms: 4, sqm: 280, floor: 0, totalFloors: 2, yearBuilt: 2020, energyClass: "A+", images: ["https://images.unsplash.com/photo-1507089947368-19c1da9775ae?w=800&q=60"], type: "house" as const, listingType: "open_house" as const, auctionDate: "Sun 20 Apr · 17:00", aiScore: 92, views: 89, tags: ["Pool", "Garden"] },
+              { id: "mock-oh-3", title: "Loft near Aristotelous Sq.", address: "City Center", city: "Thessaloniki", price: 310000, pricePerSqm: 2900, bedrooms: 1, bathrooms: 1, sqm: 107, floor: 5, totalFloors: 7, yearBuilt: 2010, energyClass: "B+", images: ["https://images.unsplash.com/photo-1502672023488-70e25813eb80?w=800&q=60"], type: "apartment" as const, listingType: "open_house" as const, auctionDate: "Thu 24 Apr · 19:30", aiScore: 84, views: 54, tags: ["City view"] },
+            ].map((p) => <PropertyCard key={p.id} property={p} />)}
+          </div>
         </div>
       </section>
 
