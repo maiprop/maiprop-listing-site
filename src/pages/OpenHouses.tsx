@@ -84,7 +84,7 @@ export default function OpenHouses() {
       yearBuilt: 2015,
       energyClass: "A",
       images: ["https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=800&q=60"],
-      type: "apartment",
+      type: "apartment" as const,
       listingType: "open_house" as const,
       auctionDate: "Sat 19 Apr · 11:00",
       aiScore: 87,
