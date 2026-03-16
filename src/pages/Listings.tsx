@@ -50,6 +50,8 @@ const listingTypeOptions = [
   { label: "All", value: "", icon: "🏘️" },
   { label: "Buy", value: "sale", icon: "🏷️" },
   { label: "Rent", value: "rent", icon: "🔑" },
+  { label: "Auctions", value: "auction", icon: "🔨" },
+  { label: "Open Houses", value: "open_house", icon: "🏠" },
 ];
 
 const sortOptions = [

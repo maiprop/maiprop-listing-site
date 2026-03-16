@@ -9,6 +9,7 @@ import {
   ArrowRight, Clock, CheckCircle2, AlertCircle, Phone, ExternalLink, Star, Crown,
 } from "lucide-react";
 import ContactsCRM from "@/components/ContactsCRM";
+import OpenHouseDashboardSection from "@/components/OpenHouseDashboardSection";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { useAuth } from "@/contexts/AuthContext";
