@@ -323,6 +323,7 @@ export default function CreateListing() {
     pets_allowed: false, short_term_rental: false, available_from: "", min_rental_months: "",
     is_featured: false,
     priority_placement: 0,
+    is_exclusive: false,
   });
 
   const set = (key: string, value: unknown) => {
@@ -742,6 +743,9 @@ export default function CreateListing() {
         has_structured_cabling: form.has_structured_cabling, has_equipped: form.has_equipped,
         is_featured: form.is_featured ?? false,
         priority_placement: Number(form.priority_placement) || 0,
+        tags: form.is_exclusive
+          ? (["exclusive"] as string[])
+          : undefined,
       };
 
       const { data, error } = await supabase
@@ -1410,6 +1414,17 @@ export default function CreateListing() {
                   </>
                 )}
 
+                {participantType === "agent" && (
+                  <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+                    <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2">
+                      <span className="text-primary">◆</span> Agent Listing
+                    </div>
+                    <p className="text-xs text-muted-foreground mb-3">Mark this as an exclusive listing (you are the sole agent).</p>
+                    <ToggleChip active={form.is_exclusive} onClick={() => set("is_exclusive", !form.is_exclusive)}>
+                      Exclusive
+                    </ToggleChip>
+                  </div>
+                )}
                 {isPro && (
                   <div className="rounded-xl border border-brand-gold/30 bg-brand-gold/5 p-4">
                     <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2">

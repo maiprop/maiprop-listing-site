@@ -6,7 +6,7 @@ import {
   Loader2, Calendar, Trash2, ToggleLeft, ToggleRight, Bookmark,
   Search, Activity, Wrench, Shield, MapPin, Euro, Edit2,
   FolderKanban, Users, Briefcase, TrendingUp, Globe2, Flame,
-  ArrowRight, Clock, CheckCircle2, AlertCircle, Phone, ExternalLink, Star,
+  ArrowRight, Clock, CheckCircle2, AlertCircle, Phone, ExternalLink, Star, Crown,
 } from "lucide-react";
 import ContactsCRM from "@/components/ContactsCRM";
 import { Button } from "@/components/ui/button";
@@ -690,13 +690,37 @@ export default function Dashboard() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="font-semibold text-sm truncate">{l.title}</p>
                           {l.is_featured && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-400/20 text-amber-600 border border-amber-400/30">⭐ Featured</span>}
+                          {(l.tags || []).includes("exclusive") && <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/20 text-primary font-medium">Exclusive</span>}
                           {l.is_off_market && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-secondary border border-border text-muted-foreground">🔒 Off-market</span>}
                           {l.is_pre_sale && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">🏗️ Pre-sale</span>}
                         </div>
                         <p className="text-xs text-muted-foreground mt-0.5">{l.city} · €{Number(l.price).toLocaleString()} · {l.sqm}m²</p>
                         <span className={`text-xs px-2 py-0.5 rounded-full mt-1 inline-block ${l.status === "active" ? "bg-brand-emerald/20 text-brand-emerald" : "bg-secondary text-muted-foreground"}`}>{l.status}</span>
                       </div>
-                      <div className="flex items-center gap-1 shrink-0">
+                      <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
+                        {isSellSide && (
+                          <>
+                            <button
+                              onClick={() => updateListing.mutate({ id: l.id, updates: { is_featured: !l.is_featured } })}
+                              className={cn("p-2 rounded-lg transition-colors", l.is_featured ? "bg-brand-gold/20 text-brand-gold" : "text-muted-foreground hover:text-foreground hover:bg-secondary")}
+                              title={l.is_featured ? "Featured (click to remove)" : "Add featured badge"}
+                            >
+                              <Crown className="w-4 h-4" />
+                            </button>
+                            <input
+                              type="number"
+                              min={0}
+                              max={10}
+                              defaultValue={l.priority_placement ?? 0}
+                              onBlur={e => {
+                                const v = Math.min(10, Math.max(0, Number(e.target.value) || 0));
+                                if (v !== (l.priority_placement ?? 0)) updateListing.mutate({ id: l.id, updates: { priority_placement: v } });
+                              }}
+                              className="w-12 px-1.5 py-1 rounded-lg border border-border bg-secondary text-xs text-center"
+                              title="Priority 0–10"
+                            />
+                          </>
+                        )}
                         <span className="text-xs text-muted-foreground mr-2">{l.views_count} views</span>
                         <button onClick={() => toggleListingStatus(l.id, l.status)} className="p-2 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground">
                           {l.status === "active" ? <ToggleRight className="w-4 h-4 text-primary" /> : <ToggleLeft className="w-4 h-4" />}
@@ -768,7 +792,12 @@ export default function Dashboard() {
                           <p className="text-xs text-muted-foreground truncate">
                             {filterCount > 0 ? Object.entries(s.filters).filter(([, v]) => v).map(([k, v]) => `${k.replace(/_/g, " ")}: ${v}`).join(", ") : "All listings"}
                           </p>
-                          <p className="text-xs text-muted-foreground mt-0.5">Saved {new Date(s.created_at).toLocaleDateString()}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Saved {new Date(s.created_at).toLocaleDateString()}
+                            {s.last_alert_sent_at && (
+                              <span className="ml-1">· Last alert {new Date(s.last_alert_sent_at).toLocaleDateString()}</span>
+                            )}
+                          </p>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           <button onClick={() => toggleAlert.mutate({ id: s.id, emailAlerts: !s.email_alerts })}

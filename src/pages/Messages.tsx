@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Search, Send, Phone, Video, MoreVertical, Paperclip, Loader2, MessageSquare, ArrowLeft, Check, CheckCheck } from "lucide-react";
+import { Search, Send, Phone, Video, MoreVertical, Paperclip, Loader2, MessageSquare, ArrowLeft, Check, CheckCheck, Link2 } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { useConversations, useMessages, useSendMessage, useMarkMessagesRead } from "@/hooks/useMessages";
 import { useAuth } from "@/contexts/AuthContext";
@@ -348,6 +348,17 @@ export default function Messages() {
                   >
                     {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
                   </button>
+                  {activeConv?.listing_id && (
+                    <button
+                      type="button"
+                      onClick={() => setInput((prev) => (prev ? `${prev} /property/${activeConv.listing_id}` : `/property/${activeConv.listing_id}`))}
+                      className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                      title="Share property link"
+                      aria-label="Share property link"
+                    >
+                      <Link2 className="w-4 h-4" />
+                    </button>
+                  )}
                   <input
                     type="text"
                     value={input}
