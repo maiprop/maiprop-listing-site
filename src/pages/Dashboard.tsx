@@ -203,8 +203,7 @@ export default function Dashboard() {
   const { data: leadFunnel } = useLeadFunnel(myProfessional?.id);
   const { data: professionalServices = [] } = useProfessionalServices(myProfessional?.id || "");
   const { data: leads = [], isLoading: leadsLoading } = useMyLeads(myProfessional?.id);
-  const { data: myOHRegistrations = [] } = useMyOpenHouseRegistrations();
-  const { data: myOHOffers = [] } = useMyOpenHouseOffers();
+  // myOHRegistrations and myOHOffers are handled inside OpenHouseDashboardSection
   const updateListing = useUpdateListing();
   const deleteListing = useDeleteListing();
   const deleteSavedSearch = useDeleteSavedSearch();
