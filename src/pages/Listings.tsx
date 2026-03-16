@@ -727,7 +727,7 @@ export default function Listings() {
         {showFilters && (
           <div className="bg-card/95 backdrop-blur-sm border-b border-border shadow-lg">
             <div className="container py-7">
-              {/* Pre-sale filter (sale listings only) */}
+              {/* Pre-sale filter (sale listings only) — client-side only, no DB column */}
               {(selectedListingType === "sale" || !selectedListingType) && (
                 <div className="mb-6 pb-5 border-b border-border">
                   <label className="flex items-center gap-2 cursor-pointer">
@@ -743,19 +743,6 @@ export default function Listings() {
                 </div>
               )}
 
-              {/* Off-market filter */}
-              <div className="mb-6 pb-5 border-b border-border">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={offMarketOnly}
-                    onChange={e => setParam("off_market", e.target.checked ? "1" : "")}
-                    className="rounded border-border"
-                  />
-                  <span className="text-sm font-medium">Off-market only</span>
-                  <span className="text-xs text-muted-foreground">Exclusive listings not publicly advertised</span>
-                </label>
-              </div>
 
               {/* Panel header */}
               <div className="flex items-center justify-between mb-6">
