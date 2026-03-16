@@ -320,8 +320,6 @@ export default function CreateListing() {
     price: "", auction_starting_bid: "", auction_date: "", auction_court: "", open_house_date: "",
     deposit_months: "", monthly_expenses: "", agent_fee_included: false,
     pets_allowed: false, short_term_rental: false, available_from: "", min_rental_months: "",
-    is_pre_sale: false,
-    is_off_market: false,
     is_featured: false,
     priority_placement: 0,
   });
