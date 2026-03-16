@@ -154,7 +154,9 @@ const NAV_BY_TYPE: Record<string, NavKey[]> = {
 };
 
 function getNavItemsForBioType(bioType: string | null, role: DashboardRole) {
-  const key = bioType ?? (role === "admin" ? "admin" : role === "seller_landlord" ? "seller" : role === "professional" ? "professional" : role === "agent" ? "agent" : role === "investor" ? "investor" : role === "institutional" ? "institutional" : role === "developer" ? "developer" : "buyer");
+  // Admin always gets admin nav (includes Admin Dashboard / Quick Sale pipeline)
+  if (role === "admin") return ALL_NAV_ITEMS.filter(i => NAV_BY_TYPE.admin.includes(i.key));
+  const key = bioType ?? (role === "seller_landlord" ? "seller" : role === "professional" ? "professional" : role === "agent" ? "agent" : role === "investor" ? "investor" : role === "institutional" ? "institutional" : role === "developer" ? "developer" : "buyer");
   const keys = NAV_BY_TYPE[key] ?? NAV_BY_TYPE.buyer;
   return ALL_NAV_ITEMS.filter(i => keys.includes(i.key));
 }
@@ -362,8 +364,28 @@ export default function Dashboard() {
                 ))}
               </div>
 
+              {/* Admin overview — Quick Sale Pipeline */}
+              {role === "admin" && (
+                <div className="grid md:grid-cols-2 gap-5">
+                  <div className="glass-card rounded-xl p-5 border border-destructive/20 bg-destructive/5">
+                    <h2 className="font-display font-semibold mb-1 flex items-center gap-2 text-destructive"><Flame className="w-4 h-4" /> Quick Sale Pipeline</h2>
+                    <p className="text-sm text-muted-foreground mb-3">Manage Quick Sale™ requests, send offers, and track deal flow.</p>
+                    <Button size="sm" className="bg-destructive/20 border border-destructive/40 text-destructive hover:bg-destructive/30 gap-1.5" asChild>
+                      <Link to="/admin?tab=pipeline"><Flame className="w-3.5 h-3.5" /> Manage Pipeline</Link>
+                    </Button>
+                  </div>
+                  <div className="glass-card rounded-xl p-5 border border-primary/20 bg-primary/5">
+                    <h2 className="font-display font-semibold mb-1 flex items-center gap-2 text-primary"><Shield className="w-4 h-4" /> Admin Dashboard</h2>
+                    <p className="text-sm text-muted-foreground mb-3">Subscribers, pricing, OS sync, and full platform admin.</p>
+                    <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground gap-1.5" asChild>
+                      <Link to="/admin"><Shield className="w-3.5 h-3.5" /> Open Admin</Link>
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               {/* Investor / Institutional overview cards */}
-              {isInvestorLike && (
+              {isInvestorLike && !(role === "admin") && (
                 <div className="grid md:grid-cols-2 gap-5">
                   <div className="glass-card rounded-xl p-5 border border-amber-500/20 bg-amber-500/5">
                     <h2 className="font-display font-semibold mb-1 flex items-center gap-2 text-brand-gold"><FolderKanban className="w-4 h-4" /> Deal Flow</h2>
@@ -1039,10 +1061,15 @@ export default function Dashboard() {
           {activeSection === "admin-dashboard" && navItems.some(i => i.key === "admin-dashboard") && (
             <div className="space-y-6">
               <h1 className="font-display text-2xl font-bold">Admin Dashboard</h1>
-              <p className="text-muted-foreground text-sm">Platform administration, subscribers, pricing, and OS sync.</p>
-              <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" asChild>
-                <Link to="/admin"><Shield className="w-4 h-4" /> Go to Admin Dashboard <ExternalLink className="w-4 h-4" /></Link>
-              </Button>
+              <p className="text-muted-foreground text-sm">Quick Sale pipeline, subscribers, pricing, and OS sync.</p>
+              <div className="flex flex-wrap gap-3">
+                <Button className="bg-destructive/20 border border-destructive/40 text-destructive hover:bg-destructive/30 gap-2" asChild>
+                  <Link to="/admin?tab=pipeline"><Flame className="w-4 h-4" /> Quick Sale Pipeline</Link>
+                </Button>
+                <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" asChild>
+                  <Link to="/admin"><Shield className="w-4 h-4" /> Full Admin <ExternalLink className="w-4 h-4" /></Link>
+                </Button>
+              </div>
             </div>
           )}
 

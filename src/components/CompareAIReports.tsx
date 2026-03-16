@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { Sparkles, Loader2, TrendingUp, TrendingDown, Minus, ShieldCheck, Volume2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { getAiErrorMessage } from "@/lib/aiErrorUtils";
+import { useAuth } from "@/contexts/AuthContext";
+import { SignInForAI } from "@/components/SignInForAI";
 import { computeWalkScore, walkScoreLabel, walkScoreColour } from "@/lib/walkScore";
 import { toast } from "sonner";
 
@@ -118,10 +120,12 @@ function ValuationCell({ data, price }: { data: AIReport; price: number }) {
 
 // ── Main export ───────────────────────────────────────────────────────────────
 export function CompareAIReports({ listings }: { listings: Listing[] }) {
+  const { user } = useAuth();
   const [reports, setReports] = useState<Record<string, PropertyAIData>>({});
   const [triggered, setTriggered] = useState(false);
 
   const fetchReports = async () => {
+    if (!user) return;
     setTriggered(true);
     const init: Record<string, PropertyAIData> = {};
     listings.forEach(l => { init[l.id] = { valuation: null, walkScore: null, neighbourhood: null, loading: true, error: null }; });
@@ -239,14 +243,20 @@ export function CompareAIReports({ listings }: { listings: Listing[] }) {
           </div>
         </td>
         <td colSpan={listings.length} className="px-4 py-4 text-center">
-          <button
-            onClick={fetchReports}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-primary text-primary-foreground text-xs font-semibold transition-opacity hover:opacity-90"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            Run AI Analysis for All Properties
-          </button>
-          <p className="text-[10px] text-muted-foreground mt-1.5">Valuation · Walk Score · Safety · Noise</p>
+          {!user ? (
+            <SignInForAI feature="AI Compare" className="!py-4" />
+          ) : (
+            <>
+              <button
+                onClick={fetchReports}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-primary text-primary-foreground text-xs font-semibold transition-opacity hover:opacity-90"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                Run AI Analysis for All Properties
+              </button>
+              <p className="text-[10px] text-muted-foreground mt-1.5">Valuation · Walk Score · Safety · Noise</p>
+            </>
+          )}
         </td>
       </tr>
     );

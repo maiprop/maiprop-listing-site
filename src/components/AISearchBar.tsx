@@ -1,6 +1,8 @@
 import { useState, useRef, KeyboardEvent } from "react";
 import { Sparkles, Loader2, X, ArrowRight, Lightbulb } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { SignInForAI } from "@/components/SignInForAI";
 import { toast } from "sonner";
 
 const SUGGESTIONS = [
@@ -32,6 +34,7 @@ interface AISearchBarProps {
 }
 
 export function AISearchBar({ onFiltersApplied }: AISearchBarProps) {
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
@@ -39,6 +42,7 @@ export function AISearchBar({ onFiltersApplied }: AISearchBarProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleSearch = async (q?: string) => {
+    if (!user) return;
     const searchQuery = (q ?? query).trim();
     if (!searchQuery) return;
     setLoading(true);
@@ -105,8 +109,12 @@ export function AISearchBar({ onFiltersApplied }: AISearchBarProps) {
               </button>
             </div>
 
-            {/* Input */}
+            {/* Input or sign-in */}
             <div className="p-4">
+              {!user ? (
+                <SignInForAI feature="AI Search" />
+              ) : (
+              <>
               <div className="flex items-center gap-2 bg-secondary rounded-xl px-4 py-3 border border-border focus-within:border-primary transition-colors">
                 <input
                   ref={inputRef}
@@ -147,6 +155,8 @@ export function AISearchBar({ onFiltersApplied }: AISearchBarProps) {
                   ))}
                 </div>
               </div>
+              </>
+              )}
             </div>
           </div>
         </div>
