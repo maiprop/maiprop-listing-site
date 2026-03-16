@@ -143,7 +143,7 @@ const ALL_NAV_ITEMS: { icon: React.ElementType; label: string; key: NavKey }[] =
 // ── Nav per bio-type (spec-accurate) ──────────────────────────────────────────
 const NAV_BY_TYPE: Record<string, NavKey[]> = {
   buyer:         ["overview", "saved", "saved-searches", "messages", "viewings", "auctions", "profile", "settings"],
-  seller:        ["overview", "listings", "saved", "saved-searches", "messages", "viewings", "profile", "settings"],
+  seller:        ["overview", "listings", "saved", "saved-searches", "messages", "viewings", "open-houses", "profile", "settings"],
   investor:      ["overview", "deal-flow", "saved", "saved-searches", "messages", "viewings", "auctions", "profile", "settings"],
   agent:         ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "contacts", "profile", "settings"],
   institutional: ["overview", "deal-flow", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "contacts", "profile", "settings"],
