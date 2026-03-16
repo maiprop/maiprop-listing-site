@@ -1392,6 +1392,7 @@ function DashboardPortfoliosSection({
   const [newName, setNewName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
+  const [addFromSavedPortfolioId, setAddFromSavedPortfolioId] = useState<string | null>(null);
 
   const handleCreate = () => {
     if (!newName.trim()) { toast.error("Portfolio name is required"); return; }
