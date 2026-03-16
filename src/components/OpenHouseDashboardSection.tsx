@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  DoorOpen, Calendar, Euro, Users, Check, X, Clock, ChevronDown,
-  ChevronUp, Loader2, Plus, ExternalLink, Building2, Eye, Star,
+  DoorOpen, Calendar, Euro, Users, Check, X, Clock,
+  ChevronDown, ChevronUp, Loader2, Plus, Building2, Eye, Star,
   CheckCircle2, AlertCircle, Timer, Flame, ArrowRight, Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,15 +10,7 @@ import { cn } from "@/lib/utils";
 import {
   useMyOpenHouseRegistrations,
   useMyOpenHouseOffers,
-  useOpenHouseSettings,
-  useOpenHouseRegistrations,
-  useOpenHouseOffers,
-  useUpdateOpenHouseRegistration,
-  useUpdateOpenHouseOffer,
-  useUpsertOpenHouseSettings,
-  type OHTimeslot,
 } from "@/hooks/useOpenHouseAssetControl";
-import { useEffect } from "react";
 import OpenHouseAssetControlPanel from "./OpenHouseAssetControlPanel";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
