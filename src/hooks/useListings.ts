@@ -54,8 +54,14 @@ export function useListings(filters?: {
         from += FETCH_LIMIT;
       }
       if (allData.length === 0) return allData;
-      // Sort by created_at descending (stable, schema-aligned)
+      // Sort: featured first → priority_placement desc → created_at desc
       allData.sort((a: any, b: any) => {
+        const aFeat = a.is_featured ? 1 : 0;
+        const bFeat = b.is_featured ? 1 : 0;
+        if (bFeat !== aFeat) return bFeat - aFeat;
+        const aPri = Number(a.priority_placement ?? 0);
+        const bPri = Number(b.priority_placement ?? 0);
+        if (bPri !== aPri) return bPri - aPri;
         const aDate = new Date(a.created_at || 0).getTime();
         const bDate = new Date(b.created_at || 0).getTime();
         return bDate - aDate;
