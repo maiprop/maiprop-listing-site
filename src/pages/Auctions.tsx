@@ -1061,14 +1061,14 @@ export default function Auctions() {
                   p === "…" ? (
                     <span key={`ellipsis-${idx}`} className="text-sm text-muted-foreground px-1 select-none">…</span>
                   ) : (
-                    <Button
-                      key={p}
-                      variant={p === currentPage ? "default" : "outline"}
-                      size="sm"
-                      className={p === currentPage ? "bg-brand-gold border-0 text-background font-bold" : "border-border"}
-                      onClick={() => {setCurrentPage(p as number);window.scrollTo({ top: 0, behavior: "smooth" });}}>
-                      {p}
-                    </Button>
+                       <Button
+                  key={p}
+                  variant={p === currentPage ? "default" : "outline"}
+                  size="sm"
+                  className={p === currentPage ? "bg-gradient-primary border-0 text-primary-foreground font-bold" : "border-border"}
+                  onClick={() => {setCurrentPage(p as number);window.scrollTo({ top: 0, behavior: "smooth" });}}>
+                       {p}
+                     </Button>
                   )
                 );
               })()}
