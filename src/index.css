@@ -505,19 +505,10 @@
   animation: hero-fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-/* ── Hero video cinematic Ken Burns (zoom only — no pan to avoid sub-pixel jitter) ── */
+/* ── Hero video (no motion by default; warm overlay handled inline in Index hero) ── */
 .hero-video {
-  filter: brightness(0.35) saturate(0.8) blur(3px);
   transform-origin: center center;
 }
-
-.hero-overlay {
-  background:
-    radial-gradient(circle at 15% 10%, hsl(var(--brand-cyan-soft) / 0.25) 0, transparent 45%),
-    radial-gradient(circle at 80% 80%, hsl(var(--brand-purple) / 0.35) 0, transparent 55%),
-    linear-gradient(135deg, hsl(var(--brand-navy-mid) / 0.9), hsl(var(--brand-purple-dark) / 0.9));
-}
-
 @keyframes hero-zoom {
   0%, 100% { transform: translate3d(0, 0, 0) scale(1.03); }
   50%      { transform: translate3d(0, 0, 0) scale(1.06); }

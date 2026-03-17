@@ -343,7 +343,9 @@ export default function OpenHouseDetail() {
                   </div>
                 )}
                 <div className="absolute top-4 left-4 flex gap-2">
-                  <span className="bg-emerald-500/90 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow">OPEN HOUSE</span>
+                  <span className="bg-gradient-primary text-primary-foreground text-xs font-bold px-3 py-1.5 rounded-full shadow-sm">
+                    OPEN HOUSE
+                  </span>
                 </div>
                 {imgs.length > 1 && (
                   <>
