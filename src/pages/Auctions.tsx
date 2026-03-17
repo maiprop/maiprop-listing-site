@@ -303,12 +303,12 @@ function yieldRange(bucket: string): [number, number] | null {
 }
 
 const OWNERSHIP_BADGE: Record<string, {label: string;cls: string;}> = {
-  full: { label: "Πλήρης κυριότητα", cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/25" },
-  bare: { label: "Ψιλή κυριότητα", cls: "bg-amber-500/15 text-amber-400 border-amber-500/25" },
-  common: { label: "Εξ αδιαιρέτου", cls: "bg-sky-500/15 text-sky-400 border-sky-500/25" },
-  usufruct: { label: "Επικαρπία", cls: "bg-violet-500/15 text-violet-400 border-violet-500/25" },
-  vertical: { label: "Κάθετη ιδιοκτησία", cls: "bg-cyan-500/15 text-cyan-400 border-cyan-500/25" },
-  horizontal: { label: "Οριζόντια ιδιοκτησία", cls: "bg-indigo-500/15 text-indigo-400 border-indigo-500/25" }
+  full: { label: "Πλήρης κυριότητα", cls: "bg-primary/15 text-primary border-primary/25" },
+  bare: { label: "Ψιλή κυριότητα", cls: "bg-brand-gold/15 text-brand-gold border-brand-gold/25" },
+  common: { label: "Εξ αδιαιρέτου", cls: "bg-accent/15 text-accent border-accent/25" },
+  usufruct: { label: "Επικαρπία", cls: "bg-muted text-muted-foreground border-border" },
+  vertical: { label: "Κάθετη ιδιοκτησία", cls: "bg-primary/10 text-primary border-primary/20" },
+  horizontal: { label: "Οριζόντια ιδιοκτησία", cls: "bg-secondary text-foreground border-border" }
 };
 
 type ViewMode = "list" | "map";
