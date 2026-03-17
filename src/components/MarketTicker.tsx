@@ -107,33 +107,33 @@ export function MarketTicker() {
         background: "hsl(220 40% 6% / 0.55)",
         backdropFilter: "blur(16px)",
         WebkitBackdropFilter: "blur(16px)",
-        border: "1px solid hsl(192 100% 50% / 0.14)",
-        boxShadow: "0 0 0 1px hsl(192 100% 50% / 0.04), 0 8px 32px -8px hsl(192 100% 50% / 0.12)",
+        border: "1px solid hsl(270 75% 62% / 0.18)",
+        boxShadow: "0 0 0 1px hsl(270 75% 62% / 0.06), 0 8px 32px -8px hsl(270 75% 62% / 0.15)",
       }}
     >
       {/* Subtle ambient glow */}
       <div
         className="absolute -inset-px rounded-2xl pointer-events-none"
-        style={{ boxShadow: "0 0 24px 2px hsl(192 100% 50% / 0.05)" }}
+        style={{ boxShadow: "0 0 24px 2px hsl(270 75% 62% / 0.07)" }}
       />
 
       {/* Header */}
       <div
         className="flex items-center justify-between px-4 py-2 border-b"
-        style={{ borderColor: "hsl(192 100% 50% / 0.1)", background: "hsl(220 40% 5% / 0.4)" }}
+        style={{ borderColor: "hsl(270 75% 62% / 0.12)", background: "hsl(220 40% 5% / 0.4)" }}
       >
         <div className="flex items-center gap-2">
           <span className="relative flex w-2 h-2 shrink-0">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-40" style={{ background: "hsl(192 100% 50%)" }} />
-            <span className="relative inline-flex rounded-full w-2 h-2" style={{ background: "hsl(192 100% 50%)" }} />
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-40" style={{ background: "hsl(270 75% 62%)" }} />
+            <span className="relative inline-flex rounded-full w-2 h-2" style={{ background: "hsl(270 75% 62%)" }} />
           </span>
-          <span className="text-[10px] font-black tracking-widest uppercase" style={{ color: "hsl(192 100% 75%)" }}>
+          <span className="text-[10px] font-black tracking-widest uppercase" style={{ color: "hsl(270 75% 80%)" }}>
             Live Market
           </span>
         </div>
-        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full" style={{ background: "hsl(192 100% 50% / 0.08)", border: "1px solid hsl(192 100% 50% / 0.18)" }}>
-          <span className="w-1 h-1 rounded-full animate-pulse" style={{ background: "hsl(192 100% 50%)" }} />
-          <span className="text-[8px] font-black tracking-widest uppercase" style={{ color: "hsl(192 100% 60%)" }}>
+        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full" style={{ background: "hsl(270 75% 62% / 0.1)", border: "1px solid hsl(270 75% 62% / 0.22)" }}>
+          <span className="w-1 h-1 rounded-full animate-pulse" style={{ background: "hsl(270 75% 62%)" }} />
+          <span className="text-[8px] font-black tracking-widest uppercase" style={{ color: "hsl(270 75% 72%)" }}>
             {isLoading ? "…" : "LIVE"}
           </span>
         </div>
