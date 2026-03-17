@@ -273,8 +273,8 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
                   to="/pricing"
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
                     forceLight
-                      ? "bg-brand-gold/30 border-brand-gold/50 text-yellow-200"
-                      : "bg-brand-gold/15 border-brand-gold/40 text-brand-gold"
+                      ? "bg-white/20 border-white/40 text-white"
+                      : "bg-primary/15 border-primary/40 text-primary"
                   }`}
                 >
                   <Zap className="w-3 h-3" /> Pro ✓
@@ -284,8 +284,8 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
                   to="/pricing"
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all hover:scale-105 ${
                     forceLight
-                      ? "bg-brand-gold/20 border-brand-gold/40 text-yellow-200 hover:bg-brand-gold/30"
-                      : "bg-brand-gold/10 border-brand-gold/30 text-brand-gold hover:bg-brand-gold/20"
+                      ? "bg-white/15 border-white/30 text-white/90 hover:bg-white/25"
+                      : "bg-primary/10 border-primary/25 text-primary hover:bg-primary/20"
                   }`}
                 >
                   <Zap className="w-3 h-3" /> Pro
