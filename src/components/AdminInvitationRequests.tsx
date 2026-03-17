@@ -148,7 +148,7 @@ export default function AdminInvitationRequests() {
                           <Button
                             size="sm"
                             variant="outline"
-                            className="h-7 text-xs text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/10"
+                            className="h-7 text-xs text-primary border-primary/30 hover:bg-primary/10"
                             onClick={() => updateStatus(r.id, "approved")}
                             disabled={updating === r.id}
                           >
