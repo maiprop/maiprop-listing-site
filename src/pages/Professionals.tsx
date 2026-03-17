@@ -209,8 +209,8 @@ export default function Professionals() {
                   else { setSelectedGroup("agents"); setSearchParams((p) => { const n = new URLSearchParams(p); n.set("category", "real_estate_agent"); return n; }); }
                 }}
                 className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-sm font-semibold border transition-all shrink-0 snap-start ${
-                selectedGroup === "agents" ?
-                "bg-cyan-500/10 border-cyan-500/20 text-cyan-400" :
+                 selectedGroup === "agents" ?
+                 "bg-primary/10 border-primary/20 text-primary" :
                 "border-border bg-secondary/50 text-muted-foreground hover:text-foreground"}`}
               >
                 <span>🏠</span>
