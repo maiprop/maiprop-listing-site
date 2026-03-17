@@ -49,8 +49,10 @@ return (
           <div className="flex flex-col gap-3 sm:flex-row sm:justify-center sm:gap-4">
             <Button asChild size="lg" className="gap-2 rounded-full bg-primary px-8 sm:px-12 text-base sm:text-lg font-semibold text-primary-foreground shadow-[0_0_40px_hsl(179_90%_63%/0.4)] transition-all hover:bg-primary/90 hover:shadow-[0_0_60px_hsl(179_90%_63%/0.6)] w-full sm:w-auto">
               <a href="mailto:kr@maiprop.co" onClick={() => {
-                if (typeof window.gtag === "function") {
-                  window.gtag("event", "conversion", {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                if (typeof (window as any).gtag === "function") {
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  (window as any).gtag("event", "conversion", {
                     send_to: "AW-17031338731/OAyuCMKFiP0bEOu1lrk_",
                     event_category: "contact",
                     event_label: "mail_us_click",
