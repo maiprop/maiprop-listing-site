@@ -11,9 +11,7 @@ const logStep = (step: string, details?: any) => {
   console.log(`[CREATE-CHECKOUT] ${step}${detailsStr}`);
 };
 
-/** Plan keys matching pricing_configs; env fallback: STRIPE_PRICE_<UPPERCASE_KEY> */
-const DEFAULT_PRICE = "price_1TABOeIy442hLqOtw3067Nzz";
-
+/** Plan keys: env STRIPE_PRICE_<UPPERCASE_KEY>, or DB pricing_configs.metadata.stripe_price_id, or STRIPE_PRICE_DEFAULT. No hardcoded fallback in production. */
 async function getPriceForPlan(supabase: ReturnType<typeof createClient>, planKey: string): Promise<string> {
   const envKey = `STRIPE_PRICE_${planKey.toUpperCase().replace(/-/g, "_")}`;
   const envPrice = Deno.env.get(envKey);
@@ -23,7 +21,9 @@ async function getPriceForPlan(supabase: ReturnType<typeof createClient>, planKe
   const stripePriceId = (data as any)?.metadata?.stripe_price_id;
   if (stripePriceId) return stripePriceId;
 
-  return Deno.env.get("STRIPE_PRICE_DEFAULT") ?? DEFAULT_PRICE;
+  const defaultPrice = Deno.env.get("STRIPE_PRICE_DEFAULT");
+  if (!defaultPrice) throw new Error("STRIPE_PRICE_DEFAULT or pricing_configs.metadata.stripe_price_id required");
+  return defaultPrice;
 }
 
 Deno.serve(async (req) => {

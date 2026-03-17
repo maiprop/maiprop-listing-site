@@ -13,16 +13,16 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.property-chat]
-verify_jwt = false
+verify_jwt = true
 
 [functions.smart-filters]
 verify_jwt = false
 
 [functions.pro-ai-tools]
-verify_jwt = false
+verify_jwt = true
 
 [functions.ai-service-match]
-verify_jwt = false
+verify_jwt = true
 
 [functions.sync-to-os]
 verify_jwt = false
@@ -46,20 +46,23 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.listing-ai-assist]
-verify_jwt = false
+verify_jwt = true
 
 [functions.create-checkout]
-verify_jwt = false
+verify_jwt = true
 
 [functions.check-subscription]
-verify_jwt = false
+verify_jwt = true
 
 [functions.customer-portal]
-verify_jwt = false
+verify_jwt = true
 
 [functions.send-saved-search-alerts]
 verify_jwt = false
 
 [functions.invitation-notify]
 verify_jwt = false
+
+[functions.create-stripe-price]
+verify_jwt = true
 

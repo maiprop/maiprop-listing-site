@@ -10,7 +10,7 @@ export function usePortfolios() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("portfolios")
-        .select("*")
+        .select("id, name, listing_ids, user_id, created_at, updated_at")
         .eq("user_id", user!.id)
         .order("updated_at", { ascending: false });
       if (error) throw error;
@@ -27,7 +27,7 @@ export function usePortfolio(id: string | undefined) {
       if (!id) return null;
       const { data: portfolio, error: pe } = await supabase
         .from("portfolios")
-        .select("*")
+        .select("id, name, listing_ids, user_id, created_at, updated_at")
         .eq("id", id)
         .single();
       if (pe || !portfolio) throw pe || new Error("Not found");

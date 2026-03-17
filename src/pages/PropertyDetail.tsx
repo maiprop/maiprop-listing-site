@@ -22,6 +22,7 @@ import { useFavorites, useToggleFavorite } from "@/hooks/useFavorites";
 import { useStartConversation } from "@/hooks/useMessages";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
+import { usePricingConfigs, formatPrice, PRICING_KEYS } from "@/hooks/usePricingConfigs";
 import { toast } from "sonner";
 import PropertyMiniMap from "@/components/PropertyMiniMap";
 import PropertyValuation from "@/components/PropertyValuation";
@@ -135,6 +136,7 @@ export default function PropertyDetail() {
   const location = useLocation();
   const { user, profile } = useAuth();
   const { isPro } = useSubscription();
+  const { data: pricingConfigs = {} } = usePricingConfigs();
 
   const { data: dbListing, isLoading } = useListing(id || "");
   const ownerIsPro = !!(dbListing as any)?.ownerIsPro;
@@ -1282,7 +1284,7 @@ export default function PropertyDetail() {
                       {!reportPurchased ?
                       <div className="flex items-center gap-3 flex-wrap">
                           <Button className="bg-gradient-primary border-0 text-primary-foreground text-sm" onClick={() => setReportPurchased(true)}>
-                            Unlock Report — €29
+                            Unlock Report — {formatPrice(pricingConfigs?.[PRICING_KEYS.valuation_single], { fallback: "€29" })}
                           </Button>
                           <span className="text-xs text-muted-foreground">One-time · instant access</span>
                         </div> :

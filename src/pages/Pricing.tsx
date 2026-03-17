@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
-import { useQuery } from "@tanstack/react-query";
+import { usePricingConfigs } from "@/hooks/usePricingConfigs";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -302,33 +302,6 @@ const PLANS: Record<AudienceId, {
   },
 };
 
-/** Fetches pricing_configs for the public Pricing page — used to override displayed amounts and labels */
-function usePublicPricingConfigs() {
-  return useQuery({
-    queryKey: ["pricing-configs-public"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("pricing_configs")
-        .select("key, label, description, amount, currency, unit")
-        .eq("is_active", true);
-      if (error) return {};
-      return (data ?? []).reduce<Record<string, { amount: number; currency: string; label: string; description: string | null; unit: string }>>(
-        (acc, row) => {
-          acc[row.key] = {
-            amount: Number(row.amount ?? 0),
-            currency: row.currency ?? "EUR",
-            label: row.label,
-            description: row.description ?? null,
-            unit: row.unit ?? "monthly",
-          };
-          return acc;
-        },
-        {}
-      );
-    },
-    staleTime: 5 * 60 * 1000,
-  });
-}
 
 // ── Module table ───────────────────────────────────────────────────────────────
 function ModuleTable({ audience, accent }: { audience: AudienceId; accent: string }) {
@@ -422,7 +395,7 @@ export default function Pricing() {
     }
   }, [profile, hasAutoSelected]);
 
-  const { data: pricingConfigs = {} } = usePublicPricingConfigs();
+  const { data: pricingConfigs = {} } = usePricingConfigs();
   const planKey = PLAN_KEYS[activeTab];
   const config = pricingConfigs[planKey];
   const basePlan = PLANS[activeTab];

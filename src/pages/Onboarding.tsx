@@ -18,6 +18,7 @@ import {
   type ServiceTemplate,
   type PricingModel,
 } from "@/lib/professionalServiceCatalog";
+import { usePricingConfigs, formatPrice, PRICING_KEYS } from "@/hooks/usePricingConfigs";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -408,6 +409,9 @@ export default function Onboarding() {
     setLoading(false);
     setStep("done");
   };
+
+  const { data: pricingConfigs = {} } = usePricingConfigs();
+  const professionalProPrice = formatPrice(pricingConfigs?.[PRICING_KEYS.professional_basic], { showUnit: true, fallback: "€49/mo" });
 
   const handleUpgradeToPro = async () => {
     try {
@@ -837,6 +841,7 @@ export default function Onboarding() {
         actions={actions}
         navigate={navigate}
         onUpgradeToPro={participantId === "professional" ? handleUpgradeToPro : undefined}
+        professionalProPrice={professionalProPrice}
       />
     );
   })();
@@ -991,6 +996,7 @@ function DoneScreen({
   actions,
   navigate,
   onUpgradeToPro,
+  professionalProPrice,
 }: {
   selected: ParticipantType | null;
   selectedColor: { bg: string; border: string; text: string; iconBg: string };
@@ -1001,7 +1007,9 @@ function DoneScreen({
   actions: { primary: { label: string; href: string }; secondary: { label: string; href: string }[]; subtitle: string };
   navigate: (href: string) => void;
   onUpgradeToPro?: () => Promise<void>;
+  professionalProPrice?: string;
 }) {
+  const proPrice = professionalProPrice ?? "€49/mo";
   const [countdown, setCountdown] = useState(4);
   const [redirectCancelled, setRedirectCancelled] = useState(false);
 
@@ -1083,7 +1091,7 @@ function DoneScreen({
           onClick={() => { setRedirectCancelled(true); onUpgradeToPro(); }}
         >
           <Crown className="w-4 h-4 mr-2" />
-          Upgrade to Pro — €49/mo
+          Upgrade to Pro — {proPrice}
         </Button>
       )}
 
