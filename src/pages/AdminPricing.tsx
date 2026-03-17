@@ -550,7 +550,3 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
   );
 }
 
-export default function AdminPricing() {
-  return <AdminPricingContent />;
-}
-
