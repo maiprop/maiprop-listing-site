@@ -728,7 +728,7 @@ export default function Firesale() {
                               </p>
                             </div>
                             <div className="text-right">
-                              <div className="text-xs bg-brand-emerald/10 text-brand-emerald border border-brand-emerald/20 px-2 py-1 rounded-lg font-semibold">
+                              <div className="text-xs bg-primary/10 text-primary border border-primary/20 px-2 py-1 rounded-lg font-semibold">
                                 94% confidence
                               </div>
                               <p className="text-[10px] text-muted-foreground mt-1.5">Valid 7 days</p>
