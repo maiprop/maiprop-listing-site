@@ -504,7 +504,7 @@ function AuctionCard({ a, favoritedIds, onToggleFav
             target="_blank"
             rel="noreferrer noopener"
             onClick={(e) => e.stopPropagation()}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold bg-brand-gold/10 border border-brand-gold/25 text-brand-gold hover:bg-brand-gold/20 transition-all">
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold bg-primary/10 border border-primary/25 text-primary hover:bg-primary/20 transition-all">
             
               <ExternalLink className="w-3 h-3" />
               eAuction
