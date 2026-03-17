@@ -121,11 +121,11 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
   };
 
   const getBadge = () => {
-    if (property.listingType === "auction") return { label: "Auction", cls: "badge-auction" };
-    if (property.listingType === "open_house") return { label: "Open House", cls: "bg-emerald-500/90 text-white" };
+  if (property.listingType === "auction") return { label: "Auction", cls: "badge-auction" };
+    if (property.listingType === "open_house") return { label: "Open House", cls: "badge-open-house" };
     if (property.listingType === "firesale") return { label: "Quick Sale", cls: "badge-firesale" };
     if (property.isNew) return { label: "New", cls: "badge-new" };
-    if (property.isPremium) return { label: "Premium", cls: "bg-brand-coral/90 text-white" };
+    if (property.isPremium) return { label: "Premium", cls: "bg-brand-purple/90 text-white" };
     return null;
   };
 
@@ -371,23 +371,23 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
 
         {/* Auction banner */}
         {property.listingType === "open_house" && property.auctionDate && (
-          <div className="flex items-center gap-2 bg-emerald-500/10 rounded-xl p-2.5 border border-emerald-500/25">
-            <Calendar className="w-4 h-4 text-emerald-600 shrink-0" />
+          <div className="flex items-center gap-2 bg-brand-cyan/10 rounded-xl p-2.5 border border-brand-cyan/25">
+            <Calendar className="w-4 h-4 text-brand-cyan shrink-0" />
             <div>
-              <div className="text-xs font-bold text-emerald-700">Open House</div>
+              <div className="text-xs font-bold text-brand-purple">Open House</div>
               <div className="text-[11px] text-muted-foreground truncate">{property.auctionDate}</div>
             </div>
           </div>
         )}
         {property.listingType === "auction" && property.auctionDate && (
-          <div className="flex items-center gap-2 bg-brand-gold/10 rounded-xl p-2.5 border border-brand-gold/25">
-            <Gavel className="w-4 h-4 text-brand-gold shrink-0" />
+          <div className="flex items-center gap-2 bg-brand-auction/10 rounded-xl p-2.5 border border-brand-auction/25">
+            <Gavel className="w-4 h-4 text-brand-auction shrink-0" />
             <div className="flex-1 min-w-0">
-              <div className="text-xs font-semibold text-brand-gold">Auction Date</div>
+              <div className="text-xs font-semibold text-brand-auction">Auction Date</div>
               <div className="text-[11px] text-muted-foreground truncate">{property.auctionDate}</div>
             </div>
             {property.auctionStartingBid && (
-              <div className="text-xs font-bold text-brand-gold shrink-0">
+              <div className="text-xs font-bold text-brand-auction shrink-0">
                 From €{property.auctionStartingBid.toLocaleString()}
               </div>
             )}
@@ -434,7 +434,7 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
               </div>
               <span className="text-xs text-muted-foreground truncate flex-1">{property.agent.name}</span>
               {property.agent.verified && (
-                <span className="flex items-center gap-0.5 text-[10px] text-brand-emerald font-semibold">
+              <span className="flex items-center gap-0.5 text-[10px] text-brand-cyan font-semibold">
                   <CheckCircle className="w-3 h-3" /> Verified
                 </span>
               )}
@@ -452,7 +452,7 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
             )}
             {property.listingType === "open_house" && (
               <Link to={detailPath} className="flex-1">
-                <button className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-emerald-500 text-white font-semibold text-sm transition-all hover:opacity-90 hover:shadow-md active:scale-[0.98]">
+                <button className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-gradient-primary text-primary-foreground font-semibold text-sm transition-all hover:opacity-90 hover:shadow-md active:scale-[0.98]">
                   <Calendar className="w-4 h-4" />
                   View Open House
                 </button>
@@ -460,7 +460,7 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
             )}
             {property.listingType === "auction" && (
               <Link to={detailPath} className="flex-1">
-                <button className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-brand-gold text-black font-semibold text-sm transition-all hover:opacity-90 hover:shadow-md active:scale-[0.98]">
+                <button className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-brand-auction/80 text-white font-semibold text-sm transition-all hover:bg-brand-auction hover:shadow-md active:scale-[0.98]">
                   <Gavel className="w-4 h-4" />
                   View Auction
                 </button>
