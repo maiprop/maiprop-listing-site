@@ -1199,7 +1199,7 @@ export default function Index() {
               willChange: "transform",
               transform: "translateZ(0)",
               animation: "hero-zoom 30s ease-in-out infinite alternate",
-              objectPosition: "60% 30%",
+              objectPosition: "80% 30%",
             }}
           >
             {heroVideoSrc && <source src={heroVideoSrc} type="video/mp4" />}
