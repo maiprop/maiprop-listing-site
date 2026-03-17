@@ -2,7 +2,15 @@
 
 ## Pushing migrations to Supabase
 
-The critical fixes are in **`supabase/migrations/20260320120000_fix_critical_security_issues.sql`**. Apply them in one of these ways:
+The critical fixes are in **`supabase/migrations/20260320120000_fix_critical_security_issues.sql`**.
+
+**Comprehensive linter fixes (20260420120000):** Run **`supabase/migrations/20260420120000_security_linter_comprehensive.sql`** to address:
+- Security Definer View (0010): profiles_public converted from view to RLS-protected table
+- profiles_public RLS: explicit SELECT policy, no anonymous over-exposure
+- Function search_path (0011): set_open_house_updated_at
+- Extensions (0014): pg_net moved to extensions schema
+
+Apply in one of these ways:
 
 ### Option A: Supabase Dashboard (no CLI)
 
@@ -31,10 +39,10 @@ To link first: `npx supabase link --project-ref YOUR_PROJECT_REF` (ref is in Pro
 
 **Issue:** Extensions like `pg_cron` and `pg_net` are in the `public` schema.
 
-**Refined behavior:**
+**Refined behavior (fixed in 20260420120000):**
 
 - **pg_cron:** Do **not** move. On Supabase 1.169.8+, `pg_cron` must be in `pg_catalog`; moving to `extensions` can fail or break cron. The linter may still report it; acceptable to leave in place.
-- **pg_net:** Optional migration `20260320130000_extensions_schema_optional.sql` moves only **pg_net** from `public` to schema `extensions`. Functions like `net.http_post()` keep working (they live in the `net` schema).
+- **pg_net:** `20260420120000_security_linter_comprehensive.sql` moves **pg_net** to schema `extensions` if still in public. Functions like `net.http_post()` keep working (they live in the `net` schema).
 - **New extensions:** Create with `WITH SCHEMA extensions` so they never land in `public`, e.g. `CREATE EXTENSION foo WITH SCHEMA extensions;`.
 
 If the migration fails (permissions), use Dashboard → Database → Extensions and disable/re-enable **pg_net** only; leave **pg_cron** as-is.
@@ -43,7 +51,26 @@ If the migration fails (permissions), use Dashboard → Database → Extensions 
 
 ---
 
-### 2. RLS policy always true (lint 0024)
+### 2. Security Definer View (lint 0010) — FIXED
+
+**Issue:** Views with `security_invoker = false` (SECURITY DEFINER) run with the creator’s privileges and bypass RLS.
+
+**Fix (20260420120000):** `profiles_public` was converted from a view to a table:
+- Table synced from `profiles` via trigger (`sync_profiles_public`)
+- RLS enabled with explicit SELECT policy for `anon` and `authenticated`
+- No SECURITY DEFINER view; table exposes only safe columns (no phone)
+
+---
+
+### 3. Function search_path mutable (lint 0011) — FIXED
+
+**Issue:** Functions without `SET search_path` can be vulnerable to search-path injection.
+
+**Fix (20260420120000):** `set_open_house_updated_at()` now has `SET search_path = public`. Other functions in the repo already had `search_path` set.
+
+---
+
+### 4. RLS policy always true (lint 0024)
 
 **Issue:** Policies with `USING (true)` or `WITH CHECK (true)` for **INSERT/UPDATE/DELETE** are too permissive. SELECT with `USING (true)` is often intentional (e.g. public read for listings, images, professionals, pricing).
 
@@ -52,7 +79,7 @@ If the migration fails (permissions), use Dashboard → Database → Extensions 
 - `consultation_requests` INSERT: now checks `requester_id IS NULL OR requester_id = auth.uid()`.
 - `sync_log` INSERT: policy removed; only service role (edge functions) inserts.
 - `firesale_requests` INSERT: now checks `user_id IS NULL OR auth.uid() = user_id`.
-- `profiles` SELECT: permissive policy dropped; use `profiles_public` for other users.
+- `profiles` SELECT: permissive policy dropped; use `profiles_public` (table with RLS) for other users.
 - `investor_subscriptions` UPDATE: user self-update removed.
 
 **No change needed (intentional public read):**
@@ -67,7 +94,7 @@ If the linter still reports a policy, it is likely on a table not listed above; 
 
 ---
 
-### 3. Leaked password protection disabled
+### 5. Leaked password protection disabled
 
 **Issue:** Passwords that appear in breach databases (e.g. HaveIBeenPwned) are not blocked.
 
@@ -84,11 +111,12 @@ Supabase’s built-in breach check uses the same idea: reject sign-up or passwor
 
 ---
 
-### 4. Summary checklist
+### 6. Summary checklist
 
 | Item | Action |
 |------|--------|
 | Push critical migration | Run `20260320120000_fix_critical_security_issues.sql` via Dashboard SQL or `supabase db push` |
+| Security linter fixes | Run `20260420120000_security_linter_comprehensive.sql` (profiles_public, search_path, pg_net) |
 | Profiles PII | Done in migration (use `profiles_public` for others) |
 | Investor subscription self-upgrade | Done in migration (user UPDATE removed) |
 | Consultation impersonation | Done in migration (`requester_id` check) |

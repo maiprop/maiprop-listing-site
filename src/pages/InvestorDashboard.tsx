@@ -453,8 +453,9 @@ export default function InvestorDashboard() {
         }));
 
         setLiveDeals(realDeals);
-      } catch {
+      } catch (e) {
         setLiveDeals([]);
+        toast.error("Could not load deals. Please try again.");
       } finally {
         setLoading(false);
       }

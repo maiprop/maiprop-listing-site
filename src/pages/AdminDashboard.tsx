@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from "react";
 import { Link, useSearchParams, useNavigate } from "react-router-dom";
-import { Shield, Flame, Users, Wifi, SlidersHorizontal, ArrowLeft, DoorOpen, FolderKanban, Flag, MailPlus } from "lucide-react";
+import { Shield, Flame, Users, Wifi, SlidersHorizontal, ArrowLeft, DoorOpen, FolderKanban, Flag, MailPlus, FileText } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import AdminFiresalePipeline from "@/components/AdminFiresalePipeline";
@@ -48,6 +48,8 @@ export default function AdminDashboard() {
     { key: "investor-screening", label: "Investor Screening", icon: FolderKanban },
     { key: "open-houses", label: "Open Houses", icon: DoorOpen },
     { key: "subscribers", label: "Subscribers", icon: Users },
+    { key: "reports", label: "Reports", icon: FileText },
+    { key: "invitations", label: "Invitations", icon: MailPlus },
     { key: "pricing", label: "Pricing", icon: SlidersHorizontal },
     { key: "os-sync", label: "OS Sync", icon: Wifi },
   ];
