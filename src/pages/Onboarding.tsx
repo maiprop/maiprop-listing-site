@@ -978,7 +978,7 @@ function Shell({
         )}
 
         {/* Animated step content */}
-        <div className={cn("transition-all duration-[200ms] ease-out will-change-transform", animClass)}>
+        <div className={cn("transition-all duration-200 ease-out will-change-transform", animClass)}>
           {displayedChildren}
         </div>
       </div>
