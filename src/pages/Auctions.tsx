@@ -387,21 +387,21 @@ function AuctionCard({ a, favoritedIds, onToggleFav
             <Gavel className="w-10 h-10 text-muted-foreground/20" />
           </div>
         }
-        <div className="absolute top-2 left-2 flex items-center gap-1.5 flex-wrap">
+      <div className="absolute top-2 left-2 flex items-center gap-1.5 flex-wrap">
           {a.is_featured && (
-            <span className="inline-flex items-center gap-1 bg-brand-gold/90 text-background text-[10px] font-bold px-2 py-0.5 rounded-full">
+            <span className="inline-flex items-center gap-1 bg-gradient-primary text-primary-foreground text-[10px] font-bold px-2 py-0.5 rounded-full">
               <Crown className="w-2.5 h-2.5" /> Featured
             </span>
           )}
           {a.auction_date && (
             <div className="flex items-center gap-1 bg-background/90 backdrop-blur-sm border border-border rounded-full px-2 py-0.5 text-[10px] font-semibold">
-              <Calendar className="w-3 h-3 text-brand-gold" />
+              <Calendar className="w-3 h-3 text-primary" />
               {format(new Date(a.auction_date), "dd MMM yyyy")}
             </div>
           )}
         </div>
         {getPropertyTypeLabel(a) && (
-          <div className="absolute top-2 right-2 bg-brand-gold/90 text-background text-[10px] font-bold px-2 py-0.5 rounded-full">
+          <div className="absolute top-2 right-2 bg-primary text-primary-foreground text-[10px] font-bold px-2 py-0.5 rounded-full">
             {getPropertyTypeLabel(a)}
           </div>
         )}
