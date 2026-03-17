@@ -169,8 +169,8 @@ function getNavItemsForBioType(bioType: string | null, role: DashboardRole) {
 // ── Lead status badge ──────────────────────────────────────────────────────────
 const LEAD_STATUS_COLORS: Record<string, string> = {
   pending:   "bg-brand-gold/20 text-brand-gold",
-  reviewed:  "bg-blue-500/20 text-blue-400",
-  confirmed: "bg-emerald-500/20 text-emerald-400",
+  reviewed:  "bg-brand-purple/20 text-brand-purple",
+  confirmed: "bg-primary/20 text-primary",
   cancelled: "bg-muted text-muted-foreground",
 };
 
