@@ -962,7 +962,7 @@ export default function Auctions() {
         <div className="container pb-6">
             {isLoading ?
           <div className="flex items-center justify-center h-[560px] rounded-2xl bg-card border border-border">
-                <Loader2 className="w-6 h-6 animate-spin text-brand-gold" />
+                <Loader2 className="w-6 h-6 animate-spin text-primary" />
               </div> :
           mappableCount === 0 ?
           <div className="flex flex-col items-center justify-center h-[560px] rounded-2xl bg-card border border-border gap-3">
