@@ -25,7 +25,7 @@ export function usePrivateOwnerAdAlert() {
     mutationFn: async (enable: boolean) => {
       if (!user) throw new Error("Not authenticated");
       if (enable) {
-        const { error } = await supabase.from("private_owner_ad_alerts").upsert(
+        const { error } = await supabase.from("private_owner_ad_alerts" as any).upsert(
           { user_id: user.id },
           { onConflict: "user_id" }
         );
