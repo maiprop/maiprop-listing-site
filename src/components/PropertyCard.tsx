@@ -372,7 +372,7 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
         {/* Auction banner */}
         {property.listingType === "open_house" && property.auctionDate && (
           <div className="flex items-center gap-2 bg-brand-cyan/10 rounded-xl p-2.5 border border-brand-cyan/25">
-            <Calendar className="w-4 h-4 text-brand-cyan shrink-0" />
+            <Calendar className="w-4 h-4 text-primary shrink-0" />
             <div>
               <div className="text-xs font-bold text-brand-purple">Open House</div>
               <div className="text-[11px] text-muted-foreground truncate">{property.auctionDate}</div>
