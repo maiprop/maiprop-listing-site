@@ -21,16 +21,8 @@ export const PropertyProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   const fetchProperties = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("properties")
-      .select("*")
-      .order("sort_order", { ascending: true });
-
-    if (error) {
-      if (import.meta.env.DEV) console.error("Failed to fetch properties:", error);
-      return;
-    }
-    setProperties((data as Property[]) || []);
+    // Legacy "properties" table no longer exists – fall back gracefully
+    setProperties([]);
     setLoading(false);
   }, []);
 
