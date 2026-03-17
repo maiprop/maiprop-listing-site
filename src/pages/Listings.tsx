@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect, forwardRef } from "react";
+import { useState, useCallback, useRef, useEffect, forwardRef, lazy, Suspense } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams, Link } from "react-router-dom";
 import {
@@ -11,12 +11,13 @@ import { Navbar } from "@/components/Navbar";
 
 import { PropertyCard } from "@/components/PropertyCard";
 import { Footer } from "@/components/Footer";
-import { MapView } from "@/components/MapView";
+// Lazy load MapView (mapbox ~1MB) only when user switches to map/split view
+const MapView = lazy(() => import("@/components/MapView").then(m => ({ default: m.MapView })));
 import { CompareDrawer } from "@/components/CompareDrawer";
 import { SaveSearchModal } from "@/components/SaveSearchModal";
 import { AISearchBar } from "@/components/AISearchBar";
 
-import { useListings } from "@/hooks/useListings";
+import { useListings, useListingsPaginated, type ListingsFilters } from "@/hooks/useListings";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCookieConsent } from "@/hooks/useCookieConsent";
 import { PROPERTY_GROUPS, PROPERTY_TYPE_MAP, TYPE_STYLE_FILTERS, getTypeLabel, getSubtypeLabel, type PropertyTypeKey } from "@/lib/propertyTypes";
@@ -433,11 +434,54 @@ export default function Listings() {
     selectedType, selectedSubtype, selectedListingType
   );
 
-  const { data: dbListings = [], isLoading, isError, error } = useListings({
+  // Build filters for server-side query
+  const listingsFilters: ListingsFilters = {
     city: searchQuery || undefined,
     listing_type: preSaleOnly ? "sale" : (selectedListingType || undefined),
     property_type: selectedType || undefined,
+    commercial_subtype: selectedSubtype || undefined,
+    sort: (selectedSort === "relevant" ? "featured" : selectedSort) as ListingsFilters["sort"],
+    price_min: selectedPrice ? Number(selectedPrice.split("-")[0]) : undefined,
+    price_max: selectedPrice ? Number(selectedPrice.split("-")[1]) : undefined,
+    beds_min: bedsRange[0] ? Number(bedsRange[0]) : undefined,
+    beds_max: bedsRange[1] ? Number(bedsRange[1]) : undefined,
+    baths_min: bathsRange[0] ? Number(bathsRange[0]) : undefined,
+    baths_max: bathsRange[1] ? Number(bathsRange[1]) : undefined,
+    sqm_min: minSqm ? Number(minSqm) : undefined,
+    sqm_max: maxSqm ? Number(maxSqm) : undefined,
+    floor_min: floorRange[0] ? Number(floorRange[0]) : undefined,
+    floor_max: floorRange[1] ? Number(floorRange[1]) : undefined,
+    year_min: yearRange[0] ? Number(yearRange[0]) : undefined,
+    year_max: yearRange[1] ? Number(yearRange[1]) : undefined,
+    energy_class: selectedEnergyClasses.length ? selectedEnergyClasses : undefined,
+    heating_system: selectedHeating || undefined,
+    construction_status: selectedConstruction || undefined,
+    is_pre_sale: preSaleOnly || undefined,
+    is_off_market: offMarketOnly || undefined,
+    features: selectedFeatures.length ? selectedFeatures : undefined,
+  };
+
+  // Paginated for grid view — fetches 24 per page
+  const {
+    data: paginatedData,
+    isLoading,
+    isError,
+    error,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useListingsPaginated(listingsFilters);
+
+  // All listings for map/split view — only fetch when in map or split view
+  const { data: mapListings = [] } = useListings(listingsFilters, {
+    enabled: viewMode === "map" || viewMode === "split",
   });
+
+  // Use paginated for grid, full for map/split
+  const dbListings =
+    viewMode === "grid"
+      ? (paginatedData?.pages.flatMap(p => p.data) ?? [])
+      : mapListings;
 
   useEffect(() => {
     if (isError && error) {
@@ -448,74 +492,16 @@ export default function Listings() {
   const hasActiveFilters = !!(searchQuery || selectedListingType || selectedType);
   const sourceListings = dbListings.map(listingToCard);
 
-  // Client-side filtering
+  // Server-side filtering handles price, beds, baths, sqm, etc. Client-side only for feature tags that may not be DB columns.
   let filtered = sourceListings.filter((p: any) => {
     const raw = p._raw || p;
-    if (preSaleOnly && !raw.is_pre_sale) return false;
-    if (offMarketOnly && !raw.is_off_market) return false;
-    if (selectedPrice) {
-      const [min, max] = selectedPrice.split("-").map(Number);
-      if (p.price < min || p.price > max) return false;
-    }
-    if (bedsRange[0] && p.bedrooms != null && p.bedrooms < Number(bedsRange[0])) return false;
-    if (bedsRange[1] && p.bedrooms != null && p.bedrooms > Number(bedsRange[1])) return false;
-    if (bathsRange[0] && p.bathrooms != null && p.bathrooms < Number(bathsRange[0])) return false;
-    if (bathsRange[1] && p.bathrooms != null && p.bathrooms > Number(bathsRange[1])) return false;
-    if (floorRange[0] && raw.floor != null && raw.floor < Number(floorRange[0])) return false;
-    if (floorRange[1] && raw.floor != null && raw.floor > Number(floorRange[1])) return false;
-    const yearBuilt = p.yearBuilt ?? raw.year_built;
-    if (yearRange[0] && yearBuilt && yearBuilt < Number(yearRange[0])) return false;
-    if (yearRange[1] && yearBuilt && yearBuilt > Number(yearRange[1])) return false;
-    if (minSqm && p.sqm < Number(minSqm)) return false;
-    if (maxSqm && p.sqm > Number(maxSqm)) return false;
-    if (selectedEnergyClasses.length > 0) {
-      const ec = p.energyClass ?? raw.energy_class;
-      if (!ec || !selectedEnergyClasses.includes(ec)) return false;
-    }
-    // Only filter by feature keys that exist on the listing (avoids over-filtering when AI returns non-DB keys)
     for (const feat of selectedFeatures) {
       if (Object.prototype.hasOwnProperty.call(raw, feat) && !raw[feat]) return false;
     }
-    if (selectedHeating && raw.heating_system !== selectedHeating) return false;
-    if (selectedConstruction && raw.construction_status !== selectedConstruction) return false;
-    // Subtype filter
-    if (selectedSubtype && raw.commercial_subtype && raw.commercial_subtype !== selectedSubtype) return false;
     return true;
   });
 
-  // User sort must NOT override paid prioritization unless "featured" is explicitly chosen.
-  // "featured" sort: featured → priority → rest. All other sorts: promoted always lead.
-  const isPromoted = (p: any) => !!(p.isFeatured || (p.priorityPlacement ?? 0) > 0);
-  const byUserSort = (a: any, b: any) => {
-    if (selectedSort === "featured") {
-      const aF = a.isFeatured ? 1 : 0;
-      const bF = b.isFeatured ? 1 : 0;
-      if (bF !== aF) return bF - aF;
-      const aPri = Number(a.priorityPlacement ?? 0);
-      const bPri = Number(b.priorityPlacement ?? 0);
-      if (bPri !== aPri) return bPri - aPri;
-      return new Date(b._raw?.created_at || 0).getTime() - new Date(a._raw?.created_at || 0).getTime();
-    }
-    if (selectedSort === "price-asc") return a.price - b.price;
-    if (selectedSort === "price-desc") return b.price - a.price;
-    if (selectedSort === "newest") return new Date(b._raw?.created_at || 0).getTime() - new Date(a._raw?.created_at || 0).getTime();
-    if (selectedSort === "ai-score") return (b.aiScore || 0) - (a.aiScore || 0);
-    if (selectedSort === "views") return (b.views || 0) - (a.views || 0);
-    return 0;
-  };
-  filtered = [...filtered].sort((a, b) => {
-    // "Featured First" sort: explicit featured ordering, skip automatic promo-first
-    if (selectedSort === "featured") return byUserSort(a, b);
-    const aPromo = isPromoted(a);
-    const bPromo = isPromoted(b);
-    if (aPromo && !bPromo) return -1;
-    if (!aPromo && bPromo) return 1;
-    if (aPromo && bPromo) {
-      const pri = (b.priorityPlacement ?? 0) - (a.priorityPlacement ?? 0);
-      if (pri !== 0) return pri;
-    }
-    return byUserSort(a, b);
-  });
+  // Sort applied server-side in useListings / useListingsPaginated
 
   const activeFilterCount = [
     selectedType, selectedSubtype, selectedPrice,
@@ -1234,12 +1220,14 @@ export default function Listings() {
                 {/* Right: map — hidden on mobile when list tab active */}
                 <div className={`flex-1 ${mobileTab === "list" ? "hidden md:block" : "block"} md:h-full h-[calc(100vh-12rem)]`}>
                   <MapGate consent={consent} accept={accept} height="100%">
-                    <MapView
-                      listings={filtered}
-                      onVisibleListingsChange={setViewportIds}
-                      onPolygonFilter={ids => { setPolygonFilterIds(ids); }}
-                      height="100%"
-                    />
+                    <Suspense fallback={<div className="flex items-center justify-center h-full"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>}>
+                      <MapView
+                        listings={filtered}
+                        onVisibleListingsChange={setViewportIds}
+                        onPolygonFilter={ids => { setPolygonFilterIds(ids); }}
+                        height="100%"
+                      />
+                    </Suspense>
                   </MapGate>
                 </div>
               </div>
@@ -1268,36 +1256,53 @@ export default function Listings() {
                 )}
               </div>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
-                {filtered.map((property: any) => (
-                  <div key={property.id} className="relative group">
-                    <PropertyCard property={property as any} />
-                    <button
-                      onClick={() => toggleCompare(property)}
-                      disabled={!isComparing(property.id) && compareList.length >= 3}
-                      className={`absolute top-2 left-2 z-10 flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold border transition-all shadow-card ${
-                        isComparing(property.id)
-                          ? "bg-accent/90 border-accent text-accent-foreground"
-                          : compareList.length >= 3
-                          ? "bg-secondary/80 border-border text-muted-foreground opacity-50 cursor-not-allowed"
-                          : "bg-card/80 border-border text-muted-foreground hover:border-accent/60 hover:text-accent backdrop-blur-sm opacity-0 group-hover:opacity-100"
-                      }`}
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
+                  {filtered.map((property: any) => (
+                    <div key={property.id} className="relative group">
+                      <PropertyCard property={property as any} />
+                      <button
+                        onClick={() => toggleCompare(property)}
+                        disabled={!isComparing(property.id) && compareList.length >= 3}
+                        className={`absolute top-2 left-2 z-10 flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold border transition-all shadow-card ${
+                          isComparing(property.id)
+                            ? "bg-accent/90 border-accent text-accent-foreground"
+                            : compareList.length >= 3
+                            ? "bg-secondary/80 border-border text-muted-foreground opacity-50 cursor-not-allowed"
+                            : "bg-card/80 border-border text-muted-foreground hover:border-accent/60 hover:text-accent backdrop-blur-sm opacity-0 group-hover:opacity-100"
+                        }`}
+                      >
+                        <GitCompare className="w-3 h-3" />
+                        {isComparing(property.id) ? "✓" : "Compare"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                {viewMode === "grid" && hasNextPage && (
+                  <div className="flex justify-center pt-8 pb-4">
+                    <Button
+                      variant="outline"
+                      onClick={() => fetchNextPage()}
+                      disabled={isFetchingNextPage}
+                      className="gap-2"
                     >
-                      <GitCompare className="w-3 h-3" />
-                      {isComparing(property.id) ? "✓" : "Compare"}
-                    </button>
+                      {isFetchingNextPage ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                      {isFetchingNextPage ? "Loading…" : "Load more"}
+                    </Button>
                   </div>
-                ))}
-              </div>
+                )}
+              </>
             )
           ) : (
             /* Full map view */
             <MapGate consent={consent} accept={accept}>
-              <MapView
-                listings={filtered}
-                onVisibleListingsChange={setViewportIds}
-                onPolygonFilter={setPolygonFilterIds}
-              />
+              <Suspense fallback={<div className="flex items-center justify-center min-h-[400px]"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>}>
+                <MapView
+                  listings={filtered}
+                  onVisibleListingsChange={setViewportIds}
+                  onPolygonFilter={setPolygonFilterIds}
+                />
+              </Suspense>
             </MapGate>
           )}
         </div>

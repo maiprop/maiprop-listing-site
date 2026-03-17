@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -10,36 +11,46 @@ import { AdminRoute } from "@/components/AdminRoute";
 import { SellerRoute } from "@/components/SellerRoute";
 import { InvestorRoute } from "@/components/InvestorRoute";
 import AIAssistantWidget from "@/components/AIAssistantWidget";
-import Index from "./pages/Index";
-import Listings from "./pages/Listings";
-import PropertyDetail from "./pages/PropertyDetail";
-import Auctions from "./pages/Auctions";
-import Firesale from "./pages/Firesale";
-import InvestorDashboard from "./pages/InvestorDashboard";
-import Professionals from "./pages/Professionals";
-import ProfessionalProfile from "./pages/ProfessionalProfile";
-import ProfessionalProfileMe from "./pages/ProfessionalProfileMe";
-import Dashboard from "./pages/Dashboard";
-import Signup from "./pages/Signup";
-import Login from "./pages/Login";
-import Onboarding from "./pages/Onboarding";
-import Messages from "./pages/Messages";
-import CreateListing from "./pages/CreateListing";
-import CreateNewBuildingListing from "./pages/CreateNewBuildingListing";
-import ResetPassword from "./pages/ResetPassword";
-import NotFound from "./pages/NotFound";
-import Projects from "./pages/Projects";
-import ProjectDetail from "./pages/ProjectDetail";
-import Portfolios from "./pages/Portfolios";
-import Pricing from "./pages/Pricing";
-import AdminDashboard from "./pages/AdminDashboard";
-import AIAssistantPage from "./pages/AIAssistantPage";
-import PrivacyPolicy from "./pages/PrivacyPolicy";
-import TermsOfService from "./pages/TermsOfService";
-import CookiePolicy from "./pages/CookiePolicy";
-import BrandedVideoRoom from "./pages/BrandedVideoRoom";
-import OpenHouses from "./pages/OpenHouses";
-import OpenHouseDetail from "./pages/OpenHouseDetail";
+
+// Route-level code splitting — pages are loaded on demand
+const Index = lazy(() => import("./pages/Index"));
+const Listings = lazy(() => import("./pages/Listings"));
+const PropertyDetail = lazy(() => import("./pages/PropertyDetail"));
+const Auctions = lazy(() => import("./pages/Auctions"));
+const Firesale = lazy(() => import("./pages/Firesale"));
+const InvestorDashboard = lazy(() => import("./pages/InvestorDashboard"));
+const Professionals = lazy(() => import("./pages/Professionals"));
+const ProfessionalProfile = lazy(() => import("./pages/ProfessionalProfile"));
+const ProfessionalProfileMe = lazy(() => import("./pages/ProfessionalProfileMe"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Signup = lazy(() => import("./pages/Signup"));
+const Login = lazy(() => import("./pages/Login"));
+const Onboarding = lazy(() => import("./pages/Onboarding"));
+const Messages = lazy(() => import("./pages/Messages"));
+const CreateListing = lazy(() => import("./pages/CreateListing"));
+const CreateNewBuildingListing = lazy(() => import("./pages/CreateNewBuildingListing"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const Projects = lazy(() => import("./pages/Projects"));
+const ProjectDetail = lazy(() => import("./pages/ProjectDetail"));
+const Portfolios = lazy(() => import("./pages/Portfolios"));
+const Pricing = lazy(() => import("./pages/Pricing"));
+const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
+const AIAssistantPage = lazy(() => import("./pages/AIAssistantPage"));
+const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
+const TermsOfService = lazy(() => import("./pages/TermsOfService"));
+const CookiePolicy = lazy(() => import("./pages/CookiePolicy"));
+const BrandedVideoRoom = lazy(() => import("./pages/BrandedVideoRoom"));
+const OpenHouses = lazy(() => import("./pages/OpenHouses"));
+const OpenHouseDetail = lazy(() => import("./pages/OpenHouseDetail"));
+
+function PageLoader() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="animate-pulse text-muted-foreground">Loading…</div>
+    </div>
+  );
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -69,6 +80,7 @@ const App = () => (
           <Toaster />
           <Sonner />
           <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+            <Suspense fallback={<PageLoader />}>
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/listings/new" element={<ProtectedRoute><CreateListing /></ProtectedRoute>} />
@@ -105,6 +117,7 @@ const App = () => (
               <Route path="*" element={<NotFound />} />
             </Routes>
             <GlobalAIWidget />
+            </Suspense>
           </BrowserRouter>
         </TooltipProvider>
       </AuthProvider>
