@@ -385,6 +385,9 @@ export default function InvestorDashboard() {
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
   const [showInvitationModal, setShowInvitationModal] = useState(false);
 
+  // Invitation request pending state
+  const [invitationStatus, setInvitationStatus] = useState<"none" | "pending" | "rejected">("none");
+
   // Expiry warning
   const daysLeft = daysUntilExpiry(subscription?.expires_at ?? null);
   const showExpiryWarning = subscribed && daysLeft !== null && daysLeft <= 7 && daysLeft >= 0;
@@ -403,6 +406,23 @@ export default function InvestorDashboard() {
   }, [user]);
 
   useEffect(() => { loadSubscription(); }, [loadSubscription]);
+
+  // Check if user already has a pending/rejected invitation request
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("invitation_requests" as any)
+      .select("status")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.status === "pending") setInvitationStatus("pending");
+        else if (data?.status === "rejected") setInvitationStatus("rejected");
+        else setInvitationStatus("none");
+      });
+  }, [user]);
 
   // Deal types — inferred from real DB data
   type LiveDeal = {
