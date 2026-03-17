@@ -601,21 +601,55 @@ export default function InvestorDashboard() {
 
         {/* ── Expiry warning banner ── */}
         {showExpiryWarning && (
-          <div className="border-b border-destructive/20 bg-destructive/5">
-            <div className="container py-3 flex items-center gap-3 flex-wrap">
-              <AlertCircle className="w-4 h-4 text-destructive shrink-0" />
-              <p className="text-sm text-destructive font-semibold flex-1 min-w-0">
-                Your <span className="capitalize">{subscription?.tier}</span> subscription expires in{" "}
-                <strong>{daysLeft === 0 ? "less than 1 day" : `${daysLeft} day${daysLeft === 1 ? "" : "s"}`}</strong>.
-                Renew now to keep full deal access.
-              </p>
-              <Button
-                size="sm"
-                className="bg-destructive hover:bg-destructive/90 text-destructive-foreground text-xs h-8 shrink-0"
-                onClick={() => setShowInvitationModal(true)}
-              >
-                Request access
-              </Button>
+          <div className="border-b border-destructive/30 bg-gradient-to-r from-destructive/10 via-destructive/5 to-transparent">
+            <div className="container py-4">
+              <div className="flex items-start gap-4 flex-wrap">
+                {/* Icon + countdown circle */}
+                <div className="relative shrink-0 w-12 h-12 flex items-center justify-center">
+                  <svg className="absolute inset-0 w-12 h-12 -rotate-90" viewBox="0 0 48 48">
+                    <circle cx="24" cy="24" r="20" fill="none" stroke="hsl(var(--destructive)/0.15)" strokeWidth="4" />
+                    <circle
+                      cx="24" cy="24" r="20"
+                      fill="none"
+                      stroke="hsl(var(--destructive))"
+                      strokeWidth="4"
+                      strokeLinecap="round"
+                      strokeDasharray={`${2 * Math.PI * 20}`}
+                      strokeDashoffset={`${2 * Math.PI * 20 * (1 - (daysLeft ?? 0) / 7)}`}
+                      className="transition-all duration-500"
+                    />
+                  </svg>
+                  <span className="relative font-display font-black text-xs text-destructive">{daysLeft}</span>
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <AlertCircle className="w-4 h-4 text-destructive shrink-0" />
+                    <p className="text-sm text-destructive font-bold">
+                      Your <span className="capitalize">{subscription?.tier}</span> access expires in{" "}
+                      {daysLeft === 0 ? "less than 1 day" : `${daysLeft} day${daysLeft === 1 ? "" : "s"}`}
+                    </p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Submit a renewal request to maintain uninterrupted access to the deal pipeline.
+                  </p>
+                  {/* Progress bar */}
+                  <div className="mt-2.5 w-full max-w-xs h-1.5 rounded-full bg-destructive/15 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-destructive transition-all duration-700"
+                      style={{ width: `${((daysLeft ?? 0) / 7) * 100}%` }}
+                    />
+                  </div>
+                </div>
+
+                <Button
+                  size="sm"
+                  className="bg-destructive hover:bg-destructive/90 text-destructive-foreground text-xs h-9 px-4 shrink-0 font-semibold"
+                  onClick={() => setShowInvitationModal(true)}
+                >
+                  Request renewal
+                </Button>
+              </div>
             </div>
           </div>
         )}
