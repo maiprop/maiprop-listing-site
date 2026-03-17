@@ -1929,7 +1929,9 @@ export default function Index() {
                   <h2 className="font-display text-3xl sm:text-4xl lg:text-5xl font-bold leading-tight mb-4 text-destructive-foreground">
                     The right expert,
                     <br />
-                    <span className="gradient-text-cyan">one click away</span>
+                    <span className="gradient-text-cyan drop-shadow-[0_0_20px_rgba(133,106,255,0.65)]">
+                      one click away
+                    </span>
                   </h2>
 
                   <Button
@@ -2011,15 +2013,22 @@ export default function Index() {
                   ].map((pro) => (
                     <Link key={pro.title} to={`/professionals?category=${pro.category}`}>
                       <div
-                        className={`group flex items-center gap-3 p-4 rounded-2xl bg-background/10 border ${pro.border} hover:bg-background/20 transition-all`}
+                        className="relative group rounded-2xl overflow-hidden"
                       >
+                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                          style={{ background: "radial-gradient(circle at 0 0, hsl(var(--brand-cyan-soft)/0.28), transparent 55%)" }}
+                        />
                         <div
-                          className={`w-10 h-10 rounded-xl ${pro.bg} flex items-center justify-center text-xl shrink-0 group-hover:scale-110 transition-transform`}
+                          className="relative flex items-center gap-3 p-4 rounded-2xl bg-background/8 border border-white/12 hover:border-brand-purple/40 backdrop-blur-md transition-all"
                         >
-                          {pro.emoji}
-                        </div>
-                        <div>
-                          <div className={`font-bold text-sm ${pro.color}`}>{pro.title}</div>
+                          <div
+                            className={`w-10 h-10 rounded-xl ${pro.bg} flex items-center justify-center text-xl shrink-0 shadow-sm`}
+                          >
+                            {pro.emoji}
+                          </div>
+                          <div>
+                            <div className={`font-semibold text-sm text-white`}>{pro.title}</div>
+                          </div>
                         </div>
                       </div>
                     </Link>
