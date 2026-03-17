@@ -807,8 +807,8 @@ export default function Auctions() {
               viewMode === "map" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`
               }>
                 <Map className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Map</span>
-                {!isLoading && mappableCount > 0 &&
-              <span className="ml-0.5 text-[10px] bg-brand-gold/20 text-brand-gold px-1.5 py-0.5 rounded-full font-bold">
+              {!isLoading && mappableCount > 0 &&
+              <span className="ml-0.5 text-[10px] bg-primary/15 text-primary px-1.5 py-0.5 rounded-full font-bold">
                     {mappableCount}
                   </span>
               }
