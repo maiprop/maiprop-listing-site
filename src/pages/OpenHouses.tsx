@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import {
   Calendar, MapPin, Loader2, DoorOpen, SlidersHorizontal, X,
   ChevronDown, Search, BedDouble, LayoutGrid, Map as MapIcon,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -123,7 +124,7 @@ export default function OpenHouses() {
     { value: "land", label: "Land" },
   ];
 
-  const { data: listings = [], isLoading } = useQuery({
+  const { data: listings = [], isLoading, isError, refetch } = useQuery({
     queryKey: ["open-houses"],
     queryFn: async () => {
       const now = new Date().toISOString();
@@ -228,63 +229,8 @@ export default function OpenHouses() {
     };
   });
 
-  const mockData = [
-    {
-      listing: { id: "mock-open-1", city: "Athens", property_type: "apartment", open_house_date: new Date(Date.now() + 3 * 3600_000).toISOString(), price: 420000, sqm: 135, latitude: 37.9838, longitude: 23.7275 },
-      card: {
-        id: "mock-open-1", title: "Modern 2BR in Kifisia", address: "Kifisia Center", city: "Athens",
-        price: 420000, pricePerSqm: 3100, bedrooms: 2, bathrooms: 2, sqm: 135,
-        floor: 2, totalFloors: 4, yearBuilt: 2015, energyClass: "A",
-        images: ["https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=800&q=60"],
-        type: "apartment" as const, listingType: "open_house" as const,
-        auctionDate: "Sat 19 Apr · 11:00", openHouseDateIso: new Date(Date.now() + 3 * 3600_000).toISOString(),
-        aiScore: 87, views: 132, tags: ["Balcony", "Parking"],
-        latitude: 37.9838, longitude: 23.7275,
-      },
-    },
-    {
-      listing: { id: "mock-open-2", city: "Athens Riviera", property_type: "house", open_house_date: new Date(Date.now() + 30 * 3600_000).toISOString(), price: 1450000, sqm: 280, latitude: 37.8113, longitude: 23.7742 },
-      card: {
-        id: "mock-open-2", title: "Sea-view Villa in Vouliagmeni", address: "Panorama Vouliagmeni", city: "Athens Riviera",
-        price: 1450000, pricePerSqm: 5200, bedrooms: 4, bathrooms: 4, sqm: 280,
-        floor: 0, totalFloors: 2, yearBuilt: 2020, energyClass: "A+",
-        images: ["https://images.unsplash.com/photo-1507089947368-19c1da9775ae?w=800&q=60"],
-        type: "house" as const, listingType: "open_house" as const,
-        auctionDate: "Sun 20 Apr · 17:00", openHouseDateIso: new Date(Date.now() + 30 * 3600_000).toISOString(),
-        aiScore: 92, views: 89, tags: ["Pool", "Garden", "Parking"],
-        latitude: 37.8113, longitude: 23.7742,
-      },
-    },
-    {
-      listing: { id: "mock-open-3", city: "Thessaloniki", property_type: "apartment", open_house_date: new Date(Date.now() + 72 * 3600_000).toISOString(), price: 310000, sqm: 107, latitude: 40.6401, longitude: 22.9444 },
-      card: {
-        id: "mock-open-3", title: "Loft Near Aristotelous Square", address: "City Center", city: "Thessaloniki",
-        price: 310000, pricePerSqm: 2900, bedrooms: 1, bathrooms: 1, sqm: 107,
-        floor: 5, totalFloors: 7, yearBuilt: 2010, energyClass: "B+",
-        images: ["https://images.unsplash.com/photo-1502672023488-70e25813eb80?w=800&q=60"],
-        type: "apartment" as const, listingType: "open_house" as const,
-        auctionDate: "Thu 24 Apr · 19:30", openHouseDateIso: new Date(Date.now() + 72 * 3600_000).toISOString(),
-        aiScore: 84, views: 54, tags: ["City view", "Elevator"],
-        latitude: 40.6401, longitude: 22.9444,
-      },
-    },
-    {
-      listing: { id: "mock-open-4", city: "Athens", property_type: "apartment", open_house_date: new Date(Date.now() + 96 * 3600_000).toISOString(), price: 265000, sqm: 63, latitude: 37.9755, longitude: 23.7388 },
-      card: {
-        id: "mock-open-4", title: "Renovated Studio in Kolonaki", address: "Kolonaki Square", city: "Athens",
-        price: 265000, pricePerSqm: 4200, bedrooms: 1, bathrooms: 1, sqm: 63,
-        floor: 3, totalFloors: 6, yearBuilt: 1960, energyClass: "B",
-        images: ["https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800&q=60"],
-        type: "apartment" as const, listingType: "open_house" as const,
-        auctionDate: "Fri 25 Apr · 10:00", openHouseDateIso: new Date(Date.now() + 96 * 3600_000).toISOString(),
-        aiScore: 79, views: 98, tags: ["Terrace", "Storage"],
-        latitude: 37.9755, longitude: 23.7388,
-      },
-    },
-  ];
-
   const isEmpty = listings.length === 0;
-  const displayData = isEmpty ? mockData : cards;
+  const displayData = isError ? [] : cards;
 
   // MapListing format for MapView
   const mapListings: MapListing[] = displayData
@@ -318,8 +264,10 @@ export default function OpenHouses() {
               <div>
                 <h1 className="font-display text-2xl sm:text-3xl font-bold">Upcoming Open Houses</h1>
                 <p className="text-muted-foreground text-sm mt-1">
-                  {isEmpty
-                    ? "Sample events — real open houses will appear as agents publish them."
+                  {isError
+                    ? "Could not load open houses."
+                    : isEmpty
+                    ? "No upcoming open houses. Agents can publish from the dashboard."
                     : `${filtered.length} event${filtered.length !== 1 ? "s" : ""} found`}
                 </p>
               </div>
@@ -546,6 +494,13 @@ export default function OpenHouses() {
                 </Button>
               </div>
             )
+          ) : isError ? (
+            <div className="glass-card rounded-xl p-16 text-center">
+              <AlertCircle className="w-14 h-14 text-destructive mx-auto mb-4" />
+              <h2 className="font-display text-lg font-semibold mb-2">Could not load open houses</h2>
+              <p className="text-sm text-muted-foreground mb-4">Please try again.</p>
+              <Button variant="outline" onClick={() => refetch()}>Retry</Button>
+            </div>
           ) : displayData.length === 0 ? (
             <div className="glass-card rounded-xl p-16 text-center">
               <Calendar className="w-14 h-14 text-muted-foreground mx-auto mb-4" />
@@ -554,18 +509,11 @@ export default function OpenHouses() {
               <Button variant="outline" onClick={clearFilters}>Clear filters</Button>
             </div>
           ) : (
-            <>
-              {isEmpty && (
-                <div className="mb-6 px-4 py-3 rounded-xl bg-primary/10 border border-primary/20 text-xs text-primary font-medium">
-                  📋 Sample events shown — real open houses will appear once agents publish them.
-                </div>
-              )}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
-                {displayData.map(({ listing, card }) => (
-                  <OpenHouseCard key={card.id} listing={listing} card={card} />
-                ))}
-              </div>
-            </>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+              {displayData.map(({ listing, card }) => (
+                <OpenHouseCard key={card.id} listing={listing} card={card} />
+              ))}
+            </div>
           )}
         </div>
       </div>

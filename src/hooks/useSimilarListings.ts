@@ -35,10 +35,10 @@ export function useSimilarListings(params: {
       if (error) throw error;
       if (!data?.length) return [];
 
-      // Fetch owner profiles for cards
+      // Fetch owner profiles for cards (use profiles_public per RLS; profiles restricted to own row)
       const ownerIds = [...new Set(data.map((r: any) => r.owner_id).filter(Boolean))];
       const { data: profiles = [] } = ownerIds.length
-        ? await supabase.from("profiles").select("user_id, display_name, avatar_url, role, bio").in("user_id", ownerIds)
+        ? await supabase.from("profiles_public").select("user_id, display_name, avatar_url, role").in("user_id", ownerIds)
         : { data: [] };
       const profileMap = new Map((profiles as any[]).map((p: any) => [p.user_id, p]));
 

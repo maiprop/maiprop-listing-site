@@ -433,11 +433,17 @@ export default function Listings() {
     selectedType, selectedSubtype, selectedListingType
   );
 
-  const { data: dbListings = [], isLoading } = useListings({
+  const { data: dbListings = [], isLoading, isError, error } = useListings({
     city: searchQuery || undefined,
     listing_type: preSaleOnly ? "sale" : (selectedListingType || undefined),
     property_type: selectedType || undefined,
   });
+
+  useEffect(() => {
+    if (isError && error) {
+      toast.error("Could not load listings. Please try again.");
+    }
+  }, [isError, error]);
 
   const hasActiveFilters = !!(searchQuery || selectedListingType || selectedType);
   const sourceListings = dbListings.map(listingToCard);
@@ -1219,6 +1225,8 @@ export default function Listings() {
                 >
                   {isLoading
                     ? <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
+                    : isError
+                    ? <div className="flex flex-col items-center justify-center py-20 gap-2 text-center"><p className="text-muted-foreground">Failed to load listings.</p><Button variant="outline" size="sm" onClick={() => window.location.reload()}>Retry</Button></div>
                     : gridCards
                   }
                 </div>
@@ -1240,6 +1248,13 @@ export default function Listings() {
             isLoading ? (
               <div className="flex items-center justify-center py-20">
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              </div>
+            ) : isError ? (
+              <div className="glass-card rounded-xl p-16 text-center">
+                <Building2 className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+                <p className="font-semibold">Could not load listings</p>
+                <p className="text-sm text-muted-foreground mt-1">Please try again later</p>
+                <Button size="sm" variant="outline" className="mt-4" onClick={() => window.location.reload()}>Retry</Button>
               </div>
             ) : filtered.length === 0 ? (
               <div className="glass-card rounded-xl p-16 text-center">

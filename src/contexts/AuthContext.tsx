@@ -97,7 +97,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // Unblock UI immediately — profile arrives shortly after
           setLoading(false);
           // Fire-and-forget: don't await, never block the auth flow
-          fetchProfile(sess.user.id).catch(() => {});
+          fetchProfile(sess.user.id).catch((err) => {
+            console.warn("Profile fetch failed:", err);
+          });
           setTimeout(() => checkSubscription(sess), 0);
         } else {
           setProfile(null);

@@ -973,7 +973,9 @@ export default function Index() {
           counts[k] = (counts[k] || 0) + 1;
         });
         setTypeCounts(counts);
-      } catch {}
+      } catch (e) {
+        console.warn("Could not fetch listing type counts:", e);
+      }
     })();
   }, []);
 
