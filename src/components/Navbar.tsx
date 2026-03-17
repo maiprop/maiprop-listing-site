@@ -320,7 +320,7 @@ export function Navbar() {
                 link.accent === "flame"
                   ? "text-destructive/80 hover:text-destructive hover:bg-destructive/10"
                   : link.accent === "dooropen"
-                    ? "text-brand-cyan/80 hover:text-brand-cyan hover:bg-brand-cyan/10"
+                    ? "text-primary/80 hover:text-primary hover:bg-primary/10"
                     : link.accent === "subtle"
                       ? "text-muted-foreground/80 hover:text-foreground hover:bg-secondary"
                       : "text-muted-foreground hover:text-foreground hover:bg-secondary"

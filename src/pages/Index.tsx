@@ -1976,9 +1976,9 @@ export default function Index() {
                       emoji: "🏛️",
                       title: "Architects",
                       count: "340+",
-                      color: "text-brand-cyan",
-                      border: "border-brand-cyan/30",
-                      bg: "bg-brand-cyan/15",
+                      color: "text-primary",
+                      border: "border-primary/30",
+                      bg: "bg-primary/15",
                     },
                     {
                       emoji: "⚖️",
