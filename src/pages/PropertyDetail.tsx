@@ -331,10 +331,22 @@ export default function PropertyDetail() {
   const ownershipPct = ownershipPctTag ? Number(ownershipPctTag.replace("ownership_pct:", "")) : null;
 
   const OWNERSHIP_LABEL: Record<string, {label: string;cls: string;}> = {
-    full: { label: "Πλήρης κυριότητα (100%)", cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" },
-    partial: { label: "Μερική κυριότητα", cls: "bg-amber-500/15 text-amber-400 border-amber-500/30" },
-    common: { label: "Εξ αδιαιρέτου", cls: "bg-sky-500/15 text-sky-400 border-sky-500/30" },
-    none: { label: "Χωρίς κυριότητα", cls: "bg-destructive/15 text-destructive border-destructive/30" }
+    full: {
+      label: "Πλήρης κυριότητα (100%)",
+      cls: "bg-gradient-primary text-white border border-white/20 shadow-[0_0_0_1px_hsl(var(--brand-indigo)/0.35)]",
+    },
+    partial: {
+      label: "Μερική κυριότητα",
+      cls: "bg-brand-purple/15 text-brand-purple border border-brand-purple/30",
+    },
+    common: {
+      label: "Εξ αδιαιρέτου",
+      cls: "bg-accent/15 text-accent border border-accent/25",
+    },
+    none: {
+      label: "Χωρίς κυριότητα",
+      cls: "bg-destructive/15 text-destructive border border-destructive/30",
+    },
   };
   const ownershipDisplay = ownershipStatus ? OWNERSHIP_LABEL[ownershipStatus] ?? { label: ownershipStatus, cls: "bg-muted text-muted-foreground border-border" } : null;
 

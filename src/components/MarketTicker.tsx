@@ -40,8 +40,20 @@ function Sparkline({ city, up }: { city: string; up: boolean }) {
   const d = SPARKLINES[city] ?? SPARKLINES.Athens;
   const color = up ? "hsl(var(--brand-indigo))" : "hsl(0 70% 55%)";
   return (
-    <svg width="36" height="18" viewBox="0 0 48 22" fill="none" className="shrink-0 opacity-80">
-      <path d={d} stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    <svg width="40" height="20" viewBox="0 0 48 22" fill="none" className="shrink-0">
+      <defs>
+        <linearGradient id={`spark-${city}-stroke`} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor={color} stopOpacity="0.5" />
+          <stop offset="100%" stopColor={color} stopOpacity="1" />
+        </linearGradient>
+      </defs>
+      <path
+        d={d}
+        stroke={`url(#spark-${city}-stroke)`}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
@@ -154,14 +166,14 @@ export function MarketTicker() {
                 style={{
                   height: "36px",
                   background: isFlickering
-                    ? "hsl(var(--brand-indigo) / 0.07)"
-                    : "transparent",
+                    ? "hsl(var(--brand-indigo) / 0.20)"
+                    : "hsl(220 40% 6% / 0.65)",
                   borderBottom: "1px solid hsl(var(--brand-indigo) / 0.05)",
                 }}
               >
                 <span
                   className="w-24 text-[11px] font-semibold transition-colors duration-300 truncate"
-                  style={{ color: isFlickering ? "hsl(var(--brand-purple))" : "hsl(210 20% 68%)" }}
+                  style={{ color: isFlickering ? "hsl(0 0% 100%)" : "hsl(220 20% 88%)" }}
                 >
                   {row.city}
                 </span>
@@ -170,7 +182,7 @@ export function MarketTicker() {
 
                 <span
                   className="flex-1 text-right text-[11px] font-bold tabular-nums transition-colors duration-300"
-                  style={{ color: isFlickering ? "hsl(var(--brand-purple))" : "hsl(210 30% 88%)" }}
+                  style={{ color: isFlickering ? "hsl(0 0% 100%)" : "hsl(0 0% 96%)" }}
                 >
                   €{row.price.toLocaleString()}
                 </span>
@@ -178,8 +190,8 @@ export function MarketTicker() {
                 <span
                   className="w-14 text-right text-[10px] font-black tabular-nums px-1 py-0.5 rounded"
                   style={{
-                    color: row.up ? "hsl(var(--brand-indigo))" : "hsl(0 72% 60%)",
-                    background: row.up ? "hsl(var(--brand-indigo) / 0.08)" : "hsl(0 72% 55% / 0.08)",
+                    color: "hsl(0 0% 100%)",
+                    background: row.up ? "hsl(var(--brand-indigo))" : "hsl(0 72% 55%)",
                   }}
                 >
                   {row.up ? "▲" : "▼"} {Math.abs(row.change).toFixed(1)}%
