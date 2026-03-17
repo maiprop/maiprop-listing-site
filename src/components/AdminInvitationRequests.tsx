@@ -374,7 +374,7 @@ export default function AdminInvitationRequests() {
                         <span className="text-brand-emerald font-semibold">✓ Linked user account</span> — approval will auto-create subscription.
                       </p>
                     ) : (
-                      <p className="text-[10px] text-amber-600 mt-3">
+                      <p className="text-[10px] text-brand-gold mt-3">
                         ⚠ No linked user account — applicant must sign up before subscription can be created.
                       </p>
                     )}
