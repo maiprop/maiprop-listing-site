@@ -21,16 +21,8 @@ export const PropertyProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   const fetchProperties = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("properties")
-      .select("*")
-      .order("sort_order", { ascending: true });
-
-    if (error) {
-      if (import.meta.env.DEV) console.error("Failed to fetch properties:", error);
-      return;
-    }
-    setProperties((data as Property[]) || []);
+    // Legacy "properties" table no longer exists – fall back gracefully
+    setProperties([]);
     setLoading(false);
   }, []);
 
@@ -38,52 +30,25 @@ export const PropertyProvider = ({ children }: { children: ReactNode }) => {
     fetchProperties();
   }, [fetchProperties]);
 
-  const addProperty = async (p: Omit<Property, "id" | "date_added" | "sort_order">) => {
-    // New properties get the highest sort_order
-    const maxOrder = properties.length > 0 ? Math.max(...properties.map((x) => x.sort_order)) : 0;
-    const { error } = await supabase.from("properties").insert({ ...p, sort_order: maxOrder + 1 });
-    if (error) { if (import.meta.env.DEV) console.error("Failed to add property:", error); toast.error("Failed to add property."); return; }
-    await fetchProperties();
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const addProperty = async (_p: Omit<Property, "id" | "date_added" | "sort_order">) => {
+    toast.error("Legacy properties table not available.");
   };
-
-  const updateProperty = async (id: string, updates: Partial<Property>) => {
-    const { error } = await supabase.from("properties").update(updates).eq("id", id);
-    if (error) { if (import.meta.env.DEV) console.error("Failed to update property:", error); toast.error("Failed to update property."); return; }
-    await fetchProperties();
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const updateProperty = async (_id: string, _updates: Partial<Property>) => {
+    toast.error("Legacy properties table not available.");
   };
-
-  const deleteProperty = async (id: string) => {
-    const { error } = await supabase.from("properties").delete().eq("id", id);
-    if (error) { if (import.meta.env.DEV) console.error("Failed to delete property:", error); toast.error("Failed to delete property."); return; }
-    await fetchProperties();
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const deleteProperty = async (_id: string) => {
+    toast.error("Legacy properties table not available.");
   };
-
-  const bulkUpdateStatus = async (ids: string[], status: Property["status"]) => {
-    const { error } = await supabase.from("properties").update({ status }).in("id", ids);
-    if (error) { if (import.meta.env.DEV) console.error("Failed to bulk update:", error); toast.error("Failed to update properties."); return; }
-    await fetchProperties();
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const bulkUpdateStatus = async (_ids: string[], _status: Property["status"]) => {
+    toast.error("Legacy properties table not available.");
   };
-
-  const reorderProperties = async (orderedIds: string[]) => {
-    // Optimistically update local state
-    const reordered = orderedIds.map((id, i) => {
-      const prop = properties.find((p) => p.id === id)!;
-      return { ...prop, sort_order: i };
-    });
-    // Keep properties not in the list unchanged
-    const otherProps = properties.filter((p) => !orderedIds.includes(p.id));
-    setProperties([...reordered, ...otherProps]);
-
-    // Batch update sort_order in DB
-    const updates = orderedIds.map((id, i) =>
-      supabase.from("properties").update({ sort_order: i }).eq("id", id)
-    );
-    const results = await Promise.all(updates);
-    const hasError = results.some((r) => r.error);
-    if (hasError) {
-      toast.error("Failed to save order.");
-      await fetchProperties();
-    }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const reorderProperties = async (_orderedIds: string[]) => {
+    toast.error("Legacy properties table not available.");
   };
 
   return (

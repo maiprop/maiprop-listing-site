@@ -26,15 +26,7 @@ export default function GuidesTeaser() {
   const [articles, setArticles] = useState<Article[]>([]);
 
   useEffect(() => {
-    supabase
-      .from("articles")
-      .select("id, slug, title, meta_description, category, read_time, updated_at")
-      .eq("published", true)
-      .order("updated_at", { ascending: false })
-      .limit(3)
-      .then(({ data }) => {
-        if (data) setArticles(data);
-      });
+    // "articles" table not yet available — section hides itself when empty
   }, []);
 
   if (articles.length === 0) return null;
