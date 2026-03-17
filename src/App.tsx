@@ -6,8 +6,6 @@ import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-route
 import { ThemeProvider } from "next-themes";
 import { HelmetProvider } from "react-helmet-async";
 import { AuthProvider } from "@/contexts/AuthContext";
-import { PropertyProvider } from "@/contexts/PropertyContext";
-import { TranslationProvider } from "@/contexts/TranslationContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AdminRoute } from "@/components/AdminRoute";
 import { SellerRoute } from "@/components/SellerRoute";
@@ -43,12 +41,6 @@ import CookiePolicy from "./pages/CookiePolicy";
 import BrandedVideoRoom from "./pages/BrandedVideoRoom";
 import OpenHouses from "./pages/OpenHouses";
 import OpenHouseDetail from "./pages/OpenHouseDetail";
-// Lovable marketing pages
-import Guides from "./pages/Guides";
-import GuideArticle from "./pages/GuideArticle";
-import Portfolio from "./pages/Portfolio";
-import Properties from "./pages/Properties";
-import Process from "./pages/Process";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -73,9 +65,7 @@ const App = () => (
     <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <TranslationProvider>
-            <PropertyProvider>
-              <TooltipProvider>
+          <TooltipProvider>
                 <Toaster />
                 <Sonner />
                 <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
@@ -112,26 +102,11 @@ const App = () => (
                     <Route path="/pricing" element={<Pricing />} />
                     <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
                     <Route path="/admin/pricing" element={<AdminRoute><Navigate to="/admin?tab=pricing" replace /></AdminRoute>} />
-                    {/* Lovable marketing routes */}
-                    <Route path="/guides" element={<Guides />} />
-                    <Route path="/guides/" element={<Guides />} />
-                    <Route path="/guides/:slug" element={<GuideArticle />} />
-                    <Route path="/guides/:slug/" element={<GuideArticle />} />
-                    <Route path="/portfolio" element={<Portfolio />} />
-                    <Route path="/portfolio/" element={<Portfolio />} />
-                    <Route path="/trackrecord" element={<Portfolio />} />
-                    <Route path="/trackrecord/" element={<Portfolio />} />
-                    <Route path="/properties" element={<Properties />} />
-                    <Route path="/properties/" element={<Properties />} />
-                    <Route path="/process" element={<Process />} />
-                    <Route path="/process/" element={<Process />} />
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                   <GlobalAIWidget />
                 </BrowserRouter>
               </TooltipProvider>
-            </PropertyProvider>
-          </TranslationProvider>
         </AuthProvider>
       </QueryClientProvider>
     </ThemeProvider>
