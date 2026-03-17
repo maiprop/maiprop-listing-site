@@ -19,7 +19,8 @@
     --secondary-foreground: 25 15% 30%;
     --muted: 36 15% 91%;
     --muted-foreground: 25 12% 50%;
-    --accent: 178 89% 40%;
+    /* Accent should read well as text + pills; keep cyan as a background highlight instead */
+    --accent: 240 70% 48%;
     --accent-foreground: 0 0% 100%;
     --destructive: 0 70% 52%;
     --destructive-foreground: 0 0% 100%;
@@ -28,7 +29,7 @@
     --ring: 261 70% 48%;
     --radius: 0.875rem;
 
-    /* Brand book: cyan, navy, purple — gradients blend all three */
+    /* Brand book: navy + indigo + purple. Cyan/mint is used sparingly as a highlight. */
     --brand-cyan: 178 89% 63%;
     --brand-cyan-glow: 178 89% 75%;
     --brand-purple: 261 84% 64%;
@@ -44,26 +45,26 @@
     /* Auctions: use a muted slate-indigo instead of gold */
     --brand-auction: 240 35% 55%;
     --brand-auction-soft: 240 35% 90%;
-    /* Keep legacy aliases pointing to brand tokens */
-    --brand-gold: 178 89% 63%;
-    --brand-emerald: 178 89% 63%;
+    /* Keep legacy aliases but make them readable (less neon cyan) */
+    --brand-gold: 261 84% 64%;
+    --brand-emerald: 240 70% 48%;
     --brand-sky: 178 89% 75%;
     --brand-surface-1: 36 25% 97%;
     --brand-surface-2: 36 20% 95%;
     --brand-surface-3: 36 15% 91%;
     --brand-surface-4: 36 12% 87%;
-    --brand-amber: 178 89% 45%;
-    --brand-amber-glow: 178 89% 58%;
+    --brand-amber: 240 70% 48%;
+    --brand-amber-glow: 261 84% 64%;
     --brand-coral: 261 84% 64%;
     --brand-coral-dark: 261 70% 48%;
 
     --gradient-hero: linear-gradient(135deg, hsl(36 28% 95%) 0%, hsl(30 22% 93%) 50%, hsl(36 25% 97%) 100%);
     --gradient-card: linear-gradient(145deg, hsl(0 0% 100%) 0%, hsl(36 20% 97%) 100%);
-    --gradient-primary: linear-gradient(135deg, hsl(var(--brand-cyan)) 0%, hsl(var(--brand-indigo)) 45%, hsl(var(--brand-purple)) 100%);
-    --gradient-accent: linear-gradient(135deg, hsl(var(--brand-purple)) 0%, hsl(var(--brand-indigo)) 45%, hsl(var(--brand-cyan)) 100%);
-    --gradient-gold: linear-gradient(135deg, hsl(var(--brand-cyan)) 0%, hsl(var(--brand-indigo)) 50%, hsl(var(--brand-cyan-glow)) 100%);
-    --gradient-emerald: linear-gradient(135deg, hsl(var(--brand-cyan)) 0%, hsl(var(--brand-indigo)) 45%, hsl(var(--brand-purple)) 100%);
-    --gradient-warm: linear-gradient(135deg, hsl(var(--brand-cyan)) 0%, hsl(var(--brand-indigo)) 45%, hsl(var(--brand-purple)) 100%);
+    --gradient-primary: linear-gradient(135deg, hsl(var(--brand-navy-mid)) 0%, hsl(var(--brand-indigo)) 55%, hsl(var(--brand-purple)) 100%);
+    --gradient-accent: linear-gradient(135deg, hsl(var(--brand-purple)) 0%, hsl(var(--brand-indigo)) 55%, hsl(var(--brand-cyan-soft)) 100%);
+    --gradient-gold: linear-gradient(135deg, hsl(var(--brand-indigo)) 0%, hsl(var(--brand-purple)) 55%, hsl(var(--brand-cyan-soft)) 100%);
+    --gradient-emerald: linear-gradient(135deg, hsl(var(--brand-indigo)) 0%, hsl(var(--brand-purple)) 60%, hsl(var(--brand-cyan-soft)) 100%);
+    --gradient-warm: linear-gradient(135deg, hsl(var(--brand-navy-mid)) 0%, hsl(var(--brand-indigo)) 55%, hsl(var(--brand-purple)) 100%);
     --gradient-auction: linear-gradient(135deg, hsl(var(--brand-auction)) 0%, hsl(var(--brand-purple-dark)) 100%);
 
     --shadow-glow-amber: 0 0 24px -4px hsl(var(--brand-indigo) / 0.35);
@@ -96,7 +97,7 @@
     --secondary-foreground: 36 15% 70%;
     --muted: 30 10% 16%;
     --muted-foreground: 36 10% 48%;
-    --accent: 178 85% 45%;
+    --accent: 240 65% 52%;
     --accent-foreground: 240 100% 10%;
     --destructive: 0 68% 50%;
     --destructive-foreground: 0 0% 100%;
@@ -117,25 +118,25 @@
     --brand-off-white: 0 0% 98%;
     --brand-auction: 240 35% 62%;
     --brand-auction-soft: 240 25% 22%;
-    --brand-gold: 178 85% 58%;
-    --brand-emerald: 178 85% 58%;
+    --brand-gold: 261 80% 68%;
+    --brand-emerald: 240 65% 52%;
     --brand-sky: 178 85% 70%;
     --brand-surface-1: 30 12% 10%;
     --brand-surface-2: 30 12% 13%;
     --brand-surface-3: 30 10% 16%;
     --brand-surface-4: 30 10% 20%;
-    --brand-amber: 178 85% 45%;
-    --brand-amber-glow: 178 85% 58%;
+    --brand-amber: 240 65% 52%;
+    --brand-amber-glow: 261 80% 68%;
     --brand-coral: 261 80% 68%;
     --brand-coral-dark: 261 65% 52%;
 
     --gradient-hero: linear-gradient(135deg, hsl(30 14% 9%) 0%, hsl(28 12% 11%) 50%, hsl(30 10% 13%) 100%);
     --gradient-card: linear-gradient(145deg, hsl(30 12% 14%) 0%, hsl(30 12% 11%) 100%);
-    --gradient-primary: linear-gradient(135deg, hsl(var(--brand-cyan)) 0%, hsl(var(--brand-indigo)) 45%, hsl(var(--brand-purple)) 100%);
-    --gradient-accent: linear-gradient(135deg, hsl(var(--brand-purple)) 0%, hsl(var(--brand-indigo)) 45%, hsl(var(--brand-cyan)) 100%);
-    --gradient-gold: linear-gradient(135deg, hsl(var(--brand-cyan)) 0%, hsl(var(--brand-indigo)) 50%, hsl(var(--brand-cyan-glow)) 100%);
-    --gradient-emerald: linear-gradient(135deg, hsl(var(--brand-cyan)) 0%, hsl(var(--brand-indigo)) 45%, hsl(var(--brand-purple)) 100%);
-    --gradient-warm: linear-gradient(135deg, hsl(var(--brand-cyan)) 0%, hsl(var(--brand-indigo)) 45%, hsl(var(--brand-purple)) 100%);
+    --gradient-primary: linear-gradient(135deg, hsl(var(--brand-navy-mid)) 0%, hsl(var(--brand-indigo)) 55%, hsl(var(--brand-purple)) 100%);
+    --gradient-accent: linear-gradient(135deg, hsl(var(--brand-purple)) 0%, hsl(var(--brand-indigo)) 55%, hsl(var(--brand-cyan-soft)) 100%);
+    --gradient-gold: linear-gradient(135deg, hsl(var(--brand-indigo)) 0%, hsl(var(--brand-purple)) 55%, hsl(var(--brand-cyan-soft)) 100%);
+    --gradient-emerald: linear-gradient(135deg, hsl(var(--brand-indigo)) 0%, hsl(var(--brand-purple)) 60%, hsl(var(--brand-cyan-soft)) 100%);
+    --gradient-warm: linear-gradient(135deg, hsl(var(--brand-navy-mid)) 0%, hsl(var(--brand-indigo)) 55%, hsl(var(--brand-purple)) 100%);
     --gradient-auction: linear-gradient(135deg, hsl(var(--brand-auction)) 0%, hsl(var(--brand-purple-dark)) 100%);
 
     --shadow-glow-amber: 0 0 28px -4px hsl(var(--brand-indigo) / 0.4);
@@ -168,7 +169,7 @@
     --secondary-foreground: 25 15% 30%;
     --muted: 36 15% 91%;
     --muted-foreground: 25 12% 50%;
-    --accent: 178 89% 40%;
+    --accent: 240 70% 48%;
     --accent-foreground: 0 0% 100%;
     --destructive: 0 70% 52%;
     --destructive-foreground: 0 0% 100%;
@@ -187,24 +188,24 @@
     --brand-slate: 240 26% 57%;
     --brand-auction: 240 35% 55%;
     --brand-auction-soft: 240 35% 90%;
-    --brand-gold: 178 89% 63%;
-    --brand-emerald: 178 89% 63%;
+    --brand-gold: 261 84% 64%;
+    --brand-emerald: 240 70% 48%;
     --brand-sky: 178 89% 75%;
     --brand-surface-1: 36 25% 97%;
     --brand-surface-2: 36 20% 95%;
     --brand-surface-3: 36 15% 91%;
     --brand-surface-4: 36 12% 87%;
-    --brand-amber: 178 89% 45%;
-    --brand-amber-glow: 178 89% 58%;
+    --brand-amber: 240 70% 48%;
+    --brand-amber-glow: 261 84% 64%;
     --brand-coral: 261 84% 64%;
     --brand-coral-dark: 261 70% 48%;
     --gradient-hero: linear-gradient(135deg, hsl(36 28% 95%) 0%, hsl(30 22% 93%) 50%, hsl(36 25% 97%) 100%);
     --gradient-card: linear-gradient(145deg, hsl(0 0% 100%) 0%, hsl(36 20% 97%) 100%);
-    --gradient-primary: linear-gradient(135deg, hsl(var(--brand-cyan)) 0%, hsl(var(--brand-indigo)) 45%, hsl(var(--brand-purple)) 100%);
-    --gradient-accent: linear-gradient(135deg, hsl(var(--brand-purple)) 0%, hsl(var(--brand-indigo)) 45%, hsl(var(--brand-cyan)) 100%);
-    --gradient-gold: linear-gradient(135deg, hsl(var(--brand-cyan)) 0%, hsl(var(--brand-indigo)) 50%, hsl(var(--brand-cyan-glow)) 100%);
-    --gradient-emerald: linear-gradient(135deg, hsl(var(--brand-cyan)) 0%, hsl(var(--brand-indigo)) 45%, hsl(var(--brand-purple)) 100%);
-    --gradient-warm: linear-gradient(135deg, hsl(var(--brand-cyan)) 0%, hsl(var(--brand-indigo)) 45%, hsl(var(--brand-purple)) 100%);
+    --gradient-primary: linear-gradient(135deg, hsl(var(--brand-navy-mid)) 0%, hsl(var(--brand-indigo)) 55%, hsl(var(--brand-purple)) 100%);
+    --gradient-accent: linear-gradient(135deg, hsl(var(--brand-purple)) 0%, hsl(var(--brand-indigo)) 55%, hsl(var(--brand-cyan-soft)) 100%);
+    --gradient-gold: linear-gradient(135deg, hsl(var(--brand-indigo)) 0%, hsl(var(--brand-purple)) 55%, hsl(var(--brand-cyan-soft)) 100%);
+    --gradient-emerald: linear-gradient(135deg, hsl(var(--brand-indigo)) 0%, hsl(var(--brand-purple)) 60%, hsl(var(--brand-cyan-soft)) 100%);
+    --gradient-warm: linear-gradient(135deg, hsl(var(--brand-navy-mid)) 0%, hsl(var(--brand-indigo)) 55%, hsl(var(--brand-purple)) 100%);
     --gradient-auction: linear-gradient(135deg, hsl(var(--brand-auction)) 0%, hsl(var(--brand-purple-dark)) 100%);
     --shadow-glow-amber: 0 0 24px -4px hsl(var(--brand-indigo) / 0.35);
     --shadow-glow-coral: 0 0 24px -4px hsl(261 84% 64% / 0.30);
@@ -283,13 +284,13 @@
   }
 
   .gradient-text-cyan {
-    background: linear-gradient(135deg, hsl(var(--brand-cyan)) 0%, hsl(var(--brand-indigo)) 45%, hsl(var(--brand-purple)) 100%);
+    background: linear-gradient(135deg, hsl(var(--brand-navy-mid)) 0%, hsl(var(--brand-purple)) 65%, hsl(var(--brand-cyan-soft)) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
   .gradient-text-amber {
-    background: linear-gradient(135deg, hsl(var(--brand-cyan)) 0%, hsl(var(--brand-indigo)) 45%, hsl(var(--brand-purple)) 100%);
+    background: linear-gradient(135deg, hsl(var(--brand-indigo)) 0%, hsl(var(--brand-purple)) 65%, hsl(var(--brand-cyan-soft)) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;

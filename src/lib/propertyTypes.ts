@@ -180,8 +180,8 @@ export const PROPERTY_TYPES: PropertyTypeConfig[] = [
     icon: Briefcase,
     description: "Private offices, coworking spaces, and business centres",
     keywords: ["coworking", "business centre", "headquarters"],
-    accentClass: "text-brand-cyan",
-    bgClass: "bg-brand-cyan/10",
+    accentClass: "text-brand-indigo",
+    bgClass: "bg-brand-indigo/10",
     group: "commercial",
     subtypes: [
       { value: "private_office",  label: "Private Office",   description: "Dedicated closed space for a single team",           icon: Briefcase },

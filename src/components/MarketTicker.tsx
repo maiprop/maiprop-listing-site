@@ -127,13 +127,13 @@ export function MarketTicker() {
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-40" style={{ background: "hsl(var(--brand-indigo))" }} />
             <span className="relative inline-flex rounded-full w-2 h-2" style={{ background: "hsl(var(--brand-indigo))" }} />
           </span>
-          <span className="text-[10px] font-black tracking-widest uppercase" style={{ color: "hsl(var(--brand-cyan))" }}>
+          <span className="text-[10px] font-black tracking-widest uppercase" style={{ color: "hsl(var(--brand-purple))" }}>
             Live Market
           </span>
         </div>
         <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full" style={{ background: "hsl(var(--brand-indigo) / 0.08)", border: "1px solid hsl(var(--brand-indigo) / 0.18)" }}>
           <span className="w-1 h-1 rounded-full animate-pulse" style={{ background: "hsl(var(--brand-indigo))" }} />
-          <span className="text-[8px] font-black tracking-widest uppercase" style={{ color: "hsl(var(--brand-cyan))" }}>
+          <span className="text-[8px] font-black tracking-widest uppercase" style={{ color: "hsl(var(--brand-purple))" }}>
             {isLoading ? "…" : "LIVE"}
           </span>
         </div>
@@ -161,7 +161,7 @@ export function MarketTicker() {
               >
                 <span
                   className="w-24 text-[11px] font-semibold transition-colors duration-300 truncate"
-                  style={{ color: isFlickering ? "hsl(var(--brand-cyan))" : "hsl(210 20% 68%)" }}
+                  style={{ color: isFlickering ? "hsl(var(--brand-purple))" : "hsl(210 20% 68%)" }}
                 >
                   {row.city}
                 </span>
@@ -170,7 +170,7 @@ export function MarketTicker() {
 
                 <span
                   className="flex-1 text-right text-[11px] font-bold tabular-nums transition-colors duration-300"
-                  style={{ color: isFlickering ? "hsl(var(--brand-cyan))" : "hsl(210 30% 88%)" }}
+                  style={{ color: isFlickering ? "hsl(var(--brand-purple))" : "hsl(210 30% 88%)" }}
                 >
                   €{row.price.toLocaleString()}
                 </span>
