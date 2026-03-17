@@ -343,8 +343,12 @@
   }
 
   .badge-auction {
-    background: linear-gradient(135deg, hsl(var(--brand-gold)) 0%, hsl(35 90% 42%) 100%);
-    color: hsl(25 20% 15%);
+    background: linear-gradient(135deg, hsl(var(--brand-auction)) 0%, hsl(var(--brand-purple-dark)) 100%);
+    color: hsl(0 0% 100%);
+  }
+  .badge-open-house {
+    background: linear-gradient(135deg, hsl(var(--brand-cyan)) 0%, hsl(var(--brand-purple)) 100%);
+    color: hsl(240 100% 10%);
   }
   .badge-firesale {
     background: linear-gradient(135deg, hsl(0 80% 58%) 0%, hsl(0 70% 46%) 100%);
