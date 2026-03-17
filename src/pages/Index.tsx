@@ -1631,7 +1631,7 @@ export default function Index() {
             </Button>
           </div>
           <div
-            className={`grid grid-cols-1 md:grid-cols-4 gap-4 reveal reveal-delay-1 ${auctionsInView ? "in-view" : ""}`}
+            className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 reveal reveal-delay-1 ${auctionsInView ? "in-view" : ""}`}
           >
             {openHouseListings.slice(0, 4).map((l: any) => {
               const imgs: string[] = l.cover_image_url ? [l.cover_image_url] : [];
