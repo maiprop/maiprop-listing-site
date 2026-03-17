@@ -427,7 +427,7 @@ export default function Firesale() {
                     key={f}
                     className="flex items-center gap-1.5 text-sm bg-muted border border-border rounded-full px-3 py-1.5 hover-scale"
                   >
-                    <Check className="w-3.5 h-3.5 text-brand-emerald" />
+                    <Check className="w-3.5 h-3.5 text-primary" />
                     {f}
                   </div>
                 ))}
