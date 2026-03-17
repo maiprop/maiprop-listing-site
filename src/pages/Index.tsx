@@ -1270,10 +1270,10 @@ export default function Index() {
               {/* ── Search Card ── */}
               <div className="animate-fade-in-up" style={{ animationDelay: "0.28s" }}>
                 <div
-                  className="bg-card/85 backdrop-blur-2xl border border-border/70 rounded-2xl shadow-elevated overflow-visible"
+                  className="bg-card/50 backdrop-blur-3xl border border-white/10 rounded-2xl overflow-visible"
                   style={{
                     boxShadow:
-                      "0 12px 48px -8px hsl(var(--primary) / 0.2), 0 2px 0 0 hsl(var(--primary) / 0.08), inset 0 1px 0 0 hsl(var(--foreground) / 0.04)",
+                      "0 12px 48px -8px hsl(var(--primary) / 0.18), 0 2px 0 0 hsl(var(--primary) / 0.06), inset 0 1px 0 0 hsl(var(--foreground) / 0.06)",
                   }}
                 >
                   {/* Tabs — scrollable on mobile */}
@@ -1282,7 +1282,7 @@ export default function Index() {
                       { label: "Buy", emoji: "🏠", color: "" },
                       { label: "Rent", emoji: "🔑", color: "" },
                       { label: "Auctions", emoji: "⚖️", color: "" },
-                      { label: "Professionals", emoji: "👔", color: "text-cyan-400" },
+                      { label: "Professionals", emoji: "👔", color: "" },
                     ].map(({ label, emoji, color }) => (
                       <button
                         key={label}
