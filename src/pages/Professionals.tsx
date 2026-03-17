@@ -381,30 +381,37 @@ export default function Professionals() {
                 const specialties = pro.specialties || [];
 
                 return (
-                  <div key={pro.id} className="glass-card rounded-xl p-5 flex flex-col gap-4 hover:border-primary/20 transition-all group">
+                  <div
+                    key={pro.id}
+                    className="relative glass-card rounded-2xl p-5 flex flex-col gap-4 border border-white/5 hover:border-brand-purple/40 hover:shadow-elevated transition-all group overflow-hidden"
+                  >
+                    <div className="pointer-events-none absolute -inset-px opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                      style={{ background: "radial-gradient(circle at 0 0, hsl(var(--brand-cyan-soft)/0.25), transparent 55%)" }}
+                    />
                       {/* Category badge */}
-                      {group &&
-                    <div className={`self-start flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold ${group.bg} ${group.border} border ${group.color}`}>
-                          {group.emoji} {group.label}
+                      {group && (
+                        <div className="relative inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-white/8 border border-white/20 backdrop-blur-sm text-white">
+                          <span className="text-base leading-none">{group.emoji}</span>
+                          <span>{group.label}</span>
                         </div>
-                    }
+                      )}
 
                       {/* Header */}
                       <div className="flex items-start gap-4">
-                        <div className="w-14 h-14 rounded-xl bg-gradient-primary flex items-center justify-center font-display font-bold text-xl text-primary-foreground shrink-0 overflow-hidden">
+                        <div className="w-14 h-14 rounded-2xl bg-gradient-primary flex items-center justify-center font-display font-bold text-xl text-primary-foreground shrink-0 overflow-hidden ring-2 ring-white/40 shadow-lg">
                           {pro.avatar_url ?
                         <img src={pro.avatar_url} alt={name} className="w-full h-full object-cover" /> :
                         initials}
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5">
-                            <span className="font-display font-semibold text-sm truncate">{name}</span>
+                            <span className="font-display font-semibold text-sm truncate text-foreground">{name}</span>
                             {pro.verified && <CheckCircle className="w-3.5 h-3.5 text-primary shrink-0" />}
                           </div>
                           <div className="text-xs text-muted-foreground">
                             <span className="mr-1">{catData.emoji}</span>{pro.title || catData.label}
                           </div>
-                          <div className="flex items-center gap-1 mt-0.5">
+                          <div className="flex items-center gap-1 mt-1">
                             <MapPin className="w-3 h-3 text-muted-foreground" />
                             <span className="text-xs text-muted-foreground">{pro.city || "Greece"}</span>
                           </div>
@@ -412,16 +419,16 @@ export default function Professionals() {
                       </div>
 
                       {/* Stats */}
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-3 text-xs">
+                        <div className="flex items-center gap-1.5">
                           <Star className="w-3.5 h-3.5 text-brand-gold fill-brand-gold" />
-                          <span className="text-sm font-semibold">{rating > 0 ? rating : "—"}</span>
-                          <span className="text-xs text-muted-foreground">({pro.reviews_count || 0})</span>
+                          <span className="font-semibold text-foreground">{rating > 0 ? rating : "—"}</span>
+                          <span className="text-muted-foreground">({pro.reviews_count || 0})</span>
                         </div>
                         <span className="text-muted-foreground text-xs">·</span>
-                        <span className="text-xs text-muted-foreground">{pro.projects_count || 0} projects</span>
+                        <span className="text-muted-foreground">{pro.projects_count || 0} projects</span>
                         <span className="text-muted-foreground text-xs">·</span>
-                        <span className="text-xs text-muted-foreground">{pro.experience_years || 0} yrs</span>
+                        <span className="text-muted-foreground">{pro.experience_years || 0} yrs</span>
                       </div>
 
                       {/* Hourly rate */}
@@ -432,17 +439,26 @@ export default function Professionals() {
                     }
 
                       {/* Specialties */}
-                      {specialties.length > 0 &&
-                    <div className="flex gap-1.5 flex-wrap">
-                          {specialties.slice(0, 3).map((s: string) =>
-                      <span key={s} className="px-2 py-0.5 rounded-full bg-secondary border border-border text-xs text-muted-foreground">{s}</span>
-                      )}
+                      {specialties.length > 0 && (
+                        <div className="flex gap-1.5 flex-wrap">
+                          {specialties.slice(0, 3).map((s: string) => (
+                            <span
+                              key={s}
+                              className="px-2.5 py-0.5 rounded-full bg-white/6 border border-white/15 text-[11px] text-foreground"
+                            >
+                              {s}
+                            </span>
+                          ))}
                         </div>
-                    }
+                      )}
 
                       {/* Actions — message links to profile; only Pro professionals show Send Message there */}
                       <div className="flex gap-2 mt-auto">
-                        <Button size="sm" className="flex-1 bg-gradient-primary border-0 text-primary-foreground text-xs gap-1.5" asChild>
+                        <Button
+                          size="sm"
+                          className="flex-1 bg-gradient-primary border-0 text-primary-foreground text-xs gap-1.5 shadow-sm"
+                          asChild
+                        >
                           <Link to={`/professionals/${pro.id}`}>View Profile <ArrowRight className="w-3 h-3" /></Link>
                         </Button>
                         <Button size="sm" variant="outline" className="border-border px-3" asChild title="Message">
