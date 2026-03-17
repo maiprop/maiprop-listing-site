@@ -884,7 +884,7 @@ export default function Firesale() {
                       "Dedicated advisor assigned within 2h",
                     ].map((t) => (
                       <div key={t} className="flex items-center gap-2">
-                        <Check className="w-3 h-3 text-brand-emerald shrink-0" />
+                        <Check className="w-3 h-3 text-primary shrink-0" />
                         {t}
                       </div>
                     ))}
