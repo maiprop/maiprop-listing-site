@@ -1383,16 +1383,15 @@ export default function Index() {
           <div className={`grid grid-cols-3 gap-3 reveal reveal-delay-1 ${browseInView ? "in-view" : ""}`}>
             {PROPERTY_TYPES.filter((t) => ["apartment", "land"].includes(t.value)).map((type) => (
               <Link key={type.value} to={`/listings?type=${type.value}`}>
-                <div className="relative rounded-2xl border border-brand-cyan/30 bg-brand-navy/80 hover:border-brand-cyan/60 hover:shadow-[0_0_16px_-4px_hsl(var(--brand-cyan)/0.35)] transition-all group p-4 flex items-center gap-3 cursor-pointer overflow-hidden">
-                  <span className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-brand-cyan/20 animate-pulse" />
-                  <div className="w-10 h-10 rounded-full bg-brand-cyan/10 border border-brand-cyan/25 flex items-center justify-center text-xl shrink-0 group-hover:scale-110 transition-transform">
+                <div className="glass-card rounded-2xl border border-border hover:border-primary/40 hover:shadow-elevated transition-all group p-4 flex items-center gap-3 cursor-pointer">
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-xl shrink-0 group-hover:scale-110 transition-transform">
                     {type.emoji}
                   </div>
                   <div>
-                    <div className="font-display font-semibold text-sm text-brand-cyan group-hover:text-brand-cyan-glow transition-colors">
+                    <div className="font-display font-semibold text-sm text-foreground group-hover:text-primary transition-colors">
                       {type.label}
                     </div>
-                    <div className="text-[10px] text-brand-cyan/50 mt-0.5">
+                    <div className="text-[10px] text-muted-foreground mt-0.5">
                       {typeCounts[type.value] ? `${typeCounts[type.value].toLocaleString()} listings` : "—"}
                     </div>
                   </div>
@@ -1402,25 +1401,24 @@ export default function Index() {
 
             {/* New Development — featured card (off-plan / pre-sale only) */}
             <Link to="/listings?pre_sale=1">
-              <div className="relative rounded-2xl border border-brand-cyan/30 bg-brand-navy/80 hover:border-brand-cyan/60 hover:shadow-[0_0_16px_-4px_hsl(var(--brand-cyan)/0.35)] transition-all group p-4 flex items-center gap-3 cursor-pointer overflow-hidden">
-                <span className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-brand-cyan/20 animate-pulse" />
-                <span className="absolute top-2 right-2 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-brand-cyan text-brand-navy leading-tight tracking-wide">
+              <div className="glass-card rounded-2xl border border-border hover:border-primary/40 hover:shadow-elevated transition-all group p-4 flex items-center gap-3 cursor-pointer relative">
+                <span className="absolute top-2 right-2 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-primary text-primary-foreground leading-tight tracking-wide">
                   NEW
                 </span>
-                <div className="w-10 h-10 rounded-full bg-brand-cyan/10 border border-brand-cyan/25 flex items-center justify-center text-xl shrink-0 group-hover:scale-110 transition-transform">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-xl shrink-0 group-hover:scale-110 transition-transform">
                   🏗️
                 </div>
                 <div>
-                  <div className="font-display font-semibold text-sm text-brand-cyan group-hover:text-brand-cyan-glow transition-colors">
+                  <div className="font-display font-semibold text-sm text-foreground group-hover:text-primary transition-colors">
                     New Development
                   </div>
-                  <div className="text-[10px] text-brand-cyan/50 mt-0.5">Off-plan &amp; new builds</div>
+                  <div className="text-[10px] text-muted-foreground mt-0.5">Off-plan &amp; new builds</div>
                 </div>
               </div>
             </Link>
           </div>
 
-          {/* ── ROW 3: Commercial subtypes + Open House + Auctions */}
+          {/* ── ROW 2: Commercial subtypes + Open House + Auctions */}
           <div
             className={`mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3 reveal reveal-delay-2 ${browseInView ? "in-view" : ""}`}
           >
@@ -1431,12 +1429,11 @@ export default function Index() {
               { label: "Auctions", emoji: "🔨", href: "/auctions" },
             ].map((item) => (
               <Link key={item.label} to={item.href}>
-                <div className="relative rounded-2xl border border-brand-cyan/30 bg-brand-navy/80 hover:border-brand-cyan/60 hover:shadow-[0_0_16px_-4px_hsl(var(--brand-cyan)/0.35)] transition-all group p-4 flex items-center gap-3 cursor-pointer overflow-hidden">
-                  <span className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-brand-cyan/20 animate-pulse" />
-                  <div className="w-10 h-10 rounded-full bg-brand-cyan/10 border border-brand-cyan/25 flex items-center justify-center text-xl shrink-0 group-hover:scale-110 transition-transform">
+                <div className="glass-card rounded-2xl border border-border hover:border-primary/40 hover:shadow-elevated transition-all group p-4 flex items-center gap-3 cursor-pointer">
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-xl shrink-0 group-hover:scale-110 transition-transform">
                     {item.emoji}
                   </div>
-                  <div className="font-display font-semibold text-sm text-brand-cyan group-hover:text-brand-cyan-glow transition-colors">
+                  <div className="font-display font-semibold text-sm text-foreground group-hover:text-primary transition-colors">
                     {item.label}
                   </div>
                 </div>
@@ -1461,7 +1458,7 @@ export default function Index() {
                 { label: "🏛️ Business Centre", sub: "office_business" },
               ].map((item) => (
                 <Link key={item.sub} to={`/listings?type=commercial&subtype=${item.sub}`}>
-                  <div className="rounded-full border border-brand-cyan/25 bg-brand-navy/60 px-3.5 py-1.5 text-xs font-medium text-brand-cyan hover:border-brand-cyan/50 hover:bg-brand-navy/80 hover:text-brand-cyan-glow transition-all cursor-pointer whitespace-nowrap">
+                  <div className="rounded-full border border-border bg-secondary px-3.5 py-1.5 text-xs font-medium text-foreground hover:border-primary/40 hover:text-primary hover:bg-primary/5 transition-all cursor-pointer whitespace-nowrap">
                     {item.label}
                   </div>
                 </Link>
@@ -1964,7 +1961,7 @@ export default function Index() {
                     {
                       emoji: "🏛️",
                       title: "Architects",
-                      count: "340+",
+                      category: "architect",
                       color: "text-primary",
                       border: "border-primary/30",
                       bg: "bg-primary/15",
@@ -1972,7 +1969,7 @@ export default function Index() {
                     {
                       emoji: "⚖️",
                       title: "Lawyers",
-                      count: "180+",
+                      category: "lawyer",
                       color: "text-brand-gold",
                       border: "border-brand-gold/30",
                       bg: "bg-brand-gold/15",
@@ -1980,37 +1977,53 @@ export default function Index() {
                     {
                       emoji: "📋",
                       title: "Notaries",
-                      count: "95+",
+                      category: "notary",
                       color: "text-brand-purple",
                       border: "border-brand-purple/30",
                       bg: "bg-brand-purple/15",
                     },
                     {
                       emoji: "🔧",
-                      title: "Engineers",
-                      count: "520+",
+                      title: "Civil Engineers",
+                      category: "civil_engineer",
                       color: "text-primary",
                       border: "border-primary/30",
                       bg: "bg-primary/15",
                     },
                     {
+                      emoji: "🏠",
+                      title: "Real Estate Agents",
+                      category: "real_estate_agent",
+                      color: "text-brand-emerald",
+                      border: "border-brand-emerald/30",
+                      bg: "bg-brand-emerald/15",
+                    },
+                    {
+                      emoji: "💰",
+                      title: "Financial Advisors",
+                      category: "financial_advisor",
+                      color: "text-brand-gold",
+                      border: "border-brand-gold/30",
+                      bg: "bg-brand-gold/10",
+                    },
+                    {
                       emoji: "🏗️",
                       title: "Contractors",
-                      count: "410+",
+                      category: "contractor",
                       color: "text-brand-purple-dark",
                       border: "border-brand-purple-dark/30",
                       bg: "bg-brand-purple-dark/15",
                     },
                     {
                       emoji: "🏡",
-                      title: "Property Mgrs",
-                      count: "230+",
+                      title: "Property Managers",
+                      category: "property_manager",
                       color: "text-brand-purple",
                       border: "border-brand-purple/30",
                       bg: "bg-brand-purple/10",
                     },
                   ].map((pro) => (
-                    <Link key={pro.title} to="/professionals">
+                    <Link key={pro.title} to={`/professionals?category=${pro.category}`}>
                       <div
                         className={`group flex items-center gap-3 p-4 rounded-2xl bg-background/10 border ${pro.border} hover:bg-background/20 transition-all`}
                       >
