@@ -678,7 +678,7 @@ export default function InvestorDashboard() {
         <div className="container py-8">
 
           {/* ─────────────── REQUEST ACCESS SECTION (non-subscribed logged-in users) ─────────────── */}
-          {!canAccessDealFlow && !isRealEstateAgent && user && (
+          {!canAccessDealFlow && user && (
             <div className={`mb-8 relative glass-card rounded-2xl overflow-hidden ${
               invitationStatus === "pending"
                 ? "border border-brand-gold/30"
