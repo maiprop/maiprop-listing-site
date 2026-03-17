@@ -240,7 +240,9 @@ export default function Professionals() {
               <div>
                 <h1 className="font-display text-3xl sm:text-5xl font-bold mb-3 leading-tight text-foreground">
                   The right expert,<br />
-                  <span className="gradient-text-cyan">one click away</span>
+                  <span className="gradient-text-cyan drop-shadow-[0_0_20px_rgba(133,106,255,0.65)]">
+                    one click away
+                  </span>
                 </h1>
                 <p className="text-muted-foreground max-w-lg text-base sm:text-lg leading-relaxed mb-4 sm:mb-5">
                   Architects, lawyers, contractors and more — a curated directory of verified property professionals across Greece.

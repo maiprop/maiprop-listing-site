@@ -1287,8 +1287,11 @@ export default function PropertyDetail() {
                         <h3 className="font-display font-semibold text-sm">Full AI Property Report</h3>
                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold font-bold">PREMIUM</span>
                       </div>
-                      <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
+                      <p className="text-xs text-muted-foreground mb-2 leading-relaxed">
                         Deep-dive: Area trends, comparable sales, property specifics analysis, and charts.
+                      </p>
+                      <p className="text-[11px] text-muted-foreground mb-4">
+                        Pro includes {REPORT_INCLUDED} reports per month; extra reports cost €{REPORT_EXTRA_COST} each.
                       </p>
                       <div className="grid grid-cols-2 gap-2 mb-4">
                         {["Cadastre Verification", "5-Year Price History", "Comparable Sales", "Investment Projection", "Legal Status Check", "Neighborhood Score"].map((item) => (
@@ -1328,7 +1331,7 @@ export default function PropertyDetail() {
                             disabled={reportLoading}
                           >
                             {reportLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <BarChart2 className="w-4 h-4" />}
-                            {reportLoading ? "Loading…" : `Load Report (${Math.max(0, REPORT_INCLUDED - reportCount)} left this month)`}
+                            {reportLoading ? "Loading…" : "Load Report"}
                           </Button>
                         </div>
                       )}
