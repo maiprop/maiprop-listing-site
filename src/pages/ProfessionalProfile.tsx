@@ -357,7 +357,7 @@ export default function ProfessionalProfile() {
                 {pro.specialties && pro.specialties.length > 0 && (
                   <div className="flex gap-2 flex-wrap mt-4">
                     {pro.specialties.map((s: string) => (
-                      <span key={s} className="px-3 py-1 rounded-full bg-secondary border border-border text-xs text-muted-foreground">
+                      <span key={s} className="px-3 py-1 rounded-full bg-gradient-accent text-accent-foreground text-xs font-medium">
                         {s}
                       </span>
                     ))}
