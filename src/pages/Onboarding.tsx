@@ -136,7 +136,7 @@ const colorMap: Record<string, { bg: string; border: string; text: string; iconB
   blue:    { bg: "bg-blue-500/10",    border: "border-blue-500/40",    text: "text-blue-400",    iconBg: "bg-blue-500/20" },
   violet:  { bg: "bg-violet-500/10",  border: "border-violet-500/40",  text: "text-violet-400",  iconBg: "bg-violet-500/20" },
   emerald: { bg: "bg-emerald-500/10", border: "border-emerald-500/40", text: "text-emerald-400", iconBg: "bg-emerald-500/20" },
-  cyan:    { bg: "bg-cyan-500/10",    border: "border-cyan-500/40",    text: "text-cyan-400",    iconBg: "bg-cyan-500/20" },
+  cyan:    { bg: "bg-brand-purple/10", border: "border-brand-purple/40", text: "text-brand-purple", iconBg: "bg-brand-purple/20" },
   amber:   { bg: "bg-amber-500/10",   border: "border-amber-500/40",   text: "text-amber-400",   iconBg: "bg-amber-500/20" },
   rose:    { bg: "bg-rose-500/10",    border: "border-rose-500/40",    text: "text-rose-400",    iconBg: "bg-rose-500/20" },
   orange:  { bg: "bg-orange-500/10",  border: "border-orange-500/40",  text: "text-orange-400",  iconBg: "bg-orange-500/20" },
@@ -623,7 +623,7 @@ export default function Onboarding() {
                           </span>
                         )}
                         {svc.videoAvailable && (
-                          <span className="inline-flex items-center gap-1 bg-cyan-500/10 border border-cyan-500/20 rounded-full px-2 py-0.5 text-[10px] text-cyan-400">
+                          <span className="inline-flex items-center gap-1 bg-brand-purple/10 border border-brand-purple/20 rounded-full px-2 py-0.5 text-[10px] text-brand-purple">
                             <Video className="w-2.5 h-2.5" /> Video
                           </span>
                         )}
@@ -673,7 +673,7 @@ export default function Onboarding() {
                             <div className={cn("absolute top-0.5 w-4 h-4 rounded-full bg-background shadow transition-transform", sel.videoEnabled ? "translate-x-4" : "translate-x-0.5")} />
                           </div>
                           <span className="text-xs text-muted-foreground flex items-center gap-1.5">
-                            <Video className="w-3.5 h-3.5 text-cyan-400" />Available via video consultation
+                            <Video className="w-3.5 h-3.5 text-brand-purple" />Available via video consultation
                             {svc.isPremiumFeature && <Lock className="w-3 h-3 text-amber-400" />}
                           </span>
                         </label>
@@ -744,8 +744,8 @@ export default function Onboarding() {
     if (step === "pro-video") return (
       <div>
         <div className="text-center mb-6">
-          <div className="w-14 h-14 rounded-2xl bg-cyan-500/10 border border-cyan-500/25 flex items-center justify-center mx-auto mb-4">
-            <Video className="w-7 h-7 text-cyan-400" />
+          <div className="w-14 h-14 rounded-2xl bg-brand-purple/10 border border-brand-purple/25 flex items-center justify-center mx-auto mb-4">
+            <Video className="w-7 h-7 text-brand-purple" />
           </div>
           <h1 className="font-display font-bold text-2xl text-foreground mb-1">Video Consultations</h1>
           <p className="text-muted-foreground text-sm">Add your meeting link so clients can book video calls with you</p>

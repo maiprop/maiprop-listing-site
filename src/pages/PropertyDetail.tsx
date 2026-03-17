@@ -1038,7 +1038,7 @@ export default function PropertyDetail() {
                           <div className="flex items-center gap-2 flex-wrap">
                             <p className="font-semibold text-sm truncate">{ownerProfile.display_name || "Owner"}</p>
                             {ownerParticipantType === "agent" &&
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30">Agent</span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-brand-purple/10 text-brand-purple border border-brand-purple/30">Agent</span>
                         }
                             {ownerParticipantType === "seller" &&
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-600 dark:text-violet-400 border border-violet-500/30">Private Seller</span>

@@ -1284,7 +1284,7 @@ export default function Index() {
                       { label: "Buy", emoji: "🏠", color: "" },
                       { label: "Rent", emoji: "🔑", color: "" },
                       { label: "Auctions", emoji: "⚖️", color: "" },
-                      { label: "Professionals", emoji: "👔", color: "text-cyan-400" },
+                      { label: "Professionals", emoji: "👔", color: "text-brand-purple" },
                     ].map(({ label, emoji, color }) => (
                       <button
                         key={label}
