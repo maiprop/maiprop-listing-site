@@ -146,7 +146,17 @@ export default function AdminInvitationRequests() {
         );
       if (subErr) throw subErr;
 
-      // 3. Send email notification (fire-and-forget)
+      // 3. Update the applicant's profile role to 'investor' for immediate access
+      const { error: profileErr } = await supabase
+        .from("profiles")
+        .update({ role: "investor" })
+        .eq("user_id", req.user_id);
+      if (profileErr) {
+        // Non-fatal — log but don't block
+        console.warn("Profile role update failed (non-fatal):", profileErr.message);
+      }
+
+      // 4. Send email notification (fire-and-forget)
       sendNotificationEmail({
         type: "approved",
         email: req.email,
@@ -155,7 +165,7 @@ export default function AdminInvitationRequests() {
       });
 
       setRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: "approved" } : r));
-      toast.success(`✅ Approved & subscription created (${tier}, 1 year) — email sent`);
+      toast.success(`✅ Approved & investor access granted (${tier}, 1 year) — email sent`);
     } catch (e) {
       toast.error((e as Error)?.message ?? "Could not approve");
     } finally {
