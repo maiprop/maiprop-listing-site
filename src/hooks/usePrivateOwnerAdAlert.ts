@@ -12,7 +12,7 @@ export function usePrivateOwnerAdAlert() {
     enabled: !!user,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("private_owner_ad_alerts")
+        .from("private_owner_ad_alerts" as any)
         .select("id")
         .eq("user_id", user!.id)
         .maybeSingle();
