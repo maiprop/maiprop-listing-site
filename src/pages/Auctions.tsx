@@ -427,7 +427,7 @@ function AuctionCard({ a, favoritedIds, onToggleFav
 
         {/* Property type pill */}
         {getPropertyTypeLabel(a) && (
-          <span className="inline-flex items-center gap-1 bg-brand-gold/15 text-brand-gold border border-brand-gold/30 text-[10px] font-semibold px-2 py-0.5 rounded-full w-fit">
+        <span className="inline-flex items-center gap-1 bg-primary/10 text-primary border border-primary/20 text-[10px] font-semibold px-2 py-0.5 rounded-full w-fit">
             {getPropertyTypeLabel(a)}
           </span>
         )}
