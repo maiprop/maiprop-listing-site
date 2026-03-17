@@ -1813,7 +1813,7 @@ export default function Index() {
             <div
               className="absolute inset-0"
               style={{
-                background: "radial-gradient(ellipse at 20% 50%, hsl(192 100% 50% / 0.05) 0%, transparent 50%)",
+                background: "radial-gradient(ellipse at 20% 50%, hsl(var(--brand-purple) / 0.06) 0%, transparent 50%)",
               }}
             />
 
