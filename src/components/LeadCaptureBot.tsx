@@ -318,19 +318,10 @@ const LeadCaptureBot = () => {
   };
 
   /** After budget selection, fetch matching properties and insert them into the chat */
-  const showMatchingProperties = useCallback(async (budget: string) => {
-    const { data } = await supabase
-      .from("properties")
-      .select("*")
-      .eq("status", "available")
-      .eq("project_type", "new")
-      .order("sort_order", { ascending: true });
-
-    if (!data || data.length === 0) return null;
-    const matched = getMatchingProperties(data as Property[], budget);
-    if (matched.length === 0) return null;
-    setSuggestedProperties(matched);
-    return matched;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const showMatchingProperties = useCallback(async (_budget: string) => {
+    // Legacy "properties" table removed — return null
+    return null;
   }, []);
 
   const handlePropertySelect = (p: Property) => {

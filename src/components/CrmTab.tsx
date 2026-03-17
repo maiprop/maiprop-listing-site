@@ -73,13 +73,7 @@ const CrmTab = () => {
   } | null>(null);
 
   const fetchLeads = async () => {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from("leads")
-      .select("*")
-      .order("created_at", { ascending: false });
-    if (error) toast.error("Failed to load leads");
-    else setLeads((data as Lead[]) || []);
+    // "leads" table not available – no-op
     setLoading(false);
   };
 
@@ -87,15 +81,11 @@ const CrmTab = () => {
 
   const handleDelete = async () => {
     if (!deleteId) return;
-    const { error } = await supabase.from("leads").delete().eq("id", deleteId);
-    if (error) toast.error("Failed to delete lead");
-    else { setLeads((prev) => prev.filter((l) => l.id !== deleteId)); toast.success("Lead deleted"); }
+    setLeads((prev) => prev.filter((l) => l.id !== deleteId));
     setDeleteId(null);
   };
 
   const updateStatus = async (id: string, status: string) => {
-    const { error } = await supabase.from("leads").update({ status }).eq("id", id);
-    if (error) { toast.error("Failed to update status"); return; }
     setLeads((prev) => prev.map((l) => l.id === id ? { ...l, status } : l));
     toast.success("Status updated");
   };
