@@ -1234,36 +1234,33 @@ export default function Index() {
           style={{ background: "radial-gradient(hsl(192 100% 50%), hsl(270 75% 62%), transparent 70%)" }}
         />
 
-        <div className="container relative z-10 pt-24 pb-8 sm:pt-28 sm:pb-16 lg:pl-16 xl:pl-24">
+        <div className="container relative z-10 pt-20 pb-8 sm:pt-28 sm:pb-16 lg:pl-16 xl:pl-24">
           <div className="grid lg:grid-cols-[1fr_360px] xl:grid-cols-[1fr_400px] gap-8 lg:gap-12 items-end">
             {/* ── LEFT: Copy + Search ── */}
             <div className="text-white">
               {/* Eyebrow */}
-              <div className="relative inline-flex mb-4 sm:mb-7 animate-fade-in-up" style={{ animationDelay: "0s" }}>
-                {/* Glow ring */}
+              <div className="relative inline-flex mb-3 sm:mb-7 animate-fade-in-up" style={{ animationDelay: "0s" }}>
                 <span
                   className="absolute inset-0 rounded-full animate-pulse"
                   style={{ boxShadow: "0 0 0 4px hsl(192 100% 50% / 0.18), 0 0 18px 4px hsl(192 100% 50% / 0.12)" }}
                 />
-
                 <div className="relative inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/15 border border-white/30 backdrop-blur-sm">
                   <span className="relative flex w-2 h-2">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-300 opacity-60" />
                     <span className="relative inline-flex rounded-full w-2 h-2 bg-cyan-300" />
                   </span>
-                  <span className="text-xs font-semibold text-white">Greece's #1 AI-Powered Property Platform</span>
+                  <span className="text-[11px] sm:text-xs font-semibold text-white">Greece's #1 AI-Powered Property Platform</span>
                 </div>
               </div>
 
               {/* Headline */}
               <h1
-                className="font-display font-black leading-[1.08] mb-4 sm:mb-6 animate-fade-in-up text-white"
-                style={{ fontSize: "clamp(1.75rem, 7vw, 4.5rem)", animationDelay: "0.08s" }}
+                className="font-display font-black leading-[1.1] mb-4 sm:mb-6 animate-fade-in-up text-white"
+                style={{ fontSize: "clamp(1.55rem, 7.5vw, 4.5rem)", animationDelay: "0.08s" }}
               >
-                Find your perfect
-                <br className="hidden xs:inline" /> property in Greece
+                Find your perfect property in Greece
                 <div className="mt-1">
-                  <span className="gradient-text-primary" style={{ fontSize: "clamp(1.9rem, 8vw, 4.8rem)" }}>
+                  <span className="gradient-text-primary" style={{ fontSize: "clamp(1.65rem, 8vw, 4.8rem)" }}>
                     with AI precision
                   </span>
                 </div>
@@ -1272,7 +1269,7 @@ export default function Index() {
               {/* ── Search Card ── */}
               <div className="animate-fade-in-up" style={{ animationDelay: "0.28s" }}>
                 <div
-                  className="bg-card/85 backdrop-blur-2xl border border-border/70 rounded-2xl shadow-elevated overflow-visible"
+                  className="bg-card/90 backdrop-blur-2xl border border-border/70 rounded-2xl shadow-elevated overflow-visible"
                   style={{
                     boxShadow:
                       "0 12px 48px -8px hsl(var(--primary) / 0.2), 0 2px 0 0 hsl(var(--primary) / 0.08), inset 0 1px 0 0 hsl(var(--foreground) / 0.04)",
@@ -1289,13 +1286,13 @@ export default function Index() {
                       <button
                         key={label}
                         onClick={() => setSearchType(label)}
-                        className={`flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all shrink-0 ${
+                        className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all shrink-0 ${
                           searchType === label
                             ? "bg-primary text-primary-foreground shadow-sm"
                             : `${color || "text-muted-foreground"} hover:text-foreground hover:bg-secondary/80`
                         }`}
                       >
-                        <span className="text-sm sm:text-base leading-none">{emoji}</span>
+                        <span className="text-sm leading-none">{emoji}</span>
                         <span>{label}</span>
                       </button>
                     ))}
@@ -1303,9 +1300,10 @@ export default function Index() {
 
                   <div className="mx-3 mt-2 h-px bg-border/50" />
 
-                  {/* Search row — stacks on mobile */}
-                  <div className="p-2 flex flex-col sm:flex-row gap-2 sm:gap-0 sm:items-stretch">
-                    <div className="flex-1 min-w-0">
+                  {/* Search row — mobile: location full-width, then type+AI+search on one row */}
+                  <div className="p-2">
+                    {/* Location / Service input — always full width on mobile */}
+                    <div className="mb-2">
                       {searchType === "Professionals" ? (
                         <ServiceInput
                           value={professionalInputValue}
@@ -1320,37 +1318,35 @@ export default function Index() {
                         <LocationInput value={searchQuery} onChange={setSearchQuery} onSearch={handleSearch} />
                       )}
                     </div>
-                    {searchType !== "Professionals" && (
-                      <>
-                        <div className="hidden sm:block w-px bg-border/50 mx-1 self-stretch my-1" />
-                        <PropertyTypeDropdown value={selectedPropertyType} onChange={setSelectedPropertyType} />
-                        <div className="hidden sm:block w-px bg-border/50 mx-1 self-stretch my-1" />
-                      </>
-                    )}
-                    <div className="flex gap-2 sm:contents">
+
+                    {/* Second row: type dropdown + AI + Search */}
+                    <div className="flex gap-2 items-center">
+                      {searchType !== "Professionals" && (
+                        <div className="flex-1 min-w-0">
+                          <PropertyTypeDropdown value={selectedPropertyType} onChange={setSelectedPropertyType} />
+                        </div>
+                      )}
                       {searchType !== "Professionals" && (
                         <button
                           onClick={() => setShowAI(true)}
-                          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all text-primary hover:bg-primary/10 shrink-0 whitespace-nowrap border border-border sm:border-0"
+                          className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all text-primary hover:bg-primary/10 shrink-0 whitespace-nowrap border border-border"
                         >
-                          <Sparkles className="w-4 h-4" />
-                          <span>AI Search</span>
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span className="hidden xs:inline">AI</span>
                         </button>
                       )}
                       <Button
-                        size="lg"
+                        size="default"
                         onClick={handleSearch}
-                        className="flex-1 sm:flex-none bg-primary hover:opacity-90 border-0 text-primary-foreground rounded-xl px-6 font-semibold shrink-0 sm:ml-1"
+                        className={`bg-primary hover:opacity-90 border-0 text-primary-foreground rounded-xl font-semibold shrink-0 ${searchType === "Professionals" ? "flex-1" : ""}`}
                       >
-                        <Search className="w-4 h-4 mr-2" />
-                        Search
+                        <Search className="w-4 h-4 sm:mr-2" />
+                        <span className="hidden sm:inline">Search</span>
                       </Button>
                     </div>
                   </div>
                 </div>
               </div>
-
-              {/* Stats — 2-col grid on mobile */}
             </div>
 
             {/* ── RIGHT: Live Market Ticker Card ── */}
@@ -1359,7 +1355,6 @@ export default function Index() {
                 className="absolute -inset-6 rounded-3xl blur-3xl opacity-15"
                 style={{ background: "radial-gradient(ellipse, hsl(192 100% 50%), hsl(270 75% 62%), transparent 70%)" }}
               />
-
               <div className="relative">
                 <MarketTicker />
               </div>
@@ -1369,59 +1364,55 @@ export default function Index() {
       </section>
 
       {/* ══ BROWSE BY TYPE ══════════════════════════════════════════════════ */}
-      <section className="py-10 sm:py-14 bg-secondary">
+      <section className="py-8 sm:py-14 bg-secondary">
         <div ref={browseRef} className="container">
-          <div className={`flex items-center justify-between mb-7 reveal ${browseInView ? "in-view" : ""}`}>
-            <div>
-              <h2 className="font-display text-2xl font-bold">Browse by Type</h2>
-            </div>
-            <Link to="/listings" className="text-sm text-primary hover:underline flex items-center gap-1">
-              All listings <ArrowRight className="w-3 h-3" />
+          <div className={`flex items-center justify-between mb-5 sm:mb-7 reveal ${browseInView ? "in-view" : ""}`}>
+            <h2 className="font-display text-xl sm:text-2xl font-bold">Browse by Type</h2>
+            <Link to="/listings" className="text-sm text-primary hover:underline flex items-center gap-1 shrink-0">
+              All <ArrowRight className="w-3 h-3" />
             </Link>
           </div>
-          {/* ── ROW 1: Primary types — Apartment, Land, New Development (big) */}
-          <div className={`grid grid-cols-3 gap-3 reveal reveal-delay-1 ${browseInView ? "in-view" : ""}`}>
+
+          {/* ── ROW 1: Primary types — icon-only on mobile, icon+label on sm+ */}
+          <div className={`grid grid-cols-3 gap-2 sm:gap-3 reveal reveal-delay-1 ${browseInView ? "in-view" : ""}`}>
             {PROPERTY_TYPES.filter((t) => ["apartment", "land"].includes(t.value)).map((type) => (
               <Link key={type.value} to={`/listings?type=${type.value}`}>
-                <div className="glass-card rounded-2xl border border-border hover:border-primary/40 hover:shadow-elevated transition-all group p-4 flex items-center gap-3 cursor-pointer">
-                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-xl shrink-0 group-hover:scale-110 transition-transform">
+                <div className="glass-card rounded-xl sm:rounded-2xl border border-border hover:border-primary/40 hover:shadow-elevated transition-all group p-3 sm:p-4 flex flex-col sm:flex-row items-center sm:items-center gap-1 sm:gap-3 cursor-pointer text-center sm:text-left">
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-primary/10 flex items-center justify-center text-lg sm:text-xl shrink-0 group-hover:scale-110 transition-transform">
                     {type.emoji}
                   </div>
                   <div>
-                    <div className="font-display font-semibold text-sm text-foreground group-hover:text-primary transition-colors">
+                    <div className="font-display font-semibold text-xs sm:text-sm text-foreground group-hover:text-primary transition-colors leading-tight">
                       {type.label}
                     </div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5">
+                    <div className="text-[9px] sm:text-[10px] text-muted-foreground mt-0.5 hidden sm:block">
                       {typeCounts[type.value] ? `${typeCounts[type.value].toLocaleString()} listings` : "—"}
                     </div>
                   </div>
                 </div>
               </Link>
             ))}
-
-            {/* New Development — featured card (off-plan / pre-sale only) */}
+            {/* New Development */}
             <Link to="/listings?pre_sale=1">
-              <div className="glass-card rounded-2xl border border-border hover:border-primary/40 hover:shadow-elevated transition-all group p-4 flex items-center gap-3 cursor-pointer relative">
-                <span className="absolute top-2 right-2 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-primary text-primary-foreground leading-tight tracking-wide">
+              <div className="glass-card rounded-xl sm:rounded-2xl border border-border hover:border-primary/40 hover:shadow-elevated transition-all group p-3 sm:p-4 flex flex-col sm:flex-row items-center sm:items-center gap-1 sm:gap-3 cursor-pointer relative text-center sm:text-left">
+                <span className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 px-1 sm:px-1.5 py-0.5 rounded-full text-[8px] sm:text-[9px] font-bold bg-primary text-primary-foreground leading-tight tracking-wide">
                   NEW
                 </span>
-                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-xl shrink-0 group-hover:scale-110 transition-transform">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-primary/10 flex items-center justify-center text-lg sm:text-xl shrink-0 group-hover:scale-110 transition-transform">
                   🏗️
                 </div>
                 <div>
-                  <div className="font-display font-semibold text-sm text-foreground group-hover:text-primary transition-colors">
-                    New Development
+                  <div className="font-display font-semibold text-xs sm:text-sm text-foreground group-hover:text-primary transition-colors leading-tight">
+                    New Dev
                   </div>
-                  <div className="text-[10px] text-muted-foreground mt-0.5">Off-plan &amp; new builds</div>
+                  <div className="text-[9px] sm:text-[10px] text-muted-foreground mt-0.5 hidden sm:block">Off-plan &amp; new builds</div>
                 </div>
               </div>
             </Link>
           </div>
 
           {/* ── ROW 2: Commercial subtypes + Open House + Auctions */}
-          <div
-            className={`mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3 reveal reveal-delay-2 ${browseInView ? "in-view" : ""}`}
-          >
+          <div className={`mt-2 sm:mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 reveal reveal-delay-2 ${browseInView ? "in-view" : ""}`}>
             {[
               { label: "Retail Shop", emoji: "🛍️", href: "/listings?type=commercial&subtype=shop" },
               { label: "Mixed-Use", emoji: "🔀", href: "/listings?type=commercial&subtype=mixed_use" },
@@ -1429,11 +1420,11 @@ export default function Index() {
               { label: "Auctions", emoji: "🔨", href: "/auctions" },
             ].map((item) => (
               <Link key={item.label} to={item.href}>
-                <div className="glass-card rounded-2xl border border-border hover:border-primary/40 hover:shadow-elevated transition-all group p-4 flex items-center gap-3 cursor-pointer">
-                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-xl shrink-0 group-hover:scale-110 transition-transform">
+                <div className="glass-card rounded-xl sm:rounded-2xl border border-border hover:border-primary/40 hover:shadow-elevated transition-all group p-3 sm:p-4 flex items-center gap-2 sm:gap-3 cursor-pointer">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-primary/10 flex items-center justify-center text-base sm:text-xl shrink-0 group-hover:scale-110 transition-transform">
                     {item.emoji}
                   </div>
-                  <div className="font-display font-semibold text-sm text-foreground group-hover:text-primary transition-colors">
+                  <div className="font-display font-semibold text-xs sm:text-sm text-foreground group-hover:text-primary transition-colors leading-tight">
                     {item.label}
                   </div>
                 </div>
@@ -1441,12 +1432,12 @@ export default function Index() {
             ))}
           </div>
 
-          {/* ── More Commercial chips */}
+          {/* ── More Commercial chips — scrollable on mobile */}
           <div className={`mt-4 reveal reveal-delay-2 ${browseInView ? "in-view" : ""}`}>
-            <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3">
+            <p className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2.5 sm:mb-3">
               More Commercial
             </p>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1 sm:flex-wrap sm:pb-0">
               {[
                 { label: "📦 Warehouse", sub: "warehouse" },
                 { label: "🍽️ Restaurant / Café", sub: "restaurant" },
@@ -1458,7 +1449,7 @@ export default function Index() {
                 { label: "🏛️ Business Centre", sub: "office_business" },
               ].map((item) => (
                 <Link key={item.sub} to={`/listings?type=commercial&subtype=${item.sub}`}>
-                  <div className="rounded-full border border-border bg-secondary px-3.5 py-1.5 text-xs font-medium text-foreground hover:border-primary/40 hover:text-primary hover:bg-primary/5 transition-all cursor-pointer whitespace-nowrap">
+                  <div className="rounded-full border border-border bg-secondary px-3 sm:px-3.5 py-1.5 text-[11px] sm:text-xs font-medium text-foreground hover:border-primary/40 hover:text-primary hover:bg-primary/5 transition-all cursor-pointer whitespace-nowrap">
                     {item.label}
                   </div>
                 </Link>
@@ -1480,7 +1471,7 @@ export default function Index() {
             </Button>
           </div>
           <div
-            className={`grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 reveal reveal-delay-1 ${featuredInView ? "in-view" : ""}`}
+            className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 reveal reveal-delay-1 ${featuredInView ? "in-view" : ""}`}
           >
             {featuredLoading && !featuredError
               ? Array.from({ length: 4 }).map((_, i) => (
@@ -1557,9 +1548,9 @@ export default function Index() {
               </Link>
             </Button>
           </div>
-          {/* 1×4 grid — show up to 4 listings */}
+          {/* 2-col on mobile → 4-col on md */}
           <div
-            className={`grid grid-cols-1 md:grid-cols-4 gap-4 reveal reveal-delay-1 ${auctionsInView ? "in-view" : ""}`}
+            className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 reveal reveal-delay-1 ${auctionsInView ? "in-view" : ""}`}
           >
             {auctionListings.slice(0, 4).map((l: any) => {
               const svFallback =
@@ -1640,7 +1631,7 @@ export default function Index() {
             </Button>
           </div>
           <div
-            className={`grid grid-cols-1 md:grid-cols-4 gap-4 reveal reveal-delay-1 ${auctionsInView ? "in-view" : ""}`}
+            className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 reveal reveal-delay-1 ${auctionsInView ? "in-view" : ""}`}
           >
             {openHouseListings.slice(0, 4).map((l: any) => {
               const imgs: string[] = l.cover_image_url ? [l.cover_image_url] : [];

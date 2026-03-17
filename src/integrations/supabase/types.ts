@@ -1701,7 +1701,66 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      firesale_requests_investor_feed: {
+        Row: {
+          address: string | null
+          ai_estimate: number | null
+          asking_price: number | null
+          bedrooms: number | null
+          city: string | null
+          condition: string | null
+          contact_email: string | null
+          contact_phone: string | null
+          created_at: string | null
+          id: string | null
+          notes: string | null
+          offer_price: number | null
+          property_type: Database["public"]["Enums"]["property_type"] | null
+          sqm: number | null
+          status: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          address?: string | null
+          ai_estimate?: number | null
+          asking_price?: number | null
+          bedrooms?: number | null
+          city?: string | null
+          condition?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string | null
+          id?: string | null
+          notes?: string | null
+          offer_price?: number | null
+          property_type?: Database["public"]["Enums"]["property_type"] | null
+          sqm?: number | null
+          status?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          address?: string | null
+          ai_estimate?: number | null
+          asking_price?: number | null
+          bedrooms?: number | null
+          city?: string | null
+          condition?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string | null
+          id?: string | null
+          notes?: string | null
+          offer_price?: number | null
+          property_type?: Database["public"]["Enums"]["property_type"] | null
+          sqm?: number | null
+          status?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       get_my_role: {
