@@ -1290,16 +1290,20 @@ export default function PropertyDetail() {
                       <p className="text-xs text-muted-foreground mb-2 leading-relaxed">
                         Deep-dive: Area trends, comparable sales, property specifics analysis, and charts.
                       </p>
-                      <p className="text-[11px] text-muted-foreground mb-4">
-                        Pro includes {REPORT_INCLUDED} reports per month; extra reports cost €{REPORT_EXTRA_COST} each.
-                      </p>
-                      <div className="grid grid-cols-2 gap-2 mb-4">
-                        {["Cadastre Verification", "5-Year Price History", "Comparable Sales", "Investment Projection", "Legal Status Check", "Neighborhood Score"].map((item) => (
-                          <div key={item} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <Check className="w-3 h-3 text-primary shrink-0" />{item}
+                      {isPro && (
+                        <>
+                          <p className="text-[11px] text-muted-foreground mb-4">
+                            Pro includes {REPORT_INCLUDED} reports per month; extra reports cost €{REPORT_EXTRA_COST} each.
+                          </p>
+                          <div className="grid grid-cols-2 gap-2 mb-4">
+                            {["Cadastre Verification", "5-Year Price History", "Comparable Sales", "Investment Projection", "Legal Status Check", "Neighborhood Score"].map((item) => (
+                              <div key={item} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                <Check className="w-3 h-3 text-primary shrink-0" />{item}
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
+                        </>
+                      )}
                       {!isPro ? (
                         <div className="pt-1 flex flex-col items-center gap-4 text-center">
                           {/* Blurred mock preview (match valuation lock style) */}
