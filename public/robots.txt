@@ -1,0 +1,28 @@
+User-agent: Googlebot
+Allow: /
+Disallow: /admin
+Disallow: /login
+Disallow: /*?search=*
+Disallow: /*?q=*
+
+User-agent: Bingbot
+Allow: /
+Disallow: /admin
+Disallow: /login
+Disallow: /*?search=*
+Disallow: /*?q=*
+
+User-agent: Twitterbot
+Allow: /
+
+User-agent: facebookexternalhit
+Allow: /
+
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /login
+Disallow: /*?search=*
+Disallow: /*?q=*
+
+Sitemap: https://properties.maiprop.co/sitemap.xml

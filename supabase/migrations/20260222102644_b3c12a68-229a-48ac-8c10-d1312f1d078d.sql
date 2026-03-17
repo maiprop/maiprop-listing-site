@@ -1,0 +1,2 @@
+ALTER TABLE public.properties DROP CONSTRAINT properties_status_check;
+ALTER TABLE public.properties ADD CONSTRAINT properties_status_check CHECK (status IN ('', 'available', 'booked', 'sold', 'under-construction'));

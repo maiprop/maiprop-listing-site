@@ -1,0 +1,79 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  scroll-behavior: smooth;
+}
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+@layer base {
+  :root {
+    --background: 235 100% 4%;
+    --foreground: 180 90% 95%;
+
+    --card: 235 60% 12%;
+    --card-foreground: 180 90% 95%;
+
+    --popover: 235 60% 10%;
+    --popover-foreground: 180 90% 95%;
+
+    --primary: 179 90% 63%;
+    --primary-foreground: 235 100% 7%;
+
+    --secondary: 263 86% 64%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 235 40% 18%;
+    --muted-foreground: 220 20% 65%;
+
+    --accent: 263 86% 64%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 235 30% 22%;
+    --input: 235 30% 22%;
+    --ring: 179 90% 63%;
+
+    --radius: 0.75rem;
+
+    /* Section-specific backgrounds */
+    --section-deep: 235 100% 4%;
+    --section-mid: 220 45% 16%;
+    --section-elevated: 225 35% 22%;
+    --section-purple: 255 40% 16%;
+    --section-cyan: 185 30% 14%;
+
+    --sidebar-background: 235 60% 10%;
+    --sidebar-foreground: 180 90% 95%;
+    --sidebar-primary: 179 90% 63%;
+    --sidebar-primary-foreground: 235 100% 7%;
+    --sidebar-accent: 235 40% 18%;
+    --sidebar-accent-foreground: 180 90% 95%;
+    --sidebar-border: 235 30% 22%;
+    --sidebar-ring: 179 90% 63%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html, body {
+    overflow-x: hidden;
+    width: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+    font-family: 'Inter', sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Space Grotesk', sans-serif;
+  }
+}

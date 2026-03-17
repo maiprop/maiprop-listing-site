@@ -1,0 +1,1 @@
+ALTER TABLE public.properties ADD COLUMN market_report text NOT NULL DEFAULT '';
