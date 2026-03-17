@@ -673,7 +673,7 @@ export default function Onboarding() {
                             <div className={cn("absolute top-0.5 w-4 h-4 rounded-full bg-background shadow transition-transform", sel.videoEnabled ? "translate-x-4" : "translate-x-0.5")} />
                           </div>
                           <span className="text-xs text-muted-foreground flex items-center gap-1.5">
-                            <Video className="w-3.5 h-3.5 text-cyan-400" />Available via video consultation
+                            <Video className="w-3.5 h-3.5 text-brand-purple" />Available via video consultation
                             {svc.isPremiumFeature && <Lock className="w-3 h-3 text-amber-400" />}
                           </span>
                         </label>
