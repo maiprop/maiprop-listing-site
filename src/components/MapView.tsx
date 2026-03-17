@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { MAPBOX_TOKEN } from "@/lib/config";
+import { MAPBOX_TOKEN, getStreetViewProxyUrl } from "@/lib/config";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -277,8 +277,9 @@ function getAuctionImage(listing: MapListing): string {
   const raw = listing._raw ?? listing;
   if (listing.images?.[0]) return listing.images[0];
   if (raw.cover_image_url) return raw.cover_image_url;
-  if (listing.latitude && listing.longitude) {
-    return `https://maps.googleapis.com/maps/api/streetview?size=400x200&location=${listing.latitude},${listing.longitude}&fov=90&pitch=5`;
+  if (listing.latitude != null && listing.longitude != null) {
+    const proxyUrl = getStreetViewProxyUrl({ lat: listing.latitude, lng: listing.longitude }, "400x200");
+    if (proxyUrl) return proxyUrl;
   }
   return "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400&q=60";
 }

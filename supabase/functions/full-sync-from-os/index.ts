@@ -165,12 +165,13 @@ function mapAuctionToListing(a: any) {
   const price = Number(a.firstPriceOffer ?? 0);
   const auctionUrl: string | null =
     a.url ?? a.auctionUrl ?? a.listingUrl ?? a.eAuctionUrl ?? null;
-  const googleMapsKey = Deno.env.get("GOOGLE_MAPS_API_KEY");
+  // Street View via proxy so API key is never stored in listings
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")?.replace(/\/$/, "");
   const lat = a.propertyLatitude != null ? Number(a.propertyLatitude) : null;
   const lng = a.propertyLongitude != null ? Number(a.propertyLongitude) : null;
   const streetViewUrl =
-    googleMapsKey && lat && lng
-      ? `https://maps.googleapis.com/maps/api/streetview?size=800x450&location=${lat},${lng}&fov=90&pitch=10&key=${googleMapsKey}`
+    supabaseUrl && lat != null && lng != null
+      ? `${supabaseUrl}/functions/v1/streetview-proxy?size=800x450&lat=${lat}&lng=${lng}`
       : null;
   const rawOwnership: string | undefined = a.ownershipStatus;
   const ownershipPct: number | undefined =
