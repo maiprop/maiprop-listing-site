@@ -154,14 +154,14 @@ export function MarketTicker() {
                 style={{
                   height: "36px",
                   background: isFlickering
-                    ? "hsl(192 100% 50% / 0.07)"
+                    ? "hsl(270 75% 62% / 0.07)"
                     : "transparent",
-                  borderBottom: "1px solid hsl(192 100% 50% / 0.05)",
+                  borderBottom: "1px solid hsl(270 75% 62% / 0.06)",
                 }}
               >
                 <span
                   className="w-24 text-[11px] font-semibold transition-colors duration-300 truncate"
-                  style={{ color: isFlickering ? "hsl(192 100% 80%)" : "hsl(210 20% 68%)" }}
+                  style={{ color: isFlickering ? "hsl(270 75% 85%)" : "hsl(210 20% 68%)" }}
                 >
                   {row.city}
                 </span>
@@ -170,7 +170,7 @@ export function MarketTicker() {
 
                 <span
                   className="flex-1 text-right text-[11px] font-bold tabular-nums transition-colors duration-300"
-                  style={{ color: isFlickering ? "hsl(192 100% 70%)" : "hsl(210 30% 88%)" }}
+                  style={{ color: isFlickering ? "hsl(270 75% 78%)" : "hsl(210 30% 88%)" }}
                 >
                   €{row.price.toLocaleString()}
                 </span>
@@ -178,8 +178,8 @@ export function MarketTicker() {
                 <span
                   className="w-14 text-right text-[10px] font-black tabular-nums px-1 py-0.5 rounded"
                   style={{
-                    color: row.up ? "hsl(192 100% 55%)" : "hsl(0 72% 60%)",
-                    background: row.up ? "hsl(192 100% 50% / 0.08)" : "hsl(0 72% 55% / 0.08)",
+                    color: row.up ? "hsl(270 75% 70%)" : "hsl(0 72% 60%)",
+                    background: row.up ? "hsl(270 75% 62% / 0.1)" : "hsl(0 72% 55% / 0.08)",
                   }}
                 >
                   {row.up ? "▲" : "▼"} {Math.abs(row.change).toFixed(1)}%
