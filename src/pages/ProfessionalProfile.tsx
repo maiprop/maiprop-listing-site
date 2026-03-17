@@ -844,7 +844,7 @@ export default function ProfessionalProfile() {
                         </Link>
                       );
                     })}
-                  {allProfessionals.filter((p: any) => p.category === pro.category && p.id !== pro.id).length === 0 && (
+                  {(Array.isArray(allProfessionals) ? allProfessionals : []).filter((p: any) => p.category === pro.category && p.id !== pro.id).length === 0 && (
                     <p className="text-xs text-muted-foreground">No others in this category yet.</p>
                   )}
                 </div>

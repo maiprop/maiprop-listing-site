@@ -32,7 +32,7 @@ export function usePrivateOwnerAdAlert() {
         if (error) throw error;
       } else {
         const { error } = await supabase
-          .from("private_owner_ad_alerts")
+          .from("private_owner_ad_alerts" as any)
           .delete()
           .eq("user_id", user.id);
         if (error) throw error;
