@@ -2162,11 +2162,11 @@ function SettingsSection({
       })()}
 
       {/* Security notice */}
-      <div className="glass-card rounded-xl p-5 border border-amber-500/20 bg-amber-500/5">
+      <div className="glass-card rounded-xl p-5 border border-brand-gold/20 bg-brand-gold/5">
         <div className="flex items-start gap-3">
-          <Shield className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+          <Shield className="w-5 h-5 text-brand-gold shrink-0 mt-0.5" />
           <div>
-            <p className="font-semibold text-sm text-amber-300">Security Notice</p>
+            <p className="font-semibold text-sm text-brand-gold">Security Notice</p>
             <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
               Switching your participant type <strong>only changes how your dashboard is organised</strong> — it does not
               affect your actual account permissions or data access rights.
