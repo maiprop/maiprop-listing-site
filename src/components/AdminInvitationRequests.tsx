@@ -48,7 +48,7 @@ export default function AdminInvitationRequests() {
       if (error) {
         setRequests([]);
       } else {
-        setRequests(data || []);
+        setRequests((data as any) || []);
       }
       setLoading(false);
     };

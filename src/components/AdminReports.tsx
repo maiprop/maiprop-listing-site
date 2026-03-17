@@ -33,7 +33,7 @@ export default function AdminReports() {
         setLoading(false);
         return;
       }
-      setReports(data || []);
+      setReports((data as any) || []);
       setLoading(false);
     };
     load();
