@@ -930,8 +930,10 @@ function PropertiesMockup() {
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────────
-// Hero video: use preload in index.html + deferred src so it loads faster. For even faster load, re-encode with faststart and lower bitrate (e.g. 720p, 1–2 Mbps).
-const HERO_VIDEO_SRC = "/hero-bg.mp4";
+// Hero video: use preload in index.html + deferred src so it loads faster.
+// Sources are re-encoded lightweight variants (720p/24fps) with WebM first and MP4 fallback.
+const HERO_VIDEO_WEBM_SRC = "/hero-bg.webm";
+const HERO_VIDEO_MP4_SRC = "/hero-bg.mp4";
 
 export default function Index() {
   const navigate = useNavigate();
@@ -942,11 +944,11 @@ export default function Index() {
   const [professionalService, setProfessionalService] = useState("");
   const [showAI, setShowAI] = useState(false);
   const [typeCounts, setTypeCounts] = useState<Record<string, number>>({});
-  const [heroVideoSrc, setHeroVideoSrc] = useState<string>("");
+  const [heroVideoReady, setHeroVideoReady] = useState(false);
 
-  // Defer video src until after first paint so the poster shows instantly and preload can run
+  // Defer source attachment until after first paint so poster renders instantly.
   useEffect(() => {
-    const id = requestAnimationFrame(() => setHeroVideoSrc(HERO_VIDEO_SRC));
+    const id = requestAnimationFrame(() => setHeroVideoReady(true));
     return () => cancelAnimationFrame(id);
   }, []);
 
@@ -1199,7 +1201,12 @@ export default function Index() {
             className="hero-video absolute inset-0 w-full h-full object-cover opacity-100 dark:opacity-70"
             style={{ objectPosition: "center center", backfaceVisibility: "hidden" }}
           >
-            {heroVideoSrc && <source src={heroVideoSrc} type="video/mp4" />}
+            {heroVideoReady && (
+              <>
+                <source src={HERO_VIDEO_WEBM_SRC} type="video/webm" />
+                <source src={HERO_VIDEO_MP4_SRC} type="video/mp4" />
+              </>
+            )}
           </video>
           {/* Strong dark overlay for text readability */}
           <div
