@@ -364,13 +364,13 @@
     content: '';
     width: 8px;
     height: 8px;
-    background: hsl(var(--brand-emerald));
+    background: hsl(var(--brand-cyan));
     border-radius: 50%;
     animation: pulse-live 1.5s ease-in-out infinite;
   }
   @keyframes pulse-live {
-    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 hsl(var(--brand-emerald) / 0.6); }
-    50% { opacity: 0.8; box-shadow: 0 0 0 6px hsl(var(--brand-emerald) / 0); }
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 hsl(var(--brand-cyan) / 0.6); }
+    50% { opacity: 0.8; box-shadow: 0 0 0 6px hsl(var(--brand-cyan) / 0); }
   }
 
   .section-divider {
