@@ -38,7 +38,7 @@ const STATIC_PRICES: Record<string, number> = {
 
 function Sparkline({ city, up }: { city: string; up: boolean }) {
   const d = SPARKLINES[city] ?? SPARKLINES.Athens;
-  const color = up ? "hsl(192 100% 55%)" : "hsl(0 70% 55%)";
+  const color = up ? "hsl(270 75% 62%)" : "hsl(0 70% 55%)";
   return (
     <svg width="36" height="18" viewBox="0 0 48 22" fill="none" className="shrink-0 opacity-80">
       <path d={d} stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
