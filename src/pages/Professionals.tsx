@@ -102,7 +102,7 @@ export default function Professionals() {
 
   const { data: professionals = [], isLoading } = useProfessionals(dbCategory);
 
-  const filtered = professionals.filter((p: any) => {
+  const filtered = (Array.isArray(professionals) ? professionals : []).filter((p: any) => {
     // Category from URL (e.g. from homepage search) — exact match
     if (categoryFromUrl) {
       if (p.category !== categoryFromUrl) return false;

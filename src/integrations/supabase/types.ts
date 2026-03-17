@@ -204,60 +204,6 @@ export type Database = {
           },
         ]
       }
-      leads: {
-        Row: {
-          id: string
-          owner_id: string
-          source: string
-          listing_id: string | null
-          professional_id: string | null
-          project_id: string | null
-          name: string
-          email: string | null
-          phone: string | null
-          message: string | null
-          status: string
-          notes: string | null
-          follow_up_at: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          owner_id: string
-          source?: string
-          listing_id?: string | null
-          professional_id?: string | null
-          project_id?: string | null
-          name: string
-          email?: string | null
-          phone?: string | null
-          message?: string | null
-          status?: string
-          notes?: string | null
-          follow_up_at?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          owner_id?: string
-          source?: string
-          listing_id?: string | null
-          professional_id?: string | null
-          project_id?: string | null
-          name?: string
-          email?: string | null
-          phone?: string | null
-          message?: string | null
-          status?: string
-          notes?: string | null
-          follow_up_at?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
       conversations: {
         Row: {
           created_at: string

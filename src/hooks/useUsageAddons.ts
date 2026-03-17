@@ -30,13 +30,13 @@ export function useValuationUsage() {
     queryKey: ["usage_ai_valuations", user?.id, monthStart],
     enabled: !!user,
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("usage_ai_valuations")
         .select("id")
         .eq("user_id", user!.id)
         .gte("created_at", monthStart);
       if (error) throw error;
-      return (data ?? []).length;
+      return ((data as any[]) ?? []).length;
     },
   });
 }
@@ -54,7 +54,7 @@ export function useRecordValuation() {
   return useMutation({
     mutationFn: async (listingId?: string) => {
       if (!user) throw new Error("Not authenticated");
-      const { error } = await supabase.from("usage_ai_valuations").insert({
+      const { error } = await (supabase as any).from("usage_ai_valuations").insert({
         user_id: user.id,
         listing_id: listingId ?? null,
       });
@@ -76,13 +76,13 @@ export function useReportUsage() {
     queryKey: ["usage_property_reports", user?.id, monthStart],
     enabled: !!user,
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("usage_property_reports")
         .select("id")
         .eq("user_id", user!.id)
         .gte("created_at", monthStart);
       if (error) throw error;
-      return (data ?? []).length;
+      return ((data as any[]) ?? []).length;
     },
   });
 }
@@ -99,7 +99,7 @@ export function useRecordReport() {
   return useMutation({
     mutationFn: async (listingId?: string) => {
       if (!user) throw new Error("Not authenticated");
-      const { error } = await supabase.from("usage_property_reports").insert({
+      const { error } = await (supabase as any).from("usage_property_reports").insert({
         user_id: user.id,
         listing_id: listingId ?? null,
       });
@@ -120,13 +120,13 @@ export function usePriorityAdsUsage() {
     queryKey: ["usage_priority_ads", user?.id, monthStart],
     enabled: !!user,
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("usage_priority_ads")
         .select("id")
         .eq("user_id", user!.id)
         .gte("created_at", monthStart);
       if (error) throw error;
-      return (data ?? []).length;
+      return ((data as any[]) ?? []).length;
     },
   });
 }
@@ -144,7 +144,7 @@ export function useRecordPriorityAd() {
     mutationFn: async (listingId: string) => {
       if (!user) throw new Error("Not authenticated");
       if (!isPro) throw new Error("Priority Ads require Pro plan");
-      const { error } = await supabase.from("usage_priority_ads").insert({
+      const { error } = await (supabase as any).from("usage_priority_ads").insert({
         user_id: user.id,
         listing_id: listingId,
       });

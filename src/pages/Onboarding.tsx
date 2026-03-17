@@ -22,7 +22,7 @@ import { usePricingConfigs, formatPrice, PRICING_KEYS } from "@/hooks/usePricing
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type RoleKey = "individual" | "seller_landlord" | "agent" | "professional" | "developer";
+type RoleKey = "individual" | "seller_landlord" | "agent" | "professional" | "developer" | "investor" | "institutional";
 type OnboardingStep =
   | "pick-type"
   | "pro-category"
