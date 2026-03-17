@@ -33,8 +33,8 @@ export function Footer() {
               { label: "Greek Auctions", to: "/auctions" },
               { label: "Quick Sale™", to: "/firesale" },
               { label: "Professionals", to: "/professionals" },
-              { label: "Pricing", to: "/pricing" },
-              { label: "Open Houses", to: "/open-houses" }].
+              { label: "Open Houses", to: "/open-houses" },
+              { label: "Pricing", to: "/pricing" }].
               map((item) =>
               <li key={item.label}>
                   <Link to={item.to} className="text-sm text-muted-foreground hover:text-foreground transition-colors">{item.label}</Link>
