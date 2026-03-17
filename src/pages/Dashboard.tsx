@@ -672,7 +672,7 @@ export default function Dashboard() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="font-semibold text-sm truncate">{l.title}</p>
-                          {l.is_featured && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-400/20 text-amber-600 border border-amber-400/30">⭐ Featured</span>}
+                          {l.is_featured && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold border border-brand-gold/30">⭐ Featured</span>}
                           {(l.tags || []).includes("exclusive") && <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/20 text-primary font-medium">Exclusive</span>}
                           {l.is_off_market && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-secondary border border-border text-muted-foreground">🔒 Off-market</span>}
                           {l.is_pre_sale && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">🏗️ Pre-sale</span>}
