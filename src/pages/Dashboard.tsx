@@ -196,6 +196,27 @@ export default function Dashboard() {
   const [alertModalOpen, setAlertModalOpen] = useState(false);
   const [editingAlert, setEditingAlert] = useState<any>(null);
 
+  // Invitation request status for non-investor users
+  const [invitationRequestStatus, setInvitationRequestStatus] = useState<"none" | "pending" | "approved" | "rejected">("none");
+  useEffect(() => {
+    if (!user) return;
+    // Only relevant for non-investor/non-admin users
+    if (["investor", "institutional", "admin"].includes(role)) return;
+    supabase
+      .from("invitation_requests" as any)
+      .select("status")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        const row = data as { status?: string } | null;
+        if (row?.status === "pending") setInvitationRequestStatus("pending");
+        else if (row?.status === "approved") setInvitationRequestStatus("approved");
+        else if (row?.status === "rejected") setInvitationRequestStatus("rejected");
+      });
+  }, [user, role]);
+
   useEffect(() => {
     const valid = sectionNavItems.some(i => i.key === activeSection);
     if (!valid && sectionNavItems.length) setActiveSection(sectionNavItems[0].key as NavKey);
