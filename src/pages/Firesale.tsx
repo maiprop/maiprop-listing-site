@@ -820,12 +820,12 @@ export default function Firesale() {
                 </div>
               ) : (
                 /* Success State */
-                <div className="glass-card rounded-2xl border border-brand-emerald/30 p-8 text-center shadow-elevated">
+                <div className="glass-card rounded-2xl border border-primary/30 p-8 text-center shadow-elevated">
                   {/* Animated check */}
                   <div className="relative w-20 h-20 mx-auto mb-6">
-                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-brand-emerald/20 to-primary/10 flex items-center justify-center">
-                      <div className="w-14 h-14 rounded-full bg-gradient-to-br from-brand-emerald to-primary/80 flex items-center justify-center shadow-lg">
-                        <Check className="w-7 h-7 text-white" strokeWidth={3} />
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary/20 to-accent/10 flex items-center justify-center">
+                      <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary to-accent/80 flex items-center justify-center shadow-lg">
+                        <Check className="w-7 h-7 text-primary-foreground" strokeWidth={3} />
                       </div>
                     </div>
                   </div>

@@ -556,7 +556,7 @@ export default function OpenHouses() {
           ) : (
             <>
               {isEmpty && (
-                <div className="mb-6 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-700 font-medium">
+                <div className="mb-6 px-4 py-3 rounded-xl bg-primary/10 border border-primary/20 text-xs text-primary font-medium">
                   📋 Sample events shown — real open houses will appear once agents publish them.
                 </div>
               )}
