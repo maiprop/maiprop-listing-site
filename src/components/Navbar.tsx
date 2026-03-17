@@ -343,7 +343,7 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
               {link.accent === "dooropen" && <DoorOpen className="w-4 h-4 shrink-0" />}
               {link.label}
               {link.badge && (
-                <span className="text-xs px-1.5 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold font-semibold">{link.badge}</span>
+                <span className="text-xs px-1.5 py-0.5 rounded-full bg-primary/15 text-primary font-semibold">{link.badge}</span>
               )}
               {link.accent === "subtle" && <span className="w-1.5 h-1.5 rounded-full bg-accent/60" />}
             </Link>
