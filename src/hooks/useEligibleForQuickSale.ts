@@ -22,7 +22,7 @@ export function useEligibleForQuickSale() {
         .in("status", ["active", "trial"])
         .limit(1)
         .maybeSingle();
-      return data as { status: string } | null;
+      return (data as unknown) as { status: string } | null;
     },
     enabled: !!user?.id,
     staleTime: 60 * 1000,

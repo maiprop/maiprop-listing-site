@@ -12,7 +12,7 @@ export function usePrivateOwnerAdAlert() {
     enabled: !!user,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("private_owner_ad_alerts")
+        .from("private_owner_ad_alerts" as any)
         .select("id")
         .eq("user_id", user!.id)
         .maybeSingle();
@@ -25,14 +25,14 @@ export function usePrivateOwnerAdAlert() {
     mutationFn: async (enable: boolean) => {
       if (!user) throw new Error("Not authenticated");
       if (enable) {
-        const { error } = await supabase.from("private_owner_ad_alerts").upsert(
+        const { error } = await supabase.from("private_owner_ad_alerts" as any).upsert(
           { user_id: user.id },
           { onConflict: "user_id" }
         );
         if (error) throw error;
       } else {
         const { error } = await supabase
-          .from("private_owner_ad_alerts")
+          .from("private_owner_ad_alerts" as any)
           .delete()
           .eq("user_id", user.id);
         if (error) throw error;

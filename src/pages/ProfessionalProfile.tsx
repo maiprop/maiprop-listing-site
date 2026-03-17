@@ -826,7 +826,7 @@ export default function ProfessionalProfile() {
               <div className="glass-card rounded-xl p-5">
                 <h3 className="font-display font-semibold mb-3 text-sm">Similar Professionals</h3>
                 <div className="space-y-3">
-                  {allProfessionals
+                  {(Array.isArray(allProfessionals) ? allProfessionals : [])
                     .filter((p: any) => p.category === pro.category && p.id !== pro.id)
                     .slice(0, 3)
                     .map((peer: any) => {
@@ -844,7 +844,7 @@ export default function ProfessionalProfile() {
                         </Link>
                       );
                     })}
-                  {allProfessionals.filter((p: any) => p.category === pro.category && p.id !== pro.id).length === 0 && (
+                  {(Array.isArray(allProfessionals) ? allProfessionals : []).filter((p: any) => p.category === pro.category && p.id !== pro.id).length === 0 && (
                     <p className="text-xs text-muted-foreground">No others in this category yet.</p>
                   )}
                 </div>
