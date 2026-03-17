@@ -797,7 +797,7 @@ export default function Firesale() {
                             Back
                           </Button>
                           <Button
-                            className="flex-1 bg-gradient-to-r from-destructive to-destructive/80 border-0 text-white h-11"
+                            className="flex-1 bg-gradient-to-r from-destructive to-destructive/80 border-0 text-destructive-foreground h-11"
                             disabled={!step2Valid || submitting}
                             onClick={handleSubmit}
                           >
