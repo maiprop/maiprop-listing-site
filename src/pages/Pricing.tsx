@@ -166,6 +166,56 @@ const PROFESSIONAL_PRO: PlanFeature[] = [
 ];
 
 // ── Pricing plan definitions ───────────────────────────────────────────────────
+const PLANS: Record<AudienceId, {
+  freeLabel: string; freePrice: string; freeDesc: string; freeCTA: string; freeHref: string;
+  paidLabel: string; paidPrice: string; paidPriceUnit: string; paidDesc: string; paidCTA: string; paidHref: string;
+  features: PlanFeature[];
+  freeList: string[];
+  accent: string; accentBg: string; accentBorder: string;
+}> = {
+  buyer: {
+    freeLabel: "Free", freePrice: "€0", freeDesc: "Everything to start your search", freeCTA: "Browse Free", freeHref: "/listings",
+    paidLabel: "Pro Plan", paidPrice: "€29", paidPriceUnit: "/ month", paidDesc: "AI-powered investor intelligence", paidCTA: "Get Pro Plan", paidHref: "/pricing",
+    freeList: BUYER_FREE_LIST, features: BUYER_PRO,
+    accent: "text-brand-gold", accentBg: "bg-brand-gold/10", accentBorder: "border-brand-gold/40",
+  },
+  seller: {
+    freeLabel: "Free", freePrice: "€0", freeDesc: "List your property and manage viewings", freeCTA: "List a Property", freeHref: "/listings/new",
+    paidLabel: "Pro Plan", paidPrice: "€19", paidPriceUnit: "/ month", paidDesc: "Unlimited listings, AI assist & analytics", paidCTA: "Get Pro Plan", paidHref: "/pricing",
+    freeList: SELLER_FREE_LIST, features: SELLER_PRO,
+    accent: "text-violet-400", accentBg: "bg-violet-500/10", accentBorder: "border-violet-500/40",
+  },
+  investor: {
+    freeLabel: "Basic Access", freePrice: "Free", freeDesc: "Quick Sale™ feed + basic auction access", freeCTA: "Get Basic Access", freeHref: "/investor-dashboard",
+    paidLabel: "Pro Plan", paidPrice: "€79", paidPriceUnit: "/ month", paidDesc: "Full deal pipeline, AI scoring & intelligence", paidCTA: "Get Pro Plan", paidHref: "/investor-dashboard",
+    freeList: INVESTOR_FREE_LIST, features: INVESTOR_PRO,
+    accent: "text-destructive", accentBg: "bg-destructive/10", accentBorder: "border-destructive/30",
+  },
+  agent: {
+    freeLabel: "Starter", freePrice: "€0", freeDesc: "List a few properties & test the platform", freeCTA: "Start Free", freeHref: "/signup",
+    paidLabel: "Pro Plan", paidPrice: "€89", paidPriceUnit: "/ month", paidDesc: "Unlimited listings, CRM & analytics", paidCTA: "Get Pro Plan", paidHref: "/pricing",
+    freeList: AGENT_FREE_LIST, features: AGENT_PRO,
+    accent: "text-brand-purple", accentBg: "bg-brand-purple/10", accentBorder: "border-brand-purple/40",
+  },
+  institutional: {
+    freeLabel: "Basic", freePrice: "Free", freeDesc: "Browse listings and explore the platform", freeCTA: "Register Free", freeHref: "/signup",
+    paidLabel: "Pro Plan", paidPrice: "€149", paidPriceUnit: "/ month", paidDesc: "Full deal flow, portfolio tools & priority support", paidCTA: "Get Pro Plan", paidHref: "/pricing",
+    freeList: INSTITUTIONAL_FREE_LIST, features: INSTITUTIONAL_PRO,
+    accent: "text-amber-400", accentBg: "bg-amber-500/10", accentBorder: "border-amber-500/40",
+  },
+  developer: {
+    freeLabel: "Starter", freePrice: "€0", freeDesc: "List projects and manage inquiries", freeCTA: "Start Free", freeHref: "/signup",
+    paidLabel: "Pro Plan", paidPrice: "€89", paidPriceUnit: "/ month", paidDesc: "Unlimited listings, project showcases & analytics", paidCTA: "Get Pro Plan", paidHref: "/pricing",
+    freeList: DEVELOPER_FREE_LIST, features: DEVELOPER_PRO,
+    accent: "text-orange-400", accentBg: "bg-orange-500/10", accentBorder: "border-orange-500/40",
+  },
+  professional: {
+    freeLabel: "Free", freePrice: "€0", freeDesc: "Join the directory & receive basic leads", freeCTA: "Register Free", freeHref: "/signup",
+    paidLabel: "Pro Plan", paidPrice: "€49", paidPriceUnit: "/ month", paidDesc: "Priority leads, booking page & AI tools", paidCTA: "Get Pro Plan", paidHref: "/pricing",
+    freeList: PROFESSIONAL_FREE_LIST, features: PROFESSIONAL_PRO,
+    accent: "text-rose-400", accentBg: "bg-rose-500/10", accentBorder: "border-rose-500/40",
+  },
+};
 
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function Pricing() {
