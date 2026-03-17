@@ -4,6 +4,7 @@
 
 import { useState, useEffect } from "react";
 import { Users, UserCheck, Clock, Ban, RefreshCw, Save, ArrowUpCircle, ArrowLeftRight, Loader2, ShieldCheck } from "lucide-react";
+import { usePricingConfigs, formatPrice, INVESTOR_TIER_TO_KEY } from "@/hooks/usePricingConfigs";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -67,6 +68,7 @@ function daysUntilExpiry(expiresAt: string | null): number | null {
 
 export default function AdminSubscribers() {
   const { refreshProfile } = useAuth();
+  const { data: pricingConfigs = {} } = usePricingConfigs();
   const [allSubs, setAllSubs] = useState<AdminSubscription[]>([]);
   const [subsLoading, setSubsLoading] = useState(false);
   const [subsFilter, setSubsFilter] = useState<"all" | "active" | "trial" | "cancelled" | "expired">("all");
@@ -105,8 +107,14 @@ export default function AdminSubscribers() {
 
   const filtered = allSubs.filter(s => subsFilter === "all" || s.status === subsFilter);
   const tierConfig: Record<string, { color: string; price: string }> = {
-    private: { color: "text-primary border-primary/20 bg-primary/10", price: "€490/mo" },
-    institutional: { color: "text-accent border-accent/20 bg-accent/10", price: "€1,490/mo" },
+    private: {
+      color: "text-primary border-primary/20 bg-primary/10",
+      price: formatPrice(pricingConfigs[INVESTOR_TIER_TO_KEY.private], { showUnit: true, fallback: "€490/mo" }),
+    },
+    institutional: {
+      color: "text-accent border-accent/20 bg-accent/10",
+      price: formatPrice(pricingConfigs[INVESTOR_TIER_TO_KEY.institutional], { showUnit: true, fallback: "€1,490/mo" }),
+    },
     developer: { color: "text-brand-gold border-brand-gold/20 bg-brand-gold/10", price: "Custom" },
   };
   const statusColor: Record<string, string> = {
@@ -146,7 +154,7 @@ export default function AdminSubscribers() {
         <div>
           <p className="text-xs text-muted-foreground mb-1">Estimated MRR</p>
           <p className="font-display font-black text-2xl text-primary">
-            €{(allSubs.filter(s => s.status === "active" && s.tier === "private").length * 490 + allSubs.filter(s => s.status === "active" && s.tier === "institutional").length * 1490).toLocaleString()}
+            €{(allSubs.filter(s => s.status === "active" && s.tier === "private").length * (pricingConfigs[INVESTOR_TIER_TO_KEY.private]?.amount ?? 490) + allSubs.filter(s => s.status === "active" && s.tier === "institutional").length * (pricingConfigs[INVESTOR_TIER_TO_KEY.institutional]?.amount ?? 1490)).toLocaleString()}
           </p>
         </div>
         <Button size="sm" variant="outline" className="border-border text-xs h-8 gap-1.5" onClick={loadAllSubs}><RefreshCw className={`w-3 h-3 ${subsLoading ? "animate-spin" : ""}`} /> Refresh</Button>
@@ -188,8 +196,8 @@ export default function AdminSubscribers() {
                       <div>
                         <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5 block">Tier</label>
                         <select value={editTier} onChange={e => setEditTier(e.target.value)} className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-xs text-foreground outline-none focus:border-primary">
-                          <option value="private">Private — €490/mo</option>
-                          <option value="institutional">Institutional — €1,490/mo</option>
+                          <option value="private">Private — {formatPrice(pricingConfigs[INVESTOR_TIER_TO_KEY.private], { showUnit: true, fallback: "€490/mo" })}</option>
+                          <option value="institutional">Institutional — {formatPrice(pricingConfigs[INVESTOR_TIER_TO_KEY.institutional], { showUnit: true, fallback: "€1,490/mo" })}</option>
                           <option value="developer">Developer — Custom</option>
                         </select>
                       </div>

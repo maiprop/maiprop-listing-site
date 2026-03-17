@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { isPlatformAdmin } from "@/lib/authUtils";
-import { SlidersHorizontal, Save, Plus, Loader2, Shield, Euro, Trash2, Sparkles, X as XIcon } from "lucide-react";
+import { SlidersHorizontal, Save, Plus, Loader2, Shield, Euro, Trash2, Sparkles, X as XIcon, CreditCard } from "lucide-react";
 
 type PricingConfig = {
   id: string;
@@ -31,6 +31,7 @@ const PRICING_SECTIONS = [
   { key: "users", label: "Users (consumers)", module: "user_subscription", audience: "user" },
   { key: "professionals", label: "Professionals", module: "professional_subscription", audience: "professional" },
   { key: "agents", label: "Agents", module: "agent_subscription", audience: "agent" },
+  { key: "investors", label: "Investors (invitation-only)", module: "investor_subscription", audience: "investor" },
   { key: "valuation", label: "Valuation reports", module: "valuation_reports", audience: "user" },
   { key: "adhoc_user", label: "Ad-hoc (listings / users)", module: "adhoc_charges", audience: "user" },
   { key: "adhoc_pro", label: "Ad-hoc (professionals)", module: "adhoc_charges", audience: "professional" },
@@ -40,6 +41,7 @@ const MODULES = [
   "user_subscription",
   "professional_subscription",
   "agent_subscription",
+  "investor_subscription",
   "valuation_reports",
   "firesale_dashboard",
   "adhoc_charges",
@@ -49,7 +51,7 @@ const MODULES = [
 
 const AUDIENCES = ["user", "professional", "agent", "investor"] as const;
 
-/** Default rows to seed when admin clicks "Seed default pricing" — aligned with Pricing page plans */
+/** Default rows to seed when admin clicks "Seed default pricing" — aligned with Pricing page and all consumers */
 const DEFAULT_SEED: Omit<PricingConfig, "id" | "created_at" | "updated_at">[] = [
   // User / Buyer / Seller (Pricing page)
   { key: "free", label: "Free", description: "Basic search & limited features", audience: "user", module: "user_subscription", unit: "monthly", currency: "EUR", amount: 0, is_active: true, sort_order: 1, metadata: {} },
@@ -61,7 +63,10 @@ const DEFAULT_SEED: Omit<PricingConfig, "id" | "created_at" | "updated_at">[] = 
   // Agents (Pricing page: Agency Pro, Developer Pro)
   { key: "agent_basic", label: "Agency Pro", description: "Unlimited listings, CRM & analytics", audience: "agent", module: "agent_subscription", unit: "monthly", currency: "EUR", amount: 89, is_active: true, sort_order: 1, metadata: {} },
   { key: "agent_plus", label: "Agent Plus", description: "Unlimited listings & valuation", audience: "agent", module: "agent_subscription", unit: "monthly", currency: "EUR", amount: 199, is_active: true, sort_order: 2, metadata: {} },
-  // Valuation reports
+  // Investor tiers (AdminSubscribers, invitation-only)
+  { key: "investor_private", label: "Investor Private", description: "Quick Sale deal flow, AI scoring", audience: "investor", module: "investor_subscription", unit: "monthly", currency: "EUR", amount: 490, is_active: true, sort_order: 1, metadata: {} },
+  { key: "investor_institutional", label: "Investor Institutional", description: "Full deal flow & priority support", audience: "investor", module: "investor_subscription", unit: "monthly", currency: "EUR", amount: 1490, is_active: true, sort_order: 2, metadata: {} },
+  // Valuation reports (PropertyDetail, etc.)
   { key: "valuation_single", label: "Single report", description: "One-off valuation report", audience: "user", module: "valuation_reports", unit: "per_report", currency: "EUR", amount: 29, is_active: true, sort_order: 1, metadata: {} },
   { key: "valuation_bundle", label: "Bundle (5 reports)", description: "5 reports pack", audience: "user", module: "valuation_reports", unit: "bundle", currency: "EUR", amount: 99, is_active: true, sort_order: 2, metadata: {} },
   // Ad-hoc charges
@@ -243,6 +248,32 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
     );
   };
 
+  const [stripeCreatingId, setStripeCreatingId] = useState<string | null>(null);
+  const handleCreateStripePrice = async (row: PricingConfig) => {
+    if (row.amount <= 0) {
+      toast.error("Set amount > 0 before creating Stripe price");
+      return;
+    }
+    setStripeCreatingId(row.id);
+    try {
+      const { data, error } = await supabase.functions.invoke("create-stripe-price", {
+        body: { config_id: row.id },
+      });
+      if (error || data?.error) throw new Error(data?.error ?? error?.message ?? "Failed");
+      const priceId = data?.price_id;
+      if (priceId) {
+        handleMetadataChange(row.id, "stripe_price_id", priceId);
+        toast.success(`Stripe price created: ${priceId}`);
+        qc.invalidateQueries({ queryKey: ["admin-pricing-configs"] });
+        qc.invalidateQueries({ queryKey: ["pricing-configs-public"] });
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to create Stripe price");
+    } finally {
+      setStripeCreatingId(null);
+    }
+  };
+
   const content = (
         <>
         <div className="space-y-8">
@@ -331,6 +362,7 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
                             <th className="text-left py-2 pr-3">Sort</th>
                             <th className="text-left py-2 pr-3">Description</th>
                             <th className="text-left py-2 pr-3">Stripe Price ID</th>
+                            <th className="text-left py-2 pr-2">Stripe</th>
                             <th className="py-2 pl-2 text-right">Actions</th>
                           </tr>
                         </thead>
@@ -409,6 +441,22 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
                                   value={(row.metadata as Record<string, string> | undefined)?.stripe_price_id ?? ""}
                                   onChange={(e) => handleMetadataChange(row.id, "stripe_price_id", e.target.value)}
                                 />
+                              </td>
+                              <td className="py-2 pr-2">
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-7 w-7"
+                                  title="Create Stripe price from this config (amount must be > 0)"
+                                  onClick={() => handleCreateStripePrice(row)}
+                                  disabled={row.amount <= 0 || stripeCreatingId === row.id}
+                                >
+                                  {stripeCreatingId === row.id ? (
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                  ) : (
+                                    <CreditCard className="w-3 h-3 text-muted-foreground" />
+                                  )}
+                                </Button>
                               </td>
                               <td className="py-2 pl-2 text-right">
                                 <Button
