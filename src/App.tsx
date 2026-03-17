@@ -1,78 +1,140 @@
-import { lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "sonner";
+import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom";
+import { ThemeProvider } from "next-themes";
+import { HelmetProvider } from "react-helmet-async";
+import { AuthProvider } from "@/contexts/AuthContext";
 import { PropertyProvider } from "@/contexts/PropertyContext";
 import { TranslationProvider } from "@/contexts/TranslationContext";
-import { AuthProvider } from "@/hooks/useAuth";
-import { HelmetProvider } from "react-helmet-async";
-
-const Index = lazy(() => import("./pages/Index"));
-const Admin = lazy(() => import("./pages/Admin"));
-const Login = lazy(() => import("./pages/Login"));
-const NotFound = lazy(() => import("./pages/NotFound"));
-const ProtectedRoute = lazy(() => import("@/components/ProtectedRoute"));
-const PropertyPage = lazy(() => import("./pages/PropertyPage"));
-const Guides = lazy(() => import("./pages/Guides"));
-const GuideArticle = lazy(() => import("./pages/GuideArticle"));
-const Portfolio = lazy(() => import("./pages/Portfolio"));
-const Properties = lazy(() => import("./pages/Properties"));
-const ProcessPage = lazy(() => import("./pages/Process"));
-const Pricing = lazy(() => import("./pages/Pricing"));
+import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { AdminRoute } from "@/components/AdminRoute";
+import { SellerRoute } from "@/components/SellerRoute";
+import { InvestorRoute } from "@/components/InvestorRoute";
+import AIAssistantWidget from "@/components/AIAssistantWidget";
+import Index from "./pages/Index";
+import Listings from "./pages/Listings";
+import PropertyDetail from "./pages/PropertyDetail";
+import Auctions from "./pages/Auctions";
+import Firesale from "./pages/Firesale";
+import InvestorDashboard from "./pages/InvestorDashboard";
+import Professionals from "./pages/Professionals";
+import ProfessionalProfile from "./pages/ProfessionalProfile";
+import ProfessionalProfileMe from "./pages/ProfessionalProfileMe";
+import Dashboard from "./pages/Dashboard";
+import Signup from "./pages/Signup";
+import Login from "./pages/Login";
+import Onboarding from "./pages/Onboarding";
+import Messages from "./pages/Messages";
+import CreateListing from "./pages/CreateListing";
+import CreateNewBuildingListing from "./pages/CreateNewBuildingListing";
+import ResetPassword from "./pages/ResetPassword";
+import NotFound from "./pages/NotFound";
+import Projects from "./pages/Projects";
+import ProjectDetail from "./pages/ProjectDetail";
+import Portfolios from "./pages/Portfolios";
+import Pricing from "./pages/Pricing";
+import AdminDashboard from "./pages/AdminDashboard";
+import AIAssistantPage from "./pages/AIAssistantPage";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import TermsOfService from "./pages/TermsOfService";
+import CookiePolicy from "./pages/CookiePolicy";
+import BrandedVideoRoom from "./pages/BrandedVideoRoom";
+import OpenHouses from "./pages/OpenHouses";
+import OpenHouseDetail from "./pages/OpenHouseDetail";
+// Lovable marketing pages
+import Guides from "./pages/Guides";
+import GuideArticle from "./pages/GuideArticle";
+import Portfolio from "./pages/Portfolio";
+import Properties from "./pages/Properties";
+import Process from "./pages/Process";
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 5 * 60 * 1000, // 5 minutes — prevents refetch on every focus/mount
-      gcTime: 10 * 60 * 1000,   // 10 minutes garbage collection
+      retry: 0,
       refetchOnWindowFocus: false,
-      refetchOnMount: false,
+      staleTime: 30_000,
     },
   },
 });
 
-// Stable-height skeleton prevents CLS while lazy chunks load
-const PageFallback = () => <div className="min-h-screen" aria-hidden="true" />;
-const W = ({ c }: { c: React.ReactNode }) => <Suspense fallback={<PageFallback />}>{c}</Suspense>;
+function GlobalAIWidget() {
+  const loc = useLocation();
+  const hide = ["/login", "/signup", "/onboarding", "/dashboard", "/messages", "/ai-assistant"].some(p => loc.pathname.startsWith(p));
+  const isPropertyPage = loc.pathname.startsWith("/property/");
+  if (hide || isPropertyPage) return null;
+  return <AIAssistantWidget variant="floating" />;
+}
 
 const App = () => (
   <HelmetProvider>
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
+    <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
+      <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <TranslationProvider>
-          <PropertyProvider>
-            <Toaster />
-            <Sonner />
-            <BrowserRouter>
-              <Routes>
-                <Route path="/" element={<W c={<Index />} />} />
-                <Route path="/property/:id" element={<W c={<PropertyPage />} />} />
-                <Route path="/guides" element={<W c={<Guides />} />} />
-                <Route path="/guides/" element={<W c={<Guides />} />} />
-                <Route path="/guides/:slug" element={<W c={<GuideArticle />} />} />
-                <Route path="/guides/:slug/" element={<W c={<GuideArticle />} />} />
-                <Route path="/portfolio" element={<W c={<Portfolio />} />} />
-                <Route path="/portfolio/" element={<W c={<Portfolio />} />} />
-                <Route path="/trackrecord" element={<W c={<Portfolio />} />} />
-                <Route path="/trackrecord/" element={<W c={<Portfolio />} />} />
-                <Route path="/properties" element={<W c={<Properties />} />} />
-                <Route path="/properties/" element={<W c={<Properties />} />} />
-                <Route path="/process" element={<W c={<ProcessPage />} />} />
-                <Route path="/process/" element={<W c={<ProcessPage />} />} />
-                <Route path="/login" element={<W c={<Login />} />} />
-                <Route path="/pricing" element={<W c={<Pricing />} />} />
-                <Route path="/admin" element={<W c={<ProtectedRoute><Admin /></ProtectedRoute>} />} />
-                <Route path="*" element={<W c={<NotFound />} />} />
-              </Routes>
-            </BrowserRouter>
-          </PropertyProvider>
+            <PropertyProvider>
+              <TooltipProvider>
+                <Toaster />
+                <Sonner />
+                <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+                  <Routes>
+                    <Route path="/" element={<Index />} />
+                    <Route path="/listings/new" element={<ProtectedRoute><CreateListing /></ProtectedRoute>} />
+                    <Route path="/listings/new-building" element={<ProtectedRoute><CreateNewBuildingListing /></ProtectedRoute>} />
+                    <Route path="/listings" element={<Listings />} />
+                    <Route path="/property/:id" element={<PropertyDetail />} />
+                    <Route path="/auction/:id" element={<PropertyDetail />} />
+                    <Route path="/auctions" element={<Auctions />} />
+                    <Route path="/firesale" element={<Firesale />} />
+                    <Route path="/investor-dashboard" element={<InvestorRoute><InvestorDashboard /></InvestorRoute>} />
+                    <Route path="/professionals" element={<Professionals />} />
+                    <Route path="/professionals/me" element={<ProtectedRoute><ProfessionalProfileMe /></ProtectedRoute>} />
+                    <Route path="/professionals/:id" element={<ProfessionalProfile />} />
+                    <Route path="/video-room/:professionalId" element={<BrandedVideoRoom />} />
+                    <Route path="/open-houses" element={<OpenHouses />} />
+                    <Route path="/open-house/:id" element={<OpenHouseDetail />} />
+                    <Route path="/signup" element={<Signup />} />
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
+                    <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+                    <Route path="/dashboard/:section" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+                    <Route path="/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
+                    <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+                    <Route path="/terms-of-service" element={<TermsOfService />} />
+                    <Route path="/cookie-policy" element={<CookiePolicy />} />
+                    <Route path="/reset-password" element={<ResetPassword />} />
+                    <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
+                    <Route path="/projects/:id" element={<ProtectedRoute><ProjectDetail /></ProtectedRoute>} />
+                    <Route path="/portfolios" element={<ProtectedRoute><Portfolios /></ProtectedRoute>} />
+                    <Route path="/ai-assistant" element={<AIAssistantPage />} />
+                    <Route path="/pricing" element={<Pricing />} />
+                    <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+                    <Route path="/admin/pricing" element={<AdminRoute><Navigate to="/admin?tab=pricing" replace /></AdminRoute>} />
+                    {/* Lovable marketing routes */}
+                    <Route path="/guides" element={<Guides />} />
+                    <Route path="/guides/" element={<Guides />} />
+                    <Route path="/guides/:slug" element={<GuideArticle />} />
+                    <Route path="/guides/:slug/" element={<GuideArticle />} />
+                    <Route path="/portfolio" element={<Portfolio />} />
+                    <Route path="/portfolio/" element={<Portfolio />} />
+                    <Route path="/trackrecord" element={<Portfolio />} />
+                    <Route path="/trackrecord/" element={<Portfolio />} />
+                    <Route path="/properties" element={<Properties />} />
+                    <Route path="/properties/" element={<Properties />} />
+                    <Route path="/process" element={<Process />} />
+                    <Route path="/process/" element={<Process />} />
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                  <GlobalAIWidget />
+                </BrowserRouter>
+              </TooltipProvider>
+            </PropertyProvider>
           </TranslationProvider>
         </AuthProvider>
-      </TooltipProvider>
-    </QueryClientProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
   </HelmetProvider>
 );
 

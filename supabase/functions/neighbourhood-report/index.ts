@@ -1,0 +1,165 @@
+import { createClient } from "npm:@supabase/supabase-js@2";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+};
+
+async function requireAuth(req: Request): Promise<Response | null> {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return new Response(JSON.stringify({ error: "Authentication required" }), {
+      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  const { data: { user }, error } = await supabase.auth.getUser(authHeader.slice(7));
+  if (error || !user) {
+    return new Response(JSON.stringify({ error: "Invalid or expired token" }), {
+      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  return null;
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  const authErr = await requireAuth(req);
+  if (authErr) return authErr;
+
+  try {
+    const { city, address, region, propertyType, lat, lng } = await req.json();
+
+    if (!city) {
+      return new Response(
+        JSON.stringify({ error: "city is required" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const useGemini = !!GEMINI_API_KEY;
+    if (!useGemini && !LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+    const apiKey = (useGemini ? GEMINI_API_KEY : LOVABLE_API_KEY)!;
+    const aiUrl = useGemini
+      ? `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`
+      : "https://ai.gateway.lovable.dev/v1/chat/completions";
+    const aiModel = "google/gemini-2.5-flash";
+
+    const locationStr = [address, city, region, "Greece"].filter(Boolean).join(", ");
+    const coordStr = lat && lng ? ` (coords: ${lat}, ${lng})` : "";
+
+    const prompt = `You are a Greek real estate market analyst. Generate a neighbourhood intelligence report for a property at: ${locationStr}${coordStr}.
+
+Return ONLY valid JSON, no markdown, no explanation:
+{
+  "areaName": "string (specific neighbourhood name, e.g. 'Kolonaki' or 'Nea Smyrni')",
+  "pricePerSqmTrend": {
+    "current": number (EUR/m² today),
+    "oneYearAgo": number,
+    "threeYearsAgo": number,
+    "fiveYearsAgo": number,
+    "changeYoY": number (% change year-on-year, e.g. 7.2),
+    "change5Y": number (% change over 5 years)
+  },
+  "noiseLevel": {
+    "score": number (1-10, 1=silent, 10=very loud),
+    "label": "Very Quiet" | "Quiet" | "Moderate" | "Busy" | "Very Busy",
+    "notes": "string (brief description, e.g. 'Residential street, low traffic')"
+  },
+  "safetyScore": {
+    "score": number (1-100, higher=safer),
+    "label": "Excellent" | "Good" | "Average" | "Below Average",
+    "trend": "Improving" | "Stable" | "Declining",
+    "notes": "string"
+  },
+  "developmentProjects": [
+    {
+      "name": "string (realistic project name)",
+      "type": "infrastructure" | "commercial" | "residential" | "transport" | "public",
+      "status": "planned" | "under_construction" | "recently_completed",
+      "impact": "positive" | "negative" | "neutral",
+      "estimatedCompletion": "string (e.g. '2026' or 'Q3 2025')",
+      "distanceKm": number
+    }
+  ],
+  "demographics": {
+    "primaryResidents": "string (e.g. 'Young professionals and families')",
+    "avgAge": number,
+    "tourismImpact": "Low" | "Moderate" | "High"
+  },
+  "investmentOutlook": {
+    "rating": "Excellent" | "Good" | "Fair" | "Poor",
+    "summary": "string (2 sentences)"
+  },
+  "areaHighlights": ["string"] 
+}
+
+Rules:
+- Base all data on real knowledge of ${city}, Greece neighbourhoods
+- developmentProjects: include 2-4 realistic projects for the area
+- areaHighlights: 3-4 short bullet points (e.g. 'Metro line 200m away')
+- All numbers must be realistic for the Greek market
+- Only return the JSON object`;
+
+    const response = await fetch(aiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(useGemini ? {} : { Authorization: `Bearer ${apiKey}` }),
+      },
+      body: JSON.stringify(
+        useGemini
+          ? { contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.5 } }
+          : { model: aiModel, messages: [{ role: "user", content: prompt }], temperature: 0.5 }
+      ),
+    });
+
+    if (!response.ok) {
+      const status = response.status;
+      const usageLimitMsg = "AI features are temporarily unavailable due to usage limits. Please try again later or contact support.";
+      if (status === 429) return new Response(JSON.stringify({ error: usageLimitMsg }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      if (status === 402) return new Response(JSON.stringify({ error: usageLimitMsg }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      throw new Error(`AI gateway error: ${status}`);
+    }
+
+    const aiData = await response.json();
+    const raw = (useGemini ? aiData.candidates?.[0]?.content?.parts?.[0]?.text ?? "" : aiData.choices?.[0]?.message?.content ?? "")
+      .replace(/```json\s*/gi, "").replace(/```\s*/gi, "").trim();
+
+    // Extract only the outermost JSON object
+    const start = raw.indexOf("{");
+    const end = raw.lastIndexOf("}");
+    const jsonStr = start !== -1 && end !== -1 ? raw.slice(start, end + 1) : raw;
+
+    let parsed: any;
+    try {
+      parsed = JSON.parse(jsonStr);
+    } catch {
+      const repaired = jsonStr
+        .replace(/,\s*}/g, "}")
+        .replace(/,\s*]/g, "]")
+        .replace(/\)\s*}/g, "}")
+        .replace(/\)\s*,/g, ",")
+        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
+      try {
+        parsed = JSON.parse(repaired);
+      } catch {
+        throw new Error("AI returned invalid JSON");
+      }
+    }
+
+    return new Response(JSON.stringify(parsed), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (e) {
+    console.error("neighbourhood-report error:", e);
+    return new Response(
+      JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+});

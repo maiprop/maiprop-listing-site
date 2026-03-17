@@ -1,0 +1,226 @@
+import { useState, useMemo } from "react";
+import { Calendar, Video, MapPin, Check, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
+import type { Property } from "@/components/PropertyCard";
+
+interface ViewingDialogProps {
+  open: boolean;
+  onClose: () => void;
+  property: Property;
+  ownerId: string;
+  /** If false, video viewing is disabled (Pro or retailers only). */
+  canVideoView?: boolean;
+}
+
+const timeSlots = [
+  "09:00", "10:00", "11:00", "12:00", "14:00", "15:00", "16:00", "17:00", "18:00"
+];
+
+function buildDynamicDays(): { label: string; date: string; iso: string }[] {
+  const days: { label: string; date: string; iso: string }[] = [];
+  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const now = new Date();
+  for (let i = 1; i <= 7; i++) {
+    const d = new Date(now);
+    d.setDate(d.getDate() + i);
+    const month = d.toLocaleString("en-GB", { month: "short" });
+    const dayNum = d.getDate();
+    days.push({
+      label: dayNames[d.getDay()],
+      date: `${month} ${dayNum}`,
+      iso: d.toISOString().slice(0, 10),
+    });
+  }
+  return days;
+}
+
+export default function ViewingDialog({ open, onClose, property, ownerId, canVideoView = true }: ViewingDialogProps) {
+  const { user } = useAuth();
+  const [viewType, setViewType] = useState<"in-person" | "video">("in-person");
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [selectedIso, setSelectedIso] = useState<string | null>(null);
+  const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  const [note, setNote] = useState("");
+  const [confirmed, setConfirmed] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const days = useMemo(buildDynamicDays, [open]);
+
+  const handleDaySelect = (day: { label: string; date: string; iso: string }) => {
+    setSelectedDay(day.date);
+    setSelectedIso(day.iso);
+    setSelectedTime(null);
+  };
+
+  const handleBook = async () => {
+    if (!user) { toast.error("Please sign in to request a viewing"); return; }
+    if (!ownerId) { toast.error("Could not determine property owner."); return; }
+    if (!selectedIso || !selectedTime) return;
+    setLoading(true);
+    const scheduledAt = new Date(`${selectedIso}T${selectedTime}:00`);
+    const { error } = await supabase.from("viewings").insert({
+      listing_id: property.id,
+      requester_id: user.id,
+      owner_id: ownerId,
+      viewing_type: viewType === "video" ? "video" : "in_person",
+      status: "pending",
+      scheduled_at: scheduledAt.toISOString(),
+      note: note.trim() || null,
+    } as any);
+    setLoading(false);
+    if (error) {
+      toast.error("Could not submit viewing request. Please try again.");
+      return;
+    }
+    setConfirmed(true);
+    toast.success("Viewing request submitted! The property owner will be notified.");
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="bg-card border-border max-w-md">
+        <DialogHeader>
+          <DialogTitle className="font-display text-lg">
+            {confirmed ? "Viewing Request Sent! 🎉" : "Book a Viewing"}
+          </DialogTitle>
+        </DialogHeader>
+
+        {confirmed ? (
+          <div className="text-center py-6 space-y-4">
+            <div className="w-16 h-16 rounded-full bg-brand-emerald/20 flex items-center justify-center mx-auto">
+              <Check className="w-8 h-8 text-brand-emerald" />
+            </div>
+            <div>
+              <p className="font-semibold">{property.title}</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                {viewType === "video" ? "📹 Video viewing" : "🏠 In-person viewing"} on {selectedDay} at {selectedTime}
+              </p>
+            </div>
+            <div className="bg-secondary rounded-xl p-4 text-sm text-left space-y-2">
+              <p className="text-muted-foreground">Your request has been sent to the property owner. They will confirm the appointment and you will receive a notification.</p>
+              {viewType === "video" && (
+                <p className="text-primary">If video viewing is confirmed, a call link will be sent before the scheduled time.</p>
+              )}
+            </div>
+            <Button className="w-full bg-gradient-primary border-0 text-primary-foreground" onClick={onClose}>
+              Done
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {/* Property mini card */}
+            <div className="flex gap-3 p-3 bg-secondary rounded-xl">
+              <img src={property.images[0]} className="w-14 h-14 rounded-lg object-cover" alt="" />
+              <div className="min-w-0">
+                <p className="font-medium text-sm truncate">{property.title}</p>
+                <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                  <MapPin className="w-3 h-3" />
+                  {property.city}
+                </div>
+              </div>
+            </div>
+
+            {/* Viewing type */}
+            <div>
+              <label className="text-sm font-medium block mb-2">Viewing Type</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setViewType("in-person")}
+                  className={`p-3 rounded-xl border text-sm font-medium flex items-center gap-2 transition-all ${
+                    viewType === "in-person"
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border text-muted-foreground hover:border-border/80"
+                  }`}
+                >
+                  <MapPin className="w-4 h-4" />
+                  In-Person
+                </button>
+                <button
+                  onClick={() => canVideoView && setViewType("video")}
+                  disabled={!canVideoView}
+                  className={`p-3 rounded-xl border text-sm font-medium flex items-center gap-2 transition-all ${
+                    !canVideoView ? "opacity-60 cursor-not-allowed border-border" : viewType === "video"
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border text-muted-foreground hover:border-border/80"
+                  }`}
+                >
+                  <Video className="w-4 h-4" />
+                  Video Call{!canVideoView && " (Pro or retailers)"}
+                </button>
+              </div>
+            </div>
+
+            {/* Day selection */}
+            <div>
+              <label className="text-sm font-medium block mb-2">Select Day</label>
+              <div className="grid grid-cols-7 gap-1">
+                {days.map(day => (
+                  <button
+                    key={day.iso}
+                    onClick={() => handleDaySelect(day)}
+                    className={`p-2 rounded-lg text-center text-xs transition-all ${
+                      selectedDay === day.date
+                        ? "bg-gradient-primary text-primary-foreground"
+                        : "bg-secondary border border-border text-muted-foreground hover:border-primary/40"
+                    }`}
+                  >
+                    <div className="font-semibold">{day.label}</div>
+                    <div className="mt-0.5 opacity-70">{day.date.split(" ")[1]}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Time slots */}
+            {selectedDay && (
+              <div>
+                <label className="text-sm font-medium block mb-2">Select Time</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {timeSlots.map(time => (
+                    <button
+                      key={time}
+                      onClick={() => setSelectedTime(time)}
+                      className={`py-2 rounded-lg text-sm transition-all ${
+                        selectedTime === time
+                          ? "bg-gradient-primary text-primary-foreground"
+                          : "bg-secondary border border-border text-muted-foreground hover:border-primary/40"
+                      }`}
+                    >
+                      {time}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Note */}
+            <div>
+              <label className="text-sm font-medium block mb-2">Note (optional)</label>
+              <textarea
+                placeholder="Any specific requirements or questions..."
+                className="w-full bg-secondary border border-border rounded-xl p-3 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary resize-none"
+                rows={2}
+                value={note}
+                onChange={e => setNote(e.target.value)}
+              />
+            </div>
+
+            <Button
+              className="w-full bg-gradient-primary border-0 text-primary-foreground"
+              disabled={!selectedDay || !selectedTime || loading}
+              onClick={handleBook}
+            >
+              {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              <Calendar className="w-4 h-4 mr-2" />
+              Confirm Booking
+            </Button>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}

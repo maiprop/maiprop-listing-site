@@ -1,27 +1,68 @@
-project_id = "cqxcztafhnwkhxgaylne"
+project_id = "jglqlaynezspefoovqyc"
 
-[functions]
-  [functions.auth-email-hook]
-    verify_jwt = false
-  [functions.contact-lead]
-    verify_jwt = false
-  [functions.translate]
-    verify_jwt = false
-  [functions.followup-lead]
-    verify_jwt = false
-  [functions.scheduled-followups]
-    verify_jwt = false
-  [functions.location-poi]
-    verify_jwt = false
-  [functions.og-meta]
-    verify_jwt = false
-  [functions.generate-article]
-    verify_jwt = false
-  [functions.submit-lead]
-    verify_jwt = false
-  [functions.generate-description]
-    verify_jwt = false
-  [functions.notify-new-lead]
-    verify_jwt = false
-  [functions.sitemap]
-    verify_jwt = false
+[functions.ai-search]
+verify_jwt = false
+
+[functions.property-valuation]
+verify_jwt = false
+
+[functions.neighbourhood-report]
+verify_jwt = false
+
+[functions.property-pois]
+verify_jwt = false
+
+[functions.property-chat]
+verify_jwt = true
+
+[functions.smart-filters]
+verify_jwt = false
+
+[functions.pro-ai-tools]
+verify_jwt = true
+
+[functions.ai-service-match]
+verify_jwt = true
+
+[functions.sync-to-os]
+verify_jwt = false
+
+[functions.receive-from-os]
+verify_jwt = false
+
+[functions.poll-os-auctions]
+verify_jwt = false
+
+[functions.sync-firesale-to-os]
+verify_jwt = false
+
+[functions.full-sync-from-os]
+verify_jwt = false
+
+[functions.fetch-report-from-os]
+verify_jwt = false
+
+[functions.os-diagnose]
+verify_jwt = false
+
+[functions.listing-ai-assist]
+verify_jwt = true
+
+[functions.create-checkout]
+verify_jwt = true
+
+[functions.check-subscription]
+verify_jwt = true
+
+[functions.customer-portal]
+verify_jwt = true
+
+[functions.send-saved-search-alerts]
+verify_jwt = false
+
+[functions.invitation-notify]
+verify_jwt = false
+
+[functions.create-stripe-price]
+verify_jwt = true
+

@@ -32,9 +32,19 @@ cd <YOUR_PROJECT_NAME>
 # Step 3: Install the necessary dependencies.
 npm i
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Step 4: Copy .env.example to .env and add your Supabase credentials (required for the app to load).
+cp .env.example .env
+# Edit .env and set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY from your Supabase project.
+
+# Step 5: Start the development server with auto-reloading and an instant preview.
 npm run dev
 ```
+
+## App not loading?
+
+- **White screen or "Configuration Error"**: Create a `.env` file (copy from `.env.example`) and set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` from your [Supabase project dashboard](https://supabase.com/dashboard).
+- **`npm` / `npx` not found**: Ensure Node.js is installed and in your PATH. Restart the terminal after installing.
+- **Stuck on "Loading..."**: Check your internet connection; the app needs to reach Supabase. If offline, it may take up to 8 seconds before the UI appears.
 
 **Edit a file directly in GitHub**
 
