@@ -447,8 +447,8 @@ function AuctionCard({ a, favoritedIds, onToggleFav
         <div className="text-xs text-muted-foreground">Built {a.year_built}</div>
         }
         <div className="flex items-center justify-between pt-1">
-          <div className="flex items-center gap-1 font-display font-bold text-brand-gold">
-            <Euro className="w-3.5 h-3.5" />
+          <div className="flex items-center gap-1 font-display font-bold bg-gradient-primary bg-clip-text text-transparent">
+            <Euro className="w-3.5 h-3.5 text-primary" />
             {(a.auction_starting_bid ?? a.price ?? 0).toLocaleString("el-GR")}
           </div>
           {a.sqm && a.sqm > 1 &&
