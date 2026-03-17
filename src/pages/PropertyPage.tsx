@@ -105,11 +105,8 @@ const PropertyPageInner = () => {
 
   useEffect(() => {
     if (!id) return;
-    supabase.from("properties").select("*").eq("id", id).single().then(({ data, error }) => {
-      if (error || !data) { navigate("/", { replace: true }); return; }
-      setProperty(data as Property);
-      setLoading(false);
-    });
+    // Legacy "properties" table removed — redirect home
+    navigate("/", { replace: true });
   }, [id, navigate]);
 
   useEffect(() => {
