@@ -933,7 +933,7 @@ export default function Auctions() {
                       <p className="text-sm font-medium">Ownership Status, Auction Round & Est. Rental Yield</p>
                       <p className="text-xs text-muted-foreground mt-0.5">Upgrade to Pro to unlock these filters.</p>
                     </div>
-                    <Button size="sm" variant="outline" className="border-brand-gold/40 text-brand-gold hover:bg-brand-gold/10 shrink-0" asChild>
+                    <Button size="sm" variant="outline" className="border-primary/40 text-primary hover:bg-primary/10 shrink-0" asChild>
                       <Link to="/pricing">Upgrade to Pro</Link>
                     </Button>
                   </div>
