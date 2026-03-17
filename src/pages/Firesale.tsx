@@ -23,6 +23,9 @@ import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useEligibleForQuickSale } from "@/hooks/useEligibleForQuickSale";
+import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
+import { useSubscription } from "@/hooks/useSubscription";
 import { isAiUsageLimitError } from "@/lib/aiErrorUtils";
 import { toast } from "sonner";
 
@@ -52,6 +55,8 @@ const propertyTypeOptions = [
 
 export default function Firesale() {
   const { user, profile } = useAuth();
+  const { eligible } = useEligibleForQuickSale();
+  const { isPro } = useSubscription();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -67,6 +72,9 @@ export default function Firesale() {
   const [addressSuggestions, setAddressSuggestions] = useState<string[]>([]);
   const [addressLoading, setAddressLoading] = useState(false);
   const addressAbortRef = useRef<AbortController | null>(null);
+
+  const participant = getParticipantTypeFromProfile(profile);
+  const isBuyerPro = participant === "buyer" && isPro;
 
   const [form, setForm] = useState({
     address: "",
@@ -1003,7 +1011,7 @@ export default function Firesale() {
                       </div>
                     ))}
                   </div>
-                  {user ? (
+                  {user && eligible && isBuyerPro ? (
                     <Button
                       className="w-full bg-accent/10 border border-accent/30 text-accent hover:bg-accent/20 gap-2 text-xs"
                       onClick={() => navigate("/investor-dashboard")}
@@ -1017,7 +1025,7 @@ export default function Firesale() {
                       <div className="rounded-xl bg-accent/5 border border-accent/20 px-4 py-3 flex items-center gap-3">
                         <Lock className="w-4 h-4 text-accent/60 shrink-0" />
                         <p className="text-[11px] text-muted-foreground leading-snug">
-                          Access is by invitation only. Sign in and submit a request — no subscription required.
+                          Access is for approved <strong>Pro buyers</strong> only. Sign in as a buyer, upgrade to Pro, and submit an invitation request from your dashboard.
                         </p>
                       </div>
                       <Button

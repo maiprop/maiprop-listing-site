@@ -1196,7 +1196,7 @@ export default function Index() {
             playsInline
             preload="auto"
             poster="/hero-poster.jpg"
-            className="hero-video absolute inset-0 w-full h-full object-cover opacity-100 dark:opacity-70"
+            className="hero-video absolute inset-0 w-full h-full object-cover"
             style={{
               objectPosition: "center center",
               animation: "hero-zoom 45s ease-in-out infinite",
@@ -1207,13 +1207,7 @@ export default function Index() {
             {heroVideoSrc && <source src={heroVideoSrc} type="video/mp4" />}
           </video>
           {/* Strong dark overlay for text readability */}
-          <div
-            className="absolute inset-0"
-            style={{
-              background:
-                "linear-gradient(160deg, hsl(25 20% 4% / 0.88) 0%, hsl(25 15% 8% / 0.60) 55%, hsl(30 10% 10% / 0.18) 100%)",
-            }}
-          />
+          <div className="absolute inset-0 hero-overlay" />
 
           {/* Bottom fade into next section */}
           <div className="absolute inset-x-0 bottom-0 h-48 sm:h-56 bg-gradient-to-t from-background via-background/60 to-transparent" />
