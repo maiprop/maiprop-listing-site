@@ -38,7 +38,7 @@ const STATIC_PRICES: Record<string, number> = {
 
 function Sparkline({ city, up }: { city: string; up: boolean }) {
   const d = SPARKLINES[city] ?? SPARKLINES.Athens;
-  const color = up ? "hsl(192 100% 55%)" : "hsl(0 70% 55%)";
+  const color = up ? "hsl(var(--brand-indigo))" : "hsl(0 70% 55%)";
   return (
     <svg width="36" height="18" viewBox="0 0 48 22" fill="none" className="shrink-0 opacity-80">
       <path d={d} stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -107,33 +107,33 @@ export function MarketTicker() {
         background: "hsl(220 40% 6% / 0.55)",
         backdropFilter: "blur(16px)",
         WebkitBackdropFilter: "blur(16px)",
-        border: "1px solid hsl(192 100% 50% / 0.14)",
-        boxShadow: "0 0 0 1px hsl(192 100% 50% / 0.04), 0 8px 32px -8px hsl(192 100% 50% / 0.12)",
+        border: "1px solid hsl(var(--brand-indigo) / 0.14)",
+        boxShadow: "0 0 0 1px hsl(var(--brand-indigo) / 0.04), 0 8px 32px -8px hsl(var(--brand-indigo) / 0.12)",
       }}
     >
       {/* Subtle ambient glow */}
       <div
         className="absolute -inset-px rounded-2xl pointer-events-none"
-        style={{ boxShadow: "0 0 24px 2px hsl(192 100% 50% / 0.05)" }}
+        style={{ boxShadow: "0 0 24px 2px hsl(var(--brand-indigo) / 0.05)" }}
       />
 
       {/* Header */}
       <div
         className="flex items-center justify-between px-4 py-2 border-b"
-        style={{ borderColor: "hsl(192 100% 50% / 0.1)", background: "hsl(220 40% 5% / 0.4)" }}
+        style={{ borderColor: "hsl(var(--brand-indigo) / 0.1)", background: "hsl(220 40% 5% / 0.4)" }}
       >
         <div className="flex items-center gap-2">
           <span className="relative flex w-2 h-2 shrink-0">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-40" style={{ background: "hsl(192 100% 50%)" }} />
-            <span className="relative inline-flex rounded-full w-2 h-2" style={{ background: "hsl(192 100% 50%)" }} />
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-40" style={{ background: "hsl(var(--brand-indigo))" }} />
+            <span className="relative inline-flex rounded-full w-2 h-2" style={{ background: "hsl(var(--brand-indigo))" }} />
           </span>
-          <span className="text-[10px] font-black tracking-widest uppercase" style={{ color: "hsl(192 100% 75%)" }}>
+          <span className="text-[10px] font-black tracking-widest uppercase" style={{ color: "hsl(var(--brand-cyan))" }}>
             Live Market
           </span>
         </div>
-        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full" style={{ background: "hsl(192 100% 50% / 0.08)", border: "1px solid hsl(192 100% 50% / 0.18)" }}>
-          <span className="w-1 h-1 rounded-full animate-pulse" style={{ background: "hsl(192 100% 50%)" }} />
-          <span className="text-[8px] font-black tracking-widest uppercase" style={{ color: "hsl(192 100% 60%)" }}>
+        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full" style={{ background: "hsl(var(--brand-indigo) / 0.08)", border: "1px solid hsl(var(--brand-indigo) / 0.18)" }}>
+          <span className="w-1 h-1 rounded-full animate-pulse" style={{ background: "hsl(var(--brand-indigo))" }} />
+          <span className="text-[8px] font-black tracking-widest uppercase" style={{ color: "hsl(var(--brand-cyan))" }}>
             {isLoading ? "…" : "LIVE"}
           </span>
         </div>
@@ -154,14 +154,14 @@ export function MarketTicker() {
                 style={{
                   height: "36px",
                   background: isFlickering
-                    ? "hsl(192 100% 50% / 0.07)"
+                    ? "hsl(var(--brand-indigo) / 0.07)"
                     : "transparent",
-                  borderBottom: "1px solid hsl(192 100% 50% / 0.05)",
+                  borderBottom: "1px solid hsl(var(--brand-indigo) / 0.05)",
                 }}
               >
                 <span
                   className="w-24 text-[11px] font-semibold transition-colors duration-300 truncate"
-                  style={{ color: isFlickering ? "hsl(192 100% 80%)" : "hsl(210 20% 68%)" }}
+                  style={{ color: isFlickering ? "hsl(var(--brand-cyan))" : "hsl(210 20% 68%)" }}
                 >
                   {row.city}
                 </span>
@@ -170,7 +170,7 @@ export function MarketTicker() {
 
                 <span
                   className="flex-1 text-right text-[11px] font-bold tabular-nums transition-colors duration-300"
-                  style={{ color: isFlickering ? "hsl(192 100% 70%)" : "hsl(210 30% 88%)" }}
+                  style={{ color: isFlickering ? "hsl(var(--brand-cyan))" : "hsl(210 30% 88%)" }}
                 >
                   €{row.price.toLocaleString()}
                 </span>
@@ -178,8 +178,8 @@ export function MarketTicker() {
                 <span
                   className="w-14 text-right text-[10px] font-black tabular-nums px-1 py-0.5 rounded"
                   style={{
-                    color: row.up ? "hsl(192 100% 55%)" : "hsl(0 72% 60%)",
-                    background: row.up ? "hsl(192 100% 50% / 0.08)" : "hsl(0 72% 55% / 0.08)",
+                    color: row.up ? "hsl(var(--brand-indigo))" : "hsl(0 72% 60%)",
+                    background: row.up ? "hsl(var(--brand-indigo) / 0.08)" : "hsl(0 72% 55% / 0.08)",
                   }}
                 >
                   {row.up ? "▲" : "▼"} {Math.abs(row.change).toFixed(1)}%
@@ -214,7 +214,7 @@ export function MarketTicker() {
         className="px-4 pb-2 pt-0.5 text-[8px] tracking-widest uppercase flex items-center gap-1.5"
         style={{ color: "hsl(215 20% 30%)" }}
       >
-        <span className="w-1 h-1 rounded-full inline-block" style={{ background: "hsl(192 100% 50% / 0.35)" }} />
+        <span className="w-1 h-1 rounded-full inline-block" style={{ background: "hsl(var(--brand-indigo) / 0.35)" }} />
         €/m² · Greek Real Estate Index
       </div>
     </div>
