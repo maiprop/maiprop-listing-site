@@ -1204,20 +1204,12 @@ export default function Index() {
           >
             {heroVideoSrc && <source src={heroVideoSrc} type="video/mp4" />}
           </video>
-          {/* Strong dark overlay for text readability — deeper on left for copy contrast */}
+          {/* Strong dark overlay for text readability */}
           <div
             className="absolute inset-0"
             style={{
               background:
-                "linear-gradient(160deg, hsl(220 60% 3% / 0.94) 0%, hsl(220 50% 6% / 0.72) 45%, hsl(220 40% 8% / 0.20) 100%)",
-            }}
-          />
-          {/* Extra left-side vignette to maximise headline legibility */}
-          <div
-            className="absolute inset-0"
-            style={{
-              background:
-                "radial-gradient(ellipse 60% 100% at 0% 50%, hsl(220 60% 3% / 0.55) 0%, transparent 70%)",
+                "linear-gradient(160deg, hsl(25 20% 4% / 0.88) 0%, hsl(25 15% 8% / 0.60) 55%, hsl(30 10% 10% / 0.18) 100%)",
             }}
           />
 
@@ -1264,11 +1256,7 @@ export default function Index() {
               {/* Headline */}
               <h1
                 className="font-display font-black leading-[1.08] mb-4 sm:mb-6 animate-fade-in-up text-white"
-                style={{
-                  fontSize: "clamp(1.75rem, 7vw, 4.5rem)",
-                  animationDelay: "0.08s",
-                  textShadow: "0 2px 24px hsl(220 60% 3% / 0.7), 0 1px 4px hsl(220 60% 3% / 0.5)",
-                }}
+                style={{ fontSize: "clamp(1.75rem, 7vw, 4.5rem)", animationDelay: "0.08s" }}
               >
                 Find your perfect
                 <br className="hidden xs:inline" /> property in Greece
@@ -1282,10 +1270,10 @@ export default function Index() {
               {/* ── Search Card ── */}
               <div className="animate-fade-in-up" style={{ animationDelay: "0.28s" }}>
                 <div
-                  className="bg-card/50 backdrop-blur-3xl border border-white/10 rounded-2xl overflow-visible"
+                  className="bg-card/85 backdrop-blur-2xl border border-border/70 rounded-2xl shadow-elevated overflow-visible"
                   style={{
                     boxShadow:
-                      "0 12px 48px -8px hsl(var(--primary) / 0.18), 0 2px 0 0 hsl(var(--primary) / 0.06), inset 0 1px 0 0 hsl(var(--foreground) / 0.06)",
+                      "0 12px 48px -8px hsl(var(--primary) / 0.2), 0 2px 0 0 hsl(var(--primary) / 0.08), inset 0 1px 0 0 hsl(var(--foreground) / 0.04)",
                   }}
                 >
                   {/* Tabs — scrollable on mobile */}
@@ -1294,7 +1282,7 @@ export default function Index() {
                       { label: "Buy", emoji: "🏠", color: "" },
                       { label: "Rent", emoji: "🔑", color: "" },
                       { label: "Auctions", emoji: "⚖️", color: "" },
-                      { label: "Professionals", emoji: "👔", color: "" },
+                      { label: "Professionals", emoji: "👔", color: "text-cyan-400" },
                     ].map(({ label, emoji, color }) => (
                       <button
                         key={label}

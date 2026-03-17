@@ -77,14 +77,13 @@ export function Navbar() {
   return (
     <>
     <header
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         scrolled
-          ? "bg-background/75 backdrop-blur-2xl border-b border-border/40 shadow-card"
+          ? "bg-background/80 backdrop-blur-xl border-b border-border/50 shadow-card"
           : hasDarkHero
             ? "bg-transparent border-b border-transparent"
             : "bg-background/60 backdrop-blur-md border-b border-border/30"
       }`}
-      style={scrolled ? { boxShadow: "0 1px 0 0 hsl(192 100% 50% / 0.08), 0 8px 32px -8px hsl(220 40% 4% / 0.6)" } : undefined}
     >
       <div className="container flex items-center justify-between h-16">
         {/* Logo */}

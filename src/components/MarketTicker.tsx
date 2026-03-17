@@ -147,19 +147,16 @@ export function MarketTicker() {
         >
           {scrollRows.map((row, i) => {
             const isFlickering = flickeringCity === row.city && i < rows.length;
-            const isFirstSet = i < rows.length;
             return (
               <div
                 key={`${row.city}-${i}`}
-                className="flex items-center gap-2.5 px-4 transition-all duration-300 animate-fade-in-up"
+                className="flex items-center gap-2.5 px-4 transition-all duration-300"
                 style={{
                   height: "36px",
                   background: isFlickering
                     ? "hsl(192 100% 50% / 0.07)"
                     : "transparent",
                   borderBottom: "1px solid hsl(192 100% 50% / 0.05)",
-                  animationDelay: isFirstSet ? `${i * 0.06}s` : "0s",
-                  animationFillMode: "both",
                 }}
               >
                 <span
