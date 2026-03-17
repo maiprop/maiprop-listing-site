@@ -71,6 +71,7 @@ export default {
           "purple-soft": "hsl(var(--brand-purple-soft))",
           navy: "hsl(var(--brand-navy))",
           "navy-mid": "hsl(var(--brand-navy-mid))",
+          indigo: "hsl(var(--brand-indigo))",
           slate: "hsl(var(--brand-slate))",
           // Auction subtle tones
           auction: "hsl(var(--brand-auction))",

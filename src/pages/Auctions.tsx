@@ -731,8 +731,8 @@ export default function Auctions() {
         <div className="border-b border-border py-6 sm:py-12" style={{background: "linear-gradient(135deg, hsl(var(--brand-navy)) 0%, hsl(var(--brand-purple-dark)) 55%, hsl(var(--brand-purple)) 100%)"}}>
           <div className="container">
             <div className="flex items-center gap-2 mb-2 sm:mb-3">
-              <Gavel className="w-4 h-4 sm:w-5 sm:h-5 text-brand-cyan" />
-              <span className="text-[10px] sm:text-xs font-bold text-brand-cyan uppercase tracking-widest">Greek Auctions · Live Data</span>
+              <Gavel className="w-4 h-4 sm:w-5 sm:h-5 text-brand-indigo" />
+              <span className="text-[10px] sm:text-xs font-bold text-brand-indigo uppercase tracking-widest">Greek Auctions · Live Data</span>
             </div>
             <h1 className="font-display text-xl sm:text-4xl font-bold mb-1.5 sm:mb-2 text-white">Property Auctions</h1>
             <p className="text-white/60 text-xs sm:text-base max-w-xl">
@@ -741,7 +741,7 @@ export default function Auctions() {
             <div className="grid grid-cols-3 gap-2 sm:gap-3 mt-4 sm:mt-8 max-w-2xl">
               {auctionStats.map((s) =>
               <div key={s.label} className="rounded-xl p-2.5 sm:p-5 text-center flex flex-col items-center justify-center border border-white/10 bg-white/5 backdrop-blur-sm">
-                  <div className="font-display text-lg sm:text-3xl font-bold text-brand-cyan">{s.value}</div>
+                  <div className="font-display text-lg sm:text-3xl font-bold text-brand-indigo">{s.value}</div>
                   <div className="text-[9px] sm:text-xs text-white/50 mt-0.5 sm:mt-1.5 font-medium leading-tight">{s.label}</div>
                 </div>
               )}

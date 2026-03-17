@@ -1198,10 +1198,10 @@ export default function Index() {
             poster="/hero-poster.jpg"
             className="hero-video absolute inset-0 w-full h-full object-cover opacity-100 dark:opacity-70"
             style={{
+              objectPosition: "center center",
+              animation: "hero-zoom 45s ease-in-out infinite",
+              backfaceVisibility: "hidden",
               willChange: "transform",
-              transform: "translateZ(0)",
-              animation: "hero-zoom 30s ease-in-out infinite alternate",
-              objectPosition: "80% 30%",
             }}
           >
             {heroVideoSrc && <source src={heroVideoSrc} type="video/mp4" />}
@@ -1223,7 +1223,7 @@ export default function Index() {
           className="absolute inset-0 z-0 opacity-[0.03]"
           style={{
             backgroundImage:
-              "linear-gradient(hsl(192 100% 50%) 1px, transparent 1px), linear-gradient(90deg, hsl(192 100% 50%) 1px, transparent 1px)",
+              "linear-gradient(hsl(var(--brand-indigo)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--brand-indigo)) 1px, transparent 1px)",
             backgroundSize: "60px 60px",
           }}
         />
@@ -1231,7 +1231,7 @@ export default function Index() {
         {/* Glow orb */}
         <div
           className="absolute top-1/4 right-1/4 w-[500px] h-[500px] rounded-full blur-[120px] opacity-10 z-0"
-          style={{ background: "radial-gradient(hsl(192 100% 50%), hsl(270 75% 62%), transparent 70%)" }}
+          style={{ background: "radial-gradient(hsl(var(--brand-cyan)), hsl(var(--brand-indigo)), hsl(var(--brand-purple)), transparent 70%)" }}
         />
 
         <div className="container relative z-10 pt-20 pb-8 sm:pt-28 sm:pb-16 lg:pl-16 xl:pl-24">
@@ -1242,12 +1242,12 @@ export default function Index() {
               <div className="relative inline-flex mb-3 sm:mb-7 animate-fade-in-up" style={{ animationDelay: "0s" }}>
                 <span
                   className="absolute inset-0 rounded-full animate-pulse"
-                  style={{ boxShadow: "0 0 0 4px hsl(192 100% 50% / 0.18), 0 0 18px 4px hsl(192 100% 50% / 0.12)" }}
+                  style={{ boxShadow: "0 0 0 4px hsl(var(--brand-indigo) / 0.18), 0 0 18px 4px hsl(var(--brand-purple) / 0.12)" }}
                 />
                 <div className="relative inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/15 border border-white/30 backdrop-blur-sm">
                   <span className="relative flex w-2 h-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-300 opacity-60" />
-                    <span className="relative inline-flex rounded-full w-2 h-2 bg-cyan-300" />
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-60" style={{ background: "hsl(var(--brand-indigo))" }} />
+                    <span className="relative inline-flex rounded-full w-2 h-2" style={{ background: "hsl(var(--brand-indigo))" }} />
                   </span>
                   <span className="text-[11px] sm:text-xs font-semibold text-white">Greece's #1 AI-Powered Property Platform</span>
                 </div>
@@ -1353,7 +1353,7 @@ export default function Index() {
             <div className="hidden lg:block animate-fade-in-up relative" style={{ animationDelay: "0.25s" }}>
               <div
                 className="absolute -inset-6 rounded-3xl blur-3xl opacity-15"
-                style={{ background: "radial-gradient(ellipse, hsl(192 100% 50%), hsl(270 75% 62%), transparent 70%)" }}
+                style={{ background: "radial-gradient(ellipse, hsl(var(--brand-cyan)), hsl(var(--brand-indigo)), hsl(var(--brand-purple)), transparent 70%)" }}
               />
               <div className="relative">
                 <MarketTicker />
