@@ -8,9 +8,10 @@ import { useState, useEffect } from "react";
 import {
   MailPlus, Loader2, Check, X, ChevronDown, ChevronUp,
   Building2, Globe, TrendingUp, DollarSign,
-  ExternalLink, RefreshCw, Filter, MessageSquare
+  ExternalLink, RefreshCw, Filter, MessageSquare, Mail
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { isPlatformAdmin } from "@/lib/authUtils";
@@ -60,6 +61,26 @@ function ExpandedDetail({ label, value }: { label: string; value: string | null 
   );
 }
 
+async function sendNotificationEmail(params: {
+  type: "approved" | "rejected";
+  email: string;
+  full_name: string | null;
+  tier?: string;
+  rejection_reason?: string;
+}) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return;
+
+  const { error } = await supabase.functions.invoke("invitation-notify", {
+    body: params,
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
+
+  if (error) {
+    console.warn("Email notification failed (non-fatal):", error.message);
+  }
+}
+
 export default function AdminInvitationRequests() {
   const { profile } = useAuth();
   const [requests, setRequests] = useState<InvitationRequest[]>([]);
@@ -69,6 +90,10 @@ export default function AdminInvitationRequests() {
   const [filterStatus, setFilterStatus] = useState<"all" | "pending" | "approved" | "rejected">("all");
   // Per-request tier selection for approval
   const [tierMap, setTierMap] = useState<Record<string, string>>({});
+  // Per-request rejection reason
+  const [rejectionReasonMap, setRejectionReasonMap] = useState<Record<string, string>>({});
+  // Track which cards have the rejection input open
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
 
   const isAdmin = isPlatformAdmin(profile);
 
@@ -88,6 +113,7 @@ export default function AdminInvitationRequests() {
   }, [isAdmin]);
 
   const getTier = (id: string) => tierMap[id] ?? "private";
+  const getRejectionReason = (id: string) => rejectionReasonMap[id] ?? "";
 
   const approve = async (req: InvitationRequest) => {
     if (!req.user_id) {
@@ -105,7 +131,7 @@ export default function AdminInvitationRequests() {
 
       // 2. Auto-create investor_subscriptions (upsert by user_id)
       const tier = getTier(req.id);
-      const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(); // 1 year
+      const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
       const { error: subErr } = await supabase
         .from("investor_subscriptions" as any)
         .upsert(
@@ -120,8 +146,16 @@ export default function AdminInvitationRequests() {
         );
       if (subErr) throw subErr;
 
+      // 3. Send email notification (fire-and-forget)
+      sendNotificationEmail({
+        type: "approved",
+        email: req.email,
+        full_name: req.full_name,
+        tier,
+      });
+
       setRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: "approved" } : r));
-      toast.success(`✅ Approved & subscription created (${tier}, 1 year)`);
+      toast.success(`✅ Approved & subscription created (${tier}, 1 year) — email sent`);
     } catch (e) {
       toast.error((e as Error)?.message ?? "Could not approve");
     } finally {
@@ -129,16 +163,32 @@ export default function AdminInvitationRequests() {
     }
   };
 
-  const reject = async (id: string) => {
-    setUpdating(id);
+  const openRejectPanel = (id: string) => {
+    setRejectingId(id);
+    if (!expanded || expanded !== id) setExpanded(id);
+  };
+
+  const confirmReject = async (req: InvitationRequest) => {
+    setUpdating(req.id);
+    const reason = getRejectionReason(req.id);
     try {
       const { error } = await supabase
         .from("invitation_requests" as any)
         .update({ status: "rejected" })
-        .eq("id", id);
+        .eq("id", req.id);
       if (error) throw error;
-      setRequests(prev => prev.map(r => r.id === id ? { ...r, status: "rejected" } : r));
-      toast.success("Request rejected");
+
+      // Send rejection email (fire-and-forget)
+      sendNotificationEmail({
+        type: "rejected",
+        email: req.email,
+        full_name: req.full_name,
+        rejection_reason: reason || undefined,
+      });
+
+      setRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: "rejected" } : r));
+      setRejectingId(null);
+      toast.success("Request rejected" + (reason ? " — email sent with reason" : " — email sent"));
     } catch (e) {
       toast.error((e as Error)?.message ?? "Could not reject");
     } finally {
@@ -176,7 +226,7 @@ export default function AdminInvitationRequests() {
             <MailPlus className="w-5 h-5 text-primary" /> Invitation Requests
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Approve to automatically activate a 1-year investor subscription.
+            Approve to automatically activate a 1-year investor subscription. Email notifications are sent automatically.
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={load} className="gap-2 h-8 text-xs">
@@ -221,6 +271,7 @@ export default function AdminInvitationRequests() {
           {filtered.map(req => {
             const isExpanded = expanded === req.id;
             const isUpdating = updating === req.id;
+            const isRejectOpen = rejectingId === req.id;
             return (
               <div
                 key={req.id}
@@ -314,17 +365,22 @@ export default function AdminInvitationRequests() {
                             onClick={() => approve(req)}
                             disabled={isUpdating}
                           >
-                            {isUpdating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                            {isUpdating && !isRejectOpen ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
                             Approve
                           </Button>
                           <Button
                             size="sm"
                             variant="outline"
-                            className="h-8 text-xs gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10"
-                            onClick={() => reject(req.id)}
+                            className={`h-8 text-xs gap-1.5 border-destructive/30 transition-colors ${
+                              isRejectOpen
+                                ? "bg-destructive/10 text-destructive"
+                                : "text-destructive hover:bg-destructive/10"
+                            }`}
+                            onClick={() => isRejectOpen ? setRejectingId(null) : openRejectPanel(req.id)}
                             disabled={isUpdating}
                           >
-                            <X className="w-3 h-3" /> Reject
+                            <MessageSquare className="w-3 h-3" />
+                            {isRejectOpen ? "Cancel" : "Reject"}
                           </Button>
                         </>
                       )}
@@ -337,6 +393,43 @@ export default function AdminInvitationRequests() {
                     </div>
                   </div>
                 </div>
+
+                {/* Rejection reason panel */}
+                {isRejectOpen && req.status === "pending" && (
+                  <div className="border-t border-destructive/20 bg-destructive/5 px-4 sm:px-5 py-4">
+                    <div className="flex items-start gap-2 mb-2">
+                      <MessageSquare className="w-3.5 h-3.5 text-destructive mt-0.5 shrink-0" />
+                      <p className="text-xs font-medium text-destructive">Rejection reason (sent to applicant by email)</p>
+                    </div>
+                    <Textarea
+                      placeholder="Optional: explain why this application was declined. This will be included in the notification email sent to the applicant."
+                      value={getRejectionReason(req.id)}
+                      onChange={e => setRejectionReasonMap(prev => ({ ...prev, [req.id]: e.target.value }))}
+                      className="min-h-[80px] text-xs bg-background border-destructive/30 focus-visible:ring-destructive/30 resize-none"
+                      disabled={isUpdating}
+                    />
+                    <div className="flex items-center gap-2 mt-3 justify-end">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs"
+                        onClick={() => setRejectingId(null)}
+                        disabled={isUpdating}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="h-7 text-xs gap-1.5 bg-destructive hover:bg-destructive/90 text-destructive-foreground border-0"
+                        onClick={() => confirmReject(req)}
+                        disabled={isUpdating}
+                      >
+                        {isUpdating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Mail className="w-3 h-3" />}
+                        Confirm Rejection & Send Email
+                      </Button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Expanded details */}
                 {isExpanded && (
