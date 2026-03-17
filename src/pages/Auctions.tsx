@@ -303,12 +303,12 @@ function yieldRange(bucket: string): [number, number] | null {
 }
 
 const OWNERSHIP_BADGE: Record<string, {label: string;cls: string;}> = {
-  full: { label: "Πλήρης κυριότητα", cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/25" },
-  bare: { label: "Ψιλή κυριότητα", cls: "bg-amber-500/15 text-amber-400 border-amber-500/25" },
-  common: { label: "Εξ αδιαιρέτου", cls: "bg-sky-500/15 text-sky-400 border-sky-500/25" },
-  usufruct: { label: "Επικαρπία", cls: "bg-violet-500/15 text-violet-400 border-violet-500/25" },
-  vertical: { label: "Κάθετη ιδιοκτησία", cls: "bg-cyan-500/15 text-cyan-400 border-cyan-500/25" },
-  horizontal: { label: "Οριζόντια ιδιοκτησία", cls: "bg-indigo-500/15 text-indigo-400 border-indigo-500/25" }
+  full: { label: "Πλήρης κυριότητα", cls: "bg-primary/15 text-primary border-primary/25" },
+  bare: { label: "Ψιλή κυριότητα", cls: "bg-brand-gold/15 text-brand-gold border-brand-gold/25" },
+  common: { label: "Εξ αδιαιρέτου", cls: "bg-accent/15 text-accent border-accent/25" },
+  usufruct: { label: "Επικαρπία", cls: "bg-muted text-muted-foreground border-border" },
+  vertical: { label: "Κάθετη ιδιοκτησία", cls: "bg-primary/10 text-primary border-primary/20" },
+  horizontal: { label: "Οριζόντια ιδιοκτησία", cls: "bg-secondary text-foreground border-border" }
 };
 
 type ViewMode = "list" | "map";
@@ -327,7 +327,7 @@ function daysUntil(dateStr?: string | null): number {
 
 function countdownBadge(days: number): {label: string;cls: string;} | null {
   if (days <= 0) return { label: "Today!", cls: "bg-destructive text-destructive-foreground" };
-  if (days === 1) return { label: "Tomorrow", cls: "bg-amber-500 text-white" };
+  if (days === 1) return { label: "Tomorrow", cls: "bg-brand-gold text-background" };
   if (days <= 7) return { label: `${days} days left`, cls: "bg-primary/80 text-primary-foreground" };
   return null;
 }
@@ -949,7 +949,7 @@ export default function Auctions() {
               {filterType && <button onClick={() => setFilterType("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors capitalize">{filterType} <X className="w-3 h-3" /></button>}
               {filterBidRange && <button onClick={() => setFilterBidRange("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{BID_RANGES.find((r) => r.value === filterBidRange)?.label} <X className="w-3 h-3" /></button>}
               {filterYearRange && <button onClick={() => setFilterYearRange("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{YEAR_RANGES.find((r) => r.value === filterYearRange)?.label} <X className="w-3 h-3" /></button>}
-              {(isPro || isMaiPropOsUser) && filterOwnership && <button onClick={() => setFilterOwnership("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-sky-500/10 border border-sky-500/20 text-xs text-sky-400 hover:bg-sky-500/20 transition-colors">{OWNERSHIP_STATUSES.find((s) => s.value === filterOwnership)?.label} <X className="w-3 h-3" /></button>}
+              {(isPro || isMaiPropOsUser) && filterOwnership && <button onClick={() => setFilterOwnership("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent hover:bg-accent/20 transition-colors">{OWNERSHIP_STATUSES.find((s) => s.value === filterOwnership)?.label} <X className="w-3 h-3" /></button>}
               {(isPro || isMaiPropOsUser) && filterRound && <button onClick={() => setFilterRound("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-brand-gold/10 border border-brand-gold/20 text-xs text-brand-gold hover:bg-brand-gold/20 transition-colors">{roundOptions.find((o) => o.value === filterRound)?.label || `Round ${filterRound}`} <X className="w-3 h-3" /></button>}
               {(isPro || isMaiPropOsUser) && filterYield && <button onClick={() => setFilterYield("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-brand-gold/10 border border-brand-gold/20 text-xs text-brand-gold hover:bg-brand-gold/20 transition-colors">Yield: {filterYield.replace("_", " ")} <X className="w-3 h-3" /></button>}
               <button onClick={clearFilters} className="text-xs text-muted-foreground hover:text-foreground ml-1">Clear all</button>
@@ -962,7 +962,7 @@ export default function Auctions() {
         <div className="container pb-6">
             {isLoading ?
           <div className="flex items-center justify-center h-[560px] rounded-2xl bg-card border border-border">
-                <Loader2 className="w-6 h-6 animate-spin text-brand-gold" />
+                <Loader2 className="w-6 h-6 animate-spin text-primary" />
               </div> :
           mappableCount === 0 ?
           <div className="flex flex-col items-center justify-center h-[560px] rounded-2xl bg-card border border-border gap-3">
