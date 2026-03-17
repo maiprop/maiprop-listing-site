@@ -383,6 +383,7 @@ export default function InvestorDashboard() {
   const canAccessDealFlow = isPlatformAdmin(profile) || (subscribed && isInvestorType);
   const [showGate, setShowGate] = useState(false);
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
+  const [showInvitationModal, setShowInvitationModal] = useState(false);
 
   // Expiry warning
   const daysLeft = daysUntilExpiry(subscription?.expires_at ?? null);

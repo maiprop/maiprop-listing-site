@@ -382,7 +382,7 @@ export function Navbar() {
             { to: "/listings", icon: List, label: "Listings" },
             { to: "/auctions", icon: Gavel, label: "Auctions" },
             { to: "/firesale", icon: Flame, label: "Quick Sale", accent: "text-destructive" },
-            { to: "/open-houses", icon: DoorOpen, label: "Open Houses", accent: "text-emerald-600" },
+            { to: "/open-houses", icon: DoorOpen, label: "Open Houses", accent: "text-primary" },
             { to: "/ai-assistant", icon: Sparkles, label: "AI" },
             { to: user ? "/dashboard" : "/signup", icon: user ? LayoutDashboard : User, label: user ? "Dashboard" : "Get Started" },
           ].map(({ to, icon: Icon, label, accent }) => {

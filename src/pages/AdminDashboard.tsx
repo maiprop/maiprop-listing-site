@@ -19,7 +19,7 @@ import AdminInvitationRequests from "@/components/AdminInvitationRequests";
 import { useMyListings } from "@/hooks/useListings";
 import { Button } from "@/components/ui/button";
 
-type AdminTab = "pipeline" | "investor-screening" | "subscribers" | "pricing" | "os-sync" | "open-houses" | "reports";
+type AdminTab = "pipeline" | "investor-screening" | "subscribers" | "pricing" | "os-sync" | "open-houses" | "reports" | "invitations";
 
 export default function AdminDashboard() {
   const [searchParams] = useSearchParams();
@@ -95,7 +95,7 @@ export default function AdminDashboard() {
             <div className="space-y-6">
               <div>
                 <h2 className="font-display text-lg font-semibold flex items-center gap-2">
-                  <DoorOpen className="w-5 h-5 text-emerald-500" /> Open House Management
+                  <DoorOpen className="w-5 h-5 text-primary" /> Open House Management
                 </h2>
                 <p className="text-sm text-muted-foreground mt-1">All open house registrations, offers, and controls for your listings.</p>
               </div>
