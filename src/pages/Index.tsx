@@ -1204,12 +1204,20 @@ export default function Index() {
           >
             {heroVideoSrc && <source src={heroVideoSrc} type="video/mp4" />}
           </video>
-          {/* Strong dark overlay for text readability */}
+          {/* Strong dark overlay for text readability — deeper on left for copy contrast */}
           <div
             className="absolute inset-0"
             style={{
               background:
-                "linear-gradient(160deg, hsl(25 20% 4% / 0.88) 0%, hsl(25 15% 8% / 0.60) 55%, hsl(30 10% 10% / 0.18) 100%)",
+                "linear-gradient(160deg, hsl(220 60% 3% / 0.94) 0%, hsl(220 50% 6% / 0.72) 45%, hsl(220 40% 8% / 0.20) 100%)",
+            }}
+          />
+          {/* Extra left-side vignette to maximise headline legibility */}
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "radial-gradient(ellipse 60% 100% at 0% 50%, hsl(220 60% 3% / 0.55) 0%, transparent 70%)",
             }}
           />
 
