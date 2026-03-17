@@ -6,10 +6,10 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import {
-  Check, X, Zap, Flame, Users, Briefcase, UserCheck,
+  Check, Zap, Users, Briefcase, UserCheck,
   TrendingUp, BarChart2, Bell, Star, Shield, Filter, ArrowRight,
-  Crown, Sparkles, Building2, Gavel, Globe2, Home, Wrench,
-  ChevronRight, MessageSquare, Eye, FileText, Layers, FolderKanban,
+  Crown, Sparkles, Building2, Gavel, Home,
+  MessageSquare, Eye, FileText, FolderKanban,
   Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
