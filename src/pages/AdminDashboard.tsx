@@ -19,7 +19,7 @@ import AdminInvitationRequests from "@/components/AdminInvitationRequests";
 import { useMyListings } from "@/hooks/useListings";
 import { Button } from "@/components/ui/button";
 
-type AdminTab = "pipeline" | "investor-screening" | "subscribers" | "pricing" | "os-sync" | "open-houses" | "reports";
+type AdminTab = "pipeline" | "investor-screening" | "subscribers" | "pricing" | "os-sync" | "open-houses" | "reports" | "invitations";
 
 export default function AdminDashboard() {
   const [searchParams] = useSearchParams();
