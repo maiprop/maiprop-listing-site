@@ -3,7 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { isBuySideRole, isPlatformAdmin } from "@/lib/authUtils";
 import { ProtectedRoute } from "./ProtectedRoute";
 
-/** Protects investor dashboard. Buy-side roles (investor, institutional) or platform admin can access. */
+/** Protects investor dashboard. Buy-side roles (investor, institutional) or platform admin can access. Platform admin always has visibility. */
 export function InvestorRoute({ children }: { children: React.ReactNode }) {
   return (
     <ProtectedRoute>

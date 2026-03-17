@@ -10,9 +10,12 @@ import {
   FolderOpen, LayoutGrid, Lock, Zap,
 } from "lucide-react";
 import { useSubscription } from "@/hooks/useSubscription";
+import { startOfCurrentMonth } from "@/hooks/usePlanLimits";
+import { DashboardPlanCard } from "@/components/DashboardPlanCard";
 import { useProfessionalAvailability } from "@/hooks/useProfessionalServices";
 import { Progress } from "@/components/ui/progress";
 import ContactsCRM from "@/components/ContactsCRM";
+import LeadsCRM from "@/components/LeadsCRM";
 import OpenHouseDashboardSection from "@/components/OpenHouseDashboardSection";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -23,6 +26,7 @@ import { useFavorites } from "@/hooks/useFavorites";
 import { useViewings, useUpdateViewing } from "@/hooks/useViewings";
 import { useSavedSearches, useDeleteSavedSearch, useToggleSavedSearchAlert } from "@/hooks/useSavedSearches";
 import { useAuctionAlerts, useDeleteAuctionAlert, useUpdateAuctionAlert } from "@/hooks/useAuctionAlerts";
+import { usePrivateOwnerAdAlert } from "@/hooks/usePrivateOwnerAdAlert";
 import { useMyProfessional, useProfessionalServices, useUpdateProfessional } from "@/hooks/useProfessionalServices";
 import { useStartConversation } from "@/hooks/useMessages";
 import { AuctionAlertModal } from "@/components/AuctionAlertModal";
@@ -32,10 +36,39 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { getParticipantTypeFromProfile, getOwnerParticipantType } from "@/lib/participantConfig";
+import { getParticipantTypeFromProfile, getOwnerParticipantType, type ParticipantId } from "@/lib/participantConfig";
 import { dbListingToCard } from "@/lib/listingUtils";
 import { useProjects, useCreateProject, useUpdateProject, useDeleteProject } from "@/hooks/useProjects";
 import { usePortfolios, usePortfolio, useCreatePortfolio, useUpdatePortfolio, useDeletePortfolio } from "@/hooks/usePortfolios";
+
+function ContactsAndLeadsSection({ initialTab = "contacts" }: { initialTab?: "contacts" | "leads" }) {
+  const [tab, setTab] = useState<"contacts" | "leads">(initialTab);
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-2 border-b border-border pb-2">
+        <button
+          onClick={() => setTab("contacts")}
+          className={cn(
+            "px-4 py-2 text-sm font-medium rounded-t-lg transition-colors",
+            tab === "contacts" ? "bg-primary text-primary-foreground" : "bg-secondary/60 text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <Users className="w-4 h-4 inline mr-2" /> Contacts
+        </button>
+        <button
+          onClick={() => setTab("leads")}
+          className={cn(
+            "px-4 py-2 text-sm font-medium rounded-t-lg transition-colors",
+            tab === "leads" ? "bg-primary text-primary-foreground" : "bg-secondary/60 text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <Briefcase className="w-4 h-4 inline mr-2" /> Leads
+        </button>
+      </div>
+      {tab === "contacts" ? <ContactsCRM /> : <LeadsCRM />}
+    </div>
+  );
+}
 
 const SAVED_TABS = [
   { label: "All", value: "" }, { label: "Sale", value: "sale" },
@@ -151,18 +184,30 @@ const NAV_BY_TYPE: Record<string, NavKey[]> = {
   buyer:         ["overview", "saved", "saved-searches", "open-houses", "messages", "viewings", "auctions", "profile", "settings"],
   seller:        ["overview", "listings", "saved", "saved-searches", "messages", "viewings", "open-houses", "profile", "settings"],
   investor:      ["overview", "deal-flow", "saved", "saved-searches", "messages", "viewings", "auctions", "open-houses", "profile", "settings"],
-  agent:         ["overview", "deal-flow", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "open-houses", "contacts", "profile", "settings"],
-  institutional: ["overview", "deal-flow", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "open-houses", "contacts", "profile", "settings"],
-  developer:     ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "contacts", "projects", "portfolios", "profile", "settings"],
-  professional:  ["overview", "services", "booking", "leads", "analytics", "messages", "viewings", "profile", "settings"],
+  agent:         ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "open-houses", "leads", "contacts", "profile", "settings"],
+  institutional: ["overview", "deal-flow", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "open-houses", "leads", "contacts", "profile", "settings"],
+  developer:     ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "leads", "contacts", "projects", "portfolios", "profile", "settings"],
+  professional:  ["overview", "services", "booking", "leads", "contacts", "analytics", "messages", "viewings", "profile", "settings"],
   admin:         ["overview", "deal-flow", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "open-houses", "services", "booking", "leads", "contacts", "projects", "portfolios", "profile", "settings"],
 };
 
-function getNavItemsForBioType(bioType: string | null, role: DashboardRole) {
-  // Admin always gets admin nav (includes Admin Dashboard / Quick Sale pipeline)
+// Free tier: fewer nav items (no analytics, no CRM/contacts for agent)
+const NAV_BY_TYPE_FREE: Record<string, NavKey[]> = {
+  buyer:         ["overview", "saved", "saved-searches", "messages", "viewings", "auctions", "profile", "settings"],
+  seller:        ["overview", "listings", "messages", "viewings", "profile", "settings"],
+  investor:      ["overview", "deal-flow", "saved", "messages", "viewings", "auctions", "profile", "settings"],
+  agent:         ["overview", "listings", "saved", "messages", "viewings", "auctions", "profile", "settings"],
+  institutional: ["overview", "deal-flow", "listings", "saved", "messages", "viewings", "auctions", "profile", "settings"],
+  developer:     ["overview", "listings", "messages", "profile", "settings"],
+  professional:  ["overview", "services", "leads", "messages", "profile", "settings"],
+  admin:         ["overview", "deal-flow", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "open-houses", "services", "booking", "leads", "contacts", "projects", "portfolios", "profile", "settings"],
+};
+
+function getNavItemsForBioType(bioType: string | null, role: DashboardRole, isPro: boolean) {
   if (role === "admin") return ALL_NAV_ITEMS.filter(i => NAV_BY_TYPE.admin.includes(i.key));
   const key = bioType ?? (role === "seller_landlord" ? "seller" : role === "professional" ? "professional" : role === "agent" ? "agent" : role === "investor" ? "investor" : role === "institutional" ? "institutional" : role === "developer" ? "developer" : "buyer");
-  const keys = NAV_BY_TYPE[key] ?? NAV_BY_TYPE.buyer;
+  const navMap = !isPro && key !== "admin" ? NAV_BY_TYPE_FREE : NAV_BY_TYPE;
+  const keys = navMap[key] ?? navMap.buyer;
   return ALL_NAV_ITEMS.filter(i => keys.includes(i.key));
 }
 
@@ -185,10 +230,11 @@ export default function Dashboard() {
   const { section } = useParams();
   const navigate = useNavigate();
   const { profile, user, signOut, updateProfile, refreshProfile } = useAuth();
+  const { isPro } = useSubscription();
   const role: DashboardRole = (profile?.role as DashboardRole) || "individual";
   const bioType = getParticipantTypeFromProfile(profile);
 
-  const navItems = getNavItemsForBioType(bioType, role);
+  const navItems = getNavItemsForBioType(bioType, role, isPro);
   const sectionNavItems = navItems.filter(i => !("href" in i && i.href));
   const defaultSection = (sectionNavItems[0]?.key ?? "overview") as NavKey;
   const [activeSection, setActiveSection] = useState<NavKey>((section as NavKey) || defaultSection);
@@ -196,11 +242,10 @@ export default function Dashboard() {
   const [alertModalOpen, setAlertModalOpen] = useState(false);
   const [editingAlert, setEditingAlert] = useState<any>(null);
 
-  // Invitation request status for non-investor users
+  // Quick Sale access application status (invitation_requests) for buyers / non-investors
   const [invitationRequestStatus, setInvitationRequestStatus] = useState<"none" | "pending" | "approved" | "rejected">("none");
   useEffect(() => {
     if (!user) return;
-    // Only relevant for non-investor/non-admin users
     if (["investor", "institutional", "admin"].includes(role)) return;
     supabase
       .from("invitation_requests" as any)
@@ -240,6 +285,7 @@ export default function Dashboard() {
   const toggleAlert = useToggleSavedSearchAlert();
   const deleteAuctionAlert = useDeleteAuctionAlert();
   const toggleAuctionAlert = useUpdateAuctionAlert();
+  const privateOwnerAlert = usePrivateOwnerAdAlert();
   const updateLeadStatus = useUpdateLeadStatus();
   const updateViewing = useUpdateViewing();
   const startConversation = useStartConversation();
@@ -291,6 +337,18 @@ export default function Dashboard() {
   };
   const statsKey = bioType ?? (role === "admin" ? "admin" : role === "seller_landlord" ? "seller" : role === "professional" ? "professional" : role === "agent" ? "agent" : role === "investor" ? "investor" : role === "institutional" ? "institutional" : role === "developer" ? "developer" : "buyer");
   const stats = statsByType[statsKey] ?? statsByType.buyer;
+
+  const monthStart = startOfCurrentMonth().toISOString();
+  const viewingsThisMonthAsRequester = (viewings as any[]).filter((v: any) => v.created_at >= monthStart).length;
+  const viewingsThisMonthAsOwner = (ownViewings as any[]).filter((v: any) => v.created_at >= monthStart).length;
+  const planUsage = {
+    savedSearches: savedSearches.length,
+    searchAlerts: (savedSearches as any[]).filter((s: any) => s.email_alerts).length,
+    viewingsThisMonth: (bioType === "buyer" || (role === "individual" && !isSellerLike)) ? viewingsThisMonthAsRequester : viewingsThisMonthAsOwner,
+    auctionAlerts: auctionAlerts.filter((a: any) => a.active).length,
+    listings: myListings.length,
+  };
+  const showPlanCard = ["buyer", "seller", "agent", "developer", "professional"].includes(bioType ?? "") || role === "seller_landlord";
 
   return (
     <div className="min-h-screen bg-background">
@@ -429,6 +487,15 @@ export default function Dashboard() {
                 ))}
               </div>
 
+              {/* Plan & Usage card */}
+              {showPlanCard && (
+                <DashboardPlanCard
+                  audience={(bioType ?? "buyer") as ParticipantId}
+                  isPro={isPro}
+                  usage={planUsage}
+                />
+              )}
+
               {/* Admin overview — unified Admin Dashboard */}
               {role === "admin" && (
                 <div className="glass-card rounded-xl p-5 border border-primary/20 bg-primary/5">
@@ -475,6 +542,20 @@ export default function Dashboard() {
               {/* Buyer overview */}
               {(role === "individual" || bioType === "buyer") && !isInvestorLike && !isSellerLike && (
                 <div className="grid md:grid-cols-2 gap-6">
+                  <div className="glass-card rounded-xl p-6 border border-destructive/20">
+                    <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Flame className="w-4 h-4 text-destructive" /> Quick Sale™ Access</h2>
+                    <p className="text-sm text-muted-foreground mb-3">
+                      {invitationRequestStatus === "pending" && "Your application for Quick Sale™ deal access is under review. We'll notify you within 48 hours."}
+                      {invitationRequestStatus === "approved" && "You have access to the Quick Sale™ deal flow. View exclusive off-market opportunities."}
+                      {invitationRequestStatus === "rejected" && "Your application was not approved. You may browse auctions and saved searches."}
+                      {invitationRequestStatus === "none" && "Apply for access to exclusive Quick Sale™ deals. Invitation-only."}
+                    </p>
+                    {invitationRequestStatus === "approved" ? (
+                      <Button size="sm" className="bg-gradient-gold border-0 text-background" asChild><Link to="/investor-dashboard">Open Deal Flow</Link></Button>
+                    ) : invitationRequestStatus === "none" ? (
+                      <Button variant="outline" size="sm" className="border-destructive/40 text-destructive" asChild><Link to="/investor-dashboard">Apply for Access</Link></Button>
+                    ) : null}
+                  </div>
                   <div className="glass-card rounded-xl p-6">
                     <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Heart className="w-4 h-4 text-destructive" /> Saved Properties</h2>
                     <p className="text-sm text-muted-foreground mb-3">{favorites.length > 0 ? `${favorites.length} saved — open Saved to view.` : "Save listings you like to find them here."}</p>
@@ -494,6 +575,15 @@ export default function Dashboard() {
               {/* Seller / Agent overview */}
               {isSellerLike && (
                 <>
+                  {!isPro && (
+                    <div className="glass-card rounded-xl p-5 border border-primary/30 bg-primary/5 flex items-center justify-between flex-wrap gap-3">
+                      <div>
+                        <p className="font-semibold text-sm">Unlock the full Dashboard</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Analytics, CRM, priority ads & more with Pro.</p>
+                      </div>
+                      <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground" asChild><Link to="/pricing">Upgrade to Pro</Link></Button>
+                    </div>
+                  )}
                   {myListings.length > 0 ? (
                     <div>
                       <h2 className="font-display font-semibold mb-4">Your Active Listings</h2>
@@ -522,15 +612,6 @@ export default function Dashboard() {
                       <Button className="bg-gradient-primary border-0 text-primary-foreground" onClick={() => setActiveSection("listings")}>
                         <Plus className="w-4 h-4 mr-2" /> Create Listing
                       </Button>
-                    </div>
-                  )}
-                  {(role === "seller_landlord" || bioType === "seller") && (
-                    <div className="glass-card rounded-xl p-4 border border-primary/20 bg-primary/5 flex items-center justify-between flex-wrap gap-3">
-                      <div>
-                        <p className="font-semibold text-sm">Upgrade to Pro</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">Get more visibility, AI listing assist, and selling add-ons.</p>
-                      </div>
-                      <Button variant="outline" size="sm" className="border-primary text-primary" asChild><Link to="/pricing">View Pro</Link></Button>
                     </div>
                   )}
                 </>
@@ -570,92 +651,9 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* ── LEADS — professional only ────────────────────────────────── */}
+          {/* ── LEADS & CONTACTS CRM — all users who need contacts ───────────── */}
           {activeSection === "leads" && navItems.some(i => i.key === "leads") && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between flex-wrap gap-3">
-                <div>
-                  <h1 className="font-display text-2xl font-bold flex items-center gap-2">
-                    <Briefcase className="w-5 h-5 text-brand-gold" /> Client Leads
-                    {pendingLeadsCount > 0 && (
-                      <span className="text-sm font-bold bg-brand-gold text-background rounded-full px-2 py-0.5">{pendingLeadsCount} new</span>
-                    )}
-                  </h1>
-                  <p className="text-sm text-muted-foreground mt-1">Consultation requests, callbacks, and messages from potential clients.</p>
-                </div>
-                <Button variant="outline" className="border-border gap-2" asChild>
-                  <Link to="/professionals"><Eye className="w-4 h-4" /> View My Profile</Link>
-                </Button>
-              </div>
-
-              {/* Advanced lead analytics — funnel stats */}
-              {(leads as any[]).length > 0 && leadFunnel && leadFunnel.total > 0 && (
-                <div className="glass-card rounded-xl p-4 border border-border">
-                  <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">Lead Analytics</h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                    <div className="rounded-lg bg-brand-gold/10 border border-brand-gold/20 px-3 py-2">
-                      <div className="text-[10px] uppercase text-muted-foreground">Pending</div>
-                      <div className="font-display text-lg font-bold text-brand-gold">{leadFunnel.pending}</div>
-                    </div>
-                    <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 px-3 py-2">
-                      <div className="text-[10px] uppercase text-muted-foreground">Reviewed</div>
-                      <div className="font-display text-lg font-bold text-blue-500">{leadFunnel.reviewed}</div>
-                    </div>
-                    <div className="rounded-lg bg-brand-emerald/10 border border-brand-emerald/20 px-3 py-2">
-                      <div className="text-[10px] uppercase text-muted-foreground">Confirmed</div>
-                      <div className="font-display text-lg font-bold text-brand-emerald">{leadFunnel.confirmed}</div>
-                    </div>
-                    <div className="rounded-lg bg-muted/50 border border-border px-3 py-2">
-                      <div className="text-[10px] uppercase text-muted-foreground">Cancelled</div>
-                      <div className="font-display text-lg font-bold text-muted-foreground">{leadFunnel.cancelled}</div>
-                    </div>
-                    <div className="rounded-lg bg-primary/10 border border-primary/20 px-3 py-2">
-                      <div className="text-[10px] uppercase text-muted-foreground">Conversion</div>
-                      <div className="font-display text-lg font-bold text-primary">{leadFunnel.conversionRate}%</div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Status filter tabs */}
-              {(leads as any[]).length > 0 && (
-                <LeadsSection
-                  leads={leads as any[]}
-                  onUpdateStatus={(id, status) => updateLeadStatus.mutate({ id, status })}
-                  onMessage={async (lead) => {
-                    if (!lead.requester_id) {
-                      toast.info("This lead came from a guest. Ask them to create an account to message.");
-                      return;
-                    }
-                    try {
-                      const convId = await startConversation.mutateAsync({
-                        other_user_id: lead.requester_id,
-                        listing_id: undefined,
-                      });
-                      navigate("/messages", { state: { openConversationId: convId } });
-                    } catch {
-                      toast.error("Could not start conversation");
-                    }
-                  }}
-                  startConversationLoading={startConversation.isPending}
-                />
-              )}
-
-              {leadsLoading ? (
-                <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
-              ) : (leads as any[]).length === 0 ? (
-                <div className="glass-card rounded-xl p-12 text-center">
-                  <Briefcase className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-                  <p className="font-semibold">No leads yet</p>
-                  <p className="text-sm text-muted-foreground mt-1 mb-4">
-                    Leads appear here when clients book consultations or request callbacks from your profile.
-                  </p>
-                  <Button variant="outline" className="border-border" asChild>
-                    <Link to="/professionals">View My Professional Profile</Link>
-                  </Button>
-                </div>
-              ) : null}
-            </div>
+            <ContactsAndLeadsSection initialTab="leads" />
           )}
 
           {/* ── MY LISTINGS ──────────────────────────────────────────────── */}
@@ -977,6 +975,32 @@ export default function Dashboard() {
                   ))}
                 </div>
               )}
+
+              {/* Private Owner Ad Alert — Pro agents only */}
+              {(bioType === "agent" || role === "agent") && isPro && (
+                <div className="glass-card rounded-xl p-5 border border-primary/20 mt-6">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <h2 className="font-display font-semibold mb-1 flex items-center gap-2">
+                        <Bell className="w-4 h-4 text-primary" /> Alert for Private Owner&apos;s Ad
+                      </h2>
+                      <p className="text-sm text-muted-foreground">Get notified when private sellers list new properties.</p>
+                    </div>
+                    <button
+                      onClick={() => privateOwnerAlert.toggle.mutate(!privateOwnerAlert.isEnabled)}
+                      disabled={privateOwnerAlert.toggle.isPending}
+                      className={cn(
+                        "px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
+                        privateOwnerAlert.isEnabled
+                          ? "bg-primary/10 border-primary text-primary"
+                          : "border-border bg-secondary text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      {privateOwnerAlert.isEnabled ? "Enabled" : "Enable"}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -1009,8 +1033,10 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* ── CONTACTS CRM ───────────────────────────────────────────── */}
-          {activeSection === "contacts" && navItems.some(i => i.key === "contacts") && <ContactsCRM />}
+          {/* ── CONTACTS & LEADS CRM ───────────────────────────────────── */}
+          {activeSection === "contacts" && navItems.some(i => i.key === "contacts") && (
+            <ContactsAndLeadsSection />
+          )}
 
           {/* ── OPEN HOUSES ─────────────────────────────────────────────── */}
           {activeSection === "open-houses" && navItems.some(i => i.key === "open-houses") && (
@@ -2234,7 +2260,7 @@ function SettingsSection({
             </li>
             <li className="flex items-start gap-2">
               <span className="text-primary shrink-0 mt-0.5">▸</span>
-              <span><strong className="text-foreground">Active subscriptions remain.</strong> Your Pro or Firesale subscription stays active until it expires. You may need to update your plan on the Pricing page if your new type requires different access.</span>
+              <span><strong className="text-foreground">Pricing adjustment.</strong> After selecting your new type, you will be redirected to the Pricing page to choose or update your plan. Switch does not grant admin — only dashboard layout and feature visibility change.</span>
             </li>
           </ul>
         </div>
