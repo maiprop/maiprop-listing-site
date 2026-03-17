@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
 import type { Database } from "@/integrations/supabase/types";
 
 export type AuctionAlert = Database["public"]["Tables"]["auction_alerts"]["Row"];
@@ -44,7 +45,10 @@ export function useCreateAuctionAlert() {
       qc.invalidateQueries({ queryKey: ["auction_alerts"] });
       toast.success("Auction alert created!");
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => {
+      const msg = getPlanLimitErrorMessage(e);
+      toast.error(msg ?? e.message);
+    },
   });
 }
 
@@ -59,7 +63,10 @@ export function useUpdateAuctionAlert() {
       qc.invalidateQueries({ queryKey: ["auction_alerts"] });
       toast.success("Alert updated.");
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => {
+      const msg = getPlanLimitErrorMessage(e);
+      toast.error(msg ?? e.message);
+    },
   });
 }
 

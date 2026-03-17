@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
 
 export function useViewings(role: "requester" | "owner" = "requester") {
   const { user } = useAuth();
@@ -46,7 +47,10 @@ export function useBookViewing() {
       queryClient.invalidateQueries({ queryKey: ["viewings"] });
       toast.success("Viewing booked successfully!");
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error) => {
+      const msg = getPlanLimitErrorMessage(err);
+      toast.error(msg ?? err.message);
+    },
   });
 }
 

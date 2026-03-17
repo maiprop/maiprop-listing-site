@@ -17,6 +17,7 @@ import SendMessageModal from "@/components/SendMessageModal";
 import BookConsultationModal from "@/components/BookConsultationModal";
 import { useStartConversation } from "@/hooks/useMessages";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSubscription } from "@/hooks/useSubscription";
 import { toast } from "sonner";
 import RequestCallbackModal from "@/components/RequestCallbackModal";
 import OnlineViewingModal from "@/components/OnlineViewingModal";
@@ -171,6 +172,7 @@ export default function ProfessionalProfile() {
   const [aiMatchOpen, setAiMatchOpen] = useState(false);
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { isPro: viewerIsPro } = useSubscription();
   const startConversation = useStartConversation();
 
   // Only Pro professionals can receive in-app messages and calendar bookings
@@ -214,6 +216,40 @@ export default function ProfessionalProfile() {
 
   const initials = displayName.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
   const rating = Number(pro.rating) || 0;
+
+  // Simplified profile for Free tier viewers (buyers on Free see minimal info)
+  if (!viewerIsPro) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <div className="pt-16">
+          <div className="bg-card border-b border-border">
+            <div className="container py-6">
+              <Link to="/professionals" className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-4 w-fit">
+                <ChevronLeft className="w-3 h-3" /> Back to Directory
+              </Link>
+              <div className="flex gap-5 items-start">
+                <div className="w-20 h-20 rounded-xl bg-gradient-primary flex items-center justify-center font-bold text-2xl text-primary-foreground shrink-0">
+                  {pro.avatar_url ? <img src={pro.avatar_url} alt="" className="w-full h-full object-cover rounded-xl" /> : initials}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h1 className="font-display text-xl font-bold">{displayName}</h1>
+                  <p className="text-sm text-muted-foreground mt-0.5">{catInfo?.emoji} {pro.title || catInfo?.label}</p>
+                  {pro.city && <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><MapPin className="w-3 h-3" />{pro.city}</p>}
+                  <div className="mt-4 p-4 rounded-xl bg-primary/5 border border-primary/20">
+                    <p className="text-sm font-medium mb-1">Upgrade to Pro to unlock</p>
+                    <p className="text-xs text-muted-foreground">Full profile, booking, messaging & unlimited professional access</p>
+                    <Button size="sm" className="mt-2" asChild><Link to="/pricing">Upgrade to Pro</Link></Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <Footer />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">

@@ -39,7 +39,7 @@ function buildDynamicDays(): { label: string; date: string; iso: string }[] {
 }
 
 export default function ViewingDialog({ open, onClose, property, ownerId, canVideoView = true }: ViewingDialogProps) {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [viewType, setViewType] = useState<"in-person" | "video">("in-person");
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [selectedIso, setSelectedIso] = useState<string | null>(null);
@@ -62,7 +62,7 @@ export default function ViewingDialog({ open, onClose, property, ownerId, canVid
     if (!selectedIso || !selectedTime) return;
     setLoading(true);
     const scheduledAt = new Date(`${selectedIso}T${selectedTime}:00`);
-    const { error } = await supabase.from("viewings").insert({
+    const { error: viewErr } = await supabase.from("viewings").insert({
       listing_id: property.id,
       requester_id: user.id,
       owner_id: ownerId,
@@ -72,10 +72,23 @@ export default function ViewingDialog({ open, onClose, property, ownerId, canVid
       note: note.trim() || null,
     } as any);
     setLoading(false);
-    if (error) {
+    if (viewErr) {
       toast.error("Could not submit viewing request. Please try again.");
       return;
     }
+    // Create lead for listing owner
+    const requesterName = profile?.display_name || profile?.first_name || user.email?.split("@")[0] || "Viewing request";
+    await supabase.from("leads").insert({
+      owner_id: ownerId,
+      source: "viewing",
+      listing_id: property.id,
+      name: requesterName,
+      email: user.email || null,
+      phone: profile?.phone || null,
+      message: `Viewing request: ${viewType} on ${selectedDay} at ${selectedTime}${note.trim() ? ` — ${note.trim()}` : ""}`,
+      status: "new",
+      follow_up_at: scheduledAt.toISOString(),
+    } as any).then(({ error: leadErr }) => { if (leadErr) console.warn("Lead create:", leadErr); });
     setConfirmed(true);
     toast.success("Viewing request submitted! The property owner will be notified.");
   };

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
@@ -22,13 +22,14 @@ import { toast } from "sonner";
 
 type AudienceId = "buyer" | "seller" | "investor" | "agent" | "institutional" | "developer" | "professional";
 
-// Investor & institutional removed from Pricing — Quick Sale is invitation-only
 const AUDIENCE_TABS: { id: AudienceId; label: string; mobileLabel: string; icon: React.ElementType }[] = [
   { id: "buyer",         label: "Buyer / Renter",      mobileLabel: "Buyer",       icon: Home },
   { id: "seller",        label: "Seller / Landlord",   mobileLabel: "Seller",      icon: Users },
+  { id: "investor",      label: "Investor",            mobileLabel: "Investor",    icon: TrendingUp },
   { id: "agent",         label: "Agent",                mobileLabel: "Agent",       icon: UserCheck },
-  { id: "developer",     label: "Developer",            mobileLabel: "Dev",         icon: Building2 },
-  { id: "professional",  label: "Professional",         mobileLabel: "Pro",         icon: Briefcase },
+  { id: "institutional",  label: "Institutional",        mobileLabel: "Inst.",       icon: Building2 },
+  { id: "developer",     label: "Developer",            mobileLabel: "Dev",         icon: Layers },
+  { id: "professional",  label: "Professional",        mobileLabel: "Pro",         icon: Briefcase },
 ];
 
 // ── Plan feature type ──────────────────────────────────────────────────────────
@@ -39,42 +40,42 @@ type PlanFeature = { label: string; free?: boolean | string; paid?: boolean | st
 // BUYER
 const BUYER_FREE_LIST = [
   "Browse all listings",
-  "View auction listings",
-  "Save up to 3 searches",
-  "Set search alerts",
-  "Book viewings",
+  "View max 60 auction listings",
+  "No pro auction filters",
+  "Save up to 1 search",
+  "Set 1 search alert",
+  "Book 1 viewing per month (physical or video)",
   "Send messages",
-  "AI property match",
-  "Neighbourhood report",
-  "Mortgage calculator",
-  "Auction alerts",
-  "Professional directory access",
+  "1 Auction alert",
+  "Professional directory access (up to 5 per category)",
 ];
 const BUYER_PRO: PlanFeature[] = [
-  { label: "Full AI Property Valuation", icon: BarChart2, free: false, paid: true },
-  { label: "Ownership Status Filters", icon: Filter, free: false, paid: true },
-  { label: "Auction Round Filters", icon: Gavel, free: false, paid: true },
-  { label: "Expected Yield Filters", icon: TrendingUp, free: false, paid: true },
-  { label: "Priority Auction Alerts", icon: Bell, free: false, paid: "Real-time" },
-  { label: "Unlimited Saved Searches", icon: Star, free: "3 max", paid: "Unlimited" },
-  { label: "Comparable Sales Data", icon: BarChart2, free: false, paid: true },
+  { label: "Full AI Property Valuation", icon: BarChart2, free: false, paid: "5/month, €3 each extra" },
+  { label: "Property Reports", icon: FileText, free: false, paid: "3/month, €9 each extra" },
+  { label: "All pro auction filters", icon: Filter, free: "None", paid: true },
+  { label: "Priority auction alerts", icon: Bell, free: false, paid: true },
+  { label: "Unlimited Saved Searches", icon: Star, free: "1 max", paid: "Unlimited" },
+  { label: "Similar sales on each listing", icon: BarChart2, free: false, paid: true },
+  { label: "View max 600 auction listings", icon: Gavel, free: "60 max", paid: "600 max" },
+  { label: "Save up to 5 searches, 5 alerts", icon: Star, free: "1 search, 1 alert", paid: "5 each" },
+  { label: "Book up to 10 viewings per month", icon: MessageSquare, free: "1/month", paid: "10/month" },
+  { label: "5 Auction alerts", icon: Bell, free: "1", paid: "5" },
+  { label: "Unlimited professionals access", icon: Users, free: "5 per category", paid: "Unlimited" },
 ];
 
 // SELLER
 const SELLER_FREE_LIST = [
   "List up to 2 properties",
-  "Manage viewings",
+  "No AI assistance",
   "Send & receive messages",
-  "Basic listing dashboard",
-  "Contact buyers directly",
+  "Basic listing dashboard (no analytics)",
 ];
 const SELLER_PRO: PlanFeature[] = [
-  { label: "Unlimited property listings", icon: Layers, free: "2 max", paid: "Unlimited" },
+  { label: "Up to 5 listings", icon: Layers, free: "2 max", paid: "5 max" },
   { label: "AI listing description assist", icon: Sparkles, free: false, paid: true },
-  { label: "Priority placement in search", icon: Star, free: false, paid: true },
-  { label: "Listing performance analytics", icon: BarChart2, free: false, paid: true },
-  { label: "Professional add-ons (valuation, legal)", icon: Briefcase, free: false, paid: true },
   { label: "Featured badge", icon: Crown, free: false, paid: true },
+  { label: "Listing performance analytics", icon: BarChart2, free: false, paid: true },
+  { label: "Priority placement in search", icon: Star, free: false, paid: true },
 ];
 
 // INVESTOR
@@ -99,18 +100,23 @@ const INVESTOR_PRO: PlanFeature[] = [
 const AGENT_FREE_LIST = [
   "Up to 5 listings",
   "Send & receive messages",
-  "View auction listings",
+  "maiProp branded video room",
+  "View up to 60 auctions",
+  "No pro auction filters",
   "Basic dashboard",
+  "Book up to 3 viewings per month (physical or online)",
+  "Basic profile on Professionals page",
 ];
 const AGENT_PRO: PlanFeature[] = [
-  { label: "Unlimited property listings", icon: Layers, free: "5 max", paid: "Unlimited" },
+  { label: "Unlimited listings", icon: Layers, free: "5 max", paid: "Unlimited" },
   { label: "AI Listing Assistant", icon: Sparkles, free: false, paid: true },
   { label: "CRM & contacts management", icon: Users, free: false, paid: true },
-  { label: "Performance analytics", icon: BarChart2, free: "Basic", paid: "Advanced" },
-  { label: "Auction alerts (create & manage)", icon: Gavel, free: false, paid: true },
-  { label: "Projects & portfolios", icon: FolderKanban, free: false, paid: true },
-  { label: "Priority listing placement", icon: Star, free: false, paid: true },
-  { label: "Bulk listing tools", icon: Layers, free: false, paid: true },
+  { label: "Performance analytics", icon: BarChart2, free: false, paid: true },
+  { label: "Unlimited auction alerts & searches", icon: Gavel, free: false, paid: true },
+  { label: "Alert for Private Owner's Ad", icon: Bell, free: false, paid: true },
+  { label: "Up to 10 Priority Ads", icon: Star, free: false, paid: "€5 each extra" },
+  { label: "Priority in Professionals Directory", icon: Crown, free: "Basic", paid: "Advanced profile" },
+  { label: "Book up to 10 viewings per month", icon: MessageSquare, free: "3/month", paid: "10/month" },
 ];
 
 // INSTITUTIONAL
@@ -131,20 +137,13 @@ const INSTITUTIONAL_PRO: PlanFeature[] = [
   { label: "Due diligence hub", icon: FileText, free: false, paid: true },
 ];
 
-// DEVELOPER
-const DEVELOPER_FREE_LIST = [
-  "Up to 5 listings",
-  "Send & receive messages",
-  "Basic dashboard",
-];
+// DEVELOPER — Pro only (no free tier)
 const DEVELOPER_PRO: PlanFeature[] = [
-  { label: "Unlimited listings", icon: Layers, free: "5 max", paid: "Unlimited" },
+  { label: "Unlimited listings", icon: Layers, free: false, paid: true },
   { label: "Project showcase pages", icon: Building2, free: false, paid: true },
   { label: "Pre-sale listing management", icon: Eye, free: false, paid: true },
-  { label: "AI Listing Assistant", icon: Sparkles, free: false, paid: true },
-  { label: "Bulk inquiry management", icon: MessageSquare, free: false, paid: true },
-  { label: "Performance analytics", icon: BarChart2, free: "Basic", paid: "Advanced" },
   { label: "Priority listing placement", icon: Star, free: false, paid: true },
+  { label: "Featured on New Building section", icon: Crown, free: false, paid: true },
 ];
 
 // PROFESSIONAL
@@ -166,22 +165,26 @@ const PROFESSIONAL_PRO: PlanFeature[] = [
 ];
 
 // ── Pricing plan definitions ───────────────────────────────────────────────────
-const PLANS: Record<AudienceId, {
+type PlanDef = {
   freeLabel: string; freePrice: string; freeDesc: string; freeCTA: string; freeHref: string;
   paidLabel: string; paidPrice: string; paidPriceUnit: string; paidDesc: string; paidCTA: string; paidHref: string;
   features: PlanFeature[];
   freeList: string[];
   accent: string; accentBg: string; accentBorder: string;
-}> = {
+  /** When true, only show Pro plan (no free tier) */
+  proOnly?: boolean;
+};
+
+const PLANS: Record<AudienceId, PlanDef> = {
   buyer: {
-    freeLabel: "Free", freePrice: "€0", freeDesc: "Everything to start your search", freeCTA: "Browse Free", freeHref: "/listings",
-    paidLabel: "Pro Plan", paidPrice: "€29", paidPriceUnit: "/ month", paidDesc: "AI-powered investor intelligence", paidCTA: "Get Pro Plan", paidHref: "/pricing",
+    freeLabel: "Free", freePrice: "€0", freeDesc: "Start your search", freeCTA: "Browse Free", freeHref: "/listings",
+    paidLabel: "Pro Plan", paidPrice: "€19", paidPriceUnit: "/ month", paidDesc: "AI valuations, reports, pro filters & more", paidCTA: "Get Pro Plan", paidHref: "/pricing",
     freeList: BUYER_FREE_LIST, features: BUYER_PRO,
     accent: "text-brand-gold", accentBg: "bg-brand-gold/10", accentBorder: "border-brand-gold/40",
   },
   seller: {
-    freeLabel: "Free", freePrice: "€0", freeDesc: "List your property and manage viewings", freeCTA: "List a Property", freeHref: "/listings/new",
-    paidLabel: "Pro Plan", paidPrice: "€19", paidPriceUnit: "/ month", paidDesc: "Unlimited listings, AI assist & analytics", paidCTA: "Get Pro Plan", paidHref: "/pricing",
+    freeLabel: "Free", freePrice: "€0", freeDesc: "List up to 2 properties", freeCTA: "List a Property", freeHref: "/listings/new",
+    paidLabel: "Pro Plan", paidPrice: "€19", paidPriceUnit: "/ month", paidDesc: "Up to 5 listings, AI assist & analytics", paidCTA: "Get Pro Plan", paidHref: "/pricing",
     freeList: SELLER_FREE_LIST, features: SELLER_PRO,
     accent: "text-violet-400", accentBg: "bg-violet-500/10", accentBorder: "border-violet-500/40",
   },
@@ -192,8 +195,8 @@ const PLANS: Record<AudienceId, {
     accent: "text-destructive", accentBg: "bg-destructive/10", accentBorder: "border-destructive/30",
   },
   agent: {
-    freeLabel: "Starter", freePrice: "€0", freeDesc: "List a few properties & test the platform", freeCTA: "Start Free", freeHref: "/signup",
-    paidLabel: "Pro Plan", paidPrice: "€89", paidPriceUnit: "/ month", paidDesc: "Unlimited listings, CRM & analytics", paidCTA: "Get Pro Plan", paidHref: "/pricing",
+    freeLabel: "Free", freePrice: "€0", freeDesc: "Up to 5 listings & basic tools", freeCTA: "Start Free", freeHref: "/signup",
+    paidLabel: "Pro Plan", paidPrice: "€149", paidPriceUnit: "/ month", paidDesc: "Unlimited listings, CRM, analytics & priority ads", paidCTA: "Get Pro Plan", paidHref: "/pricing",
     freeList: AGENT_FREE_LIST, features: AGENT_PRO,
     accent: "text-brand-purple", accentBg: "bg-brand-purple/10", accentBorder: "border-brand-purple/40",
   },
@@ -204,10 +207,11 @@ const PLANS: Record<AudienceId, {
     accent: "text-amber-400", accentBg: "bg-amber-500/10", accentBorder: "border-amber-500/40",
   },
   developer: {
-    freeLabel: "Starter", freePrice: "€0", freeDesc: "List projects and manage inquiries", freeCTA: "Start Free", freeHref: "/signup",
-    paidLabel: "Pro Plan", paidPrice: "€89", paidPriceUnit: "/ month", paidDesc: "Unlimited listings, project showcases & analytics", paidCTA: "Get Pro Plan", paidHref: "/pricing",
-    freeList: DEVELOPER_FREE_LIST, features: DEVELOPER_PRO,
+    freeLabel: "—", freePrice: "—", freeDesc: "Developers require Pro plan", freeCTA: "—", freeHref: "#",
+    paidLabel: "Pro Plan", paidPrice: "€89", paidPriceUnit: "/ month", paidDesc: "Unlimited listings, project showcases & featured placement", paidCTA: "Get Pro Plan", paidHref: "/pricing",
+    freeList: [], features: DEVELOPER_PRO,
     accent: "text-orange-400", accentBg: "bg-orange-500/10", accentBorder: "border-orange-500/40",
+    proOnly: true,
   },
   professional: {
     freeLabel: "Free", freePrice: "€0", freeDesc: "Join the directory & receive basic leads", freeCTA: "Register Free", freeHref: "/signup",
@@ -222,6 +226,7 @@ export default function Pricing() {
   const { user, profile } = useAuth();
   const { isPro } = useSubscription();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const [activeTab, setActiveTab] = useState<AudienceId>("buyer");
   const [hasAutoSelected, setHasAutoSelected] = useState(false);
@@ -274,15 +279,20 @@ export default function Pricing() {
   };
 
   useEffect(() => {
-    if (!hasAutoSelected && profile) {
-      const pt = getParticipantTypeFromProfile(profile);
-      // Investor/institutional are invitation-only; no pricing tab — fall back to buyer
-      const tab = pt === "investor" || pt === "institutional" ? "buyer" : pt;
-      const validTab = AUDIENCE_TABS.some(t => t.id === tab) ? tab : "buyer";
-      setActiveTab(validTab as AudienceId);
+    if (hasAutoSelected) return;
+    const audienceParam = searchParams.get("audience") as AudienceId | null;
+    if (audienceParam && AUDIENCE_TABS.some(t => t.id === audienceParam)) {
+      setActiveTab(audienceParam);
       setHasAutoSelected(true);
+      return;
     }
-  }, [profile, hasAutoSelected]);
+    if (profile) {
+      const pt = getParticipantTypeFromProfile(profile);
+      const validTab = AUDIENCE_TABS.some(t => t.id === pt) ? pt : "buyer";
+      setActiveTab(validTab as AudienceId);
+    }
+    setHasAutoSelected(true);
+  }, [profile, hasAutoSelected, searchParams]);
 
   const { data: pricingConfigs = {} } = usePricingConfigs();
   const planKey = PLAN_KEYS[activeTab];
@@ -343,9 +353,13 @@ export default function Pricing() {
 
         {/* Pricing cards */}
         <div className="container max-w-5xl py-10 sm:py-16 px-4 pb-28 lg:pb-16">
-          <div className="grid md:grid-cols-2 gap-5 items-stretch mb-4">
+          <div className={cn(
+            "grid gap-5 items-stretch mb-4",
+            plan.proOnly ? "grid-cols-1 max-w-xl mx-auto" : "md:grid-cols-2"
+          )}>
 
-            {/* Free card */}
+            {/* Free card — hidden for proOnly (e.g. developer) */}
+            {!plan.proOnly && (
             <div className="glass-card rounded-2xl border border-border overflow-hidden flex flex-col">
               <div className="px-6 sm:px-8 py-6 border-b border-border">
                 <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">{plan.freeLabel}</p>
@@ -371,6 +385,7 @@ export default function Pricing() {
                 </Button>
               </div>
             </div>
+            )}
 
             {/* Paid card */}
             <div className={cn("relative glass-card rounded-2xl border-2 overflow-hidden flex flex-col shadow-elevated", plan.accentBorder)}>

@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tansta
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
 import { getOwnerParticipantType } from "@/lib/participantConfig";
 
 export type ListingsFilters = {
@@ -262,7 +263,10 @@ export function useCreateListing() {
       queryClient.invalidateQueries({ queryKey: ["listings-paginated"] });
       toast.success("Listing published successfully!");
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error) => {
+      const msg = getPlanLimitErrorMessage(err);
+      toast.error(msg ?? err.message);
+    },
   });
 }
 
