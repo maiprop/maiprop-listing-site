@@ -13,44 +13,57 @@
     --card-foreground: 25 20% 15%;
     --popover: 0 0% 100%;
     --popover-foreground: 25 20% 15%;
-    --primary: 192 65% 32%;
+    --primary: 261 70% 48%;
     --primary-foreground: 0 0% 100%;
     --secondary: 36 20% 93%;
     --secondary-foreground: 25 15% 30%;
     --muted: 36 15% 91%;
     --muted-foreground: 25 12% 50%;
-    --accent: 28 75% 52%;
+    --accent: 178 89% 40%;
     --accent-foreground: 0 0% 100%;
     --destructive: 0 70% 52%;
     --destructive-foreground: 0 0% 100%;
     --border: 36 15% 87%;
     --input: 36 20% 93%;
-    --ring: 192 65% 32%;
+    --ring: 261 70% 48%;
     --radius: 0.875rem;
 
-    --brand-cyan: 192 80% 38%;
-    --brand-cyan-glow: 192 80% 52%;
-    --brand-purple: 270 70% 55%;
-    --brand-purple-dark: 270 55% 38%;
-    --brand-gold: 44 85% 48%;
-    --brand-emerald: 158 50% 36%;
-    --brand-sky: 200 65% 46%;
+    /* Brand book primaries: #4ef5f1 cyan, #8755f2 purple, #000059/#0f132e navy */
+    --brand-cyan: 178 89% 63%;
+    --brand-cyan-glow: 178 89% 75%;
+    --brand-purple: 261 84% 64%;
+    --brand-purple-dark: 261 70% 48%;
+    --brand-navy: 240 100% 17%;
+    --brand-navy-mid: 232 70% 12%;
+    /* Functional tones from brand book */
+    --brand-cyan-soft: 168 82% 85%;
+    --brand-purple-soft: 261 72% 82%;
+    --brand-slate: 240 26% 57%;
+    --brand-off-white: 0 0% 98%;
+    /* Auctions: use a muted slate-indigo instead of gold */
+    --brand-auction: 240 35% 55%;
+    --brand-auction-soft: 240 35% 90%;
+    /* Keep legacy aliases pointing to brand tokens */
+    --brand-gold: 178 89% 63%;
+    --brand-emerald: 178 89% 63%;
+    --brand-sky: 178 89% 75%;
     --brand-surface-1: 36 25% 97%;
     --brand-surface-2: 36 20% 95%;
     --brand-surface-3: 36 15% 91%;
     --brand-surface-4: 36 12% 87%;
-    --brand-amber: 192 65% 32%;
-    --brand-amber-glow: 192 65% 44%;
-    --brand-coral: 28 75% 52%;
-    --brand-coral-dark: 28 65% 40%;
+    --brand-amber: 178 89% 45%;
+    --brand-amber-glow: 178 89% 58%;
+    --brand-coral: 261 84% 64%;
+    --brand-coral-dark: 261 70% 48%;
 
     --gradient-hero: linear-gradient(135deg, hsl(36 28% 95%) 0%, hsl(30 22% 93%) 50%, hsl(36 25% 97%) 100%);
     --gradient-card: linear-gradient(145deg, hsl(0 0% 100%) 0%, hsl(36 20% 97%) 100%);
     --gradient-primary: linear-gradient(135deg, hsl(var(--brand-cyan)) 0%, hsl(var(--brand-purple)) 100%);
-    --gradient-accent: linear-gradient(135deg, hsl(var(--brand-coral)) 0%, hsl(var(--brand-cyan)) 100%);
-    --gradient-gold: linear-gradient(135deg, hsl(44 85% 48%) 0%, hsl(34 80% 42%) 100%);
-    --gradient-emerald: linear-gradient(135deg, hsl(158 50% 36%) 0%, hsl(170 45% 32%) 100%);
-    --gradient-warm: linear-gradient(135deg, hsl(192 60% 36%) 0%, hsl(28 70% 48%) 100%);
+    --gradient-accent: linear-gradient(135deg, hsl(var(--brand-purple)) 0%, hsl(var(--brand-cyan)) 100%);
+    --gradient-gold: linear-gradient(135deg, hsl(var(--brand-cyan)) 0%, hsl(var(--brand-cyan-glow)) 100%);
+    --gradient-emerald: linear-gradient(135deg, hsl(var(--brand-cyan)) 0%, hsl(var(--brand-purple)) 100%);
+    --gradient-warm: linear-gradient(135deg, hsl(var(--brand-cyan)) 0%, hsl(var(--brand-purple)) 100%);
+    --gradient-auction: linear-gradient(135deg, hsl(var(--brand-auction)) 0%, hsl(var(--brand-purple-dark)) 100%);
 
     --shadow-glow-amber: 0 0 24px -4px hsl(192 65% 32% / 0.25);
     --shadow-glow-coral: 0 0 24px -4px hsl(28 75% 52% / 0.25);
@@ -60,12 +73,12 @@
 
     --sidebar-background: 36 22% 95%;
     --sidebar-foreground: 25 15% 30%;
-    --sidebar-primary: 192 65% 32%;
+    --sidebar-primary: 261 70% 48%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 36 15% 91%;
     --sidebar-accent-foreground: 25 15% 30%;
     --sidebar-border: 36 15% 87%;
-    --sidebar-ring: 192 65% 32%;
+    --sidebar-ring: 261 70% 48%;
   }
 
   /* ─── DARK MODE ─── */
@@ -76,43 +89,52 @@
     --card-foreground: 36 20% 90%;
     --popover: 30 12% 13%;
     --popover-foreground: 36 20% 90%;
-    --primary: 192 65% 48%;
-    --primary-foreground: 30 12% 10%;
+    --primary: 261 80% 68%;
+    --primary-foreground: 240 100% 10%;
     --secondary: 30 10% 18%;
     --secondary-foreground: 36 15% 70%;
     --muted: 30 10% 16%;
     --muted-foreground: 36 10% 48%;
-    --accent: 28 70% 55%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 178 85% 45%;
+    --accent-foreground: 240 100% 10%;
     --destructive: 0 68% 50%;
     --destructive-foreground: 0 0% 100%;
     --border: 30 10% 22%;
     --input: 30 10% 18%;
-    --ring: 192 65% 48%;
+    --ring: 261 80% 68%;
 
-    --brand-cyan: 192 65% 48%;
-    --brand-cyan-glow: 192 65% 60%;
-    --brand-purple: 270 65% 60%;
-    --brand-purple-dark: 270 55% 44%;
-    --brand-gold: 44 85% 52%;
-    --brand-emerald: 158 55% 44%;
-    --brand-sky: 200 70% 52%;
+    --brand-cyan: 178 85% 58%;
+    --brand-cyan-glow: 178 85% 70%;
+    --brand-purple: 261 80% 68%;
+    --brand-purple-dark: 261 65% 52%;
+    --brand-navy: 240 100% 17%;
+    --brand-navy-mid: 232 70% 12%;
+    --brand-cyan-soft: 168 60% 30%;
+    --brand-purple-soft: 261 45% 30%;
+    --brand-slate: 240 20% 48%;
+    --brand-off-white: 0 0% 98%;
+    --brand-auction: 240 35% 62%;
+    --brand-auction-soft: 240 25% 22%;
+    --brand-gold: 178 85% 58%;
+    --brand-emerald: 178 85% 58%;
+    --brand-sky: 178 85% 70%;
     --brand-surface-1: 30 12% 10%;
     --brand-surface-2: 30 12% 13%;
     --brand-surface-3: 30 10% 16%;
     --brand-surface-4: 30 10% 20%;
-    --brand-amber: 192 65% 48%;
-    --brand-amber-glow: 192 65% 60%;
-    --brand-coral: 28 70% 55%;
-    --brand-coral-dark: 28 60% 42%;
+    --brand-amber: 178 85% 45%;
+    --brand-amber-glow: 178 85% 58%;
+    --brand-coral: 261 80% 68%;
+    --brand-coral-dark: 261 65% 52%;
 
     --gradient-hero: linear-gradient(135deg, hsl(30 14% 9%) 0%, hsl(28 12% 11%) 50%, hsl(30 10% 13%) 100%);
     --gradient-card: linear-gradient(145deg, hsl(30 12% 14%) 0%, hsl(30 12% 11%) 100%);
     --gradient-primary: linear-gradient(135deg, hsl(var(--brand-cyan)) 0%, hsl(var(--brand-purple)) 100%);
-    --gradient-accent: linear-gradient(135deg, hsl(var(--brand-coral)) 0%, hsl(var(--brand-cyan)) 100%);
-    --gradient-gold: linear-gradient(135deg, hsl(44 85% 52%) 0%, hsl(34 80% 44%) 100%);
-    --gradient-emerald: linear-gradient(135deg, hsl(158 55% 44%) 0%, hsl(170 50% 38%) 100%);
-    --gradient-warm: linear-gradient(135deg, hsl(192 60% 44%) 0%, hsl(28 65% 50%) 100%);
+    --gradient-accent: linear-gradient(135deg, hsl(var(--brand-purple)) 0%, hsl(var(--brand-cyan)) 100%);
+    --gradient-gold: linear-gradient(135deg, hsl(var(--brand-cyan)) 0%, hsl(var(--brand-cyan-glow)) 100%);
+    --gradient-emerald: linear-gradient(135deg, hsl(var(--brand-cyan)) 0%, hsl(var(--brand-purple)) 100%);
+    --gradient-warm: linear-gradient(135deg, hsl(var(--brand-cyan)) 0%, hsl(var(--brand-purple)) 100%);
+    --gradient-auction: linear-gradient(135deg, hsl(var(--brand-auction)) 0%, hsl(var(--brand-purple-dark)) 100%);
 
     --shadow-glow-amber: 0 0 28px -4px hsl(192 65% 48% / 0.35);
     --shadow-glow-coral: 0 0 28px -4px hsl(28 70% 55% / 0.35);
@@ -138,54 +160,62 @@
     --card-foreground: 25 20% 15%;
     --popover: 0 0% 100%;
     --popover-foreground: 25 20% 15%;
-    --primary: 192 65% 32%;
+    --primary: 261 70% 48%;
     --primary-foreground: 0 0% 100%;
     --secondary: 36 20% 93%;
     --secondary-foreground: 25 15% 30%;
     --muted: 36 15% 91%;
     --muted-foreground: 25 12% 50%;
-    --accent: 28 75% 52%;
+    --accent: 178 89% 40%;
     --accent-foreground: 0 0% 100%;
     --destructive: 0 70% 52%;
     --destructive-foreground: 0 0% 100%;
     --border: 36 15% 87%;
     --input: 36 20% 93%;
-    --ring: 192 65% 32%;
-    --brand-cyan: 192 80% 38%;
-    --brand-cyan-glow: 192 80% 52%;
-    --brand-purple: 270 70% 55%;
-    --brand-purple-dark: 270 55% 38%;
-    --brand-gold: 44 85% 48%;
-    --brand-emerald: 158 50% 36%;
-    --brand-sky: 200 65% 46%;
+    --ring: 261 70% 48%;
+    --brand-cyan: 178 89% 63%;
+    --brand-cyan-glow: 178 89% 75%;
+    --brand-purple: 261 84% 64%;
+    --brand-purple-dark: 261 70% 48%;
+    --brand-navy: 240 100% 17%;
+    --brand-navy-mid: 232 70% 12%;
+    --brand-cyan-soft: 168 82% 85%;
+    --brand-purple-soft: 261 72% 82%;
+    --brand-slate: 240 26% 57%;
+    --brand-auction: 240 35% 55%;
+    --brand-auction-soft: 240 35% 90%;
+    --brand-gold: 178 89% 63%;
+    --brand-emerald: 178 89% 63%;
+    --brand-sky: 178 89% 75%;
     --brand-surface-1: 36 25% 97%;
     --brand-surface-2: 36 20% 95%;
     --brand-surface-3: 36 15% 91%;
     --brand-surface-4: 36 12% 87%;
-    --brand-amber: 192 65% 32%;
-    --brand-amber-glow: 192 65% 44%;
-    --brand-coral: 28 75% 52%;
-    --brand-coral-dark: 28 65% 40%;
+    --brand-amber: 178 89% 45%;
+    --brand-amber-glow: 178 89% 58%;
+    --brand-coral: 261 84% 64%;
+    --brand-coral-dark: 261 70% 48%;
     --gradient-hero: linear-gradient(135deg, hsl(36 28% 95%) 0%, hsl(30 22% 93%) 50%, hsl(36 25% 97%) 100%);
     --gradient-card: linear-gradient(145deg, hsl(0 0% 100%) 0%, hsl(36 20% 97%) 100%);
     --gradient-primary: linear-gradient(135deg, hsl(var(--brand-cyan)) 0%, hsl(var(--brand-purple)) 100%);
-    --gradient-accent: linear-gradient(135deg, hsl(var(--brand-coral)) 0%, hsl(var(--brand-cyan)) 100%);
-    --gradient-gold: linear-gradient(135deg, hsl(44 85% 48%) 0%, hsl(34 80% 42%) 100%);
-    --gradient-emerald: linear-gradient(135deg, hsl(158 50% 36%) 0%, hsl(170 45% 32%) 100%);
-    --gradient-warm: linear-gradient(135deg, hsl(192 60% 36%) 0%, hsl(28 70% 48%) 100%);
-    --shadow-glow-amber: 0 0 24px -4px hsl(192 65% 32% / 0.25);
-    --shadow-glow-coral: 0 0 24px -4px hsl(28 75% 52% / 0.25);
+    --gradient-accent: linear-gradient(135deg, hsl(var(--brand-purple)) 0%, hsl(var(--brand-cyan)) 100%);
+    --gradient-gold: linear-gradient(135deg, hsl(var(--brand-cyan)) 0%, hsl(var(--brand-cyan-glow)) 100%);
+    --gradient-emerald: linear-gradient(135deg, hsl(var(--brand-cyan)) 0%, hsl(var(--brand-purple)) 100%);
+    --gradient-warm: linear-gradient(135deg, hsl(var(--brand-cyan)) 0%, hsl(var(--brand-purple)) 100%);
+    --gradient-auction: linear-gradient(135deg, hsl(var(--brand-auction)) 0%, hsl(var(--brand-purple-dark)) 100%);
+    --shadow-glow-amber: 0 0 24px -4px hsl(178 89% 63% / 0.30);
+    --shadow-glow-coral: 0 0 24px -4px hsl(261 84% 64% / 0.30);
     --shadow-card: 0 4px 24px -8px hsl(25 20% 15% / 0.10);
     --shadow-elevated: 0 8px 40px -12px hsl(25 20% 15% / 0.14);
-    --shadow-warm: 0 4px 20px -6px hsl(192 65% 32% / 0.18);
+    --shadow-warm: 0 4px 20px -6px hsl(261 70% 48% / 0.18);
     --sidebar-background: 36 22% 95%;
     --sidebar-foreground: 25 15% 30%;
-    --sidebar-primary: 192 65% 32%;
+    --sidebar-primary: 261 70% 48%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 36 15% 91%;
     --sidebar-accent-foreground: 25 15% 30%;
     --sidebar-border: 36 15% 87%;
-    --sidebar-ring: 192 65% 32%;
+    --sidebar-ring: 261 70% 48%;
   }
 }
 
@@ -313,8 +343,12 @@
   }
 
   .badge-auction {
-    background: linear-gradient(135deg, hsl(var(--brand-gold)) 0%, hsl(35 90% 42%) 100%);
-    color: hsl(25 20% 15%);
+    background: linear-gradient(135deg, hsl(var(--brand-auction)) 0%, hsl(var(--brand-purple-dark)) 100%);
+    color: hsl(0 0% 100%);
+  }
+  .badge-open-house {
+    background: linear-gradient(135deg, hsl(var(--brand-cyan)) 0%, hsl(var(--brand-purple)) 100%);
+    color: hsl(240 100% 10%);
   }
   .badge-firesale {
     background: linear-gradient(135deg, hsl(0 80% 58%) 0%, hsl(0 70% 46%) 100%);
@@ -330,13 +364,13 @@
     content: '';
     width: 8px;
     height: 8px;
-    background: hsl(var(--brand-emerald));
+    background: hsl(var(--brand-cyan));
     border-radius: 50%;
     animation: pulse-live 1.5s ease-in-out infinite;
   }
   @keyframes pulse-live {
-    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 hsl(var(--brand-emerald) / 0.6); }
-    50% { opacity: 0.8; box-shadow: 0 0 0 6px hsl(var(--brand-emerald) / 0); }
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 hsl(var(--brand-cyan) / 0.6); }
+    50% { opacity: 0.8; box-shadow: 0 0 0 6px hsl(var(--brand-cyan) / 0); }
   }
 
   .section-divider {

@@ -62,15 +62,23 @@ export default {
           ring: "hsl(var(--sidebar-ring))",
         },
         brand: {
-          // Primary brand colours
+          // Primary brand colours — from brand book
           cyan: "hsl(var(--brand-cyan))",
           "cyan-glow": "hsl(var(--brand-cyan-glow))",
+          "cyan-soft": "hsl(var(--brand-cyan-soft))",
           purple: "hsl(var(--brand-purple))",
           "purple-dark": "hsl(var(--brand-purple-dark))",
-          gold: "hsl(var(--brand-gold))",
-          emerald: "hsl(var(--brand-emerald))",
+          "purple-soft": "hsl(var(--brand-purple-soft))",
+          navy: "hsl(var(--brand-navy))",
+          "navy-mid": "hsl(var(--brand-navy-mid))",
+          slate: "hsl(var(--brand-slate))",
+          // Auction subtle tones
+          auction: "hsl(var(--brand-auction))",
+          "auction-soft": "hsl(var(--brand-auction-soft))",
+          // Retained legacy aliases
+          gold: "hsl(var(--brand-cyan))",
+          emerald: "hsl(var(--brand-cyan))",
           sky: "hsl(var(--brand-sky))",
-          // Legacy aliases so existing usage doesn't break
           amber: "hsl(var(--brand-cyan))",
           "amber-glow": "hsl(var(--brand-cyan-glow))",
           coral: "hsl(var(--brand-purple))",
