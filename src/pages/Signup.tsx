@@ -34,7 +34,7 @@ const PARTICIPANT_TYPES: {
 }[] = [
   { id: "buyer",         label: "Buyer / Renter",      sublabel: "Browse, search & book viewings",         icon: Home,       accent: "text-brand-gold",  accentBg: "bg-brand-gold/10",  accentBorder: "border-brand-gold/40" },
   { id: "seller",        label: "Seller / Landlord",   sublabel: "List & manage your property",            icon: Users,      accent: "text-violet-400",  accentBg: "bg-violet-500/10",  accentBorder: "border-violet-500/40" },
-  { id: "agent",         label: "Agent",                sublabel: "Listings, CRM & client management",      icon: UserCheck,  accent: "text-cyan-400",    accentBg: "bg-cyan-500/10",    accentBorder: "border-cyan-500/40" },
+  { id: "agent",         label: "Agent",                sublabel: "Listings, CRM & client management",      icon: UserCheck,  accent: "text-brand-purple", accentBg: "bg-brand-purple/10", accentBorder: "border-brand-purple/40" },
   { id: "developer",     label: "Developer",            sublabel: "Project showcases & pre-sale management", icon: Building2, accent: "text-orange-400",  accentBg: "bg-orange-500/10",  accentBorder: "border-orange-500/40" },
   { id: "professional",  label: "Professional",         sublabel: "Directory listing, leads & bookings",    icon: Briefcase,  accent: "text-rose-400",    accentBg: "bg-rose-500/10",    accentBorder: "border-rose-500/40" },
 ];

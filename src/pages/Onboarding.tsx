@@ -136,7 +136,7 @@ const colorMap: Record<string, { bg: string; border: string; text: string; iconB
   blue:    { bg: "bg-blue-500/10",    border: "border-blue-500/40",    text: "text-blue-400",    iconBg: "bg-blue-500/20" },
   violet:  { bg: "bg-violet-500/10",  border: "border-violet-500/40",  text: "text-violet-400",  iconBg: "bg-violet-500/20" },
   emerald: { bg: "bg-emerald-500/10", border: "border-emerald-500/40", text: "text-emerald-400", iconBg: "bg-emerald-500/20" },
-  cyan:    { bg: "bg-cyan-500/10",    border: "border-cyan-500/40",    text: "text-cyan-400",    iconBg: "bg-cyan-500/20" },
+  cyan:    { bg: "bg-brand-purple/10", border: "border-brand-purple/40", text: "text-brand-purple", iconBg: "bg-brand-purple/20" },
   amber:   { bg: "bg-amber-500/10",   border: "border-amber-500/40",   text: "text-amber-400",   iconBg: "bg-amber-500/20" },
   rose:    { bg: "bg-rose-500/10",    border: "border-rose-500/40",    text: "text-rose-400",    iconBg: "bg-rose-500/20" },
   orange:  { bg: "bg-orange-500/10",  border: "border-orange-500/40",  text: "text-orange-400",  iconBg: "bg-orange-500/20" },
