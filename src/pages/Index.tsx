@@ -45,7 +45,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { SignInForAI } from "@/components/SignInForAI";
 import { toast } from "sonner";
 import heroBg from "@/assets/hero-bg.jpg";
-import thessalonikiLandmark from "@/assets/thessaloniki-landmark.webp";
+import thessalonikiLandmark from "@/assets/thessaloniki-landmark.jpg";
 
 const RECENT_SEARCHES_KEY = "maiprop_recent_searches";
 const MAX_RECENT = 6;
@@ -930,10 +930,8 @@ function PropertiesMockup() {
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────────
-// Hero video: WebM (VP9) for modern browsers — add hero-bg.webm for smaller load.
-// Generate: ffmpeg -i public/hero-bg.mp4 -c:v libvpx-vp9 -crf 15 -b:v 0 -an public/hero-bg.webm
-const HERO_VIDEO_MP4 = "/hero-bg.mp4";
-const HERO_VIDEO_WEBM = "/hero-bg.webm"; // optional, smaller; Safari falls back to MP4
+// Hero video: use preload in index.html + deferred src so it loads faster. For even faster load, re-encode with faststart and lower bitrate (e.g. 720p, 1–2 Mbps).
+const HERO_VIDEO_SRC = "/hero-bg.mp4";
 
 export default function Index() {
   const navigate = useNavigate();
@@ -944,11 +942,11 @@ export default function Index() {
   const [professionalService, setProfessionalService] = useState("");
   const [showAI, setShowAI] = useState(false);
   const [typeCounts, setTypeCounts] = useState<Record<string, number>>({});
-  const [heroVideoReady, setHeroVideoReady] = useState(false);
+  const [heroVideoSrc, setHeroVideoSrc] = useState<string>("");
 
-  // Defer video src until after first paint so the poster shows instantly
+  // Defer video src until after first paint so the poster shows instantly and preload can run
   useEffect(() => {
-    const id = requestAnimationFrame(() => setHeroVideoReady(true));
+    const id = requestAnimationFrame(() => setHeroVideoSrc(HERO_VIDEO_SRC));
     return () => cancelAnimationFrame(id);
   }, []);
 
@@ -1206,12 +1204,7 @@ export default function Index() {
               objectPosition: "80% 30%",
             }}
           >
-            {heroVideoReady && (
-              <>
-                <source src={HERO_VIDEO_WEBM} type="video/webm" />
-                <source src={HERO_VIDEO_MP4} type="video/mp4" />
-              </>
-            )}
+            {heroVideoSrc && <source src={heroVideoSrc} type="video/mp4" />}
           </video>
           {/* Strong dark overlay for text readability */}
           <div

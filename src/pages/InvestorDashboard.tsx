@@ -385,6 +385,9 @@ export default function InvestorDashboard() {
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
   const [showInvitationModal, setShowInvitationModal] = useState(false);
 
+  // Invitation request pending state
+  const [invitationStatus, setInvitationStatus] = useState<"none" | "pending" | "rejected">("none");
+
   // Expiry warning
   const daysLeft = daysUntilExpiry(subscription?.expires_at ?? null);
   const showExpiryWarning = subscribed && daysLeft !== null && daysLeft <= 7 && daysLeft >= 0;
@@ -403,6 +406,24 @@ export default function InvestorDashboard() {
   }, [user]);
 
   useEffect(() => { loadSubscription(); }, [loadSubscription]);
+
+  // Check if user already has a pending/rejected invitation request
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("invitation_requests" as any)
+      .select("status")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        const row = data as { status?: string } | null;
+        if (row?.status === "pending") setInvitationStatus("pending");
+        else if (row?.status === "rejected") setInvitationStatus("rejected");
+        else setInvitationStatus("none");
+      });
+  }, [user]);
 
   // Deal types — inferred from real DB data
   type LiveDeal = {
@@ -658,53 +679,124 @@ export default function InvestorDashboard() {
 
           {/* ─────────────── REQUEST ACCESS SECTION (non-subscribed logged-in users) ─────────────── */}
           {!canAccessDealFlow && !isRealEstateAgent && user && (
-            <div className="mb-8 relative glass-card rounded-2xl border border-primary/30 overflow-hidden">
+            <div className={`mb-8 relative glass-card rounded-2xl overflow-hidden ${
+              invitationStatus === "pending"
+                ? "border border-brand-gold/30"
+                : invitationStatus === "rejected"
+                ? "border border-destructive/30"
+                : "border border-primary/30"
+            }`}>
               {/* Background glow */}
               <div className="absolute inset-0 pointer-events-none" style={{
-                background: "radial-gradient(ellipse 60% 80% at 0% 50%, hsl(var(--primary)/0.06), transparent 60%), radial-gradient(ellipse 40% 60% at 100% 30%, hsl(var(--accent)/0.05), transparent 60%)"
+                background: invitationStatus === "pending"
+                  ? "radial-gradient(ellipse 60% 80% at 0% 50%, hsl(var(--brand-gold)/0.06), transparent 60%)"
+                  : invitationStatus === "rejected"
+                  ? "radial-gradient(ellipse 60% 80% at 0% 50%, hsl(var(--destructive)/0.06), transparent 60%)"
+                  : "radial-gradient(ellipse 60% 80% at 0% 50%, hsl(var(--primary)/0.06), transparent 60%), radial-gradient(ellipse 40% 60% at 100% 30%, hsl(var(--accent)/0.05), transparent 60%)"
               }} />
               <div className="relative px-6 py-7 sm:px-8 sm:py-9">
                 <div className="flex flex-col lg:flex-row lg:items-center gap-6 lg:gap-10">
                   {/* Left: Invitation badge + heading */}
                   <div className="flex-1 min-w-0">
-                    <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/20 text-primary px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest mb-4">
-                      <Lock className="w-3 h-3" />
-                      Invitation-only access
-                    </div>
-                    <h2 className="font-display text-xl sm:text-2xl font-black mb-2">
-                      Request Access to the <span className="gradient-text-primary">Deal Flow</span>
-                    </h2>
-                    <p className="text-sm text-muted-foreground leading-relaxed max-w-lg">
-                      Quick Sale™ deal flow is exclusively available to verified investors and institutional buyers.
-                      Submit your profile and our team will review your application — no subscription fee, access is purely by invitation.
-                    </p>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5">
-                      {[
-                        { icon: "🔒", label: "No public pricing" },
-                        { icon: "✅", label: "Admin-vetted" },
-                        { icon: "⚡", label: "48h response" },
-                        { icon: "🤝", label: "NDA protected" },
-                      ].map(f => (
-                        <div key={f.label} className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <span className="text-base leading-none">{f.icon}</span>
-                          {f.label}
+                    {invitationStatus === "pending" ? (
+                      <>
+                        <div className="inline-flex items-center gap-2 bg-brand-gold/10 border border-brand-gold/30 text-brand-gold px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest mb-4">
+                          <Clock className="w-3 h-3" />
+                          Application under review
                         </div>
-                      ))}
-                    </div>
+                        <h2 className="font-display text-xl sm:text-2xl font-black mb-2">
+                          Your Application is <span className="text-brand-gold">Pending</span>
+                        </h2>
+                        <p className="text-sm text-muted-foreground leading-relaxed max-w-lg">
+                          We've received your request and our team is reviewing your investor profile. You'll be notified by email once a decision is made — typically within 48 hours.
+                        </p>
+                        <div className="flex items-center gap-2 mt-5">
+                          <div className="w-2 h-2 rounded-full bg-brand-gold animate-pulse" />
+                          <span className="text-xs text-muted-foreground">Application pending — we'll contact you by email</span>
+                        </div>
+                      </>
+                    ) : invitationStatus === "rejected" ? (
+                      <>
+                        <div className="inline-flex items-center gap-2 bg-destructive/10 border border-destructive/30 text-destructive px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest mb-4">
+                          <Ban className="w-3 h-3" />
+                          Application not approved
+                        </div>
+                        <h2 className="font-display text-xl sm:text-2xl font-black mb-2">
+                          Access <span className="text-destructive">Not Granted</span>
+                        </h2>
+                        <p className="text-sm text-muted-foreground leading-relaxed max-w-lg">
+                          Your previous application was not approved at this time. If your circumstances have changed, you are welcome to submit a new request.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/20 text-primary px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest mb-4">
+                          <Lock className="w-3 h-3" />
+                          Invitation-only access
+                        </div>
+                        <h2 className="font-display text-xl sm:text-2xl font-black mb-2">
+                          Request Access to the <span className="gradient-text-primary">Deal Flow</span>
+                        </h2>
+                        <p className="text-sm text-muted-foreground leading-relaxed max-w-lg">
+                          Quick Sale™ deal flow is exclusively available to verified investors and institutional buyers.
+                          Submit your profile and our team will review your application — no subscription fee, access is purely by invitation.
+                        </p>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5">
+                          {[
+                            { icon: "🔒", label: "No public pricing" },
+                            { icon: "✅", label: "Admin-vetted" },
+                            { icon: "⚡", label: "48h response" },
+                            { icon: "🤝", label: "NDA protected" },
+                          ].map(f => (
+                            <div key={f.label} className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <span className="text-base leading-none">{f.icon}</span>
+                              {f.label}
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
                   </div>
-                  {/* Right: CTA */}
+                  {/* Right: CTA or status */}
                   <div className="shrink-0 flex flex-col items-start lg:items-end gap-3 lg:min-w-[200px]">
-                    <Button
-                      className="bg-gradient-primary border-0 text-primary-foreground h-12 px-7 text-sm font-bold shadow-elevated"
-                      onClick={() => setShowInvitationModal(true)}
-                    >
-                      <MailPlus className="w-4 h-4 mr-2" />
-                      Request an Invitation
-                    </Button>
-                    <p className="text-[11px] text-muted-foreground">
-                      Already applied?{" "}
-                      <span className="text-primary cursor-default">We'll contact you by email.</span>
-                    </p>
+                    {invitationStatus === "pending" ? (
+                      <div className="flex flex-col items-start lg:items-end gap-2">
+                        <div className="inline-flex items-center gap-2.5 bg-brand-gold/10 border border-brand-gold/30 text-brand-gold px-5 py-3 rounded-xl font-bold text-sm">
+                          <Clock className="w-4 h-4 shrink-0" />
+                          Application pending
+                        </div>
+                        <p className="text-[11px] text-muted-foreground text-right max-w-[200px]">
+                          No action needed — we'll reach out once your application is reviewed.
+                        </p>
+                      </div>
+                    ) : invitationStatus === "rejected" ? (
+                      <div className="flex flex-col items-start lg:items-end gap-2">
+                        <Button
+                          className="bg-secondary border border-border text-foreground h-12 px-7 text-sm font-bold hover:bg-muted"
+                          onClick={() => setShowInvitationModal(true)}
+                        >
+                          <MailPlus className="w-4 h-4 mr-2" />
+                          Re-apply
+                        </Button>
+                        <p className="text-[11px] text-muted-foreground">
+                          Submit a new application for consideration.
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <Button
+                          className="bg-gradient-primary border-0 text-primary-foreground h-12 px-7 text-sm font-bold shadow-elevated"
+                          onClick={() => setShowInvitationModal(true)}
+                        >
+                          <MailPlus className="w-4 h-4 mr-2" />
+                          Request an Invitation
+                        </Button>
+                        <p className="text-[11px] text-muted-foreground">
+                          Already applied?{" "}
+                          <span className="text-primary cursor-default">We'll contact you by email.</span>
+                        </p>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -943,7 +1035,8 @@ export default function InvestorDashboard() {
             onClose={() => setShowInvitationModal(false)}
             onSuccess={() => {
               setShowInvitationModal(false);
-              toast.success("Invitation request submitted. We'll be in touch.");
+              setInvitationStatus("pending");
+              toast.success("Invitation request submitted. We'll be in touch within 48 hours.");
             }}
           />
         )}
