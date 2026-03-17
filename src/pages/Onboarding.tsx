@@ -744,8 +744,8 @@ export default function Onboarding() {
     if (step === "pro-video") return (
       <div>
         <div className="text-center mb-6">
-          <div className="w-14 h-14 rounded-2xl bg-cyan-500/10 border border-cyan-500/25 flex items-center justify-center mx-auto mb-4">
-            <Video className="w-7 h-7 text-cyan-400" />
+          <div className="w-14 h-14 rounded-2xl bg-brand-purple/10 border border-brand-purple/25 flex items-center justify-center mx-auto mb-4">
+            <Video className="w-7 h-7 text-brand-purple" />
           </div>
           <h1 className="font-display font-bold text-2xl text-foreground mb-1">Video Consultations</h1>
           <p className="text-muted-foreground text-sm">Add your meeting link so clients can book video calls with you</p>
