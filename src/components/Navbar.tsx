@@ -135,7 +135,7 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
               {link.label}
               {link.badge && (
                 <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold animate-pulse ${
-                  forceLight ? "bg-white/20 text-white" : "bg-brand-gold/20 text-brand-gold"
+                  forceLight ? "bg-white/20 text-white" : "bg-primary/15 text-primary"
                 }`}>
                   {link.badge}
                 </span>
