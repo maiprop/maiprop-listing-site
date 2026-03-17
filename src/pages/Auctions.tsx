@@ -1004,7 +1004,7 @@ export default function Auctions() {
 
             {!isLoading && !error && visibleFiltered.length === 0 &&
           <div className="text-center py-20">
-                <Gavel className="w-12 h-12 text-brand-gold/30 mx-auto mb-4" />
+                <Gavel className="w-12 h-12 text-primary/30 mx-auto mb-4" />
                 <p className="font-display font-semibold text-lg mb-2">No auctions match your filters</p>
                 <p className="text-sm text-muted-foreground max-w-sm mx-auto">
                   Try adjusting your filters or selecting "All Cities".
