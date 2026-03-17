@@ -63,8 +63,10 @@ return (
               </a>
             </Button>
             <Button size="lg" variant="outline" className="gap-2 rounded-full border-primary/50 px-8 sm:px-12 text-base sm:text-lg font-semibold w-full sm:w-auto" onClick={() => {
-              if (typeof window.gtag === "function") {
-                window.gtag("event", "conversion", {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              if (typeof (window as any).gtag === "function") {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (window as any).gtag("event", "conversion", {
                   send_to: "AW-17031338731/OAyuCMKFiP0bEOu1lrk_",
                   event_category: "contact",
                   event_label: "talk_to_us_click",
