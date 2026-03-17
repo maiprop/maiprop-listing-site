@@ -305,7 +305,7 @@ function yieldRange(bucket: string): [number, number] | null {
 const OWNERSHIP_BADGE: Record<string, {label: string;cls: string;}> = {
   full: { label: "Πλήρης κυριότητα", cls: "bg-primary/15 text-primary border-primary/25" },
   bare: { label: "Ψιλή κυριότητα", cls: "bg-brand-purple/15 text-brand-purple border-brand-purple/25" },
-  common: { label: "Εξ αδιαιρέτου", cls: "bg-accent/15 text-accent-foreground border-accent/25" },
+  common: { label: "Εξ αδιαιρέτου", cls: "bg-accent/15 text-accent border-accent/25" },
   usufruct: { label: "Επικαρπία", cls: "bg-muted text-muted-foreground border-border" },
   vertical: { label: "Κάθετη ιδιοκτησία", cls: "bg-primary/10 text-primary border-primary/20" },
   horizontal: { label: "Οριζόντια ιδιοκτησία", cls: "bg-secondary text-foreground border-border" }

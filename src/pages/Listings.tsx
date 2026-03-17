@@ -1187,7 +1187,7 @@ export default function Listings() {
                     disabled={!isComparing(property.id) && compareList.length >= 3}
                     className={`absolute top-2 left-2 z-10 flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold border transition-all shadow-card ${
                       isComparing(property.id)
-                        ? "bg-accent/90 border-accent text-accent-foreground"
+                        ? "bg-accent/90 border-accent text-background"
                         : compareList.length >= 3
                         ? "bg-secondary/80 border-border text-muted-foreground opacity-50 cursor-not-allowed"
                         : "bg-card/80 border-border text-muted-foreground hover:border-accent/60 hover:text-accent backdrop-blur-sm opacity-0 group-hover:opacity-100"

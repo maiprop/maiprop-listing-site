@@ -337,7 +337,7 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
             </span>
           )}
           {property.bathrooms != null && property.bathrooms > 0 && (
-            <span className="flex items-center gap-1 bg-accent/10 text-accent-foreground border border-accent/20 px-2.5 py-1 rounded-lg font-medium">
+            <span className="flex items-center gap-1 bg-accent/10 text-accent border border-accent/20 px-2.5 py-1 rounded-lg font-medium">
               <Bath className="w-3.5 h-3.5" /> {property.bathrooms} bath
             </span>
           )}
