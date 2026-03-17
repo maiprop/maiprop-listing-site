@@ -280,7 +280,7 @@ const PLANS: Record<AudienceId, {
     freeLabel: "Starter", freePrice: "€0", freeDesc: "List a few properties & test the platform", freeCTA: "Start Free", freeHref: "/signup",
     paidLabel: "Agency Pro", paidPrice: "€89", paidPriceUnit: "/ month", paidDesc: "Unlimited listings, CRM & analytics", paidCTA: "Get Agency Pro", paidHref: "/pricing",
     freeList: AGENT_FREE_LIST, features: AGENT_PRO,
-    accent: "text-cyan-400", accentBg: "bg-cyan-500/10", accentBorder: "border-cyan-500/40",
+    accent: "text-brand-purple", accentBg: "bg-brand-purple/10", accentBorder: "border-brand-purple/40",
   },
   institutional: {
     freeLabel: "Basic", freePrice: "Free", freeDesc: "Browse listings and explore the platform", freeCTA: "Register Free", freeHref: "/signup",
