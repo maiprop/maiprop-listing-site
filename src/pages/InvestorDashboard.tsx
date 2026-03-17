@@ -678,7 +678,7 @@ export default function InvestorDashboard() {
         <div className="container py-8">
 
           {/* ─────────────── REQUEST ACCESS SECTION (non-subscribed logged-in users) ─────────────── */}
-          {!canAccessDealFlow && !isRealEstateAgent && user && (
+          {!canAccessDealFlow && user && (
             <div className={`mb-8 relative glass-card rounded-2xl overflow-hidden ${
               invitationStatus === "pending"
                 ? "border border-brand-gold/30"
@@ -1000,23 +1000,27 @@ export default function InvestorDashboard() {
                     <div className="absolute top-0 right-0 w-20 h-20 rounded-bl-full bg-primary/5" />
                     <div className="relative">
                       <Crown className="w-5 h-5 text-primary mb-3" />
-                      {isRealEstateAgent ? (
-                        <>
-                          <h4 className="font-display font-bold text-sm mb-1">Deal Flow for Investors</h4>
-                          <p className="text-xs text-muted-foreground mb-3 leading-relaxed">This dashboard is for investors and institutional buyers. As a real estate agent, use the main <strong>Dashboard</strong> to manage your listings. Firesale requests are managed by platform admins.</p>
-                          <Button className="w-full bg-primary/10 border border-primary/30 text-primary text-xs h-9" asChild>
-                            <Link to="/dashboard">Go to Dashboard</Link>
-                          </Button>
-                        </>
+                      <h4 className="font-display font-bold text-sm mb-1">Quick Sale™ access is by invitation only</h4>
+                      {invitationStatus === "pending" ? (
+                        <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
+                          Your application is <strong className="text-brand-gold">under review</strong>. We'll contact you by email within 48 hours.
+                        </p>
+                      ) : invitationStatus === "rejected" ? (
+                        <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
+                          Your previous application wasn't approved. You may re-apply below.
+                        </p>
                       ) : (
-                        <>
-                          <h4 className="font-display font-bold text-sm mb-1">Quick Sale™ access is by invitation only</h4>
-                          <p className="text-xs text-muted-foreground mb-3 leading-relaxed">Request an invitation to join the deal flow and get seller contacts, full AI reports, and real-time deal alerts.</p>
-                          <Button className="w-full bg-gradient-primary border-0 text-primary-foreground text-xs h-9" onClick={() => setShowInvitationModal(true)}>
-                            <MailPlus className="w-3.5 h-3.5 mr-1.5" />
-                            Request invitation
-                          </Button>
-                        </>
+                        <p className="text-xs text-muted-foreground mb-3 leading-relaxed">Request an invitation to join the deal flow and get seller contacts, full AI reports, and real-time deal alerts.</p>
+                      )}
+                      {invitationStatus === "pending" ? (
+                        <div className="flex items-center gap-2 text-xs text-brand-gold font-semibold">
+                          <Clock className="w-3.5 h-3.5" /> Application pending — we'll be in touch
+                        </div>
+                      ) : (
+                        <Button className="w-full bg-gradient-primary border-0 text-primary-foreground text-xs h-9" onClick={() => setShowInvitationModal(true)}>
+                          <MailPlus className="w-3.5 h-3.5 mr-1.5" />
+                          {invitationStatus === "rejected" ? "Re-apply for access" : "Request invitation"}
+                        </Button>
                       )}
                     </div>
                   </div>
