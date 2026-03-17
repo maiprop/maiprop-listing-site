@@ -289,7 +289,7 @@ export default function Dashboard() {
                   {profile?.verified
                     ? <CheckCircle className="w-3 h-3 text-primary" />
                     : profile?.role === "professional"
-                      ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/20 font-semibold">⏳ Pending</span>
+                      ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-gold/15 text-brand-gold border border-brand-gold/20 font-semibold">⏳ Pending</span>
                       : null}
                 </div>
               </div>
