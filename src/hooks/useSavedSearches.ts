@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
 
 export type SavedSearch = {
   id: string;
@@ -55,7 +56,10 @@ export function useCreateSavedSearch() {
       qc.invalidateQueries({ queryKey: ["saved_searches"] });
       toast.success("Search saved!");
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => {
+      const msg = getPlanLimitErrorMessage(e);
+      toast.error(msg ?? e.message);
+    },
   });
 }
 
@@ -70,7 +74,10 @@ export function useDeleteSavedSearch() {
       qc.invalidateQueries({ queryKey: ["saved_searches"] });
       toast.success("Saved search removed.");
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => {
+      const msg = getPlanLimitErrorMessage(e);
+      toast.error(msg ?? e.message);
+    },
   });
 }
 
@@ -87,6 +94,9 @@ export function useToggleSavedSearchAlert() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["saved_searches"] });
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => {
+      const msg = getPlanLimitErrorMessage(e);
+      toast.error(msg ?? e.message);
+    },
   });
 }

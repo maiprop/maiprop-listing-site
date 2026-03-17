@@ -35,6 +35,20 @@ export function useSubmitConsultation() {
         message: input.message ?? null,
       });
       if (error) throw error;
+      // Create lead for professional
+      const { data: pro } = await supabase.from("professionals").select("user_id").eq("id", input.professional_id).single();
+      if (pro?.user_id) {
+        await supabase.from("leads").insert({
+          owner_id: pro.user_id,
+          source: input.request_type === "callback" ? "callback" : input.request_type === "message" ? "message" : "consultation",
+          professional_id: input.professional_id,
+          name: input.requester_name,
+          email: input.requester_email,
+          phone: input.requester_phone ?? null,
+          message: input.message ?? null,
+          status: "new",
+        } as any).then(({ error: leadErr }) => { if (leadErr) console.warn("Lead create:", leadErr); });
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["consultation-requests"] });
