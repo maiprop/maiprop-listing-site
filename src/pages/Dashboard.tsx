@@ -412,7 +412,7 @@ export default function Dashboard() {
               {/* Investor / Institutional overview cards */}
               {isInvestorLike && !(role === "admin") && (
                 <div className="grid md:grid-cols-2 gap-5">
-                  <div className="glass-card rounded-xl p-5 border border-amber-500/20 bg-amber-500/5">
+                  <div className="glass-card rounded-xl p-5 border border-brand-gold/20 bg-brand-gold/5">
                     <h2 className="font-display font-semibold mb-1 flex items-center gap-2 text-brand-gold"><FolderKanban className="w-4 h-4" /> Deal Flow</h2>
                     <p className="text-sm text-muted-foreground mb-3">Your private pipeline of off-market and Quick Sale™ opportunities.</p>
                     <Button size="sm" className="bg-gradient-gold border-0 text-background font-semibold gap-1.5" asChild>
