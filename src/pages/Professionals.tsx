@@ -10,14 +10,109 @@ import { Link } from "react-router-dom";
 
 // ─── Category Groups ──────────────────────────────────────────────────────────
 const categoryGroups = [
-  { id: "agents", label: "Real Estate Agents", emoji: "🏠", color: "text-primary", bg: "bg-primary/10", border: "border-primary/20", categories: ["real_estate_agent"], description: "Buy, sell, rent — licensed agents & agencies" },
-  { id: "legal", label: "Legal & Title", emoji: "⚖️", color: "text-brand-gold", bg: "bg-brand-gold/10", border: "border-brand-gold/20", categories: ["lawyer", "notary"], description: "Property title, contracts, conveyancing" },
-  { id: "finance", label: "Finance & Insurance", emoji: "💼", color: "text-accent", bg: "bg-accent/10", border: "border-accent/20", categories: ["financial_advisor", "valuer", "insurance_broker"], description: "Mortgages, valuations, property insurance" },
-  { id: "design", label: "Design & Planning", emoji: "🏛️", color: "text-primary", bg: "bg-primary/10", border: "border-primary/20", categories: ["architect", "civil_engineer", "interior_designer", "urban_planning_consultant", "building_permit_consultant"], description: "Architecture, engineering, urban planning" },
-  { id: "construction", label: "Construction & Trades", emoji: "🏗️", color: "text-brand-gold", bg: "bg-brand-gold/10", border: "border-brand-gold/20", categories: ["electrician", "plumber", "contractor", "concrete_contractor", "steel_structure_contractor", "carpenter", "tile_installer", "painter", "drywall_installer", "waterproofing_specialist", "insulation_contractor", "roofing_contractor", "window_aluminum_installer", "elevator_installer", "smart_home_installer"], description: "Electricians, plumbers, contractors and trade specialists" },
-  { id: "consultants", label: "Consultants & Compliance", emoji: "📄", color: "text-accent", bg: "bg-accent/10", border: "border-accent/20", categories: ["utility_certification_provider", "esg_sustainability_consultant", "legalization_specialist", "energy_certificate_inspector", "building_regulation_consultant", "fire_protection_consultant"], description: "Utility certification, legalization, energy & compliance" },
-  { id: "management", label: "Property & Hospitality", emoji: "🏢", color: "text-primary", bg: "bg-primary/10", border: "border-primary/20", categories: ["property_manager", "facility_manager", "short_term_rental_operator", "hotel_hospitality_operator"], description: "Property management, STR and hospitality operators" },
-  { id: "advisory", label: "Advisory & Tech", emoji: "✈️", color: "text-accent", bg: "bg-accent/10", border: "border-accent/20", categories: ["relocation_immigration_consultant", "marketing_agency", "crm_listing_data_provider"], description: "Relocation, marketing, CRM and data providers" },
+  {
+    id: "agents",
+    label: "Real Estate Agents",
+    emoji: "🏠",
+    color: "text-white",
+    bg: "bg-gradient-accent",
+    border: "border-transparent",
+    categories: ["real_estate_agent"],
+    description: "Buy, sell, rent — licensed agents & agencies",
+  },
+  {
+    id: "legal",
+    label: "Legal & Title",
+    emoji: "⚖️",
+    color: "text-white",
+    bg: "bg-gradient-primary",
+    border: "border-transparent",
+    categories: ["lawyer", "notary"],
+    description: "Property title, contracts, conveyancing",
+  },
+  {
+    id: "finance",
+    label: "Finance & Insurance",
+    emoji: "💼",
+    color: "text-white",
+    bg: "bg-gradient-emerald",
+    border: "border-transparent",
+    categories: ["financial_advisor", "valuer", "insurance_broker"],
+    description: "Mortgages, valuations, property insurance",
+  },
+  {
+    id: "design",
+    label: "Design & Planning",
+    emoji: "🏛️",
+    color: "text-white",
+    bg: "bg-gradient-warm",
+    border: "border-transparent",
+    categories: ["architect", "civil_engineer", "interior_designer", "urban_planning_consultant", "building_permit_consultant"],
+    description: "Architecture, engineering, urban planning",
+  },
+  {
+    id: "construction",
+    label: "Construction & Trades",
+    emoji: "🏗️",
+    color: "text-white",
+    bg: "bg-gradient-primary",
+    border: "border-transparent",
+    categories: [
+      "electrician",
+      "plumber",
+      "contractor",
+      "concrete_contractor",
+      "steel_structure_contractor",
+      "carpenter",
+      "tile_installer",
+      "painter",
+      "drywall_installer",
+      "waterproofing_specialist",
+      "insulation_contractor",
+      "roofing_contractor",
+      "window_aluminum_installer",
+      "elevator_installer",
+      "smart_home_installer",
+    ],
+    description: "Electricians, plumbers, contractors and trade specialists",
+  },
+  {
+    id: "consultants",
+    label: "Consultants & Compliance",
+    emoji: "📄",
+    color: "text-white",
+    bg: "bg-gradient-accent",
+    border: "border-transparent",
+    categories: [
+      "utility_certification_provider",
+      "esg_sustainability_consultant",
+      "legalization_specialist",
+      "energy_certificate_inspector",
+      "building_regulation_consultant",
+      "fire_protection_consultant",
+    ],
+    description: "Utility certification, legalization, energy & compliance",
+  },
+  {
+    id: "management",
+    label: "Property & Hospitality",
+    emoji: "🏢",
+    color: "text-white",
+    bg: "bg-gradient-gold",
+    border: "border-transparent",
+    categories: ["property_manager", "facility_manager", "short_term_rental_operator", "hotel_hospitality_operator"],
+    description: "Property management, STR and hospitality operators",
+  },
+  {
+    id: "advisory",
+    label: "Advisory & Tech",
+    emoji: "✈️",
+    color: "text-white",
+    bg: "bg-gradient-emerald",
+    border: "border-transparent",
+    categories: ["relocation_immigration_consultant", "marketing_agency", "crm_listing_data_provider"],
+    description: "Relocation, marketing, CRM and data providers",
+  },
 ];
 
 const ALL_CATEGORIES = categoryGroups.flatMap((g) => g.categories);
@@ -143,20 +238,19 @@ export default function Professionals() {
             </div>
             <div className="grid lg:grid-cols-2 gap-6 sm:gap-8 items-end">
               <div>
-                <h1 className="font-display text-3xl sm:text-5xl font-bold mb-3 leading-tight">
-                  Every expert you need for<br />
-                  <span className="gradient-text-cyan">property in Greece</span>
+                <h1 className="font-display text-3xl sm:text-5xl font-bold mb-3 leading-tight text-foreground">
+                  The right expert,<br />
+                  <span className="gradient-text-cyan">one click away</span>
                 </h1>
                 <p className="text-muted-foreground max-w-lg text-base sm:text-lg leading-relaxed mb-4 sm:mb-5">
-                  From legal due-diligence to renovation — find professionals by criteria, availability and area coverage.
+                  Architects, lawyers, contractors and more — a curated directory of verified property professionals across Greece.
                 </p>
                 <Button
                   onClick={() => setAiMatchOpen(true)}
-                  variant="outline"
-                  className="border-primary/40 text-primary hover:bg-primary/10 gap-2"
+                  className="bg-gradient-accent text-accent-foreground border-0 shadow-md hover:opacity-95 gap-2 px-5 sm:px-7"
                 >
                   <Search className="w-4 h-4" />
-                  Find my professional
+                  Explore directory
                   <ArrowRight className="w-3.5 h-3.5" />
                 </Button>
               </div>

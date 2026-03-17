@@ -443,17 +443,25 @@ function AuctionCard({ a, favoritedIds, onToggleFav
           </div>
         }
 
-        {a.year_built &&
-        <div className="text-xs text-muted-foreground">Built {a.year_built}</div>
-        }
+        {(a.year_built || (a.sqm && a.sqm > 1)) && (
+          <div className="flex flex-wrap items-center gap-1.5 mt-1">
+            {a.year_built && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-brand-slate/10 text-brand-slate border border-brand-slate/25">
+                Built {a.year_built}
+              </span>
+            )}
+            {a.sqm && a.sqm > 1 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-brand-emerald/10 text-brand-emerald border border-brand-emerald/25">
+                {a.sqm} τ.μ.
+              </span>
+            )}
+          </div>
+        )}
         <div className="flex items-center justify-between pt-1">
           <div className="flex items-center gap-1 font-display font-bold bg-gradient-primary bg-clip-text text-transparent">
             <Euro className="w-3.5 h-3.5 text-primary" />
             {(a.auction_starting_bid ?? a.price ?? 0).toLocaleString("el-GR")}
           </div>
-          {a.sqm && a.sqm > 1 &&
-          <span className="text-xs text-muted-foreground">{a.sqm} τ.μ.</span>
-          }
         </div>
         {a.auction_court && !/^[A-Z_]+$/.test(a.auction_court) &&
           <div className="text-xs text-muted-foreground truncate">{a.auction_court}</div>
@@ -739,12 +747,19 @@ export default function Auctions() {
               Real-time court auction data powered by mAI Prop OS.
             </p>
             <div className="grid grid-cols-3 gap-2 sm:gap-3 mt-4 sm:mt-8 max-w-2xl">
-              {auctionStats.map((s) =>
-              <div key={s.label} className="rounded-xl p-2.5 sm:p-5 text-center flex flex-col items-center justify-center border border-white/10 bg-white/5 backdrop-blur-sm">
-                  <div className="font-display text-lg sm:text-3xl font-bold text-brand-indigo">{s.value}</div>
-                  <div className="text-[9px] sm:text-xs text-white/50 mt-0.5 sm:mt-1.5 font-medium leading-tight">{s.label}</div>
+              {auctionStats.map((s) => (
+                <div
+                  key={s.label}
+                  className="rounded-2xl p-2.5 sm:p-5 text-center flex flex-col items-center justify-center border border-white/15 bg-gradient-to-br from-white/18 via-white/6 to-transparent backdrop-blur-xl"
+                >
+                  <div className="font-display text-lg sm:text-3xl font-bold text-white drop-shadow-sm">
+                    {s.value}
+                  </div>
+                  <div className="text-[9px] sm:text-xs text-white/80 mt-0.5 sm:mt-1.5 font-medium leading-tight">
+                    {s.label}
+                  </div>
                 </div>
-              )}
+              ))}
             </div>
           </div>
         </div>
