@@ -414,8 +414,7 @@ const Admin = () => {
   const refreshPoi = async (p: Property) => {
     setRefreshingPoi((prev) => new Set(prev).add(p.id));
     try {
-      // Clear cache first so AI is called fresh
-      await supabase.from("properties").update({ poi_cache: null } as any).eq("id", p.id);
+      // Legacy "properties" table removed — skip local cache clear
       const { data, error } = await supabase.functions.invoke("location-poi", {
         body: { location: p.location, property_id: p.id },
       });
