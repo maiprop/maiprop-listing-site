@@ -5,13 +5,17 @@ export function useProfessionals(category?: string) {
   return useQuery({
     queryKey: ["professionals", category],
     queryFn: async () => {
-      let query = supabase
-        .from("professionals")
-        .select("*")
-        .order("rating", { ascending: false });
-      if (category) query = query.eq("category", category as any);
-      const { data, error } = await query;
-      if (error) throw error;
+      const { data, error } = await supabase.rpc("get_professionals_with_priority", {
+        p_category: category ?? null,
+      });
+      if (error) {
+        // Fallback if RPC not yet migrated
+        let query = supabase.from("professionals").select("*").order("rating", { ascending: false });
+        if (category) query = query.eq("category", category as any);
+        const { data: fallback, error: fallbackErr } = await query;
+        if (fallbackErr) throw fallbackErr;
+        return fallback || [];
+      }
       return data || [];
     },
   });

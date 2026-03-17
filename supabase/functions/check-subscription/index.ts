@@ -70,6 +70,13 @@ Deno.serve(async (req) => {
       logStep("No active subscription");
     }
 
+    // Update profiles.subscription_product_id for RLS/limit enforcement
+    const { error: updateError } = await supabaseClient
+      .from("profiles")
+      .update({ subscription_product_id: productId })
+      .eq("user_id", user.id);
+    if (updateError) logStep("Profile subscription update failed", { error: updateError.message });
+
     return new Response(JSON.stringify({
       subscribed: hasActiveSub,
       product_id: productId,

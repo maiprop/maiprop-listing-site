@@ -19,8 +19,11 @@
 |-------|------------|--------|
 | `/admin` | `AdminRoute` → `isPlatformAdmin()` | OK |
 | `/admin/pricing` | `AdminRoute` → redirects to `/admin?tab=pricing` | OK |
+| `/investor-dashboard` | `InvestorRoute` → `isBuySideRole()` or `isPlatformAdmin()` | OK |
 
 **AdminRoute** (`src/components/AdminRoute.tsx`): Uses `isPlatformAdmin(profile)`; redirects non-admins to `/dashboard`.
+
+**InvestorRoute** (`src/components/InvestorRoute.tsx`): Buy-side roles (investor, institutional) or platform admin can access. Platform admin always has visibility.
 
 ---
 

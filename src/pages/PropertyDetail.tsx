@@ -983,15 +983,22 @@ export default function PropertyDetail() {
                 
               </div>
 
-              {/* ── Neighbourhood Report ── */}
-              <NeighbourhoodReport
-                city={city}
-                address={address}
-                region={db?.region}
-                propertyType={propertyType}
-                lat={db?.latitude ? Number(db.latitude) : undefined}
-                lng={db?.longitude ? Number(db.longitude) : undefined}
-                listingId={id ?? undefined} />
+              {/* ── Neighbourhood Report (Property Report — Pro) ── */}
+              {isPro ? (
+                <NeighbourhoodReport
+                  city={city}
+                  address={address}
+                  region={db?.region}
+                  propertyType={propertyType}
+                  lat={db?.latitude ? Number(db.latitude) : undefined}
+                  lng={db?.longitude ? Number(db.longitude) : undefined}
+                  listingId={id ?? undefined} />
+              ) : (
+                <div className="glass-card rounded-xl p-6 border border-border text-center">
+                  <p className="text-sm text-muted-foreground">Property Reports (3/month included) require Pro plan.</p>
+                  <Button variant="outline" size="sm" className="mt-2" asChild><Link to="/pricing">Upgrade to Pro</Link></Button>
+                </div>
+              )}
               
 
             </div>
