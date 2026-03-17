@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { getAiErrorMessage } from "@/lib/aiErrorUtils";
 import { useAuth } from "@/contexts/AuthContext";
 import { SignInForAI } from "@/components/SignInForAI";
+import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
