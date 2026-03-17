@@ -35,10 +35,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
+    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
     // Fetch requester profile email via auth.admin
     const { data: userData, error: userErr } = await supabase.auth.admin.getUserById(record.requester_id);
@@ -60,7 +57,10 @@ Deno.serve(async (req) => {
     const listingTitle = listing?.title || "Open House";
     const openHouseDate = listing?.open_house_date
       ? new Date(listing.open_house_date).toLocaleDateString("en-GB", {
-          weekday: "long", day: "numeric", month: "long", year: "numeric",
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+          year: "numeric",
         })
       : null;
 
@@ -92,9 +92,10 @@ Deno.serve(async (req) => {
         <!-- Body -->
         <tr><td style="padding:28px 32px">
           <p style="color:#111827;font-size:15px;margin:0 0 20px">
-            ${isApproved
-              ? `Great news! Your registration for the open house event has been <strong>approved</strong>.`
-              : `We're sorry, your registration for the open house event was <strong>not approved</strong> at this time.`
+            ${
+              isApproved
+                ? `Great news! Your registration for the open house event has been <strong>approved</strong>.`
+                : `We're sorry, your registration for the open house event was <strong>not approved</strong> at this time.`
             }
           </p>
 
@@ -104,21 +105,25 @@ Deno.serve(async (req) => {
             ${openHouseDate ? `<p style="color:#6b7280;font-size:13px;margin:0">📅 ${openHouseDate}</p>` : ""}
           </div>
 
-          ${isApproved ? `
+          ${
+            isApproved
+              ? `
           <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px 18px;margin-bottom:20px">
             <p style="color:#166534;font-size:13px;margin:0">
               ✅ You are now cleared to attend. Please bring a valid ID on the day of the event.
               ${record.timeslot_index != null ? " Your assigned timeslot will be confirmed separately." : ""}
             </p>
-          </div>` : `
+          </div>`
+              : `
           <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:14px 18px;margin-bottom:20px">
             <p style="color:#991b1b;font-size:13px;margin:0">
               You can contact the listing agent for more information or browse other open houses on MaiProp.
             </p>
             ${rejectionNote}
-          </div>`}
+          </div>`
+          }
 
-          <a href="https://maiprop-listing-site.lovable.app/open-houses/${record.listing_id}"
+          <a href="https://portal.maiprop.co/open-houses/${record.listing_id}"
              style="display:inline-block;background:#0f172a;color:#ffffff;font-size:14px;font-weight:600;padding:12px 24px;border-radius:8px;text-decoration:none">
             View Open House →
           </a>
@@ -175,7 +180,6 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ ok: true, status: newStatus, recipient: recipientEmail }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-
   } catch (err) {
     console.error("oh-registration-notify error:", err);
     return new Response(JSON.stringify({ ok: false, error: String(err) }), {

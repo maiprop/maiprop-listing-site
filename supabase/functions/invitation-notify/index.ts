@@ -14,20 +14,22 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
+    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
+    const {
+      data: { user },
+      error: authErr,
+    } = await supabase.auth.getUser(token);
     if (authErr || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -36,7 +38,8 @@ Deno.serve(async (req) => {
 
     if (!type || !email) {
       return new Response(JSON.stringify({ error: "type and email are required" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -46,7 +49,7 @@ Deno.serve(async (req) => {
     }
 
     const firstName = full_name?.split(" ")[0] || "there";
-    const appUrl = "https://maiprop-listing-site.lovable.app";
+    const appUrl = "https://portal.maiprop.co/";
 
     let subject: string;
     let html: string;
@@ -76,12 +79,16 @@ Deno.serve(async (req) => {
             <p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#0a0e1a;">Congratulations, ${firstName}!</p>
             <p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6;">Your invitation request to MaiProp's exclusive Deal Flow has been <strong style="color:#10b981;">approved</strong>. You now have full access to our curated off-market deal pipeline.</p>
 
-            ${tier ? `
+            ${
+              tier
+                ? `
             <div style="background:#0a0e1a;border-radius:12px;padding:20px 24px;margin:0 0 24px;">
               <p style="margin:0 0 4px;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#9ca3af;">Access tier</p>
               <p style="margin:0;font-size:18px;font-weight:700;color:#d4af37;text-transform:capitalize;">${tier}</p>
             </div>
-            ` : ""}
+            `
+                : ""
+            }
 
             <div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:12px;padding:20px 24px;margin:0 0 32px;">
               <p style="margin:0 0 12px;font-size:13px;font-weight:600;color:#065f46;">What's included:</p>
@@ -136,12 +143,16 @@ Deno.serve(async (req) => {
             <p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#0a0e1a;">Thank you for applying, ${firstName}</p>
             <p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6;">After carefully reviewing your application, we're unable to approve access to MaiProp Deal Flow at this time.</p>
 
-            ${rejection_reason ? `
+            ${
+              rejection_reason
+                ? `
             <div style="background:#fef9e7;border:1px solid #fde68a;border-radius:12px;padding:20px 24px;margin:0 0 24px;">
               <p style="margin:0 0 6px;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#92400e;">Reason</p>
               <p style="margin:0;font-size:14px;color:#78350f;line-height:1.6;">${rejection_reason}</p>
             </div>
-            ` : ""}
+            `
+                : ""
+            }
 
             <p style="margin:0 0 32px;font-size:14px;color:#6b7280;line-height:1.6;">If you believe your profile has changed or you'd like to provide additional information, you're welcome to reapply in the future.</p>
 
@@ -165,7 +176,8 @@ Deno.serve(async (req) => {
 </html>`;
     } else {
       return new Response(JSON.stringify({ error: "Invalid type. Use 'approved' or 'rejected'" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -174,7 +186,7 @@ Deno.serve(async (req) => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
       },
       body: JSON.stringify({
         to: email,
@@ -196,7 +208,8 @@ Deno.serve(async (req) => {
   } catch (err) {
     console.error("invitation-notify error:", err);
     return new Response(JSON.stringify({ error: (err as Error).message }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });

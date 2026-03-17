@@ -49,14 +49,12 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL") ?? "",
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-    { auth: { persistSession: false } }
-  );
+  const supabase = createClient(Deno.env.get("SUPABASE_URL") ?? "", Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", {
+    auth: { persistSession: false },
+  });
 
   const RESEND_KEY = Deno.env.get("RESEND_API_KEY");
-  const APP_URL = Deno.env.get("MAIPROP_APP_URL") || "https://maiprop-listing-site.lovable.app";
+  const APP_URL = Deno.env.get("MAIPROP_APP_URL") || "https://portal.maiprop.co/";
   const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "alerts@maiprop.co";
 
   try {
@@ -100,13 +98,15 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const listingsToSend = (listings || []).filter((l: { id: string }) => newIds.includes(l.id) || prevIds.length === 0);
+      const listingsToSend = (listings || []).filter(
+        (l: { id: string }) => newIds.includes(l.id) || prevIds.length === 0,
+      );
       if (listingsToSend.length === 0) continue;
 
       const listHtml = listingsToSend
         .map(
           (l: { id: string; title: string; city: string; price: number }) =>
-            `<li><a href="${APP_URL}/property/${l.id}">${l.title}</a> · ${l.city || ""} · €${Number(l.price || 0).toLocaleString()}</li>`
+            `<li><a href="${APP_URL}/property/${l.id}">${l.title}</a> · ${l.city || ""} · €${Number(l.price || 0).toLocaleString()}</li>`,
         )
         .join("");
 
@@ -150,15 +150,15 @@ Deno.serve(async (req) => {
         .eq("id", s.id);
     }
 
-    return new Response(
-      JSON.stringify({ ok: true, processed: searches.length, emailsSent: sent }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
-    );
+    return new Response(JSON.stringify({ ok: true, processed: searches.length, emailsSent: sent }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 200,
+    });
   } catch (err) {
     log("ERROR", (err as Error).message);
-    return new Response(
-      JSON.stringify({ ok: false, error: (err as Error).message }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
-    );
+    return new Response(JSON.stringify({ ok: false, error: (err as Error).message }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500,
+    });
   }
 });
