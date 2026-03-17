@@ -3,7 +3,8 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 const logStep = (step: string, details?: any) => {
@@ -35,7 +36,8 @@ Deno.serve(async (req) => {
   if (!serviceRoleKey) {
     console.error("SUPABASE_SERVICE_ROLE_KEY is not set — checkout cannot proceed safely");
     return new Response(JSON.stringify({ error: "Checkout service unavailable" }), {
-      status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 503,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
   const supabaseClient = createClient(Deno.env.get("SUPABASE_URL") ?? "", serviceRoleKey);
@@ -51,7 +53,7 @@ Deno.serve(async (req) => {
     const user = userData.user;
     logStep("User authenticated", { userId: user.id, email: user.email });
 
-    const body = (req.method === "POST" && req.body) ? await req.json().catch(() => ({})) : {};
+    const body = req.method === "POST" && req.body ? await req.json().catch(() => ({})) : {};
     const plan = (body.plan ?? "pro") as string;
     const successUrl = body.success_url;
     const cancelUrl = body.cancel_url;
@@ -68,8 +70,9 @@ Deno.serve(async (req) => {
       logStep("Existing Stripe customer found", { customerId });
     }
 
-    const origin = req.headers.get("origin") || "https://maiprop-listing-site.lovable.app";
-    const success = successUrl ?? (plan.startsWith("professional") ? `${origin}/dashboard?pro=success` : `${origin}/pro?success=1`);
+    const origin = req.headers.get("origin") || "https://portal.maiprop.co/";
+    const success =
+      successUrl ?? (plan.startsWith("professional") ? `${origin}/dashboard?pro=success` : `${origin}/pro?success=1`);
     const cancel = cancelUrl ?? (plan.startsWith("professional") ? `${origin}/pricing` : `${origin}/pro?cancelled=1`);
 
     const session = await stripe.checkout.sessions.create({
