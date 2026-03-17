@@ -60,3 +60,6 @@ verify_jwt = false
 [functions.send-saved-search-alerts]
 verify_jwt = false
 
+[functions.invitation-notify]
+verify_jwt = false
+
