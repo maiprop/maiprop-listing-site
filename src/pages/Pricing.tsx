@@ -8,7 +8,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import {
   Check, Zap, Users, Briefcase, UserCheck,
   TrendingUp, BarChart2, Bell, Star, Shield, Filter, ArrowRight,
-  Crown, Sparkles, Building2, Gavel, Home,
+  Crown, Sparkles, Building2, Gavel, Home, Layers,
   MessageSquare, Eye, FileText, FolderKanban,
   Loader2,
 } from "lucide-react";
