@@ -313,7 +313,7 @@ export default function OpenHouseDetail() {
                 <Trash2 className="w-3.5 h-3.5" /> Delete
               </Button>
               {isOwner && editingDate && (
-                <div className="flex flex-wrap items-center gap-2 w-full mt-2 p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
+                <div className="flex flex-wrap items-center gap-2 w-full mt-2 p-3 rounded-lg bg-primary/5 border border-primary/20">
                   <input type="datetime-local" value={dateInput} onChange={(e) => setDateInput(e.target.value)} className="px-3 py-2 rounded-lg border border-border bg-background text-sm" />
                   <Button size="sm" onClick={saveDate} disabled={updateListing.isPending}>{updateListing.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}</Button>
                   <Button size="sm" variant="ghost" onClick={() => setEditingDate(false)}>Cancel</Button>

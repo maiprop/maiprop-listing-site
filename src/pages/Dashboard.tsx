@@ -2190,7 +2190,7 @@ function SettingsSection({
           </p>
           <ul className="text-xs text-muted-foreground space-y-1.5 leading-relaxed list-none">
             <li className="flex items-start gap-2">
-              <span className="text-amber-400 shrink-0 mt-0.5">▸</span>
+              <span className="text-brand-gold shrink-0 mt-0.5">▸</span>
               <span><strong className="text-foreground">Extra charges may apply.</strong> Upgrading to a higher-tier participant type (e.g. Agent, Institutional) may activate a paid plan. You will be informed before any charge is made.</span>
             </li>
             <li className="flex items-start gap-2">

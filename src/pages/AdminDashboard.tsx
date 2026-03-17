@@ -95,7 +95,7 @@ export default function AdminDashboard() {
             <div className="space-y-6">
               <div>
                 <h2 className="font-display text-lg font-semibold flex items-center gap-2">
-                  <DoorOpen className="w-5 h-5 text-emerald-500" /> Open House Management
+                  <DoorOpen className="w-5 h-5 text-primary" /> Open House Management
                 </h2>
                 <p className="text-sm text-muted-foreground mt-1">All open house registrations, offers, and controls for your listings.</p>
               </div>
