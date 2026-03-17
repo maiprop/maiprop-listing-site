@@ -563,32 +563,6 @@ export default function Pricing() {
             </div>
           </div>
 
-          {/* Module table */}
-          <ModuleTable audience={activeTab} accent={plan.accent} />
-
-          {/* Cross-links */}
-          <div className="mt-12 grid sm:grid-cols-3 gap-4">
-            {[
-              { icon: Crown, label: "mAI Prop Pro", desc: "Full AI valuation & investor tools", href: "/pricing", accent: "text-brand-gold" },
-              { icon: Gavel, label: "Auction Hub", desc: "Live court auctions & foreclosures", href: "/auctions", accent: "text-primary" },
-              { icon: Flame, label: "Quick Sale™ Deal Flow", desc: "By invitation only — request access", href: "/investor-dashboard", accent: "text-destructive" },
-            ].map((item) => (
-              <Link
-                key={item.href}
-                to={item.href}
-                className="glass-card rounded-xl border border-border p-4 flex items-center gap-3 hover:border-primary/30 transition-colors group"
-              >
-                <div className={cn("w-9 h-9 rounded-xl bg-secondary flex items-center justify-center shrink-0", item.accent)}>
-                  <item.icon className="w-4 h-4" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-foreground truncate">{item.label}</p>
-                  <p className="text-xs text-muted-foreground truncate">{item.desc}</p>
-                </div>
-                <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-primary ml-auto shrink-0 transition-colors" />
-              </Link>
-            ))}
-          </div>
 
           <p className="text-center text-xs text-muted-foreground mt-10 max-w-xl mx-auto">
             All prices are in EUR and exclude VAT where applicable. Final billing may vary by agreement.
