@@ -29,14 +29,6 @@ const LIMITS: Record<ParticipantId, Record<PlanTier, PlanLimits>> = {
     free:  { savedSearches: null, searchAlerts: null, viewingsPerMonth: 3, auctionAlerts: null, listings: 5 },
     pro:   { savedSearches: null, searchAlerts: null, viewingsPerMonth: 10, auctionAlerts: null, listings: null },
   },
-  investor: {
-    free:  { savedSearches: null, searchAlerts: null, viewingsPerMonth: null, auctionAlerts: null, listings: null },
-    pro:   { savedSearches: null, searchAlerts: null, viewingsPerMonth: null, auctionAlerts: null, listings: null },
-  },
-  institutional: {
-    free:  { savedSearches: null, searchAlerts: null, viewingsPerMonth: null, auctionAlerts: null, listings: null },
-    pro:   { savedSearches: null, searchAlerts: null, viewingsPerMonth: null, auctionAlerts: null, listings: null },
-  },
   developer: {
     free:  { savedSearches: null, searchAlerts: null, viewingsPerMonth: null, auctionAlerts: null, listings: null },
     pro:   { savedSearches: null, searchAlerts: null, viewingsPerMonth: null, auctionAlerts: null, listings: null },

@@ -378,9 +378,8 @@ export default function InvestorDashboard() {
   const [subLoading, setSubLoading] = useState(true);
   const subscribed = subscription?.status === "active" || subscription?.status === "trial";
 
-  const isInvestorType = ["investor", "institutional"].includes(participantType);
   const isRealEstateAgent = participantType === "agent";
-  const canAccessDealFlow = isPlatformAdmin(profile) || (subscribed && isInvestorType);
+  const canAccessDealFlow = isPlatformAdmin(profile) || subscribed;
   const [showGate, setShowGate] = useState(false);
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
   const [showInvitationModal, setShowInvitationModal] = useState(false);

@@ -10,14 +10,13 @@ export function isPlatformAdmin(
   return profile.role === "admin" || !!(profile as { is_platform_admin?: boolean }).is_platform_admin;
 }
 
-/** Sell-side: can create listings (agent, seller_landlord, developer, institutional) */
+/** Sell-side: can create listings (agent, seller_landlord, developer) */
 export function isSellSideRole(profile: { role?: string } | null): boolean {
   if (!profile?.role) return false;
-  return ["agent", "seller_landlord", "developer", "institutional"].includes(profile.role);
+  return ["agent", "seller_landlord", "developer"].includes(profile.role);
 }
 
-/** Buy-side: can access investor dashboard (investor, institutional) */
+/** Buy-side: can access investor dashboard (legacy — no longer used; admin-only access via isPlatformAdmin) */
 export function isBuySideRole(profile: { role?: string } | null): boolean {
-  if (!profile?.role) return false;
-  return ["investor", "institutional"].includes(profile.role);
+  return false;
 }

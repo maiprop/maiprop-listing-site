@@ -6,9 +6,7 @@
 export type ParticipantId =
   | "buyer"
   | "seller"
-  | "investor"
   | "agent"
-  | "institutional"
   | "developer"
   | "professional";
 
@@ -21,8 +19,6 @@ export function getParticipantTypeFromProfile(
 ): ParticipantId {
   if (!profile) return "buyer";
   const bio = profile.bio ?? "";
-  if (bio.startsWith("__type:investor")) return "investor";
-  if (bio.startsWith("__type:institutional")) return "institutional";
   if (bio.startsWith("__type:developer")) return "developer";
   if (bio.startsWith("__type:seller")) return "seller";
   if (bio.startsWith("__type:professional")) return "professional";
@@ -31,8 +27,6 @@ export function getParticipantTypeFromProfile(
   if (profile.role === "admin" || profile.role === "agent") return "agent";
   if (profile.role === "professional") return "professional";
   if (profile.role === "seller_landlord") return "seller";
-  if (profile.role === "investor") return "investor";
-  if (profile.role === "institutional") return "institutional";
   if (profile.role === "developer") return "developer";
   return "buyer";
 }
@@ -40,20 +34,18 @@ export function getParticipantTypeFromProfile(
 /** Derive owner type for listing display: agent vs private seller/landlord */
 export function getOwnerParticipantType(profile: { role?: string; bio?: string | null } | null): "agent" | "seller" | null {
   if (!profile) return null;
-  if (["admin", "agent", "institutional", "developer"].includes(profile.role || "")) return "agent";
+  if (["admin", "agent", "developer"].includes(profile.role || "")) return "agent";
   if (profile.role === "seller_landlord") return "seller";
   const bio = profile.bio ?? "";
   if (bio.startsWith("__type:seller")) return "seller";
-  if (bio.startsWith("__type:agent") || bio.startsWith("__type:institutional") || bio.startsWith("__type:developer")) return "agent";
+  if (bio.startsWith("__type:agent") || bio.startsWith("__type:developer")) return "agent";
   return null;
 }
 
 export const PARTICIPANT_LABELS: Record<ParticipantId, string> = {
   buyer: "Buyer / Renter",
   seller: "Seller / Landlord",
-  investor: "Investor",
   agent: "Agent",
-  institutional: "Institutional / Fund",
   developer: "Developer",
   professional: "Professional",
 };

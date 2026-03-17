@@ -22,7 +22,7 @@ import { usePricingConfigs, formatPrice, PRICING_KEYS } from "@/hooks/usePricing
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type RoleKey = "individual" | "seller_landlord" | "agent" | "professional" | "investor" | "institutional" | "developer";
+type RoleKey = "individual" | "seller_landlord" | "agent" | "professional" | "developer";
 type OnboardingStep =
   | "pick-type"
   | "pro-category"
@@ -128,30 +128,6 @@ const participants: ParticipantType[] = [
       "Performance analytics",
     ],
     section: "Development",
-  },
-  {
-    id: "investor", role: "investor", icon: TrendingUp, color: "emerald",
-    label: "Private Investor", tagline: "Access the deal pipeline",
-    desc: "Invest in off-market and Quick Sale™ opportunities",
-    features: [
-      "Quick Sale™ deal flow",
-      "Saved searches & auction alerts",
-      "ROI calculator",
-      "AI market summary",
-    ],
-    section: "Private",
-  },
-  {
-    id: "institutional", role: "institutional", icon: Building2, color: "amber",
-    label: "Institutional / Fund", tagline: "Buy-side and sell-side",
-    desc: "Fund or institution with deal flow and listing capabilities",
-    features: [
-      "Quick Sale™ deal flow",
-      "Listings & analytics",
-      "CRM & contacts",
-      "Projects & portfolios",
-    ],
-    section: "Institutional",
   },
 ];
 
@@ -464,7 +440,7 @@ export default function Onboarding() {
           <p className="text-muted-foreground text-sm max-w-sm mx-auto">Choose your profile. You can always update it in settings.</p>
         </div>
         <div className="space-y-6">
-          {(["Private", "Real estate agents", "Development", "Institutional", "Services"] as const).map(section => {
+          {(["Private", "Real estate agents", "Development", "Services"] as const).map(section => {
             const sectionParticipants = participants.filter(p => p.section === section);
             if (sectionParticipants.length === 0) return null;
             return (
@@ -845,9 +821,7 @@ export default function Onboarding() {
     }> = {
       buyer:         { primary: { label: "Browse Listings",       href: "/listings" },           secondary: [{ label: "View Auctions", href: "/auctions" }, { label: "Go to Dashboard", href: "/dashboard" }], subtitle: "Find your perfect property." },
       seller:        { primary: { label: "List My Property",       href: "/listings/new" },        secondary: [{ label: "Browse Market",  href: "/listings" }, { label: "Go to Dashboard", href: "/dashboard" }], subtitle: "Start with your first listing." },
-      investor:      { primary: { label: "View Pricing & Plans",   href: "/pricing?audience=investor" }, secondary: [{ label: "Investor Dashboard", href: "/investor-dashboard" }, { label: "Browse Auctions", href: "/auctions" }], subtitle: "Choose your plan to access the deal pipeline." },
       agent:         { primary: { label: "View Pricing & Plans",   href: "/pricing?audience=agent" },   secondary: [{ label: "Create Listing", href: "/listings/new" }, { label: "Go to Dashboard", href: "/dashboard" }], subtitle: "Choose your plan for listings and CRM." },
-      institutional: { primary: { label: "View Pricing & Plans",   href: "/pricing?audience=institutional" }, secondary: [{ label: "Investor Dashboard", href: "/investor-dashboard" }, { label: "Go to Dashboard", href: "/dashboard" }], subtitle: "Choose your plan for deal flow and listings." },
       developer:     { primary: { label: "View Pricing & Plans",   href: "/pricing?audience=developer" },   secondary: [{ label: "Create Building", href: "/listings/new-building" }, { label: "Go to Dashboard", href: "/dashboard" }], subtitle: "Choose your plan for projects and portfolios." },
       professional:  { primary: { label: "View My Profile",        href: "/professionals/me" },    secondary: [{ label: "Explore Dashboard", href: "/dashboard" }, { label: "Directory", href: "/professionals" }], subtitle: "Your profile is live in the directory." },
     };

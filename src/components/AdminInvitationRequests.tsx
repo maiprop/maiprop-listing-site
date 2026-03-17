@@ -146,16 +146,7 @@ export default function AdminInvitationRequests() {
         );
       if (subErr) throw subErr;
 
-      // 3. Update the applicant's profile role to 'investor' for immediate access
-      const { error: profileErr } = await supabase
-        .from("profiles")
-        .update({ role: "investor" })
-        .eq("user_id", req.user_id);
-      if (profileErr) {
-        // Non-fatal — log but don't block
-        console.warn("Profile role update failed (non-fatal):", profileErr.message);
-      }
-
+      // 3. Eligibility = investor_subscriptions only (no role change; access via subscription)
       // 4. Send email notification (fire-and-forget)
       sendNotificationEmail({
         type: "approved",

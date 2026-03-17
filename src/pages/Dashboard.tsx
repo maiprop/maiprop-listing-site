@@ -10,6 +10,7 @@ import {
   FolderOpen, LayoutGrid, Lock, Zap,
 } from "lucide-react";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useEligibleForQuickSale } from "@/hooks/useEligibleForQuickSale";
 import { startOfCurrentMonth } from "@/hooks/usePlanLimits";
 import { DashboardPlanCard } from "@/components/DashboardPlanCard";
 import { useProfessionalAvailability } from "@/hooks/useProfessionalServices";
@@ -156,7 +157,7 @@ type NavKey =
   | "deal-flow" | "contacts" | "projects" | "portfolios"
   | "profile" | "settings";
 
-type DashboardRole = "individual" | "seller_landlord" | "agent" | "professional" | "investor" | "institutional" | "developer" | "admin";
+type DashboardRole = "individual" | "seller_landlord" | "agent" | "professional" | "developer" | "admin";
 
 const ALL_NAV_ITEMS: { icon: React.ElementType; label: string; key: NavKey; href?: string }[] = [
   { icon: Home,          label: "Overview",       key: "overview"       },
@@ -183,9 +184,7 @@ const ALL_NAV_ITEMS: { icon: React.ElementType; label: string; key: NavKey; href
 const NAV_BY_TYPE: Record<string, NavKey[]> = {
   buyer:         ["overview", "saved", "saved-searches", "open-houses", "messages", "viewings", "auctions", "profile", "settings"],
   seller:        ["overview", "listings", "saved", "saved-searches", "messages", "viewings", "open-houses", "profile", "settings"],
-  investor:      ["overview", "deal-flow", "saved", "saved-searches", "messages", "viewings", "auctions", "open-houses", "profile", "settings"],
   agent:         ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "open-houses", "leads", "contacts", "profile", "settings"],
-  institutional: ["overview", "deal-flow", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "open-houses", "leads", "contacts", "profile", "settings"],
   developer:     ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "leads", "contacts", "projects", "portfolios", "profile", "settings"],
   professional:  ["overview", "services", "booking", "leads", "contacts", "analytics", "messages", "viewings", "profile", "settings"],
   admin:         ["overview", "deal-flow", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "open-houses", "services", "booking", "leads", "contacts", "projects", "portfolios", "profile", "settings"],
@@ -195,19 +194,20 @@ const NAV_BY_TYPE: Record<string, NavKey[]> = {
 const NAV_BY_TYPE_FREE: Record<string, NavKey[]> = {
   buyer:         ["overview", "saved", "saved-searches", "messages", "viewings", "auctions", "profile", "settings"],
   seller:        ["overview", "listings", "messages", "viewings", "profile", "settings"],
-  investor:      ["overview", "deal-flow", "saved", "messages", "viewings", "auctions", "profile", "settings"],
   agent:         ["overview", "listings", "saved", "messages", "viewings", "auctions", "profile", "settings"],
-  institutional: ["overview", "deal-flow", "listings", "saved", "messages", "viewings", "auctions", "profile", "settings"],
   developer:     ["overview", "listings", "messages", "profile", "settings"],
   professional:  ["overview", "services", "leads", "messages", "profile", "settings"],
   admin:         ["overview", "deal-flow", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "open-houses", "services", "booking", "leads", "contacts", "projects", "portfolios", "profile", "settings"],
 };
 
-function getNavItemsForBioType(bioType: string | null, role: DashboardRole, isPro: boolean) {
+function getNavItemsForBioType(bioType: string | null, role: DashboardRole, isPro: boolean, eligibleForQuickSale = false) {
   if (role === "admin") return ALL_NAV_ITEMS.filter(i => NAV_BY_TYPE.admin.includes(i.key));
-  const key = bioType ?? (role === "seller_landlord" ? "seller" : role === "professional" ? "professional" : role === "agent" ? "agent" : role === "investor" ? "investor" : role === "institutional" ? "institutional" : role === "developer" ? "developer" : "buyer");
+  const key = bioType ?? (role === "seller_landlord" ? "seller" : role === "professional" ? "professional" : role === "agent" ? "agent" : role === "developer" ? "developer" : "buyer");
   const navMap = !isPro && key !== "admin" ? NAV_BY_TYPE_FREE : NAV_BY_TYPE;
-  const keys = navMap[key] ?? navMap.buyer;
+  let keys = navMap[key] ?? navMap.buyer;
+  if (eligibleForQuickSale && key === "buyer" && !keys.includes("deal-flow")) {
+    keys = [...keys, "deal-flow"];
+  }
   return ALL_NAV_ITEMS.filter(i => keys.includes(i.key));
 }
 
@@ -231,10 +231,11 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { profile, user, signOut, updateProfile, refreshProfile } = useAuth();
   const { isPro } = useSubscription();
+  const { eligible: eligibleForQuickSale } = useEligibleForQuickSale();
   const role: DashboardRole = (profile?.role as DashboardRole) || "individual";
   const bioType = getParticipantTypeFromProfile(profile);
 
-  const navItems = getNavItemsForBioType(bioType, role, isPro);
+  const navItems = getNavItemsForBioType(bioType, role, isPro, eligibleForQuickSale);
   const sectionNavItems = navItems.filter(i => !("href" in i && i.href));
   const defaultSection = (sectionNavItems[0]?.key ?? "overview") as NavKey;
   const [activeSection, setActiveSection] = useState<NavKey>((section as NavKey) || defaultSection);
@@ -246,7 +247,7 @@ export default function Dashboard() {
   const [invitationRequestStatus, setInvitationRequestStatus] = useState<"none" | "pending" | "approved" | "rejected">("none");
   useEffect(() => {
     if (!user) return;
-    if (["investor", "institutional", "admin"].includes(role)) return;
+    if (role === "admin") return;
     supabase
       .from("invitation_requests" as any)
       .select("status")
@@ -311,15 +312,13 @@ export default function Dashboard() {
     if (role === "seller_landlord" || bioType === "seller") return "Seller / Landlord";
     if (role === "agent" || bioType === "agent") return "Agent";
     if (role === "professional" || bioType === "professional") return "Professional";
-    if (role === "investor" || bioType === "investor") return "Investor";
-    if (role === "institutional" || bioType === "institutional") return "Institutional";
     if (role === "developer" || bioType === "developer") return "Developer";
     if (bioType === "buyer") return "Buyer / Renter";
     return "Buyer / Renter";
   })();
 
-  const isInvestorLike = bioType === "investor" || bioType === "institutional" || role === "investor" || role === "institutional";
-  const isSellSide = role === "agent" || role === "institutional" || role === "developer";
+  const isInvestorLike = false;
+  const isSellSide = role === "agent" || role === "developer";
   const isSellerLike = role === "seller_landlord" || bioType === "seller" || isSellSide;
   const upcomingViewingsCount = viewings.filter((v: any) => v.status === "confirmed" || v.status === "pending").length;
   const ownViewingsCount = ownViewings.filter((v: any) => v.status === "confirmed" || v.status === "pending").length;
@@ -328,14 +327,12 @@ export default function Dashboard() {
   const statsByType: Record<string, { label: string; value: number; icon: React.ElementType; color: string }[]> = {
     buyer:         [{ label: "Saved", value: favorites.length, icon: Heart, color: "text-destructive" }, { label: "Saved Searches", value: savedSearches.length, icon: Bookmark, color: "text-primary" }, { label: "Viewings", value: upcomingViewingsCount, icon: Calendar, color: "text-brand-gold" }, { label: "Auction Alerts", value: auctionAlerts.filter((a: any) => a.active).length, icon: Gavel, color: "text-brand-gold" }],
     seller:        [{ label: "Active Listings", value: myListings.filter(l => l.status === "active").length, icon: Building2, color: "text-primary" }, { label: "Total Views", value: myListings.reduce((s, l) => s + (l.views_count || 0), 0), icon: Eye, color: "text-brand-emerald" }, { label: "Saved", value: favorites.length, icon: Heart, color: "text-destructive" }, { label: "Viewings", value: upcomingViewingsCount + ownViewingsCount, icon: Calendar, color: "text-brand-gold" }],
-    investor:      [{ label: "Saved Deals", value: favorites.length, icon: Heart, color: "text-destructive" }, { label: "Saved Searches", value: savedSearches.length, icon: Bookmark, color: "text-primary" }, { label: "Auction Alerts", value: auctionAlerts.filter((a: any) => a.active).length, icon: Gavel, color: "text-brand-gold" }, { label: "Viewings", value: upcomingViewingsCount, icon: Calendar, color: "text-brand-gold" }],
     agent:         [{ label: "Active Listings", value: myListings.filter(l => l.status === "active").length, icon: Building2, color: "text-primary" }, { label: "Total Views", value: myListings.reduce((s, l) => s + (l.views_count || 0), 0), icon: Eye, color: "text-brand-emerald" }, { label: "Saved", value: favorites.length, icon: Heart, color: "text-destructive" }, { label: "Viewings", value: upcomingViewingsCount + ownViewingsCount, icon: Calendar, color: "text-brand-gold" }],
-    institutional: [{ label: "Active Listings", value: myListings.filter(l => l.status === "active").length, icon: Building2, color: "text-primary" }, { label: "Saved Deals", value: favorites.length, icon: Heart, color: "text-destructive" }, { label: "Auction Alerts", value: auctionAlerts.filter((a: any) => a.active).length, icon: Gavel, color: "text-brand-gold" }, { label: "Viewings", value: upcomingViewingsCount + ownViewingsCount, icon: Calendar, color: "text-brand-gold" }],
     developer:     [{ label: "Active Listings", value: myListings.filter(l => l.status === "active").length, icon: Building2, color: "text-primary" }, { label: "Total Views", value: myListings.reduce((s, l) => s + (l.views_count || 0), 0), icon: Eye, color: "text-brand-emerald" }, { label: "Saved", value: favorites.length, icon: Heart, color: "text-destructive" }, { label: "Viewings", value: upcomingViewingsCount + ownViewingsCount, icon: Calendar, color: "text-brand-gold" }],
     professional:  [{ label: "Services", value: professionalServices.length, icon: Wrench, color: "text-primary" }, { label: "Pending Leads", value: pendingLeadsCount, icon: Briefcase, color: "text-brand-gold" }, { label: "Total Leads", value: (leads as any[]).length, icon: Users, color: "text-primary" }],
     admin:         [{ label: "Active Listings", value: myListings.filter(l => l.status === "active").length, icon: Building2, color: "text-primary" }, { label: "Total Views", value: myListings.reduce((s, l) => s + (l.views_count || 0), 0), icon: Eye, color: "text-brand-emerald" }, { label: "Saved", value: favorites.length, icon: Heart, color: "text-destructive" }, { label: "Viewings", value: upcomingViewingsCount + ownViewingsCount, icon: Calendar, color: "text-brand-gold" }],
   };
-  const statsKey = bioType ?? (role === "admin" ? "admin" : role === "seller_landlord" ? "seller" : role === "professional" ? "professional" : role === "agent" ? "agent" : role === "investor" ? "investor" : role === "institutional" ? "institutional" : role === "developer" ? "developer" : "buyer");
+  const statsKey = bioType ?? (role === "admin" ? "admin" : role === "seller_landlord" ? "seller" : role === "professional" ? "professional" : role === "agent" ? "agent" : role === "developer" ? "developer" : "buyer");
   const stats = statsByType[statsKey] ?? statsByType.buyer;
 
   const monthStart = startOfCurrentMonth().toISOString();
@@ -2129,8 +2126,6 @@ const ROLE_PERMISSIONS: Record<string, { label: string; can: string[] }> = {
   seller_landlord: { label: "Seller / Landlord", can: ["Create & manage listings", "Receive viewing requests", "AI listing assist"] },
   agent:           { label: "Agent",            can: ["Unlimited listings", "Lead management", "Analytics"] },
   admin:           { label: "Admin",            can: ["Platform admin", "Subscribers", "Pricing", "OS sync", "All dashboards"] },
-  investor:        { label: "Investor",         can: ["Deal flow", "Saved deals", "Auction alerts", "ROI calculator"] },
-  institutional:   { label: "Institutional",   can: ["Deal flow", "Listings", "Portfolios", "CRM", "Analytics"] },
   developer:       { label: "Developer",       can: ["Listings", "Projects", "Portfolios", "Analytics"] },
   professional:    { label: "Professional",     can: ["Professional directory", "Service catalog", "Client leads", "Verified badge"] },
 };
@@ -2248,7 +2243,7 @@ function SettingsSection({
           <ul className="text-xs text-muted-foreground space-y-1.5 leading-relaxed list-none">
             <li className="flex items-start gap-2">
               <span className="text-brand-gold shrink-0 mt-0.5">▸</span>
-              <span><strong className="text-foreground">Extra charges may apply.</strong> Upgrading to a higher-tier participant type (e.g. Agent, Institutional) may activate a paid plan. You will be informed before any charge is made.</span>
+              <span><strong className="text-foreground">Extra charges may apply.</strong> Upgrading to a higher-tier participant type (e.g. Agent, Developer) may activate a paid plan. You will be informed before any charge is made.</span>
             </li>
             <li className="flex items-start gap-2">
               <span className="text-destructive shrink-0 mt-0.5">▸</span>

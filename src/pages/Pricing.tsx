@@ -20,14 +20,12 @@ import { toast } from "sonner";
 
 // ── Audience config ────────────────────────────────────────────────────────────
 
-type AudienceId = "buyer" | "seller" | "investor" | "agent" | "institutional" | "developer" | "professional";
+type AudienceId = "buyer" | "seller" | "agent" | "developer" | "professional";
 
 const AUDIENCE_TABS: { id: AudienceId; label: string; mobileLabel: string; icon: React.ElementType }[] = [
   { id: "buyer",         label: "Buyer / Renter",      mobileLabel: "Buyer",       icon: Home },
   { id: "seller",        label: "Seller / Landlord",   mobileLabel: "Seller",      icon: Users },
-  { id: "investor",      label: "Investor",            mobileLabel: "Investor",    icon: TrendingUp },
   { id: "agent",         label: "Agent",                mobileLabel: "Agent",       icon: UserCheck },
-  { id: "institutional",  label: "Institutional",        mobileLabel: "Inst.",       icon: Building2 },
   { id: "developer",     label: "Developer",            mobileLabel: "Dev",         icon: Layers },
   { id: "professional",  label: "Professional",        mobileLabel: "Pro",         icon: Briefcase },
 ];
@@ -78,24 +76,6 @@ const SELLER_PRO: PlanFeature[] = [
   { label: "Priority placement in search", icon: Star, free: false, paid: true },
 ];
 
-// INVESTOR
-const INVESTOR_FREE_LIST = [
-  "Quick Sale™ deal feed",
-  "Browse auctions",
-  "Save listings & price alerts",
-  "Saved searches",
-  "Auction alerts",
-  "ROI calculator (basic)",
-  "AI market summary",
-];
-const INVESTOR_PRO: PlanFeature[] = [
-  { label: "Full AI Deal Scoring", icon: BarChart2, free: false, paid: true },
-  { label: "Investor Dashboard (deal pipeline)", icon: FolderKanban, free: false, paid: true },
-  { label: "Full AI Property Valuation", icon: BarChart2, free: false, paid: true },
-  { label: "Due Diligence Checklist", icon: Shield, free: false, paid: true },
-  { label: "Comparable Sales Data", icon: BarChart2, free: false, paid: true },
-];
-
 // AGENT
 const AGENT_FREE_LIST = [
   "Up to 5 listings",
@@ -117,24 +97,6 @@ const AGENT_PRO: PlanFeature[] = [
   { label: "Up to 10 Priority Ads", icon: Star, free: false, paid: "€5 each extra" },
   { label: "Priority in Professionals Directory", icon: Crown, free: "Basic", paid: "Advanced profile" },
   { label: "Book up to 10 viewings per month", icon: MessageSquare, free: "3/month", paid: "10/month" },
-];
-
-// INSTITUTIONAL
-const INSTITUTIONAL_FREE_LIST = [
-  "Browse listings & auctions",
-  "Quick Sale™ deal feed (basic)",
-  "Send messages",
-  "Saved searches",
-];
-const INSTITUTIONAL_PRO: PlanFeature[] = [
-  { label: "Investor Dashboard & deal flow", icon: FolderKanban, free: false, paid: true },
-  { label: "Unlimited listings", icon: Layers, free: false, paid: true },
-  { label: "AI deal scoring & valuation", icon: BarChart2, free: false, paid: true },
-  { label: "Advanced portfolio analytics", icon: TrendingUp, free: false, paid: true },
-  { label: "CRM & contacts (full)", icon: Users, free: false, paid: true },
-  { label: "Projects & portfolios", icon: FolderKanban, free: false, paid: true },
-  { label: "Priority support & onboarding", icon: Crown, free: false, paid: true },
-  { label: "Due diligence hub", icon: FileText, free: false, paid: true },
 ];
 
 // DEVELOPER — Pro only (no free tier)
@@ -188,23 +150,11 @@ const PLANS: Record<AudienceId, PlanDef> = {
     freeList: SELLER_FREE_LIST, features: SELLER_PRO,
     accent: "text-violet-400", accentBg: "bg-violet-500/10", accentBorder: "border-violet-500/40",
   },
-  investor: {
-    freeLabel: "Basic Access", freePrice: "Free", freeDesc: "Quick Sale™ feed + basic auction access", freeCTA: "Get Basic Access", freeHref: "/investor-dashboard",
-    paidLabel: "Pro Plan", paidPrice: "€79", paidPriceUnit: "/ month", paidDesc: "Full deal pipeline, AI scoring & intelligence", paidCTA: "Get Pro Plan", paidHref: "/investor-dashboard",
-    freeList: INVESTOR_FREE_LIST, features: INVESTOR_PRO,
-    accent: "text-destructive", accentBg: "bg-destructive/10", accentBorder: "border-destructive/30",
-  },
   agent: {
     freeLabel: "Free", freePrice: "€0", freeDesc: "Up to 5 listings & basic tools", freeCTA: "Start Free", freeHref: "/signup",
     paidLabel: "Pro Plan", paidPrice: "€149", paidPriceUnit: "/ month", paidDesc: "Unlimited listings, CRM, analytics & priority ads", paidCTA: "Get Pro Plan", paidHref: "/pricing",
     freeList: AGENT_FREE_LIST, features: AGENT_PRO,
     accent: "text-brand-purple", accentBg: "bg-brand-purple/10", accentBorder: "border-brand-purple/40",
-  },
-  institutional: {
-    freeLabel: "Basic", freePrice: "Free", freeDesc: "Browse listings and explore the platform", freeCTA: "Register Free", freeHref: "/signup",
-    paidLabel: "Pro Plan", paidPrice: "€149", paidPriceUnit: "/ month", paidDesc: "Full deal flow, portfolio tools & priority support", paidCTA: "Get Pro Plan", paidHref: "/pricing",
-    freeList: INSTITUTIONAL_FREE_LIST, features: INSTITUTIONAL_PRO,
-    accent: "text-amber-400", accentBg: "bg-amber-500/10", accentBorder: "border-amber-500/40",
   },
   developer: {
     freeLabel: "—", freePrice: "—", freeDesc: "Developers require Pro plan", freeCTA: "—", freeHref: "#",
@@ -236,9 +186,7 @@ export default function Pricing() {
   const PLAN_KEYS: Record<AudienceId, string> = {
     buyer: "pro",
     seller: "seller_pro",
-    investor: "investor_private",
     agent: "agent_basic",
-    institutional: "investor_institutional",
     developer: "agent_basic",
     professional: "professional_basic",
   };
