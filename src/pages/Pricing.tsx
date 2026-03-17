@@ -6,10 +6,10 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import {
-  Check, X, Zap, Flame, Users, Briefcase, UserCheck,
+  Check, Zap, Users, Briefcase, UserCheck,
   TrendingUp, BarChart2, Bell, Star, Shield, Filter, ArrowRight,
-  Crown, Sparkles, Building2, Gavel, Globe2, Home, Wrench,
-  ChevronRight, MessageSquare, Eye, FileText, Layers, FolderKanban,
+  Crown, Sparkles, Building2, Gavel, Home, Layers,
+  MessageSquare, Eye, FileText, FolderKanban,
   Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -165,91 +165,6 @@ const PROFESSIONAL_PRO: PlanFeature[] = [
   { label: "Consultation messaging suite", icon: MessageSquare, free: false, paid: true },
 ];
 
-// ── Dashboard modules per role ─────────────────────────────────────────────────
-type ModuleRow = { module: string; desc: string };
-const MODULES: Record<AudienceId, ModuleRow[]> = {
-  buyer: [
-    { module: "Overview", desc: "Dashboard home" },
-    { module: "Saved Listings", desc: "Favourited properties" },
-    { module: "Saved Searches", desc: "Search filters + alerts" },
-    { module: "Messages", desc: "Conversations" },
-    { module: "Viewings", desc: "Viewing requests" },
-    { module: "Auction Alerts", desc: "Court auction notifications" },
-    { module: "Profile", desc: "Your public profile" },
-    { module: "Settings", desc: "Account settings" },
-  ],
-  seller: [
-    { module: "Overview", desc: "Dashboard home" },
-    { module: "Listings", desc: "Create, edit & manage listings" },
-    { module: "Saved Listings", desc: "Favourited properties" },
-    { module: "Messages", desc: "Buyer conversations" },
-    { module: "Viewings", desc: "Viewing requests" },
-    { module: "Profile", desc: "Your public profile" },
-    { module: "Settings", desc: "Account settings" },
-  ],
-  investor: [
-    { module: "Overview", desc: "Dashboard home" },
-    { module: "Deal Flow", desc: "Link to Investor Dashboard" },
-    { module: "Saved Listings", desc: "Saved properties + price alerts" },
-    { module: "Saved Searches", desc: "Saved search filters" },
-    { module: "Messages", desc: "Conversations" },
-    { module: "Viewings", desc: "Viewing requests" },
-    { module: "Auction Alerts", desc: "Court auction notifications" },
-    { module: "Profile", desc: "Your public profile" },
-    { module: "Settings", desc: "Account settings" },
-  ],
-  agent: [
-    { module: "Overview", desc: "Dashboard home" },
-    { module: "Listings", desc: "All managed listings" },
-    { module: "Analytics", desc: "Listing & lead analytics" },
-    { module: "Saved Listings", desc: "Favourited properties" },
-    { module: "Saved Searches", desc: "Search filters" },
-    { module: "Messages", desc: "Conversations" },
-    { module: "Viewings", desc: "Viewing requests" },
-    { module: "Auction Alerts", desc: "Court auction notifications" },
-    { module: "Contacts CRM", desc: "Lead & client management" },
-    { module: "Profile", desc: "Your public profile" },
-    { module: "Settings", desc: "Account settings" },
-  ],
-  institutional: [
-    { module: "Overview", desc: "Dashboard home" },
-    { module: "Deal Flow", desc: "Link to Investor Dashboard" },
-    { module: "Listings", desc: "All managed listings" },
-    { module: "Analytics", desc: "Portfolio analytics" },
-    { module: "Saved Listings", desc: "Favourited properties" },
-    { module: "Saved Searches", desc: "Search filters" },
-    { module: "Messages", desc: "Conversations" },
-    { module: "Viewings", desc: "Viewing requests" },
-    { module: "Auction Alerts", desc: "Court auction notifications" },
-    { module: "Contacts CRM", desc: "Lead & client management" },
-    { module: "Profile", desc: "Your public profile" },
-    { module: "Settings", desc: "Account settings" },
-  ],
-  developer: [
-    { module: "Overview", desc: "Dashboard home" },
-    { module: "Listings", desc: "All managed listings" },
-    { module: "Analytics", desc: "Listing & lead analytics" },
-    { module: "Saved Listings", desc: "Favourited properties" },
-    { module: "Saved Searches", desc: "Search filters" },
-    { module: "Messages", desc: "Conversations" },
-    { module: "Viewings", desc: "Viewing requests" },
-    { module: "Contacts CRM", desc: "Inquiry management" },
-    { module: "Projects", desc: "Project showcase pages" },
-    { module: "Portfolios", desc: "Portfolio management" },
-    { module: "Profile", desc: "Your public profile" },
-    { module: "Settings", desc: "Account settings" },
-  ],
-  professional: [
-    { module: "Overview", desc: "Dashboard home" },
-    { module: "Services", desc: "Service catalog, rates & availability" },
-    { module: "Leads", desc: "Consultation requests & leads" },
-    { module: "Messages", desc: "Client conversations" },
-    { module: "Viewings", desc: "Viewing requests" },
-    { module: "Profile", desc: "Your public professional profile" },
-    { module: "Settings", desc: "Account settings" },
-  ],
-};
-
 // ── Pricing plan definitions ───────────────────────────────────────────────────
 const PLANS: Record<AudienceId, {
   freeLabel: string; freePrice: string; freeDesc: string; freeCTA: string; freeHref: string;
@@ -260,37 +175,37 @@ const PLANS: Record<AudienceId, {
 }> = {
   buyer: {
     freeLabel: "Free", freePrice: "€0", freeDesc: "Everything to start your search", freeCTA: "Browse Free", freeHref: "/listings",
-    paidLabel: "mAI Prop Pro", paidPrice: "€29", paidPriceUnit: "/ month", paidDesc: "AI-powered investor intelligence", paidCTA: "Get Pro", paidHref: "/pricing",
+    paidLabel: "Pro Plan", paidPrice: "€29", paidPriceUnit: "/ month", paidDesc: "AI-powered investor intelligence", paidCTA: "Get Pro Plan", paidHref: "/pricing",
     freeList: BUYER_FREE_LIST, features: BUYER_PRO,
     accent: "text-brand-gold", accentBg: "bg-brand-gold/10", accentBorder: "border-brand-gold/40",
   },
   seller: {
     freeLabel: "Free", freePrice: "€0", freeDesc: "List your property and manage viewings", freeCTA: "List a Property", freeHref: "/listings/new",
-    paidLabel: "Seller Pro", paidPrice: "€19", paidPriceUnit: "/ month", paidDesc: "Unlimited listings, AI assist & analytics", paidCTA: "Get Seller Pro", paidHref: "/pricing",
+    paidLabel: "Pro Plan", paidPrice: "€19", paidPriceUnit: "/ month", paidDesc: "Unlimited listings, AI assist & analytics", paidCTA: "Get Pro Plan", paidHref: "/pricing",
     freeList: SELLER_FREE_LIST, features: SELLER_PRO,
     accent: "text-violet-400", accentBg: "bg-violet-500/10", accentBorder: "border-violet-500/40",
   },
   investor: {
     freeLabel: "Basic Access", freePrice: "Free", freeDesc: "Quick Sale™ feed + basic auction access", freeCTA: "Get Basic Access", freeHref: "/investor-dashboard",
-    paidLabel: "Investor Pro", paidPrice: "€79", paidPriceUnit: "/ month", paidDesc: "Full deal pipeline, AI scoring & intelligence", paidCTA: "Get Investor Pro", paidHref: "/investor-dashboard",
+    paidLabel: "Pro Plan", paidPrice: "€79", paidPriceUnit: "/ month", paidDesc: "Full deal pipeline, AI scoring & intelligence", paidCTA: "Get Pro Plan", paidHref: "/investor-dashboard",
     freeList: INVESTOR_FREE_LIST, features: INVESTOR_PRO,
     accent: "text-destructive", accentBg: "bg-destructive/10", accentBorder: "border-destructive/30",
   },
   agent: {
     freeLabel: "Starter", freePrice: "€0", freeDesc: "List a few properties & test the platform", freeCTA: "Start Free", freeHref: "/signup",
-    paidLabel: "Agency Pro", paidPrice: "€89", paidPriceUnit: "/ month", paidDesc: "Unlimited listings, CRM & analytics", paidCTA: "Get Agency Pro", paidHref: "/pricing",
+    paidLabel: "Pro Plan", paidPrice: "€89", paidPriceUnit: "/ month", paidDesc: "Unlimited listings, CRM & analytics", paidCTA: "Get Pro Plan", paidHref: "/pricing",
     freeList: AGENT_FREE_LIST, features: AGENT_PRO,
     accent: "text-brand-purple", accentBg: "bg-brand-purple/10", accentBorder: "border-brand-purple/40",
   },
   institutional: {
     freeLabel: "Basic", freePrice: "Free", freeDesc: "Browse listings and explore the platform", freeCTA: "Register Free", freeHref: "/signup",
-    paidLabel: "Institutional Pro", paidPrice: "€149", paidPriceUnit: "/ month", paidDesc: "Full deal flow, portfolio tools & priority support", paidCTA: "Get Institutional Pro", paidHref: "/pricing",
+    paidLabel: "Pro Plan", paidPrice: "€149", paidPriceUnit: "/ month", paidDesc: "Full deal flow, portfolio tools & priority support", paidCTA: "Get Pro Plan", paidHref: "/pricing",
     freeList: INSTITUTIONAL_FREE_LIST, features: INSTITUTIONAL_PRO,
     accent: "text-amber-400", accentBg: "bg-amber-500/10", accentBorder: "border-amber-500/40",
   },
   developer: {
     freeLabel: "Starter", freePrice: "€0", freeDesc: "List projects and manage inquiries", freeCTA: "Start Free", freeHref: "/signup",
-    paidLabel: "Developer Pro", paidPrice: "€89", paidPriceUnit: "/ month", paidDesc: "Unlimited listings, project showcases & analytics", paidCTA: "Get Developer Pro", paidHref: "/pricing",
+    paidLabel: "Pro Plan", paidPrice: "€89", paidPriceUnit: "/ month", paidDesc: "Unlimited listings, project showcases & analytics", paidCTA: "Get Pro Plan", paidHref: "/pricing",
     freeList: DEVELOPER_FREE_LIST, features: DEVELOPER_PRO,
     accent: "text-orange-400", accentBg: "bg-orange-500/10", accentBorder: "border-orange-500/40",
   },
@@ -301,32 +216,6 @@ const PLANS: Record<AudienceId, {
     accent: "text-rose-400", accentBg: "bg-rose-500/10", accentBorder: "border-rose-500/40",
   },
 };
-
-
-// ── Module table ───────────────────────────────────────────────────────────────
-function ModuleTable({ audience, accent }: { audience: AudienceId; accent: string }) {
-  const rows = MODULES[audience];
-  return (
-    <div className="mt-10 glass-card rounded-2xl border border-border overflow-hidden">
-      <div className="px-5 py-4 border-b border-border flex items-center gap-2">
-        <Layers className={cn("w-4 h-4", accent)} />
-        <h3 className="text-sm font-bold text-foreground">Dashboard Modules</h3>
-        <span className="ml-auto text-xs text-muted-foreground">{rows.length} modules included</span>
-      </div>
-      <div className="divide-y divide-border">
-        {rows.map((r, i) => (
-          <div key={r.module} className={cn("grid grid-cols-[1fr_2fr] gap-0", i % 2 === 1 ? "bg-muted/20" : "")}>
-            <div className="px-5 py-3 text-sm font-semibold text-foreground flex items-center gap-2">
-              <Check className={cn("w-3.5 h-3.5 shrink-0", accent)} />
-              {r.module}
-            </div>
-            <div className="px-5 py-3 text-xs text-muted-foreground border-l border-border flex items-center">{r.desc}</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function Pricing() {
