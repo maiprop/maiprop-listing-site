@@ -109,7 +109,11 @@ export function Navbar() {
                       ? forceLight ? "text-white bg-white/20" : "text-primary bg-primary/10"
                       : forceLight
                         ? "text-white bg-white/20"
-...
+                        : "text-primary bg-primary/10"
+                  : link.accent === "flame"
+                    ? forceLight
+                      ? "text-orange-300 hover:text-orange-200 hover:bg-white/10"
+                      : "text-destructive/80 hover:text-destructive hover:bg-destructive/10"
                     : link.accent === "dooropen"
                       ? forceLight
                         ? "text-white/80 hover:text-white hover:bg-white/10"
