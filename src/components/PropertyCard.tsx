@@ -371,23 +371,23 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
 
         {/* Auction banner */}
         {property.listingType === "open_house" && property.auctionDate && (
-          <div className="flex items-center gap-2 bg-emerald-500/10 rounded-xl p-2.5 border border-emerald-500/25">
-            <Calendar className="w-4 h-4 text-emerald-600 shrink-0" />
+          <div className="flex items-center gap-2 bg-brand-cyan/10 rounded-xl p-2.5 border border-brand-cyan/25">
+            <Calendar className="w-4 h-4 text-brand-cyan shrink-0" />
             <div>
-              <div className="text-xs font-bold text-emerald-700">Open House</div>
+              <div className="text-xs font-bold text-brand-purple">Open House</div>
               <div className="text-[11px] text-muted-foreground truncate">{property.auctionDate}</div>
             </div>
           </div>
         )}
         {property.listingType === "auction" && property.auctionDate && (
-          <div className="flex items-center gap-2 bg-brand-gold/10 rounded-xl p-2.5 border border-brand-gold/25">
-            <Gavel className="w-4 h-4 text-brand-gold shrink-0" />
+          <div className="flex items-center gap-2 bg-brand-auction/10 rounded-xl p-2.5 border border-brand-auction/25">
+            <Gavel className="w-4 h-4 text-brand-auction shrink-0" />
             <div className="flex-1 min-w-0">
-              <div className="text-xs font-semibold text-brand-gold">Auction Date</div>
+              <div className="text-xs font-semibold text-brand-auction">Auction Date</div>
               <div className="text-[11px] text-muted-foreground truncate">{property.auctionDate}</div>
             </div>
             {property.auctionStartingBid && (
-              <div className="text-xs font-bold text-brand-gold shrink-0">
+              <div className="text-xs font-bold text-brand-auction shrink-0">
                 From €{property.auctionStartingBid.toLocaleString()}
               </div>
             )}
