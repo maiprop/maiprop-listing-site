@@ -751,9 +751,9 @@ export default function Auctions() {
 
         {/* Alert CTA */}
         <div className="container py-4 sm:py-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 p-4 rounded-xl bg-brand-gold/10 border border-brand-gold/20">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 p-4 rounded-xl bg-primary/8 border border-primary/20">
             <div className="flex items-start gap-3 flex-1">
-              <Bell className="w-5 h-5 text-brand-gold shrink-0 mt-0.5" />
+              <Bell className="w-5 h-5 text-primary shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-medium">Get notified of new auctions matching your criteria</p>
                 <p className="text-xs text-muted-foreground mt-0.5">Set custom alerts for location, price range, and property type</p>
@@ -761,7 +761,7 @@ export default function Auctions() {
             </div>
             <Button
               size="sm"
-              className="bg-gradient-gold border-0 text-background font-semibold w-full sm:w-auto shrink-0"
+              className="bg-gradient-primary border-0 text-primary-foreground font-semibold w-full sm:w-auto shrink-0"
               onClick={() => user ? setAlertModalOpen(true) : window.location.href = "/login"}>
               {user ? "Set Alert" : "Sign in to Alert"}
             </Button>
