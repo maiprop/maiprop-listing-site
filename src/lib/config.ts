@@ -1,6 +1,6 @@
 // Public configuration constants
 // These are publishable/public keys safe to store in client code.
-// In production, env vars are required; no hardcoded fallbacks (security audit).
+// No hardcoded fallbacks — use .env (copy from .env.example) for all environments.
 
 const env = (import.meta as any).env ?? {};
 const isProd = env.PROD === true || env.MODE === "production";
@@ -9,20 +9,18 @@ const _url = env.VITE_SUPABASE_URL ?? env.VITE_SUPABASE_PROJECT_URL;
 const _anonKey = env.VITE_SUPABASE_PUBLISHABLE_KEY ?? env.VITE_SUPABASE_ANON_KEY;
 const _mapbox = env.VITE_MAPBOX_TOKEN;
 
-if (isProd) {
-  if (!_url || !_anonKey) throw new Error("VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are required in production");
-  // Mapbox is optional — app loads without it; maps will be disabled until VITE_MAPBOX_TOKEN is set
+if (!_url || !_anonKey) {
+  throw new Error(
+    "VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY (or VITE_SUPABASE_ANON_KEY) are required. " +
+      "Copy .env.example to .env and set values from your Supabase project."
+  );
 }
 
-// Supabase — dev fallbacks for local/Lovable only; production uses env only (no keys in bundle)
-export const SUPABASE_URL =
-  isProd ? _url! : (_url ?? "https://jglqlaynezspefoovqyc.supabase.co");
-export const SUPABASE_ANON_KEY =
-  isProd ? _anonKey! : (_anonKey ?? "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnbHFsYXluZXpzcGVmb292cXljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4MzEyNTUsImV4cCI6MjA4ODQwNzI1NX0.lHq_GYad1eWXba5n0IPiC2-6tj-f_U_fHGjDsEURGsE");
+export const SUPABASE_URL = _url;
+export const SUPABASE_ANON_KEY = _anonKey;
 
-// Mapbox — dev fallback; production uses env (empty string if not set; map components must handle)
-export const MAPBOX_TOKEN =
-  isProd ? (_mapbox ?? "") : (_mapbox ?? "pk.eyJ1Ijoia3JlbmlvczkyIiwiYSI6ImNtbWh0MjlxYjBza3YydXBqcThqeXBoYmcifQ.BElf3IJI7DGBjj2o2dTDqw");
+// Mapbox optional — app works without it; maps disabled until set
+export const MAPBOX_TOKEN = _mapbox ?? "";
 
 // Google Maps API key — use only for Maps JavaScript (e.g. Places autocomplete).
 // Restrict to HTTP referrers in Google Cloud Console. Do NOT use for Street View

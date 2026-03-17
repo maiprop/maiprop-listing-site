@@ -45,7 +45,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { SignInForAI } from "@/components/SignInForAI";
 import { toast } from "sonner";
 import heroBg from "@/assets/hero-bg.jpg";
-import thessalonikiLandmark from "@/assets/thessaloniki-landmark.jpg";
+import thessalonikiLandmark from "@/assets/thessaloniki-landmark.webp";
 
 const RECENT_SEARCHES_KEY = "maiprop_recent_searches";
 const MAX_RECENT = 6;

@@ -5,6 +5,19 @@
 
 ---
 
+## Pre-deployment checklist (Supabase Dashboard)
+
+| Task | Where | Notes |
+|------|-------|-------|
+| Run security migrations | SQL Editor | `20260320120000_fix_critical_security_issues.sql`, `20260319120000_security_fixes.sql` |
+| Enable breach detection | Authentication → Providers → Email | Reject leaked passwords at sign-up/reset |
+| Set edge function secrets | Edge Functions → Secrets | See list below |
+
+**Required Edge Function secrets:** `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`  
+**Required if using feature:** `MAIPROP_OS_WEBHOOK_SECRET`, `MAIPROP_OS_URL`, `MAIPROP_OS_EMAIL`, `MAIPROP_OS_PASSWORD`, `LOVABLE_API_KEY`, `GOOGLE_MAPS_API_KEY`, `GEMINI_API_KEY`
+
+---
+
 ## 1. Apply security migrations (database)
 
 Run these in **Supabase Dashboard → SQL Editor**, or run `npm run db:push` (or `supabase db push`) if the Supabase CLI is installed and linked.
