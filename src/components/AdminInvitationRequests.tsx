@@ -309,7 +309,7 @@ export default function AdminInvitationRequests() {
                           </select>
                           <Button
                             size="sm"
-                            className="h-8 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white border-0"
+                            className="h-8 text-xs gap-1.5 bg-brand-emerald hover:bg-brand-emerald/90 text-primary-foreground border-0"
                             onClick={() => approve(req)}
                             disabled={isUpdating}
                           >
