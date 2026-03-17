@@ -418,8 +418,9 @@ export default function InvestorDashboard() {
       .limit(1)
       .maybeSingle()
       .then(({ data }) => {
-        if (data?.status === "pending") setInvitationStatus("pending");
-        else if (data?.status === "rejected") setInvitationStatus("rejected");
+        const row = data as { status?: string } | null;
+        if (row?.status === "pending") setInvitationStatus("pending");
+        else if (row?.status === "rejected") setInvitationStatus("rejected");
         else setInvitationStatus("none");
       });
   }, [user]);
