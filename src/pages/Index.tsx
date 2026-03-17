@@ -1961,7 +1961,7 @@ export default function Index() {
                     {
                       emoji: "🏛️",
                       title: "Architects",
-                      count: "340+",
+                      category: "architect",
                       color: "text-primary",
                       border: "border-primary/30",
                       bg: "bg-primary/15",
@@ -1969,7 +1969,7 @@ export default function Index() {
                     {
                       emoji: "⚖️",
                       title: "Lawyers",
-                      count: "180+",
+                      category: "lawyer",
                       color: "text-brand-gold",
                       border: "border-brand-gold/30",
                       bg: "bg-brand-gold/15",
@@ -1977,37 +1977,53 @@ export default function Index() {
                     {
                       emoji: "📋",
                       title: "Notaries",
-                      count: "95+",
+                      category: "notary",
                       color: "text-brand-purple",
                       border: "border-brand-purple/30",
                       bg: "bg-brand-purple/15",
                     },
                     {
                       emoji: "🔧",
-                      title: "Engineers",
-                      count: "520+",
+                      title: "Civil Engineers",
+                      category: "civil_engineer",
                       color: "text-primary",
                       border: "border-primary/30",
                       bg: "bg-primary/15",
                     },
                     {
+                      emoji: "🏠",
+                      title: "Real Estate Agents",
+                      category: "real_estate_agent",
+                      color: "text-brand-emerald",
+                      border: "border-brand-emerald/30",
+                      bg: "bg-brand-emerald/15",
+                    },
+                    {
+                      emoji: "💰",
+                      title: "Financial Advisors",
+                      category: "financial_advisor",
+                      color: "text-brand-gold",
+                      border: "border-brand-gold/30",
+                      bg: "bg-brand-gold/10",
+                    },
+                    {
                       emoji: "🏗️",
                       title: "Contractors",
-                      count: "410+",
+                      category: "contractor",
                       color: "text-brand-purple-dark",
                       border: "border-brand-purple-dark/30",
                       bg: "bg-brand-purple-dark/15",
                     },
                     {
                       emoji: "🏡",
-                      title: "Property Mgrs",
-                      count: "230+",
+                      title: "Property Managers",
+                      category: "property_manager",
                       color: "text-brand-purple",
                       border: "border-brand-purple/30",
                       bg: "bg-brand-purple/10",
                     },
                   ].map((pro) => (
-                    <Link key={pro.title} to="/professionals">
+                    <Link key={pro.title} to={`/professionals?category=${pro.category}`}>
                       <div
                         className={`group flex items-center gap-3 p-4 rounded-2xl bg-background/10 border ${pro.border} hover:bg-background/20 transition-all`}
                       >
