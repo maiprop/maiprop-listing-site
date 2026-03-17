@@ -89,19 +89,19 @@
     --card-foreground: 36 20% 90%;
     --popover: 30 12% 13%;
     --popover-foreground: 36 20% 90%;
-    --primary: 192 65% 48%;
-    --primary-foreground: 30 12% 10%;
+    --primary: 261 80% 68%;
+    --primary-foreground: 240 100% 10%;
     --secondary: 30 10% 18%;
     --secondary-foreground: 36 15% 70%;
     --muted: 30 10% 16%;
     --muted-foreground: 36 10% 48%;
-    --accent: 28 70% 55%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 178 85% 45%;
+    --accent-foreground: 240 100% 10%;
     --destructive: 0 68% 50%;
     --destructive-foreground: 0 0% 100%;
     --border: 30 10% 22%;
     --input: 30 10% 18%;
-    --ring: 192 65% 48%;
+    --ring: 261 80% 68%;
 
     --brand-cyan: 178 85% 58%;
     --brand-cyan-glow: 178 85% 70%;
