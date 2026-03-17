@@ -1,21 +1,42 @@
-import { useLocation } from "react-router-dom";
+import { useLocation, Link } from "react-router-dom";
 import { useEffect } from "react";
+import { Home, Search, Gavel, Flame, Building2 } from "lucide-react";
+import { Navbar } from "@/components/Navbar";
+import { Button } from "@/components/ui/button";
 
 const NotFound = () => {
   const location = useLocation();
 
   useEffect(() => {
-    if (import.meta.env.DEV) console.warn("404: non-existent route:", location.pathname);
+    console.error("404 Error: User attempted to access non-existent route:", location.pathname);
   }, [location.pathname]);
 
+  const quickLinks = [
+    { to: "/", icon: Home, label: "Home" },
+    { to: "/listings", icon: Search, label: "Browse Listings" },
+    { to: "/auctions", icon: Gavel, label: "Auctions" },
+    { to: "/firesale", icon: Flame, label: "Quick Sale" },
+    { to: "/professionals", icon: Building2, label: "Professionals" },
+  ];
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">404</h1>
-        <p className="mb-4 text-xl text-muted-foreground">Oops! Page not found</p>
-        <a href="/" className="text-primary underline hover:text-primary/90">
-          Return to Home
-        </a>
+    <div className="min-h-screen bg-background flex flex-col">
+      <Navbar />
+      <div className="flex-1 flex items-center justify-center px-4 pt-20 pb-12">
+        <div className="text-center max-w-md">
+          <h1 className="mb-2 text-6xl font-bold text-primary">404</h1>
+          <p className="mb-6 text-lg text-muted-foreground">Oops! This page doesn't exist or has moved.</p>
+          <div className="flex flex-wrap gap-2 justify-center mb-8">
+            {quickLinks.map(({ to, icon: Icon, label }) => (
+              <Button key={to} variant="outline" size="sm" className="border-border gap-1.5" asChild>
+                <Link to={to}><Icon className="w-3.5 h-3.5" /> {label}</Link>
+              </Button>
+            ))}
+          </div>
+          <Button className="bg-gradient-primary border-0 text-primary-foreground" asChild>
+            <Link to="/"><Home className="w-4 h-4 mr-2" /> Return to Home</Link>
+          </Button>
+        </div>
       </div>
     </div>
   );

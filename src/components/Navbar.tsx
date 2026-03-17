@@ -1,199 +1,419 @@
 import { useState, useEffect } from "react";
-import { useLocation, Link } from "react-router-dom";
+import logoImg from "@/assets/logo.png";
+import logoDarkImg from "@/assets/logo-dark.png";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Bell, MessageSquare, User, Menu, X, ChevronDown, Plus, LogOut, LayoutDashboard, Building2, Sun, Moon, Home, List, Gavel, Flame, Zap, Sparkles, DoorOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Menu, X } from "lucide-react";
-import LanguageSwitcher from "@/components/LanguageSwitcher";
-import { useTranslation } from "@/contexts/TranslationContext";
-import maipropLogo from "@/assets/maiprop-logo-dark.png";
+import { Badge } from "@/components/ui/badge";
+import { useTheme } from "next-themes";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useAuth } from "@/contexts/AuthContext";
+import { useSubscription } from "@/hooks/useSubscription";
+import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
+import { isPlatformAdmin } from "@/lib/authUtils";
 
-const navLinks = [
-  { label: "Benefits", href: "#overview" },
-  { label: "Opportunities", href: "#opportunities" },
-  { label: "Track Record", href: "#delivered" },
-  { label: "Platform", href: "#platform" },
-  { label: "Process", href: "#journey" },
-  { label: "FAQ", href: "#faq" },
-  { label: "Resources", href: "#resources" },
-];
+// Pages that have a full-width dark hero image at the top
+const DARK_HERO_ROUTES = ["/"];
 
-const whatsappMessage = [
-  "Hello! I would like to explore investment opportunities under the Greek Golden Visa program.",
-  "",
-  "Please share the following details:",
-  "",
-  "1. Full Name:",
-  "2. Phone (International format):",
-  "3. Email:",
-  "4. Nationality (Country of citizenship):",
-  "5. Investment Budget (in EUR - minimum 250000):",
-  "6. Preferred Property Location:",
-  "7. Property Type (Apartment or Villa):",
-  "8. When are you planning to invest (0-6 months or 6-12 months):",
-].join("\n");
-const WHATSAPP_URL = `https://wa.me/306971853470?text=${encodeURIComponent(whatsappMessage)}`;
-
-const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean }) => {
-  const { t } = useTranslation();
-  const location = useLocation();
-  const isHome = location.pathname === "/";
+export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = {}) {
   const [scrolled, setScrolled] = useState(forceScrolled);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { user, profile, signOut } = useAuth();
+  const { isPro } = useSubscription();
+  const { theme, setTheme } = useTheme();
+
+  const participantType = getParticipantTypeFromProfile(profile);
+  const isDeveloper = participantType === "developer";
+  const canListProperty = ["seller", "agent", "institutional", "developer"].includes(participantType);
+  const hasDarkHero = DARK_HERO_ROUTES.includes(location.pathname);
+  // When transparent AND over a dark hero, force white text; otherwise use semantic tokens
+  const isTransparent = !scrolled;
+  const forceLight = isTransparent && hasDarkHero;
 
   useEffect(() => {
     if (forceScrolled) return;
-    const onScroll = () => setScrolled(window.scrollY > 40);
-    window.addEventListener("scroll", onScroll);
-    return () => window.removeEventListener("scroll", onScroll);
+    const handleScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
   }, [forceScrolled]);
 
-  const handleClick = (href: string) => {
-    setMobileOpen(false);
-    if (isHome) {
-      const el = document.querySelector(href);
-      el?.scrollIntoView({ behavior: "smooth" });
+  const isActive = (href: string) => {
+    const [path, qs] = href.split("?");
+    if (path !== "/" && !location.pathname.startsWith(path)) return false;
+    if (qs) {
+      const params = new URLSearchParams(qs);
+      const current = new URLSearchParams(location.search);
+      for (const [k, v] of params.entries()) {
+        if (current.get(k) !== v) return false;
+      }
     }
-    // if not home, the <a href> handles navigation natively
+    return path !== "/" || location.pathname === "/";
+  };
+
+  const navLinks = [
+    { label: "Buy", href: "/listings?listing_type=sale" },
+    { label: "Rent", href: "/listings?listing_type=rent" },
+    { label: "Auctions", href: "/auctions", badge: "Live" },
+    { label: "Quick Sale™", href: "/firesale", accent: "flame" },
+    { label: "Open Houses", href: "/open-houses", accent: "dooropen" },
+    { label: "Professionals", href: "/professionals", accent: "subtle" },
+  ];
+
+  const displayName = profile?.display_name || profile?.first_name || user?.email?.split("@")[0] || "Account";
+  const initials = displayName.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/");
   };
 
   return (
+    <>
     <header
-      className={`fixed left-0 right-0 top-0 z-50 transition-all duration-300 ${
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         scrolled
-          ? "border-b border-border/30 bg-background/40 backdrop-blur-xl shadow-lg"
-          : "bg-transparent backdrop-blur-none"
+          ? "bg-background/80 backdrop-blur-xl border-b border-border/50 shadow-card"
+          : hasDarkHero
+            ? "bg-transparent border-b border-transparent"
+            : "bg-background/60 backdrop-blur-md border-b border-border/30"
       }`}
     >
-      <div className="container mx-auto flex items-center justify-between px-6 py-4 text-sidebar-primary bg-transparent">
-        <a href="/" className="flex items-center gap-2">
+      <div className="container flex items-center justify-between h-16">
+        {/* Logo */}
+        <Link to="/" className="flex items-center shrink-0">
           <img
-            alt="mAI properties"
-            width={340}
-            height={160}
-            className="h-20 w-auto object-contain transition-all duration-300"
-            src={maipropLogo}
-            loading="eager"
+            src={forceLight || theme === "dark" ? logoDarkImg : logoImg}
+            alt="maiProp — Real estate | Real decisions."
+            className="h-10 w-auto object-contain transition-all duration-300"
           />
-        </a>
+        </Link>
 
         {/* Desktop nav */}
-        <nav className="hidden items-center gap-8 md:flex">
-          {navLinks.map((l) =>
-            (l as any).isPage ? (
-              <Link
-                key={l.href}
-                to={l.href}
-                className="text-sm font-medium transition-colors text-secondary-foreground hover:text-foreground"
-              >
-                {t(l.label)}
-              </Link>
-            ) : (l as any).isExternal ? (
-              <a key={l.href} href={l.href} className="text-sm font-medium transition-colors text-secondary-foreground">
-                {t(l.label)}
-              </a>
-            ) : isHome ? (
-              <button
-                key={l.href}
-                onClick={() => handleClick(l.href)}
-                className="text-sm font-medium transition-colors text-secondary-foreground"
-              >
-                {t(l.label)}
-              </button>
-            ) : (
-              <a
-                key={l.href}
-                href={`/${l.href}`}
-                className="text-sm font-medium transition-colors text-secondary-foreground"
-              >
-                {t(l.label)}
-              </a>
-            ),
-          )}
-          <LanguageSwitcher />
-          <Button
-            size="sm"
-            className="rounded-full px-6"
-            onClick={() => {
-              if (isHome) {
-                const el = document.querySelector("#contact");
-                el?.scrollIntoView({ behavior: "smooth" });
-              } else {
-                window.location.href = "/#contact";
-              }
-            }}
-          >
-            {t("Get Started")}
-          </Button>
+        <nav className="hidden lg:flex items-center gap-0.5">
+          {navLinks.map((link) => (
+            <Link
+              key={link.href}
+              to={link.href}
+              className={`relative px-3 py-2 text-sm font-medium rounded-md transition-colors flex items-center gap-1.5
+                ${isActive(link.href)
+                  ? link.accent === "flame"
+                    ? "text-destructive bg-destructive/10"
+                    : link.accent === "dooropen"
+                      ? forceLight ? "text-white bg-white/20" : "text-primary bg-primary/10"
+                      : forceLight
+                        ? "text-white bg-white/20"
+                        : "text-primary bg-primary/10"
+                  : link.accent === "flame"
+                    ? forceLight
+                      ? "text-orange-300 hover:text-orange-200 hover:bg-white/10"
+                      : "text-destructive/80 hover:text-destructive hover:bg-destructive/10"
+                    : link.accent === "dooropen"
+                      ? forceLight
+                        ? "text-white/80 hover:text-white hover:bg-white/10"
+                        : "text-primary/80 hover:text-primary hover:bg-primary/10"
+                      : link.accent === "subtle"
+                        ? forceLight
+                          ? "text-white/80 hover:text-white hover:bg-white/10"
+                          : "text-muted-foreground/90 hover:text-foreground hover:bg-secondary"
+                        : forceLight
+                            ? "text-white/80 hover:text-white hover:bg-white/10"
+                            : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                }`}
+            >
+              {link.accent === "flame" && <span className="text-sm">🔥</span>}
+              {link.accent === "dooropen" && <DoorOpen className="w-3.5 h-3.5 shrink-0" />}
+              {link.label}
+              {link.badge && (
+                <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold animate-pulse ${
+                  forceLight ? "bg-white/20 text-white" : "bg-brand-gold/20 text-brand-gold"
+                }`}>
+                  {link.badge}
+                </span>
+              )}
+              {link.accent === "subtle" && (
+                <span className={`w-1.5 h-1.5 rounded-full ml-0.5 ${forceLight ? "bg-white/50" : "bg-accent/60"}`} />
+              )}
+            </Link>
+          ))}
         </nav>
 
-        {/* Mobile toggle */}
-        <button className="md:hidden" onClick={() => setMobileOpen(!mobileOpen)}>
-          {mobileOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+        {/* Right actions */}
+        <div className="hidden lg:flex items-center gap-1">
+          <button
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            className={`p-2 rounded-lg transition-colors ${
+              forceLight
+                ? "text-white/80 hover:text-white hover:bg-white/10"
+                : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+            }`}
+            aria-label="Toggle theme"
+          >
+            {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </button>
+          {user ? (
+            <>
+              <Link to="/messages">
+                <button className={`relative p-2 rounded-lg transition-colors ${
+                  forceLight
+                    ? "text-white/80 hover:text-white hover:bg-white/10"
+                    : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                }`} title="Messages">
+                  <MessageSquare className="w-4 h-4" />
+                  <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-primary" />
+                </button>
+              </Link>
+              <DropdownMenu>
+                <DropdownMenuTrigger className={`relative p-2 rounded-lg transition-colors outline-none ${
+                  forceLight
+                    ? "text-white/80 hover:text-white hover:bg-white/10"
+                    : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                }`} title="Notifications">
+                  <Bell className="w-4 h-4" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-72 bg-card border-border p-4">
+                  <p className="text-sm font-medium mb-1">Notifications</p>
+                  <p className="text-xs text-muted-foreground">No notifications yet. Activity alerts and updates coming soon.</p>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger className={`flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors outline-none ${
+                  forceLight ? "hover:bg-white/10" : "hover:bg-secondary"
+                }`}>
+                  <div className="w-7 h-7 rounded-full bg-gradient-primary flex items-center justify-center text-xs font-bold text-primary-foreground">
+                    {profile?.avatar_url
+                      ? <img src={profile.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
+                      : initials}
+                  </div>
+                  <span className={`text-sm max-w-[80px] truncate ${forceLight ? "text-white" : "text-foreground"}`}>{displayName}</span>
+                  <ChevronDown className={`w-3 h-3 ${forceLight ? "text-white/60" : "text-muted-foreground"}`} />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-52 bg-card border-border">
+                  <div className="px-3 py-2 border-b border-border">
+                    <p className="text-xs font-semibold truncate">{displayName}</p>
+                    <p className="text-xs text-muted-foreground capitalize">
+                    {isPlatformAdmin(profile) ? "Admin" : (profile?.role as string) === "seller_landlord" ? "Seller / Landlord" : (profile?.role as string) === "agent" ? "Agent" : (profile?.role as string) === "professional" ? "Professional" : (profile?.role as string) === "investor" ? "Investor" : (profile?.role as string) === "institutional" ? "Institutional" : (profile?.role as string) === "developer" ? "Developer" : (profile?.role as string) === "individual" ? "Buyer / Renter" : (profile?.role || "Buyer / Renter")}
+                  </p>
+                  </div>
+                  <DropdownMenuItem asChild>
+                    <Link to="/dashboard" className="flex items-center gap-2 cursor-pointer">
+                      <LayoutDashboard className="w-3.5 h-3.5" /> Dashboard
+                    </Link>
+                  </DropdownMenuItem>
+                  {canListProperty && (
+                    <DropdownMenuItem asChild>
+                      <Link to="/dashboard/listings" className="flex items-center gap-2 cursor-pointer">
+                        <Building2 className="w-3.5 h-3.5" /> My Listings
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem asChild>
+                    <Link to="/messages" className="flex items-center gap-2 cursor-pointer">
+                      <MessageSquare className="w-3.5 h-3.5" /> Messages
+                    </Link>
+                  </DropdownMenuItem>
+                  {(participantType === "investor" || participantType === "institutional") && (
+                    <DropdownMenuItem asChild>
+                      <Link to="/investor-dashboard" className="flex items-center gap-2 cursor-pointer">
+                        <Flame className="w-3.5 h-3.5" /> Investor Dashboard
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={handleSignOut}
+                    className="flex items-center gap-2 text-destructive focus:text-destructive cursor-pointer"
+                  >
+                    <LogOut className="w-3.5 h-3.5" /> Sign Out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {canListProperty && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground hover:opacity-90 gap-1.5">
+                      <Plus className="w-3.5 h-3.5" /> List Property <ChevronDown className="w-3 h-3 opacity-80" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem asChild>
+                      <Link to="/listings/new" className="flex items-center gap-2 cursor-pointer">
+                        <Home className="w-3.5 h-3.5" /> Regular Listing
+                      </Link>
+                    </DropdownMenuItem>
+                    {isDeveloper && (
+                      <DropdownMenuItem asChild>
+                        <Link to="/listings/new-building" className="flex items-center gap-2 cursor-pointer">
+                          <Building2 className="w-3.5 h-3.5" /> New Building
+                        </Link>
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+              {/* Pro badge / CTA */}
+              {isPro ? (
+                <Link
+                  to="/pricing"
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                    forceLight
+                      ? "bg-brand-gold/30 border-brand-gold/50 text-yellow-200"
+                      : "bg-brand-gold/15 border-brand-gold/40 text-brand-gold"
+                  }`}
+                >
+                  <Zap className="w-3 h-3" /> Pro ✓
+                </Link>
+              ) : (
+                <Link
+                  to="/pricing"
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all hover:scale-105 ${
+                    forceLight
+                      ? "bg-brand-gold/20 border-brand-gold/40 text-yellow-200 hover:bg-brand-gold/30"
+                      : "bg-brand-gold/10 border-brand-gold/30 text-brand-gold hover:bg-brand-gold/20"
+                  }`}
+                >
+                  <Zap className="w-3 h-3" /> Pro
+                </Link>
+              )}
+            </>
+          ) : (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={forceLight ? "text-white/90 hover:text-white hover:bg-white/10" : "text-muted-foreground hover:text-foreground"}
+                asChild
+              >
+                <Link to="/login">Sign In</Link>
+              </Button>
+              <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground hover:opacity-90" asChild>
+                <Link to="/signup">Get Started</Link>
+              </Button>
+            </>
+          )}
+        </div>
+
+        {/* Mobile menu button — 44px touch target */}
+        <button
+          className={`lg:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg transition-colors ${
+            forceLight ? "text-white/80 hover:text-white" : "text-muted-foreground hover:text-foreground"
+          }`}
+          onClick={() => setMobileOpen(!mobileOpen)}
+          aria-label={mobileOpen ? "Close menu" : "Open menu"}
+        >
+          {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </button>
       </div>
 
-      {/* Mobile menu */}
+      {/* Mobile dropdown */}
       {mobileOpen && (
-        <div className="border-t border-border bg-background/95 backdrop-blur-xl md:hidden">
-          <nav className="container mx-auto flex flex-col gap-1 px-6 py-4">
-            {navLinks.map((l) =>
-              (l as any).isPage ? (
-                <Link
-                  key={l.href}
-                  to={l.href}
-                  onClick={() => setMobileOpen(false)}
-                  className="rounded-lg px-3 py-2.5 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                >
-                  {t(l.label)}
-                </Link>
-              ) : (l as any).isExternal ? (
-                <a
-                  key={l.href}
-                  href={l.href}
-                  onClick={() => setMobileOpen(false)}
-                  className="rounded-lg px-3 py-2.5 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                >
-                  {t(l.label)}
-                </a>
-              ) : isHome ? (
-                <button
-                  key={l.href}
-                  onClick={() => handleClick(l.href)}
-                  className="rounded-lg px-3 py-2.5 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                >
-                  {t(l.label)}
-                </button>
-              ) : (
-                <a
-                  key={l.href}
-                  href={`/${l.href}`}
-                  onClick={() => setMobileOpen(false)}
-                  className="rounded-lg px-3 py-2.5 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                >
-                  {t(l.label)}
-                </a>
-              ),
-            )}
-            <LanguageSwitcher />
-            <Button
-              size="sm"
-              className="mt-2 rounded-full"
-              onClick={() => {
-                setMobileOpen(false);
-                if (isHome) {
-                  const el = document.querySelector("#contact");
-                  el?.scrollIntoView({ behavior: "smooth" });
-                } else {
-                  window.location.href = "/#contact";
-                }
-              }}
+        <div className="lg:hidden bg-card/95 backdrop-blur-xl border-b border-border px-4 py-4 space-y-1">
+          {navLinks.map((link) => (
+            <Link
+              key={link.href}
+              to={link.href}
+              className={`flex items-center gap-2 min-h-[44px] px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                link.accent === "flame"
+                  ? "text-destructive/80 hover:text-destructive hover:bg-destructive/10"
+                  : link.accent === "dooropen"
+                    ? "text-primary/80 hover:text-primary hover:bg-primary/10"
+                    : link.accent === "subtle"
+                      ? "text-muted-foreground/80 hover:text-foreground hover:bg-secondary"
+                      : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+              }`}
+              onClick={() => setMobileOpen(false)}
             >
-              {t("Get Started")}
-            </Button>
-          </nav>
+              {link.accent === "flame" && <span>🔥</span>}
+              {link.accent === "dooropen" && <DoorOpen className="w-4 h-4 shrink-0" />}
+              {link.label}
+              {link.badge && (
+                <span className="text-xs px-1.5 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold font-semibold">{link.badge}</span>
+              )}
+              {link.accent === "subtle" && <span className="w-1.5 h-1.5 rounded-full bg-accent/60" />}
+            </Link>
+          ))}
+          <div className="pt-2 flex gap-2">
+            {user ? (
+              <>
+                <Button variant="outline" size="sm" className="flex-1 border-border" asChild>
+                  <Link to="/dashboard" onClick={() => setMobileOpen(false)}>Dashboard</Link>
+                </Button>
+                <Button size="sm" className="flex-1 bg-gradient-primary border-0 text-primary-foreground" onClick={handleSignOut}>
+                  Sign Out
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="outline" size="sm" className="flex-1 border-border" asChild>
+                  <Link to="/login" onClick={() => setMobileOpen(false)}>Sign In</Link>
+                </Button>
+                <Button size="sm" className="flex-1 bg-gradient-primary border-0 text-primary-foreground" asChild>
+                  <Link to="/signup" onClick={() => setMobileOpen(false)}>Sign Up</Link>
+                </Button>
+              </>
+            )}
+          </div>
+          <div className="pt-2 border-t border-border">
+            <button
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              className="flex items-center gap-2 px-3 py-2.5 w-full rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+            >
+              {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              Switch to {theme === "dark" ? "Light" : "Dark"} Mode
+            </button>
+          </div>
         </div>
       )}
     </header>
-  );
-};
 
+      {/* ── Mobile Bottom Nav ─────────────────────────────────────────── */}
+      <nav
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-card/90 backdrop-blur-xl border-t border-border/50 pb-safe"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+        aria-label="Main navigation"
+      >
+        <div className="flex items-stretch h-[60px]">
+          {[
+            { to: "/", icon: Home, label: "Home" },
+            { to: "/listings?listing_type=sale", icon: Building2, label: "Buy" },
+            { to: "/listings?listing_type=rent", icon: List, label: "Rent" },
+            { to: "/auctions", icon: Gavel, label: "Auctions" },
+            { to: user ? "/dashboard" : "/signup", icon: user ? LayoutDashboard : User, label: user ? "Account" : "Sign Up" },
+          ].map(({ to, icon: Icon, label }) => {
+            const active =
+              to === "/"
+                ? location.pathname === "/"
+                : location.pathname === to.split("?")[0] &&
+                  (!to.includes("?") || new URLSearchParams(location.search).get("listing_type") === new URLSearchParams(to.split("?")[1] || "").get("listing_type"));
+            return (
+              <Link
+                key={to + label}
+                to={to}
+                className={`flex-1 flex flex-col items-center justify-center gap-0.5 min-h-[44px] py-2 text-[11px] font-semibold transition-colors active:scale-95 active:opacity-80 ${
+                  active ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                }`}
+                aria-current={active ? "page" : undefined}
+              >
+                <Icon
+                  className={`w-[22px] h-[22px] shrink-0 transition-transform ${active ? "scale-110" : ""}`}
+                  strokeWidth={active ? 2.5 : 1.8}
+                />
+                <span className="leading-tight tracking-tight">{label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
+    </>
+  );
+}
 export default Navbar;

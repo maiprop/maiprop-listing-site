@@ -1,0 +1,626 @@
+import { useState, useCallback, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  Building2, ChevronLeft, Loader2, Check, MapPin, Image, LayoutGrid,
+  FileText, Upload, Home, ChevronRight
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Navbar } from "@/components/Navbar";
+import { Footer } from "@/components/Footer";
+import { useAuth } from "@/contexts/AuthContext";
+import { type ProjectUnitInsert } from "@/hooks/useProjectUnits";
+import { useAddProjectMedia, type ProjectMediaType } from "@/hooks/useProjectMedia";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
+
+const INPUT_CLS = "w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors";
+const LABEL_CLS = "text-xs text-muted-foreground block mb-1.5 font-medium";
+
+const KITCHEN_TYPES = ["open", "closed", "semi-open", "kitchenette", "none"];
+const ENERGY_CLASSES = ["A+", "A", "B+", "B", "C", "D", "E", "F", "G", "Exempt"];
+const MEDIA_TYPES: { value: ProjectMediaType; label: string }[] = [
+  { value: "rendering", label: "Building renderings" },
+  { value: "floor_plan", label: "Floor plans" },
+  { value: "site_plan", label: "Site plan" },
+  { value: "brochure_pdf", label: "Project brochure (PDF)" },
+  { value: "drone", label: "Drone photos" },
+  { value: "walkthrough", label: "3D walkthrough" },
+  { value: "progress", label: "Construction progress" },
+  { value: "video", label: "Video" },
+];
+
+type UploadedImage = { id: string; url: string; file?: File; uploading?: boolean; error?: string };
+
+const STEPS = [
+  { id: 1, label: "Building", icon: Building2 },
+  { id: 2, label: "Unit", icon: Home },
+  { id: 3, label: "Media", icon: LayoutGrid },
+  { id: 4, label: "Listing", icon: FileText },
+  { id: 5, label: "Photos", icon: Image },
+];
+
+export default function CreateNewBuildingListing() {
+  const navigate = useNavigate();
+  const { user, profile } = useAuth();
+  const addMedia = useAddProjectMedia();
+
+  const participantType = getParticipantTypeFromProfile(profile);
+  const canCreateListing = participantType === "developer";
+
+  const [step, setStep] = useState(1);
+  const [submitting, setSubmitting] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Step 1: Project
+  const [project, setProject] = useState({
+    name: "",
+    building_permit_number: "",
+    developer_company: "",
+    architect_group: "",
+    construction_company: "",
+    description: "",
+    address: "",
+    city: "",
+    municipality: "",
+    area_description: "",
+    permit_approval_date: "",
+    construction_start_date: "",
+    structural_completion_date: "",
+    delivery_date: "",
+    latitude: "" as string | number,
+    longitude: "" as string | number,
+  });
+
+  // Step 2: Unit
+  const [unit, setUnit] = useState({
+    unit_id: "",
+    floor: "",
+    unit_number: "",
+    internal_sqm: "",
+    balcony_sqm: "",
+    storage_sqm: "",
+    parking_sqm: "",
+    bedrooms: "",
+    bathrooms: "",
+    kitchen_type: "",
+    living_rooms: "",
+    price: "",
+    vat_included: true,
+    parking_price: "",
+    storage_price: "",
+    sea_view: false,
+    city_view: false,
+    mountain_view: false,
+    energy_class: "",
+    heating_system: "",
+    cooling_system: "",
+  });
+
+  // Step 3: Project media (optional)
+  const [projectMedia, setProjectMedia] = useState<Record<ProjectMediaType, File | null>>({
+    rendering: null, floor_plan: null, site_plan: null, brochure_pdf: null,
+    drone: null, walkthrough: null, progress: null, video: null,
+  });
+
+  // Step 4: Listing
+  const [listing, setListing] = useState({
+    title: "",
+    description: "",
+  });
+
+  // Step 5: Photos
+  const [images, setImages] = useState<UploadedImage[]>([]);
+  const [coverImageId, setCoverImageId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user || !profile || canCreateListing) return;
+    toast.error("New building listings are for developers only. Switch your participant type in Settings.");
+    navigate("/dashboard/settings", { replace: true });
+  }, [user, profile, canCreateListing, navigate]);
+
+  if (user && profile && !canCreateListing) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <span className="text-sm text-muted-foreground">Redirecting…</span>
+        </div>
+      </div>
+    );
+  }
+
+  const setProjectField = (key: string, value: string | number) =>
+    setProject(p => ({ ...p, [key]: value }));
+  const setUnitField = (key: string, value: string | number | boolean) =>
+    setUnit(u => ({ ...u, [key]: value }));
+
+  const uploadListingImage = useCallback(async (file: File): Promise<UploadedImage> => {
+    if (!user) throw new Error("Must be logged in");
+    const ext = file.name.split(".").pop();
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const path = `${user.id}/${id}.${ext}`;
+    const { error } = await supabase.storage.from("listing-images").upload(path, file, { upsert: true });
+    if (error) throw error;
+    const { data } = supabase.storage.from("listing-images").getPublicUrl(path);
+    return { id, url: data.publicUrl };
+  }, [user]);
+
+  const uploadProjectMedia = useCallback(async (file: File, projectId: string): Promise<string> => {
+    if (!user) throw new Error("Not authenticated");
+    const ext = file.name.split(".").pop() || "jpg";
+    const path = `${user.id}/${projectId}/media-${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from("project-media").upload(path, file, { upsert: true });
+    if (error) throw error;
+    const { data } = supabase.storage.from("project-media").getPublicUrl(path);
+    return data.publicUrl;
+  }, [user]);
+
+  const handleListingFilesSelected = async (files: FileList | null) => {
+    if (!files || !user) return;
+    const newFiles = Array.from(files).slice(0, 20 - images.length);
+    if (newFiles.length === 0) return;
+    const placeholders: UploadedImage[] = newFiles.map(file => ({
+      id: `placeholder-${Date.now()}-${Math.random()}`,
+      url: URL.createObjectURL(file),
+      file,
+      uploading: true,
+    }));
+    setImages(prev => [...prev, ...placeholders]);
+    for (let i = 0; i < newFiles.length; i++) {
+      const placeholder = placeholders[i];
+      try {
+        const uploaded = await uploadListingImage(newFiles[i]);
+        setImages(prev => prev.map(img =>
+          img.id === placeholder.id ? { ...uploaded, uploading: false } : img
+        ));
+        if (i === 0) setCoverImageId(prev => prev ?? uploaded.id);
+      } catch (err: any) {
+        setImages(prev => prev.map(img =>
+          img.id === placeholder.id ? { ...img, uploading: false, error: err.message } : img
+        ));
+        toast.error(`Failed to upload ${newFiles[i].name}`);
+      }
+    }
+  };
+
+  const validateStep = (s: number): boolean => {
+    const newErrors: Record<string, string> = {};
+    if (s === 1) {
+      if (!project.name.trim()) newErrors.project_name = "Project name is required";
+      if (!project.building_permit_number.trim()) newErrors.building_permit = "Building permit number is required";
+      if (!project.city.trim()) newErrors.project_city = "City is required";
+    }
+    if (s === 2) {
+      if (!unit.internal_sqm) newErrors.internal_sqm = "Internal sqm is required";
+      if (!unit.price) newErrors.price = "Price is required";
+      if (!unit.bedrooms) newErrors.bedrooms = "Bedrooms is required";
+      if (!unit.bathrooms) newErrors.bathrooms = "Bathrooms is required";
+    }
+    if (s === 4) {
+      if (!listing.title.trim()) newErrors.title = "Listing title is required";
+    }
+    if (s === 5) {
+      const validImages = images.filter(img => !img.uploading && !img.error);
+      if (validImages.length === 0) newErrors.photos = "At least one photo is required";
+      if (!coverImageId || !validImages.some(img => img.id === coverImageId)) newErrors.cover = "Set a cover photo";
+    }
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      toast.error(Object.values(newErrors)[0]);
+      return false;
+    }
+    setErrors({});
+    return true;
+  };
+
+  const handleNext = () => {
+    if (validateStep(step)) setStep(s => Math.min(s + 1, STEPS.length));
+  };
+
+  const handleBack = () => setStep(s => Math.max(s - 1, 1));
+
+  const handleSubmit = async () => {
+    if (!user) return;
+    if (!project.name || !project.building_permit_number || !project.city) {
+      toast.error("Fill in required project fields");
+      return;
+    }
+    if (!unit.internal_sqm || !unit.price || !unit.bedrooms || !unit.bathrooms) {
+      toast.error("Fill in required unit fields");
+      return;
+    }
+    const finalTitle = listing.title.trim() || `${project.name}${unit.unit_id ? ` - Unit ${unit.unit_id}` : ""}`.trim();
+    if (!finalTitle) {
+      toast.error("Listing title is required");
+      return;
+    }
+    const validImages = images.filter(img => !img.uploading && !img.error);
+    if (validImages.length === 0) {
+      toast.error("At least one photo is required");
+      return;
+    }
+    const coverImg = validImages.find(img => img.id === coverImageId);
+    const coverImageUrl = coverImg?.url;
+    if (!coverImageUrl) {
+      toast.error("Set a cover photo");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const projectPayload = {
+        name: project.name.trim(),
+        building_permit_number: project.building_permit_number.trim(),
+        developer_company: project.developer_company || undefined,
+        architect_group: project.architect_group || undefined,
+        construction_company: project.construction_company || undefined,
+        description: project.description || undefined,
+        address: project.address || undefined,
+        city: project.city.trim(),
+        municipality: project.municipality || undefined,
+        area_description: project.area_description || undefined,
+        latitude: project.latitude ? parseFloat(String(project.latitude)) : undefined,
+        longitude: project.longitude ? parseFloat(String(project.longitude)) : undefined,
+        permit_approval_date: project.permit_approval_date || undefined,
+        construction_start_date: project.construction_start_date || undefined,
+        structural_completion_date: project.structural_completion_date || undefined,
+        delivery_date: project.delivery_date || undefined,
+      };
+
+      const { data: createdProject, error: projErr } = await supabase
+        .from("projects")
+        .insert({ ...projectPayload, owner_id: user.id })
+        .select()
+        .single();
+      if (projErr) throw projErr;
+
+      const internalSqm = parseFloat(String(unit.internal_sqm));
+      const price = parseFloat(String(unit.price));
+      const unitPayload: ProjectUnitInsert = {
+        project_id: createdProject.id,
+        unit_id: unit.unit_id || undefined,
+        floor: unit.floor ? parseInt(String(unit.floor)) : undefined,
+        unit_number: unit.unit_number || undefined,
+        availability_status: "available",
+        internal_sqm: internalSqm,
+        balcony_sqm: unit.balcony_sqm ? parseFloat(String(unit.balcony_sqm)) : undefined,
+        storage_sqm: unit.storage_sqm ? parseFloat(String(unit.storage_sqm)) : undefined,
+        parking_sqm: unit.parking_sqm ? parseFloat(String(unit.parking_sqm)) : undefined,
+        bedrooms: parseInt(String(unit.bedrooms)),
+        bathrooms: parseInt(String(unit.bathrooms)),
+        kitchen_type: unit.kitchen_type || undefined,
+        living_rooms: unit.living_rooms ? parseInt(String(unit.living_rooms)) : undefined,
+        price,
+        price_per_sqm: price / internalSqm,
+        vat_included: unit.vat_included,
+        parking_price: unit.parking_price ? parseFloat(String(unit.parking_price)) : undefined,
+        storage_price: unit.storage_price ? parseFloat(String(unit.storage_price)) : undefined,
+        sea_view: unit.sea_view,
+        city_view: unit.city_view,
+        mountain_view: unit.mountain_view,
+        energy_class: unit.energy_class || undefined,
+        heating_system: unit.heating_system || undefined,
+        cooling_system: unit.cooling_system || undefined,
+      };
+
+      const { data: createdUnit, error: unitErr } = await (supabase as any)
+        .from("project_units")
+        .insert(unitPayload)
+        .select()
+        .single();
+      if (unitErr) throw unitErr;
+
+      for (const [mediaType, file] of Object.entries(projectMedia)) {
+        if (file) {
+          const url = await uploadProjectMedia(file, createdProject.id);
+          await addMedia.mutateAsync({ project_id: createdProject.id, url, media_type: mediaType as ProjectMediaType });
+        }
+      }
+
+      const listingPayload: any = {
+        title: finalTitle,
+        description: listing.description || undefined,
+        city: project.city.trim(),
+        address: project.address || undefined,
+        property_type: "apartment",
+        listing_type: "sale",
+        price,
+        sqm: internalSqm,
+        bedrooms: parseInt(String(unit.bedrooms)),
+        bathrooms: parseInt(String(unit.bathrooms)),
+        living_rooms: unit.living_rooms ? parseInt(String(unit.living_rooms)) : undefined,
+        floor: unit.floor ? parseInt(String(unit.floor)) : undefined,
+        energy_class: unit.energy_class || undefined,
+        heating_system: unit.heating_system || undefined,
+        cover_image_url: coverImageUrl,
+        price_per_sqm: Math.round(price / internalSqm),
+        owner_id: user.id,
+        status: "active",
+        project_id: createdProject.id,
+        is_pre_sale: true,
+      };
+
+      const { data: createdListing, error: listErr } = await supabase
+        .from("listings")
+        .insert(listingPayload)
+        .select()
+        .single();
+      if (listErr) throw listErr;
+
+      const additionalImages = validImages.filter(img => img.url !== coverImageUrl);
+      if (additionalImages.length > 0) {
+        await supabase.from("listing_images").insert(
+          additionalImages.map((img, idx) => ({
+            listing_id: createdListing.id,
+            url: img.url,
+            sort_order: idx + 1,
+          }))
+        );
+      }
+
+      toast.success("New building listing created!");
+      navigate(`/property/${createdListing.id}`);
+    } catch (err: any) {
+      toast.error(err.message || "Something went wrong");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const completionPct = Math.round(
+    (100 * STEPS.filter((_, i) => {
+      if (i === 0) return !!(project.name && project.building_permit_number && project.city);
+      if (i === 1) return !!(unit.internal_sqm && unit.price && unit.bedrooms && unit.bathrooms);
+      if (i === 2) return true;
+      if (i === 3) return !!listing.title.trim();
+      if (i === 4) return images.some(img => !img.uploading && !img.error);
+      return false;
+    }).length) / STEPS.length
+  );
+
+  return (
+    <div className="min-h-screen bg-background">
+      <Navbar />
+      <div className="pt-16">
+        <div className="border-b border-border bg-card py-5">
+          <div className="container">
+            <div className="flex items-center justify-between mb-1">
+              <h1 className="font-display text-2xl font-bold">New Building Listing</h1>
+              <span className="text-sm font-semibold tabular-nums text-primary">{completionPct}%</span>
+            </div>
+            <p className="text-muted-foreground text-xs mb-3">
+              Step {step} of {STEPS.length} — {STEPS[step - 1].label}
+            </p>
+            <div className="w-full h-1.5 bg-secondary rounded-full overflow-hidden">
+              <div className="h-full bg-primary rounded-full transition-all duration-500" style={{ width: `${completionPct}%` }} />
+            </div>
+          </div>
+        </div>
+
+        <div className="container py-8 max-w-3xl">
+          <div className="flex items-center gap-1 mb-8 overflow-x-auto pb-2">
+            {STEPS.map((s, i) => (
+              <div key={s.id} className="flex items-center gap-1 shrink-0">
+                <button
+                  onClick={() => step > s.id && setStep(s.id)}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                    step === s.id ? "bg-primary text-primary-foreground"
+                      : step > s.id ? "bg-primary/20 text-primary cursor-pointer hover:bg-primary/30"
+                      : "bg-secondary text-muted-foreground"
+                  }`}
+                >
+                  {step > s.id ? <Check className="w-3 h-3" /> : <s.icon className="w-3 h-3" />}
+                  {s.label}
+                </button>
+                {i < STEPS.length - 1 && <div className={`w-4 h-0.5 ${step > s.id ? "bg-primary" : "bg-border"}`} />}
+              </div>
+            ))}
+          </div>
+
+          <div className="glass-card rounded-2xl p-6 md:p-8">
+            {/* Step 1: Building */}
+            {step === 1 && (
+              <div className="space-y-6">
+                <h2 className="font-display text-xl font-semibold">Building & Project Details</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="sm:col-span-2">
+                    <label className={LABEL_CLS}>Project name *</label>
+                    <input value={project.name} onChange={e => setProjectField("name", e.target.value)} placeholder="e.g. Marina Heights" className={INPUT_CLS} />
+                    {errors.project_name && <p className="text-xs text-destructive mt-1">{errors.project_name}</p>}
+                  </div>
+                  <div>
+                    <label className={LABEL_CLS}>Building permit number *</label>
+                    <input value={project.building_permit_number} onChange={e => setProjectField("building_permit_number", e.target.value)} placeholder="e.g. 12345/2024" className={INPUT_CLS} />
+                    {errors.building_permit && <p className="text-xs text-destructive mt-1">{errors.building_permit}</p>}
+                  </div>
+                  <div>
+                    <label className={LABEL_CLS}>City *</label>
+                    <input value={project.city} onChange={e => setProjectField("city", e.target.value)} placeholder="e.g. Athens" className={INPUT_CLS} />
+                    {errors.project_city && <p className="text-xs text-destructive mt-1">{errors.project_city}</p>}
+                  </div>
+                  <div><label className={LABEL_CLS}>Developer company</label><input value={project.developer_company} onChange={e => setProjectField("developer_company", e.target.value)} placeholder="Company name" className={INPUT_CLS} /></div>
+                  <div><label className={LABEL_CLS}>Architect / group</label><input value={project.architect_group} onChange={e => setProjectField("architect_group", e.target.value)} placeholder="Architect or group" className={INPUT_CLS} /></div>
+                  <div><label className={LABEL_CLS}>Construction company</label><input value={project.construction_company} onChange={e => setProjectField("construction_company", e.target.value)} placeholder="Constructor" className={INPUT_CLS} /></div>
+                  <div><label className={LABEL_CLS}>Municipality</label><input value={project.municipality} onChange={e => setProjectField("municipality", e.target.value)} placeholder="Δήμος" className={INPUT_CLS} /></div>
+                  <div className="sm:col-span-2"><label className={LABEL_CLS}>Address</label><input value={project.address} onChange={e => setProjectField("address", e.target.value)} placeholder="Street, number" className={INPUT_CLS} /></div>
+                  <div><label className={LABEL_CLS}>Latitude</label><input type="number" step="any" value={project.latitude} onChange={e => setProjectField("latitude", e.target.value)} placeholder="37.9838" className={INPUT_CLS} /></div>
+                  <div><label className={LABEL_CLS}>Longitude</label><input type="number" step="any" value={project.longitude} onChange={e => setProjectField("longitude", e.target.value)} placeholder="23.7275" className={INPUT_CLS} /></div>
+                  <div className="sm:col-span-2"><label className={LABEL_CLS}>Project description</label><textarea value={project.description} onChange={e => setProjectField("description", e.target.value)} rows={4} placeholder="Brief description..." className={INPUT_CLS + " resize-none"} /></div>
+                  <div className="sm:col-span-2"><label className={LABEL_CLS}>Area description</label><textarea value={project.area_description} onChange={e => setProjectField("area_description", e.target.value)} rows={2} placeholder="Neighbourhood, amenities..." className={INPUT_CLS + " resize-none"} /></div>
+                  <div><label className={LABEL_CLS}>Permit approval date</label><input type="date" value={project.permit_approval_date} onChange={e => setProjectField("permit_approval_date", e.target.value)} className={INPUT_CLS} /></div>
+                  <div><label className={LABEL_CLS}>Construction start</label><input type="date" value={project.construction_start_date} onChange={e => setProjectField("construction_start_date", e.target.value)} className={INPUT_CLS} /></div>
+                  <div><label className={LABEL_CLS}>Structural completion</label><input type="date" value={project.structural_completion_date} onChange={e => setProjectField("structural_completion_date", e.target.value)} className={INPUT_CLS} /></div>
+                  <div><label className={LABEL_CLS}>Delivery date</label><input type="date" value={project.delivery_date} onChange={e => setProjectField("delivery_date", e.target.value)} className={INPUT_CLS} /></div>
+                </div>
+              </div>
+            )}
+
+            {/* Step 2: Unit */}
+            {step === 2 && (
+              <div className="space-y-6">
+                <h2 className="font-display text-xl font-semibold">Unit Details</h2>
+                <p className="text-sm text-muted-foreground">Details for the specific unit you are listing.</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div><label className={LABEL_CLS}>Unit ID</label><input value={unit.unit_id} onChange={e => setUnitField("unit_id", e.target.value)} placeholder="A101" className={INPUT_CLS} /></div>
+                  <div><label className={LABEL_CLS}>Floor</label><input type="number" value={unit.floor} onChange={e => setUnitField("floor", e.target.value)} placeholder="1" className={INPUT_CLS} /></div>
+                  <div><label className={LABEL_CLS}>Unit number</label><input value={unit.unit_number} onChange={e => setUnitField("unit_number", e.target.value)} placeholder="101" className={INPUT_CLS} /></div>
+                  <div><label className={LABEL_CLS}>Internal sqm *</label><input type="number" step="0.01" value={unit.internal_sqm} onChange={e => setUnitField("internal_sqm", e.target.value)} placeholder="85" className={INPUT_CLS} />{errors.internal_sqm && <p className="text-xs text-destructive">{errors.internal_sqm}</p>}</div>
+                  <div><label className={LABEL_CLS}>Balcony sqm</label><input type="number" step="0.01" value={unit.balcony_sqm} onChange={e => setUnitField("balcony_sqm", e.target.value)} placeholder="12" className={INPUT_CLS} /></div>
+                  <div><label className={LABEL_CLS}>Price (€) *</label><input type="number" value={unit.price} onChange={e => setUnitField("price", e.target.value)} placeholder="250000" className={INPUT_CLS} />{errors.price && <p className="text-xs text-destructive">{errors.price}</p>}</div>
+                  <div><label className={LABEL_CLS}>Bedrooms *</label><input type="number" value={unit.bedrooms} onChange={e => setUnitField("bedrooms", e.target.value)} placeholder="2" className={INPUT_CLS} />{errors.bedrooms && <p className="text-xs text-destructive">{errors.bedrooms}</p>}</div>
+                  <div><label className={LABEL_CLS}>Bathrooms *</label><input type="number" value={unit.bathrooms} onChange={e => setUnitField("bathrooms", e.target.value)} placeholder="2" className={INPUT_CLS} />{errors.bathrooms && <p className="text-xs text-destructive">{errors.bathrooms}</p>}</div>
+                  <div><label className={LABEL_CLS}>Living rooms</label><input type="number" value={unit.living_rooms} onChange={e => setUnitField("living_rooms", e.target.value)} placeholder="1" className={INPUT_CLS} /></div>
+                  <div><label className={LABEL_CLS}>Storage sqm</label><input type="number" step="0.01" value={unit.storage_sqm} onChange={e => setUnitField("storage_sqm", e.target.value)} placeholder="0" className={INPUT_CLS} /></div>
+                  <div><label className={LABEL_CLS}>Parking sqm</label><input type="number" step="0.01" value={unit.parking_sqm} onChange={e => setUnitField("parking_sqm", e.target.value)} placeholder="0" className={INPUT_CLS} /></div>
+                  <div><label className={LABEL_CLS}>Kitchen type</label><select value={unit.kitchen_type} onChange={e => setUnitField("kitchen_type", e.target.value)} className={INPUT_CLS}><option value="">—</option>{KITCHEN_TYPES.map(k => <option key={k} value={k}>{k}</option>)}</select></div>
+                  <div><label className={LABEL_CLS}>Energy class</label><select value={unit.energy_class} onChange={e => setUnitField("energy_class", e.target.value)} className={INPUT_CLS}><option value="">—</option>{ENERGY_CLASSES.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                  <div><label className={LABEL_CLS}>Heating</label><input value={unit.heating_system} onChange={e => setUnitField("heating_system", e.target.value)} placeholder="e.g. heat pump" className={INPUT_CLS} /></div>
+                  <div><label className={LABEL_CLS}>Cooling</label><input value={unit.cooling_system} onChange={e => setUnitField("cooling_system", e.target.value)} placeholder="e.g. AC" className={INPUT_CLS} /></div>
+                  <div><label className={LABEL_CLS}>Parking price (€)</label><input type="number" value={unit.parking_price} onChange={e => setUnitField("parking_price", e.target.value)} placeholder="0" className={INPUT_CLS} /></div>
+                  <div><label className={LABEL_CLS}>Storage price (€)</label><input type="number" value={unit.storage_price} onChange={e => setUnitField("storage_price", e.target.value)} placeholder="0" className={INPUT_CLS} /></div>
+                  <div className="sm:col-span-2 lg:col-span-3 flex items-center gap-4 pt-2">
+                    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={unit.sea_view} onChange={e => setUnitField("sea_view", e.target.checked)} /> Sea view</label>
+                    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={unit.city_view} onChange={e => setUnitField("city_view", e.target.checked)} /> City view</label>
+                    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={unit.mountain_view} onChange={e => setUnitField("mountain_view", e.target.checked)} /> Mountain view</label>
+                    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={unit.vat_included} onChange={e => setUnitField("vat_included", e.target.checked)} /> VAT included</label>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Step 3: Project Media (optional) */}
+            {step === 3 && (
+              <div className="space-y-6">
+                <h2 className="font-display text-xl font-semibold">Project Media (Optional)</h2>
+                <p className="text-sm text-muted-foreground">Upload renderings, floor plans, brochures, etc. You can add more later from the project page.</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {MEDIA_TYPES.map(({ value, label }) => (
+                    <div key={value} className="space-y-1">
+                      <label className={LABEL_CLS}>{label}</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="file"
+                          accept={value === "brochure_pdf" ? "application/pdf" : "image/*,video/*"}
+                          onChange={e => {
+                            const f = e.target.files?.[0];
+                            if (f) setProjectMedia(p => ({ ...p, [value]: f }));
+                          }}
+                          className="text-sm"
+                        />
+                        {projectMedia[value] && (
+                          <span className="text-xs text-muted-foreground truncate max-w-[120px]">{projectMedia[value]?.name}</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Step 4: Listing */}
+            {step === 4 && (
+              <div className="space-y-6">
+                <h2 className="font-display text-xl font-semibold">Listing Info</h2>
+                <p className="text-sm text-muted-foreground">Title and description for the listing. A default title was suggested from your project and unit.</p>
+                <div className="space-y-4">
+                  <div>
+                    <label className={LABEL_CLS}>Listing title *</label>
+                    <input
+                      value={listing.title || `${project.name}${unit.unit_id ? ` - Unit ${unit.unit_id}` : ""}`}
+                      onChange={e => setListing(l => ({ ...l, title: e.target.value }))}
+                      placeholder="e.g. Marina Heights - Unit A101"
+                      className={INPUT_CLS}
+                    />
+                    {errors.title && <p className="text-xs text-destructive mt-1">{errors.title}</p>}
+                  </div>
+                  <div>
+                    <label className={LABEL_CLS}>Description</label>
+                    <textarea
+                      value={listing.description}
+                      onChange={e => setListing(l => ({ ...l, description: e.target.value }))}
+                      rows={6}
+                      placeholder="Describe the unit, building amenities, finishes..."
+                      className={INPUT_CLS + " resize-none"}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Step 5: Photos */}
+            {step === 5 && (
+              <div className="space-y-6">
+                <h2 className="font-display text-xl font-semibold">Listing Photos</h2>
+                <p className="text-sm text-muted-foreground">Upload photos for your listing. Drag to reorder. Click "Set as cover" on the main photo.</p>
+                <div
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={e => { e.preventDefault(); handleListingFilesSelected(e.dataTransfer.files); }}
+                  className="border-2 border-dashed border-border rounded-xl p-8 text-center hover:border-primary/50 transition-colors cursor-pointer"
+                  onClick={() => document.getElementById("nb-photo-input")?.click()}
+                >
+                  <input
+                    id="nb-photo-input"
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={e => handleListingFilesSelected(e.target.files)}
+                  />
+                  <Upload className="w-10 h-10 mx-auto text-muted-foreground mb-2" />
+                  <p className="text-sm font-medium">Drop photos or click to upload</p>
+                  <p className="text-xs text-muted-foreground mt-1">JPG, PNG, WEBP — max 20</p>
+                </div>
+                {images.length > 0 && (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    {images.map(img => (
+                      <div key={img.id} className="relative aspect-[4/3] rounded-lg overflow-hidden bg-secondary group">
+                        <img src={img.url} alt="" className="w-full h-full object-cover" />
+                        {img.uploading && <div className="absolute inset-0 flex items-center justify-center bg-background/80"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>}
+                        {img.error && <div className="absolute inset-0 flex items-center justify-center bg-destructive/20 text-destructive text-xs p-1">{img.error}</div>}
+                        {!img.uploading && !img.error && (
+                          <button
+                            type="button"
+                            onClick={() => setCoverImageId(img.id)}
+                            className={`absolute bottom-0 inset-x-0 py-1 text-xs font-medium ${coverImageId === img.id ? "bg-primary text-primary-foreground" : "bg-background/80 opacity-0 group-hover:opacity-100"} transition-opacity`}
+                          >
+                            {coverImageId === img.id ? "Cover" : "Set as cover"}
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {errors.photos && <p className="text-xs text-destructive">{errors.photos}</p>}
+                {errors.cover && <p className="text-xs text-destructive">{errors.cover}</p>}
+              </div>
+            )}
+
+            <div className="flex items-center justify-between gap-4 mt-8 pt-6 border-t border-border">
+              <Button variant="outline" onClick={handleBack} disabled={step === 1} className="gap-2">
+                <ChevronLeft className="w-4 h-4" /> Back
+              </Button>
+              {step < STEPS.length ? (
+                <Button onClick={handleNext} className="gap-2 bg-gradient-primary border-0">
+                  Next <ChevronRight className="w-4 h-4" />
+                </Button>
+              ) : (
+                <Button onClick={handleSubmit} disabled={submitting} className="gap-2 bg-gradient-primary border-0">
+                  {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  {submitting ? "Creating…" : "Create Listing"}
+                </Button>
+              )}
+            </div>
+          </div>
+
+          <p className="text-center text-sm text-muted-foreground mt-4">
+            <Link to="/listings/new" className="text-primary hover:underline">Create a regular listing</Link>
+            {" · "}
+            <Link to="/projects" className="text-primary hover:underline">My projects</Link>
+          </p>
+        </div>
+      </div>
+      <Footer />
+    </div>
+  );
+}

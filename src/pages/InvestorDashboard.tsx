@@ -306,7 +306,7 @@ function InvitationRequestModal({
                   <Link to="/privacy-policy" target="_blank" className="text-primary hover:underline">Privacy Policy</Link>
                   {" "}and{" "}
                   <Link to="/terms-of-service" target="_blank" className="text-primary hover:underline">Terms of Service</Link>
-                  . I understand that Quick Sale™ access is discretionary, that being a Pro subscriber does not guarantee a position as an investor, and that mAI Prop may contact me regarding this request.
+                  . I understand that Quick Sale™ access is discretionary and that mAI Prop may contact me regarding this request.
                 </span>
               </label>
             </div>
@@ -447,7 +447,7 @@ export default function InvestorDashboard() {
       setLoading(true);
       try {
         const { data } = await supabase
-          .from("firesale_requests_investor_feed")
+          .from("firesale_requests")
           .select("*")
           .neq("status", "pending")
           .order("created_at", { ascending: false })
@@ -573,11 +573,11 @@ export default function InvestorDashboard() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => subscribed ? setShowInvitationModal(true) : navigate("/pricing")}
+                    onClick={() => setShowInvitationModal(true)}
                     className="inline-flex items-center gap-1.5 text-xs bg-primary/10 border border-primary/20 text-primary px-3 py-1.5 rounded-full font-semibold hover:bg-primary/20 transition-colors"
                   >
                     <MailPlus className="w-3 h-3" />
-                    {subscribed ? "Request invitation" : "Pro required to apply"}
+                    Request invitation
                   </button>
                 </div>
                 {subscribed && subscription && (
@@ -739,15 +739,11 @@ export default function InvestorDashboard() {
                         </h2>
                         <p className="text-sm text-muted-foreground leading-relaxed max-w-lg">
                           Quick Sale™ deal flow is exclusively available to verified investors and institutional buyers.
-                          {subscribed ? (
-                            "Submit your profile and our team will review your application. Being a Pro subscriber does not guarantee a position as an investor — access is by invitation only."
-                          ) : (
-                            "You must be a Pro subscriber (as a buyer) before you can apply for Quick Sale™ access. Upgrade on Pricing."
-                          )}
+                          Submit your profile and our team will review your application — no subscription fee, access is purely by invitation.
                         </p>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5">
                           {[
-                            { icon: "🔒", label: "Pro required to apply" },
+                            { icon: "🔒", label: "No public pricing" },
                             { icon: "✅", label: "Admin-vetted" },
                             { icon: "⚡", label: "48h response" },
                             { icon: "🤝", label: "NDA protected" },
@@ -786,7 +782,7 @@ export default function InvestorDashboard() {
                           Submit a new application for consideration.
                         </p>
                       </div>
-                    ) : subscribed ? (
+                    ) : (
                       <>
                         <Button
                           className="bg-gradient-primary border-0 text-primary-foreground h-12 px-7 text-sm font-bold shadow-elevated"
@@ -796,22 +792,8 @@ export default function InvestorDashboard() {
                           Request an Invitation
                         </Button>
                         <p className="text-[11px] text-muted-foreground">
-                          Pro required to apply. Access is invitation-only — approval not guaranteed.
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        <Button
-                          className="bg-secondary border border-border text-foreground h-12 px-7 text-sm font-bold hover:bg-muted"
-                          asChild
-                        >
-                          <Link to="/pricing">
-                            <ExternalLink className="w-4 h-4 mr-2" />
-                            Upgrade to Pro
-                          </Link>
-                        </Button>
-                        <p className="text-[11px] text-muted-foreground">
-                          You must be a Pro subscriber (as a buyer) before you can apply.
+                          Already applied?{" "}
+                          <span className="text-primary cursor-default">We'll contact you by email.</span>
                         </p>
                       </>
                     )}
@@ -1027,31 +1009,17 @@ export default function InvestorDashboard() {
                         <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
                           Your previous application wasn't approved. You may re-apply below.
                         </p>
-                      ) : subscribed ? (
-                        <p className="text-xs text-muted-foreground mb-3 leading-relaxed">Request an invitation to join the deal flow and get seller contacts, full AI reports, and real-time deal alerts. Being Pro does not guarantee approval.</p>
                       ) : (
-                        <p className="text-xs text-muted-foreground mb-3 leading-relaxed">You must have an active Pro subscription to apply. <Link to="/pricing" className="text-primary hover:underline">Renew or upgrade on Pricing</Link>.</p>
+                        <p className="text-xs text-muted-foreground mb-3 leading-relaxed">Request an invitation to join the deal flow and get seller contacts, full AI reports, and real-time deal alerts.</p>
                       )}
                       {invitationStatus === "pending" ? (
                         <div className="flex items-center gap-2 text-xs text-brand-gold font-semibold">
                           <Clock className="w-3.5 h-3.5" /> Application pending — we'll be in touch
                         </div>
-                      ) : invitationStatus === "rejected" ? (
-                        <Button className="w-full bg-gradient-primary border-0 text-primary-foreground text-xs h-9" onClick={() => setShowInvitationModal(true)}>
-                          <MailPlus className="w-3.5 h-3.5 mr-1.5" />
-                          Re-apply for access
-                        </Button>
-                      ) : subscribed ? (
-                        <Button className="w-full bg-gradient-primary border-0 text-primary-foreground text-xs h-9" onClick={() => setShowInvitationModal(true)}>
-                          <MailPlus className="w-3.5 h-3.5 mr-1.5" />
-                          Request invitation
-                        </Button>
                       ) : (
-                        <Button className="w-full bg-secondary border border-border text-foreground text-xs h-9" asChild>
-                          <Link to="/pricing">
-                            <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
-                            Renew subscription to apply
-                          </Link>
+                        <Button className="w-full bg-gradient-primary border-0 text-primary-foreground text-xs h-9" onClick={() => setShowInvitationModal(true)}>
+                          <MailPlus className="w-3.5 h-3.5 mr-1.5" />
+                          {invitationStatus === "rejected" ? "Re-apply for access" : "Request invitation"}
                         </Button>
                       )}
                     </div>

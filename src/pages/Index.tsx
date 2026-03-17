@@ -1,299 +1,2124 @@
-import { lazy, Suspense, useEffect } from "react";
-import { Helmet } from "react-helmet-async";
-import { useLocation } from "react-router-dom";
-import Navbar from "@/components/Navbar";
-import HeroSection from "@/components/HeroSection";
-import SectionDivider from "@/components/SectionDivider";
-import { LeadBotProvider } from "@/components/LeadBotProvider";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInView } from "@/hooks/useInView";
+import { usePullToRefresh } from "@/hooks/usePullToRefresh";
+import ReactDOM from "react-dom";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  Search,
+  MapPin,
+  ChevronDown,
+  Users,
+  ArrowRight,
+  Gavel,
+  Flame,
+  ExternalLink,
+  BarChart2,
+  Sparkles,
+  Check,
+  X,
+  Loader2,
+  Lightbulb,
+  Clock,
+  TrendingUp,
+  Shield,
+  Zap,
+  Building2,
+  Star,
+  Globe,
+  Brain,
+  Store,
+  Briefcase,
+} from "lucide-react";
+import { getStreetViewProxyUrl, GOOGLE_MAPS_API_KEY } from "@/lib/config";
+import { getProfessionalSearchSuggestions } from "@/lib/professionalServiceCatalog";
+import { Button } from "@/components/ui/button";
+import { Navbar } from "@/components/Navbar";
+import { MarketTicker } from "@/components/MarketTicker";
+import { PropertyCard } from "@/components/PropertyCard";
+import { Footer } from "@/components/Footer";
+import { CookieConsentBanner } from "@/components/CookieConsentBanner";
 
-const CookieConsent = lazy(() => import("@/components/CookieConsent"));
+import { PROPERTY_TYPES, PROPERTY_GROUPS, PROPERTY_TYPE_MAP, type PropertyTypeKey } from "@/lib/propertyTypes";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { SignInForAI } from "@/components/SignInForAI";
+import { toast } from "sonner";
+import heroBg from "@/assets/hero-bg.jpg";
+import thessalonikiLandmark from "@/assets/thessaloniki-landmark.jpg";
 
-// Lazy-load below-the-fold sections
-const GoldenVisaStats = lazy(() => import("@/components/GoldenVisaStats"));
-const InvestmentOpportunities = lazy(() => import("@/components/InvestmentOpportunities"));
-const DeliveredProjects = lazy(() => import("@/components/DeliveredProjects"));
+const RECENT_SEARCHES_KEY = "maiprop_recent_searches";
+const MAX_RECENT = 6;
 
-const PlatformReference = lazy(() => import("@/components/PlatformReference"));
-const JourneySection = lazy(() => import("@/components/JourneySection"));
-const ContactSection = lazy(() => import("@/components/ContactSection"));
-const FaqSection = lazy(() => import("@/components/FaqSection"));
-const GuidesTeaser = lazy(() => import("@/components/GuidesTeaser"));
-const LeadCaptureBot = lazy(() => import("@/components/LeadCaptureBot"));
+function getRecentSearches(): string[] {
+  try {
+    const raw = localStorage.getItem(RECENT_SEARCHES_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
 
-const faqJsonLd = {
-  "@context": "https://schema.org",
-  "@type": "FAQPage",
-  mainEntity: [
-    {
-      "@type": "Question",
-      name: "What is the minimum investment for a Greek Golden Visa?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "The minimum investment for a Greek Golden Visa is €250,000 in qualifying real estate. mAI Investments offers pre-verified properties starting at this threshold, covering Athens, Piraeus, Glyfada, and the Athenian Riviera.",
-      },
-    },
-    {
-      "@type": "Question",
-      name: "How long does the Greek Golden Visa process take?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "The Greek Golden Visa process typically takes 6–9 months from initial consultation to residency permit approval, including property purchase, legal registration, and biometrics appointment.",
-      },
-    },
-    {
-      "@type": "Question",
-      name: "Which countries can I access with a Greek Golden Visa?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "A Greek Golden Visa grants the right to live in Greece and travel freely across all 27 Schengen Area countries without additional visas.",
-      },
-    },
-    {
-      "@type": "Question",
-      name: "Can I rent out my Golden Visa property?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "Yes. Golden Visa properties in Greece can be rented out. mAI Investments' portfolio is specifically designed for rental income — properties are sourced, renovated, and stabilised with tenants in place, targeting average net yields of 3–5% annually through a mix of mid-term and long-term rental strategies.",
-      },
-    },
-    {
-      "@type": "Question",
-      name: "Do I need to live in Greece to keep the Golden Visa?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "No. The Greek Golden Visa does not require a minimum stay in Greece. You can maintain the residency permit simply by keeping the qualifying real estate investment.",
-      },
-    },
-    {
-      "@type": "Question",
-      name: "Can I become a Greek citizen through the Golden Visa?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "Yes. After 7 years of legal residency in Greece, Golden Visa holders can apply for Greek citizenship — one of the most valuable passports in the world. Greek citizenship grants full EU citizenship rights, the ability to live, work, and study anywhere in the EU, and visa-free access to 185+ countries. The path requires a basic language test and proof of integration, but does not require continuous physical residence.",
-      },
-    },
-  ],
-};
+function addRecentSearch(query: string) {
+  if (!query.trim()) return;
+  const existing = getRecentSearches().filter((s) => s !== query);
+  localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify([query, ...existing].slice(0, MAX_RECENT)));
+}
 
-const BASE_URL = "https://properties.maiprop.co";
+function removeRecentSearch(query: string) {
+  const existing = getRecentSearches().filter((s) => s !== query);
+  localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(existing));
+}
 
-const organizationLd = {
-  "@context": "https://schema.org",
-  "@type": ["Organization", "RealEstateAgent"],
-  "@id": `${BASE_URL}/#organization`,
-  "name": "mAI Investments Properties",
-  "alternateName": "mAI Prop",
-  "url": BASE_URL,
-  "logo": {
-    "@type": "ImageObject",
-    "url": `${BASE_URL}/images/maiprop-logo.webp`,
-    "width": 200,
-    "height": 60,
-  },
-  "description": "mAI Investments connects non-EU investors with Golden Visa eligible real estate in Athens and the Greek Riviera. We source, renovate, and manage income-generating properties targeting net yields of 5–7%.",
-  "address": {
-    "@type": "PostalAddress",
-    "addressLocality": "Athens",
-    "addressCountry": "GR",
-  },
-  "areaServed": [
-    { "@type": "City", "name": "Athens", "sameAs": "https://www.wikidata.org/wiki/Q1524" },
-    { "@type": "City", "name": "Piraeus" },
-    { "@type": "City", "name": "Glyfada" },
-  ],
-  "knowsAbout": ["Greek Golden Visa", "Real Estate Investment Greece", "EU Residency by Investment"],
-  "availableLanguage": ["en", "el", "ar", "zh", "ru", "fr", "hi", "he", "tr"],
-  "sameAs": [
-    "https://www.facebook.com/maiprop",
-    "https://www.linkedin.com/company/maiprop",
-    "https://www.instagram.com/maiprop",
-  ],
-};
+// Live counts are fetched from DB in the Index component
 
-const Index = () => {
-  const location = useLocation();
-  const params = new URLSearchParams(location.search);
-  const lang = params.get("lang");
-  // Noindex ?lang= parameter variants to protect crawl budget
-  const isLangVariant = !!lang;
-  const canonicalUrl = `${BASE_URL}/`;
+const AI_SUGGESTIONS = [
+  "Quiet apartment near metro in Athens under 200k",
+  "3 bed villa with pool for rent in Mykonos",
+  "Studio with parking in Thessaloniki under 80k",
+  "New build energy A+ apartment in Athens",
+];
+
+// ── Property Type Dropdown ─────────────────────────────────────────────────────
+function PropertyTypeDropdown({ value, onChange }: { value: string; onChange: (type: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0, width: 0, openUp: false });
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const isOpeningRef = useRef(false);
+
+  const openDropdown = () => {
+    if (btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - r.bottom;
+      const openUp = spaceBelow < 360;
+      setPos({
+        top: openUp ? r.top + window.scrollY - 360 - 4 : r.bottom + window.scrollY + 4,
+        left: r.left + window.scrollX,
+        width: r.width,
+        openUp,
+      });
+    }
+    // Mark that we're in the process of opening so the close handler ignores this event
+    isOpeningRef.current = true;
+    setOpen((o) => !o);
+    setTimeout(() => {
+      isOpeningRef.current = false;
+    }, 50);
+  };
+
   useEffect(() => {
-    const hash = window.location.hash;
-    if (!hash) return;
-    // Use a fixed delay to allow all lazy sections to render before scrolling
-    const timer = setTimeout(() => {
-      const el = document.querySelector(hash);
-      el?.scrollIntoView({ behavior: "smooth" });
-    }, 1500);
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (isOpeningRef.current) return;
+      const portal = document.getElementById("type-dropdown-portal");
+      if (btnRef.current?.contains(e.target as Node)) return;
+      if (portal?.contains(e.target as Node)) return;
+      setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
+
+  const currentType = value ? PROPERTY_TYPE_MAP[value as PropertyTypeKey] : null;
+  const TypeIcon = currentType?.icon;
+
+  const dropdownList = (
+    <div
+      id="type-dropdown-portal"
+      style={{
+        position: "absolute",
+        top: pos.top,
+        left: pos.left,
+        minWidth: Math.max(pos.width, 230),
+        zIndex: 9999,
+      }}
+      className="bg-card border border-border rounded-xl shadow-elevated max-h-[360px] overflow-y-auto pb-2"
+    >
+      <button
+        onClick={() => {
+          onChange("");
+          setOpen(false);
+        }}
+        className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left transition-colors hover:bg-secondary ${!value ? "text-primary bg-primary/10" : "text-foreground"}`}
+      >
+        <Building2 className="w-4 h-4 shrink-0" />
+        <span className="font-medium">All Types</span>
+        {!value && <Check className="w-3.5 h-3.5 ml-auto" />}
+      </button>
+      <div className="h-px bg-border mx-2" />
+      {PROPERTY_GROUPS.map((group, gi) => (
+        <div key={group.id}>
+          <div className="flex items-center gap-2 px-3 pt-2.5 pb-1">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{group.label}</span>
+          </div>
+          {group.id === "commercial" ? (
+            <button
+              onClick={() => {
+                onChange("commercial");
+                setOpen(false);
+              }}
+              className={`w-full flex items-center gap-2.5 pl-5 pr-3 py-2 text-sm text-left transition-colors hover:bg-secondary ${value === "commercial" ? "text-primary bg-primary/10" : "text-foreground"}`}
+            >
+              <Store
+                className={`w-4 h-4 shrink-0 ${value === "commercial" ? "text-primary" : "text-muted-foreground"}`}
+              />
+
+              <span className="font-medium">All Commercial & Offices</span>
+              {value === "commercial" && <Check className="w-3.5 h-3.5 ml-auto" />}
+            </button>
+          ) : (
+            group.types.map((typeKey) => {
+              const pt = PROPERTY_TYPE_MAP[typeKey];
+              const Icon = pt.icon;
+              return (
+                <button
+                  key={pt.value}
+                  onClick={() => {
+                    onChange(pt.value);
+                    setOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-2.5 pl-5 pr-3 py-2 text-sm text-left transition-colors hover:bg-secondary ${value === pt.value ? "text-primary bg-primary/10" : "text-foreground"}`}
+                >
+                  <Icon
+                    className={`w-4 h-4 shrink-0 ${value === pt.value ? "text-primary" : "text-muted-foreground"}`}
+                  />
+
+                  <span className="font-medium">{pt.label}</span>
+                  {value === pt.value && <Check className="w-3.5 h-3.5 ml-auto" />}
+                </button>
+              );
+            })
+          )}
+          {gi < PROPERTY_GROUPS.length - 1 && <div className="h-px bg-border mx-2 mt-1.5" />}
+        </div>
+      ))}
+    </div>
+  );
+
+  return (
+    <div className="relative">
+      <button
+        ref={btnRef}
+        onClick={openDropdown}
+        className={`flex items-center gap-2 bg-secondary/60 rounded-xl px-4 py-3 h-full cursor-pointer hover:bg-secondary transition-colors whitespace-nowrap ${value ? "text-primary" : "text-muted-foreground"}`}
+      >
+        {TypeIcon ? <TypeIcon className="w-4 h-4 shrink-0" /> : <Building2 className="w-4 h-4 shrink-0" />}
+        <span className="text-sm font-medium">{currentType?.label ?? "Property type"}</span>
+        <ChevronDown className={`w-4 h-4 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && ReactDOM.createPortal(dropdownList, document.body)}
+    </div>
+  );
+}
+
+// ── AI Search Modal ────────────────────────────────────────────────────────────
+function AISearchModal({
+  onFiltersApplied,
+  onClose,
+}: {
+  onFiltersApplied: (f: Record<string, any>) => void;
+  onClose: () => void;
+}) {
+  const { user } = useAuth();
+  const [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    setTimeout(() => inputRef.current?.focus(), 50);
+  }, []);
+
+  const handleSearch = async (q?: string) => {
+    if (!user) return;
+    const searchQuery = (q ?? query).trim();
+    if (!searchQuery) return;
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("ai-search", { body: { query: searchQuery } });
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error);
+      onFiltersApplied(data);
+      onClose();
+    } catch (e: any) {
+      toast.error(e.message || "AI search failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] flex items-start justify-center pt-20 px-4 bg-background/70 backdrop-blur-sm"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="w-full max-w-xl bg-card border border-border rounded-2xl shadow-elevated overflow-hidden">
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-border bg-primary/5">
+          <Sparkles className="w-5 h-5 text-primary shrink-0" />
+          <div className="flex-1">
+            <p className="font-display font-semibold text-sm">AI Property Search</p>
+            <p className="text-[11px] text-muted-foreground">Describe what you're looking for in plain language</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-secondary transition-colors">
+            <X className="w-4 h-4 text-muted-foreground" />
+          </button>
+        </div>
+        <div className="p-4">
+          {!user ? (
+            <SignInForAI feature="AI Search" />
+          ) : (
+          <>
+          <div className="flex items-center gap-2 bg-secondary rounded-xl px-4 py-3 border border-border focus-within:border-primary transition-colors">
+            <input
+              ref={inputRef}
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSearch();
+                if (e.key === "Escape") onClose();
+              }}
+              placeholder="e.g. quiet apartment near metro in Athens under 200k..."
+              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
+              disabled={loading}
+            />
+
+            <button
+              onClick={() => handleSearch()}
+              disabled={loading || !query.trim()}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-primary text-primary-foreground text-xs font-semibold disabled:opacity-50 transition-opacity"
+            >
+              {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowRight className="w-3.5 h-3.5" />}
+              {loading ? "Searching…" : "Search"}
+            </button>
+          </div>
+          <div className="mt-4">
+            <div className="flex items-center gap-1.5 mb-2.5">
+              <Lightbulb className="w-3.5 h-3.5 text-muted-foreground" />
+              <p className="text-[11px] text-muted-foreground font-medium">Try these examples</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {AI_SUGGESTIONS.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => {
+                    setQuery(s);
+                    handleSearch(s);
+                  }}
+                  disabled={loading}
+                  className="px-2.5 py-1.5 rounded-lg bg-secondary border border-border text-xs text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors disabled:opacity-50 text-left"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+          </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Location Input ─────────────────────────────────────────────────────────────
+function LocationInput({
+  value,
+  onChange,
+  onSearch,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onSearch: () => void;
+}) {
+  const [focused, setFocused] = useState(false);
+  const [recents, setRecents] = useState<string[]>([]);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const googleLoadedRef = useRef(false);
+  const autocompleteRef = useRef<any>(null);
+  const refresh = useCallback(() => setRecents(getRecentSearches()), []);
+
+  const getPos = () => {
+    if (!wrapRef.current) return { top: 0, left: 0, width: 300 };
+    const r = wrapRef.current.getBoundingClientRect();
+    return { top: r.bottom + window.scrollY + 4, left: r.left + window.scrollX, width: r.width };
+  };
+
+  useEffect(() => {
+    refresh();
+    const handler = (e: MouseEvent) => {
+      const portal = document.getElementById("location-dropdown-portal");
+      if (wrapRef.current?.contains(e.target as Node)) return;
+      if (portal?.contains(e.target as Node)) return;
+      setFocused(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [refresh]);
+
+  useEffect(() => {
+    if (!GOOGLE_MAPS_API_KEY || !inputRef.current || googleLoadedRef.current) return;
+    const input = inputRef.current;
+    const initGoogle = () => {
+      const g = (window as any).google;
+      if (!g?.maps?.places?.Autocomplete) return;
+      if (autocompleteRef.current) return;
+      const autocomplete = new g.maps.places.Autocomplete(input, {
+        types: ["(regions)"],
+        componentRestrictions: { country: "gr" },
+        fields: ["address_components", "formatted_address"],
+      });
+      autocomplete.addListener("place_changed", () => {
+        const place = autocomplete.getPlace();
+        if (!place.address_components) return;
+        const ac = place.address_components;
+        const get = (t: string) => ac.find((c: any) => c.types.includes(t))?.long_name ?? "";
+        const city =
+          get("locality") ||
+          get("administrative_area_level_2") ||
+          get("administrative_area_level_1") ||
+          place.formatted_address ||
+          "";
+        onChange(city);
+      });
+      autocompleteRef.current = autocomplete;
+    };
+    if ((window as any).google?.maps?.places) {
+      initGoogle();
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places`;
+    script.async = true;
+    script.onload = () => {
+      googleLoadedRef.current = true;
+      initGoogle();
+    };
+    document.head.appendChild(script);
+    return () => {
+      autocompleteRef.current = null;
+    };
+  }, [onChange]);
+
+  const showDropdown = focused && recents.length > 0 && !value;
+  const pos = showDropdown ? getPos() : null;
+
+  const dropdown =
+    showDropdown && pos ? (
+      <div
+        id="location-dropdown-portal"
+        style={{ position: "absolute", top: pos.top, left: pos.left, width: pos.width, zIndex: 9999 }}
+        className="bg-card border border-border rounded-2xl shadow-elevated overflow-hidden"
+      >
+        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border bg-secondary/40">
+          <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Recent Searches</span>
+        </div>
+        {recents.map((r) => (
+          <div
+            key={r}
+            className="flex items-center group px-4 py-2.5 hover:bg-secondary transition-colors cursor-pointer"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              onChange(r);
+              setFocused(false);
+              onSearch();
+            }}
+          >
+            <Clock className="w-3.5 h-3.5 text-muted-foreground mr-3 shrink-0" />
+            <span className="flex-1 text-sm text-foreground truncate">{r}</span>
+            <button
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={(ev) => {
+                ev.stopPropagation();
+                removeRecentSearch(r);
+                refresh();
+              }}
+              className="opacity-0 group-hover:opacity-100 p-1 rounded-lg hover:bg-border transition-all text-muted-foreground hover:text-foreground"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        ))}
+      </div>
+    ) : null;
+
+  return (
+    <div ref={wrapRef} className="flex-1 min-w-0 relative">
+      <div className="flex items-center gap-2 px-4 py-2.5 h-full min-h-[44px]">
+        <MapPin className="w-4 h-4 text-primary shrink-0" />
+        <input
+          ref={inputRef}
+          type="text"
+          placeholder="City, area, or neighbourhood..."
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onFocus={() => {
+            refresh();
+            setFocused(true);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              setFocused(false);
+              onSearch();
+            }
+            if (e.key === "Escape") setFocused(false);
+          }}
+          className="flex-1 bg-transparent text-sm font-medium text-foreground placeholder:text-muted-foreground outline-none min-w-0"
+          autoComplete="off"
+        />
+
+        {value && (
+          <button
+            onClick={() => onChange("")}
+            className="text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+      {dropdown && ReactDOM.createPortal(dropdown, document.body)}
+    </div>
+  );
+}
+
+// ── Service Input (Professionals autocomplete) ─────────────────────────────────
+const PROFESSIONAL_SUGGESTIONS = getProfessionalSearchSuggestions();
+
+function ServiceInput({
+  value,
+  onChange,
+  onSearch,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onSearch: (category: string) => void;
+}) {
+  const [focused, setFocused] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const q = value.toLowerCase().trim();
+  const filtered = q
+    ? PROFESSIONAL_SUGGESTIONS.filter(
+        (s) => s.label.toLowerCase().includes(q) || s.category.toLowerCase().includes(q),
+      ).slice(0, 12)
+    : PROFESSIONAL_SUGGESTIONS.slice(0, 10);
+
+  const getPos = () => {
+    if (!wrapRef.current) return { top: 0, left: 0, width: 300 };
+    const r = wrapRef.current.getBoundingClientRect();
+    return { top: r.bottom + window.scrollY + 4, left: r.left + window.scrollX, width: r.width };
+  };
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      const portal = document.getElementById("service-dropdown-portal");
+      if (wrapRef.current?.contains(e.target as Node)) return;
+      if (portal?.contains(e.target as Node)) return;
+      setFocused(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const showDropdown = focused && filtered.length > 0;
+  const pos = showDropdown ? getPos() : null;
+
+  const dropdown =
+    showDropdown && pos ? (
+      <div
+        id="service-dropdown-portal"
+        style={{ position: "absolute", top: pos.top, left: pos.left, width: Math.max(pos.width, 280), zIndex: 9999 }}
+        className="bg-card border border-border rounded-2xl shadow-elevated overflow-hidden"
+      >
+        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border bg-secondary/40">
+          <Briefcase className="w-3.5 h-3.5 text-muted-foreground" />
+          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+            Professionals & Services
+          </span>
+        </div>
+        {filtered.map((s) => (
+          <div
+            key={`${s.category}-${s.label}-${s.type}`}
+            className="flex items-center px-4 py-2.5 hover:bg-secondary transition-colors cursor-pointer"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              onChange(s.label);
+              setFocused(false);
+              onSearch(s.category);
+            }}
+          >
+            <span className="text-sm text-foreground">{s.label}</span>
+            {s.type === "service" && (
+              <span className="ml-auto text-[10px] text-muted-foreground truncate max-w-[120px]">
+                {s.category.replace(/_/g, " ")}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+    ) : null;
+
+  return (
+    <div ref={wrapRef} className="flex-1 min-w-0 relative">
+      <div className="flex items-center gap-2 px-4 py-2.5 h-full min-h-[44px]">
+        <Briefcase className="w-4 h-4 text-primary shrink-0" />
+        <input
+          type="text"
+          placeholder="e.g. Architect, Lawyer, Property Valuation..."
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onFocus={() => setFocused(true)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && filtered[0]) {
+              onChange(filtered[0].label);
+              setFocused(false);
+              onSearch(filtered[0].category);
+            }
+            if (e.key === "Escape") setFocused(false);
+          }}
+          className="flex-1 bg-transparent text-sm font-medium text-foreground placeholder:text-muted-foreground outline-none min-w-0"
+          autoComplete="off"
+        />
+        {value && (
+          <button
+            onClick={() => onChange("")}
+            className="text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+      {dropdown && ReactDOM.createPortal(dropdown, document.body)}
+    </div>
+  );
+}
+
+// ── OS Dashboard Mockup (faithful to os.maiprop.co) ──────────────────────────
+function OSDashboardMockup() {
+  const [flickeringIdx, setFlickeringIdx] = useState<number | null>(null);
+  const [prices, setPrices] = useState([2860, 1920, 6450, 3772, 2290, 5120, 4180]);
+
+  useEffect(() => {
+    const basePrices = [2860, 1920, 6450, 3772, 2290, 5120, 4180];
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = () => {
+      const idx = Math.floor(Math.random() * basePrices.length);
+      const base = basePrices[idx];
+      const delta = Math.round(base * (0.001 + Math.random() * 0.003) * (Math.random() > 0.35 ? 1 : -1));
+      setPrices((prev) => prev.map((p, i) => (i === idx ? p + delta : p)));
+      setFlickeringIdx(idx);
+      setTimeout(() => setFlickeringIdx(null), 700);
+      timer = setTimeout(tick, 2800 + Math.random() * 600);
+    };
+    timer = setTimeout(tick, 1500);
     return () => clearTimeout(timer);
   }, []);
 
-  return (
-  <main
-    className="min-h-screen bg-background overflow-x-hidden"
-    role="main"
-    itemScope
-    itemType="https://schema.org/WebPage"
-  >
-    {/* Crawl budget: canonical always points to clean URL; noindex ?lang= variants */}
-    <Helmet>
-      <title>Greek Golden Visa Real Estate — EU Residency from €250K | mAI Investments</title>
-      <meta name="description" content="Invest in Golden Visa eligible Greek real estate from €250,000. EU residency, Schengen access, and 5–7% net rental yields. Pre-verified properties in Athens & the Greek Riviera." />
-      <meta name="keywords" content="Greek Golden Visa, Greece real estate investment, EU residency investment, Athens property investment, Golden Visa property Greece, Greece Golden Visa €250000, Schengen residency, buy property Greece" />
-      <meta name="robots" content={isLangVariant ? "noindex, follow" : "index, follow"} />
-      <link rel="canonical" href={canonicalUrl} />
-      {/* Hreflang — all supported languages */}
-      <link rel="alternate" hrefLang="en"      href={canonicalUrl} />
-      <link rel="alternate" hrefLang="en-US"   href={canonicalUrl} />
-      <link rel="alternate" hrefLang="en-GB"   href={canonicalUrl} />
-      <link rel="alternate" hrefLang="el"      href={`${canonicalUrl}?lang=el`} />
-      <link rel="alternate" hrefLang="ar"      href={`${canonicalUrl}?lang=ar`} />
-      <link rel="alternate" hrefLang="ar-AE"   href={`${canonicalUrl}?lang=ar`} />
-      <link rel="alternate" hrefLang="zh"      href={`${canonicalUrl}?lang=zh`} />
-      <link rel="alternate" hrefLang="zh-CN"   href={`${canonicalUrl}?lang=zh`} />
-      <link rel="alternate" hrefLang="ru"      href={`${canonicalUrl}?lang=ru`} />
-      <link rel="alternate" hrefLang="fr"      href={`${canonicalUrl}?lang=fr`} />
-      <link rel="alternate" hrefLang="hi"      href={`${canonicalUrl}?lang=hi`} />
-      <link rel="alternate" hrefLang="he"      href={`${canonicalUrl}?lang=he`} />
-      <link rel="alternate" hrefLang="tr"      href={`${canonicalUrl}?lang=tr`} />
-      <link rel="alternate" hrefLang="x-default" href={canonicalUrl} />
-      {/* Open Graph */}
-      <meta property="og:type" content="website" />
-      <meta property="og:url" content={canonicalUrl} />
-      <meta property="og:locale" content="en_US" />
-      <meta property="og:locale:alternate" content="ar_AE" />
-      <meta property="og:locale:alternate" content="zh_CN" />
-      <meta property="og:locale:alternate" content="ru_RU" />
-      <meta property="og:locale:alternate" content="tr_TR" />
-      <meta property="og:site_name" content="mAI Investments" />
-      <meta property="og:title" content="Greek Golden Visa Real Estate — EU Residency from €250K | mAI Investments" />
-      <meta property="og:description" content="Invest in Golden Visa eligible Greek real estate from €250,000. EU residency, Schengen access, and 5–7% net rental yields." />
-      <meta property="og:image" content={`${BASE_URL}/og-image.png`} />
-      <meta property="og:image:width" content="1200" />
-      <meta property="og:image:height" content="630" />
-      <meta property="og:image:alt" content="mAI Investments — Greek Golden Visa real estate platform" />
-      {/* Twitter */}
-      <meta name="twitter:card" content="summary_large_image" />
-      <meta name="twitter:site" content="@maiprop" />
-      <meta name="twitter:title" content="Greek Golden Visa Real Estate — EU Residency from €250K | mAI Investments" />
-      <meta name="twitter:description" content="Pre-verified Golden Visa properties in Athens from €250,000. EU residency, Schengen access, rental income." />
-      <meta name="twitter:image" content={`${BASE_URL}/og-image.png`} />
-      <meta name="twitter:image:alt" content="mAI Investments — Greek Golden Visa real estate platform" />
-    </Helmet>
-    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />
-    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationLd) }} />
-    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({
-      "@context": "https://schema.org",
-      "@type": "WebSite",
-      "@id": `${BASE_URL}/#website`,
-      "name": "mAI Investments Properties",
-      "url": BASE_URL,
-      "description": "Greek Golden Visa real estate investment platform — pre-verified properties in Athens from €250,000.",
-      "publisher": { "@id": `${BASE_URL}/#organization` },
-      "potentialAction": {
-        "@type": "SearchAction",
-        "target": `${BASE_URL}/properties/?q={search_term_string}`,
-        "query-input": "required name=search_term_string"
-      },
-      "inLanguage": ["en", "el", "ar", "zh", "ru", "fr", "hi", "he", "tr"]
-    }) }} />
-    <LeadBotProvider>
-      <Navbar />
-      <HeroSection />
-      <SectionDivider />
-      <Suspense fallback={<div className="min-h-[300px]" />}>
-        <GoldenVisaStats />
-      </Suspense>
-      <SectionDivider />
-      <Suspense fallback={<div className="min-h-[1200px]" />}>
-        <InvestmentOpportunities />
-      </Suspense>
-      <SectionDivider />
-      <Suspense fallback={<div className="min-h-[600px]" />}>
-        <DeliveredProjects />
-      </Suspense>
-      <SectionDivider />
-      <Suspense fallback={<div className="min-h-[500px]" />}>
-        <PlatformReference />
-      </Suspense>
-      <SectionDivider />
-      <Suspense fallback={<div className="min-h-[600px]" />}>
-        <JourneySection />
-      </Suspense>
-      <SectionDivider />
-      <Suspense fallback={<div className="min-h-[600px]" />}>
-        <FaqSection />
-      </Suspense>
-      <SectionDivider />
-      <Suspense fallback={<div className="min-h-[400px]" />}>
-        <GuidesTeaser />
-      </Suspense>
-      <SectionDivider />
-      <Suspense fallback={<div className="min-h-[500px]" />}>
-        <ContactSection />
-      </Suspense>
-      <footer className="border-t border-border bg-background py-6" role="contentinfo">
-        <div className="container mx-auto flex flex-col items-center gap-5 px-6">
-          {/* Social icons */}
-          <div className="flex items-center gap-6">
-            <a href="https://www.facebook.com/maiprop" target="_blank" rel="noopener noreferrer" aria-label="Facebook" className="text-muted-foreground hover:text-foreground transition-colors">
-              <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" /></svg>
-            </a>
-            <a href="https://www.instagram.com/maipropos/" target="_blank" rel="noopener noreferrer" aria-label="Instagram" className="text-muted-foreground hover:text-foreground transition-colors">
-              <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z" /></svg>
-            </a>
-            <a href="https://www.linkedin.com/company/mai-prop/" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn" className="text-muted-foreground hover:text-foreground transition-colors">
-              <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" /></svg>
-            </a>
-            <a href="https://www.youtube.com/@maipropos" target="_blank" rel="noopener noreferrer" aria-label="YouTube" className="text-muted-foreground hover:text-foreground transition-colors">
-              <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" /></svg>
-            </a>
-          </div>
+  const marketData = [
+    { city: "Athens", delta: "▲1.3%" },
+    { city: "Thessaloniki", delta: "▲0.8%" },
+    { city: "Mykonos", delta: "▲2.3%" },
+    { city: "Glyfada", delta: "▲1.7%" },
+    { city: "Rhodes", delta: "▲3.1%" },
+    { city: "Santorini", delta: "▲1.9%" },
+    { city: "Kifisia", delta: "▲0.6%" },
+  ];
 
-          {/* Product switcher bar */}
-          <div className="flex flex-wrap items-center justify-center gap-1.5 rounded-xl border border-border/60 bg-muted/30 px-3 py-2">
-            <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mr-2">Our Products</span>
-            <a
-              href="https://os.maiprop.co"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-lg border border-border/50 bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-all hover:border-secondary/50 hover:bg-secondary/5"
+  const sparklines = [
+    "M0,10 C5,8 10,6 15,4 C20,2 25,5 30,2",
+    "M0,8 C5,10 10,7 15,9 C20,5 25,3 30,4",
+    "M0,10 C5,9 10,6 15,7 C20,4 25,2 30,1",
+    "M0,9 C5,7 10,8 15,5 C20,6 25,4 30,3",
+    "M0,10 C5,8 10,11 15,7 C20,5 25,6 30,3",
+    "M0,9 C5,6 10,7 15,5 C20,8 25,4 30,2",
+    "M0,10 C5,9 10,8 15,9 C20,7 25,8 30,9",
+  ];
+
+  return (
+    <div className="w-full h-full overflow-hidden select-none font-sans" style={{ background: "hsl(220 30% 7%)" }}>
+      {/* Navbar */}
+      <div
+        className="flex items-center justify-between px-4 py-2 border-b"
+        style={{ borderColor: "rgba(255,255,255,0.08)", background: "hsl(220 30% 5%)" }}
+      >
+        <div className="flex items-center gap-3">
+          <div
+            className="text-[10px] font-black tracking-tight flex items-center gap-1"
+            style={{ color: "hsl(183 100% 50%)" }}
+          >
+            mAI Prop
+            <span
+              className="text-[7px] font-black ml-0.5 px-1 rounded-sm"
+              style={{ background: "hsl(183 100% 50% / 0.15)", color: "hsl(183 100% 70%)" }}
             >
-              <svg className="h-3.5 w-3.5 text-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-              <span>mAI Prop OS</span>
-              <span className="text-muted-foreground">Operator platform</span>
-              <svg className="h-3 w-3 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="M7 17L17 7M7 7h10v10"/></svg>
-            </a>
-            <a
-              href="https://maiprop.co"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-lg border border-border/50 bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-all hover:border-primary/50 hover:bg-primary/5"
-            >
-              <svg className="h-3.5 w-3.5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-              <span>mAI Prop</span>
-              <span className="text-muted-foreground">Real estate listing portal</span>
-              <svg className="h-3 w-3 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="M7 17L17 7M7 7h10v10"/></svg>
-            </a>
-            <div className="inline-flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary">
-              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-              <span>mAI Properties</span>
-              <span className="text-primary/70">You are here</span>
+              OS
+            </span>
+          </div>
+          <div className="flex gap-1.5">
+            {["Modules", "Benefits", "Pricing", "Resources"].map((t) => (
+              <span key={t} className="text-[7px] px-1.5 py-0.5 rounded" style={{ color: "rgba(255,255,255,0.4)" }}>
+                {t}
+              </span>
+            ))}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <div
+            className="text-[7px] px-2 py-1 rounded-full font-bold"
+            style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.5)" }}
+          >
+            START FOR FREE
+          </div>
+          <div
+            className="text-[7px] px-2 py-1 rounded-full font-bold"
+            style={{
+              background: "hsl(183 100% 50% / 0.15)",
+              color: "hsl(183 100% 50%)",
+              border: "1px solid hsl(183 100% 50% / 0.3)",
+            }}
+          >
+            SIGN IN
+          </div>
+        </div>
+      </div>
+      {/* Hero + Market Widget */}
+      <div className="flex h-[calc(100%-36px)]">
+        {/* Left: Hero text */}
+        <div className="flex-1 px-5 pt-5 pb-3 flex flex-col justify-center">
+          <div className="text-[13px] font-black leading-snug mb-2" style={{ color: "rgba(255,255,255,0.9)" }}>
+            Real Estate
+            <br />
+            <span style={{ color: "hsl(183 100% 50%)" }}>Investment Platform</span>
+          </div>
+          <p className="text-[7px] mb-2.5" style={{ color: "hsl(183 100% 70%)" }}>
+            Gain The Edge In Greek Real Estate Market With:
+          </p>
+          <div className="space-y-1.5 mb-4">
+            {[
+              "Data Accessibility",
+              "Predictive Analytics",
+              "Mapped Data & Automated Reports",
+              "Portfolio & Asset Management",
+              "Auctions Analysis & Automations",
+            ].map((f) => (
+              <div key={f} className="flex items-center gap-1.5 text-[7px]" style={{ color: "rgba(255,255,255,0.7)" }}>
+                <div
+                  className="w-2.5 h-2.5 rounded-full border flex items-center justify-center shrink-0"
+                  style={{ borderColor: "hsl(183 100% 50% / 0.5)" }}
+                >
+                  <div className="w-1 h-1 rounded-full" style={{ background: "hsl(183 100% 50%)" }} />
+                </div>
+                {f}
+              </div>
+            ))}
+          </div>
+          <div
+            className="inline-flex items-center gap-1.5 text-[7px] font-bold px-3 py-1.5 rounded-full w-fit"
+            style={{
+              background: "hsl(183 100% 50% / 0.12)",
+              border: "1px solid hsl(183 100% 50% / 0.35)",
+              color: "hsl(183 100% 60%)",
+            }}
+          >
+            <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "hsl(183 100% 50%)" }} />
+            SEE IT IN ACTION
+          </div>
+        </div>
+        {/* Right: Live Market widget */}
+        <div
+          className="w-44 shrink-0 mr-4 mt-4 mb-4 rounded-xl overflow-hidden border flex flex-col"
+          style={{ background: "hsl(220 30% 10%)", borderColor: "rgba(255,255,255,0.1)" }}
+        >
+          <div
+            className="flex items-center justify-between px-2.5 py-1.5 border-b"
+            style={{ borderColor: "rgba(255,255,255,0.08)" }}
+          >
+            <div className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: "hsl(183 100% 50%)" }} />
+              <span
+                className="text-[7px] font-bold uppercase tracking-widest"
+                style={{ color: "rgba(255,255,255,0.6)" }}
+              >
+                Live Market
+              </span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "hsl(183 100% 50%)" }} />
+              <span className="text-[6px] font-bold" style={{ color: "hsl(183 100% 60%)" }}>
+                LIVE
+              </span>
             </div>
           </div>
-
-          <p className="text-sm text-muted-foreground">© {new Date().getFullYear()} mAI Prop. All rights reserved.</p>
+          <div className="flex-1 overflow-hidden">
+            {marketData.map((row, i) => {
+              const isFlick = flickeringIdx === i;
+              return (
+                <div
+                  key={row.city}
+                  className="flex items-center gap-1 px-2.5 py-[3px] border-b last:border-0 transition-all duration-300"
+                  style={{
+                    borderColor: "rgba(255,255,255,0.04)",
+                    background: isFlick ? "rgba(0,255,240,0.07)" : "transparent",
+                  }}
+                >
+                  <span
+                    className="text-[7px] w-16 truncate transition-colors duration-300"
+                    style={{ color: isFlick ? "hsl(183 100% 75%)" : "rgba(255,255,255,0.7)" }}
+                  >
+                    {row.city}
+                  </span>
+                  <svg viewBox="0 0 30 12" className="w-7 h-2.5 shrink-0" preserveAspectRatio="none">
+                    <path
+                      d={sparklines[i]}
+                      fill="none"
+                      stroke="hsl(183 100% 50%)"
+                      strokeWidth="1.2"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                  <span
+                    className="text-[7px] font-bold ml-auto transition-colors duration-300"
+                    style={{ color: isFlick ? "hsl(183 100% 70%)" : "rgba(255,255,255,0.9)" }}
+                  >
+                    {prices[i].toLocaleString()}
+                  </span>
+                  <span className="text-[6px] font-bold w-8 text-right" style={{ color: "hsl(142 70% 55%)" }}>
+                    {row.delta}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <div
+            className="mx-2 my-1.5 rounded-lg px-2 py-1.5 border"
+            style={{ background: "hsl(183 100% 50% / 0.06)", borderColor: "hsl(183 100% 50% / 0.15)" }}
+          >
+            <div className="flex items-center justify-between mb-0.5">
+              <div className="flex items-center gap-1">
+                <span className="text-[8px]">⚡</span>
+                <span
+                  className="text-[6px] font-bold uppercase tracking-widest"
+                  style={{ color: "rgba(255,255,255,0.4)" }}
+                >
+                  New Auctions Today
+                </span>
+              </div>
+              <span className="text-[11px] font-black" style={{ color: "hsl(183 100% 60%)" }}>
+                47
+              </span>
+            </div>
+            <div className="text-[6px]" style={{ color: "rgba(255,255,255,0.35)" }}>
+              Latest: <span style={{ color: "rgba(255,255,255,0.6)" }}>Apartment · Athens</span>
+            </div>
+            <div className="text-[7px] font-bold mt-0.5" style={{ color: "hsl(183 100% 50%)" }}>
+              €128,000
+            </div>
+          </div>
+          <div className="text-center pb-1.5">
+            <span className="text-[5.5px] uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.2)" }}>
+              €/m² · Greek Real Estate Index
+            </span>
+          </div>
         </div>
-      </footer>
-      <Suspense fallback={null}>
-        <LeadCaptureBot />
-      </Suspense>
-      <Suspense fallback={null}>
-        <CookieConsent />
-      </Suspense>
-    </LeadBotProvider>
-  </main>
+      </div>
+    </div>
   );
-};
+}
 
-export default Index;
+// ── Properties Portal Mockup (faithful to properties.maiprop.co) ──────────────
+function PropertiesMockup() {
+  const stats = [
+    { value: "€250K", label: "Minimum Investment" },
+    { value: "6-9 Months", label: "To Visa Approval" },
+    { value: "27 Countries", label: "Schengen Access" },
+  ];
+
+  return (
+    <div
+      className="w-full h-full overflow-hidden select-none font-sans relative"
+      style={{ background: "hsl(210 30% 8%)" }}
+    >
+      {/* Hero bg: Acropolis */}
+      <div className="absolute inset-0">
+        <img
+          src="https://images.unsplash.com/photo-1555993539-1732b0258235?w=600&q=50&fm=webp"
+          alt=""
+          className="w-full h-full object-cover opacity-30"
+        />
+
+        <div
+          className="absolute inset-0"
+          style={{ background: "linear-gradient(to bottom, hsl(200 40% 12% / 0.75) 0%, hsl(200 40% 6% / 0.95) 100%)" }}
+        />
+      </div>
+      {/* Navbar */}
+      <div className="relative z-10 flex items-center justify-between px-4 py-2">
+        <div className="flex items-center gap-1.5">
+          <div
+            className="w-5 h-5 rounded overflow-hidden flex items-center justify-center"
+            style={{ background: "rgba(255,255,255,0.08)" }}
+          >
+            <span className="text-[6px] font-black" style={{ color: "hsl(183 100% 60%)" }}>
+              mP
+            </span>
+          </div>
+          <span className="text-[9px] font-black text-white">mAI prop</span>
+        </div>
+        <div className="flex items-center gap-2">
+          {["Benefits", "Opportunities", "Track Record", "mAI Prop OS"].map((l) => (
+            <span key={l} className="text-[6px]" style={{ color: "rgba(255,255,255,0.5)" }}>
+              {l}
+            </span>
+          ))}
+        </div>
+        <div
+          className="text-[7px] font-bold px-2.5 py-1 rounded-full"
+          style={{ background: "hsl(183 100% 50%)", color: "hsl(220 30% 8%)" }}
+        >
+          Get Started
+        </div>
+      </div>
+      {/* Hero content */}
+      <div className="relative z-10 px-5 pt-3">
+        <div
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full mb-3 border text-[5.5px] font-bold uppercase tracking-wider"
+          style={{
+            borderColor: "rgba(255,255,255,0.2)",
+            color: "rgba(255,255,255,0.55)",
+            background: "rgba(255,255,255,0.06)",
+          }}
+        >
+          Greek Golden Visa Program | EU Residency Through Real Estate
+        </div>
+        <h2 className="text-[14px] font-black leading-snug mb-2">
+          <span className="text-white">Secure Your European</span>
+          <br />
+          <span style={{ color: "hsl(183 100% 60%)" }}>Golden </span>
+          <span style={{ color: "hsl(265 80% 72%)" }}>Visa in Greece</span>
+        </h2>
+        <p className="text-[7.5px] mb-1" style={{ color: "rgba(255,255,255,0.65)" }}>
+          EU residency through €250K+ Greek real estate investments.
+        </p>
+        <p className="text-[7px] italic mb-3.5" style={{ color: "rgba(255,255,255,0.4)" }}>
+          Live freely, invest wisely, and protect your global future.
+        </p>
+        <div className="flex items-center gap-2.5 mb-5">
+          <div
+            className="inline-flex items-center gap-1 text-[7.5px] font-bold px-3 py-1.5 rounded-full"
+            style={{ background: "hsl(183 100% 50%)", color: "hsl(220 30% 8%)" }}
+          >
+            Start Your Golden Visa →
+          </div>
+          <div className="text-[7px] font-semibold" style={{ color: "rgba(255,255,255,0.55)" }}>
+            View Properties
+          </div>
+        </div>
+        <div className="flex gap-6">
+          {stats.map((s) => (
+            <div key={s.value}>
+              <div className="text-[12px] font-black text-white">{s.value}</div>
+              <div className="text-[6px]" style={{ color: "rgba(255,255,255,0.4)" }}>
+                {s.label}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main ───────────────────────────────────────────────────────────────────────
+// Hero video: use preload in index.html + deferred src so it loads faster. For even faster load, re-encode with faststart and lower bitrate (e.g. 720p, 1–2 Mbps).
+const HERO_VIDEO_SRC = "/hero-bg.mp4";
+
+export default function Index() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchType, setSearchType] = useState("Buy");
+  const [selectedPropertyType, setSelectedPropertyType] = useState("");
+  const [professionalService, setProfessionalService] = useState("");
+  const [showAI, setShowAI] = useState(false);
+  const [typeCounts, setTypeCounts] = useState<Record<string, number>>({});
+  const [heroVideoSrc, setHeroVideoSrc] = useState<string>("");
+
+  // Defer video src until after first paint so the poster shows instantly and preload can run
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setHeroVideoSrc(HERO_VIDEO_SRC));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  // Pull-to-refresh — invalidates featured & auction queries
+  const { pulling, refreshing, progress } = usePullToRefresh({
+    onRefresh: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["homepage-featured"] }),
+        queryClient.invalidateQueries({ queryKey: ["homepage-auctions"] }),
+        queryClient.invalidateQueries({ queryKey: ["homepage-open-houses"] }),
+      ]);
+    },
+  });
+
+  // Fetch live listing counts grouped by property_type
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await supabase.from("listings").select("property_type").eq("status", "active");
+        if (!data) return;
+        const counts: Record<string, number> = {};
+        data.forEach((row) => {
+          const k = row.property_type as string;
+          counts[k] = (counts[k] || 0) + 1;
+        });
+        setTypeCounts(counts);
+      } catch (e) {
+        console.warn("Could not fetch listing type counts:", e);
+      }
+    })();
+  }, []);
+
+  // Scroll-reveal refs
+  const { ref: browseRef, inView: browseInView } = useInView();
+  const { ref: featuredRef, inView: featuredInView } = useInView();
+  const { ref: auctionsRef, inView: auctionsInView } = useInView();
+  const { ref: firesaleRef, inView: firesaleInView } = useInView();
+  const { ref: locationsRef, inView: locationsInView } = useInView();
+  const { ref: prosRef, inView: prosInView } = useInView();
+  const { ref: osRef, inView: osInView } = useInView();
+  const { ref: goldenRef, inView: goldenInView } = useInView();
+  const { ref: trustRef, inView: trustInView } = useInView();
+
+  // Timeout so listing queries never hang forever (e.g. Supabase unreachable)
+  const queryTimeout = <T,>(p: Promise<T>, ms: number): Promise<T> =>
+    Promise.race([p, new Promise<T>((_, rej) => setTimeout(() => rej(new Error("Request timeout")), ms))]);
+
+  // DB listings for homepage sections — use separate lightweight queries with limits
+  const featuredSelect =
+    "id, title, address, city, price, price_per_sqm, bedrooms, bathrooms, sqm, floor, total_floors, year_built, energy_class, cover_image_url, property_type, listing_type, ai_score, views_count, tags";
+  const {
+    data: featuredListings = [],
+    isLoading: featuredLoading,
+    isError: featuredError,
+  } = useQuery({
+    queryKey: ["homepage-featured"],
+    queryFn: async () => {
+      const run = async () => {
+        const { data, error } = await supabase
+          .from("listings")
+          .select(`${featuredSelect}, listing_images(url, sort_order)`)
+          .eq("status", "active")
+          .eq("listing_type", "sale")
+          .order("created_at", { ascending: false })
+          .limit(4);
+        if (error) {
+          const fallback = await supabase
+            .from("listings")
+            .select(featuredSelect)
+            .eq("status", "active")
+            .eq("listing_type", "sale")
+            .order("created_at", { ascending: false })
+            .limit(4);
+          if (fallback.error) throw fallback.error;
+          return fallback.data || [];
+        }
+        return data || [];
+      };
+      return queryTimeout(run(), 12_000);
+    },
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
+
+  const auctionSelect =
+    "id, title, address, city, price, price_per_sqm, bedrooms, bathrooms, sqm, floor, total_floors, year_built, energy_class, cover_image_url, property_type, listing_type, ai_score, views_count, tags, auction_date, auction_starting_bid, latitude, longitude";
+  const today = new Date().toISOString().split("T")[0];
+  const {
+    data: auctionListings = [],
+    isLoading: auctionsLoading,
+    isError: auctionsError,
+  } = useQuery({
+    queryKey: ["homepage-auctions"],
+    queryFn: async () => {
+      const run = async () => {
+        const { data, error } = await supabase
+          .from("listings")
+          .select(`${auctionSelect}, listing_images(url, sort_order)`)
+          .eq("status", "active")
+          .eq("listing_type", "auction")
+          .or(`auction_date.gte.${today},auction_date.is.null`)
+          .order("auction_date", { ascending: true, nullsFirst: false })
+          .limit(6);
+        if (error) {
+          const fallback = await supabase
+            .from("listings")
+            .select(auctionSelect)
+            .eq("status", "active")
+            .eq("listing_type", "auction")
+            .or(`auction_date.gte.${today},auction_date.is.null`)
+            .order("auction_date", { ascending: true, nullsFirst: false })
+            .limit(6);
+          if (fallback.error) throw fallback.error;
+          const list = fallback.data || [];
+          return list.sort((a: any, b: any) => {
+            const aHasImg = !!(a.cover_image_url || a.listing_images?.length);
+            const bHasImg = !!(b.cover_image_url || b.listing_images?.length);
+            return (bHasImg ? 1 : 0) - (aHasImg ? 1 : 0);
+          });
+        }
+        return (data || []).sort((a: any, b: any) => {
+          const aHasImg = !!(a.cover_image_url || a.listing_images?.length);
+          const bHasImg = !!(b.cover_image_url || b.listing_images?.length);
+          return (bHasImg ? 1 : 0) - (aHasImg ? 1 : 0);
+        });
+      };
+      return queryTimeout(run(), 12_000);
+    },
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
+
+  const { data: openHouseListings = [] } = useQuery({
+    queryKey: ["homepage-open-houses"],
+    queryFn: async () => {
+      const now = new Date().toISOString();
+      const { data, error } = await supabase
+        .from("listings")
+        .select(
+          "id, title, address, city, price, price_per_sqm, bedrooms, bathrooms, sqm, floor, total_floors, year_built, energy_class, cover_image_url, property_type, listing_type, ai_score, views_count, tags, open_house_date, latitude, longitude, listing_images(url, sort_order)",
+        )
+        .eq("status", "active")
+        .eq("listing_type", "open_house")
+        .gte("open_house_date", now)
+        .order("open_house_date", { ascending: true })
+        .limit(6);
+      if (error) return [];
+      const list = (data || []).sort((a: any, b: any) => {
+        const aHasImg = !!(a.cover_image_url || a.listing_images?.length);
+        const bHasImg = !!(b.cover_image_url || b.listing_images?.length);
+        return (bHasImg ? 1 : 0) - (aHasImg ? 1 : 0);
+      });
+      return list;
+    },
+    staleTime: 2 * 60 * 1000,
+  });
+
+  const listingTypeMap: Record<string, string> = {
+    Buy: "sale",
+    Rent: "rent",
+    Auctions: "auction",
+  };
+
+  const handleSearch = () => {
+    if (searchType === "Professionals") {
+      const q = (professionalService || searchQuery).trim().toLowerCase();
+      const params = new URLSearchParams();
+      const match = PROFESSIONAL_SUGGESTIONS.find(
+        (s) => s.category === q || s.label.toLowerCase() === q || s.category.replace(/_/g, " ") === q,
+      );
+      if (match) params.set("category", match.category);
+      else if (q) params.set("search", q);
+      navigate(`/professionals?${params.toString()}`);
+      return;
+    }
+    const lt = listingTypeMap[searchType];
+    if (lt === "firesale") {
+      navigate("/firesale");
+      return;
+    }
+    if (lt === "auction") {
+      navigate("/auctions");
+      return;
+    }
+    if (searchQuery.trim()) addRecentSearch(searchQuery.trim());
+    const params = new URLSearchParams();
+    if (searchQuery) params.set("city", searchQuery);
+    if (selectedPropertyType) params.set("type", selectedPropertyType);
+    if (lt) params.set("listing_type", lt);
+    navigate(`/listings?${params.toString()}`);
+  };
+
+  const handleProfessionalSearch = (category: string) => {
+    setProfessionalService(category);
+    navigate(`/professionals?category=${category}`);
+  };
+
+  const professionalInputValue = searchType === "Professionals" ? searchQuery : "";
+
+  const handleAIFilters = (filters: Record<string, any>) => {
+    const params = new URLSearchParams();
+    if (filters.city) params.set("city", filters.city);
+    if (filters.listing_type) params.set("listing_type", filters.listing_type);
+    if (filters.property_type) params.set("type", filters.property_type);
+    if (filters.price_min != null || filters.price_max != null)
+      params.set("price", `${filters.price_min ?? 0}-${filters.price_max ?? 9999999}`);
+    if (filters.beds_min) params.set("beds_min", String(filters.beds_min));
+    if (filters.sqm_min) params.set("sqm_min", String(filters.sqm_min));
+    if (filters.features?.length) params.set("features", filters.features.join(","));
+    navigate(`/listings?${params.toString()}`);
+  };
+
+  return (
+    <div className="min-h-screen bg-background">
+      <Navbar />
+      {showAI && <AISearchModal onFiltersApplied={handleAIFilters} onClose={() => setShowAI(false)} />}
+      <CookieConsentBanner />
+
+      {/* Pull-to-refresh indicator — mobile only */}
+      {(pulling || refreshing) && (
+        <div className="lg:hidden fixed top-14 left-0 right-0 z-50 flex justify-center pointer-events-none">
+          <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-card border border-border shadow-elevated mt-2 transition-all">
+            <div
+              className={`w-4 h-4 rounded-full border-2 border-primary transition-all ${refreshing ? "animate-spin border-t-transparent" : ""}`}
+              style={
+                !refreshing
+                  ? { background: `conic-gradient(hsl(var(--primary)) ${progress * 360}deg, transparent 0deg)` }
+                  : undefined
+              }
+            />
+            <span className="text-xs font-medium text-foreground">
+              {refreshing ? "Refreshing…" : progress >= 1 ? "Release to refresh" : "Pull to refresh"}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* ══ HERO ══════════════════════════════════════════════════════════════ */}
+      <section className="relative min-h-[100svh] flex items-center overflow-hidden">
+        {/* Background — sits behind everything, no pt offset so video starts at top under the transparent navbar */}
+        <div className="absolute inset-0 z-0 overflow-hidden">
+          {/* Video background */}
+          <video
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="auto"
+            poster="/hero-poster.jpg"
+            className="hero-video absolute inset-0 w-full h-full object-cover opacity-100 dark:opacity-70"
+            style={{
+              willChange: "transform",
+              transform: "translateZ(0)",
+              animation: "hero-zoom 30s ease-in-out infinite alternate",
+              objectPosition: "80% 30%",
+            }}
+          >
+            {heroVideoSrc && <source src={heroVideoSrc} type="video/mp4" />}
+          </video>
+          {/* Strong dark overlay for text readability */}
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "linear-gradient(160deg, hsl(25 20% 4% / 0.88) 0%, hsl(25 15% 8% / 0.60) 55%, hsl(30 10% 10% / 0.18) 100%)",
+            }}
+          />
+
+          {/* Bottom fade into next section */}
+          <div className="absolute inset-x-0 bottom-0 h-48 sm:h-56 bg-gradient-to-t from-background via-background/60 to-transparent" />
+        </div>
+        {/* Grid overlay */}
+        <div
+          className="absolute inset-0 z-0 opacity-[0.03]"
+          style={{
+            backgroundImage:
+              "linear-gradient(hsl(192 100% 50%) 1px, transparent 1px), linear-gradient(90deg, hsl(192 100% 50%) 1px, transparent 1px)",
+            backgroundSize: "60px 60px",
+          }}
+        />
+
+        {/* Glow orb */}
+        <div
+          className="absolute top-1/4 right-1/4 w-[500px] h-[500px] rounded-full blur-[120px] opacity-10 z-0"
+          style={{ background: "radial-gradient(hsl(192 100% 50%), hsl(270 75% 62%), transparent 70%)" }}
+        />
+
+        <div className="container relative z-10 pt-20 pb-8 sm:pt-28 sm:pb-16 lg:pl-16 xl:pl-24">
+          <div className="grid lg:grid-cols-[1fr_360px] xl:grid-cols-[1fr_400px] gap-8 lg:gap-12 items-end">
+            {/* ── LEFT: Copy + Search ── */}
+            <div className="text-white">
+              {/* Eyebrow */}
+              <div className="relative inline-flex mb-3 sm:mb-7 animate-fade-in-up" style={{ animationDelay: "0s" }}>
+                <span
+                  className="absolute inset-0 rounded-full animate-pulse"
+                  style={{ boxShadow: "0 0 0 4px hsl(192 100% 50% / 0.18), 0 0 18px 4px hsl(192 100% 50% / 0.12)" }}
+                />
+                <div className="relative inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/15 border border-white/30 backdrop-blur-sm">
+                  <span className="relative flex w-2 h-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-300 opacity-60" />
+                    <span className="relative inline-flex rounded-full w-2 h-2 bg-cyan-300" />
+                  </span>
+                  <span className="text-[11px] sm:text-xs font-semibold text-white">Greece's #1 AI-Powered Property Platform</span>
+                </div>
+              </div>
+
+              {/* Headline */}
+              <h1
+                className="font-display font-black leading-[1.1] mb-4 sm:mb-6 animate-fade-in-up text-white"
+                style={{ fontSize: "clamp(1.55rem, 7.5vw, 4.5rem)", animationDelay: "0.08s" }}
+              >
+                Find your perfect property in Greece
+                <div className="mt-1">
+                  <span className="gradient-text-primary" style={{ fontSize: "clamp(1.65rem, 8vw, 4.8rem)" }}>
+                    with AI precision
+                  </span>
+                </div>
+              </h1>
+
+              {/* ── Search Card ── */}
+              <div className="animate-fade-in-up" style={{ animationDelay: "0.28s" }}>
+                <div
+                  className="bg-card/90 backdrop-blur-2xl border border-border/70 rounded-2xl shadow-elevated overflow-visible"
+                  style={{
+                    boxShadow:
+                      "0 12px 48px -8px hsl(var(--primary) / 0.2), 0 2px 0 0 hsl(var(--primary) / 0.08), inset 0 1px 0 0 hsl(var(--foreground) / 0.04)",
+                  }}
+                >
+                  {/* Tabs — scrollable on mobile */}
+                  <div className="flex gap-0.5 px-2 pt-2.5 overflow-x-auto scrollbar-none">
+                    {[
+                      { label: "Buy", emoji: "🏠", color: "" },
+                      { label: "Rent", emoji: "🔑", color: "" },
+                      { label: "Auctions", emoji: "⚖️", color: "" },
+                      { label: "Professionals", emoji: "👔", color: "text-brand-purple" },
+                    ].map(({ label, emoji, color }) => (
+                      <button
+                        key={label}
+                        onClick={() => setSearchType(label)}
+                        className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all shrink-0 ${
+                          searchType === label
+                            ? "bg-primary text-primary-foreground shadow-sm"
+                            : `${color || "text-muted-foreground"} hover:text-foreground hover:bg-secondary/80`
+                        }`}
+                      >
+                        <span className="text-sm leading-none">{emoji}</span>
+                        <span>{label}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="mx-3 mt-2 h-px bg-border/50" />
+
+                  {/* Search row — mobile: location full-width, then type+AI+search on one row */}
+                  <div className="p-2">
+                    {/* Location / Service input — always full width on mobile */}
+                    <div className="mb-2">
+                      {searchType === "Professionals" ? (
+                        <ServiceInput
+                          value={professionalInputValue}
+                          onChange={(v) => {
+                            setSearchQuery(v);
+                            const m = PROFESSIONAL_SUGGESTIONS.find((s) => s.label === v);
+                            setProfessionalService(m ? m.category : "");
+                          }}
+                          onSearch={handleProfessionalSearch}
+                        />
+                      ) : (
+                        <LocationInput value={searchQuery} onChange={setSearchQuery} onSearch={handleSearch} />
+                      )}
+                    </div>
+
+                    {/* Second row: type dropdown + AI + Search */}
+                    <div className="flex gap-2 items-center">
+                      {searchType !== "Professionals" && (
+                        <div className="flex-1 min-w-0">
+                          <PropertyTypeDropdown value={selectedPropertyType} onChange={setSelectedPropertyType} />
+                        </div>
+                      )}
+                      {searchType !== "Professionals" && (
+                        <button
+                          onClick={() => setShowAI(true)}
+                          className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all text-primary hover:bg-primary/10 shrink-0 whitespace-nowrap border border-border"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span className="hidden xs:inline">AI</span>
+                        </button>
+                      )}
+                      <Button
+                        size="default"
+                        onClick={handleSearch}
+                        className={`bg-primary hover:opacity-90 border-0 text-primary-foreground rounded-xl font-semibold shrink-0 ${searchType === "Professionals" ? "flex-1" : ""}`}
+                      >
+                        <Search className="w-4 h-4 sm:mr-2" />
+                        <span className="hidden sm:inline">Search</span>
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* ── RIGHT: Live Market Ticker Card ── */}
+            <div className="hidden lg:block animate-fade-in-up relative" style={{ animationDelay: "0.25s" }}>
+              <div
+                className="absolute -inset-6 rounded-3xl blur-3xl opacity-15"
+                style={{ background: "radial-gradient(ellipse, hsl(192 100% 50%), hsl(270 75% 62%), transparent 70%)" }}
+              />
+              <div className="relative">
+                <MarketTicker />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ══ BROWSE BY TYPE ══════════════════════════════════════════════════ */}
+      <section className="py-8 sm:py-14 bg-secondary">
+        <div ref={browseRef} className="container">
+          <div className={`flex items-center justify-between mb-5 sm:mb-7 reveal ${browseInView ? "in-view" : ""}`}>
+            <h2 className="font-display text-xl sm:text-2xl font-bold">Browse by Type</h2>
+            <Link to="/listings" className="text-sm text-primary hover:underline flex items-center gap-1 shrink-0">
+              All <ArrowRight className="w-3 h-3" />
+            </Link>
+          </div>
+
+          {/* ── ROW 1: Primary types — icon-only on mobile, icon+label on sm+ */}
+          <div className={`grid grid-cols-3 gap-2 sm:gap-3 reveal reveal-delay-1 ${browseInView ? "in-view" : ""}`}>
+            {PROPERTY_TYPES.filter((t) => ["apartment", "land"].includes(t.value)).map((type) => (
+              <Link key={type.value} to={`/listings?type=${type.value}`}>
+                <div className="glass-card rounded-xl sm:rounded-2xl border border-border hover:border-primary/40 hover:shadow-elevated transition-all group p-3 sm:p-4 flex flex-col sm:flex-row items-center sm:items-center gap-1 sm:gap-3 cursor-pointer text-center sm:text-left">
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-primary/10 flex items-center justify-center text-lg sm:text-xl shrink-0 group-hover:scale-110 transition-transform">
+                    {type.emoji}
+                  </div>
+                  <div>
+                    <div className="font-display font-semibold text-xs sm:text-sm text-foreground group-hover:text-primary transition-colors leading-tight">
+                      {type.label}
+                    </div>
+                    <div className="text-[9px] sm:text-[10px] text-muted-foreground mt-0.5 hidden sm:block">
+                      {typeCounts[type.value] ? `${typeCounts[type.value].toLocaleString()} listings` : "—"}
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            ))}
+            {/* New Development */}
+            <Link to="/listings?pre_sale=1">
+              <div className="glass-card rounded-xl sm:rounded-2xl border border-border hover:border-primary/40 hover:shadow-elevated transition-all group p-3 sm:p-4 flex flex-col sm:flex-row items-center sm:items-center gap-1 sm:gap-3 cursor-pointer relative text-center sm:text-left">
+                <span className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 px-1 sm:px-1.5 py-0.5 rounded-full text-[8px] sm:text-[9px] font-bold bg-primary text-primary-foreground leading-tight tracking-wide">
+                  NEW
+                </span>
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-primary/10 flex items-center justify-center text-lg sm:text-xl shrink-0 group-hover:scale-110 transition-transform">
+                  🏗️
+                </div>
+                <div>
+                  <div className="font-display font-semibold text-xs sm:text-sm text-foreground group-hover:text-primary transition-colors leading-tight">
+                    New Dev
+                  </div>
+                  <div className="text-[9px] sm:text-[10px] text-muted-foreground mt-0.5 hidden sm:block">Off-plan &amp; new builds</div>
+                </div>
+              </div>
+            </Link>
+          </div>
+
+          {/* ── ROW 2: Commercial subtypes + Open House + Auctions */}
+          <div className={`mt-2 sm:mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 reveal reveal-delay-2 ${browseInView ? "in-view" : ""}`}>
+            {[
+              { label: "Retail Shop", emoji: "🛍️", href: "/listings?type=commercial&subtype=shop" },
+              { label: "Mixed-Use", emoji: "🔀", href: "/listings?type=commercial&subtype=mixed_use" },
+              { label: "Open House", emoji: "🚪", href: "/open-houses" },
+              { label: "Auctions", emoji: "🔨", href: "/auctions" },
+            ].map((item) => (
+              <Link key={item.label} to={item.href}>
+                <div className="glass-card rounded-xl sm:rounded-2xl border border-border hover:border-primary/40 hover:shadow-elevated transition-all group p-3 sm:p-4 flex items-center gap-2 sm:gap-3 cursor-pointer">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-primary/10 flex items-center justify-center text-base sm:text-xl shrink-0 group-hover:scale-110 transition-transform">
+                    {item.emoji}
+                  </div>
+                  <div className="font-display font-semibold text-xs sm:text-sm text-foreground group-hover:text-primary transition-colors leading-tight">
+                    {item.label}
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+
+          {/* ── More Commercial chips — scrollable on mobile */}
+          <div className={`mt-4 reveal reveal-delay-2 ${browseInView ? "in-view" : ""}`}>
+            <p className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2.5 sm:mb-3">
+              More Commercial
+            </p>
+            <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1 sm:flex-wrap sm:pb-0">
+              {[
+                { label: "📦 Warehouse", sub: "warehouse" },
+                { label: "🍽️ Restaurant / Café", sub: "restaurant" },
+                { label: "🏨 Hotel / B&B", sub: "hotel" },
+                { label: "🔬 Clinic / Medical", sub: "clinic" },
+                { label: "🏗️ Industrial Space", sub: "industrial" },
+                { label: "🖼️ Showroom", sub: "showroom" },
+                { label: "🎪 Hall / Event Space", sub: "hall" },
+                { label: "🏛️ Business Centre", sub: "office_business" },
+              ].map((item) => (
+                <Link key={item.sub} to={`/listings?type=commercial&subtype=${item.sub}`}>
+                  <div className="rounded-full border border-border bg-secondary px-3 sm:px-3.5 py-1.5 text-[11px] sm:text-xs font-medium text-foreground hover:border-primary/40 hover:text-primary hover:bg-primary/5 transition-all cursor-pointer whitespace-nowrap">
+                    {item.label}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ══ FEATURED PROPERTIES ══════════════════════════════════════════════ */}
+      <section className="py-10 sm:py-16 bg-background">
+        <div ref={featuredRef} className="container">
+          <div className={`flex items-center justify-between mb-6 sm:mb-8 reveal ${featuredInView ? "in-view" : ""}`}>
+            <div>
+              <h2 className="font-display text-xl sm:text-2xl font-bold">Featured Properties</h2>
+            </div>
+            <Button variant="outline" size="sm" className="border-border text-xs" asChild>
+              <Link to="/listings">View All</Link>
+            </Button>
+          </div>
+          <div
+            className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 reveal reveal-delay-1 ${featuredInView ? "in-view" : ""}`}
+          >
+            {featuredLoading && !featuredError
+              ? Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="glass-card rounded-2xl border border-border overflow-hidden animate-pulse">
+                    <div className="bg-muted h-52 w-full" />
+                    <div className="p-4 space-y-3">
+                      <div className="h-4 bg-muted rounded-md w-3/4" />
+                      <div className="h-3 bg-muted rounded-md w-1/2" />
+                      <div className="h-5 bg-muted rounded-md w-1/3" />
+                      <div className="flex gap-2 pt-1">
+                        <div className="h-3 bg-muted rounded-md w-10" />
+                        <div className="h-3 bg-muted rounded-md w-10" />
+                        <div className="h-3 bg-muted rounded-md w-10" />
+                      </div>
+                    </div>
+                  </div>
+                ))
+              : featuredListings.map((l: any) => {
+                  const imgs: string[] = l.cover_image_url ? [l.cover_image_url] : [];
+                  if (!imgs.length && l.listing_images?.length) {
+                    const sorted = [...l.listing_images].sort((a: any, b: any) => a.sort_order - b.sort_order);
+                    sorted.forEach((img: any) => imgs.push(img.url));
+                  }
+                  return (
+                    <PropertyCard
+                      key={l.id}
+                      property={{
+                        id: l.id,
+                        title: l.title,
+                        address: l.address || l.city,
+                        city: l.city,
+                        price: Number(l.price),
+                        pricePerSqm: l.price_per_sqm ? Number(l.price_per_sqm) : undefined,
+                        bedrooms: l.bedrooms,
+                        bathrooms: l.bathrooms,
+                        sqm: Number(l.sqm),
+                        floor: l.floor,
+                        totalFloors: l.total_floors,
+                        yearBuilt: l.year_built,
+                        energyClass: l.energy_class,
+                        images: imgs,
+                        type: l.property_type,
+                        listingType: l.listing_type,
+                        aiScore: l.ai_score,
+                        views: l.views_count,
+                        tags: l.tags || [],
+                      }}
+                    />
+                  );
+                })}
+          </div>
+        </div>
+      </section>
+
+      {/* ══ AUCTIONS ════════════════════════════════════════════════════════ */}
+      <section className="py-10 sm:py-16 bg-secondary">
+        <div ref={auctionsRef} className="container">
+          <div className={`flex items-center justify-between mb-6 sm:mb-8 reveal ${auctionsInView ? "in-view" : ""}`}>
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <Gavel className="w-4 h-4 text-brand-gold" />
+                <span className="text-xs font-semibold text-brand-gold uppercase tracking-widest">Greek Auctions</span>
+              </div>
+              <h2 className="font-display text-xl sm:text-2xl font-bold">This Week's Auctions</h2>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-brand-gold/30 text-brand-gold hover:bg-brand-gold/10 text-xs"
+              asChild
+            >
+              <Link to="/auctions">
+                All Auctions <ArrowRight className="w-3 h-3 ml-1" />
+              </Link>
+            </Button>
+          </div>
+          {/* 2-col on mobile → 4-col on md */}
+          <div
+            className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 reveal reveal-delay-1 ${auctionsInView ? "in-view" : ""}`}
+          >
+            {auctionListings.slice(0, 4).map((l: any) => {
+              const svFallback =
+                l.latitude != null && l.longitude != null
+                  ? getStreetViewProxyUrl({ lat: Number(l.latitude), lng: Number(l.longitude) })
+                  : null;
+              const imgs: string[] = l.cover_image_url ? [l.cover_image_url] : [];
+              if (!imgs.length && l.listing_images?.length) {
+                const sorted = [...l.listing_images].sort((a: any, b: any) => a.sort_order - b.sort_order);
+                sorted.forEach((img: any) => imgs.push(img.url));
+              }
+              if (!imgs.length && svFallback) imgs.push(svFallback);
+              return (
+                <PropertyCard
+                  key={l.id}
+                  property={{
+                    id: l.id,
+                    title: l.title,
+                    address: l.address || l.city,
+                    city: l.city,
+                    price: Number(l.price),
+                    pricePerSqm: l.price_per_sqm ? Number(l.price_per_sqm) : undefined,
+                    bedrooms: l.bedrooms,
+                    bathrooms: l.bathrooms,
+                    sqm: Number(l.sqm),
+                    floor: l.floor,
+                    totalFloors: l.total_floors,
+                    yearBuilt: l.year_built,
+                    energyClass: l.energy_class,
+                    images: imgs,
+                    type: l.property_type,
+                    listingType: l.listing_type,
+                    auctionDate: l.auction_date ? new Date(l.auction_date).toLocaleDateString("en-GB") : undefined,
+                    auctionStartingBid: l.auction_starting_bid ? Number(l.auction_starting_bid) : undefined,
+                    aiScore: l.ai_score,
+                    views: l.views_count,
+                    tags: l.tags || [],
+                  }}
+                />
+              );
+            })}
+            {/* Fill remaining slots with skeleton placeholders when loading */}
+            {auctionsLoading &&
+              auctionListings.length === 0 &&
+              Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="glass-card rounded-2xl border border-border overflow-hidden animate-pulse">
+                  <div className="bg-muted h-52 w-full" />
+                  <div className="p-4 space-y-3">
+                    <div className="h-4 bg-muted rounded-md w-3/4" />
+                    <div className="h-3 bg-muted rounded-md w-1/2" />
+                    <div className="h-5 bg-muted rounded-md w-1/3" />
+                  </div>
+                </div>
+              ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ══ OPEN HOUSES ══════════════════════════════════════════════════════ */}
+      <section className="py-10 sm:py-16 bg-background">
+        <div className="container">
+          <div className={`flex items-center justify-between mb-6 sm:mb-8 reveal ${auctionsInView ? "in-view" : ""}`}>
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs font-semibold text-emerald-600 uppercase tracking-widest">Open Houses</span>
+              </div>
+              <h2 className="font-display text-xl sm:text-2xl font-bold">Scheduled viewings — no appointment needed</h2>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10 text-xs"
+              asChild
+            >
+              <Link to="/open-houses">
+                All Open Houses <ArrowRight className="w-3 h-3 ml-1" />
+              </Link>
+            </Button>
+          </div>
+          <div
+            className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 reveal reveal-delay-1 ${auctionsInView ? "in-view" : ""}`}
+          >
+            {openHouseListings.slice(0, 4).map((l: any) => {
+              const imgs: string[] = l.cover_image_url ? [l.cover_image_url] : [];
+              if (!imgs.length && l.listing_images?.length) {
+                const sorted = [...l.listing_images].sort((a: any, b: any) => a.sort_order - b.sort_order);
+                sorted.forEach((img: any) => imgs.push(img.url));
+              }
+              const svFallback =
+                l.latitude != null && l.longitude != null
+                  ? getStreetViewProxyUrl({ lat: Number(l.latitude), lng: Number(l.longitude) })
+                  : null;
+              if (!imgs.length && svFallback) imgs.push(svFallback);
+              return (
+                <PropertyCard
+                  key={l.id}
+                  property={{
+                    id: l.id,
+                    title: l.title,
+                    address: l.address || l.city,
+                    city: l.city,
+                    price: Number(l.price),
+                    pricePerSqm: l.price_per_sqm ? Number(l.price_per_sqm) : undefined,
+                    bedrooms: l.bedrooms,
+                    bathrooms: l.bathrooms,
+                    sqm: Number(l.sqm),
+                    floor: l.floor,
+                    totalFloors: l.total_floors,
+                    yearBuilt: l.year_built,
+                    energyClass: l.energy_class,
+                    images: imgs,
+                    type: l.property_type,
+                    listingType: "open_house",
+                    auctionDate: l.open_house_date
+                      ? new Date(l.open_house_date).toLocaleDateString("en-GB", {
+                          weekday: "short",
+                          day: "numeric",
+                          month: "short",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : undefined,
+                    aiScore: l.ai_score,
+                    views: l.views_count,
+                    tags: l.tags || [],
+                  }}
+                />
+              );
+            })}
+            {/* Mock cards when no open houses are live yet */}
+            {openHouseListings.length === 0 &&
+              [
+                {
+                  id: "mock-oh-1",
+                  title: "Modern 2BR in Kifisia",
+                  address: "Kifisia Center",
+                  city: "Athens",
+                  price: 420000,
+                  pricePerSqm: 3100,
+                  bedrooms: 2,
+                  bathrooms: 2,
+                  sqm: 135,
+                  floor: 2,
+                  totalFloors: 4,
+                  yearBuilt: 2015,
+                  energyClass: "A",
+                  images: ["https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=800&q=60"],
+                  type: "apartment" as const,
+                  listingType: "open_house" as const,
+                  auctionDate: "Sat 19 Apr · 11:00",
+                  aiScore: 87,
+                  views: 132,
+                  tags: ["Balcony", "Parking"],
+                },
+                {
+                  id: "mock-oh-2",
+                  title: "Sea-view Villa, Vouliagmeni",
+                  address: "Panorama Vouliagmeni",
+                  city: "Athens Riviera",
+                  price: 1450000,
+                  pricePerSqm: 5200,
+                  bedrooms: 4,
+                  bathrooms: 4,
+                  sqm: 280,
+                  floor: 0,
+                  totalFloors: 2,
+                  yearBuilt: 2020,
+                  energyClass: "A+",
+                  images: ["https://images.unsplash.com/photo-1507089947368-19c1da9775ae?w=800&q=60"],
+                  type: "house" as const,
+                  listingType: "open_house" as const,
+                  auctionDate: "Sun 20 Apr · 17:00",
+                  aiScore: 92,
+                  views: 89,
+                  tags: ["Pool", "Garden"],
+                },
+                {
+                  id: "mock-oh-3",
+                  title: "Loft near Aristotelous Sq.",
+                  address: "City Center",
+                  city: "Thessaloniki",
+                  price: 310000,
+                  pricePerSqm: 2900,
+                  bedrooms: 1,
+                  bathrooms: 1,
+                  sqm: 107,
+                  floor: 5,
+                  totalFloors: 7,
+                  yearBuilt: 2010,
+                  energyClass: "B+",
+                  images: ["https://images.unsplash.com/photo-1502672023488-70e25813eb80?w=800&q=60"],
+                  type: "apartment" as const,
+                  listingType: "open_house" as const,
+                  auctionDate: "Thu 24 Apr · 19:30",
+                  aiScore: 84,
+                  views: 54,
+                  tags: ["City view"],
+                },
+                {
+                  id: "mock-oh-4",
+                  title: "Renovated Studio in Kolonaki",
+                  address: "Kolonaki Square",
+                  city: "Athens",
+                  price: 265000,
+                  pricePerSqm: 4200,
+                  bedrooms: 1,
+                  bathrooms: 1,
+                  sqm: 63,
+                  floor: 3,
+                  totalFloors: 6,
+                  yearBuilt: 1960,
+                  energyClass: "B",
+                  images: ["https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800&q=60"],
+                  type: "apartment" as const,
+                  listingType: "open_house" as const,
+                  auctionDate: "Fri 25 Apr · 10:00",
+                  aiScore: 79,
+                  views: 98,
+                  tags: ["Terrace", "Storage"],
+                },
+              ].map((p) => <PropertyCard key={p.id} property={p} />)}
+          </div>
+        </div>
+      </section>
+
+      {/* ══ QUICK SALE CTA ══════════════════════════════════════════════════ */}
+      <section className="py-10 sm:py-16 bg-background">
+        <div ref={firesaleRef} className="container">
+          <div
+            className={`relative rounded-3xl overflow-hidden bg-card border border-border reveal ${firesaleInView ? "in-view" : ""}`}
+          >
+            <div
+              className="absolute inset-0"
+              style={{ background: "radial-gradient(ellipse at 80% 50%, hsl(0 72% 55% / 0.12) 0%, transparent 60%)" }}
+            />
+
+            <div
+              className="absolute inset-0"
+              style={{
+                background: "radial-gradient(ellipse at 20% 50%, hsl(var(--brand-purple) / 0.06) 0%, transparent 50%)",
+              }}
+            />
+
+            <div className="relative p-6 sm:p-10 md:p-16 grid md:grid-cols-2 gap-6 sm:gap-8 items-center">
+              <div>
+                <div className="flex items-center gap-2 mb-4">
+                  <Flame className="w-5 h-5 text-destructive flame-flicker" />
+                  <span className="text-xs font-bold text-destructive uppercase tracking-widest">
+                    Quick Sale™ Instant Offer
+                  </span>
+                </div>
+                <h2 className="font-display text-2xl sm:text-4xl font-bold mb-4">
+                  Sell Your Property <br />
+                  <span className="gradient-text-primary">in 96 Hours</span>
+                </h2>
+                <p className="text-muted-foreground mb-6 text-sm sm:text-base">
+                  Get a guaranteed cash offer for your property powered by our AI valuation engine. No waiting, no
+                  stress.
+                </p>
+                <Button
+                  size="lg"
+                  className="w-full sm:w-auto bg-gradient-primary border-0 text-primary-foreground"
+                  asChild
+                >
+                  <Link to="/firesale">
+                    Get Instant Offer <ArrowRight className="w-4 h-4 ml-2" />
+                  </Link>
+                </Button>
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                {[
+                  { value: "96h", label: "Average Closing" },
+                  { value: "100%", label: "Cash Offers" },
+                  { value: "Active", label: "Buyers" },
+                  { value: "AI", label: "Valuation Engine" },
+                ].map((item) => (
+                  <div key={item.label} className="glass-card rounded-xl p-3 sm:p-4 text-center">
+                    <div className="font-display text-xl sm:text-2xl font-bold gradient-text-cyan">{item.value}</div>
+                    <div className="text-xs text-muted-foreground mt-1">{item.label}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ══ POPULAR LOCATIONS ════════════════════════════════════════════════ */}
+      <section className="py-10 sm:py-16 bg-secondary">
+        <div ref={locationsRef} className="container">
+          <div className={`flex items-center justify-between mb-6 sm:mb-8 reveal ${locationsInView ? "in-view" : ""}`}>
+            <h2 className="font-display text-xl sm:text-2xl font-bold">Popular Locations</h2>
+            <Link to="/listings" className="text-sm text-primary hover:underline flex items-center gap-1">
+              Explore All <ArrowRight className="w-3 h-3" />
+            </Link>
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              {
+                name: "Athens",
+                listings: 24860,
+                trend: "+1.2%",
+                image: "https://images.unsplash.com/photo-1555993539-1732b0258235?w=600&q=80",
+              },
+              {
+                name: "Thessaloniki",
+                listings: 8240,
+                trend: "+0.8%",
+                image: thessalonikiLandmark,
+              },
+              {
+                name: "Mykonos",
+                listings: 1820,
+                trend: "+2.3%",
+                image: "https://images.unsplash.com/photo-1533104816931-20fa691ff6ca?w=600&q=80",
+              },
+              {
+                name: "Santorini",
+                listings: 1240,
+                trend: "+1.9%",
+                image: "https://images.unsplash.com/photo-1570077188670-e3a8d69ac5ff?w=600&q=80",
+              },
+            ].map((city, idx) => (
+              <Link
+                key={city.name}
+                to={`/listings?city=${city.name}`}
+                className={`reveal ${locationsInView ? "in-view" : ""}`}
+                style={{ transitionDelay: `${idx * 0.1}s` }}
+              >
+                <div className="relative rounded-xl overflow-hidden aspect-[3/4] group shadow-card hover:shadow-elevated transition-shadow duration-500">
+                  <img
+                    src={city.image}
+                    alt={city.name}
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out"
+                  />
+
+                  <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-background/30 to-transparent group-hover:from-background/95 transition-all duration-500" />
+                  {/* Shimmer on hover */}
+                  <div
+                    className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+                    style={{ background: "linear-gradient(135deg, hsl(var(--primary) / 0.08) 0%, transparent 60%)" }}
+                  />
+                  <div className="absolute bottom-4 left-4 translate-y-1 group-hover:translate-y-0 transition-transform duration-300">
+                    <div className="font-display font-bold text-lg text-foreground">{city.name}</div>
+                    <div className="text-xs text-muted-foreground">{city.listings.toLocaleString()} listings</div>
+                    <div className="text-xs text-brand-emerald font-semibold flex items-center gap-1 mt-0.5">
+                      <TrendingUp className="w-3 h-3" />
+                      {city.trend}
+                    </div>
+                  </div>
+                  {/* Arrow appears on hover */}
+                  <div className="absolute top-3 right-3 w-8 h-8 rounded-full bg-primary/80 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100 transition-all duration-300">
+                    <ArrowRight className="w-4 h-4 text-primary-foreground" />
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ══ PROFESSIONALS CTA ════════════════════════════════════════════════ */}
+      <section className="py-10 sm:py-20 bg-background">
+        <div ref={prosRef} className="container">
+          <div
+            className={`relative rounded-3xl overflow-hidden border border-accent/20 bg-foreground dark:bg-[hsl(265_40%_7%)] reveal ${prosInView ? "in-view" : ""}`}
+          >
+            <div
+              className="absolute top-0 left-0 w-80 h-80 rounded-full blur-3xl opacity-20"
+              style={{ background: "radial-gradient(hsl(265 80% 60%), transparent 70%)" }}
+            />
+
+            <div
+              className="absolute bottom-0 right-0 w-80 h-80 rounded-full blur-3xl opacity-15"
+              style={{ background: "radial-gradient(hsl(183 100% 42%), transparent 70%)" }}
+            />
+
+            <div className="relative p-6 sm:p-10 md:p-14 lg:p-16 text-background">
+              <div className="grid lg:grid-cols-2 gap-8 sm:gap-12 items-center">
+                <div>
+                  <h2 className="font-display text-3xl sm:text-4xl lg:text-5xl font-bold leading-tight mb-4 text-destructive-foreground">
+                    The right expert,
+                    <br />
+                    <span className="gradient-text-cyan">one click away</span>
+                  </h2>
+
+                  <Button
+                    size="lg"
+                    className="bg-gradient-accent border-0 text-accent-foreground font-semibold px-8 gap-2"
+                    asChild
+                  >
+                    <Link to="/professionals">
+                      Explore Directory <ArrowRight className="w-4 h-4" />
+                    </Link>
+                  </Button>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    {
+                      emoji: "🏛️",
+                      title: "Architects",
+                      category: "architect",
+                      color: "text-primary",
+                      border: "border-primary/30",
+                      bg: "bg-primary/15",
+                    },
+                    {
+                      emoji: "⚖️",
+                      title: "Lawyers",
+                      category: "lawyer",
+                      color: "text-brand-gold",
+                      border: "border-brand-gold/30",
+                      bg: "bg-brand-gold/15",
+                    },
+                    {
+                      emoji: "📋",
+                      title: "Notaries",
+                      category: "notary",
+                      color: "text-brand-purple",
+                      border: "border-brand-purple/30",
+                      bg: "bg-brand-purple/15",
+                    },
+                    {
+                      emoji: "🔧",
+                      title: "Civil Engineers",
+                      category: "civil_engineer",
+                      color: "text-primary",
+                      border: "border-primary/30",
+                      bg: "bg-primary/15",
+                    },
+                    {
+                      emoji: "🏠",
+                      title: "Real Estate Agents",
+                      category: "real_estate_agent",
+                      color: "text-brand-emerald",
+                      border: "border-brand-emerald/30",
+                      bg: "bg-brand-emerald/15",
+                    },
+                    {
+                      emoji: "💰",
+                      title: "Financial Advisors",
+                      category: "financial_advisor",
+                      color: "text-brand-gold",
+                      border: "border-brand-gold/30",
+                      bg: "bg-brand-gold/10",
+                    },
+                    {
+                      emoji: "🏗️",
+                      title: "Contractors",
+                      category: "contractor",
+                      color: "text-brand-purple-dark",
+                      border: "border-brand-purple-dark/30",
+                      bg: "bg-brand-purple-dark/15",
+                    },
+                    {
+                      emoji: "🏡",
+                      title: "Property Managers",
+                      category: "property_manager",
+                      color: "text-brand-purple",
+                      border: "border-brand-purple/30",
+                      bg: "bg-brand-purple/10",
+                    },
+                  ].map((pro) => (
+                    <Link key={pro.title} to={`/professionals?category=${pro.category}`}>
+                      <div
+                        className={`group flex items-center gap-3 p-4 rounded-2xl bg-background/10 border ${pro.border} hover:bg-background/20 transition-all`}
+                      >
+                        <div
+                          className={`w-10 h-10 rounded-xl ${pro.bg} flex items-center justify-center text-xl shrink-0 group-hover:scale-110 transition-transform`}
+                        >
+                          {pro.emoji}
+                        </div>
+                        <div>
+                          <div className={`font-bold text-sm ${pro.color}`}>{pro.title}</div>
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ══ mAI PROP OS ═════════════════════════════════════════════════════ */}
+      <section className="py-12 sm:py-20 bg-secondary overflow-hidden">
+        <div ref={osRef} className="container">
+          <div className="grid lg:grid-cols-2 gap-8 sm:gap-12 items-center">
+            {/* Copy */}
+            <div className={`reveal ${osInView ? "in-view" : ""}`}>
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 mb-4 sm:mb-5">
+                <BarChart2 className="w-3.5 h-3.5 text-primary" />
+                <span className="text-xs font-semibold text-primary uppercase tracking-wide">
+                  Powered by mAI Prop OS
+                </span>
+              </div>
+              <h2 className="font-display text-3xl sm:text-4xl font-bold leading-tight mb-3 sm:mb-4">
+                Greece's Real Estate <br />
+                <span className="gradient-text-primary">Data Gateway</span>
+              </h2>
+              <p className="text-muted-foreground leading-relaxed mb-6">
+                Every data on mAI prop is powered by mAI prop OS — our proprietary data platform aggregating Greek
+                cadastre records, judicial auctions, price indices, and predictive analytics into one live dashboard.
+              </p>
+              <ul className="space-y-3 mb-8">
+                {[
+                  "Real-time €/m² indices for every Greek region",
+                  "3,200+ monthly judicial & bank auctions",
+                  "AI-powered investment scoring & portfolio tools",
+                  "Automated property reports in minutes",
+                ].map((item) => (
+                  <li key={item} className="flex items-start gap-2.5 text-sm text-muted-foreground">
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+              <div className="flex gap-3">
+                <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2 glow-cyan" asChild>
+                  <a href="https://os.maiprop.co" target="_blank" rel="noreferrer">
+                    Open mAI Prop OS <ExternalLink className="w-4 h-4" />
+                  </a>
+                </Button>
+              </div>
+            </div>
+
+            {/* App Mockup */}
+            <div className={`relative reveal reveal-delay-1 ${osInView ? "in-view" : ""}`}>
+              <div
+                className="absolute inset-0 -m-8 rounded-3xl opacity-20 blur-3xl"
+                style={{ background: "radial-gradient(ellipse, hsl(183 100% 42%), transparent 70%)" }}
+              />
+
+              <div className="relative rounded-2xl overflow-hidden border border-primary/30 shadow-elevated glow-cyan">
+                {/* Browser chrome */}
+                <div className="flex items-center gap-2 px-4 py-2.5 bg-card border-b border-border">
+                  <div className="flex gap-1.5 shrink-0">
+                    <span className="w-3 h-3 rounded-full bg-destructive/60" />
+                    <span className="w-3 h-3 rounded-full bg-brand-gold/60" />
+                    <span className="w-3 h-3 rounded-full bg-brand-emerald/60" />
+                  </div>
+                  <div className="flex-1 flex items-center gap-2 bg-secondary rounded-lg px-3 py-1.5 mx-2">
+                    <Globe className="w-3 h-3 text-muted-foreground shrink-0" />
+                    <span className="text-xs text-muted-foreground font-mono">os.maiprop.co</span>
+                  </div>
+                  <a
+                    href="https://os.maiprop.co"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="shrink-0 p-1 rounded hover:bg-secondary transition-colors"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5 text-muted-foreground" />
+                  </a>
+                </div>
+                {/* Mockup content */}
+                <div className="aspect-[16/10] bg-background">
+                  <OSDashboardMockup />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <Footer />
+      {/* bottom spacing for mobile nav */}
+      <div className="h-20 lg:hidden" />
+    </div>
+  );
+}

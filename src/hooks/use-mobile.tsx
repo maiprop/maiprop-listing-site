@@ -1,5 +1,10 @@
 import * as React from "react";
 
+/**
+ * Treat "mobile" as <768px for sidebar/shell components.
+ * This keeps the dashboard sidebar expanded on tablets,
+ * while Navbar still controls its own layout at lg (1024px).
+ */
 const MOBILE_BREAKPOINT = 768;
 
 export function useIsMobile() {
