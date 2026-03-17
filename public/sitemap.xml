@@ -1,0 +1,493 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 24 static + 8 articles + 17 properties = 49 URLs -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+
+  <!-- ===================== STATIC PAGES ===================== -->
+
+  <url>
+    <loc>https://properties.maiprop.co/</loc>
+    <lastmod>2026-03-09</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/" />
+    <xhtml:link rel="alternate" hreflang="en-US" href="https://properties.maiprop.co/" />
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://properties.maiprop.co/" />
+    <xhtml:link rel="alternate" hreflang="el" href="https://properties.maiprop.co/?lang=el" />
+    <xhtml:link rel="alternate" hreflang="ar" href="https://properties.maiprop.co/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="ar-AE" href="https://properties.maiprop.co/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="zh" href="https://properties.maiprop.co/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="zh-CN" href="https://properties.maiprop.co/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="ru" href="https://properties.maiprop.co/?lang=ru" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://properties.maiprop.co/?lang=fr" />
+    <xhtml:link rel="alternate" hreflang="hi" href="https://properties.maiprop.co/?lang=hi" />
+    <xhtml:link rel="alternate" hreflang="he" href="https://properties.maiprop.co/?lang=he" />
+    <xhtml:link rel="alternate" hreflang="tr" href="https://properties.maiprop.co/?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/greek-golden-visa/</loc>
+    <lastmod>2026-03-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/greek-golden-visa/" />
+    <xhtml:link rel="alternate" hreflang="en-US" href="https://properties.maiprop.co/greek-golden-visa/" />
+    <xhtml:link rel="alternate" hreflang="en-GB" href="https://properties.maiprop.co/greek-golden-visa/" />
+    <xhtml:link rel="alternate" hreflang="el" href="https://properties.maiprop.co/greek-golden-visa/?lang=el" />
+    <xhtml:link rel="alternate" hreflang="ar" href="https://properties.maiprop.co/greek-golden-visa/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="zh" href="https://properties.maiprop.co/greek-golden-visa/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="ru" href="https://properties.maiprop.co/greek-golden-visa/?lang=ru" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://properties.maiprop.co/greek-golden-visa/?lang=fr" />
+    <xhtml:link rel="alternate" hreflang="tr" href="https://properties.maiprop.co/greek-golden-visa/?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/greek-golden-visa/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/greek-golden-visa-requirements/</loc>
+    <lastmod>2026-03-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/greek-golden-visa-requirements/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/greek-golden-visa-requirements/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/250k-golden-visa-properties/</loc>
+    <lastmod>2026-03-07</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/250k-golden-visa-properties/" />
+    <xhtml:link rel="alternate" hreflang="el" href="https://properties.maiprop.co/250k-golden-visa-properties/?lang=el" />
+    <xhtml:link rel="alternate" hreflang="ar" href="https://properties.maiprop.co/250k-golden-visa-properties/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="zh" href="https://properties.maiprop.co/250k-golden-visa-properties/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="ru" href="https://properties.maiprop.co/250k-golden-visa-properties/?lang=ru" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/250k-golden-visa-properties/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/golden-visa-journey/</loc>
+    <lastmod>2026-03-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/golden-visa-journey/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/golden-visa-journey/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/process/</loc>
+    <lastmod>2026-03-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/process/" />
+    <xhtml:link rel="alternate" hreflang="el" href="https://properties.maiprop.co/process/?lang=el" />
+    <xhtml:link rel="alternate" hreflang="ar" href="https://properties.maiprop.co/process/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="zh" href="https://properties.maiprop.co/process/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="ru" href="https://properties.maiprop.co/process/?lang=ru" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/process/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/properties/</loc>
+    <lastmod>2026-03-09</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/properties/" />
+    <xhtml:link rel="alternate" hreflang="el" href="https://properties.maiprop.co/properties/?lang=el" />
+    <xhtml:link rel="alternate" hreflang="ar" href="https://properties.maiprop.co/properties/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="zh" href="https://properties.maiprop.co/properties/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="ru" href="https://properties.maiprop.co/properties/?lang=ru" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/properties/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/trackrecord/</loc>
+    <lastmod>2026-03-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/trackrecord/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/trackrecord/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/guides/</loc>
+    <lastmod>2026-03-09</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/guides/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/guides/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/buy-the-lifestyle/</loc>
+    <lastmod>2026-03-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/buy-the-lifestyle/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/buy-the-lifestyle/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/greece-vs-portugal-golden-visa/</loc>
+    <lastmod>2026-03-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/greece-vs-portugal-golden-visa/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/greece-vs-portugal-golden-visa/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/golden-visa-family-included/</loc>
+    <lastmod>2026-03-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/golden-visa-family-included/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/golden-visa-family-included/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/golden-visa-rental-income-properties/</loc>
+    <lastmod>2026-03-07</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/golden-visa-rental-income-properties/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/golden-visa-rental-income-properties/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/golden-visa-tax-benefits/</loc>
+    <lastmod>2026-03-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/golden-visa-tax-benefits/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/golden-visa-tax-benefits/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/golden-visa-for-investors/</loc>
+    <lastmod>2026-03-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/golden-visa-for-investors/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/golden-visa-for-investors/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/golden-visa-for-high-net-worth/</loc>
+    <lastmod>2026-03-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/golden-visa-for-high-net-worth/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/golden-visa-for-high-net-worth/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/golden-visa-property-compliance/</loc>
+    <lastmod>2026-03-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/golden-visa-property-compliance/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/golden-visa-property-compliance/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/is-golden-visa-worth-it/</loc>
+    <lastmod>2026-03-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/is-golden-visa-worth-it/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/is-golden-visa-worth-it/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/greece-vs-dubai-golden-visa/</loc>
+    <lastmod>2026-03-07</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/greece-vs-dubai-golden-visa/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/greece-vs-dubai-golden-visa/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/greek-golden-visa-chinese-investors/</loc>
+    <lastmod>2026-03-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/greek-golden-visa-chinese-investors/" />
+    <xhtml:link rel="alternate" hreflang="zh" href="https://properties.maiprop.co/greek-golden-visa-chinese-investors/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/greek-golden-visa-chinese-investors/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/greek-golden-visa-uae-investors/</loc>
+    <lastmod>2026-03-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/greek-golden-visa-uae-investors/" />
+    <xhtml:link rel="alternate" hreflang="ar-AE" href="https://properties.maiprop.co/greek-golden-visa-uae-investors/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/greek-golden-visa-uae-investors/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/greek-golden-visa-russian-investors/</loc>
+    <lastmod>2026-03-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/greek-golden-visa-russian-investors/" />
+    <xhtml:link rel="alternate" hreflang="ru" href="https://properties.maiprop.co/greek-golden-visa-russian-investors/?lang=ru" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/greek-golden-visa-russian-investors/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/greek-golden-visa-turkish-investors/</loc>
+    <lastmod>2026-03-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/greek-golden-visa-turkish-investors/" />
+    <xhtml:link rel="alternate" hreflang="tr" href="https://properties.maiprop.co/greek-golden-visa-turkish-investors/?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/greek-golden-visa-turkish-investors/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/golden-visa-by-nationality/</loc>
+    <lastmod>2026-03-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/golden-visa-by-nationality/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/golden-visa-by-nationality/" />
+  </url>
+
+  <!-- ===================== GUIDE ARTICLES (8) ===================== -->
+
+  <url>
+    <loc>https://properties.maiprop.co/guides/greece-vs-dubai-golden-visa/</loc>
+    <lastmod>2026-03-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.75</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/guides/greece-vs-dubai-golden-visa/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/guides/greece-vs-dubai-golden-visa/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/guides/how-much-does-the-golden-visa-cost/</loc>
+    <lastmod>2026-03-02</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.75</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/guides/how-much-does-the-golden-visa-cost/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/guides/how-much-does-the-golden-visa-cost/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/guides/greek-rising-real-estate-market/</loc>
+    <lastmod>2026-03-02</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.75</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/guides/greek-rising-real-estate-market/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/guides/greek-rising-real-estate-market/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/guides/athens-vs-thessaloniki-where-to-invest/</loc>
+    <lastmod>2026-03-01</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.75</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/guides/athens-vs-thessaloniki-where-to-invest/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/guides/athens-vs-thessaloniki-where-to-invest/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/guides/what-to-expect-from-the-visa-as-an-investment/</loc>
+    <lastmod>2026-03-01</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.75</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/guides/what-to-expect-from-the-visa-as-an-investment/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/guides/what-to-expect-from-the-visa-as-an-investment/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/guides/mediterranean-lifestyle-golden-visa/</loc>
+    <lastmod>2026-03-01</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.75</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/guides/mediterranean-lifestyle-golden-visa/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/guides/mediterranean-lifestyle-golden-visa/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/guides/benefits-greek-golden-visa-non-eu-citizens/</loc>
+    <lastmod>2026-03-01</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.75</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/guides/benefits-greek-golden-visa-non-eu-citizens/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/guides/benefits-greek-golden-visa-non-eu-citizens/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/guides/greek-golden-visa-tax-benefits-uae-investors/</loc>
+    <lastmod>2026-02-28</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.75</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/guides/greek-golden-visa-tax-benefits-uae-investors/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/guides/greek-golden-visa-tax-benefits-uae-investors/" />
+  </url>
+
+  <!-- ===================== PROPERTIES (17) ===================== -->
+
+  <!-- available / new -->
+  <url>
+    <loc>https://properties.maiprop.co/property/5d97a1c7-959c-4a76-8d7d-6521cd892b9a/</loc>
+    <lastmod>2026-03-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/property/5d97a1c7-959c-4a76-8d7d-6521cd892b9a/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/property/5d97a1c7-959c-4a76-8d7d-6521cd892b9a/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/property/6ecc0fb0-49ab-470d-af09-f470b61845c1/</loc>
+    <lastmod>2026-03-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/property/6ecc0fb0-49ab-470d-af09-f470b61845c1/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/property/6ecc0fb0-49ab-470d-af09-f470b61845c1/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/property/61a020a0-75a6-4c31-8d08-4b8e31a62f58/</loc>
+    <lastmod>2026-03-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/property/61a020a0-75a6-4c31-8d08-4b8e31a62f58/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/property/61a020a0-75a6-4c31-8d08-4b8e31a62f58/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/property/111a1d9c-f285-4958-86a0-8376538b952d/</loc>
+    <lastmod>2026-03-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/property/111a1d9c-f285-4958-86a0-8376538b952d/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/property/111a1d9c-f285-4958-86a0-8376538b952d/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/property/fed3aed8-fe21-4653-a290-a952b7a0cfc3/</loc>
+    <lastmod>2026-03-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/property/fed3aed8-fe21-4653-a290-a952b7a0cfc3/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/property/fed3aed8-fe21-4653-a290-a952b7a0cfc3/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/property/7ff47793-fd9b-4562-a82b-4de8e17e4da1/</loc>
+    <lastmod>2026-03-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/property/7ff47793-fd9b-4562-a82b-4de8e17e4da1/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/property/7ff47793-fd9b-4562-a82b-4de8e17e4da1/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/property/e02007d1-a007-42ee-864d-c11c8ae2f0e2/</loc>
+    <lastmod>2026-03-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/property/e02007d1-a007-42ee-864d-c11c8ae2f0e2/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/property/e02007d1-a007-42ee-864d-c11c8ae2f0e2/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/property/6a9b0d0d-b7e5-4e26-8448-7552f592e15b/</loc>
+    <lastmod>2026-03-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/property/6a9b0d0d-b7e5-4e26-8448-7552f592e15b/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/property/6a9b0d0d-b7e5-4e26-8448-7552f592e15b/" />
+  </url>
+
+  <!-- under-construction -->
+  <url>
+    <loc>https://properties.maiprop.co/property/b9ae9439-3e5a-44fd-a312-b3cd70d7c6df/</loc>
+    <lastmod>2026-03-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/property/b9ae9439-3e5a-44fd-a312-b3cd70d7c6df/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/property/b9ae9439-3e5a-44fd-a312-b3cd70d7c6df/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/property/f9087dfc-0a49-4a86-b54f-4b8fe617f185/</loc>
+    <lastmod>2026-03-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/property/f9087dfc-0a49-4a86-b54f-4b8fe617f185/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/property/f9087dfc-0a49-4a86-b54f-4b8fe617f185/" />
+  </url>
+
+  <!-- booked -->
+  <url>
+    <loc>https://properties.maiprop.co/property/01277459-7845-4316-9981-33fda90b0e4f/</loc>
+    <lastmod>2026-03-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/property/01277459-7845-4316-9981-33fda90b0e4f/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/property/01277459-7845-4316-9981-33fda90b0e4f/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/property/b0625c04-31ce-44ae-aa32-787fa408bed8/</loc>
+    <lastmod>2026-03-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/property/b0625c04-31ce-44ae-aa32-787fa408bed8/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/property/b0625c04-31ce-44ae-aa32-787fa408bed8/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/property/f27ae804-2e5f-4556-8e28-5bf07647981a/</loc>
+    <lastmod>2026-03-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/property/f27ae804-2e5f-4556-8e28-5bf07647981a/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/property/f27ae804-2e5f-4556-8e28-5bf07647981a/" />
+  </url>
+
+  <!-- delivered / sold -->
+  <url>
+    <loc>https://properties.maiprop.co/property/a55600d0-dce1-4a88-b520-319b2ade3e00/</loc>
+    <lastmod>2026-02-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/property/a55600d0-dce1-4a88-b520-319b2ade3e00/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/property/a55600d0-dce1-4a88-b520-319b2ade3e00/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/property/12b08de3-c821-449c-a344-fc8a6a94e53e/</loc>
+    <lastmod>2026-02-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/property/12b08de3-c821-449c-a344-fc8a6a94e53e/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/property/12b08de3-c821-449c-a344-fc8a6a94e53e/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/property/9205f588-1965-4e4a-8010-0adcf09201b0/</loc>
+    <lastmod>2026-02-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/property/9205f588-1965-4e4a-8010-0adcf09201b0/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/property/9205f588-1965-4e4a-8010-0adcf09201b0/" />
+  </url>
+
+  <url>
+    <loc>https://properties.maiprop.co/property/98fb7a3e-9006-454d-bc18-9c8ed16e074f/</loc>
+    <lastmod>2026-02-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://properties.maiprop.co/property/98fb7a3e-9006-454d-bc18-9c8ed16e074f/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://properties.maiprop.co/property/98fb7a3e-9006-454d-bc18-9c8ed16e074f/" />
+  </url>
+
+</urlset>
