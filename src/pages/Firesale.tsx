@@ -427,7 +427,7 @@ export default function Firesale() {
                     key={f}
                     className="flex items-center gap-1.5 text-sm bg-muted border border-border rounded-full px-3 py-1.5 hover-scale"
                   >
-                    <Check className="w-3.5 h-3.5 text-brand-emerald" />
+                    <Check className="w-3.5 h-3.5 text-primary" />
                     {f}
                   </div>
                 ))}
@@ -728,7 +728,7 @@ export default function Firesale() {
                               </p>
                             </div>
                             <div className="text-right">
-                              <div className="text-xs bg-brand-emerald/10 text-brand-emerald border border-brand-emerald/20 px-2 py-1 rounded-lg font-semibold">
+                              <div className="text-xs bg-primary/10 text-primary border border-primary/20 px-2 py-1 rounded-lg font-semibold">
                                 94% confidence
                               </div>
                               <p className="text-[10px] text-muted-foreground mt-1.5">Valid 7 days</p>
@@ -797,7 +797,7 @@ export default function Firesale() {
                             Back
                           </Button>
                           <Button
-                            className="flex-1 bg-gradient-to-r from-destructive to-destructive/80 border-0 text-white h-11"
+                            className="flex-1 bg-gradient-to-r from-destructive to-destructive/80 border-0 text-destructive-foreground h-11"
                             disabled={!step2Valid || submitting}
                             onClick={handleSubmit}
                           >
@@ -820,12 +820,12 @@ export default function Firesale() {
                 </div>
               ) : (
                 /* Success State */
-                <div className="glass-card rounded-2xl border border-brand-emerald/30 p-8 text-center shadow-elevated">
+                <div className="glass-card rounded-2xl border border-primary/30 p-8 text-center shadow-elevated">
                   {/* Animated check */}
                   <div className="relative w-20 h-20 mx-auto mb-6">
-                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-brand-emerald/20 to-primary/10 flex items-center justify-center">
-                      <div className="w-14 h-14 rounded-full bg-gradient-to-br from-brand-emerald to-primary/80 flex items-center justify-center shadow-lg">
-                        <Check className="w-7 h-7 text-white" strokeWidth={3} />
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary/20 to-accent/10 flex items-center justify-center">
+                      <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary to-accent/80 flex items-center justify-center shadow-lg">
+                        <Check className="w-7 h-7 text-primary-foreground" strokeWidth={3} />
                       </div>
                     </div>
                   </div>
@@ -843,7 +843,7 @@ export default function Firesale() {
                   {/* Timeline */}
                   <div className="grid grid-cols-3 gap-3 mb-6">
                     {[
-                      { time: "Now", label: "Request live", color: "text-brand-emerald", icon: "✅" },
+                      { time: "Now", label: "Request live", color: "text-primary", icon: "✅" },
                       { time: "~2h", label: "Advisor assigned", color: "text-primary", icon: "👤" },
                       { time: "24h", label: "Cash offer sent", color: "text-brand-gold", icon: "💰" },
                     ].map((s) => (
@@ -884,7 +884,7 @@ export default function Firesale() {
                       "Dedicated advisor assigned within 2h",
                     ].map((t) => (
                       <div key={t} className="flex items-center gap-2">
-                        <Check className="w-3 h-3 text-brand-emerald shrink-0" />
+                        <Check className="w-3 h-3 text-primary shrink-0" />
                         {t}
                       </div>
                     ))}
