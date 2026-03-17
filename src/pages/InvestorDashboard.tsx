@@ -1035,7 +1035,8 @@ export default function InvestorDashboard() {
             onClose={() => setShowInvitationModal(false)}
             onSuccess={() => {
               setShowInvitationModal(false);
-              toast.success("Invitation request submitted. We'll be in touch.");
+              setInvitationStatus("pending");
+              toast.success("Invitation request submitted. We'll be in touch within 48 hours.");
             }}
           />
         )}
