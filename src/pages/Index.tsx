@@ -1233,7 +1233,7 @@ export default function Index() {
         />
 
         <div className="container relative z-10 pt-24 pb-8 sm:pt-28 sm:pb-16 lg:pl-16 xl:pl-24">
-          <div className="grid lg:grid-cols-[1fr_360px] xl:grid-cols-[1fr_400px] gap-8 lg:gap-12 items-center">
+          <div className="grid lg:grid-cols-[1fr_360px] xl:grid-cols-[1fr_400px] gap-8 lg:gap-12 items-end">
             {/* ── LEFT: Copy + Search ── */}
             <div className="text-white">
               {/* Eyebrow */}
