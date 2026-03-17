@@ -335,7 +335,7 @@ function countdownBadge(days: number): {label: string;cls: string;} | null {
 // Premium lock badge
 function PremiumBadge() {
   return (
-    <span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold border border-brand-gold/30">
+    <span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-gradient-primary text-primary-foreground border border-primary/30">
       <Lock className="w-2.5 h-2.5" /> PRO
     </span>);
 
