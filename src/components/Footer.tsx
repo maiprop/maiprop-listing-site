@@ -122,7 +122,7 @@ export function Footer() {
               <span className="text-base leading-none">🏛️</span>
               <div>
                 <div className="text-xs font-semibold text-foreground group-hover:text-brand-gold transition-colors leading-tight">mAI properties</div>
-                <div className="text-[10px] text-muted-foreground leading-tight">Investment &amp; Golden Visa</div>
+                <div className="text-[10px] text-muted-foreground leading-tight">Investment properties</div>
               </div>
               <ExternalLink className="w-3 h-3 text-muted-foreground group-hover:text-brand-gold transition-colors ml-0.5" />
             </a>
