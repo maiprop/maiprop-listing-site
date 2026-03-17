@@ -623,7 +623,7 @@ export default function Onboarding() {
                           </span>
                         )}
                         {svc.videoAvailable && (
-                          <span className="inline-flex items-center gap-1 bg-cyan-500/10 border border-cyan-500/20 rounded-full px-2 py-0.5 text-[10px] text-cyan-400">
+                          <span className="inline-flex items-center gap-1 bg-brand-purple/10 border border-brand-purple/20 rounded-full px-2 py-0.5 text-[10px] text-brand-purple">
                             <Video className="w-2.5 h-2.5" /> Video
                           </span>
                         )}
