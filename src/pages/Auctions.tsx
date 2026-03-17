@@ -1117,13 +1117,13 @@ export default function Auctions() {
                </>
            }
             {/* CTA */}
-            <div className="mt-10 p-6 glass-card rounded-xl border border-brand-gold/20 text-center">
-              <Gavel className="w-8 h-8 text-brand-gold mx-auto mb-3" />
+            <div className="mt-10 p-6 glass-card rounded-xl border border-primary/20 text-center">
+              <Gavel className="w-8 h-8 text-primary mx-auto mb-3" />
               <h3 className="font-display font-semibold mb-2">Full Auction Database</h3>
               <p className="text-sm text-muted-foreground mb-4">
                 Access 3,200+ monthly auctions with AI pre-analysis reports. Available on mAI Prop OS.
               </p>
-              <Button className="bg-gradient-gold border-0 text-background font-semibold" asChild>
+              <Button className="bg-gradient-primary border-0 text-primary-foreground font-semibold" asChild>
                 <a href="https://os.maiprop.co" target="_blank" rel="noreferrer">
                   Open mAI Prop OS <ExternalLink className="w-4 h-4 ml-2" />
                 </a>
