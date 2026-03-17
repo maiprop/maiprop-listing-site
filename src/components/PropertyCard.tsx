@@ -434,7 +434,7 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
               </div>
               <span className="text-xs text-muted-foreground truncate flex-1">{property.agent.name}</span>
               {property.agent.verified && (
-              <span className="flex items-center gap-0.5 text-[10px] text-brand-cyan font-semibold">
+              <span className="flex items-center gap-0.5 text-[10px] text-primary font-semibold">
                   <CheckCircle className="w-3 h-3" /> Verified
                 </span>
               )}
