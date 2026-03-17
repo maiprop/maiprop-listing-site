@@ -86,7 +86,7 @@ function buildListingsQuery(filters?: ListingsFilters, from = 0, pageSize = 500)
 
   // Feature booleans (e.g. has_elevator, has_parking)
   for (const feat of filters?.features ?? []) {
-    query = query.eq(feat, true);
+    query = query.eq(feat as any, true);
   }
 
   return query;
