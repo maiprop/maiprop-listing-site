@@ -61,9 +61,9 @@ interface PropertyCardProps {
 }
 
 const energyColors: Record<string, string> = {
-  "A+": "bg-emerald-500", A: "bg-emerald-400", "B+": "bg-green-400",
-  B: "bg-lime-400", C: "bg-yellow-400", D: "bg-orange-400",
-  E: "bg-orange-500", F: "bg-red-500", G: "bg-red-600",
+  "A+": "bg-brand-cyan", A: "bg-brand-cyan/80", "B+": "bg-primary/80",
+  B: "bg-primary/60", C: "bg-brand-gold/80", D: "bg-brand-gold/60",
+  E: "bg-destructive/80", F: "bg-destructive", G: "bg-destructive",
 };
 
 // Internal/system tag prefixes that should never be shown to users
