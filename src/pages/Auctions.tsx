@@ -304,8 +304,8 @@ function yieldRange(bucket: string): [number, number] | null {
 
 const OWNERSHIP_BADGE: Record<string, {label: string;cls: string;}> = {
   full: { label: "Πλήρης κυριότητα", cls: "bg-primary/15 text-primary border-primary/25" },
-  bare: { label: "Ψιλή κυριότητα", cls: "bg-brand-gold/15 text-brand-gold border-brand-gold/25" },
-  common: { label: "Εξ αδιαιρέτου", cls: "bg-accent/15 text-accent border-accent/25" },
+  bare: { label: "Ψιλή κυριότητα", cls: "bg-brand-purple/15 text-brand-purple border-brand-purple/25" },
+  common: { label: "Εξ αδιαιρέτου", cls: "bg-accent/15 text-accent-foreground border-accent/25" },
   usufruct: { label: "Επικαρπία", cls: "bg-muted text-muted-foreground border-border" },
   vertical: { label: "Κάθετη ιδιοκτησία", cls: "bg-primary/10 text-primary border-primary/20" },
   horizontal: { label: "Οριζόντια ιδιοκτησία", cls: "bg-secondary text-foreground border-border" }
@@ -327,15 +327,15 @@ function daysUntil(dateStr?: string | null): number {
 
 function countdownBadge(days: number): {label: string;cls: string;} | null {
   if (days <= 0) return { label: "Today!", cls: "bg-destructive text-destructive-foreground" };
-  if (days === 1) return { label: "Tomorrow", cls: "bg-brand-gold text-background" };
-  if (days <= 7) return { label: `${days} days left`, cls: "bg-primary/80 text-primary-foreground" };
+  if (days === 1) return { label: "Tomorrow", cls: "bg-gradient-primary text-primary-foreground" };
+  if (days <= 7) return { label: `${days} days left`, cls: "bg-primary text-primary-foreground" };
   return null;
 }
 
 // Premium lock badge
 function PremiumBadge() {
   return (
-    <span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold border border-brand-gold/30">
+    <span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-gradient-primary text-primary-foreground border border-primary/30">
       <Lock className="w-2.5 h-2.5" /> PRO
     </span>);
 
@@ -387,21 +387,21 @@ function AuctionCard({ a, favoritedIds, onToggleFav
             <Gavel className="w-10 h-10 text-muted-foreground/20" />
           </div>
         }
-        <div className="absolute top-2 left-2 flex items-center gap-1.5 flex-wrap">
+      <div className="absolute top-2 left-2 flex items-center gap-1.5 flex-wrap">
           {a.is_featured && (
-            <span className="inline-flex items-center gap-1 bg-brand-gold/90 text-background text-[10px] font-bold px-2 py-0.5 rounded-full">
+            <span className="inline-flex items-center gap-1 bg-gradient-primary text-primary-foreground text-[10px] font-bold px-2 py-0.5 rounded-full">
               <Crown className="w-2.5 h-2.5" /> Featured
             </span>
           )}
           {a.auction_date && (
             <div className="flex items-center gap-1 bg-background/90 backdrop-blur-sm border border-border rounded-full px-2 py-0.5 text-[10px] font-semibold">
-              <Calendar className="w-3 h-3 text-brand-gold" />
+              <Calendar className="w-3 h-3 text-primary" />
               {format(new Date(a.auction_date), "dd MMM yyyy")}
             </div>
           )}
         </div>
         {getPropertyTypeLabel(a) && (
-          <div className="absolute top-2 right-2 bg-brand-gold/90 text-background text-[10px] font-bold px-2 py-0.5 rounded-full">
+          <div className="absolute top-2 right-2 bg-primary text-primary-foreground text-[10px] font-bold px-2 py-0.5 rounded-full">
             {getPropertyTypeLabel(a)}
           </div>
         )}
@@ -427,7 +427,7 @@ function AuctionCard({ a, favoritedIds, onToggleFav
 
         {/* Property type pill */}
         {getPropertyTypeLabel(a) && (
-          <span className="inline-flex items-center gap-1 bg-brand-gold/15 text-brand-gold border border-brand-gold/30 text-[10px] font-semibold px-2 py-0.5 rounded-full w-fit">
+        <span className="inline-flex items-center gap-1 bg-primary/10 text-primary border border-primary/20 text-[10px] font-semibold px-2 py-0.5 rounded-full w-fit">
             {getPropertyTypeLabel(a)}
           </span>
         )}
@@ -447,8 +447,8 @@ function AuctionCard({ a, favoritedIds, onToggleFav
         <div className="text-xs text-muted-foreground">Built {a.year_built}</div>
         }
         <div className="flex items-center justify-between pt-1">
-          <div className="flex items-center gap-1 font-display font-bold text-brand-gold">
-            <Euro className="w-3.5 h-3.5" />
+          <div className="flex items-center gap-1 font-display font-bold bg-gradient-primary bg-clip-text text-transparent">
+            <Euro className="w-3.5 h-3.5 text-primary" />
             {(a.auction_starting_bid ?? a.price ?? 0).toLocaleString("el-GR")}
           </div>
           {a.sqm && a.sqm > 1 &&
@@ -504,7 +504,7 @@ function AuctionCard({ a, favoritedIds, onToggleFav
             target="_blank"
             rel="noreferrer noopener"
             onClick={(e) => e.stopPropagation()}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold bg-brand-gold/10 border border-brand-gold/25 text-brand-gold hover:bg-brand-gold/20 transition-all">
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold bg-primary/10 border border-primary/25 text-primary hover:bg-primary/20 transition-all">
             
               <ExternalLink className="w-3 h-3" />
               eAuction
@@ -728,21 +728,21 @@ export default function Auctions() {
       <Navbar />
       <div className="pt-16">
         {/* Hero */}
-        <div className="bg-card border-b border-border py-6 sm:py-12">
+        <div className="border-b border-border py-6 sm:py-12" style={{background: "linear-gradient(135deg, hsl(var(--brand-navy)) 0%, hsl(var(--brand-purple-dark)) 55%, hsl(var(--brand-purple)) 100%)"}}>
           <div className="container">
             <div className="flex items-center gap-2 mb-2 sm:mb-3">
-              <Gavel className="w-4 h-4 sm:w-5 sm:h-5 text-brand-gold" />
-              <span className="text-[10px] sm:text-xs font-bold text-brand-gold uppercase tracking-widest">Greek Auctions · Live Data</span>
+              <Gavel className="w-4 h-4 sm:w-5 sm:h-5 text-brand-cyan" />
+              <span className="text-[10px] sm:text-xs font-bold text-brand-cyan uppercase tracking-widest">Greek Auctions · Live Data</span>
             </div>
-            <h1 className="font-display text-xl sm:text-4xl font-bold mb-1.5 sm:mb-2">Property Auctions</h1>
-            <p className="text-muted-foreground text-xs sm:text-base max-w-xl">
+            <h1 className="font-display text-xl sm:text-4xl font-bold mb-1.5 sm:mb-2 text-white">Property Auctions</h1>
+            <p className="text-white/60 text-xs sm:text-base max-w-xl">
               Real-time court auction data powered by mAI Prop OS.
             </p>
             <div className="grid grid-cols-3 gap-2 sm:gap-3 mt-4 sm:mt-8 max-w-2xl">
               {auctionStats.map((s) =>
-              <div key={s.label} className="glass-card rounded-xl p-2.5 sm:p-5 text-center flex flex-col items-center justify-center">
-                  <div className="font-display text-lg sm:text-3xl font-bold gradient-text-gold">{s.value}</div>
-                  <div className="text-[9px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1.5 font-medium leading-tight">{s.label}</div>
+              <div key={s.label} className="rounded-xl p-2.5 sm:p-5 text-center flex flex-col items-center justify-center border border-white/10 bg-white/5 backdrop-blur-sm">
+                  <div className="font-display text-lg sm:text-3xl font-bold text-brand-cyan">{s.value}</div>
+                  <div className="text-[9px] sm:text-xs text-white/50 mt-0.5 sm:mt-1.5 font-medium leading-tight">{s.label}</div>
                 </div>
               )}
             </div>
@@ -751,9 +751,9 @@ export default function Auctions() {
 
         {/* Alert CTA */}
         <div className="container py-4 sm:py-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 p-4 rounded-xl bg-brand-gold/10 border border-brand-gold/20">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 p-4 rounded-xl bg-primary/8 border border-primary/20">
             <div className="flex items-start gap-3 flex-1">
-              <Bell className="w-5 h-5 text-brand-gold shrink-0 mt-0.5" />
+              <Bell className="w-5 h-5 text-primary shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-medium">Get notified of new auctions matching your criteria</p>
                 <p className="text-xs text-muted-foreground mt-0.5">Set custom alerts for location, price range, and property type</p>
@@ -761,7 +761,7 @@ export default function Auctions() {
             </div>
             <Button
               size="sm"
-              className="bg-gradient-gold border-0 text-background font-semibold w-full sm:w-auto shrink-0"
+              className="bg-gradient-primary border-0 text-primary-foreground font-semibold w-full sm:w-auto shrink-0"
               onClick={() => user ? setAlertModalOpen(true) : window.location.href = "/login"}>
               {user ? "Set Alert" : "Sign in to Alert"}
             </Button>
@@ -807,8 +807,8 @@ export default function Auctions() {
               viewMode === "map" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`
               }>
                 <Map className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Map</span>
-                {!isLoading && mappableCount > 0 &&
-              <span className="ml-0.5 text-[10px] bg-brand-gold/20 text-brand-gold px-1.5 py-0.5 rounded-full font-bold">
+              {!isLoading && mappableCount > 0 &&
+              <span className="ml-0.5 text-[10px] bg-primary/15 text-primary px-1.5 py-0.5 rounded-full font-bold">
                     {mappableCount}
                   </span>
               }
@@ -933,7 +933,7 @@ export default function Auctions() {
                       <p className="text-sm font-medium">Ownership Status, Auction Round & Est. Rental Yield</p>
                       <p className="text-xs text-muted-foreground mt-0.5">Upgrade to Pro to unlock these filters.</p>
                     </div>
-                    <Button size="sm" variant="outline" className="border-brand-gold/40 text-brand-gold hover:bg-brand-gold/10 shrink-0" asChild>
+                    <Button size="sm" variant="outline" className="border-primary/40 text-primary hover:bg-primary/10 shrink-0" asChild>
                       <Link to="/pricing">Upgrade to Pro</Link>
                     </Button>
                   </div>
@@ -950,8 +950,8 @@ export default function Auctions() {
               {filterBidRange && <button onClick={() => setFilterBidRange("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{BID_RANGES.find((r) => r.value === filterBidRange)?.label} <X className="w-3 h-3" /></button>}
               {filterYearRange && <button onClick={() => setFilterYearRange("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{YEAR_RANGES.find((r) => r.value === filterYearRange)?.label} <X className="w-3 h-3" /></button>}
               {(isPro || isMaiPropOsUser) && filterOwnership && <button onClick={() => setFilterOwnership("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent hover:bg-accent/20 transition-colors">{OWNERSHIP_STATUSES.find((s) => s.value === filterOwnership)?.label} <X className="w-3 h-3" /></button>}
-              {(isPro || isMaiPropOsUser) && filterRound && <button onClick={() => setFilterRound("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-brand-gold/10 border border-brand-gold/20 text-xs text-brand-gold hover:bg-brand-gold/20 transition-colors">{roundOptions.find((o) => o.value === filterRound)?.label || `Round ${filterRound}`} <X className="w-3 h-3" /></button>}
-              {(isPro || isMaiPropOsUser) && filterYield && <button onClick={() => setFilterYield("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-brand-gold/10 border border-brand-gold/20 text-xs text-brand-gold hover:bg-brand-gold/20 transition-colors">Yield: {filterYield.replace("_", " ")} <X className="w-3 h-3" /></button>}
+              {(isPro || isMaiPropOsUser) && filterRound && <button onClick={() => setFilterRound("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{roundOptions.find((o) => o.value === filterRound)?.label || `Round ${filterRound}`} <X className="w-3 h-3" /></button>}
+              {(isPro || isMaiPropOsUser) && filterYield && <button onClick={() => setFilterYield("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">Yield: {filterYield.replace("_", " ")} <X className="w-3 h-3" /></button>}
               <button onClick={clearFilters} className="text-xs text-muted-foreground hover:text-foreground ml-1">Clear all</button>
             </div>
           }
@@ -1004,7 +1004,7 @@ export default function Auctions() {
 
             {!isLoading && !error && visibleFiltered.length === 0 &&
           <div className="text-center py-20">
-                <Gavel className="w-12 h-12 text-brand-gold/30 mx-auto mb-4" />
+                <Gavel className="w-12 h-12 text-primary/30 mx-auto mb-4" />
                 <p className="font-display font-semibold text-lg mb-2">No auctions match your filters</p>
                 <p className="text-sm text-muted-foreground max-w-sm mx-auto">
                   Try adjusting your filters or selecting "All Cities".
@@ -1061,14 +1061,14 @@ export default function Auctions() {
                   p === "…" ? (
                     <span key={`ellipsis-${idx}`} className="text-sm text-muted-foreground px-1 select-none">…</span>
                   ) : (
-                    <Button
-                      key={p}
-                      variant={p === currentPage ? "default" : "outline"}
-                      size="sm"
-                      className={p === currentPage ? "bg-brand-gold border-0 text-background font-bold" : "border-border"}
-                      onClick={() => {setCurrentPage(p as number);window.scrollTo({ top: 0, behavior: "smooth" });}}>
-                      {p}
-                    </Button>
+                       <Button
+                  key={p}
+                  variant={p === currentPage ? "default" : "outline"}
+                  size="sm"
+                  className={p === currentPage ? "bg-gradient-primary border-0 text-primary-foreground font-bold" : "border-border"}
+                  onClick={() => {setCurrentPage(p as number);window.scrollTo({ top: 0, behavior: "smooth" });}}>
+                       {p}
+                     </Button>
                   )
                 );
               })()}
@@ -1098,32 +1098,32 @@ export default function Auctions() {
                    </div>
                  }
                  {/* Upsell when free user hits page cap */}
-                {!isPro && !isMaiPropOsUser && totalRaw > MAX_PAGES_FREE * PAGE_SIZE &&
-                  <div className="mt-8 p-5 rounded-2xl bg-brand-gold/10 border border-brand-gold/30 flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">
-                    <Gavel className="w-8 h-8 text-brand-gold shrink-0" />
-                    <div className="flex-1">
-                      <p className="font-display font-semibold text-sm">
-                        See 300% more results with Pro
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Pro shows 3× the free results — not all future auctions. For the full database, use mAI Prop OS.
-                      </p>
-                    </div>
-                    <Button size="sm" className="bg-gradient-gold border-0 text-background font-semibold shrink-0" asChild>
-                      <Link to="/pricing">Upgrade to Pro</Link>
-                    </Button>
-                  </div>
-                }
+                 {!isPro && !isMaiPropOsUser && totalRaw > MAX_PAGES_FREE * PAGE_SIZE &&
+                   <div className="mt-8 p-5 rounded-2xl bg-primary/8 border border-primary/25 flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">
+                     <Gavel className="w-8 h-8 text-primary shrink-0" />
+                     <div className="flex-1">
+                       <p className="font-display font-semibold text-sm">
+                         See 300% more results with Pro
+                       </p>
+                       <p className="text-xs text-muted-foreground mt-0.5">
+                         Pro shows 3× the free results — not all future auctions. For the full database, use mAI Prop OS.
+                       </p>
+                     </div>
+                     <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground font-semibold shrink-0" asChild>
+                       <Link to="/pricing">Upgrade to Pro</Link>
+                     </Button>
+                   </div>
+                 }
                </>
            }
             {/* CTA */}
-            <div className="mt-10 p-6 glass-card rounded-xl border border-brand-gold/20 text-center">
-              <Gavel className="w-8 h-8 text-brand-gold mx-auto mb-3" />
+            <div className="mt-10 p-6 glass-card rounded-xl border border-primary/20 text-center">
+              <Gavel className="w-8 h-8 text-primary mx-auto mb-3" />
               <h3 className="font-display font-semibold mb-2">Full Auction Database</h3>
               <p className="text-sm text-muted-foreground mb-4">
                 Access 3,200+ monthly auctions with AI pre-analysis reports. Available on mAI Prop OS.
               </p>
-              <Button className="bg-gradient-gold border-0 text-background font-semibold" asChild>
+              <Button className="bg-gradient-primary border-0 text-primary-foreground font-semibold" asChild>
                 <a href="https://os.maiprop.co" target="_blank" rel="noreferrer">
                   Open mAI Prop OS <ExternalLink className="w-4 h-4 ml-2" />
                 </a>
