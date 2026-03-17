@@ -481,3 +481,16 @@
     transform: translateZ(0) scale(1.04) translateX(0%) !important;
   }
 }
+
+/* ── Market Ticker — vertical scroll animation ───────────────────────── */
+@keyframes ticker-scroll-rows {
+  0%   { transform: translateY(0); }
+  100% { transform: translateY(-50%); }
+}
+.ticker-scroll-rows {
+  animation: ticker-scroll-rows 18s linear infinite;
+  will-change: transform;
+}
+.ticker-scroll-rows:hover {
+  animation-play-state: paused;
+}
