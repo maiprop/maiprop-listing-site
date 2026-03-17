@@ -988,7 +988,7 @@ export default function Firesale() {
                   </div>
                   <h4 className="font-display font-bold text-base mb-2">Access the Deal Flow</h4>
                   <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
-                    Off-market properties before they hit the market. Exclusive to registered investors.
+                    Off-market properties before they hit the market. Access is by invitation only — request an invitation on the Investor Dashboard.
                   </p>
                   <div className="space-y-1.5 mb-4">
                     {[

@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { getSubtypeLabel, PROPERTY_TYPE_MAP, type PropertyTypeKey } from "@/lib/propertyTypes";
 import { useToggleFavorite, useIsFavorited } from "@/hooks/useFavorites";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 export interface Property {
@@ -110,9 +111,18 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
     }
   };
 
-  const handleReport = (e: React.MouseEvent) => {
+  const handleReport = async (e: React.MouseEvent) => {
     e.preventDefault();
-    toast.info("Report submitted. Our team will review it.");
+    e.stopPropagation();
+    if (!user) { toast.error("Sign in to report"); navigate("/login"); return; }
+    const entityType = property.listingType === "firesale" ? "firesale_request" : "listing";
+    const { error } = await supabase.from("listing_reports").insert({
+      entity_type: entityType,
+      entity_id: property.id,
+      reporter_id: user.id,
+    });
+    if (error) toast.error("Could not submit report");
+    else toast.success("Report submitted. Our team will review it.");
   };
 
   const formatPrice = (price: number, type: string) => {

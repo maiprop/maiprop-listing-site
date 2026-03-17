@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  User, Building2, Wrench, TrendingUp, Globe2, Home,
+  User, Building2, Wrench, Home,
   Check, ArrowRight, Loader2, Shield, Phone, FileText,
   Briefcase, ChevronRight, Sparkles, Video, Calendar,
   Clock, Lock, Crown, Plus, Minus, Euro,
@@ -89,19 +89,6 @@ const participants: ParticipantType[] = [
     section: "Private",
   },
   {
-    id: "investor", role: "investor", icon: TrendingUp, color: "emerald",
-    label: "Private Investor", tagline: "Grow your portfolio",
-    desc: "Buying to invest, flip, or generate rental yield",
-    features: [
-      "ROI calculator & deal scoring",
-      "Investor dashboard (deal pipeline)",
-      "Auction access & firesale deals",
-      "Due diligence checklist",
-      "Saved searches + price alerts",
-    ],
-    section: "Private",
-  },
-  {
     id: "agent", role: "agent", icon: Building2, color: "cyan",
     label: "Real Estate Agent / Agency", tagline: "Scale your business",
     desc: "Licensed professional listing properties for clients",
@@ -112,19 +99,6 @@ const participants: ParticipantType[] = [
       "Analytics & performance dashboard",
     ],
     section: "Real estate agents",
-  },
-  {
-    id: "institutional", role: "institutional", icon: Globe2, color: "amber",
-    label: "Institutional / Fund", tagline: "Portfolio at scale",
-    desc: "Investment fund, REIT, or institutional buyer",
-    features: [
-      "Investor dashboard & deal flow",
-      "Firesale off-market deals",
-      "CRM, analytics & portfolio tools",
-      "Due diligence hub",
-      "Priority support & onboarding",
-    ],
-    section: "Institutional & development",
   },
   {
     id: "professional", role: "professional", icon: Wrench, color: "rose",
@@ -152,7 +126,7 @@ const participants: ParticipantType[] = [
       "Bulk inquiry management",
       "Performance analytics",
     ],
-    section: "Institutional & development",
+    section: "Development",
   },
 ];
 
@@ -462,7 +436,7 @@ export default function Onboarding() {
           <p className="text-muted-foreground text-sm max-w-sm mx-auto">Choose your profile. You can always update it in settings.</p>
         </div>
         <div className="space-y-6">
-          {(["Private", "Real estate agents", "Institutional & development", "Services"] as const).map(section => {
+          {(["Private", "Real estate agents", "Development", "Services"] as const).map(section => {
             const sectionParticipants = participants.filter(p => p.section === section);
             if (sectionParticipants.length === 0) return null;
             return (

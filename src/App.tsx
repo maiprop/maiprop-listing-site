@@ -31,7 +31,6 @@ import NotFound from "./pages/NotFound";
 import Projects from "./pages/Projects";
 import ProjectDetail from "./pages/ProjectDetail";
 import Portfolios from "./pages/Portfolios";
-import FiresalePricing from "./pages/FiresalePricing";
 import Pricing from "./pages/Pricing";
 import AdminDashboard from "./pages/AdminDashboard";
 import AIAssistantPage from "./pages/AIAssistantPage";
@@ -101,7 +100,6 @@ const App = () => (
               <Route path="/portfolios" element={<ProtectedRoute><Portfolios /></ProtectedRoute>} />
               <Route path="/ai-assistant" element={<AIAssistantPage />} />
               <Route path="/pricing" element={<Pricing />} />
-              <Route path="/pricing/firesale-investors" element={<FiresalePricing />} />
               <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
               <Route path="/admin/pricing" element={<AdminRoute><Navigate to="/admin?tab=pricing" replace /></AdminRoute>} />
               <Route path="*" element={<NotFound />} />

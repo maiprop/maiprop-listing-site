@@ -22,12 +22,11 @@ import { toast } from "sonner";
 
 type AudienceId = "buyer" | "seller" | "investor" | "agent" | "institutional" | "developer" | "professional";
 
+// Investor & institutional removed from Pricing — Quick Sale is invitation-only
 const AUDIENCE_TABS: { id: AudienceId; label: string; mobileLabel: string; icon: React.ElementType }[] = [
   { id: "buyer",         label: "Buyer / Renter",      mobileLabel: "Buyer",       icon: Home },
   { id: "seller",        label: "Seller / Landlord",   mobileLabel: "Seller",      icon: Users },
-  { id: "investor",      label: "Investor",             mobileLabel: "Investor",    icon: TrendingUp },
   { id: "agent",         label: "Agent",                mobileLabel: "Agent",       icon: UserCheck },
-  { id: "institutional", label: "Institutional / Fund", mobileLabel: "Fund",        icon: Globe2 },
   { id: "developer",     label: "Developer",            mobileLabel: "Dev",         icon: Building2 },
   { id: "professional",  label: "Professional",         mobileLabel: "Pro",         icon: Briefcase },
 ];
@@ -414,7 +413,11 @@ export default function Pricing() {
 
   useEffect(() => {
     if (!hasAutoSelected && profile) {
-      setActiveTab(getParticipantTypeFromProfile(profile));
+      const pt = getParticipantTypeFromProfile(profile);
+      // Investor/institutional are invitation-only; no pricing tab — fall back to buyer
+      const tab = pt === "investor" || pt === "institutional" ? "buyer" : pt;
+      const validTab = AUDIENCE_TABS.some(t => t.id === tab) ? tab : "buyer";
+      setActiveTab(validTab as AudienceId);
       setHasAutoSelected(true);
     }
   }, [profile, hasAutoSelected]);
@@ -595,7 +598,7 @@ export default function Pricing() {
             {[
               { icon: Crown, label: "mAI Prop Pro", desc: "Full AI valuation & investor tools", href: "/pricing", accent: "text-brand-gold" },
               { icon: Gavel, label: "Auction Hub", desc: "Live court auctions & foreclosures", href: "/auctions", accent: "text-primary" },
-              { icon: Flame, label: "Firesale Investor", desc: "Off-market Quick Sale™ deal flow", href: "/investor-dashboard", accent: "text-destructive" },
+              { icon: Flame, label: "Quick Sale™ Deal Flow", desc: "By invitation only — request access", href: "/investor-dashboard", accent: "text-destructive" },
             ].map((item) => (
               <Link
                 key={item.href}
