@@ -2016,9 +2016,9 @@ export default function Index() {
                       emoji: "🏡",
                       title: "Property Mgrs",
                       count: "230+",
-                      color: "text-brand-cyan",
-                      border: "border-brand-cyan/30",
-                      bg: "bg-brand-cyan/10",
+                      color: "text-brand-purple",
+                      border: "border-brand-purple/30",
+                      bg: "bg-brand-purple/10",
                     },
                   ].map((pro) => (
                     <Link key={pro.title} to="/professionals">
