@@ -1017,22 +1017,15 @@ export default function Firesale() {
                       <div className="rounded-xl bg-accent/5 border border-accent/20 px-4 py-3 flex items-center gap-3">
                         <Lock className="w-4 h-4 text-accent/60 shrink-0" />
                         <p className="text-[11px] text-muted-foreground leading-snug">
-                          Sign in to access the exclusive investor deal flow.
+                          Access is by invitation only. Sign in and submit a request — no subscription required.
                         </p>
                       </div>
                       <Button
                         className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2 text-xs h-10"
-                        onClick={() => navigate("/login", { state: { from: "/firesale" } })}
+                        onClick={() => navigate("/login", { state: { from: "/investor-dashboard" } })}
                       >
                         <ArrowRight className="w-3.5 h-3.5" />
-                        Sign In to Access
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="w-full border-border text-xs h-9"
-                        onClick={() => navigate("/signup", { state: { from: "/firesale" } })}
-                      >
-                        Create a Free Account
+                        Sign In & Request Access
                       </Button>
                     </div>
                   )}
