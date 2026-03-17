@@ -1301,9 +1301,40 @@ export default function PropertyDetail() {
                         ))}
                       </div>
                       {!isPro ? (
-                        <div className="text-center py-2">
-                          <p className="text-sm text-muted-foreground">Property Reports (3/month included) require Pro plan.</p>
-                          <Button variant="outline" size="sm" className="mt-2" asChild><Link to="/pricing">Upgrade to Pro</Link></Button>
+                        <div className="pt-1 flex flex-col items-center gap-4 text-center">
+                          {/* Blurred mock preview (match valuation lock style) */}
+                          <div className="w-full pointer-events-none select-none blur-[5px] opacity-50 space-y-3">
+                            <div className="flex items-start gap-4">
+                              <div className="flex-1">
+                                <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Report Score</p>
+                                <p className="font-display font-black text-2xl text-foreground">██ / 100</p>
+                                <p className="text-xs text-muted-foreground mt-1 font-mono">Confidence: ███%</p>
+                              </div>
+                              <div className="flex gap-3 shrink-0">
+                                <div className="w-14 h-14 rounded-full bg-muted border-4 border-brand-emerald/40" />
+                                <div className="w-14 h-14 rounded-full bg-muted border-4 border-primary/30" />
+                              </div>
+                            </div>
+                            <div className="bg-secondary/60 border border-border rounded-xl px-3 py-2 text-xs flex items-center justify-between">
+                              <span className="text-muted-foreground">Investment outlook</span>
+                              <span className="font-bold text-brand-emerald">Positive</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="bg-secondary/50 rounded-lg px-2.5 py-2 h-9" />
+                              <div className="bg-secondary/50 rounded-lg px-2.5 py-2 h-9" />
+                            </div>
+                          </div>
+
+                          <Lock className="w-6 h-6 text-primary" />
+                          <div>
+                            <p className="font-display font-bold text-sm">Pro Feature</p>
+                            <p className="text-xs text-muted-foreground mt-1 leading-relaxed max-w-[220px]">
+                              Full AI report — trends, legal checks, comps, and investment score.
+                            </p>
+                          </div>
+                          <Link to="/pricing" className="flex items-center gap-1.5 text-xs font-semibold bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors">
+                            <Zap className="w-3.5 h-3.5" /> Upgrade to Pro
+                          </Link>
                         </div>
                       ) : reportLoaded ? (
                         <Button variant="outline" className="border-primary/30 text-primary gap-2 text-sm">
