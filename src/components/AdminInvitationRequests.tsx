@@ -1,13 +1,14 @@
 /**
  * Admin view for Quick Sale invitation requests.
  * One-click Approve auto-creates an investor_subscriptions record.
+ * Sends email notification via edge function on approve/reject.
  */
 
 import { useState, useEffect } from "react";
 import {
   MailPlus, Loader2, Check, X, ChevronDown, ChevronUp,
-  User, Building2, Globe, TrendingUp, DollarSign, Calendar,
-  ExternalLink, RefreshCw, Filter
+  Building2, Globe, TrendingUp, DollarSign,
+  ExternalLink, RefreshCw, Filter, MessageSquare
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
