@@ -1339,7 +1339,21 @@ export default function PropertyDetail() {
 
               {/* Report error */}
               <div className="text-center pt-1">
-                <button className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 mx-auto transition-colors">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!user) { toast.error("Sign in to report"); navigate("/login"); return; }
+                    if (!id) return;
+                    const { error } = await supabaseClient.from("listing_reports").insert({
+                      entity_type: "listing",
+                      entity_id: id,
+                      reporter_id: user.id,
+                    });
+                    if (error) toast.error("Could not submit report");
+                    else toast.success("Report submitted. Our team will review it.");
+                  }}
+                  className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 mx-auto transition-colors"
+                >
                   <Info className="w-3 h-3" />Found an error? Report this listing
                 </button>
               </div>

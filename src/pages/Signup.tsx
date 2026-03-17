@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { Eye, EyeOff, Loader2, ArrowRight, Home, Users, TrendingUp, UserCheck, Globe2, Building2, Briefcase, ChevronLeft } from "lucide-react";
+import { Eye, EyeOff, Loader2, ArrowRight, Home, Users, UserCheck, Building2, Briefcase, ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { useAuth } from "@/contexts/AuthContext";
@@ -22,6 +22,7 @@ const GoogleIcon = () => (
 
 type ParticipantId = "buyer" | "seller" | "investor" | "agent" | "institutional" | "developer" | "professional";
 
+// Investor & institutional removed — Quick Sale is invitation-only; participant ids kept for invited users
 const PARTICIPANT_TYPES: {
   id: ParticipantId;
   label: string;
@@ -33,9 +34,7 @@ const PARTICIPANT_TYPES: {
 }[] = [
   { id: "buyer",         label: "Buyer / Renter",      sublabel: "Browse, search & book viewings",         icon: Home,       accent: "text-brand-gold",  accentBg: "bg-brand-gold/10",  accentBorder: "border-brand-gold/40" },
   { id: "seller",        label: "Seller / Landlord",   sublabel: "List & manage your property",            icon: Users,      accent: "text-violet-400",  accentBg: "bg-violet-500/10",  accentBorder: "border-violet-500/40" },
-  { id: "investor",      label: "Investor",             sublabel: "Deal flow, auctions & AI valuations",    icon: TrendingUp, accent: "text-destructive",  accentBg: "bg-destructive/10", accentBorder: "border-destructive/30" },
   { id: "agent",         label: "Agent",                sublabel: "Listings, CRM & client management",      icon: UserCheck,  accent: "text-cyan-400",    accentBg: "bg-cyan-500/10",    accentBorder: "border-cyan-500/40" },
-  { id: "institutional", label: "Institutional / Fund", sublabel: "Portfolio tools & deal pipeline",        icon: Globe2,     accent: "text-amber-400",   accentBg: "bg-amber-500/10",   accentBorder: "border-amber-500/40" },
   { id: "developer",     label: "Developer",            sublabel: "Project showcases & pre-sale management", icon: Building2, accent: "text-orange-400",  accentBg: "bg-orange-500/10",  accentBorder: "border-orange-500/40" },
   { id: "professional",  label: "Professional",         sublabel: "Directory listing, leads & bookings",    icon: Briefcase,  accent: "text-rose-400",    accentBg: "bg-rose-500/10",    accentBorder: "border-rose-500/40" },
 ];

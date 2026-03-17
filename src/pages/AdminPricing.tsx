@@ -26,13 +26,12 @@ type PricingConfig = {
   metadata: Record<string, unknown> | null;
 };
 
-/** Predefined sections so admin can manage all pricings: users, professionals, agents, valuation, firesale, ad-hoc */
+/** Predefined sections so admin can manage all pricings: users, professionals, agents, valuation, investors, ad-hoc */
 const PRICING_SECTIONS = [
   { key: "users", label: "Users (consumers)", module: "user_subscription", audience: "user" },
   { key: "professionals", label: "Professionals", module: "professional_subscription", audience: "professional" },
   { key: "agents", label: "Agents", module: "agent_subscription", audience: "agent" },
   { key: "valuation", label: "Valuation reports", module: "valuation_reports", audience: "user" },
-  { key: "firesale", label: "Firesale / Investors", module: "firesale_dashboard", audience: "investor" },
   { key: "adhoc_user", label: "Ad-hoc (listings / users)", module: "adhoc_charges", audience: "user" },
   { key: "adhoc_pro", label: "Ad-hoc (professionals)", module: "adhoc_charges", audience: "professional" },
 ] as const;
@@ -65,12 +64,6 @@ const DEFAULT_SEED: Omit<PricingConfig, "id" | "created_at" | "updated_at">[] = 
   // Valuation reports
   { key: "valuation_single", label: "Single report", description: "One-off valuation report", audience: "user", module: "valuation_reports", unit: "per_report", currency: "EUR", amount: 29, is_active: true, sort_order: 1, metadata: {} },
   { key: "valuation_bundle", label: "Bundle (5 reports)", description: "5 reports pack", audience: "user", module: "valuation_reports", unit: "bundle", currency: "EUR", amount: 99, is_active: true, sort_order: 2, metadata: {} },
-  // Firesale / Investor (Pricing page + FiresalePricing page)
-  { key: "firesale_investor_basic", label: "Investor – Quick Sale Access", description: "Access to Quick Sale™ deal feed with basic filters", audience: "investor", module: "firesale_dashboard", unit: "monthly", currency: "EUR", amount: 0, is_active: true, sort_order: 0, metadata: {} },
-  { key: "firesale_investor_pro", label: "Investor – Firesale Pro", description: "Full Firesale dashboard, live pipeline, AI scoring", audience: "investor", module: "firesale_dashboard", unit: "monthly", currency: "EUR", amount: 79, is_active: true, sort_order: 1, metadata: {} },
-  { key: "investor_private", label: "Investor Pro", description: "Full deal pipeline, AI scoring & intelligence", audience: "investor", module: "firesale_dashboard", unit: "monthly", currency: "EUR", amount: 79, is_active: true, sort_order: 2, metadata: {} },
-  { key: "investor_institutional", label: "Institutional Pro", description: "Full deal flow, portfolio tools & priority support", audience: "investor", module: "firesale_dashboard", unit: "monthly", currency: "EUR", amount: 149, is_active: true, sort_order: 3, metadata: {} },
-  { key: "investor_developer", label: "Developer", description: "Custom / white-glove", audience: "investor", module: "firesale_dashboard", unit: "custom", currency: "EUR", amount: 0, is_active: true, sort_order: 4, metadata: {} },
   // Ad-hoc charges
   { key: "extra_listing", label: "Extra ad listing", description: "Additional listing beyond plan limit", audience: "user", module: "adhoc_charges", unit: "per_listing", currency: "EUR", amount: 9, is_active: true, sort_order: 1, metadata: {} },
   { key: "featured_listing", label: "Featured listing", description: "Highlight listing in search / homepage", audience: "user", module: "adhoc_charges", unit: "per_listing", currency: "EUR", amount: 19, is_active: true, sort_order: 2, metadata: {} },
@@ -114,7 +107,6 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-pricing-configs"] });
       qc.invalidateQueries({ queryKey: ["pricing-configs-public"] });
-      qc.invalidateQueries({ queryKey: ["pricing", "firesale_investors"] });
       toast.success("Pricing configuration saved.");
     },
     onError: (e: any) => {
@@ -149,7 +141,6 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-pricing-configs"] });
       qc.invalidateQueries({ queryKey: ["pricing-configs-public"] });
-      qc.invalidateQueries({ queryKey: ["pricing", "firesale_investors"] });
       toast.success("Default pricing seeded. You can adjust amounts and save.");
     },
     onError: (e: any) => toast.error(e.message || "Failed to seed default pricing."),

@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from "react";
 import { Link, useSearchParams, useNavigate } from "react-router-dom";
-import { Shield, Flame, Users, Wifi, SlidersHorizontal, ArrowLeft, DoorOpen, FolderKanban } from "lucide-react";
+import { Shield, Flame, Users, Wifi, SlidersHorizontal, ArrowLeft, DoorOpen, FolderKanban, Flag, MailPlus } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import AdminFiresalePipeline from "@/components/AdminFiresalePipeline";
@@ -14,23 +14,26 @@ import AdminSubscribers from "@/components/AdminSubscribers";
 import AdminPanel from "@/components/AdminPanel";
 import { AdminPricingContent } from "@/pages/AdminPricing";
 import OpenHouseDashboardSection from "@/components/OpenHouseDashboardSection";
+import AdminReports from "@/components/AdminReports";
+import AdminInvitationRequests from "@/components/AdminInvitationRequests";
 import { useMyListings } from "@/hooks/useListings";
 import { Button } from "@/components/ui/button";
 
-type AdminTab = "pipeline" | "investor-screening" | "subscribers" | "pricing" | "os-sync" | "open-houses";
+type AdminTab = "pipeline" | "investor-screening" | "subscribers" | "pricing" | "os-sync" | "open-houses" | "reports";
 
 export default function AdminDashboard() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { data: myListings = [] } = useMyListings();
+  const validTabs = ["pipeline", "investor-screening", "subscribers", "pricing", "os-sync", "open-houses", "reports", "invitations"];
   const tabParam = searchParams.get("tab") as AdminTab | null;
   const [activeTab, setActiveTab] = useState<AdminTab>(
-    tabParam && ["pipeline", "investor-screening", "subscribers", "pricing", "os-sync", "open-houses"].includes(tabParam) ? tabParam : "pipeline"
+    tabParam && validTabs.includes(tabParam) ? tabParam : "pipeline"
   );
 
   useEffect(() => {
     const t = searchParams.get("tab") as AdminTab | null;
-    if (t && ["pipeline", "investor-screening", "subscribers", "pricing", "os-sync", "open-houses"].includes(t)) {
+    if (t && validTabs.includes(t)) {
       setActiveTab(t);
     }
   }, [searchParams]);
@@ -102,6 +105,8 @@ export default function AdminDashboard() {
           {activeTab === "subscribers" && <AdminSubscribers />}
           {activeTab === "pricing" && <AdminPricingContent embed />}
           {activeTab === "os-sync" && <AdminPanel />}
+          {activeTab === "invitations" && <AdminInvitationRequests />}
+          {activeTab === "reports" && <AdminReports />}
         </div>
       </div>
       <Footer />
