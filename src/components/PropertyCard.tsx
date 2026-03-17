@@ -121,11 +121,11 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
   };
 
   const getBadge = () => {
-    if (property.listingType === "auction") return { label: "Auction", cls: "badge-auction" };
-    if (property.listingType === "open_house") return { label: "Open House", cls: "bg-emerald-500/90 text-white" };
+  if (property.listingType === "auction") return { label: "Auction", cls: "badge-auction" };
+    if (property.listingType === "open_house") return { label: "Open House", cls: "badge-open-house" };
     if (property.listingType === "firesale") return { label: "Quick Sale", cls: "badge-firesale" };
     if (property.isNew) return { label: "New", cls: "badge-new" };
-    if (property.isPremium) return { label: "Premium", cls: "bg-brand-coral/90 text-white" };
+    if (property.isPremium) return { label: "Premium", cls: "bg-brand-purple/90 text-white" };
     return null;
   };
 
