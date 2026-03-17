@@ -50,7 +50,7 @@ const InvestmentOpportunities = () => {
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {preview.map((p) => (
               <RevealItem key={p.id}>
-                <PropertyCard property={p} onClick={() => setSelected(p)} />
+                <PropertyCard property={p as any} onClick={() => setSelected(p)} />
               </RevealItem>
             ))}
           </div>
