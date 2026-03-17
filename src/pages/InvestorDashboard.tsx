@@ -655,6 +655,62 @@ export default function InvestorDashboard() {
         )}
 
         <div className="container py-8">
+
+          {/* ─────────────── REQUEST ACCESS SECTION (non-subscribed logged-in users) ─────────────── */}
+          {!canAccessDealFlow && !isRealEstateAgent && user && (
+            <div className="mb-8 relative glass-card rounded-2xl border border-primary/30 overflow-hidden">
+              {/* Background glow */}
+              <div className="absolute inset-0 pointer-events-none" style={{
+                background: "radial-gradient(ellipse 60% 80% at 0% 50%, hsl(var(--primary)/0.06), transparent 60%), radial-gradient(ellipse 40% 60% at 100% 30%, hsl(var(--accent)/0.05), transparent 60%)"
+              }} />
+              <div className="relative px-6 py-7 sm:px-8 sm:py-9">
+                <div className="flex flex-col lg:flex-row lg:items-center gap-6 lg:gap-10">
+                  {/* Left: Invitation badge + heading */}
+                  <div className="flex-1 min-w-0">
+                    <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/20 text-primary px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest mb-4">
+                      <Lock className="w-3 h-3" />
+                      Invitation-only access
+                    </div>
+                    <h2 className="font-display text-xl sm:text-2xl font-black mb-2">
+                      Request Access to the <span className="gradient-text-primary">Deal Flow</span>
+                    </h2>
+                    <p className="text-sm text-muted-foreground leading-relaxed max-w-lg">
+                      Quick Sale™ deal flow is exclusively available to verified investors and institutional buyers.
+                      Submit your profile and our team will review your application — no subscription fee, access is purely by invitation.
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5">
+                      {[
+                        { icon: "🔒", label: "No public pricing" },
+                        { icon: "✅", label: "Admin-vetted" },
+                        { icon: "⚡", label: "48h response" },
+                        { icon: "🤝", label: "NDA protected" },
+                      ].map(f => (
+                        <div key={f.label} className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <span className="text-base leading-none">{f.icon}</span>
+                          {f.label}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Right: CTA */}
+                  <div className="shrink-0 flex flex-col items-start lg:items-end gap-3 lg:min-w-[200px]">
+                    <Button
+                      className="bg-gradient-primary border-0 text-primary-foreground h-12 px-7 text-sm font-bold shadow-elevated"
+                      onClick={() => setShowInvitationModal(true)}
+                    >
+                      <MailPlus className="w-4 h-4 mr-2" />
+                      Request an Invitation
+                    </Button>
+                    <p className="text-[11px] text-muted-foreground">
+                      Already applied?{" "}
+                      <span className="text-primary cursor-default">We'll contact you by email.</span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* ─────────────── DEAL FEED TAB ─────────────── */}
           {activeTab === "deals" && (
             <div className="grid lg:grid-cols-[1fr_300px] gap-8">
