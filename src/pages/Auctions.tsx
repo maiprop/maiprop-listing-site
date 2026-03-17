@@ -327,8 +327,8 @@ function daysUntil(dateStr?: string | null): number {
 
 function countdownBadge(days: number): {label: string;cls: string;} | null {
   if (days <= 0) return { label: "Today!", cls: "bg-destructive text-destructive-foreground" };
-  if (days === 1) return { label: "Tomorrow", cls: "bg-brand-gold text-background" };
-  if (days <= 7) return { label: `${days} days left`, cls: "bg-primary/80 text-primary-foreground" };
+  if (days === 1) return { label: "Tomorrow", cls: "bg-gradient-primary text-primary-foreground" };
+  if (days <= 7) return { label: `${days} days left`, cls: "bg-primary text-primary-foreground" };
   return null;
 }
 
