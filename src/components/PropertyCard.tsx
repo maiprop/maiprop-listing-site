@@ -452,7 +452,7 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
             )}
             {property.listingType === "open_house" && (
               <Link to={detailPath} className="flex-1">
-                <button className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-emerald-500 text-white font-semibold text-sm transition-all hover:opacity-90 hover:shadow-md active:scale-[0.98]">
+                <button className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-gradient-primary text-primary-foreground font-semibold text-sm transition-all hover:opacity-90 hover:shadow-md active:scale-[0.98]">
                   <Calendar className="w-4 h-4" />
                   View Open House
                 </button>
@@ -460,7 +460,7 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
             )}
             {property.listingType === "auction" && (
               <Link to={detailPath} className="flex-1">
-                <button className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-brand-gold text-black font-semibold text-sm transition-all hover:opacity-90 hover:shadow-md active:scale-[0.98]">
+                <button className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-brand-auction/80 text-white font-semibold text-sm transition-all hover:bg-brand-auction hover:shadow-md active:scale-[0.98]">
                   <Gavel className="w-4 h-4" />
                   View Auction
                 </button>
