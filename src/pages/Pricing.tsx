@@ -256,6 +256,9 @@ export default function Pricing() {
       }
     : basePlan;
 
+  const participant = getParticipantTypeFromProfile(profile);
+  const hasAudiencePro = isPro && activeTab === participant;
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
@@ -338,7 +341,7 @@ export default function Pricing() {
             {/* Paid card */}
             <div className={cn("relative glass-card rounded-2xl border-2 overflow-hidden flex flex-col shadow-elevated", plan.accentBorder)}>
               <div className="absolute top-4 right-4">
-                {activeTab === "buyer" && isPro ? (
+                {hasAudiencePro ? (
                   <span className="flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider bg-emerald-500 text-white">
                     <Crown className="w-2.5 h-2.5" /> Your Plan
                   </span>
@@ -387,7 +390,7 @@ export default function Pricing() {
               </div>
 
               <div className="px-6 sm:px-8 pb-6 sm:pb-8 space-y-2">
-                {activeTab === "buyer" && isPro ? (
+                {hasAudiencePro ? (
                   <Button
                     variant="outline"
                     className="w-full h-11 border-emerald-500/40 text-emerald-400"
