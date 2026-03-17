@@ -33,7 +33,7 @@ export default function AdminReports() {
         setLoading(false);
         return;
       }
-      setReports(data || []);
+      setReports((data as any) || []);
       setLoading(false);
     };
     load();
@@ -60,7 +60,7 @@ export default function AdminReports() {
     <div className="space-y-6">
       <div>
         <h2 className="font-display text-lg font-semibold flex items-center gap-2">
-          <Flag className="w-5 h-5 text-amber-500" /> Listing Reports
+          <Flag className="w-5 h-5 text-brand-gold" /> Listing Reports
         </h2>
         <p className="text-sm text-muted-foreground mt-1">
           User reports on listings, auctions, open houses, and firesale requests. Review and take action as needed.

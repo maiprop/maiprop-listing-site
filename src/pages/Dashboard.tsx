@@ -169,8 +169,8 @@ function getNavItemsForBioType(bioType: string | null, role: DashboardRole) {
 // ── Lead status badge ──────────────────────────────────────────────────────────
 const LEAD_STATUS_COLORS: Record<string, string> = {
   pending:   "bg-brand-gold/20 text-brand-gold",
-  reviewed:  "bg-blue-500/20 text-blue-400",
-  confirmed: "bg-emerald-500/20 text-emerald-400",
+  reviewed:  "bg-brand-purple/20 text-brand-purple",
+  confirmed: "bg-primary/20 text-primary",
   cancelled: "bg-muted text-muted-foreground",
 };
 
@@ -289,7 +289,7 @@ export default function Dashboard() {
                   {profile?.verified
                     ? <CheckCircle className="w-3 h-3 text-primary" />
                     : profile?.role === "professional"
-                      ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/20 font-semibold">⏳ Pending</span>
+                      ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-gold/15 text-brand-gold border border-brand-gold/20 font-semibold">⏳ Pending</span>
                       : null}
                 </div>
               </div>
@@ -412,7 +412,7 @@ export default function Dashboard() {
               {/* Investor / Institutional overview cards */}
               {isInvestorLike && !(role === "admin") && (
                 <div className="grid md:grid-cols-2 gap-5">
-                  <div className="glass-card rounded-xl p-5 border border-amber-500/20 bg-amber-500/5">
+                  <div className="glass-card rounded-xl p-5 border border-brand-gold/20 bg-brand-gold/5">
                     <h2 className="font-display font-semibold mb-1 flex items-center gap-2 text-brand-gold"><FolderKanban className="w-4 h-4" /> Deal Flow</h2>
                     <p className="text-sm text-muted-foreground mb-3">Your private pipeline of off-market and Quick Sale™ opportunities.</p>
                     <Button size="sm" className="bg-gradient-gold border-0 text-background font-semibold gap-1.5" asChild>
@@ -672,7 +672,7 @@ export default function Dashboard() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="font-semibold text-sm truncate">{l.title}</p>
-                          {l.is_featured && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-400/20 text-amber-600 border border-amber-400/30">⭐ Featured</span>}
+                          {l.is_featured && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold border border-brand-gold/30">⭐ Featured</span>}
                           {(l.tags || []).includes("exclusive") && <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/20 text-primary font-medium">Exclusive</span>}
                           {l.is_off_market && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-secondary border border-border text-muted-foreground">🔒 Off-market</span>}
                           {l.is_pre_sale && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">🏗️ Pre-sale</span>}
@@ -2162,11 +2162,11 @@ function SettingsSection({
       })()}
 
       {/* Security notice */}
-      <div className="glass-card rounded-xl p-5 border border-amber-500/20 bg-amber-500/5">
+      <div className="glass-card rounded-xl p-5 border border-brand-gold/20 bg-brand-gold/5">
         <div className="flex items-start gap-3">
-          <Shield className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+          <Shield className="w-5 h-5 text-brand-gold shrink-0 mt-0.5" />
           <div>
-            <p className="font-semibold text-sm text-amber-300">Security Notice</p>
+            <p className="font-semibold text-sm text-brand-gold">Security Notice</p>
             <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
               Switching your participant type <strong>only changes how your dashboard is organised</strong> — it does not
               affect your actual account permissions or data access rights.
@@ -2190,7 +2190,7 @@ function SettingsSection({
           </p>
           <ul className="text-xs text-muted-foreground space-y-1.5 leading-relaxed list-none">
             <li className="flex items-start gap-2">
-              <span className="text-amber-400 shrink-0 mt-0.5">▸</span>
+              <span className="text-brand-gold shrink-0 mt-0.5">▸</span>
               <span><strong className="text-foreground">Extra charges may apply.</strong> Upgrading to a higher-tier participant type (e.g. Agent, Institutional) may activate a paid plan. You will be informed before any charge is made.</span>
             </li>
             <li className="flex items-start gap-2">

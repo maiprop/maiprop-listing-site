@@ -184,8 +184,8 @@ export default function OpenHouseRegistrationDialog({
 
         {step === "done" ? (
           <div className="text-center py-6 space-y-4">
-            <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto">
-              <Check className="w-8 h-8 text-emerald-600" />
+            <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mx-auto">
+              <Check className="w-8 h-8 text-primary" />
             </div>
             <p className="font-semibold">{listingTitle}</p>
             <p className="text-sm text-muted-foreground">

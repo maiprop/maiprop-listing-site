@@ -421,6 +421,75 @@ export type Database = {
         }
         Relationships: []
       }
+      invitation_requests: {
+        Row: {
+          aum_range: string | null
+          company: string | null
+          company_website: string | null
+          created_at: string
+          deal_size_range: string | null
+          email: string
+          full_name: string | null
+          geographic_focus: string | null
+          id: string
+          investment_focus: string | null
+          investment_vehicle: string | null
+          job_title: string | null
+          linkedin_url: string | null
+          message: string | null
+          phone: string | null
+          source: string | null
+          status: string
+          terms_accepted: boolean | null
+          user_id: string | null
+          years_experience: string | null
+        }
+        Insert: {
+          aum_range?: string | null
+          company?: string | null
+          company_website?: string | null
+          created_at?: string
+          deal_size_range?: string | null
+          email: string
+          full_name?: string | null
+          geographic_focus?: string | null
+          id?: string
+          investment_focus?: string | null
+          investment_vehicle?: string | null
+          job_title?: string | null
+          linkedin_url?: string | null
+          message?: string | null
+          phone?: string | null
+          source?: string | null
+          status?: string
+          terms_accepted?: boolean | null
+          user_id?: string | null
+          years_experience?: string | null
+        }
+        Update: {
+          aum_range?: string | null
+          company?: string | null
+          company_website?: string | null
+          created_at?: string
+          deal_size_range?: string | null
+          email?: string
+          full_name?: string | null
+          geographic_focus?: string | null
+          id?: string
+          investment_focus?: string | null
+          investment_vehicle?: string | null
+          job_title?: string | null
+          linkedin_url?: string | null
+          message?: string | null
+          phone?: string | null
+          source?: string | null
+          status?: string
+          terms_accepted?: boolean | null
+          user_id?: string | null
+          years_experience?: string | null
+        }
+        Relationships: []
+      }
       listing_images: {
         Row: {
           created_at: string
@@ -452,6 +521,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      listing_reports: {
+        Row: {
+          created_at: string
+          entity_id: string
+          entity_type: string
+          id: string
+          reporter_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          entity_id: string
+          entity_type: string
+          id?: string
+          reporter_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          entity_id?: string
+          entity_type?: string
+          id?: string
+          reporter_id?: string | null
+        }
+        Relationships: []
       }
       listing_view_events: {
         Row: {
@@ -949,13 +1042,6 @@ export type Database = {
             referencedColumns: ["user_id"]
           },
           {
-            foreignKeyName: "open_house_offers_bidder_id_fkey"
-            columns: ["bidder_id"]
-            isOneToOne: false
-            referencedRelation: "profiles_public"
-            referencedColumns: ["user_id"]
-          },
-          {
             foreignKeyName: "open_house_offers_listing_id_fkey"
             columns: ["listing_id"]
             isOneToOne: false
@@ -1044,13 +1130,6 @@ export type Database = {
             columns: ["requester_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["user_id"]
-          },
-          {
-            foreignKeyName: "open_house_registrations_requester_id_fkey"
-            columns: ["requester_id"]
-            isOneToOne: false
-            referencedRelation: "profiles_public"
             referencedColumns: ["user_id"]
           },
         ]
@@ -1414,6 +1493,33 @@ export type Database = {
         }
         Relationships: []
       }
+      profiles_public: {
+        Row: {
+          avatar_url: string | null
+          display_name: string | null
+          first_name: string | null
+          last_name: string | null
+          role: Database["public"]["Enums"]["user_role"] | null
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          display_name?: string | null
+          first_name?: string | null
+          last_name?: string | null
+          role?: Database["public"]["Enums"]["user_role"] | null
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          display_name?: string | null
+          first_name?: string | null
+          last_name?: string | null
+          role?: Database["public"]["Enums"]["user_role"] | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       projects: {
         Row: {
           address: string | null
@@ -1595,33 +1701,7 @@ export type Database = {
       }
     }
     Views: {
-      profiles_public: {
-        Row: {
-          avatar_url: string | null
-          display_name: string | null
-          first_name: string | null
-          last_name: string | null
-          role: Database["public"]["Enums"]["user_role"] | null
-          user_id: string | null
-        }
-        Insert: {
-          avatar_url?: string | null
-          display_name?: string | null
-          first_name?: string | null
-          last_name?: string | null
-          role?: Database["public"]["Enums"]["user_role"] | null
-          user_id?: string | null
-        }
-        Update: {
-          avatar_url?: string | null
-          display_name?: string | null
-          first_name?: string | null
-          last_name?: string | null
-          role?: Database["public"]["Enums"]["user_role"] | null
-          user_id?: string | null
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Functions: {
       get_my_role: {
