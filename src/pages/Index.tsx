@@ -1264,7 +1264,11 @@ export default function Index() {
               {/* Headline */}
               <h1
                 className="font-display font-black leading-[1.08] mb-4 sm:mb-6 animate-fade-in-up text-white"
-                style={{ fontSize: "clamp(1.75rem, 7vw, 4.5rem)", animationDelay: "0.08s" }}
+                style={{
+                  fontSize: "clamp(1.75rem, 7vw, 4.5rem)",
+                  animationDelay: "0.08s",
+                  textShadow: "0 2px 24px hsl(220 60% 3% / 0.7), 0 1px 4px hsl(220 60% 3% / 0.5)",
+                }}
               >
                 Find your perfect
                 <br className="hidden xs:inline" /> property in Greece
