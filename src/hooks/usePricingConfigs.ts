@@ -44,24 +44,26 @@ export const INVESTOR_TIER_TO_KEY: Record<string, string> = {
 export function usePricingConfigs() {
   return useQuery<PricingConfigMap>({
     queryKey: ["pricing-configs-public"],
-    queryFn: async () => {
+    queryFn: async (): Promise<PricingConfigMap> => {
       const { data, error } = await supabase
         .from("pricing_configs")
         .select("key, label, description, amount, currency, unit, metadata")
         .eq("is_active", true);
       if (error) throw error;
-      return (data ?? []).reduce<PricingConfigMap>((acc, row: PricingConfigRow) => {
-        const meta = (row.metadata ?? {}) as { stripe_price_id?: string };
-        acc[row.key] = {
+      const map: PricingConfigMap = {};
+      for (const row of data ?? []) {
+        const rawMeta = row.metadata as Record<string, unknown> | null;
+        const meta: { stripe_price_id?: string } = rawMeta ?? {};
+        map[row.key] = {
           amount: Number(row.amount ?? 0),
           currency: row.currency ?? "EUR",
           label: row.label,
           description: row.description ?? null,
           unit: row.unit ?? "monthly",
-          stripePriceId: meta?.stripe_price_id,
+          stripePriceId: typeof meta?.stripe_price_id === "string" ? meta.stripe_price_id : undefined,
         };
-        return acc;
-      }, {});
+      }
+      return map;
     },
     staleTime: 5 * 60 * 1000,
   });
