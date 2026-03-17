@@ -307,6 +307,16 @@ export default function Dashboard() {
                 <div className="font-semibold text-sm truncate">{displayName}</div>
                 <div className="flex items-center gap-1 mt-0.5 flex-wrap">
                   <span className="text-xs px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium capitalize">{roleLabel}</span>
+                  {invitationRequestStatus === "pending" && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-brand-gold/15 text-brand-gold border border-brand-gold/25 font-bold uppercase tracking-wide flex items-center gap-1">
+                      <Clock className="w-2.5 h-2.5" /> Pending
+                    </span>
+                  )}
+                  {invitationRequestStatus === "rejected" && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-destructive/10 text-destructive border border-destructive/20 font-bold uppercase tracking-wide">
+                      Not approved
+                    </span>
+                  )}
                   {profile?.verified
                     ? <CheckCircle className="w-3 h-3 text-primary" />
                     : profile?.role === "professional"
