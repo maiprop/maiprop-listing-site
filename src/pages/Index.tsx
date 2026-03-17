@@ -1233,7 +1233,7 @@ export default function Index() {
         />
 
         <div className="container relative z-10 pt-24 pb-8 sm:pt-28 sm:pb-16 lg:pl-16 xl:pl-24">
-          <div className="grid lg:grid-cols-[1fr_360px] xl:grid-cols-[1fr_400px] gap-8 lg:gap-12 items-center">
+          <div className="grid lg:grid-cols-[1fr_360px] xl:grid-cols-[1fr_400px] gap-8 lg:gap-12 items-end">
             {/* ── LEFT: Copy + Search ── */}
             <div className="text-white">
               {/* Eyebrow */}
@@ -1813,7 +1813,7 @@ export default function Index() {
             <div
               className="absolute inset-0"
               style={{
-                background: "radial-gradient(ellipse at 20% 50%, hsl(192 100% 50% / 0.05) 0%, transparent 50%)",
+                background: "radial-gradient(ellipse at 20% 50%, hsl(var(--brand-purple) / 0.06) 0%, transparent 50%)",
               }}
             />
 
@@ -1976,9 +1976,9 @@ export default function Index() {
                       emoji: "🏛️",
                       title: "Architects",
                       count: "340+",
-                      color: "text-primary",
-                      border: "border-primary/30",
-                      bg: "bg-primary/15",
+                      color: "text-brand-cyan",
+                      border: "border-brand-cyan/30",
+                      bg: "bg-brand-cyan/15",
                     },
                     {
                       emoji: "⚖️",
@@ -1992,33 +1992,33 @@ export default function Index() {
                       emoji: "📋",
                       title: "Notaries",
                       count: "95+",
-                      color: "text-brand-emerald",
-                      border: "border-brand-emerald/30",
-                      bg: "bg-brand-emerald/15",
-                    },
-                    {
-                      emoji: "🔧",
-                      title: "Engineers",
-                      count: "520+",
-                      color: "text-accent",
-                      border: "border-accent/30",
-                      bg: "bg-accent/15",
-                    },
-                    {
-                      emoji: "🏗️",
-                      title: "Contractors",
-                      count: "410+",
                       color: "text-brand-purple",
                       border: "border-brand-purple/30",
                       bg: "bg-brand-purple/15",
                     },
                     {
+                      emoji: "🔧",
+                      title: "Engineers",
+                      count: "520+",
+                      color: "text-primary",
+                      border: "border-primary/30",
+                      bg: "bg-primary/15",
+                    },
+                    {
+                      emoji: "🏗️",
+                      title: "Contractors",
+                      count: "410+",
+                      color: "text-brand-purple-dark",
+                      border: "border-brand-purple-dark/30",
+                      bg: "bg-brand-purple-dark/15",
+                    },
+                    {
                       emoji: "🏡",
                       title: "Property Mgrs",
                       count: "230+",
-                      color: "text-brand-sky",
-                      border: "border-brand-sky/30",
-                      bg: "bg-brand-sky/15",
+                      color: "text-brand-cyan",
+                      border: "border-brand-cyan/30",
+                      bg: "bg-brand-cyan/10",
                     },
                   ].map((pro) => (
                     <Link key={pro.title} to="/professionals">
