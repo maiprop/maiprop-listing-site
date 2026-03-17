@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useEligibleForQuickSale } from "@/hooks/useEligibleForQuickSale";
 import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
 import { isPlatformAdmin } from "@/lib/authUtils";
 
@@ -32,7 +33,8 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
 
   const participantType = getParticipantTypeFromProfile(profile);
   const isDeveloper = participantType === "developer";
-  const canListProperty = ["seller", "agent", "institutional", "developer"].includes(participantType);
+  const canListProperty = ["seller", "agent", "developer"].includes(participantType);
+  const { eligible: eligibleForQuickSale } = useEligibleForQuickSale();
   const hasDarkHero = DARK_HERO_ROUTES.includes(location.pathname);
   // When transparent AND over a dark hero, force white text; otherwise use semantic tokens
   const isTransparent = !scrolled;
@@ -200,7 +202,7 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
                   <div className="px-3 py-2 border-b border-border">
                     <p className="text-xs font-semibold truncate">{displayName}</p>
                     <p className="text-xs text-muted-foreground capitalize">
-                    {isPlatformAdmin(profile) ? "Admin" : (profile?.role as string) === "seller_landlord" ? "Seller / Landlord" : (profile?.role as string) === "agent" ? "Agent" : (profile?.role as string) === "professional" ? "Professional" : (profile?.role as string) === "investor" ? "Investor" : (profile?.role as string) === "institutional" ? "Institutional" : (profile?.role as string) === "developer" ? "Developer" : (profile?.role as string) === "individual" ? "Buyer / Renter" : (profile?.role || "Buyer / Renter")}
+                    {isPlatformAdmin(profile) ? "Admin" : (profile?.role as string) === "seller_landlord" ? "Seller / Landlord" : (profile?.role as string) === "agent" ? "Agent" : (profile?.role as string) === "professional" ? "Professional" : (profile?.role as string) === "developer" ? "Developer" : (profile?.role as string) === "individual" ? "Buyer / Renter" : (profile?.role || "Buyer / Renter")}
                   </p>
                   </div>
                   <DropdownMenuItem asChild>
@@ -225,10 +227,10 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
                       <MessageSquare className="w-3.5 h-3.5" /> Messages
                     </Link>
                   </DropdownMenuItem>
-                  {(participantType === "investor" || participantType === "institutional") && (
+                  {eligibleForQuickSale && (
                     <DropdownMenuItem asChild>
                       <Link to="/investor-dashboard" className="flex items-center gap-2 cursor-pointer">
-                        <Flame className="w-3.5 h-3.5" /> Investor Dashboard
+                        <Flame className="w-3.5 h-3.5" /> Quick Sale Deals
                       </Link>
                     </DropdownMenuItem>
                   )}

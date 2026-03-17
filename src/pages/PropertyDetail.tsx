@@ -23,6 +23,7 @@ import { useStartConversation } from "@/hooks/useMessages";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { usePricingConfigs, formatPrice, PRICING_KEYS } from "@/hooks/usePricingConfigs";
+import { useReportUsage, useRecordReport, REPORT_INCLUDED, REPORT_EXTRA_COST } from "@/hooks/useUsageAddons";
 import { toast } from "sonner";
 import PropertyMiniMap from "@/components/PropertyMiniMap";
 import PropertyValuation from "@/components/PropertyValuation";
@@ -137,6 +138,8 @@ export default function PropertyDetail() {
   const { user, profile } = useAuth();
   const { isPro } = useSubscription();
   const { data: pricingConfigs = {} } = usePricingConfigs();
+  const { data: reportCount = 0 } = useReportUsage();
+  const recordReport = useRecordReport();
 
   const { data: dbListing, isLoading } = useListing(id || "");
   const ownerIsPro = !!(dbListing as any)?.ownerIsPro;
@@ -161,7 +164,8 @@ export default function PropertyDetail() {
 
   const [currentImage, setCurrentImage] = useState(0);
   const [viewingOpen, setViewingOpen] = useState(false);
-  const [reportPurchased, setReportPurchased] = useState(false);
+  const [reportLoaded, setReportLoaded] = useState(false);
+  const [reportLoading, setReportLoading] = useState(false);
   const [descExpanded, setDescExpanded] = useState(false);
   const [walkScore, setWalkScore] = useState<number | null>(null);
   const [auctionAlertOpen, setAuctionAlertOpen] = useState(false);
@@ -983,22 +987,15 @@ export default function PropertyDetail() {
                 
               </div>
 
-              {/* ── Neighbourhood Report (Property Report — Pro) ── */}
-              {isPro ? (
-                <NeighbourhoodReport
-                  city={city}
-                  address={address}
-                  region={db?.region}
-                  propertyType={propertyType}
-                  lat={db?.latitude ? Number(db.latitude) : undefined}
-                  lng={db?.longitude ? Number(db.longitude) : undefined}
-                  listingId={id ?? undefined} />
-              ) : (
-                <div className="glass-card rounded-xl p-6 border border-border text-center">
-                  <p className="text-sm text-muted-foreground">Property Reports (3/month included) require Pro plan.</p>
-                  <Button variant="outline" size="sm" className="mt-2" asChild><Link to="/pricing">Upgrade to Pro</Link></Button>
-                </div>
-              )}
+              {/* ── Neighbourhood Report — sign-in only ── */}
+              <NeighbourhoodReport
+                city={city}
+                address={address}
+                region={db?.region}
+                propertyType={propertyType}
+                lat={db?.latitude ? Number(db.latitude) : undefined}
+                lng={db?.longitude ? Number(db.longitude) : undefined}
+                listingId={id ?? undefined} />
               
 
             </div>
@@ -1266,8 +1263,8 @@ export default function PropertyDetail() {
                 </div>)
               }
 
-              {/* ④ Full AI Property Report */}
-              <Section className={reportPurchased ? "border-primary/30" : ""}>
+              {/* ④ Full AI Property Report — Pro only, 3 free/month, €9 each extra */}
+              <Section className={reportLoaded ? "border-primary/30" : ""}>
                 <div className="p-6">
                   <div className="flex items-start gap-4">
                     <div className="w-11 h-11 rounded-xl bg-gradient-primary flex items-center justify-center shrink-0">
@@ -1288,18 +1285,41 @@ export default function PropertyDetail() {
                           </div>
                         ))}
                       </div>
-                      {!reportPurchased ?
-                      <div className="flex items-center gap-3 flex-wrap">
-                          <Button className="bg-gradient-primary border-0 text-primary-foreground text-sm" onClick={() => setReportPurchased(true)}>
-                            Unlock Report — {formatPrice(pricingConfigs?.[PRICING_KEYS.valuation_single], { fallback: "€29" })}
-                          </Button>
-                          <span className="text-xs text-muted-foreground">One-time · instant access</span>
-                        </div> :
-
-                      <Button variant="outline" className="border-primary/30 text-primary gap-2 text-sm">
+                      {!isPro ? (
+                        <div className="text-center py-2">
+                          <p className="text-sm text-muted-foreground">Property Reports (3/month included) require Pro plan.</p>
+                          <Button variant="outline" size="sm" className="mt-2" asChild><Link to="/pricing">Upgrade to Pro</Link></Button>
+                        </div>
+                      ) : reportLoaded ? (
+                        <Button variant="outline" className="border-primary/30 text-primary gap-2 text-sm">
                           <Download className="w-4 h-4" /> Download PDF
                         </Button>
-                      }
+                      ) : reportCount >= REPORT_INCLUDED ? (
+                        <div className="text-center py-2">
+                          <p className="text-sm text-muted-foreground">Included reports used this month. Extra: €{REPORT_EXTRA_COST} each.</p>
+                          <Button variant="outline" size="sm" className="mt-2" asChild><Link to="/pricing">Get extra report</Link></Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <Button
+                            className="bg-gradient-primary border-0 text-primary-foreground text-sm"
+                            onClick={async () => {
+                              if (!user || !id) return;
+                              setReportLoading(true);
+                              try {
+                                await recordReport.mutateAsync(id);
+                                setReportLoaded(true);
+                              } finally {
+                                setReportLoading(false);
+                              }
+                            }}
+                            disabled={reportLoading}
+                          >
+                            {reportLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <BarChart2 className="w-4 h-4" />}
+                            {reportLoading ? "Loading…" : `Load Report (${Math.max(0, REPORT_INCLUDED - reportCount)} left this month)`}
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

@@ -9,8 +9,6 @@ import { getAiErrorMessage } from "@/lib/aiErrorUtils";
 import { useAuth } from "@/contexts/AuthContext";
 import { SignInForAI } from "@/components/SignInForAI";
 import { toast } from "sonner";
-import { useSubscription } from "@/hooks/useSubscription";
-import { useReportUsage, useRecordReport, REPORT_INCLUDED, REPORT_EXTRA_COST } from "@/hooks/useUsageAddons";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -185,26 +183,12 @@ function isOsNeighbourhoodReport(r: unknown): r is NeighbourhoodData {
 
 export default function NeighbourhoodReport({ city, address, region, propertyType, lat, lng, listingId }: NeighbourhoodReportProps) {
   const { user } = useAuth();
-  const { isPro } = useSubscription();
-  const { data: reportCount = 0 } = useReportUsage();
-  const recordReport = useRecordReport();
   const [data, setData] = useState<NeighbourhoodData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const remaining = isPro ? Math.max(0, REPORT_INCLUDED - reportCount) : 0;
-  const needsExtra = isPro && reportCount >= REPORT_INCLUDED;
-
   const load = async () => {
     if (!user) return;
-    if (!isPro) {
-      setError("Property Report requires Pro plan");
-      return;
-    }
-    if (needsExtra) {
-      setError(`Included reports used. Extra: €${REPORT_EXTRA_COST} each.`);
-      return;
-    }
     setLoading(true);
     setError(null);
     try {
@@ -213,7 +197,6 @@ export default function NeighbourhoodReport({ city, address, region, propertyTyp
           body: { listing_id: listingId, report_type: "neighbourhood" },
         });
         if (!osErr && osRes?.ok && osRes.report && isOsNeighbourhoodReport(osRes.report)) {
-          await recordReport.mutateAsync(listingId);
           setData(osRes.report as NeighbourhoodData);
           setLoading(false);
           return;
@@ -224,7 +207,6 @@ export default function NeighbourhoodReport({ city, address, region, propertyTyp
       });
       if (fnErr) throw fnErr;
       if (result?.error) throw new Error(result.error);
-      await recordReport.mutateAsync(listingId ?? undefined);
       setData(result as NeighbourhoodData);
     } catch (e: unknown) {
       const msg = getAiErrorMessage(e, null, "Failed to load neighbourhood report");
@@ -256,9 +238,8 @@ export default function NeighbourhoodReport({ city, address, region, propertyTyp
         {!user && <SignInForAI feature="Neighbourhood Report" />}
         {user && !data && !loading && !error && (
           <div className="text-center space-y-3 py-4">
-            <p className="text-xs text-muted-foreground">{remaining > 0 ? `${remaining} of ${REPORT_INCLUDED} reports remaining this month` : `Included reports used. Extra: €${REPORT_EXTRA_COST} each`}</p>
-            <Button className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2" onClick={load} disabled={needsExtra}>
-              {needsExtra ? "Upgrade for more reports" : <><Building2 className="w-4 h-4" /> Load Property Report</>}
+            <Button className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2" onClick={load}>
+              <Building2 className="w-4 h-4" /> Load Neighbourhood Report
             </Button>
           </div>
         )}

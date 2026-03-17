@@ -31,7 +31,6 @@ const PRICING_SECTIONS = [
   { key: "users", label: "Users (consumers)", module: "user_subscription", audience: "user" },
   { key: "professionals", label: "Professionals", module: "professional_subscription", audience: "professional" },
   { key: "agents", label: "Agents", module: "agent_subscription", audience: "agent" },
-  { key: "investors", label: "Investors (invitation-only)", module: "investor_subscription", audience: "investor" },
   { key: "valuation", label: "Valuation reports", module: "valuation_reports", audience: "user" },
   { key: "adhoc_user", label: "Ad-hoc (listings / users)", module: "adhoc_charges", audience: "user" },
   { key: "adhoc_pro", label: "Ad-hoc (professionals)", module: "adhoc_charges", audience: "professional" },
@@ -41,7 +40,6 @@ const MODULES = [
   "user_subscription",
   "professional_subscription",
   "agent_subscription",
-  "investor_subscription",
   "valuation_reports",
   "firesale_dashboard",
   "adhoc_charges",
@@ -49,7 +47,7 @@ const MODULES = [
   "listings",
 ] as const;
 
-const AUDIENCES = ["user", "professional", "agent", "investor"] as const;
+const AUDIENCES = ["user", "professional", "agent"] as const;
 
 /** Default rows to seed when admin clicks "Seed default pricing" — aligned with Pricing page and all consumers */
 const DEFAULT_SEED: Omit<PricingConfig, "id" | "created_at" | "updated_at">[] = [
@@ -63,9 +61,6 @@ const DEFAULT_SEED: Omit<PricingConfig, "id" | "created_at" | "updated_at">[] = 
   // Agents (Pricing page: Agency Pro, Developer Pro)
   { key: "agent_basic", label: "Agency Pro", description: "Unlimited listings, CRM & analytics", audience: "agent", module: "agent_subscription", unit: "monthly", currency: "EUR", amount: 89, is_active: true, sort_order: 1, metadata: {} },
   { key: "agent_plus", label: "Agent Plus", description: "Unlimited listings & valuation", audience: "agent", module: "agent_subscription", unit: "monthly", currency: "EUR", amount: 199, is_active: true, sort_order: 2, metadata: {} },
-  // Investor tiers (AdminSubscribers, invitation-only)
-  { key: "investor_private", label: "Investor Private", description: "Quick Sale deal flow, AI scoring", audience: "investor", module: "investor_subscription", unit: "monthly", currency: "EUR", amount: 490, is_active: true, sort_order: 1, metadata: {} },
-  { key: "investor_institutional", label: "Investor Institutional", description: "Full deal flow & priority support", audience: "investor", module: "investor_subscription", unit: "monthly", currency: "EUR", amount: 1490, is_active: true, sort_order: 2, metadata: {} },
   // Valuation reports (PropertyDetail, etc.)
   { key: "valuation_single", label: "Single report", description: "One-off valuation report", audience: "user", module: "valuation_reports", unit: "per_report", currency: "EUR", amount: 29, is_active: true, sort_order: 1, metadata: {} },
   { key: "valuation_bundle", label: "Bundle (5 reports)", description: "5 reports pack", audience: "user", module: "valuation_reports", unit: "bundle", currency: "EUR", amount: 99, is_active: true, sort_order: 2, metadata: {} },

@@ -30,15 +30,13 @@ export const PRICING_KEYS = {
   professional_premium: "professional_premium",
   valuation_single: "valuation_single",
   valuation_bundle: "valuation_bundle",
-  investor_private: "investor_private",
-  investor_institutional: "investor_institutional",
 } as const;
 
-/** Maps investor_subscriptions.tier to pricing_configs key */
+/** Legacy: Maps investor_subscriptions.tier to pricing_configs key (admin only; configs may be absent if not seeded) */
 export const INVESTOR_TIER_TO_KEY: Record<string, string> = {
   private: "investor_private",
   institutional: "investor_institutional",
-  developer: "investor_developer", // Custom — no fixed price
+  developer: "investor_developer",
 };
 
 export function usePricingConfigs() {

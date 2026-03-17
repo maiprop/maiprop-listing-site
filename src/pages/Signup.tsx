@@ -20,9 +20,7 @@ const GoogleIcon = () => (
   </svg>
 );
 
-type ParticipantId = "buyer" | "seller" | "investor" | "agent" | "institutional" | "developer" | "professional";
-
-// Investor & institutional removed — Quick Sale is invitation-only; participant ids kept for invited users
+type ParticipantId = "buyer" | "seller" | "agent" | "developer" | "professional";
 const PARTICIPANT_TYPES: {
   id: ParticipantId;
   label: string;
