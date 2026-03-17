@@ -1278,18 +1278,18 @@ export default function Index() {
                   {/* Tabs — scrollable on mobile */}
                   <div className="flex gap-0.5 px-2 pt-2.5 overflow-x-auto scrollbar-none">
                     {[
-                      { label: "Buy", emoji: "🏠", color: "" },
-                      { label: "Rent", emoji: "🔑", color: "" },
-                      { label: "Auctions", emoji: "⚖️", color: "" },
-                      { label: "Professionals", emoji: "👔", color: "text-brand-purple" },
-                    ].map(({ label, emoji, color }) => (
+                      { label: "Buy", emoji: "🏠" },
+                      { label: "Rent", emoji: "🔑" },
+                      { label: "Auctions", emoji: "⚖️" },
+                      { label: "Professionals", emoji: "👔" },
+                    ].map(({ label, emoji }) => (
                       <button
                         key={label}
                         onClick={() => setSearchType(label)}
-                        className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all shrink-0 ${
+                        className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold font-display transition-all shrink-0 ${
                           searchType === label
                             ? "bg-primary text-primary-foreground shadow-sm"
-                            : `${color || "text-muted-foreground"} hover:text-foreground hover:bg-secondary/80`
+                            : "text-muted-foreground hover:text-foreground hover:bg-secondary/80"
                         }`}
                       >
                         <span className="text-sm leading-none">{emoji}</span>
