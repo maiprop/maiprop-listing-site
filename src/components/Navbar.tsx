@@ -324,9 +324,9 @@ export function Navbar() {
                 link.accent === "flame"
                   ? "text-destructive/80 hover:text-destructive hover:bg-destructive/10"
                   : link.accent === "dooropen"
-                    ? "text-emerald-600/80 hover:text-emerald-600 hover:bg-emerald-500/10"
+                    ? "text-brand-cyan/80 hover:text-brand-cyan hover:bg-brand-cyan/10"
                     : link.accent === "subtle"
-                      ? "text-accent/80 hover:text-accent hover:bg-accent/10"
+                      ? "text-muted-foreground/80 hover:text-foreground hover:bg-secondary"
                       : "text-muted-foreground hover:text-foreground hover:bg-secondary"
               }`}
               onClick={() => setMobileOpen(false)}
