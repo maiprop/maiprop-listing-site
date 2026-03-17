@@ -175,13 +175,13 @@ function mapAuctionToListing(a: any) {
   const auctionUrl: string | null =
     a.url ?? a.auctionUrl ?? a.listingUrl ?? a.eAuctionUrl ?? null;
 
-  // Build Google Street View cover photo when coordinates are available
-  const googleMapsKey = Deno.env.get("GOOGLE_MAPS_API_KEY");
+  // Build Street View via proxy (key never in DB or client URLs)
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")?.replace(/\/$/, "");
   const lat = a.propertyLatitude != null ? Number(a.propertyLatitude) : null;
   const lng = a.propertyLongitude != null ? Number(a.propertyLongitude) : null;
   const streetViewUrl =
-    googleMapsKey && lat && lng
-      ? `https://maps.googleapis.com/maps/api/streetview?size=800x450&location=${lat},${lng}&fov=90&pitch=10&key=${googleMapsKey}`
+    supabaseUrl && lat != null && lng != null
+      ? `${supabaseUrl}/functions/v1/streetview-proxy?size=800x450&lat=${lat}&lng=${lng}`
       : null;
 
   // Map ownershipStatus from OS API to normalized tags used by frontend filters
