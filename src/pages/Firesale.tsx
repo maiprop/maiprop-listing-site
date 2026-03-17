@@ -843,7 +843,7 @@ export default function Firesale() {
                   {/* Timeline */}
                   <div className="grid grid-cols-3 gap-3 mb-6">
                     {[
-                      { time: "Now", label: "Request live", color: "text-brand-emerald", icon: "✅" },
+                      { time: "Now", label: "Request live", color: "text-primary", icon: "✅" },
                       { time: "~2h", label: "Advisor assigned", color: "text-primary", icon: "👤" },
                       { time: "24h", label: "Cash offer sent", color: "text-brand-gold", icon: "💰" },
                     ].map((s) => (
