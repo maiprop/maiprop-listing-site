@@ -106,7 +106,7 @@ export function Navbar() {
                   ? link.accent === "flame"
                     ? "text-destructive bg-destructive/10"
                     : link.accent === "dooropen"
-                      ? forceLight ? "text-white bg-white/20" : "text-emerald-600 bg-emerald-500/10"
+                      ? forceLight ? "text-white bg-white/20" : "text-brand-cyan bg-brand-cyan/10"
                       : forceLight
                         ? "text-white bg-white/20"
                         : "text-primary bg-primary/10"
@@ -116,12 +116,12 @@ export function Navbar() {
                       : "text-destructive/80 hover:text-destructive hover:bg-destructive/10"
                     : link.accent === "dooropen"
                       ? forceLight
-                        ? "text-emerald-200 hover:text-white hover:bg-white/10"
-                        : "text-emerald-600/80 hover:text-emerald-600 hover:bg-emerald-500/10"
+                        ? "text-brand-cyan/80 hover:text-white hover:bg-white/10"
+                        : "text-brand-cyan/80 hover:text-brand-cyan hover:bg-brand-cyan/10"
                       : link.accent === "subtle"
                         ? forceLight
                           ? "text-white/80 hover:text-white hover:bg-white/10"
-                          : "text-accent/90 hover:text-accent hover:bg-accent/10"
+                          : "text-muted-foreground/90 hover:text-foreground hover:bg-secondary"
                         : forceLight
                             ? "text-white/80 hover:text-white hover:bg-white/10"
                             : "text-muted-foreground hover:text-foreground hover:bg-secondary"
