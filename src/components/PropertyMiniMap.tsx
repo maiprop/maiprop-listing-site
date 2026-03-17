@@ -212,8 +212,16 @@ export default function PropertyMiniMap({
         </div>
       </div>
 
-      {/* Mapbox mini map */}
+      {/* Mapbox mini map — fallback to Google if no token */}
       <div className="relative h-64">
+        {!MAPBOX_TOKEN ? (
+          <iframe
+            title="map"
+            loading="lazy"
+            className="w-full h-full border-0"
+            src={`https://maps.google.com/maps?q=${lat},${lng}&output=embed&z=15`}
+          />
+        ) : (
         <Map
           ref={mapRef}
           mapboxAccessToken={MAPBOX_TOKEN}
@@ -256,6 +264,7 @@ export default function PropertyMiniMap({
             );
           })}
         </Map>
+        )}
 
         {/* Coords badge */}
         <div className="absolute bottom-2 left-2 bg-background/80 backdrop-blur-sm rounded-lg px-2 py-1 text-[10px] text-muted-foreground border border-border pointer-events-none">

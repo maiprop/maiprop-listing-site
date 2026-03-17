@@ -11,7 +11,7 @@ const _mapbox = env.VITE_MAPBOX_TOKEN;
 
 if (isProd) {
   if (!_url || !_anonKey) throw new Error("VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are required in production");
-  if (!_mapbox) throw new Error("VITE_MAPBOX_TOKEN is required in production");
+  // Mapbox is optional — app loads without it; maps will be disabled until VITE_MAPBOX_TOKEN is set
 }
 
 // Supabase — dev fallbacks for local/Lovable only; production uses env only (no keys in bundle)
@@ -20,9 +20,9 @@ export const SUPABASE_URL =
 export const SUPABASE_ANON_KEY =
   isProd ? _anonKey! : (_anonKey ?? "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpnbHFsYXluZXpzcGVmb292cXljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4MzEyNTUsImV4cCI6MjA4ODQwNzI1NX0.lHq_GYad1eWXba5n0IPiC2-6tj-f_U_fHGjDsEURGsE");
 
-// Mapbox — dev fallback only; production uses env
+// Mapbox — dev fallback; production uses env (empty string if not set; map components must handle)
 export const MAPBOX_TOKEN =
-  isProd ? _mapbox! : (_mapbox ?? "pk.eyJ1Ijoia3JlbmlvczkyIiwiYSI6ImNtbWh0MjlxYjBza3YydXBqcThqeXBoYmcifQ.BElf3IJI7DGBjj2o2dTDqw");
+  isProd ? (_mapbox ?? "") : (_mapbox ?? "pk.eyJ1Ijoia3JlbmlvczkyIiwiYSI6ImNtbWh0MjlxYjBza3YydXBqcThqeXBoYmcifQ.BElf3IJI7DGBjj2o2dTDqw");
 
 // Google Maps API key — use only for Maps JavaScript (e.g. Places autocomplete).
 // Restrict to HTTP referrers in Google Cloud Console. Do NOT use for Street View

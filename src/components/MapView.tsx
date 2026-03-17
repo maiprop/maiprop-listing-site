@@ -610,6 +610,23 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
     return isDragging ? "grabbing" : "grab";
   }, []);
 
+  if (!MAPBOX_TOKEN) {
+    return (
+      <div
+        className="rounded-2xl overflow-hidden border border-border shadow-card relative flex items-center justify-center bg-secondary"
+        style={{ height: height ?? "calc(100vh - 14rem)" }}
+      >
+        <div className="text-center p-6">
+          <MapPin className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+          <p className="text-sm text-muted-foreground">Map requires VITE_MAPBOX_TOKEN to be configured.</p>
+          <a href="https://www.google.com/maps" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline text-sm mt-2 inline-block">
+            Open Google Maps →
+          </a>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className="rounded-2xl overflow-hidden border border-border shadow-card relative"
