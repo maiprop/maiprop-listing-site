@@ -152,3 +152,64 @@ This document lists features and limits from the Pricing specs that are **not ye
    - Add Plan card to Overview (or Settings).
    - Add upgrade CTAs when at limit.
    - Add usage display for valuations/reports (when implemented).
+
+---
+## 8. Edge Functions / background jobs: wired vs not wired (and missing connections)
+
+This section is about **connections** (frontend calls vs cron/DB triggers vs currently unused functions), not just ???caps/enforcement???.
+
+### A) Edge Functions that the frontend does call (but may have wiring mismatches)
+- `property-chat`
+  - **Called by:** `src/components/AIAssistantWidget.tsx`
+  - **Current issue (wiring):** it sends `Authorization: Bearer ${SUPABASE_ANON_KEY}` (anon key), but security hardening checks require a real **user JWT**.
+  - **Who should benefit:** buyer/seller/agent/developer/professional/investor/institutional (any authenticated participant) for the AI assistant UI.
+  - **Connection to make:** pass the authenticated user access token from `AuthContext` (or adjust function auth verification in a controlled, deliberate way).
+- `ai-service-match`
+  - **Called by:** `src/components/AIServiceMatchModal.tsx`
+  - **Current issue (wiring):** also uses `Authorization: Bearer ${SUPABASE_ANON_KEY}` which won???t satisfy JWT verification.
+  - **Who should benefit:** any authenticated participant using ???Find matching professional???.
+  - **Connection to make:** use the user???s JWT for the `Authorization` header.
+- `smart-filters`
+  - **Called by:** `src/hooks/useSmartFilters.ts`
+  - **Current behavior:** skips AI call when `!user` (logged-out users get default config).
+  - **Suggested rule:** if pricing ever says ???smart filters are Pro???, gate on `isPro`; otherwise keep as ???authenticated user??? level access.
+
+### B) Edge Functions that are NOT called by the frontend at all
+- `pro-ai-tools`
+  - **Current wiring:** no frontend references found (not invoked by any route/component).
+  - **Who should benefit:** **Pro** users across participant ids (buyer/seller/agent/developer/professional/investor/institutional), specifically for the ???Pro AI tools??? experience promised on pricing.
+  - **Connection to make:** integrate `pro-ai-tools` into the same UI surfaces currently using `property-chat` / property tool cards:
+    - Property detail ???Property Valuation / Property Report???
+    - AI assistant flows (if you want Pro-specific prompts/behavior)
+- `receive-from-os`
+  - **Current wiring:** no frontend calls found; expected to be OS -> Supabase webhook style ingestion.
+  - **Who should benefit:** platform/admin integration only.
+  - **Connection to make:** ensure the OS system is configured to POST to `/functions/v1/receive-from-os` (with correct auth/service role) and that the payload updates the intended tables.
+- `auth-email-hook`, `process-email-queue`, `send-saved-search-alerts`
+  - **Current wiring:** not called directly from the frontend; expected to run via `pg_cron` / auth/webhook flows.
+  - **Who should benefit:** users who create saved searches/notifications, plus auth flows.
+  - **Connection to make:** verify the end-to-end chain:
+    - UI insert/update of saved searches -> DB queue/state -> cron triggers -> edge function -> email send -> user notification.
+
+### C) Edge Functions wired via DB triggers / cron (exist, but not ???by participation id??? directly)
+- `oh-registration-notify`
+  - **Wired by:** DB trigger on `open_house_registrations.status`
+  - **Who should benefit:** the user who registered for an open house (typically buyer/investor depending on your onboarding mapping).
+- OS sync functions (`full-sync-from-os`, `sync-to-os`, `sync-firesale-to-os`, `poll-os-auctions`, `os-diagnose`)
+  - **Wired by:** Admin UI + scheduled cron
+  - **Who should benefit:** platform/admin only (never ???agent Free???).
+
+---
+## 9. Participant-id based wiring: should an agent get access to a module that???s not accessible?
+
+Rule of thumb from `src/pages/Dashboard.tsx`:
+- **Agent Free** hides modules like **Analytics / Contacts / Leads** from the dashboard nav; they only appear when `isPro=true`.
+- Therefore, **an agent should not automatically gain** those modules on Free just because the functionality exists somewhere; the correct connection is:
+  - Pro-only dashboard nav + Pro-only AI tool cards controlled by `isPro`.
+
+Concrete examples:
+- **Should an agent get `pro-ai-tools`?**
+  - **Yes, but only when the agent is Pro.**
+  - Reason: `pro-ai-tools` is currently not wired anywhere in the frontend; once wired, it should align with the existing ???Pro??? surfaces for property valuation/reporting.
+- **Should an agent get `property-chat` / `ai-service-match`?**
+  - **Yes for authenticated agents**, but only if the frontend passes a **user JWT** (current anon-key Authorization will fail JWT verification).
