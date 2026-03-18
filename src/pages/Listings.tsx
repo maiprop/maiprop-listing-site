@@ -565,74 +565,178 @@ export default function Listings() {
       <Navbar />
 
       <div className="pt-16">
-        {/* Sticky search bar */}
+        {/* Sticky filter bar */}
         <div className="bg-card border-b border-border sticky top-16 z-40">
-          <div className="container py-2 sm:py-4">
-            {/* Row 1 on mobile: Search + Map/Grid toggle + Filters */}
-            <div className="flex gap-2 items-center mb-2 sm:mb-0 sm:hidden">
-              {/* Search */}
-              <div className="flex-1 flex items-center gap-2 bg-secondary rounded-xl px-3 py-2.5 border border-border focus-within:border-primary transition-colors min-w-0">
-                <Search className="w-4 h-4 text-muted-foreground shrink-0" />
-                <input
-                  type="text"
-                  placeholder="City or area..."
-                  value={searchQuery}
-                  onChange={e => setParam("city", e.target.value)}
-                  className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none min-w-0"
-                />
-                {searchQuery && (
-                  <button onClick={() => setParam("city", "")}><X className="w-3.5 h-3.5 text-muted-foreground" /></button>
-                )}
-              </div>
-              {/* Map/Grid toggle */}
-              <div className="flex rounded-xl border border-border overflow-hidden shrink-0">
-                <button onClick={() => setViewMode("grid")} title="Grid"
-                  className={`p-2.5 min-w-[38px] transition-colors ${viewMode === "grid" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"}`}>
-                  <LayoutGrid className="w-4 h-4" />
+          <div className="container py-2 sm:py-4 space-y-2 sm:space-y-0">
+
+            {/* ── MOBILE FILTER BAR ── */}
+            <div className="sm:hidden space-y-2">
+              {/* Row 1: search + view toggle + filters button */}
+              <div className="flex gap-2 items-center">
+                <div className="flex-1 flex items-center gap-2 bg-secondary rounded-xl px-3 py-2.5 border border-border focus-within:border-primary transition-colors min-w-0">
+                  <Search className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <input
+                    type="text"
+                    placeholder="City or area..."
+                    value={searchQuery}
+                    onChange={e => setParam("city", e.target.value)}
+                    className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none min-w-0"
+                  />
+                  {searchQuery && (
+                    <button onClick={() => setParam("city", "")}><X className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                  )}
+                </div>
+                <div className="flex rounded-xl border border-border overflow-hidden shrink-0">
+                  <button onClick={() => setViewMode("grid")} title="Grid"
+                    className={`p-2.5 min-w-[38px] transition-colors ${viewMode === "grid" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"}`}>
+                    <LayoutGrid className="w-4 h-4" />
+                  </button>
+                  <button onClick={() => setViewMode("map")} title="Map"
+                    className={`p-2.5 min-w-[38px] transition-colors ${viewMode === "map" || viewMode === "split" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"}`}>
+                    <Map className="w-4 h-4" />
+                  </button>
+                </div>
+                <button
+                  onClick={() => setShowFilters(!showFilters)}
+                  className={`shrink-0 flex items-center gap-1.5 px-3 h-[38px] rounded-xl border text-xs font-medium transition-colors ${showFilters ? "bg-primary/10 border-primary/30 text-primary" : "bg-secondary border-border text-muted-foreground"}`}>
+                  <SlidersHorizontal className="w-4 h-4" />
+                  {activeFilterCount > 0 && (
+                    <span className="w-4 h-4 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center">{activeFilterCount}</span>
+                  )}
                 </button>
-                <button onClick={() => setViewMode("map")} title="Map"
-                  className={`p-2.5 min-w-[38px] transition-colors ${viewMode === "map" || viewMode === "split" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"}`}>
-                  <Map className="w-4 h-4" />
-                </button>
               </div>
-              <Button variant="outline" size="sm"
-                className={`shrink-0 px-3 h-[38px] min-w-[38px] ${showFilters ? "bg-primary/10 border-primary/30 text-primary" : "border-border"}`}
-                onClick={() => setShowFilters(!showFilters)}>
-                <SlidersHorizontal className="w-4 h-4" />
-                {activeFilterCount > 0 && (
-                  <span className="w-4 h-4 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center ml-1">{activeFilterCount}</span>
-                )}
-              </Button>
+
+              {/* Row 2: listing type pills + property type pills + price select */}
+              <div className="flex gap-1.5 overflow-x-auto scrollbar-none pb-0.5 items-center">
+                {/* Listing type pills */}
+                {listingTypeOptions.map(o => (
+                  <button
+                    key={o.value}
+                    onClick={() => setParam("listing_type", o.value)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors whitespace-nowrap shrink-0 ${
+                      selectedListingType === o.value
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-secondary text-muted-foreground border-border hover:border-primary/40 hover:text-foreground"
+                    }`}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+                <div className="w-px h-4 bg-border shrink-0" />
+                {/* Property type pills */}
+                {[
+                  { value: "", label: "All" },
+                  { value: "apartment", label: "Apt" },
+                  { value: "house", label: "House" },
+                  { value: "villa", label: "Villa" },
+                  { value: "land", label: "Land" },
+                  { value: "commercial", label: "Comm." },
+                  { value: "office", label: "Office" },
+                ].map(t => (
+                  <button
+                    key={t.value}
+                    onClick={() => { setParam("type", t.value); setParam("subtype", ""); }}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors whitespace-nowrap shrink-0 ${
+                      selectedType === t.value
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-secondary text-muted-foreground border-border hover:border-primary/40 hover:text-foreground"
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+                <div className="w-px h-4 bg-border shrink-0" />
+                {/* Price select */}
+                <div className="relative shrink-0">
+                  <select
+                    value={selectedPrice}
+                    onChange={e => setParam("price", e.target.value)}
+                    className={`appearance-none border rounded-full px-3 py-1.5 pr-6 text-xs font-medium cursor-pointer outline-none transition-colors ${
+                      selectedPrice
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-secondary text-muted-foreground border-border"
+                    }`}
+                  >
+                    {(selectedListingType === "rent" ? rentPriceRanges : buyPriceRanges).map(o => (
+                      <option key={o.value} value={o.value} className="bg-card text-foreground">{o.label}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none opacity-70" />
+                </div>
+                <AISearchBar onFiltersApplied={applyAIFilters} />
+              </div>
+
+              {/* Mobile advanced filters panel */}
+              {showFilters && (
+                <div className="border border-border rounded-xl bg-card/95 p-4 space-y-4">
+                  {/* Size */}
+                  <div className="space-y-1.5">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Size (m²)</span>
+                    <div className="flex gap-2">
+                      <input type="number" placeholder="Min m²" value={minSqm}
+                        onChange={e => setParam("sqm_min", e.target.value)}
+                        className="flex-1 px-3 py-2 text-sm rounded-lg border border-border bg-secondary text-foreground outline-none focus:border-primary" />
+                      <input type="number" placeholder="Max m²" value={maxSqm}
+                        onChange={e => setParam("sqm_max", e.target.value)}
+                        className="flex-1 px-3 py-2 text-sm rounded-lg border border-border bg-secondary text-foreground outline-none focus:border-primary" />
+                    </div>
+                  </div>
+                  {/* Bedrooms */}
+                  <div className="space-y-1.5">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Bedrooms</span>
+                    <div className="flex gap-1.5 flex-wrap">
+                      {["", "1", "2", "3", "4", "5"].map(b => (
+                        <button key={b}
+                          onClick={() => setParam("beds_min", b)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                            bedsRange[0] === b
+                              ? "bg-primary text-primary-foreground border-primary"
+                              : "bg-secondary text-muted-foreground border-border hover:border-primary/40"
+                          }`}>{b === "" ? "Any" : `${b}+`}</button>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Listing status */}
+                  {(selectedListingType === "sale" || !selectedListingType) && (
+                    <div className="space-y-1.5">
+                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</span>
+                      <div className="flex gap-2 flex-wrap">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="checkbox" checked={offMarketOnly}
+                            onChange={e => setParam("off_market", e.target.checked ? "1" : "")}
+                            className="rounded border-border accent-primary" />
+                          <span className="text-sm">🔒 Off-market</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="checkbox" checked={preSaleOnly}
+                            onChange={e => setParam("pre_sale", e.target.checked ? "1" : "")}
+                            className="rounded border-border accent-primary" />
+                          <span className="text-sm">🏗️ Pre-sale</span>
+                        </label>
+                      </div>
+                    </div>
+                  )}
+                  {activeFilterCount > 0 && (
+                    <button onClick={clearAllFilters}
+                      className="w-full py-2 text-xs text-muted-foreground border border-border rounded-lg hover:text-foreground hover:border-primary/30 transition-colors">
+                      Clear all filters
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Active filter chips on mobile */}
+              {activeFilterCount > 0 && !showFilters && (
+                <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-0.5">
+                  {selectedPrice && <button onClick={() => setParam("price", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary shrink-0">{[...buyPriceRanges, ...rentPriceRanges].find(r => r.value === selectedPrice)?.label || selectedPrice} <X className="w-3 h-3" /></button>}
+                  {bedsRange[0] && <button onClick={() => setParam("beds_min", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary shrink-0">{bedsRange[0]}+ beds <X className="w-3 h-3" /></button>}
+                  {(minSqm || maxSqm) && <button onClick={() => { setParam("sqm_min", ""); setParam("sqm_max", ""); }} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary shrink-0">Size <X className="w-3 h-3" /></button>}
+                  <button onClick={clearAllFilters} className="text-xs text-muted-foreground shrink-0 ml-1">Clear all</button>
+                </div>
+              )}
             </div>
 
-            {/* Row 2 on mobile: scrollable type/price/sort chips */}
-            <div className="flex gap-2 items-center overflow-x-auto scrollbar-none sm:hidden pb-0.5 mt-1.5">
-              <ListingTypeButton value={selectedListingType} onChange={v => setParam("listing_type", v)} />
-              <PropertyTypeButton
-                value={selectedType}
-                subtype={selectedSubtype}
-                onChange={(type, sub) => {
-                  setSearchParams(prev => {
-                    const next = new URLSearchParams(prev);
-                    if (type) next.set("type", type); else next.delete("type");
-                    if (sub) next.set("subtype", sub); else next.delete("subtype");
-                    return next;
-                  }, { replace: true });
-                }}
-              />
-              <div className="relative shrink-0">
-                <select value={selectedPrice} onChange={e => setParam("price", e.target.value)}
-                  className="appearance-none bg-secondary border border-border rounded-xl px-3 py-2 pr-7 text-xs text-foreground cursor-pointer outline-none focus:border-primary">
-                  {(selectedListingType === "rent" ? rentPriceRanges : buyPriceRanges).map(o => (
-                    <option key={o.value} value={o.value} className="bg-card">{o.label}</option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
-              </div>
-              <AISearchBar onFiltersApplied={applyAIFilters} />
-            </div>
-
-            {/* Desktop: single row — unchanged */}
+            {/* ── DESKTOP FILTER BAR (unchanged) ── */}
             <div className="hidden sm:flex gap-2 items-center overflow-x-auto scrollbar-none sm:flex-wrap">
               {/* Search */}
               <div className="shrink-0 flex-1 min-w-[200px] flex items-center gap-2 bg-secondary rounded-xl px-4 py-2.5 border border-border focus-within:border-primary transition-colors">
@@ -710,9 +814,9 @@ export default function Listings() {
               </div>
             </div>
 
-            {/* Active filter chips */}
+            {/* Desktop active filter chips */}
             {activeFilterCount > 0 && (
-              <div className="flex items-center gap-2 mt-2 flex-wrap overflow-x-auto scrollbar-none pb-0.5">
+              <div className="hidden sm:flex items-center gap-2 mt-2 flex-wrap overflow-x-auto scrollbar-none pb-0.5">
                 <span className="text-xs text-muted-foreground shrink-0">Active:</span>
                 {selectedType && <button onClick={() => { setParam("type", ""); setParam("subtype", ""); }} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">{PROPERTY_TYPE_MAP[selectedType as PropertyTypeKey]?.emoji} {getTypeLabel(selectedType)} <X className="w-3 h-3" /></button>}
                 {selectedSubtype && selectedType && <button onClick={() => setParam("subtype", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">{getSubtypeLabel(selectedType, selectedSubtype)} <X className="w-3 h-3" /></button>}
