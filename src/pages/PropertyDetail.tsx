@@ -484,7 +484,7 @@ export default function PropertyDetail() {
 
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pb-bottom-nav lg:pb-0">
       <Navbar />
 
       <div className="pt-16">
@@ -502,7 +502,7 @@ export default function PropertyDetail() {
           </div>
         </div>
 
-        <div className="container pb-24 lg:pb-10">
+        <div className="container pb-10">
           <div className="grid lg:grid-cols-[1fr_340px] gap-6 lg:gap-8">
 
             {/* ──── LEFT COLUMN ──── */}
@@ -615,7 +615,9 @@ export default function PropertyDetail() {
                         </span>
                       }
                     </div>
-                    <h1 className="font-display text-2xl md:text-3xl font-bold leading-tight">{title}</h1>
+                    <h1 className="font-display text-2xl md:text-3xl font-bold leading-tight line-clamp-3 sm:line-clamp-none pr-2">
+                      {title}
+                    </h1>
                     <div className="flex items-center gap-1.5 mt-2 text-sm text-muted-foreground">
                       <MapPin className="w-3.5 h-3.5 shrink-0" />
                       <span>
@@ -642,42 +644,42 @@ export default function PropertyDetail() {
                 {/* Key stats bar */}
                 <div className="flex items-center gap-2 flex-wrap">
                   {bedrooms != null &&
-                  <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium">
+                  <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
                       <Bed className="w-3.5 h-3.5 text-primary" />{bedrooms} bed
                     </div>
                   }
                   {bathrooms != null &&
-                  <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium">
+                  <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
                       <Bath className="w-3.5 h-3.5 text-primary" />{bathrooms} bath
                     </div>
                   }
                   {(db as any)?.wc_count != null &&
-                  <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium">
+                  <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
                       <Home className="w-3.5 h-3.5 text-primary" />{(db as any).wc_count} WC
                     </div>
                   }
-                  <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium">
+                  <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
                     <Square className="w-3.5 h-3.5 text-primary" />{sqm} m²
                   </div>
                   {db.floor != null &&
-                  <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium">
+                  <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
                       <Layers className="w-3.5 h-3.5 text-primary" />
                       {db.floor === -1 ? "Basement" : db.floor === 0 ? "Ground floor" : `${db.floor}${["st", "nd", "rd"][db.floor - 1] || "th"} floor`}
                       {db.total_floors ? ` / ${db.total_floors}` : ""}
                     </div>
                   }
                   {db.year_built != null &&
-                  <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium">
+                  <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
                       <Calendar className="w-3.5 h-3.5 text-primary" />Construction year {db.year_built}
                     </div>
                   }
                   {(db as any)?.heating_system &&
-                  <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium">
+                  <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
                       <Thermometer className="w-3.5 h-3.5 text-primary" />{HEATING_TYPES.find((h) => h.value === (db as any).heating_system)?.label ?? (db as any).heating_system.replace(/_/g, " ")}
                     </div>
                   }
                   {(db as any)?.construction_status &&
-                  <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium">
+                  <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
                       <Building2 className="w-3.5 h-3.5 text-primary" />{CONDITION_OPTIONS.find((c) => c.value === (db as any).construction_status)?.label ?? (db as any).construction_status.replace(/_/g, " ")}
                     </div>
                   }
@@ -689,7 +691,7 @@ export default function PropertyDetail() {
                     </div>
                   }
                   {ownershipPct != null && ownershipStatus !== "full" &&
-                  <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium">
+                  <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
                       <Tag className="w-3.5 h-3.5 text-primary" />{ownershipPct}%
                     </div>
                   }

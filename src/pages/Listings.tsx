@@ -561,7 +561,7 @@ export default function Listings() {
   const yearOpts = ["1950", "1960", "1970", "1980", "1990", "2000", "2005", "2010", "2015", "2018", "2020", "2022", "2024", "2025"].map(v => ({ label: v, value: v }));
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pb-bottom-nav lg:pb-0">
       <Navbar />
 
       <div className="pt-16">
@@ -1268,7 +1268,7 @@ export default function Listings() {
                 )}
               </div>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
+              <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
                 {filtered.map((property: any) => (
                   <div key={property.id} className="relative group">
                     <PropertyCard property={property as any} />
@@ -1306,7 +1306,10 @@ export default function Listings() {
       <Footer />
 
       {/* Floating Map / List pill — mobile only, above bottom nav */}
-      <div className="md:hidden fixed bottom-[4.75rem] left-1/2 -translate-x-1/2 z-50 animate-fade-in">
+      <div
+        className="md:hidden fixed left-1/2 -translate-x-1/2 z-50 animate-fade-in"
+        style={{ bottom: "calc(var(--bottom-nav-h, 56px) + env(safe-area-inset-bottom, 0px) + 12px)" }}
+      >
         {viewMode === "map" ? (
           <button
             onClick={() => setViewMode("grid")}
@@ -1332,9 +1335,6 @@ export default function Listings() {
           </button>
         )}
       </div>
-
-      {/* bottom spacing for mobile nav */}
-      <div className="h-16 md:hidden" />
 
       {/* Compare drawer */}
       <CompareDrawer

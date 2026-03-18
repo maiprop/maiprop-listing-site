@@ -1162,7 +1162,7 @@ export default function Index() {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-16 lg:pb-0">
+    <div className="min-h-screen bg-background pb-bottom-nav lg:pb-0">
       <Navbar />
       {showAI && <AISearchModal onFiltersApplied={handleAIFilters} onClose={() => setShowAI(false)} />}
       <CookieConsentBanner />
@@ -1225,7 +1225,7 @@ export default function Index() {
           className="absolute inset-0 z-0 opacity-[0.03]"
           style={{
             backgroundImage:
-              "linear-gradient(hsl(var(--brand-indigo)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--brand-indigo)) 1px, transparent 1px)",
+              "linear-gradient(hsl(var(--brand-purple)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--brand-purple)) 1px, transparent 1px)",
             backgroundSize: "60px 60px",
           }}
         />
@@ -1233,7 +1233,7 @@ export default function Index() {
         {/* Glow orb */}
         <div
           className="absolute top-1/4 right-1/4 w-[500px] h-[500px] rounded-full blur-[120px] opacity-10 z-0"
-          style={{ background: "radial-gradient(hsl(var(--brand-cyan)), hsl(var(--brand-indigo)), hsl(var(--brand-purple)), transparent 70%)" }}
+          style={{ background: "radial-gradient(hsl(var(--brand-cyan)), hsl(var(--brand-purple)), transparent 70%)" }}
         />
 
         <div className="container relative z-10 pt-20 pb-8 sm:pt-28 sm:pb-16 lg:pl-16 xl:pl-24 px-4">
@@ -1244,12 +1244,12 @@ export default function Index() {
               <div className="relative inline-flex mb-3 sm:mb-7 animate-fade-in-up" style={{ animationDelay: "0s" }}>
                 <span
                   className="absolute inset-0 rounded-full animate-pulse"
-                  style={{ boxShadow: "0 0 0 4px hsl(var(--brand-indigo) / 0.18), 0 0 18px 4px hsl(var(--brand-purple) / 0.12)" }}
+                  style={{ boxShadow: "0 0 0 4px hsl(var(--brand-cyan) / 0.16), 0 0 18px 4px hsl(var(--brand-purple) / 0.12)" }}
                 />
                 <div className="relative inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/15 border border-white/30 backdrop-blur-sm">
                   <span className="relative flex w-2 h-2 shrink-0">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-60" style={{ background: "hsl(var(--brand-indigo))" }} />
-                    <span className="relative inline-flex rounded-full w-2 h-2" style={{ background: "hsl(var(--brand-indigo))" }} />
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-60" style={{ background: "hsl(var(--brand-cyan))" }} />
+                    <span className="relative inline-flex rounded-full w-2 h-2" style={{ background: "hsl(var(--brand-cyan))" }} />
                   </span>
                   <span className="text-[11px] sm:text-xs font-semibold text-white">Greece's #1 AI-Powered Property Platform</span>
                 </div>
@@ -1262,7 +1262,10 @@ export default function Index() {
               >
                 Find your perfect<br className="sm:hidden" /> property in Greece
                 <div className="mt-1">
-                  <span className="gradient-text-primary" style={{ fontSize: "clamp(1.5rem, 7vw, 4.8rem)" }}>
+                  <span
+                    className="bg-gradient-to-r from-white via-brand-cyan to-brand-purple bg-clip-text text-transparent drop-shadow-[0_2px_14px_rgba(0,0,0,0.65)]"
+                    style={{ fontSize: "clamp(1.5rem, 7vw, 4.8rem)" }}
+                  >
                     with AI precision
                   </span>
                 </div>
