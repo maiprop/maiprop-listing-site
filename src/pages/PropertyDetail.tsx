@@ -1235,27 +1235,25 @@ export default function PropertyDetail() {
 
               /* Non-pro: static locked card — no edge function calls */
               <div className="glass-card rounded-2xl overflow-hidden border border-primary/20">
-                  <div className="flex items-center gap-2 px-5 py-3.5 bg-primary/5 border-b border-primary/20">
-                    <Zap className="w-4 h-4 text-primary" />
-                    <h4 className="font-display font-semibold text-sm flex-1">Property Valuation</h4>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/15 text-primary font-semibold">Pro</span>
-                  </div>
-                  <div className="p-6 flex flex-col items-center gap-4 text-center min-h-[220px] justify-center">
-                    <Lock className="w-6 h-6 text-primary" />
-                    <div>
-                      <p className="font-display font-bold text-sm">Pro Feature</p>
-                      <p className="text-xs text-muted-foreground mt-1 leading-relaxed max-w-[240px] mx-auto">
-                        Full AI valuation — price range, confidence, legal &amp; tax overlay, key factors.
-                      </p>
-                    </div>
-                    <Link
-                      to="/pricing"
-                      className="flex items-center justify-center gap-1.5 text-xs font-semibold bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors w-full max-w-[240px]"
-                    >
-                      <Zap className="w-3.5 h-3.5" /> Upgrade to Pro
+                <div className="flex items-center gap-2 px-5 py-3.5 bg-primary/5 border-b border-primary/20">
+                  <Zap className="w-4 h-4 text-primary" />
+                  <h4 className="font-display font-semibold text-sm flex-1">Property Valuation</h4>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/15 text-primary font-semibold">
+                    mAI Prop · 2026 Model
+                  </span>
+                </div>
+                <div className="p-5 text-center space-y-3">
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Type-specific AI valuation — price range, confidence, liquidity, and Greek legal/tax overlay.
+                  </p>
+                  <Button className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2" asChild>
+                    <Link to="/pricing">
+                      <Zap className="w-4 h-4" /> Upgrade to Pro
                     </Link>
-                  </div>
-                </div>)
+                  </Button>
+                  <p className="text-[10px] text-muted-foreground">Pro Feature · Unlock full valuations</p>
+                </div>
+              </div>)
               }
 
               {/* ④ Property Report — Pro only, 3 free/month, €9 each extra */}
