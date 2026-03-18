@@ -1273,15 +1273,15 @@ export default function Index() {
 
               {/* ── Search Card ── */}
               <div className="animate-fade-in-up" style={{ animationDelay: "0.28s" }}>
-                <div
+              <div
                   className="bg-card/90 backdrop-blur-2xl border border-border/70 rounded-2xl shadow-elevated overflow-visible"
                   style={{
                     boxShadow:
                       "0 12px 48px -8px hsl(var(--primary) / 0.2), 0 2px 0 0 hsl(var(--primary) / 0.08), inset 0 1px 0 0 hsl(var(--foreground) / 0.04)",
                   }}
                 >
-                  {/* Tabs — scrollable on mobile */}
-                  <div className="flex gap-0.5 px-2 pt-2.5 overflow-x-auto scrollbar-none">
+                  {/* Tabs — scrollable on mobile, proper touch targets */}
+                  <div className="flex gap-0.5 px-2 pt-2 overflow-x-auto scrollbar-none">
                     {[
                       { label: "Buy", emoji: "🏠" },
                       { label: "Rent", emoji: "🔑" },
@@ -1291,7 +1291,7 @@ export default function Index() {
                       <button
                         key={label}
                         onClick={() => setSearchType(label)}
-                        className={`flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-semibold font-display transition-all shrink-0 whitespace-nowrap ${
+                        className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold font-display transition-all shrink-0 whitespace-nowrap min-h-[36px] ${
                           searchType === label
                             ? "bg-primary text-primary-foreground shadow-sm"
                             : "text-muted-foreground hover:text-foreground hover:bg-secondary/80"
@@ -1303,7 +1303,7 @@ export default function Index() {
                     ))}
                   </div>
 
-                  <div className="mx-3 mt-2 h-px bg-border/50" />
+                  <div className="mx-3 mt-1.5 h-px bg-border/50" />
 
                   {/* Search rows */}
                   <div className="p-2">
@@ -1327,14 +1327,14 @@ export default function Index() {
                     {/* Second row: type dropdown + AI + Search */}
                     <div className="flex gap-1.5 items-stretch">
                       {searchType !== "Professionals" && (
-                        <div className="flex-1 min-w-0">
+                        <div className="flex-1 min-w-0 overflow-hidden">
                           <PropertyTypeDropdown value={selectedPropertyType} onChange={setSelectedPropertyType} />
                         </div>
                       )}
                       {searchType !== "Professionals" && (
                         <button
                           onClick={() => setShowAI(true)}
-                          className="flex items-center justify-center gap-1 px-2.5 py-2 rounded-xl text-xs font-semibold transition-all text-primary hover:bg-primary/10 shrink-0 border border-border min-w-[40px]"
+                          className="flex items-center justify-center gap-1 px-2.5 py-2 rounded-xl text-xs font-semibold transition-all text-primary hover:bg-primary/10 shrink-0 border border-border min-w-[44px] min-h-[44px]"
                         >
                           <Sparkles className="w-3.5 h-3.5 shrink-0" />
                           <span className="hidden sm:inline">AI</span>
@@ -1343,7 +1343,7 @@ export default function Index() {
                       <Button
                         size="default"
                         onClick={handleSearch}
-                        className={`bg-primary hover:opacity-90 border-0 text-primary-foreground rounded-xl font-semibold shrink-0 px-4 ${searchType === "Professionals" ? "flex-1" : ""}`}
+                        className={`bg-primary hover:opacity-90 border-0 text-primary-foreground rounded-xl font-semibold shrink-0 px-4 min-h-[44px] ${searchType === "Professionals" ? "flex-1" : ""}`}
                       >
                         <Search className="w-4 h-4 sm:mr-2" />
                         <span className="hidden sm:inline">Search</span>
