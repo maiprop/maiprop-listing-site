@@ -88,7 +88,7 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
             : "bg-background/60 backdrop-blur-md border-b border-border/30"
       }`}
     >
-      <div className="container flex items-center justify-between h-16">
+      <div className="container flex items-center justify-between h-16 px-4 sm:px-6">
         {/* Logo */}
         <Link to="/" className="flex items-center shrink-0">
           <img
