@@ -7,7 +7,7 @@ import {
   Shield, FileText, Zap, ExternalLink, Lock, BarChart2, Eye,
   Home, Clock, Check, Gavel, Download, Loader2, CheckCircle,
   Thermometer, Wrench, TreePine, Flame, Wifi, Car, Building2,
-  Info, ChevronDown, ChevronUp, Euro, Tag, Layers, LayoutGrid, Bell, Globe, Scale, History } from
+  Info, ChevronDown, ChevronUp, Euro, Tag, Layers, LayoutGrid, Bell, Globe, Scale, History, ClipboardList } from
 "lucide-react";
 import { getSubtypeLabel, PROPERTY_TYPE_MAP, type PropertyTypeKey } from "@/lib/propertyTypes";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,7 @@ import NeighbourhoodReport from "@/components/NeighbourhoodReport";
 import { walkScoreLabel, walkScoreColour } from "@/lib/walkScore";
 import { HEATING_TYPES, CONDITION_OPTIONS } from "@/lib/filterConfig";
 import AIAssistantWidget from "@/components/AIAssistantWidget";
+import { AuctionAlertModal } from "@/components/AuctionAlertModal";
 import { PastDealsTable } from "@/components/PastDealsTable";
 import { getStreetViewProxyUrl } from "@/lib/config";
 import { dbListingToCard } from "@/lib/listingUtils";
@@ -167,7 +168,7 @@ export default function PropertyDetail() {
   const [reportLoading, setReportLoading] = useState(false);
   const [descExpanded, setDescExpanded] = useState(false);
   const [walkScore, setWalkScore] = useState<number | null>(null);
-  // Auction alert UI removed
+  const [auctionAlertOpen, setAuctionAlertOpen] = useState(false);
 
   // AI Market Insights — dynamically loaded from property-valuation edge function
   const [aiInsightsData, setAiInsightsData] = useState<{
@@ -313,7 +314,7 @@ export default function PropertyDetail() {
   const listingType = db.listing_type;
   const propertyType = db.property_type;
   const subtype = (db as any)?.commercial_subtype as string | null;
-  const descriptionRaw = db.description;
+  const description = db.description;
   const ownerProfile = (dbListing as any).profiles;
   const ownerParticipantType = (dbListing as any).ownerParticipantType ?? null;
   const pricePerSqm = db.price_per_sqm;
@@ -321,24 +322,6 @@ export default function PropertyDetail() {
   const isLandType = propertyType === "land";
   const isAuction = listingType === "auction";
   const websiteUrl = (db as any)?.website_url as string | null;
-
-  // Some scraped descriptions include a standalone price line (e.g. "– €1.300").
-  // Strip obvious price-only lines before rendering.
-  const description = (descriptionRaw || "")
-    .split(/\r?\n/)
-    .filter((line) => {
-      const t = line.trim();
-      if (!t) return true;
-      // Standalone price-like line
-      if (/^[-–—]?\s*€\s*[\d.,]+$/i.test(t)) return false;
-      if (/^[-–—]?\s*[\d.,]+\s*€$/i.test(t)) return false;
-      // Common prefixes from scrapes
-      if (/^(market value|starting bid|price)\s*:/i.test(t)) return false;
-      if (/^(τιμή|τιμη)\s*:/i.test(t)) return false;
-      return true;
-    })
-    .join("\n")
-    .trim();
 
   // Extract ownership info from tags (for auction listings)
   const tags: string[] = (db as any)?.tags ?? [];
@@ -642,9 +625,15 @@ export default function PropertyDetail() {
                         {address && address !== city ? `${address}, ${city}` : city}
                         {db.region ? ` · ${db.region}` : ""}
                       </span>
+                      {isAuction && pricePerSqm &&
+                      <span className="ml-2 text-xs font-semibold text-muted-foreground border-l border-border pl-2">
+                        €{Number(pricePerSqm).toLocaleString()}/m²
+                      </span>
+                      }
                     </div>
                   </div>
 
+                  {!isAuction &&
                   <div className="text-right shrink-0">
                     <div className="font-display text-3xl font-black text-foreground">
                       €{price.toLocaleString()}
@@ -656,6 +645,7 @@ export default function PropertyDetail() {
                       </div>
                     }
                   </div>
+                  }
                 </div>
 
                 {/* Key stats bar */}
@@ -868,7 +858,6 @@ export default function PropertyDetail() {
                       ⚡ Judicial auction — buyer conducts own due diligence. maiProp provides AI-powered pre-auction analysis.
                     </div>
 
-                    {/* Auction external links + alerts removed */}
 
                     {/* Past Deals table — premium only */}
                     {isPro && (
@@ -958,7 +947,7 @@ export default function PropertyDetail() {
               }
 
               {/* ── Website Link (distinctive section) ── */}
-              {!isAuction && websiteUrl &&
+              {websiteUrl &&
               <Section>
                   <SectionHeader icon={Globe} title="Official Website" />
                   
@@ -1013,19 +1002,19 @@ export default function PropertyDetail() {
 
               {/* ① Contact / Buy card — Starting Bid FIRST */}
               <div className="glass-card rounded-2xl overflow-hidden border border-primary/10 shadow-elevated">
-                {/* Price header */}
+                {/* Price header — hidden for auctions (price shown in Auction Details section) */}
+                {!isAuction &&
                 <div className="bg-gradient-to-br from-primary/10 to-accent/5 border-b border-border px-5 py-4">
                   <div className="flex items-end justify-between">
                     <div>
                       <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">
-                        {listingType === "rent" ? "Monthly Rent" : isAuction ? "Starting Bid" : "Asking Price"}
+                        {listingType === "rent" ? "Monthly Rent" : "Asking Price"}
                       </p>
                       <p className="font-display text-2xl font-black text-foreground">
-                        €{(isAuction && db.auction_starting_bid ? Number(db.auction_starting_bid) : price).toLocaleString()}
+                        €{price.toLocaleString()}
                         {listingType === "rent" && <span className="text-sm font-normal text-muted-foreground">/mo</span>}
                       </p>
-                      {isAuction && db.auction_starting_bid && null}
-                      {!isAuction && pricePerSqm && <p className="text-xs text-muted-foreground mt-0.5">€{Number(pricePerSqm).toLocaleString()}/m²</p>}
+                      {pricePerSqm && <p className="text-xs text-muted-foreground mt-0.5">€{Number(pricePerSqm).toLocaleString()}/m²</p>}
                     </div>
                     <div className="text-right">
                       <div className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -1035,6 +1024,7 @@ export default function PropertyDetail() {
                     </div>
                   </div>
                 </div>
+                }
 
                 {/* Agent info — hidden for auctions */}
                 {!isAuction &&
@@ -1081,11 +1071,9 @@ export default function PropertyDetail() {
                   </div>
                 }
 
-                {/* Actions */}
-                <div className="p-5 space-y-2.5">
-                  {isAuction ? null :
-
-                  ownerIsPro ?
+                {/* Actions — hidden for auctions */}
+                {!isAuction && <div className="p-5 space-y-2.5">
+                  {ownerIsPro ?
                   <>
                       <Button className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2 h-10"
                     onClick={handleContact} disabled={startConversation.isPending}>
@@ -1116,7 +1104,7 @@ export default function PropertyDetail() {
                   <p className="text-xs text-muted-foreground">Messaging and calendar sync available for Pro property owners.</p>
 
                   }
-                </div>
+                </div>}
 
                 {/* Response time — only non-auction */}
                 {!isAuction &&
@@ -1204,110 +1192,103 @@ export default function PropertyDetail() {
 
               /* Non-pro: static locked card — no edge function calls */
               <div className="glass-card rounded-2xl overflow-hidden border border-primary/20">
-                  <div className="flex items-center gap-2 px-5 py-3.5 bg-primary/5 border-b border-primary/20">
-                    <Zap className="w-4 h-4 text-primary" />
-                    <h4 className="font-display font-semibold text-sm flex-1">Property Valuation</h4>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/15 text-primary font-semibold">Pro</span>
-                  </div>
-                  <div className="p-6 flex flex-col items-center gap-4 text-center min-h-[220px] justify-center">
-                    <Lock className="w-6 h-6 text-primary" />
-                    <div>
-                      <p className="font-display font-bold text-sm">Pro Feature</p>
-                      <p className="text-xs text-muted-foreground mt-1 leading-relaxed max-w-[240px] mx-auto">
-                        Full AI valuation — price range, confidence, legal &amp; tax overlay, key factors.
-                      </p>
-                    </div>
-                    <Link
-                      to="/pricing"
-                      className="flex items-center justify-center gap-1.5 text-xs font-semibold bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors w-full max-w-[240px]"
-                    >
-                      <Zap className="w-3.5 h-3.5" /> Upgrade to Pro
+                <div className="flex items-center gap-2 px-5 py-3.5 bg-primary/5 border-b border-primary/20">
+                  <Zap className="w-4 h-4 text-primary" />
+                  <h4 className="font-display font-semibold text-sm flex-1">Property Valuation</h4>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/15 text-primary font-semibold">
+                    mAI Prop · 2026 Model
+                  </span>
+                </div>
+                <div className="p-5 text-center space-y-3">
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Type-specific AI valuation — price range, confidence, liquidity, and Greek legal/tax overlay.
+                  </p>
+                  <Button className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2" asChild>
+                    <Link to="/pricing">
+                      <Zap className="w-4 h-4" /> Upgrade to Pro
                     </Link>
-                  </div>
-                </div>)
+                  </Button>
+                  <p className="text-[10px] text-muted-foreground">Pro Feature · Unlock full valuations</p>
+                </div>
+              </div>)
               }
 
               {/* ④ Property Report — Pro only, 3 free/month, €9 each extra */}
-              <Section className={reportLoaded ? "border-primary/30" : ""}>
-                <div className="p-6">
-                  <div className="flex items-start gap-4">
-                    <div className="w-11 h-11 rounded-xl bg-gradient-primary flex items-center justify-center shrink-0">
-                      <BarChart2 className="w-5 h-5 text-primary-foreground" />
+              <div className={`glass-card rounded-2xl overflow-hidden border ${reportLoaded ? "border-primary/30" : "border-primary/20"}`}>
+                {/* Header — matches Property Valuation header exactly */}
+                <div className="flex items-center gap-2 px-5 py-3.5 bg-primary/5 border-b border-primary/20">
+                  <ClipboardList className="w-4 h-4 text-primary" />
+                  <h4 className="font-display font-semibold text-sm flex-1">Property Report</h4>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/15 text-primary font-semibold">
+                    mAI Prop · 2026 Model
+                  </span>
+                </div>
+
+                <div className="p-5">
+                  {!isPro ? (
+                    <div className="text-center space-y-3">
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Deep-dive: Area trends, comparable sales, property specifics analysis, and charts.
+                      </p>
+                      <Button className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2" asChild>
+                        <Link to="/pricing">
+                          <Zap className="w-4 h-4" /> Upgrade to Pro
+                        </Link>
+                      </Button>
+                      <p className="text-[10px] text-muted-foreground">Pro Feature · Unlock full reports</p>
                     </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-display font-semibold text-sm">Property Report</h3>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/15 text-primary font-semibold">Pro</span>
-                      </div>
+                  ) : reportLoaded ? (
+                    <div className="text-center space-y-3">
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Report loaded. Download your full PDF below.
+                      </p>
+                      <Button className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2">
+                        <Download className="w-4 h-4" /> Download PDF
+                      </Button>
+                      <p className="text-[10px] text-muted-foreground">Full · Instant · PDF export</p>
+                    </div>
+                  ) : reportCount >= REPORT_INCLUDED ? (
+                    <div className="text-center space-y-3">
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Included reports used this month. Extra reports cost €{REPORT_EXTRA_COST} each.
+                      </p>
+                      <Button className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2" asChild>
+                        <Link to="/pricing"><Zap className="w-4 h-4" /> Get Extra Report</Link>
+                      </Button>
+                      <p className="text-[10px] text-muted-foreground">€{REPORT_EXTRA_COST} per extra report</p>
+                    </div>
+                  ) : (
+                    <div className="text-center space-y-3">
                       {isPro && (
-                        <p className="text-xs text-muted-foreground mb-2 leading-relaxed">
-                          Deep-dive: Area trends, comparable sales, property specifics analysis, and charts.
+                        <p className="text-[10px] text-muted-foreground">
+                          {Math.max(0, REPORT_INCLUDED - reportCount)} of {REPORT_INCLUDED} reports remaining this month
                         </p>
                       )}
-                      {isPro && (
-                        <>
-                          <p className="text-[11px] text-muted-foreground mb-4">
-                            Pro includes {REPORT_INCLUDED} reports per month; extra reports cost €{REPORT_EXTRA_COST} each.
-                          </p>
-                          <div className="grid grid-cols-2 gap-2 mb-4">
-                            {["Cadastre Verification", "5-Year Price History", "Comparable Sales", "Investment Projection", "Legal Status Check", "Neighborhood Score"].map((item) => (
-                              <div key={item} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                <Check className="w-3 h-3 text-primary shrink-0" />{item}
-                              </div>
-                            ))}
-                          </div>
-                        </>
-                      )}
-                      {!isPro ? (
-                        <div className="flex flex-col items-center gap-4 text-center min-h-[220px] justify-center">
-                          <Lock className="w-6 h-6 text-primary" />
-                          <div>
-                            <p className="font-display font-bold text-sm">Pro Feature</p>
-                            <p className="text-xs text-muted-foreground mt-1 leading-relaxed max-w-[240px] mx-auto">
-                              Deep-dive: Area trends, comparable sales, property specifics analysis, and charts.
-                            </p>
-                          </div>
-                          <Link
-                            to="/pricing"
-                            className="flex items-center justify-center gap-1.5 text-xs font-semibold bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors w-full max-w-[240px]"
-                          >
-                            <Zap className="w-3.5 h-3.5" /> Upgrade to Pro
-                          </Link>
-                        </div>
-                      ) : reportLoaded ? (
-                        <Button variant="outline" className="border-primary/30 text-primary gap-2 text-sm">
-                          <Download className="w-4 h-4" /> Download PDF
-                        </Button>
-                      ) : reportCount >= REPORT_INCLUDED ? (
-                        <div className="text-center py-2">
-                          <p className="text-sm text-muted-foreground">Included reports used this month. Extra: €{REPORT_EXTRA_COST} each.</p>
-                          <Button variant="outline" size="sm" className="mt-2" asChild><Link to="/pricing">Get extra report</Link></Button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-3 flex-wrap">
-                          <Button
-                            className="bg-gradient-primary border-0 text-primary-foreground text-sm"
-                            onClick={async () => {
-                              if (!user || !id) return;
-                              setReportLoading(true);
-                              try {
-                                await recordReport.mutateAsync(id);
-                                setReportLoaded(true);
-                              } finally {
-                                setReportLoading(false);
-                              }
-                            }}
-                            disabled={reportLoading}
-                          >
-                            {reportLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <BarChart2 className="w-4 h-4" />}
-                            {reportLoading ? "Loading…" : "Load Report"}
-                          </Button>
-                        </div>
-                      )}
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Deep-dive: Area trends, comparable sales, property specifics analysis, and charts.
+                      </p>
+                      <Button
+                        className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2"
+                        onClick={async () => {
+                          if (!user || !id) return;
+                          setReportLoading(true);
+                          try {
+                            await recordReport.mutateAsync(id);
+                            setReportLoaded(true);
+                          } finally {
+                            setReportLoading(false);
+                          }
+                        }}
+                        disabled={reportLoading}
+                      >
+                        {reportLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ClipboardList className="w-4 h-4" />}
+                        {reportLoading ? "Loading…" : "Load Report"}
+                      </Button>
+                      <p className="text-[10px] text-muted-foreground">Full · Instant · Not a formal report</p>
                     </div>
-                  </div>
+                  )}
                 </div>
-              </Section>
+              </div>
 
               {/* Professional add-ons — valuation & legal */}
               <div className="glass-card rounded-2xl border border-border overflow-hidden">
@@ -1444,7 +1425,11 @@ export default function PropertyDetail() {
         }} />
       
 
-      {/* Auction alert UI removed */}
+      {/* Auction Alert Modal */}
+      <AuctionAlertModal
+        open={auctionAlertOpen}
+        onClose={() => setAuctionAlertOpen(false)} />
+      
     </div>);
 
 }

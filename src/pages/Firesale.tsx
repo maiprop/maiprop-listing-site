@@ -559,16 +559,16 @@ export default function Firesale() {
           <p className="reveal in-view text-[11px] font-bold uppercase tracking-widest text-muted-foreground text-center mb-6 sm:mb-8">
             How It Works
           </p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
             {steps.map((s, i) => (
               <div
                 key={s.step}
-                className={`reveal in-view reveal-delay-${i + 1} relative flex gap-4 md:flex-col md:gap-0 glass-card rounded-xl p-5 border border-border transition-all duration-300 hover:-translate-y-1 hover:shadow-elevated hover:border-primary/30`}
+                className={`reveal in-view reveal-delay-${i + 1} relative flex gap-4 md:flex-col md:gap-0 glass-card rounded-xl p-4 sm:p-5 border border-border transition-all duration-300 hover:-translate-y-1 hover:shadow-elevated hover:border-primary/30`}
               >
-                <div className="font-display text-5xl font-black gradient-text-cyan opacity-20 leading-none md:mb-3">
+                <div className="font-display text-4xl sm:text-5xl font-black gradient-text-cyan opacity-20 leading-none md:mb-3 shrink-0 w-12 md:w-auto">
                   {s.step}
                 </div>
-                <div>
+                <div className="flex-1 min-w-0">
                   <h3 className="font-display font-bold text-sm mb-1">{s.title}</h3>
                   <p className="text-xs text-muted-foreground leading-relaxed">{s.desc}</p>
                 </div>
