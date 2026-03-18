@@ -1074,29 +1074,7 @@ export default function PropertyDetail() {
                 {/* Actions */}
                 <div className="p-5 space-y-2.5">
                   {isAuction ?
-                  <>
-                      <Button
-                      className="w-full bg-gradient-gold border-0 text-background font-semibold gap-2 h-10"
-                      onClick={() => {
-                        if (!user) {toast.error("Sign in to set auction alerts");navigate("/login");return;}
-                        setAuctionAlertOpen(true);
-                      }}>
-                      
-                        <Bell className="w-4 h-4" />
-                        Set Auction Alert
-                      </Button>
-                      {websiteUrl &&
-                    <a
-                      href={websiteUrl.startsWith("http") ? websiteUrl : `https://${websiteUrl}`}
-                      target="_blank"
-                      rel="noopener noreferrer">
-                      
-                          <Button variant="outline" className="w-full border-border gap-2 h-9 text-xs">
-                            <ExternalLink className="w-3.5 h-3.5" />View on eAuction.gr
-                          </Button>
-                        </a>
-                    }
-                    </> :
+                  null :
 
                   ownerIsPro ?
                   <>
