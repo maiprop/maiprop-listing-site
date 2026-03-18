@@ -48,7 +48,7 @@ const BUYER_FREE_LIST = [
   "Professional directory access (up to 5 per category)",
 ];
 const BUYER_PRO: PlanFeature[] = [
-  { label: "Full AI Property Valuation", icon: BarChart2, free: false, paid: "5/month, €3 each extra" },
+  { label: "Property Valuation", icon: BarChart2, free: false, paid: "5/month, €3 each extra" },
   { label: "Property Reports", icon: FileText, free: false, paid: "3/month, €9 each extra" },
   { label: "All pro auction filters", icon: Filter, free: "None", paid: true },
   { label: "Priority auction alerts", icon: Bell, free: false, paid: true },
