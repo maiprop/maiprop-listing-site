@@ -740,7 +740,11 @@ export default function Auctions() {
           <div className="container">
             <div className="flex items-center gap-2 mb-2 sm:mb-3">
               <Gavel className="w-4 h-4 sm:w-5 sm:h-5 text-brand-indigo" />
-              <span className="text-[10px] sm:text-xs font-bold text-brand-indigo uppercase tracking-widest">Greek Auctions · Live Data</span>
+              <span
+                className="text-[10px] sm:text-xs font-bold uppercase tracking-widest bg-gradient-to-r from-brand-cyan via-primary-foreground to-brand-purple bg-clip-text text-transparent drop-shadow-[0_0_8px_rgba(255,255,255,0.35)]"
+              >
+                Greek Auctions · Live Data
+              </span>
             </div>
             <h1 className="font-display text-xl sm:text-4xl font-bold mb-1.5 sm:mb-2 text-white">Property Auctions</h1>
             <p className="text-white/60 text-xs sm:text-base max-w-xl">
