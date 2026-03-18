@@ -1071,12 +1071,9 @@ export default function PropertyDetail() {
                   </div>
                 }
 
-                {/* Actions */}
-                <div className="p-5 space-y-2.5">
-                  {isAuction ?
-                  null :
-
-                  ownerIsPro ?
+                {/* Actions — hidden for auctions */}
+                {!isAuction && <div className="p-5 space-y-2.5">
+                  {ownerIsPro ?
                   <>
                       <Button className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2 h-10"
                     onClick={handleContact} disabled={startConversation.isPending}>
