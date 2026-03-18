@@ -816,7 +816,7 @@ function OSDashboardMockup() {
             </div>
           </div>
           <div className="text-center pb-1.5">
-            <span className="text-[5.5px] uppercase tracking-widest" style={{ color: "rgba(255,255,255,0)" }}>
+            <span className="text-[5.5px] uppercase tracking-widest" style={{ color: "rgba(255,255,255)" }}>
               €/m² · Greek Real Estate Index
             </span>
           </div>
