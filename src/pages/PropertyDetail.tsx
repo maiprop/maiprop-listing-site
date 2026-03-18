@@ -625,9 +625,15 @@ export default function PropertyDetail() {
                         {address && address !== city ? `${address}, ${city}` : city}
                         {db.region ? ` · ${db.region}` : ""}
                       </span>
+                      {isAuction && pricePerSqm &&
+                      <span className="ml-2 text-xs font-semibold text-muted-foreground border-l border-border pl-2">
+                        €{Number(pricePerSqm).toLocaleString()}/m²
+                      </span>
+                      }
                     </div>
                   </div>
 
+                  {!isAuction &&
                   <div className="text-right shrink-0">
                     <div className="font-display text-3xl font-black text-foreground">
                       €{price.toLocaleString()}
@@ -639,6 +645,7 @@ export default function PropertyDetail() {
                       </div>
                     }
                   </div>
+                  }
                 </div>
 
                 {/* Key stats bar */}
@@ -1019,21 +1026,19 @@ export default function PropertyDetail() {
 
               {/* ① Contact / Buy card — Starting Bid FIRST */}
               <div className="glass-card rounded-2xl overflow-hidden border border-primary/10 shadow-elevated">
-                {/* Price header */}
+                {/* Price header — hidden for auctions (price shown in Auction Details section) */}
+                {!isAuction &&
                 <div className="bg-gradient-to-br from-primary/10 to-accent/5 border-b border-border px-5 py-4">
                   <div className="flex items-end justify-between">
                     <div>
                       <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">
-                        {listingType === "rent" ? "Monthly Rent" : isAuction ? "Starting Bid" : "Asking Price"}
+                        {listingType === "rent" ? "Monthly Rent" : "Asking Price"}
                       </p>
                       <p className="font-display text-2xl font-black text-foreground">
-                        €{(isAuction && db.auction_starting_bid ? Number(db.auction_starting_bid) : price).toLocaleString()}
+                        €{price.toLocaleString()}
                         {listingType === "rent" && <span className="text-sm font-normal text-muted-foreground">/mo</span>}
                       </p>
-                      {isAuction && db.auction_starting_bid &&
-                      <p className="text-xs text-muted-foreground mt-0.5">Market value: €{price.toLocaleString()}</p>
-                      }
-                      {!isAuction && pricePerSqm && <p className="text-xs text-muted-foreground mt-0.5">€{Number(pricePerSqm).toLocaleString()}/m²</p>}
+                      {pricePerSqm && <p className="text-xs text-muted-foreground mt-0.5">€{Number(pricePerSqm).toLocaleString()}/m²</p>}
                     </div>
                     <div className="text-right">
                       <div className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -1043,6 +1048,7 @@ export default function PropertyDetail() {
                     </div>
                   </div>
                 </div>
+                }
 
                 {/* Agent info — hidden for auctions */}
                 {!isAuction &&
