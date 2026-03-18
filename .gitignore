@@ -28,3 +28,6 @@ COMMIT_HISTORY*.txt*
 
 # Local / separate project (not part of this repo)
 mai-pro-os/
+
+# Supabase local temp (generated)
+supabase/.temp/
