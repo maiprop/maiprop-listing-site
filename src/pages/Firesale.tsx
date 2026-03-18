@@ -388,7 +388,7 @@ export default function Firesale() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pb-bottom-nav lg:pb-0">
       <Navbar />
       <div className="pt-16">
         {/* Hero */}
@@ -473,14 +473,14 @@ export default function Firesale() {
         </div>
 
         {/* Main section: Form + Investor pitch */}
-        <div className="container py-8 sm:py-16 pb-24 lg:pb-16">
+        <div className="container py-8 sm:py-16 pb-12">
           <div className="grid lg:grid-cols-[1fr_420px] gap-6 sm:gap-10 items-start">
             {/* Left: Form */}
             <div className="reveal in-view">
               {!submitted ? (
                 <div className="glass-card rounded-2xl border border-primary/20 overflow-hidden shadow-elevated animate-fade-in">
                   {/* Header */}
-                  <div className="px-7 py-5 border-b border-border bg-gradient-to-r from-destructive/5 to-transparent">
+                  <div className="px-5 sm:px-7 py-5 border-b border-border bg-gradient-to-r from-destructive/5 to-transparent">
                     <div className="flex items-center gap-3">
                       <div className="w-9 h-9 rounded-xl bg-destructive/10 flex items-center justify-center">
                         <Flame className="w-4.5 h-4.5 text-destructive" />
@@ -502,7 +502,7 @@ export default function Firesale() {
                     </div>
                   </div>
 
-                  <div className="p-7">
+                  <div className="p-5 sm:p-7">
                     {step === 1 && (
                       <div className="space-y-5">
                         <h4 className="font-display font-semibold text-sm">Property Details</h4>

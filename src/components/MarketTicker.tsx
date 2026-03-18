@@ -38,7 +38,7 @@ const STATIC_PRICES: Record<string, number> = {
 
 function Sparkline({ city, up }: { city: string; up: boolean }) {
   const d = SPARKLINES[city] ?? SPARKLINES.Athens;
-  const color = up ? "hsl(var(--brand-indigo))" : "hsl(0 70% 55%)";
+  const color = up ? "hsl(var(--brand-cyan))" : "hsl(0 70% 55%)";
   return (
     <svg width="40" height="20" viewBox="0 0 48 22" fill="none" className="shrink-0">
       <defs>
@@ -116,36 +116,36 @@ export function MarketTicker() {
     <div
       className="relative rounded-2xl overflow-hidden"
       style={{
-        background: "hsl(220 40% 6% / 0.55)",
+        background: "hsl(270 28% 8% / 0.55)",
         backdropFilter: "blur(16px)",
         WebkitBackdropFilter: "blur(16px)",
-        border: "1px solid hsl(var(--brand-indigo) / 0.14)",
-        boxShadow: "0 0 0 1px hsl(var(--brand-indigo) / 0.04), 0 8px 32px -8px hsl(var(--brand-indigo) / 0.12)",
+        border: "1px solid hsl(var(--brand-purple) / 0.16)",
+        boxShadow: "0 0 0 1px hsl(var(--brand-purple) / 0.05), 0 8px 32px -8px hsl(var(--brand-purple) / 0.14)",
       }}
     >
       {/* Subtle ambient glow */}
       <div
         className="absolute -inset-px rounded-2xl pointer-events-none"
-        style={{ boxShadow: "0 0 24px 2px hsl(var(--brand-indigo) / 0.05)" }}
+        style={{ boxShadow: "0 0 26px 2px hsl(var(--brand-cyan) / 0.06)" }}
       />
 
       {/* Header */}
       <div
         className="flex items-center justify-between px-4 py-2 border-b"
-        style={{ borderColor: "hsl(var(--brand-indigo) / 0.1)", background: "hsl(220 40% 5% / 0.4)" }}
+        style={{ borderColor: "hsl(var(--brand-purple) / 0.12)", background: "hsl(270 28% 7% / 0.35)" }}
       >
         <div className="flex items-center gap-2">
           <span className="relative flex w-2 h-2 shrink-0">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-40" style={{ background: "hsl(var(--brand-indigo))" }} />
-            <span className="relative inline-flex rounded-full w-2 h-2" style={{ background: "hsl(var(--brand-indigo))" }} />
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-40" style={{ background: "hsl(var(--brand-cyan))" }} />
+            <span className="relative inline-flex rounded-full w-2 h-2" style={{ background: "hsl(var(--brand-cyan))" }} />
           </span>
-          <span className="text-[10px] font-black tracking-widest uppercase" style={{ color: "hsl(var(--brand-purple))" }}>
+          <span className="text-[10px] font-black tracking-widest uppercase" style={{ color: "hsl(var(--brand-cyan-glow))" }}>
             Live Market
           </span>
         </div>
-        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full" style={{ background: "hsl(var(--brand-indigo) / 0.08)", border: "1px solid hsl(var(--brand-indigo) / 0.18)" }}>
-          <span className="w-1 h-1 rounded-full animate-pulse" style={{ background: "hsl(var(--brand-indigo))" }} />
-          <span className="text-[8px] font-black tracking-widest uppercase" style={{ color: "hsl(var(--brand-purple))" }}>
+        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full" style={{ background: "hsl(var(--brand-cyan) / 0.10)", border: "1px solid hsl(var(--brand-cyan) / 0.22)" }}>
+          <span className="w-1 h-1 rounded-full animate-pulse" style={{ background: "hsl(var(--brand-cyan))" }} />
+          <span className="text-[8px] font-black tracking-widest uppercase" style={{ color: "hsl(var(--brand-cyan-glow))" }}>
             {isLoading ? "…" : "LIVE"}
           </span>
         </div>
@@ -166,9 +166,9 @@ export function MarketTicker() {
                 style={{
                   height: "36px",
                   background: isFlickering
-                    ? "hsl(var(--brand-indigo) / 0.20)"
-                    : "hsl(220 40% 6% / 0.65)",
-                  borderBottom: "1px solid hsl(var(--brand-indigo) / 0.05)",
+                    ? "hsl(var(--brand-purple) / 0.18)"
+                    : "hsl(270 28% 8% / 0.62)",
+                  borderBottom: "1px solid hsl(var(--brand-purple) / 0.08)",
                 }}
               >
                 <span
@@ -191,7 +191,7 @@ export function MarketTicker() {
                   className="w-14 text-right text-[10px] font-black tabular-nums px-1 py-0.5 rounded"
                   style={{
                     color: "hsl(0 0% 100%)",
-                    background: row.up ? "hsl(var(--brand-indigo))" : "hsl(0 72% 55%)",
+                    background: row.up ? "hsl(var(--brand-cyan) / 0.92)" : "hsl(0 72% 55%)",
                   }}
                 >
                   {row.up ? "▲" : "▼"} {Math.abs(row.change).toFixed(1)}%

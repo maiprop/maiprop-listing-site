@@ -368,13 +368,13 @@
     content: '';
     width: 8px;
     height: 8px;
-    background: hsl(var(--brand-indigo));
+    background: hsl(var(--brand-cyan));
     border-radius: 50%;
     animation: pulse-live 1.5s ease-in-out infinite;
   }
   @keyframes pulse-live {
-    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 hsl(var(--brand-indigo) / 0.6); }
-    50% { opacity: 0.8; box-shadow: 0 0 0 6px hsl(var(--brand-indigo) / 0); }
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 hsl(var(--brand-cyan) / 0.55); }
+    50% { opacity: 0.8; box-shadow: 0 0 0 6px hsl(var(--brand-cyan) / 0); }
   }
 
   .section-divider {
@@ -407,7 +407,7 @@
   }
 
   .chat-bubble-sent {
-    background: var(--gradient-primary);
+    background: linear-gradient(135deg, hsl(var(--brand-purple)) 0%, hsl(var(--brand-cyan)) 100%);
     color: hsl(0 0% 100%);
     border-radius: 18px 18px 4px 18px;
   }
@@ -439,6 +439,11 @@
 
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Reserve space for the fixed mobile bottom nav (h-14) + safe-area inset */
+.pb-bottom-nav {
+  padding-bottom: calc(var(--bottom-nav-h, 56px) + env(safe-area-inset-bottom, 0px));
 }
 
 /* ── Firesale hero animated glow orbs ─────────────────────────────────── */

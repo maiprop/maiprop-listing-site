@@ -11,6 +11,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AdminRoute } from "@/components/AdminRoute";
 import { SellerRoute } from "@/components/SellerRoute";
 import { InvestorRoute } from "@/components/InvestorRoute";
+import { BottomNav } from "@/components/BottomNav";
 import AIAssistantWidget from "@/components/AIAssistantWidget";
 import Index from "./pages/Index";
 const Listings = lazy(() => import("./pages/Listings"));
@@ -108,6 +109,7 @@ const App = () => (
                     </Routes>
                   </Suspense>
                   <GlobalAIWidget />
+                  <BottomNav />
                 </BrowserRouter>
               </TooltipProvider>
         </AuthProvider>
