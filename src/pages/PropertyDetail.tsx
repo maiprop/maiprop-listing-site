@@ -625,6 +625,11 @@ export default function PropertyDetail() {
                         {address && address !== city ? `${address}, ${city}` : city}
                         {db.region ? ` · ${db.region}` : ""}
                       </span>
+                      {isAuction && pricePerSqm &&
+                      <span className="ml-2 text-xs font-semibold text-muted-foreground border-l border-border pl-2">
+                        €{Number(pricePerSqm).toLocaleString()}/m²
+                      </span>
+                      }
                     </div>
                   </div>
 
