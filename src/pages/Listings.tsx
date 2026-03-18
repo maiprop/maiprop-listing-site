@@ -568,10 +568,10 @@ export default function Listings() {
         {/* Sticky search bar */}
         <div className="bg-card border-b border-border sticky top-16 z-40">
           <div className="container py-2 sm:py-4">
-            {/* Row 1 on mobile: Search + Map/Grid toggle */}
+            {/* Row 1 on mobile: Search + Map/Grid toggle + Filters */}
             <div className="flex gap-2 items-center mb-2 sm:mb-0 sm:hidden">
               {/* Search */}
-              <div className="flex-1 flex items-center gap-2 bg-secondary rounded-xl px-3 py-2.5 border border-border focus-within:border-primary transition-colors">
+              <div className="flex-1 flex items-center gap-2 bg-secondary rounded-xl px-3 py-2.5 border border-border focus-within:border-primary transition-colors min-w-0">
                 <Search className="w-4 h-4 text-muted-foreground shrink-0" />
                 <input
                   type="text"
@@ -584,19 +584,19 @@ export default function Listings() {
                   <button onClick={() => setParam("city", "")}><X className="w-3.5 h-3.5 text-muted-foreground" /></button>
                 )}
               </div>
-              {/* Map/Grid/Filters row */}
+              {/* Map/Grid toggle */}
               <div className="flex rounded-xl border border-border overflow-hidden shrink-0">
                 <button onClick={() => setViewMode("grid")} title="Grid"
-                  className={`p-2.5 transition-colors ${viewMode === "grid" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"}`}>
+                  className={`p-2.5 min-w-[38px] transition-colors ${viewMode === "grid" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"}`}>
                   <LayoutGrid className="w-4 h-4" />
                 </button>
                 <button onClick={() => setViewMode("map")} title="Map"
-                  className={`p-2.5 transition-colors ${viewMode === "map" || viewMode === "split" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"}`}>
+                  className={`p-2.5 min-w-[38px] transition-colors ${viewMode === "map" || viewMode === "split" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"}`}>
                   <Map className="w-4 h-4" />
                 </button>
               </div>
               <Button variant="outline" size="sm"
-                className={`shrink-0 px-3 h-[38px] ${showFilters ? "bg-primary/10 border-primary/30 text-primary" : "border-border"}`}
+                className={`shrink-0 px-3 h-[38px] min-w-[38px] ${showFilters ? "bg-primary/10 border-primary/30 text-primary" : "border-border"}`}
                 onClick={() => setShowFilters(!showFilters)}>
                 <SlidersHorizontal className="w-4 h-4" />
                 {activeFilterCount > 0 && (
@@ -606,7 +606,7 @@ export default function Listings() {
             </div>
 
             {/* Row 2 on mobile: scrollable type/price/sort chips */}
-            <div className="flex gap-2 items-center overflow-x-auto scrollbar-none sm:hidden pb-0.5">
+            <div className="flex gap-2 items-center overflow-x-auto scrollbar-none sm:hidden pb-0.5 mt-1.5">
               <ListingTypeButton value={selectedListingType} onChange={v => setParam("listing_type", v)} />
               <PropertyTypeButton
                 value={selectedType}
