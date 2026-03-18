@@ -791,13 +791,16 @@ export default function Auctions() {
         <div className="container pb-3 sm:pb-4">
           <div className="flex items-center justify-between sm:justify-end gap-2">
             {/* City select — visible on mobile as part of toolbar */}
-            <select
-              value={selectedCity}
-              onChange={(e) => setSelectedCity(e.target.value)}
-              className="sm:hidden flex-1 appearance-none bg-secondary border border-border rounded-xl px-3 py-2 text-sm text-foreground outline-none focus:border-primary cursor-pointer"
-            >
-              {cityOptions.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
+            <div className="sm:hidden relative flex-1 min-w-0">
+              <select
+                value={selectedCity}
+                onChange={(e) => setSelectedCity(e.target.value)}
+                className="w-full h-9 appearance-none bg-secondary border border-border rounded-xl pl-3 pr-8 text-sm text-foreground outline-none focus:border-primary cursor-pointer"
+              >
+                {cityOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+            </div>
             {/* Filters toggle */}
             <Button
               variant="outline"

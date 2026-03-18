@@ -181,6 +181,28 @@ export default function Professionals() {
     el.scrollBy({ left: dir === "left" ? -step : step, behavior: "smooth" });
   };
 
+  const selectGroup = (groupId: string | null) => {
+    if (!groupId) {
+      setSelectedGroup(null);
+      setSearchParams((p) => {
+        const n = new URLSearchParams(p);
+        n.delete("category");
+        return n;
+      });
+      return;
+    }
+
+    const group = categoryGroups.find((g) => g.id === groupId) ?? null;
+    setSelectedGroup(group?.id ?? null);
+    const cat = group?.categories?.[0];
+    setSearchParams((p) => {
+      const n = new URLSearchParams(p);
+      if (cat) n.set("category", cat);
+      else n.delete("category");
+      return n;
+    });
+  };
+
   useEffect(() => {
     if (categoryFromUrl) {
       const g = categoryGroups.find((gr) => gr.categories.includes(categoryFromUrl));
@@ -276,7 +298,29 @@ export default function Professionals() {
         {/* ── Category Groups ─────────────────────────────────────────── */}
         <div className="bg-card/40 border-b border-border">
           <div className="container py-4 sm:py-6">
-            <div className="relative flex items-center gap-2">
+            {/* Mobile: compact dropdown */}
+            <div className="sm:hidden">
+              <label className="sr-only" htmlFor="professional-category-group">Category</label>
+              <div className="relative">
+                <select
+                  id="professional-category-group"
+                  value={selectedGroup ?? ""}
+                  onChange={(e) => selectGroup(e.target.value || null)}
+                  className="w-full h-10 appearance-none bg-secondary border border-border rounded-xl pl-3 pr-9 text-sm text-foreground outline-none focus:border-primary cursor-pointer"
+                >
+                  <option value="">All Professionals</option>
+                  {categoryGroups.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.emoji} {g.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none rotate-90" />
+              </div>
+            </div>
+
+            {/* Desktop/tablet: scrollable chips */}
+            <div className="relative hidden sm:flex items-center gap-2">
               <Button
                 variant="outline"
                 size="icon"
@@ -291,7 +335,7 @@ export default function Professionals() {
                 className="flex gap-2 overflow-x-auto scrollbar-none pb-1 flex-1 min-w-0 scroll-smooth snap-x snap-mandatory"
               >
               <button
-                onClick={() => { setSelectedGroup(null); setSearchParams((p) => { const n = new URLSearchParams(p); n.delete("category"); return n; }); }}
+                onClick={() => selectGroup(null)}
                 className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-sm font-medium border transition-all shrink-0 ${
                 !selectedGroup ?
                 "bg-secondary border-primary/40 text-foreground" :
@@ -301,8 +345,8 @@ export default function Professionals() {
               </button>
               <button
                 onClick={() => {
-                  if (selectedGroup === "agents") { setSelectedGroup(null); setSearchParams((p) => { const n = new URLSearchParams(p); n.delete("category"); return n; }); }
-                  else { setSelectedGroup("agents"); setSearchParams((p) => { const n = new URLSearchParams(p); n.set("category", "real_estate_agent"); return n; }); }
+                  if (selectedGroup === "agents") selectGroup(null);
+                  else selectGroup("agents");
                 }}
                 className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-sm font-semibold border transition-all shrink-0 snap-start ${
                  selectedGroup === "agents" ?
@@ -316,12 +360,8 @@ export default function Professionals() {
               <button
                 key={group.id}
                 onClick={() => {
-                  if (selectedGroup === group.id) { setSelectedGroup(null); setSearchParams((p) => { const n = new URLSearchParams(p); n.delete("category"); return n; }); }
-                  else {
-                    setSelectedGroup(group.id);
-                    const cat = group.categories[0];
-                    setSearchParams((p) => { const n = new URLSearchParams(p); if (cat) n.set("category", cat); else n.delete("category"); return n; });
-                  }
+                  if (selectedGroup === group.id) selectGroup(null);
+                  else selectGroup(group.id);
                 }}
                 className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-sm font-semibold border transition-all shrink-0 snap-start ${
                 selectedGroup === group.id ?
