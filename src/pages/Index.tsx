@@ -21,6 +21,7 @@ import {
   Lightbulb,
   Clock,
   TrendingUp,
+  TrendingDown,
   Shield,
   Zap,
   Building2,
@@ -267,53 +268,53 @@ function AISearchModal({
           {!user ? (
             <SignInForAI feature="AI Search" />
           ) : (
-            <>
-              <div className="flex items-center gap-2 bg-secondary rounded-xl px-4 py-3 border border-border focus-within:border-primary transition-colors">
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleSearch();
-                    if (e.key === "Escape") onClose();
-                  }}
-                  placeholder="e.g. quiet apartment near metro in Athens under 200k..."
-                  className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
-                  disabled={loading}
-                />
+          <>
+          <div className="flex items-center gap-2 bg-secondary rounded-xl px-4 py-3 border border-border focus-within:border-primary transition-colors">
+            <input
+              ref={inputRef}
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSearch();
+                if (e.key === "Escape") onClose();
+              }}
+              placeholder="e.g. quiet apartment near metro in Athens under 200k..."
+              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
+              disabled={loading}
+            />
 
+            <button
+              onClick={() => handleSearch()}
+              disabled={loading || !query.trim()}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-primary text-primary-foreground text-xs font-semibold disabled:opacity-50 transition-opacity"
+            >
+              {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowRight className="w-3.5 h-3.5" />}
+              {loading ? "Searching…" : "Search"}
+            </button>
+          </div>
+          <div className="mt-4">
+            <div className="flex items-center gap-1.5 mb-2.5">
+              <Lightbulb className="w-3.5 h-3.5 text-muted-foreground" />
+              <p className="text-[11px] text-muted-foreground font-medium">Try these examples</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {AI_SUGGESTIONS.map((s) => (
                 <button
-                  onClick={() => handleSearch()}
-                  disabled={loading || !query.trim()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-primary text-primary-foreground text-xs font-semibold disabled:opacity-50 transition-opacity"
+                  key={s}
+                  onClick={() => {
+                    setQuery(s);
+                    handleSearch(s);
+                  }}
+                  disabled={loading}
+                  className="px-2.5 py-1.5 rounded-lg bg-secondary border border-border text-xs text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors disabled:opacity-50 text-left"
                 >
-                  {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowRight className="w-3.5 h-3.5" />}
-                  {loading ? "Searching…" : "Search"}
+                  {s}
                 </button>
-              </div>
-              <div className="mt-4">
-                <div className="flex items-center gap-1.5 mb-2.5">
-                  <Lightbulb className="w-3.5 h-3.5 text-muted-foreground" />
-                  <p className="text-[11px] text-muted-foreground font-medium">Try these examples</p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {AI_SUGGESTIONS.map((s) => (
-                    <button
-                      key={s}
-                      onClick={() => {
-                        setQuery(s);
-                        handleSearch(s);
-                      }}
-                      disabled={loading}
-                      className="px-2.5 py-1.5 rounded-lg bg-secondary border border-border text-xs text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors disabled:opacity-50 text-left"
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </>
+              ))}
+            </div>
+          </div>
+          </>
           )}
         </div>
       </div>
@@ -816,7 +817,7 @@ function OSDashboardMockup() {
             </div>
           </div>
           <div className="text-center pb-1.5">
-            <span className="text-[5.5px] uppercase tracking-widest" style={{ color: "rgba(255,255,255)" }}>
+            <span className="text-[5.5px] uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.2)" }}>
               €/m² · Greek Real Estate Index
             </span>
           </div>
@@ -995,6 +996,135 @@ export default function Index() {
   // Timeout so listing queries never hang forever (e.g. Supabase unreachable)
   const queryTimeout = <T,>(p: Promise<T>, ms: number): Promise<T> =>
     Promise.race([p, new Promise<T>((_, rej) => setTimeout(() => rej(new Error("Request timeout")), ms))]);
+
+  // ── Popular Locations (live counts + price trend) ──────────────────────────
+  const popularLocationsFallback = [
+    {
+      name: "Athens",
+      listings: 24860,
+      trend: "+1.2%",
+      trendUp: true,
+      image: "https://images.unsplash.com/photo-1555993539-1732b0258235?w=600&q=80",
+    },
+    {
+      name: "Thessaloniki",
+      listings: 8240,
+      trend: "+0.8%",
+      trendUp: true,
+      image: thessalonikiLandmark,
+    },
+    {
+      name: "Mykonos",
+      listings: 1820,
+      trend: "+2.3%",
+      trendUp: true,
+      image: "https://images.unsplash.com/photo-1533104816931-20fa691ff6ca?w=600&q=80",
+    },
+    {
+      name: "Santorini",
+      listings: 1240,
+      trend: "+1.9%",
+      trendUp: true,
+      image: "https://images.unsplash.com/photo-1570077188670-e3a8d69ac5ff?w=600&q=80",
+    },
+  ] as const;
+
+  type PopularLocation = (typeof popularLocationsFallback)[number];
+
+  const {
+    data: popularLocationsData,
+    isLoading: popularLocationsLoading,
+    isError: popularLocationsError,
+  } = useQuery({
+    queryKey: ["homepage-popular-locations", "v2"],
+    enabled: locationsInView,
+    staleTime: 10 * 60 * 1000,
+    queryFn: async () => {
+      const cities = popularLocationsFallback.map((c) => c.name);
+
+      // 1) Active listings count per city (public via RLS)
+      const counts = await Promise.all(
+        cities.map(async (city) => {
+          const { count, error } = await supabase
+            .from("listings")
+            .select("id", { count: "exact", head: true })
+            .eq("status", "active")
+            .eq("city", city);
+          if (error) throw error;
+          return [city, Number(count ?? 0)] as const;
+        })
+      );
+      const listingsByCity: Record<string, number> = Object.fromEntries(counts);
+
+      // 2) Trend: avg price_per_sqm change between last 30 days and previous 30 days (sale listings)
+      const now = new Date();
+      const currStart = new Date(now);
+      currStart.setDate(currStart.getDate() - 30);
+      const prevStart = new Date(now);
+      prevStart.setDate(prevStart.getDate() - 60);
+
+      const { data, error } = await supabase
+        .from("listings")
+        .select("city, price_per_sqm, created_at")
+        .eq("status", "active")
+        .eq("listing_type", "sale")
+        .in("city", cities)
+        .not("price_per_sqm", "is", null)
+        .gte("created_at", prevStart.toISOString())
+        .lt("created_at", now.toISOString());
+
+      if (error) throw error;
+
+      const currentPrices: Record<string, number[]> = {};
+      const prevPrices: Record<string, number[]> = {};
+
+      (data ?? []).forEach((row: { city?: string; price_per_sqm?: number | string | null; created_at?: string }) => {
+        const city = row.city?.trim();
+        if (!city) return;
+        const p = row.price_per_sqm == null ? NaN : Number(row.price_per_sqm);
+        if (!Number.isFinite(p)) return;
+        const createdAt = row.created_at ? new Date(row.created_at) : null;
+        if (!createdAt) return;
+        if (createdAt >= currStart) {
+          currentPrices[city] = currentPrices[city] ?? [];
+          currentPrices[city].push(p);
+        } else {
+          prevPrices[city] = prevPrices[city] ?? [];
+          prevPrices[city].push(p);
+        }
+      });
+
+      const round1 = (n: number) => Math.round(n * 10) / 10;
+
+      const makeTrend = (city: string, fallback: PopularLocation) => {
+        const prev = prevPrices[city] ?? [];
+        const curr = currentPrices[city] ?? [];
+        // Need a minimum sample to avoid crazy swings
+        if (prev.length < 2 || curr.length < 2) {
+          return { trend: fallback.trend, trendUp: fallback.trendUp };
+        }
+        const prevAvg = prev.reduce((a, b) => a + b, 0) / prev.length;
+        const currAvg = curr.reduce((a, b) => a + b, 0) / curr.length;
+        if (!Number.isFinite(prevAvg) || prevAvg <= 0 || !Number.isFinite(currAvg)) {
+          return { trend: fallback.trend, trendUp: fallback.trendUp };
+        }
+        const pct = ((currAvg - prevAvg) / prevAvg) * 100;
+        const up = pct >= 0;
+        const abs = Math.abs(round1(pct));
+        const label = `${up ? "+" : "-"}${abs.toFixed(1)}%`;
+        return { trend: label, trendUp: up };
+      };
+
+      const fallbackByCity = Object.fromEntries(popularLocationsFallback.map((c) => [c.name, c])) as Record<string, PopularLocation>;
+
+      // Build final cards
+      return cities.map((city) => {
+        const fallback = fallbackByCity[city];
+        const { trend, trendUp } = makeTrend(city, fallback);
+        return { ...fallback, listings: listingsByCity[city] ?? fallback.listings, trend, trendUp };
+      });
+    },
+  });
 
   // DB listings for homepage sections — use separate lightweight queries with limits
   const featuredSelect =
@@ -1244,24 +1374,14 @@ export default function Index() {
               <div className="relative inline-flex mb-3 sm:mb-7 animate-fade-in-up" style={{ animationDelay: "0s" }}>
                 <span
                   className="absolute inset-0 rounded-full animate-pulse"
-                  style={{
-                    boxShadow: "0 0 0 4px hsl(var(--brand-cyan) / 0.16), 0 0 18px 4px hsl(var(--brand-purple) / 0.12)",
-                  }}
+                  style={{ boxShadow: "0 0 0 4px hsl(var(--brand-cyan) / 0.16), 0 0 18px 4px hsl(var(--brand-purple) / 0.12)" }}
                 />
                 <div className="relative inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/15 border border-white/30 backdrop-blur-sm">
                   <span className="relative flex w-2 h-2 shrink-0">
-                    <span
-                      className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-60"
-                      style={{ background: "hsl(var(--brand-cyan))" }}
-                    />
-                    <span
-                      className="relative inline-flex rounded-full w-2 h-2"
-                      style={{ background: "hsl(var(--brand-cyan))" }}
-                    />
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-60" style={{ background: "hsl(var(--brand-cyan))" }} />
+                    <span className="relative inline-flex rounded-full w-2 h-2" style={{ background: "hsl(var(--brand-cyan))" }} />
                   </span>
-                  <span className="text-[11px] sm:text-xs font-semibold text-white">
-                    Greece's #1 AI-Powered Property Platform
-                  </span>
+                  <span className="text-[11px] sm:text-xs font-semibold text-white">Greece's #1 AI-Powered Property Platform</span>
                 </div>
               </div>
 
@@ -1270,8 +1390,7 @@ export default function Index() {
                 className="font-display font-black leading-[1.1] mb-4 sm:mb-6 animate-fade-in-up text-white break-words"
                 style={{ fontSize: "clamp(1.4rem, 6.5vw, 4.5rem)", animationDelay: "0.08s" }}
               >
-                Find your perfect
-                <br className="sm:hidden" /> property in Greece
+                Find your perfect<br className="sm:hidden" /> property in Greece
                 <div className="mt-1">
                   <span
                     className="bg-gradient-to-r from-white via-brand-cyan to-brand-purple bg-clip-text text-transparent drop-shadow-[0_2px_14px_rgba(0,0,0,0.65)]"
@@ -1284,7 +1403,7 @@ export default function Index() {
 
               {/* ── Search Card ── */}
               <div className="animate-fade-in-up" style={{ animationDelay: "0.28s" }}>
-                <div
+              <div
                   className="bg-card/90 backdrop-blur-2xl border border-border/70 rounded-2xl shadow-elevated overflow-visible"
                   style={{
                     boxShadow:
@@ -1369,10 +1488,7 @@ export default function Index() {
             <div className="hidden lg:block animate-fade-in-up relative" style={{ animationDelay: "0.25s" }}>
               <div
                 className="absolute -inset-6 rounded-3xl blur-3xl opacity-15"
-                style={{
-                  background:
-                    "radial-gradient(ellipse, hsl(var(--brand-cyan)), hsl(var(--brand-indigo)), hsl(var(--brand-purple)), transparent 70%)",
-                }}
+                style={{ background: "radial-gradient(ellipse, hsl(var(--brand-cyan)), hsl(var(--brand-indigo)), hsl(var(--brand-purple)), transparent 70%)" }}
               />
               <div className="relative">
                 <MarketTicker />
@@ -1424,18 +1540,14 @@ export default function Index() {
                   <div className="font-display font-semibold text-xs sm:text-sm text-foreground group-hover:text-primary transition-colors leading-tight">
                     New Dev
                   </div>
-                  <div className="text-[9px] sm:text-[10px] text-muted-foreground mt-0.5 hidden sm:block">
-                    Off-plan &amp; new builds
-                  </div>
+                  <div className="text-[9px] sm:text-[10px] text-muted-foreground mt-0.5 hidden sm:block">Off-plan &amp; new builds</div>
                 </div>
               </div>
             </Link>
           </div>
 
           {/* ── ROW 2: Commercial subtypes + Open House + Auctions */}
-          <div
-            className={`mt-2 sm:mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 reveal reveal-delay-2 ${browseInView ? "in-view" : ""}`}
-          >
+          <div className={`mt-2 sm:mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 reveal reveal-delay-2 ${browseInView ? "in-view" : ""}`}>
             {[
               { label: "Retail Shop", emoji: "🛍️", href: "/listings?type=commercial&subtype=shop" },
               { label: "Mixed-Use", emoji: "🔀", href: "/listings?type=commercial&subtype=mixed_use" },
@@ -1871,32 +1983,7 @@ export default function Index() {
             </Link>
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
-              {
-                name: "Athens",
-                listings: 24860,
-                trend: "+1.2%",
-                image: "https://images.unsplash.com/photo-1555993539-1732b0258235?w=600&q=80",
-              },
-              {
-                name: "Thessaloniki",
-                listings: 8240,
-                trend: "+0.8%",
-                image: thessalonikiLandmark,
-              },
-              {
-                name: "Mykonos",
-                listings: 1820,
-                trend: "+2.3%",
-                image: "https://images.unsplash.com/photo-1533104816931-20fa691ff6ca?w=600&q=80",
-              },
-              {
-                name: "Santorini",
-                listings: 1240,
-                trend: "+1.9%",
-                image: "https://images.unsplash.com/photo-1570077188670-e3a8d69ac5ff?w=600&q=80",
-              },
-            ].map((city, idx) => (
+            {(popularLocationsError ? popularLocationsFallback : (popularLocationsData ?? popularLocationsFallback))?.map((city, idx) => (
               <Link
                 key={city.name}
                 to={`/listings?city=${city.name}`}
@@ -1919,8 +2006,12 @@ export default function Index() {
                   <div className="absolute bottom-4 left-4 translate-y-1 group-hover:translate-y-0 transition-transform duration-300">
                     <div className="font-display font-bold text-lg text-foreground">{city.name}</div>
                     <div className="text-xs text-muted-foreground">{city.listings.toLocaleString()} listings</div>
-                    <div className="text-xs text-brand-emerald font-semibold flex items-center gap-1 mt-0.5">
-                      <TrendingUp className="w-3 h-3" />
+                    <div
+                      className={`text-xs font-semibold flex items-center gap-1 mt-0.5 ${
+                        city.trendUp ? "text-brand-emerald" : "text-destructive"
+                      }`}
+                    >
+                      {city.trendUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                       {city.trend}
                     </div>
                   </div>
@@ -1978,29 +2069,18 @@ export default function Index() {
                     { emoji: "⚖️", title: "Lawyers", category: "lawyer", bg: "bg-brand-gold/15" },
                     { emoji: "📋", title: "Notaries", category: "notary", bg: "bg-brand-purple/15" },
                     { emoji: "🔧", title: "Civil Engineers", category: "civil_engineer", bg: "bg-primary/15" },
-                    {
-                      emoji: "🏠",
-                      title: "Real Estate Agents",
-                      category: "real_estate_agent",
-                      bg: "bg-brand-emerald/15",
-                    },
+                    { emoji: "🏠", title: "Real Estate Agents", category: "real_estate_agent", bg: "bg-brand-emerald/15" },
                     { emoji: "💰", title: "Financial Advisors", category: "financial_advisor", bg: "bg-brand-gold/10" },
                     { emoji: "🏗️", title: "Contractors", category: "contractor", bg: "bg-brand-purple-dark/15" },
                     { emoji: "🏡", title: "Property Managers", category: "property_manager", bg: "bg-brand-purple/10" },
                   ].map((pro) => (
                     <Link key={pro.title} to={`/professionals?category=${pro.category}`}>
                       <div className="relative group rounded-xl sm:rounded-2xl overflow-hidden">
-                        <div
-                          className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                          style={{
-                            background:
-                              "radial-gradient(circle at 0 0, hsl(var(--brand-cyan-soft)/0.28), transparent 55%)",
-                          }}
+                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                          style={{ background: "radial-gradient(circle at 0 0, hsl(var(--brand-cyan-soft)/0.28), transparent 55%)" }}
                         />
                         <div className="relative flex items-center gap-2 sm:gap-3 p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-background/8 border border-white/12 hover:border-brand-purple/40 backdrop-blur-md transition-all min-h-[56px]">
-                          <div
-                            className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl ${pro.bg} flex items-center justify-center text-base sm:text-xl shrink-0 shadow-sm`}
-                          >
+                          <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl ${pro.bg} flex items-center justify-center text-base sm:text-xl shrink-0 shadow-sm`}>
                             {pro.emoji}
                           </div>
                           <div className="font-semibold text-xs sm:text-sm text-white leading-tight">{pro.title}</div>
