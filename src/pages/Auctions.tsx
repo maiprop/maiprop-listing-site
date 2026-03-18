@@ -789,9 +789,10 @@ export default function Auctions() {
 
         {/* Toolbar */}
         <div className="container pb-3 sm:pb-4">
-          {/* Mobile filter bar */}
+
+          {/* ── MOBILE TOOLBAR ── */}
           <div className="sm:hidden space-y-2 mb-3">
-            {/* Row 1: city + view toggle + filter button */}
+            {/* Single row: city search + filter button + view toggle */}
             <div className="flex gap-2 items-center">
               <select
                 value={selectedCity}
@@ -800,43 +801,53 @@ export default function Auctions() {
               >
                 {cityOptions.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
-              <div className="flex items-center gap-1 bg-secondary rounded-lg p-1 border border-border shrink-0">
-                <button onClick={() => setViewMode("list")}
-                  className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === "list" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}>
-                  <List className="w-3.5 h-3.5" />
-                </button>
-                <button onClick={() => setViewMode("map")}
-                  className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === "map" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}>
-                  <Map className="w-3.5 h-3.5" />
-                </button>
-              </div>
               <button
                 onClick={() => setShowFilters((v) => !v)}
-                className={`shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-medium transition-colors ${showFilters ? "bg-primary/10 border-primary/30 text-primary" : "bg-secondary border-border text-muted-foreground"}`}>
-                <SlidersHorizontal className="w-3.5 h-3.5" />
+                className={`shrink-0 flex items-center gap-1.5 px-3 py-2.5 rounded-xl border text-sm font-medium transition-colors ${showFilters ? "bg-primary/10 border-primary/30 text-primary" : "bg-secondary border-border text-muted-foreground"}`}>
+                <SlidersHorizontal className="w-4 h-4" />
+                Filters
                 {activeFilterCount > 0 && <span className="w-4 h-4 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center">{activeFilterCount}</span>}
               </button>
-            </div>
-            {/* Row 2: type pills + price select */}
-            <div className="flex gap-1.5 overflow-x-auto scrollbar-none pb-0.5 items-center">
-              {[{ value: "", label: "All Types" }, { value: "apartment", label: "Apt" }, { value: "house", label: "House" }, { value: "villa", label: "Villa" }, { value: "land", label: "Land" }, { value: "commercial", label: "Comm." }, { value: "office", label: "Office" }].map(t => (
-                <button key={t.value} onClick={() => setFilterType(t.value)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors whitespace-nowrap shrink-0 ${filterType === t.value ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-muted-foreground border-border hover:border-primary/40"}`}>
-                  {t.label}
+              <div className="flex items-center gap-1 bg-secondary rounded-xl p-1 border border-border shrink-0">
+                <button onClick={() => setViewMode("list")}
+                  className={`px-2.5 py-1.5 rounded-lg transition-all ${viewMode === "list" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}>
+                  <List className="w-4 h-4" />
                 </button>
-              ))}
-              <div className="w-px h-4 bg-border shrink-0" />
-              <div className="relative shrink-0">
-                <select value={filterBidRange} onChange={e => setFilterBidRange(e.target.value)}
-                  className={`appearance-none border rounded-full px-3 py-1.5 pr-6 text-xs font-medium cursor-pointer outline-none transition-colors ${filterBidRange ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-muted-foreground border-border"}`}>
-                  {BID_RANGES.map(r => <option key={r.value} value={r.value} className="bg-card text-foreground">{r.label}</option>)}
-                </select>
-                <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none opacity-70" />
+                <button onClick={() => setViewMode("map")}
+                  className={`px-2.5 py-1.5 rounded-lg transition-all ${viewMode === "map" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}>
+                  <Map className="w-4 h-4" />
+                </button>
               </div>
             </div>
-            {/* Mobile expanded filters panel */}
+
+            {/* Mobile filter dropdown panel */}
             {showFilters && (
               <div className="border border-border rounded-xl bg-card/95 p-4 space-y-4">
+                {/* Property type */}
+                <div className="space-y-1.5">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Property Type</span>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {[{ value: "", label: "All Types" }, { value: "apartment", label: "Apartment" }, { value: "house", label: "House" }, { value: "villa", label: "Villa" }, { value: "land", label: "Land" }, { value: "commercial", label: "Commercial" }, { value: "office", label: "Office" }].map(t => (
+                      <button key={t.value} onClick={() => setFilterType(t.value)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors whitespace-nowrap ${filterType === t.value ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-muted-foreground border-border hover:border-primary/40"}`}>
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* Starting bid */}
+                <div className="space-y-1.5">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Starting Bid</span>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {BID_RANGES.map(r => (
+                      <button key={r.value} onClick={() => setFilterBidRange(filterBidRange === r.value ? "" : r.value)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors whitespace-nowrap ${filterBidRange === r.value ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-muted-foreground border-border hover:border-primary/40"}`}>
+                        {r.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* Construction year */}
                 <div className="space-y-1.5">
                   <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Construction Year</span>
                   <div className="flex gap-1.5 flex-wrap">
@@ -856,9 +867,19 @@ export default function Auctions() {
                 )}
               </div>
             )}
+
+            {/* Active filter chips — shown when panel is closed */}
+            {activeFilterCount > 0 && !showFilters && (
+              <div className="flex gap-1.5 overflow-x-auto scrollbar-none pb-0.5">
+                {filterType && <button onClick={() => setFilterType("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary shrink-0">{filterType} <X className="w-3 h-3" /></button>}
+                {filterBidRange && <button onClick={() => setFilterBidRange("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary shrink-0">{BID_RANGES.find(r => r.value === filterBidRange)?.label} <X className="w-3 h-3" /></button>}
+                {filterYearRange && <button onClick={() => setFilterYearRange("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary shrink-0">{YEAR_RANGES.find(r => r.value === filterYearRange)?.label} <X className="w-3 h-3" /></button>}
+                <button onClick={clearFilters} className="text-xs text-muted-foreground shrink-0 ml-1">Clear all</button>
+              </div>
+            )}
           </div>
 
-          {/* Desktop toolbar */}
+          {/* ── DESKTOP TOOLBAR ── */}
           <div className="hidden sm:flex items-center justify-end gap-2">
             <Button
               variant="outline"
