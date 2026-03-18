@@ -5,35 +5,52 @@ import { useState, useEffect, useRef } from "react";
 
 // ── Sparkline paths – pre-generated organic waves per city ────────────────────
 const SPARKLINES: Record<string, string> = {
-  Athens:       "M0,14 C4,10 8,18 12,12 C16,6 20,16 24,10 C28,4 32,14 36,8 C40,2 44,12 48,8",
+  Athens: "M0,14 C4,10 8,18 12,12 C16,6 20,16 24,10 C28,4 32,14 36,8 C40,2 44,12 48,8",
   Thessaloniki: "M0,12 C4,16 8,8 12,14 C16,20 20,10 24,16 C28,12 32,18 36,12 C40,8 44,14 48,10",
-  Mykonos:      "M0,16 C4,8 8,14 12,6 C16,2 20,10 24,4 C28,8 32,4 36,10 C40,6 44,14 48,8",
-  Glyfada:      "M0,10 C4,14 8,8 12,12 C16,16 20,8 24,14 C28,10 32,6 36,12 C40,8 44,12 48,6",
-  Rhodes:       "M0,8 C4,12 8,4 12,10 C16,6 20,14 24,8 C28,4 32,10 36,6 C40,12 44,8 48,4",
-  Santorini:    "M0,14 C4,10 8,16 12,8 C16,4 20,12 24,6 C28,10 32,4 36,8 C40,2 44,10 48,6",
-  Kifisia:      "M0,12 C4,8 8,14 12,10 C16,6 20,12 24,8 C28,14 32,10 36,14 C40,8 44,12 48,10",
-  Piraeus:      "M0,8 C4,12 8,10 12,14 C16,16 20,12 24,16 C28,14 32,16 36,18 C40,14 44,16 48,18",
-  Heraklion:    "M0,12 C4,8 8,12 12,8 C16,6 20,10 24,8 C28,12 32,8 36,10 C40,6 44,10 48,8",
+  Mykonos: "M0,16 C4,8 8,14 12,6 C16,2 20,10 24,4 C28,8 32,4 36,10 C40,6 44,14 48,8",
+  Glyfada: "M0,10 C4,14 8,8 12,12 C16,16 20,8 24,14 C28,10 32,6 36,12 C40,8 44,12 48,6",
+  Rhodes: "M0,8 C4,12 8,4 12,10 C16,6 20,14 24,8 C28,4 32,10 36,6 C40,12 44,8 48,4",
+  Santorini: "M0,14 C4,10 8,16 12,8 C16,4 20,12 24,6 C28,10 32,4 36,8 C40,2 44,10 48,6",
+  Kifisia: "M0,12 C4,8 8,14 12,10 C16,6 20,12 24,8 C28,14 32,10 36,14 C40,8 44,12 48,10",
+  Piraeus: "M0,8 C4,12 8,10 12,14 C16,16 20,12 24,16 C28,14 32,16 36,18 C40,14 44,16 48,18",
+  Heraklion: "M0,12 C4,8 8,12 12,8 C16,6 20,10 24,8 C28,12 32,8 36,10 C40,6 44,10 48,8",
 };
 
 // ── Static trends per city ────────────────────────────────────────────────────
 const CITY_CHANGES: Record<string, { change: number; up: boolean }> = {
-  Athens:       { change: 1.2, up: true },
+  Athens: { change: 1.2, up: true },
   Thessaloniki: { change: 0.8, up: true },
-  Mykonos:      { change: 2.3, up: true },
-  Glyfada:      { change: 1.7, up: true },
-  Rhodes:       { change: 3.2, up: true },
-  Santorini:    { change: 1.9, up: true },
-  Kifisia:      { change: 0.6, up: true },
-  Piraeus:      { change: -0.3, up: false },
-  Heraklion:    { change: 1.4, up: true },
+  Mykonos: { change: 2.3, up: true },
+  Glyfada: { change: 1.7, up: true },
+  Rhodes: { change: 3.2, up: true },
+  Santorini: { change: 1.9, up: true },
+  Kifisia: { change: 0.6, up: true },
+  Piraeus: { change: -0.3, up: false },
+  Heraklion: { change: 1.4, up: true },
 };
 
-const DISPLAY_CITIES = ["Athens", "Thessaloniki", "Mykonos", "Glyfada", "Rhodes", "Santorini", "Kifisia", "Piraeus", "Heraklion"];
+const DISPLAY_CITIES = [
+  "Athens",
+  "Thessaloniki",
+  "Mykonos",
+  "Glyfada",
+  "Rhodes",
+  "Santorini",
+  "Kifisia",
+  "Piraeus",
+  "Heraklion",
+];
 
 const STATIC_PRICES: Record<string, number> = {
-  Athens: 2840, Thessaloniki: 1920, Mykonos: 6450, Glyfada: 3760,
-  Rhodes: 2299, Santorini: 5120, Kifisia: 4180, Piraeus: 1740, Heraklion: 1880,
+  Athens: 2840,
+  Thessaloniki: 1920,
+  Mykonos: 6450,
+  Glyfada: 3760,
+  Rhodes: 2299,
+  Santorini: 5120,
+  Kifisia: 4180,
+  Piraeus: 1740,
+  Heraklion: 1880,
 };
 
 function Sparkline({ city, up }: { city: string; up: boolean }) {
@@ -47,13 +64,7 @@ function Sparkline({ city, up }: { city: string; up: boolean }) {
           <stop offset="100%" stopColor={color} stopOpacity="1" />
         </linearGradient>
       </defs>
-      <path
-        d={d}
-        stroke={`url(#spark-${city}-stroke)`}
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      <path d={d} stroke={`url(#spark-${city}-stroke)`} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -70,13 +81,15 @@ function useLiveFlicker(basePrices: Record<string, number>) {
       const city = cities[Math.floor(Math.random() * cities.length)];
       const base = basePrices[city];
       const delta = base * (0.0005 + Math.random() * 0.002) * (Math.random() > 0.35 ? 1 : -1);
-      setPrices(prev => ({ ...prev, [city]: Math.round(prev[city] + delta) }));
+      setPrices((prev) => ({ ...prev, [city]: Math.round(prev[city] + delta) }));
       setFlickeringCity(city);
       setTimeout(() => setFlickeringCity(null), 700);
       timerRef.current = setTimeout(tick, 2800 + Math.random() * 600);
     };
     timerRef.current = setTimeout(tick, 1500);
-    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return { prices, flickeringCity };
@@ -98,16 +111,16 @@ export function MarketTicker() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const baseRows = DISPLAY_CITIES.map(city => {
-    const live = liveData?.find(d => d.city === city);
+  const baseRows = DISPLAY_CITIES.map((city) => {
+    const live = liveData?.find((d) => d.city === city);
     const price = live?.is_live ? live.avg_price_per_sqm : (STATIC_PRICES[city] ?? 0);
     const trend = CITY_CHANGES[city] ?? { change: 1.0, up: true };
     return { city, price, ...trend, isLive: live?.is_live ?? false };
   });
 
-  const basePriceMap = Object.fromEntries(baseRows.map(r => [r.city, r.price]));
+  const basePriceMap = Object.fromEntries(baseRows.map((r) => [r.city, r.price]));
   const { prices: livePrices, flickeringCity } = useLiveFlicker(basePriceMap);
-  const rows = baseRows.map(r => ({ ...r, price: livePrices[r.city] ?? r.price }));
+  const rows = baseRows.map((r) => ({ ...r, price: livePrices[r.city] ?? r.price }));
 
   // Duplicate rows for seamless infinite scroll
   const scrollRows = [...rows, ...rows];
@@ -136,16 +149,31 @@ export function MarketTicker() {
       >
         <div className="flex items-center gap-2">
           <span className="relative flex w-2 h-2 shrink-0">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-40" style={{ background: "hsl(var(--brand-cyan))" }} />
-            <span className="relative inline-flex rounded-full w-2 h-2" style={{ background: "hsl(var(--brand-cyan))" }} />
+            <span
+              className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-40"
+              style={{ background: "hsl(var(--brand-cyan))" }}
+            />
+            <span
+              className="relative inline-flex rounded-full w-2 h-2"
+              style={{ background: "hsl(var(--brand-cyan))" }}
+            />
           </span>
-          <span className="text-[10px] font-black tracking-widest uppercase" style={{ color: "hsl(var(--brand-cyan-glow))" }}>
+          <span
+            className="text-[10px] font-black tracking-widest uppercase"
+            style={{ color: "hsl(var(--brand-cyan-glow))" }}
+          >
             Live Market
           </span>
         </div>
-        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full" style={{ background: "hsl(var(--brand-cyan) / 0.10)", border: "1px solid hsl(var(--brand-cyan) / 0.22)" }}>
+        <div
+          className="flex items-center gap-1.5 px-2 py-0.5 rounded-full"
+          style={{ background: "hsl(var(--brand-cyan) / 0.10)", border: "1px solid hsl(var(--brand-cyan) / 0.22)" }}
+        >
           <span className="w-1 h-1 rounded-full animate-pulse" style={{ background: "hsl(var(--brand-cyan))" }} />
-          <span className="text-[8px] font-black tracking-widest uppercase" style={{ color: "hsl(var(--brand-cyan-glow))" }}>
+          <span
+            className="text-[8px] font-black tracking-widest uppercase"
+            style={{ color: "hsl(var(--brand-cyan-glow))" }}
+          >
             {isLoading ? "…" : "LIVE"}
           </span>
         </div>
@@ -153,10 +181,7 @@ export function MarketTicker() {
 
       {/* Scrolling city rows — clipped container */}
       <div className="overflow-hidden" style={{ height: "calc(7 * 36px)" }}>
-        <div
-          className="ticker-scroll-rows"
-          style={{ animationPlayState: "running" }}
-        >
+        <div className="ticker-scroll-rows" style={{ animationPlayState: "running" }}>
           {scrollRows.map((row, i) => {
             const isFlickering = flickeringCity === row.city && i < rows.length;
             return (
@@ -165,9 +190,7 @@ export function MarketTicker() {
                 className="flex items-center gap-2.5 px-4 transition-all duration-300"
                 style={{
                   height: "36px",
-                  background: isFlickering
-                    ? "hsl(var(--brand-purple) / 0.18)"
-                    : "hsl(270 28% 8% / 0.62)",
+                  background: isFlickering ? "hsl(var(--brand-purple) / 0.18)" : "hsl(270 28% 8% / 0.62)",
                   borderBottom: "1px solid hsl(var(--brand-purple) / 0.08)",
                 }}
               >
@@ -226,7 +249,7 @@ export function MarketTicker() {
         className="px-4 pb-2 pt-0.5 text-[8px] tracking-widest uppercase flex items-center gap-1.5"
         style={{ color: "hsl(215 20% 30%)" }}
       >
-        <span className="w-1 h-1 rounded-full inline-block" style={{ background: "hsl(var(--brand-indigo) / 0.35)" }} />
+        <span className="w-1 h-1 rounded-full inline-block" style={{ background: "hsl(var(--brand-indigo) / 0.15)" }} />
         €/m² · Greek Real Estate Index
       </div>
     </div>
