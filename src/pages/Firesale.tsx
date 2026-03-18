@@ -59,6 +59,7 @@ export default function Firesale() {
   const { isPro } = useSubscription();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const nowYear = new Date().getFullYear();
 
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
@@ -75,6 +76,8 @@ export default function Firesale() {
 
   const participant = getParticipantTypeFromProfile(profile);
   const isBuyerPro = participant === "buyer" && isPro;
+  const isSeller = participant === "seller" || profile?.role === "seller_landlord";
+  const canSubmitQuickSale = !!user && isSeller;
 
   const [form, setForm] = useState({
     address: "",
@@ -89,6 +92,8 @@ export default function Firesale() {
     notes: "",
   });
 
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
   // Prefill from profile when it loads
   useEffect(() => {
     if (profile) {
@@ -102,6 +107,81 @@ export default function Firesale() {
   }, [profile, user]);
 
   const upd = (k: string, v: string) => setForm((prev) => ({ ...prev, [k]: v }));
+
+  const normalizeKaek = (raw: string) => raw.replace(/\s+/g, "").trim();
+
+  const validateStep1 = () => {
+    const next: Record<string, string> = {};
+
+    if (!form.address.trim() || form.address.trim().length < 5) {
+      next.address = "Please enter a full address (min 5 characters).";
+    }
+
+    const kaek = normalizeKaek(form.kaek);
+    if (!kaek) {
+      next.kaek = "KAEK is required.";
+    } else if (!/^\d{12}(\/\d{1,2})?(\/\d{1,2})?$/.test(kaek)) {
+      next.kaek = "KAEK format looks invalid (e.g. 050240601001/0/1).";
+    }
+
+    if (!form.propertyType) {
+      next.propertyType = "Property type is required.";
+    }
+
+    const sqm = Number(form.sqm);
+    if (!form.sqm || Number.isNaN(sqm)) {
+      next.sqm = "Size (m²) is required.";
+    } else if (sqm < 10 || sqm > 5000) {
+      next.sqm = "Size (m²) must be between 10 and 5000.";
+    }
+
+    const asking = Number(form.askingPrice);
+    if (!form.askingPrice || Number.isNaN(asking)) {
+      next.askingPrice = "Asking price is required.";
+    } else if (asking < 5_000 || asking > 100_000_000) {
+      next.askingPrice = "Asking price must be between €5,000 and €100,000,000.";
+    }
+
+    const year = Number(form.constructionYear);
+    if (!form.constructionYear || Number.isNaN(year)) {
+      next.constructionYear = "Construction year is required.";
+    } else if (year < 1800 || year > nowYear + 1) {
+      next.constructionYear = `Construction year must be between 1800 and ${nowYear + 1}.`;
+    }
+
+    if (photoFiles.length < 5) {
+      next.photos = "Please upload at least 5 property photos.";
+    }
+
+    if (!form.notes.trim() || form.notes.trim().length < 10) {
+      next.notes = "Please add a short note (min 10 characters).";
+    }
+
+    return next;
+  };
+
+  const validateStep2 = () => {
+    const next: Record<string, string> = {};
+
+    if (!form.contactName.trim() || form.contactName.trim().length < 2) {
+      next.contactName = "Full name is required.";
+    }
+
+    if (!form.contactEmail.trim()) {
+      next.contactEmail = "Email is required.";
+    } else if (!/\S+@\S+\.\S+/.test(form.contactEmail)) {
+      next.contactEmail = "Email looks invalid.";
+    }
+
+    const phone = form.contactPhone.replace(/\s+/g, "").trim();
+    if (!phone) {
+      next.contactPhone = "Phone number is required.";
+    } else if (!/^\+?[0-9]{8,15}$/.test(phone)) {
+      next.contactPhone = "Phone number looks invalid (use digits, optionally starting with +).";
+    }
+
+    return next;
+  };
 
   // Lightweight address autocomplete via Nominatim (OSM)
   useEffect(() => {
@@ -236,16 +316,8 @@ export default function Firesale() {
     return urls;
   };
 
-  const step1Valid = !!(
-    form.address.trim() &&
-    form.propertyType &&
-    form.sqm &&
-    Number(form.sqm) > 0 &&
-    form.askingPrice &&
-    Number(form.askingPrice) > 0 &&
-    photoFiles.length >= 5
-  );
-  const step2Valid = !!(form.contactName.trim() && form.contactEmail.trim() && /\S+@\S+\.\S+/.test(form.contactEmail));
+  const step1Valid = Object.keys(validateStep1()).length === 0;
+  const step2Valid = Object.keys(validateStep2()).length === 0;
 
   const generateEstimate = async () => {
     const basePerSqm: Record<string, number> = {
@@ -286,20 +358,56 @@ export default function Firesale() {
   };
 
   const handleContinue = async () => {
+    if (!canSubmitQuickSale) {
+      toast.error("To submit a Quick Sale™ request, please sign up as a Seller first.");
+      if (!user) {
+        navigate("/signup?type=seller");
+      } else {
+        try {
+          sessionStorage.setItem("signup_participant_type", "seller");
+          localStorage.setItem("signup_participant_type", "seller");
+        } catch (_) {}
+        navigate("/onboarding");
+      }
+      return;
+    }
+
+    const v1 = validateStep1();
+    setErrors(v1);
+    if (Object.keys(v1).length > 0) {
+      toast.error(Object.values(v1)[0] || "Please fix the highlighted fields.");
+      return;
+    }
+
     await generateEstimate();
     setStep(2);
   };
 
   const handleSubmit = async () => {
-    if (!step2Valid) {
-      toast.error("Please fill in all required fields.");
-      return;
-    }
     if (!user) {
       toast.error("You must be logged in to submit a Quick Sale™ request.");
       navigate("/login");
       return;
     }
+    if (!canSubmitQuickSale) {
+      toast.error("Please complete Seller signup to submit a Quick Sale™ request.");
+      try {
+        sessionStorage.setItem("signup_participant_type", "seller");
+        localStorage.setItem("signup_participant_type", "seller");
+      } catch (_) {}
+      navigate("/onboarding");
+      return;
+    }
+
+    const v1 = validateStep1();
+    const v2 = validateStep2();
+    const merged = { ...v1, ...v2 };
+    setErrors(merged);
+    if (Object.keys(merged).length > 0) {
+      toast.error(Object.values(merged)[0] || "Please fix the highlighted fields.");
+      return;
+    }
+
     setSubmitting(true);
     try {
       const estimate = aiEstimate || Math.round(Number(form.sqm) * 1900 * 0.92);
@@ -318,7 +426,7 @@ export default function Firesale() {
         metaLines.push(`Photo condition grade (1–10): ${grade}`);
       }
       if (form.kaek.trim()) {
-        metaLines.push(`KAEK: ${form.kaek.trim()}`);
+        metaLines.push(`KAEK: ${normalizeKaek(form.kaek)}`);
       }
       if (form.notes.trim()) {
         metaLines.push(form.notes.trim());
@@ -507,6 +615,37 @@ export default function Firesale() {
                       <div className="space-y-5">
                         <h4 className="font-display font-semibold text-sm">Property Details</h4>
 
+                        {!canSubmitQuickSale && (
+                          <div className="rounded-xl bg-muted border border-border p-3 flex items-start gap-3">
+                            <Lock className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold">Seller account required</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                To submit a Quick Sale™ request, you must have a Seller profile. It’s free — Pro is not required.
+                              </p>
+                              <div className="mt-2">
+                                <Button
+                                  size="sm"
+                                  className="bg-gradient-primary border-0 text-primary-foreground"
+                                  onClick={() => {
+                                    if (!user) {
+                                      navigate("/signup?type=seller");
+                                      return;
+                                    }
+                                    try {
+                                      sessionStorage.setItem("signup_participant_type", "seller");
+                                      localStorage.setItem("signup_participant_type", "seller");
+                                    } catch (_) {}
+                                    navigate("/onboarding");
+                                  }}
+                                >
+                                  {user ? "Become a Seller" : "Sign up as Seller"}
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
                         {/* Address with autocomplete */}
                         <div>
                           <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
@@ -522,6 +661,7 @@ export default function Firesale() {
                               className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
                             />
                           </div>
+                          {errors.address && <p className="mt-1 text-xs text-destructive">{errors.address}</p>}
                           {addressLoading && (
                             <p className="mt-1 text-[10px] text-muted-foreground">Searching address suggestions…</p>
                           )}
@@ -547,7 +687,8 @@ export default function Firesale() {
                         {/* KAEK */}
                         <div>
                           <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                            KAEK <span className="text-[10px] font-normal normal-case text-muted-foreground">(Κωδικός Αριθμός Εθνικού Κτηματολογίου)</span>
+                            KAEK <span className="text-destructive">*</span>{" "}
+                            <span className="text-[10px] font-normal normal-case text-muted-foreground">(Κωδικός Αριθμός Εθνικού Κτηματολογίου)</span>
                           </label>
                           <div className="flex gap-2 bg-muted border border-border rounded-xl px-3 py-2.5 focus-within:border-primary transition-colors">
                             <Hash className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
@@ -559,6 +700,7 @@ export default function Firesale() {
                               className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none font-mono"
                             />
                           </div>
+                          {errors.kaek && <p className="mt-1 text-xs text-destructive">{errors.kaek}</p>}
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
@@ -576,6 +718,7 @@ export default function Firesale() {
                                 <option key={t.value} value={t.value} className="bg-card">{t.label}</option>
                               ))}
                             </select>
+                            {errors.propertyType && <p className="mt-1 text-xs text-destructive">{errors.propertyType}</p>}
                           </div>
 
                           <div>
@@ -589,6 +732,7 @@ export default function Firesale() {
                               onChange={(e) => upd("sqm", e.target.value)}
                               className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
                             />
+                            {errors.sqm && <p className="mt-1 text-xs text-destructive">{errors.sqm}</p>}
                           </div>
 
                           <div className="col-span-2">
@@ -605,11 +749,12 @@ export default function Firesale() {
                                 className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
                               />
                             </div>
+                            {errors.askingPrice && <p className="mt-1 text-xs text-destructive">{errors.askingPrice}</p>}
                           </div>
 
                           <div className="col-span-2">
                             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                              Construction Year
+                              Construction Year <span className="text-destructive">*</span>
                             </label>
                             <input
                               type="number"
@@ -618,6 +763,7 @@ export default function Firesale() {
                               onChange={(e) => upd("constructionYear", e.target.value)}
                               className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
                             />
+                            {errors.constructionYear && <p className="mt-1 text-xs text-destructive">{errors.constructionYear}</p>}
                           </div>
                         </div>
 
@@ -681,6 +827,7 @@ export default function Firesale() {
                                 {photoPreviews.length} photo{photoPreviews.length !== 1 ? "s" : ""} selected
                                 {photoPreviews.length < 5 && " · add at least 5 photos to continue"}
                               </p>
+                              {errors.photos && <p className="text-xs text-destructive">{errors.photos}</p>}
                             </div>
                           )}
                         </div>
@@ -688,7 +835,7 @@ export default function Firesale() {
                         {/* Notes */}
                         <div>
                           <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                            Additional Notes
+                            Additional Notes <span className="text-destructive">*</span>
                           </label>
                           <textarea
                             rows={2}
@@ -697,6 +844,7 @@ export default function Firesale() {
                             onChange={(e) => upd("notes", e.target.value)}
                             className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary resize-none transition-colors"
                           />
+                          {errors.notes && <p className="mt-1 text-xs text-destructive">{errors.notes}</p>}
                         </div>
 
                         <Button
@@ -752,7 +900,7 @@ export default function Firesale() {
                         <div className="space-y-4">
                           <div>
                             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                              Full Name
+                              Full Name <span className="text-destructive">*</span>
                             </label>
                             <input
                               type="text"
@@ -761,11 +909,12 @@ export default function Firesale() {
                               onChange={(e) => upd("contactName", e.target.value)}
                               className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
                             />
+                            {errors.contactName && <p className="mt-1 text-xs text-destructive">{errors.contactName}</p>}
                           </div>
                           <div className="grid grid-cols-2 gap-4">
                             <div>
                               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                                Email
+                                Email <span className="text-destructive">*</span>
                               </label>
                               <input
                                 type="email"
@@ -774,10 +923,11 @@ export default function Firesale() {
                                 onChange={(e) => upd("contactEmail", e.target.value)}
                                 className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
                               />
+                              {errors.contactEmail && <p className="mt-1 text-xs text-destructive">{errors.contactEmail}</p>}
                             </div>
                             <div>
                               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                                Phone
+                                Phone <span className="text-destructive">*</span>
                               </label>
                               <input
                                 type="tel"
@@ -786,6 +936,7 @@ export default function Firesale() {
                                 onChange={(e) => upd("contactPhone", e.target.value)}
                                 className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
                               />
+                              {errors.contactPhone && <p className="mt-1 text-xs text-destructive">{errors.contactPhone}</p>}
                             </div>
                           </div>
                         </div>
