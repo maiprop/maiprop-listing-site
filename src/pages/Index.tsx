@@ -1162,7 +1162,7 @@ export default function Index() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pb-16 lg:pb-0">
       <Navbar />
       {showAI && <AISearchModal onFiltersApplied={handleAIFilters} onClose={() => setShowAI(false)} />}
       <CookieConsentBanner />
@@ -1236,10 +1236,10 @@ export default function Index() {
           style={{ background: "radial-gradient(hsl(var(--brand-cyan)), hsl(var(--brand-indigo)), hsl(var(--brand-purple)), transparent 70%)" }}
         />
 
-        <div className="container relative z-10 pt-20 pb-8 sm:pt-28 sm:pb-16 lg:pl-16 xl:pl-24">
+        <div className="container relative z-10 pt-20 pb-8 sm:pt-28 sm:pb-16 lg:pl-16 xl:pl-24 px-4">
           <div className="grid lg:grid-cols-[1fr_360px] xl:grid-cols-[1fr_400px] gap-8 lg:gap-12 items-end">
             {/* ── LEFT: Copy + Search ── */}
-            <div className="text-white">
+            <div className="text-white min-w-0">
               {/* Eyebrow */}
               <div className="relative inline-flex mb-3 sm:mb-7 animate-fade-in-up" style={{ animationDelay: "0s" }}>
                 <span
@@ -1247,7 +1247,7 @@ export default function Index() {
                   style={{ boxShadow: "0 0 0 4px hsl(var(--brand-indigo) / 0.18), 0 0 18px 4px hsl(var(--brand-purple) / 0.12)" }}
                 />
                 <div className="relative inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/15 border border-white/30 backdrop-blur-sm">
-                  <span className="relative flex w-2 h-2">
+                  <span className="relative flex w-2 h-2 shrink-0">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-60" style={{ background: "hsl(var(--brand-indigo))" }} />
                     <span className="relative inline-flex rounded-full w-2 h-2" style={{ background: "hsl(var(--brand-indigo))" }} />
                   </span>
@@ -1257,12 +1257,12 @@ export default function Index() {
 
               {/* Headline */}
               <h1
-                className="font-display font-black leading-[1.1] mb-4 sm:mb-6 animate-fade-in-up text-white"
-                style={{ fontSize: "clamp(1.55rem, 7.5vw, 4.5rem)", animationDelay: "0.08s" }}
+                className="font-display font-black leading-[1.1] mb-4 sm:mb-6 animate-fade-in-up text-white break-words"
+                style={{ fontSize: "clamp(1.4rem, 6.5vw, 4.5rem)", animationDelay: "0.08s" }}
               >
-                Find your perfect property in Greece
+                Find your perfect<br className="sm:hidden" /> property in Greece
                 <div className="mt-1">
-                  <span className="gradient-text-primary" style={{ fontSize: "clamp(1.65rem, 8vw, 4.8rem)" }}>
+                  <span className="gradient-text-primary" style={{ fontSize: "clamp(1.5rem, 7vw, 4.8rem)" }}>
                     with AI precision
                   </span>
                 </div>
@@ -1288,7 +1288,7 @@ export default function Index() {
                       <button
                         key={label}
                         onClick={() => setSearchType(label)}
-                        className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold font-display transition-all shrink-0 ${
+                        className={`flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-semibold font-display transition-all shrink-0 whitespace-nowrap ${
                           searchType === label
                             ? "bg-primary text-primary-foreground shadow-sm"
                             : "text-muted-foreground hover:text-foreground hover:bg-secondary/80"
@@ -1302,10 +1302,10 @@ export default function Index() {
 
                   <div className="mx-3 mt-2 h-px bg-border/50" />
 
-                  {/* Search row — mobile: location full-width, then type+AI+search on one row */}
+                  {/* Search rows */}
                   <div className="p-2">
-                    {/* Location / Service input — always full width on mobile */}
-                    <div className="mb-2">
+                    {/* Location / Service input — always full width */}
+                    <div className="mb-2 bg-secondary/60 rounded-xl border border-border/50 focus-within:border-primary/50 transition-colors">
                       {searchType === "Professionals" ? (
                         <ServiceInput
                           value={professionalInputValue}
@@ -1322,7 +1322,7 @@ export default function Index() {
                     </div>
 
                     {/* Second row: type dropdown + AI + Search */}
-                    <div className="flex gap-2 items-center">
+                    <div className="flex gap-1.5 items-stretch">
                       {searchType !== "Professionals" && (
                         <div className="flex-1 min-w-0">
                           <PropertyTypeDropdown value={selectedPropertyType} onChange={setSelectedPropertyType} />
@@ -1331,16 +1331,16 @@ export default function Index() {
                       {searchType !== "Professionals" && (
                         <button
                           onClick={() => setShowAI(true)}
-                          className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all text-primary hover:bg-primary/10 shrink-0 whitespace-nowrap border border-border"
+                          className="flex items-center justify-center gap-1 px-2.5 py-2 rounded-xl text-xs font-semibold transition-all text-primary hover:bg-primary/10 shrink-0 border border-border min-w-[40px]"
                         >
-                          <Sparkles className="w-3.5 h-3.5" />
-                          <span className="hidden xs:inline">AI</span>
+                          <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                          <span className="hidden sm:inline">AI</span>
                         </button>
                       )}
                       <Button
                         size="default"
                         onClick={handleSearch}
-                        className={`bg-primary hover:opacity-90 border-0 text-primary-foreground rounded-xl font-semibold shrink-0 ${searchType === "Professionals" ? "flex-1" : ""}`}
+                        className={`bg-primary hover:opacity-90 border-0 text-primary-foreground rounded-xl font-semibold shrink-0 px-4 ${searchType === "Professionals" ? "flex-1" : ""}`}
                       >
                         <Search className="w-4 h-4 sm:mr-2" />
                         <span className="hidden sm:inline">Search</span>
