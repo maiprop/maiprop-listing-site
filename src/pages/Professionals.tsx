@@ -219,7 +219,7 @@ export default function Professionals() {
   const activeGroup = selectedGroup ? categoryGroups.find((g) => g.id === selectedGroup) : null;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pb-bottom-nav lg:pb-0">
       <Navbar />
       {aiMatchOpen && <AIServiceMatchModal onClose={() => setAiMatchOpen(false)} onNavigate={(cat) => { setSearchParams((p) => { const n = new URLSearchParams(p); n.set("category", cat); return n; }); setSelectedGroup(categoryGroups.find((g) => g.categories.includes(cat))?.id ?? null); }} />}
       <div className="pt-16">
@@ -345,7 +345,7 @@ export default function Professionals() {
           </div>
         </div>
 
-        <div className="container py-6 sm:py-8 pb-24 lg:pb-8">
+        <div className="container py-6 sm:py-8 pb-8">
 
           {/* ── Search ───────────────────────────────────────────────── */}
           <div className="flex gap-3 mb-6 flex-wrap items-center">
