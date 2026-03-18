@@ -814,7 +814,7 @@ export default function Listings() {
 
             {/* Desktop active filter chips */}
             {activeFilterCount > 0 && (
-              <div className="hidden sm:flex items-center gap-2 mt-2 flex-wrap overflow-x-auto scrollbar-none pb-0.5">
+              <div className="hidden sm:flex items-center gap-2 mt-3 flex-wrap overflow-x-auto scrollbar-none pb-0.5">
                 <span className="text-xs text-muted-foreground shrink-0">Active:</span>
                 {selectedType && <button onClick={() => { setParam("type", ""); setParam("subtype", ""); }} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">{PROPERTY_TYPE_MAP[selectedType as PropertyTypeKey]?.emoji} {getTypeLabel(selectedType)} <X className="w-3 h-3" /></button>}
                 {selectedSubtype && selectedType && <button onClick={() => setParam("subtype", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">{getSubtypeLabel(selectedType, selectedSubtype)} <X className="w-3 h-3" /></button>}
