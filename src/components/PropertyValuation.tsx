@@ -197,7 +197,7 @@ export default function PropertyValuation(props: PropertyValuationProps) {
   const runValuation = async () => {
     if (!user) return;
     if (!isPro) {
-      toast.error("AI Property Valuation requires Pro plan");
+      toast.error("Property Valuation requires Pro plan");
       return;
     }
     if (needsExtra) {
@@ -240,14 +240,14 @@ export default function PropertyValuation(props: PropertyValuationProps) {
       {/* Header */}
       <div className="flex items-center gap-2 px-5 py-3.5 bg-primary/5 border-b border-primary/20">
         <Zap className="w-4 h-4 text-primary" />
-        <h4 className="font-display font-semibold text-sm flex-1">AI Property Valuation</h4>
+        <h4 className="font-display font-semibold text-sm flex-1">Property Valuation</h4>
         <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/15 text-primary font-semibold">
           mAI Prop · 2026 Model
         </span>
       </div>
 
       <div className="p-5">
-        {!user && <SignInForAI feature="AI Property Valuation" />}
+        {!user && <SignInForAI feature="Property Valuation" />}
         {user && !result && (
           <div className="text-center space-y-3">
             {isPro && (

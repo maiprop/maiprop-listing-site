@@ -1183,7 +1183,7 @@ export default function PropertyDetail() {
 
               })()}
 
-              {/* ③ AI Property Valuation — unlocked for Pro users */}
+              {/* ③ Property Valuation — unlocked for Pro users */}
               {isPro ?
               <PropertyValuation
                 title={title}
@@ -1235,7 +1235,7 @@ export default function PropertyDetail() {
               <div className="glass-card rounded-2xl overflow-hidden border border-primary/20">
                   <div className="flex items-center gap-2 px-5 py-3.5 bg-primary/5 border-b border-primary/20">
                     <Zap className="w-4 h-4 text-primary" />
-                    <h4 className="font-display font-semibold text-sm flex-1">AI Property Valuation</h4>
+                    <h4 className="font-display font-semibold text-sm flex-1">Property Valuation</h4>
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/15 text-primary font-semibold">Pro</span>
                   </div>
                   <div className="p-6 flex flex-col items-center gap-4 text-center">
@@ -1264,11 +1264,14 @@ export default function PropertyDetail() {
                     <Lock className="w-6 h-6 text-primary" />
                     <div>
                       <p className="font-display font-bold text-sm">Pro Feature</p>
-                      <p className="text-xs text-muted-foreground mt-1 leading-relaxed max-w-[200px]">
+                      <p className="text-xs text-muted-foreground mt-1 leading-relaxed max-w-[240px] mx-auto">
                         Full AI valuation — price range, confidence, legal &amp; tax overlay, key factors.
                       </p>
                     </div>
-                    <Link to="/pricing" className="flex items-center gap-1.5 text-xs font-semibold bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors">
+                    <Link
+                      to="/pricing"
+                      className="flex items-center justify-center gap-1.5 text-xs font-semibold bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors w-full max-w-[240px]"
+                    >
                       <Zap className="w-3.5 h-3.5" /> Upgrade to Pro
                     </Link>
                   </div>
@@ -1287,15 +1290,10 @@ export default function PropertyDetail() {
                         <h3 className="font-display font-semibold text-sm">Full AI Property Report</h3>
                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold font-bold">PREMIUM</span>
                       </div>
-                      {isPro ? (
+                      {isPro && (
                         <p className="text-xs text-muted-foreground mb-2 leading-relaxed">
                           Deep-dive: Area trends, comparable sales, property specifics analysis, and charts.
                         </p>
-                      ) : (
-                        <div className="mb-2 pointer-events-none select-none blur-[4px] opacity-55 space-y-1.5">
-                          <div className="h-2 rounded bg-secondary/80 w-[92%]" />
-                          <div className="h-2 rounded bg-secondary/80 w-[74%]" />
-                        </div>
                       )}
                       {isPro && (
                         <>
@@ -1312,38 +1310,18 @@ export default function PropertyDetail() {
                         </>
                       )}
                       {!isPro ? (
-                        <div className="pt-1 flex flex-col items-center gap-4 text-center">
-                          {/* Blurred mock preview (match valuation lock style) */}
-                          <div className="w-full pointer-events-none select-none blur-[5px] opacity-50 space-y-3">
-                            <div className="flex items-start gap-4">
-                              <div className="flex-1">
-                                <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Report Score</p>
-                                <p className="font-display font-black text-2xl text-foreground">██ / 100</p>
-                                <p className="text-xs text-muted-foreground mt-1 font-mono">Confidence: ███%</p>
-                              </div>
-                              <div className="flex gap-3 shrink-0">
-                                <div className="w-14 h-14 rounded-full bg-muted border-4 border-brand-emerald/40" />
-                                <div className="w-14 h-14 rounded-full bg-muted border-4 border-primary/30" />
-                              </div>
-                            </div>
-                            <div className="bg-secondary/60 border border-border rounded-xl px-3 py-2 text-xs flex items-center justify-between">
-                              <span className="text-muted-foreground">Investment outlook</span>
-                              <span className="font-bold text-brand-emerald">Positive</span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                              <div className="bg-secondary/50 rounded-lg px-2.5 py-2 h-9" />
-                              <div className="bg-secondary/50 rounded-lg px-2.5 py-2 h-9" />
-                            </div>
-                          </div>
-
+                        <div className="flex flex-col items-center gap-4 text-center">
                           <Lock className="w-6 h-6 text-primary" />
                           <div>
                             <p className="font-display font-bold text-sm">Pro Feature</p>
-                            <p className="text-xs text-muted-foreground mt-1 leading-relaxed max-w-[220px]">
+                            <p className="text-xs text-muted-foreground mt-1 leading-relaxed max-w-[240px] mx-auto">
                               Deep-dive: Area trends, comparable sales, property specifics analysis, and charts.
                             </p>
                           </div>
-                          <Link to="/pricing" className="flex items-center gap-1.5 text-xs font-semibold bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors">
+                          <Link
+                            to="/pricing"
+                            className="flex items-center justify-center gap-1.5 text-xs font-semibold bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors w-full max-w-[240px]"
+                          >
                             <Zap className="w-3.5 h-3.5" /> Upgrade to Pro
                           </Link>
                         </div>
