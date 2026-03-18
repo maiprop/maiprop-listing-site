@@ -381,45 +381,6 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
         </div>
       )}
     </header>
-
-      {/* ── Mobile Bottom Nav ─────────────────────────────────────────── */}
-      <nav
-        className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-card/90 backdrop-blur-xl border-t border-border/50 pb-safe"
-        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
-        aria-label="Main navigation"
-      >
-        <div className="flex items-stretch h-[60px]">
-          {[
-            { to: "/", icon: Home, label: "Home" },
-            { to: "/listings?listing_type=sale", icon: Building2, label: "Buy" },
-            { to: "/listings?listing_type=rent", icon: List, label: "Rent" },
-            { to: "/auctions", icon: Gavel, label: "Auctions" },
-            { to: user ? "/dashboard" : "/signup", icon: user ? LayoutDashboard : User, label: user ? "Account" : "Sign Up" },
-          ].map(({ to, icon: Icon, label }) => {
-            const active =
-              to === "/"
-                ? location.pathname === "/"
-                : location.pathname === to.split("?")[0] &&
-                  (!to.includes("?") || new URLSearchParams(location.search).get("listing_type") === new URLSearchParams(to.split("?")[1] || "").get("listing_type"));
-            return (
-              <Link
-                key={to + label}
-                to={to}
-                className={`flex-1 flex flex-col items-center justify-center gap-0.5 min-h-[44px] py-2 text-[11px] font-semibold transition-colors active:scale-95 active:opacity-80 ${
-                  active ? "text-primary" : "text-muted-foreground hover:text-foreground"
-                }`}
-                aria-current={active ? "page" : undefined}
-              >
-                <Icon
-                  className={`w-[22px] h-[22px] shrink-0 transition-transform ${active ? "scale-110" : ""}`}
-                  strokeWidth={active ? 2.5 : 1.8}
-                />
-                <span className="leading-tight tracking-tight">{label}</span>
-              </Link>
-            );
-          })}
-        </div>
-      </nav>
     </>
   );
 }
