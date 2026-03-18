@@ -7,7 +7,7 @@ import {
   Shield, FileText, Zap, ExternalLink, Lock, BarChart2, Eye,
   Home, Clock, Check, Gavel, Download, Loader2, CheckCircle,
   Thermometer, Wrench, TreePine, Flame, Wifi, Car, Building2,
-  Info, ChevronDown, ChevronUp, Euro, Tag, Layers, LayoutGrid, Bell, Globe, Scale, History } from
+  Info, ChevronDown, ChevronUp, Euro, Tag, Layers, LayoutGrid, Bell, Globe, Scale, History, ClipboardList } from
 "lucide-react";
 import { getSubtypeLabel, PROPERTY_TYPE_MAP, type PropertyTypeKey } from "@/lib/propertyTypes";
 import { Button } from "@/components/ui/button";
