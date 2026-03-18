@@ -1934,9 +1934,9 @@ export default function Index() {
             />
 
             <div className="relative p-6 sm:p-10 md:p-14 lg:p-16 text-background">
-              <div className="grid lg:grid-cols-2 gap-8 sm:gap-12 items-center">
+              <div className="grid lg:grid-cols-2 gap-6 sm:gap-12 items-center">
                 <div>
-                  <h2 className="font-display text-3xl sm:text-4xl lg:text-5xl font-bold leading-tight mb-4 text-destructive-foreground">
+                  <h2 className="font-display text-2xl sm:text-4xl lg:text-5xl font-bold leading-tight mb-4 text-destructive-foreground">
                     The right expert,
                     <br />
                     <span className="gradient-text-cyan drop-shadow-[0_0_20px_rgba(133,106,255,0.65)]">
@@ -1946,7 +1946,7 @@ export default function Index() {
 
                   <Button
                     size="lg"
-                    className="bg-gradient-accent border-0 text-accent-foreground font-semibold px-8 gap-2"
+                    className="bg-gradient-accent border-0 text-accent-foreground font-semibold px-8 gap-2 w-full sm:w-auto"
                     asChild
                   >
                     <Link to="/professionals">
@@ -1954,91 +1954,27 @@ export default function Index() {
                     </Link>
                   </Button>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-2 sm:gap-3">
                   {[
-                    {
-                      emoji: "🏛️",
-                      title: "Architects",
-                      category: "architect",
-                      color: "text-primary",
-                      border: "border-primary/30",
-                      bg: "bg-primary/15",
-                    },
-                    {
-                      emoji: "⚖️",
-                      title: "Lawyers",
-                      category: "lawyer",
-                      color: "text-brand-gold",
-                      border: "border-brand-gold/30",
-                      bg: "bg-brand-gold/15",
-                    },
-                    {
-                      emoji: "📋",
-                      title: "Notaries",
-                      category: "notary",
-                      color: "text-brand-purple",
-                      border: "border-brand-purple/30",
-                      bg: "bg-brand-purple/15",
-                    },
-                    {
-                      emoji: "🔧",
-                      title: "Civil Engineers",
-                      category: "civil_engineer",
-                      color: "text-primary",
-                      border: "border-primary/30",
-                      bg: "bg-primary/15",
-                    },
-                    {
-                      emoji: "🏠",
-                      title: "Real Estate Agents",
-                      category: "real_estate_agent",
-                      color: "text-brand-emerald",
-                      border: "border-brand-emerald/30",
-                      bg: "bg-brand-emerald/15",
-                    },
-                    {
-                      emoji: "💰",
-                      title: "Financial Advisors",
-                      category: "financial_advisor",
-                      color: "text-brand-gold",
-                      border: "border-brand-gold/30",
-                      bg: "bg-brand-gold/10",
-                    },
-                    {
-                      emoji: "🏗️",
-                      title: "Contractors",
-                      category: "contractor",
-                      color: "text-brand-purple-dark",
-                      border: "border-brand-purple-dark/30",
-                      bg: "bg-brand-purple-dark/15",
-                    },
-                    {
-                      emoji: "🏡",
-                      title: "Property Managers",
-                      category: "property_manager",
-                      color: "text-brand-purple",
-                      border: "border-brand-purple/30",
-                      bg: "bg-brand-purple/10",
-                    },
+                    { emoji: "🏛️", title: "Architects", category: "architect", bg: "bg-primary/15" },
+                    { emoji: "⚖️", title: "Lawyers", category: "lawyer", bg: "bg-brand-gold/15" },
+                    { emoji: "📋", title: "Notaries", category: "notary", bg: "bg-brand-purple/15" },
+                    { emoji: "🔧", title: "Civil Engineers", category: "civil_engineer", bg: "bg-primary/15" },
+                    { emoji: "🏠", title: "Real Estate Agents", category: "real_estate_agent", bg: "bg-brand-emerald/15" },
+                    { emoji: "💰", title: "Financial Advisors", category: "financial_advisor", bg: "bg-brand-gold/10" },
+                    { emoji: "🏗️", title: "Contractors", category: "contractor", bg: "bg-brand-purple-dark/15" },
+                    { emoji: "🏡", title: "Property Managers", category: "property_manager", bg: "bg-brand-purple/10" },
                   ].map((pro) => (
                     <Link key={pro.title} to={`/professionals?category=${pro.category}`}>
-                      <div
-                        className="relative group rounded-2xl overflow-hidden"
-                      >
+                      <div className="relative group rounded-xl sm:rounded-2xl overflow-hidden">
                         <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
                           style={{ background: "radial-gradient(circle at 0 0, hsl(var(--brand-cyan-soft)/0.28), transparent 55%)" }}
                         />
-                        <div
-                          className="relative flex items-center gap-3 p-4 rounded-2xl bg-background/8 border border-white/12 hover:border-brand-purple/40 backdrop-blur-md transition-all"
-                        >
-                          <div
-                            className={`w-10 h-10 rounded-xl ${pro.bg} flex items-center justify-center text-xl shrink-0 shadow-sm`}
-                          >
+                        <div className="relative flex items-center gap-2 sm:gap-3 p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-background/8 border border-white/12 hover:border-brand-purple/40 backdrop-blur-md transition-all min-h-[56px]">
+                          <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl ${pro.bg} flex items-center justify-center text-base sm:text-xl shrink-0 shadow-sm`}>
                             {pro.emoji}
                           </div>
-                          <div>
-                            <div className={`font-semibold text-sm text-white`}>{pro.title}</div>
-                          </div>
+                          <div className="font-semibold text-xs sm:text-sm text-white leading-tight">{pro.title}</div>
                         </div>
                       </div>
                     </Link>
