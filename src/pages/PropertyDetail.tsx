@@ -1287,9 +1287,16 @@ export default function PropertyDetail() {
                         <h3 className="font-display font-semibold text-sm">Full AI Property Report</h3>
                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold font-bold">PREMIUM</span>
                       </div>
-                      <p className="text-xs text-muted-foreground mb-2 leading-relaxed">
-                        Deep-dive: Area trends, comparable sales, property specifics analysis, and charts.
-                      </p>
+                      {isPro ? (
+                        <p className="text-xs text-muted-foreground mb-2 leading-relaxed">
+                          Deep-dive: Area trends, comparable sales, property specifics analysis, and charts.
+                        </p>
+                      ) : (
+                        <div className="mb-2 pointer-events-none select-none blur-[4px] opacity-55 space-y-1.5">
+                          <div className="h-2 rounded bg-secondary/80 w-[92%]" />
+                          <div className="h-2 rounded bg-secondary/80 w-[74%]" />
+                        </div>
+                      )}
                       {isPro && (
                         <>
                           <p className="text-[11px] text-muted-foreground mb-4">
@@ -1333,7 +1340,7 @@ export default function PropertyDetail() {
                           <div>
                             <p className="font-display font-bold text-sm">Pro Feature</p>
                             <p className="text-xs text-muted-foreground mt-1 leading-relaxed max-w-[220px]">
-                              Full AI report — trends, legal checks, comps, and investment score.
+                              Deep-dive: Area trends, comparable sales, property specifics analysis, and charts.
                             </p>
                           </div>
                           <Link to="/pricing" className="flex items-center gap-1.5 text-xs font-semibold bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors">
