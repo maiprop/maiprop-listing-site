@@ -1259,86 +1259,81 @@ export default function PropertyDetail() {
               }
 
               {/* ④ Property Report — Pro only, 3 free/month, €9 each extra */}
-              <Section className={reportLoaded ? "border-primary/30" : ""}>
-                <div className="p-6">
-                  <div className="flex items-start gap-4">
-                    <div className="w-11 h-11 rounded-xl bg-gradient-primary flex items-center justify-center shrink-0">
-                      <BarChart2 className="w-5 h-5 text-primary-foreground" />
+              <div className={`glass-card rounded-2xl overflow-hidden border ${reportLoaded ? "border-primary/30" : "border-primary/20"}`}>
+                {/* Header — matches Property Valuation header exactly */}
+                <div className="flex items-center gap-2 px-5 py-3.5 bg-primary/5 border-b border-primary/20">
+                  <ClipboardList className="w-4 h-4 text-primary" />
+                  <h4 className="font-display font-semibold text-sm flex-1">Property Report</h4>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/15 text-primary font-semibold">
+                    mAI Prop · 2026 Model
+                  </span>
+                </div>
+
+                <div className="p-5">
+                  {!isPro ? (
+                    <div className="text-center space-y-3">
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Deep-dive: Area trends, comparable sales, property specifics analysis, and charts.
+                      </p>
+                      <Button className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2" asChild>
+                        <Link to="/pricing">
+                          <Zap className="w-4 h-4" /> Upgrade to Pro
+                        </Link>
+                      </Button>
+                      <p className="text-[10px] text-muted-foreground">Pro Feature · Unlock full reports</p>
                     </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-display font-semibold text-sm">Property Report</h3>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/15 text-primary font-semibold">Pro</span>
-                      </div>
+                  ) : reportLoaded ? (
+                    <div className="text-center space-y-3">
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Report loaded. Download your full PDF below.
+                      </p>
+                      <Button className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2">
+                        <Download className="w-4 h-4" /> Download PDF
+                      </Button>
+                      <p className="text-[10px] text-muted-foreground">Full · Instant · PDF export</p>
+                    </div>
+                  ) : reportCount >= REPORT_INCLUDED ? (
+                    <div className="text-center space-y-3">
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Included reports used this month. Extra reports cost €{REPORT_EXTRA_COST} each.
+                      </p>
+                      <Button className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2" asChild>
+                        <Link to="/pricing"><Zap className="w-4 h-4" /> Get Extra Report</Link>
+                      </Button>
+                      <p className="text-[10px] text-muted-foreground">€{REPORT_EXTRA_COST} per extra report</p>
+                    </div>
+                  ) : (
+                    <div className="text-center space-y-3">
                       {isPro && (
-                        <p className="text-xs text-muted-foreground mb-2 leading-relaxed">
-                          Deep-dive: Area trends, comparable sales, property specifics analysis, and charts.
+                        <p className="text-[10px] text-muted-foreground">
+                          {Math.max(0, REPORT_INCLUDED - reportCount)} of {REPORT_INCLUDED} reports remaining this month
                         </p>
                       )}
-                      {isPro && (
-                        <>
-                          <p className="text-[11px] text-muted-foreground mb-4">
-                            Pro includes {REPORT_INCLUDED} reports per month; extra reports cost €{REPORT_EXTRA_COST} each.
-                          </p>
-                          <div className="grid grid-cols-2 gap-2 mb-4">
-                            {["Cadastre Verification", "5-Year Price History", "Comparable Sales", "Investment Projection", "Legal Status Check", "Neighborhood Score"].map((item) => (
-                              <div key={item} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                <Check className="w-3 h-3 text-primary shrink-0" />{item}
-                              </div>
-                            ))}
-                          </div>
-                        </>
-                      )}
-                      {!isPro ? (
-                        <div className="flex flex-col items-center gap-4 text-center min-h-[220px] justify-center">
-                          <Lock className="w-6 h-6 text-primary" />
-                          <div>
-                            <p className="font-display font-bold text-sm">Pro Feature</p>
-                            <p className="text-xs text-muted-foreground mt-1 leading-relaxed max-w-[240px] mx-auto">
-                              Deep-dive: Area trends, comparable sales, property specifics analysis, and charts.
-                            </p>
-                          </div>
-                          <Link
-                            to="/pricing"
-                            className="flex items-center justify-center gap-1.5 text-xs font-semibold bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors w-full max-w-[240px]"
-                          >
-                            <Zap className="w-3.5 h-3.5" /> Upgrade to Pro
-                          </Link>
-                        </div>
-                      ) : reportLoaded ? (
-                        <Button variant="outline" className="border-primary/30 text-primary gap-2 text-sm">
-                          <Download className="w-4 h-4" /> Download PDF
-                        </Button>
-                      ) : reportCount >= REPORT_INCLUDED ? (
-                        <div className="text-center py-2">
-                          <p className="text-sm text-muted-foreground">Included reports used this month. Extra: €{REPORT_EXTRA_COST} each.</p>
-                          <Button variant="outline" size="sm" className="mt-2" asChild><Link to="/pricing">Get extra report</Link></Button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-3 flex-wrap">
-                          <Button
-                            className="bg-gradient-primary border-0 text-primary-foreground text-sm"
-                            onClick={async () => {
-                              if (!user || !id) return;
-                              setReportLoading(true);
-                              try {
-                                await recordReport.mutateAsync(id);
-                                setReportLoaded(true);
-                              } finally {
-                                setReportLoading(false);
-                              }
-                            }}
-                            disabled={reportLoading}
-                          >
-                            {reportLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <BarChart2 className="w-4 h-4" />}
-                            {reportLoading ? "Loading…" : "Load Report"}
-                          </Button>
-                        </div>
-                      )}
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Deep-dive: Area trends, comparable sales, property specifics analysis, and charts.
+                      </p>
+                      <Button
+                        className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2"
+                        onClick={async () => {
+                          if (!user || !id) return;
+                          setReportLoading(true);
+                          try {
+                            await recordReport.mutateAsync(id);
+                            setReportLoaded(true);
+                          } finally {
+                            setReportLoading(false);
+                          }
+                        }}
+                        disabled={reportLoading}
+                      >
+                        {reportLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ClipboardList className="w-4 h-4" />}
+                        {reportLoading ? "Loading…" : "Load Report"}
+                      </Button>
+                      <p className="text-[10px] text-muted-foreground">Full · Instant · Not a formal report</p>
                     </div>
-                  </div>
+                  )}
                 </div>
-              </Section>
+              </div>
 
               {/* Professional add-ons — valuation & legal */}
               <div className="glass-card rounded-2xl border border-border overflow-hidden">
