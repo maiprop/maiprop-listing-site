@@ -58,6 +58,54 @@ Notes:
 - **Developer Free** is treated as **Pro-only in pricing UX**; the app still has a Free nav mapping, but product intent is “Pro-only”.
 - `Yes*` for the global AI widget: it is hidden on specific routes (`/login`, `/signup`, `/onboarding`, `/dashboard`, `/messages`, `/ai-assistant`, and property pages) per `src/App.tsx`.
 
+## Pricing vs UI parity (possible “loopholes”)
+
+The pricing page is a *promise/marketing list*, while dashboard visibility is implemented by nav routing rules (`Dashboard.tsx`) and separate feature gates (AI usage, Pro subscription, eligibility). This section flags places where the **UI reveals a module when Pro is enabled**, even if that module is not explicitly called out by name in the pricing bullets.
+
+### Quick Sale / deal-flow (buyer)
+- `deal-flow` (Investor Dashboard module) can appear for the **buyer dashboard key** when `useEligibleForQuickSale().eligible === true`.
+- `useEligibleForQuickSale()` is based on **active/trial `investor_subscriptions` (or admin)**, not on Pro (`isPro`) directly.
+- So a **buyer Free** user who is eligible can see `deal-flow` even if the Pricing page “buyer Free” list doesn’t mention Investor Dashboard.
+
+### buyer pro
+- Dashboard shows **Open Houses** (`open-houses`) in the nav when Pro is enabled (`NAV_BY_TYPE.buyer` includes `open-houses`; `NAV_BY_TYPE_FREE.buyer` does not).
+- The buyer Pro feature bullets list viewings/saved searches/alerts/AI tools, but don’t explicitly name **Open Houses** as a separate promise (UI-wise it becomes visible).
+
+### seller pro
+- Dashboard shows **Open Houses** (`open-houses`) with Pro for the seller nav key.
+- Seller Pro bullets focus on AI listing assist/featured/analytics, but don’t explicitly call out Open Houses as a separate module (UI reveals it via nav).
+
+### agent pro
+- Dashboard shows **Analytics**, **Saved Searches**, **Open Houses**, **Leads**, and **Contacts** in the nav when Pro is enabled.
+- Pricing includes CRM & contacts management and performance analytics, but does not explicitly list Open Houses / Leads / Saved Searches as named bullet items (the modules become visible via nav).
+
+### developer pro
+- Dashboard shows **Analytics**, **Leads**, **Contacts**, **Projects**, and **Portfolios** in the nav when Pro is enabled.
+- Pricing lists project showcase pages / pre-sale management / featured placement / priority, but does not explicitly enumerate Leads/Contacts/Portfolios/Analytics as standalone bullets (UI becomes visible via nav).
+
+### professional pro
+- Dashboard shows **Booking**, **Contacts**, **Analytics**, and **Viewings** in the nav when Pro is enabled.
+- Pricing lists booking/calendar + advanced lead analytics + messaging, but does not explicitly mention Contacts/Viewings by module name (UI exposes them through nav).
+
+### institutional / investor ids
+- In this codebase, `getParticipantTypeFromProfile()` maps to only `buyer/seller/agent/developer/professional` dashboard keys.
+- That means **institutional/investor participant ids effectively use the buyer dashboard keys**, plus `deal-flow` when eligible.
+
+## Dashboard visibility: Basic (Free) vs Pro nav modules
+
+“Basic dashboard” = `NAV_BY_TYPE_FREE` (when `isPro === false`).
+“Pro dashboard” = `NAV_BY_TYPE` (when `isPro === true`), except for **admin** which uses the admin nav definition.
+
+Note: **Deal Flow (`deal-flow`)** may be added on top for buyer when `useEligibleForQuickSale()` returns eligible (independent of Pro).
+
+| Participant id (dashboard key) | Basic dashboard modules (`isPro=false`) | Pro dashboard modules (`isPro=true`) |
+|---|---|---|
+| buyer | Overview, Saved, Saved Searches, Messages, Viewings, Auction Alerts, Profile, Settings | Overview, Saved, Saved Searches, Open Houses, Messages, Viewings, Auction Alerts, Profile, Settings (+ `deal-flow` if eligible) |
+| seller | Overview, My Listings, Messages, Viewings, Profile, Settings | Overview, My Listings, Saved, Saved Searches, Messages, Viewings, Open Houses, Profile, Settings |
+| agent | Overview, My Listings, Saved, Messages, Viewings, Auction Alerts, Profile, Settings | Overview, My Listings, Analytics, Saved, Saved Searches, Messages, Viewings, Auction Alerts, Open Houses, Leads, Contacts, Profile, Settings |
+| developer | Overview, My Listings, Messages, Profile, Settings | Overview, My Listings, Analytics, Saved, Saved Searches, Messages, Viewings, Leads, Contacts, Projects, Portfolios, Profile, Settings |
+| professional | Overview, My Services, Leads, Messages, Profile, Settings | Overview, My Services, Booking, Leads, Contacts, Analytics, Messages, Viewings, Profile, Settings |
+
 ## Big “everything” flow diagram (single page)
 
 ```mermaid
