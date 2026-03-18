@@ -1104,7 +1104,7 @@ export default function PropertyDetail() {
                   <p className="text-xs text-muted-foreground">Messaging and calendar sync available for Pro property owners.</p>
 
                   }
-                </div>
+                </div>}
 
                 {/* Response time — only non-auction */}
                 {!isAuction &&
