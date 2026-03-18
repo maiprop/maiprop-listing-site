@@ -628,6 +628,7 @@ export default function PropertyDetail() {
                     </div>
                   </div>
 
+                  {!isAuction &&
                   <div className="text-right shrink-0">
                     <div className="font-display text-3xl font-black text-foreground">
                       €{price.toLocaleString()}
@@ -639,6 +640,7 @@ export default function PropertyDetail() {
                       </div>
                     }
                   </div>
+                  }
                 </div>
 
                 {/* Key stats bar */}
