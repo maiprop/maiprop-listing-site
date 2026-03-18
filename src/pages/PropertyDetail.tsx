@@ -1238,29 +1238,7 @@ export default function PropertyDetail() {
                     <h4 className="font-display font-semibold text-sm flex-1">Property Valuation</h4>
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/15 text-primary font-semibold">Pro</span>
                   </div>
-                  <div className="p-6 flex flex-col items-center gap-4 text-center">
-                    {/* Blurred mock data */}
-                    <div className="w-full pointer-events-none select-none blur-[5px] opacity-50 space-y-3">
-                      <div className="flex items-start gap-4">
-                        <div className="flex-1">
-                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">AI Estimated Value</p>
-                          <p className="font-display font-black text-2xl text-foreground">€███,███</p>
-                          <p className="text-xs text-muted-foreground mt-1 font-mono">€███,███ — €███,███</p>
-                        </div>
-                        <div className="flex gap-3 shrink-0">
-                          <div className="w-14 h-14 rounded-full bg-muted border-4 border-brand-emerald/40" />
-                          <div className="w-14 h-14 rounded-full bg-muted border-4 border-primary/30" />
-                        </div>
-                      </div>
-                      <div className="bg-secondary/60 border border-border rounded-xl px-3 py-2 text-xs flex items-center justify-between">
-                        <span className="text-muted-foreground">Pricing position</span>
-                        <span className="font-bold text-brand-emerald">Underpriced</span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="bg-secondary/50 rounded-lg px-2.5 py-2 h-9" />
-                        <div className="bg-secondary/50 rounded-lg px-2.5 py-2 h-9" />
-                      </div>
-                    </div>
+                  <div className="p-6 flex flex-col items-center gap-4 text-center min-h-[220px] justify-center">
                     <Lock className="w-6 h-6 text-primary" />
                     <div>
                       <p className="font-display font-bold text-sm">Pro Feature</p>
@@ -1278,7 +1256,7 @@ export default function PropertyDetail() {
                 </div>)
               }
 
-              {/* ④ Full AI Property Report — Pro only, 3 free/month, €9 each extra */}
+              {/* ④ Property Report — Pro only, 3 free/month, €9 each extra */}
               <Section className={reportLoaded ? "border-primary/30" : ""}>
                 <div className="p-6">
                   <div className="flex items-start gap-4">
@@ -1287,8 +1265,8 @@ export default function PropertyDetail() {
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-display font-semibold text-sm">Full AI Property Report</h3>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold font-bold">PREMIUM</span>
+                        <h3 className="font-display font-semibold text-sm">Property Report</h3>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/15 text-primary font-semibold">Pro</span>
                       </div>
                       {isPro && (
                         <p className="text-xs text-muted-foreground mb-2 leading-relaxed">
@@ -1310,7 +1288,7 @@ export default function PropertyDetail() {
                         </>
                       )}
                       {!isPro ? (
-                        <div className="flex flex-col items-center gap-4 text-center">
+                        <div className="flex flex-col items-center gap-4 text-center min-h-[220px] justify-center">
                           <Lock className="w-6 h-6 text-primary" />
                           <div>
                             <p className="font-display font-bold text-sm">Pro Feature</p>
