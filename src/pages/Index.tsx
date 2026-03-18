@@ -267,53 +267,53 @@ function AISearchModal({
           {!user ? (
             <SignInForAI feature="AI Search" />
           ) : (
-          <>
-          <div className="flex items-center gap-2 bg-secondary rounded-xl px-4 py-3 border border-border focus-within:border-primary transition-colors">
-            <input
-              ref={inputRef}
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleSearch();
-                if (e.key === "Escape") onClose();
-              }}
-              placeholder="e.g. quiet apartment near metro in Athens under 200k..."
-              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
-              disabled={loading}
-            />
-
-            <button
-              onClick={() => handleSearch()}
-              disabled={loading || !query.trim()}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-primary text-primary-foreground text-xs font-semibold disabled:opacity-50 transition-opacity"
-            >
-              {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowRight className="w-3.5 h-3.5" />}
-              {loading ? "Searching…" : "Search"}
-            </button>
-          </div>
-          <div className="mt-4">
-            <div className="flex items-center gap-1.5 mb-2.5">
-              <Lightbulb className="w-3.5 h-3.5 text-muted-foreground" />
-              <p className="text-[11px] text-muted-foreground font-medium">Try these examples</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {AI_SUGGESTIONS.map((s) => (
-                <button
-                  key={s}
-                  onClick={() => {
-                    setQuery(s);
-                    handleSearch(s);
+            <>
+              <div className="flex items-center gap-2 bg-secondary rounded-xl px-4 py-3 border border-border focus-within:border-primary transition-colors">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSearch();
+                    if (e.key === "Escape") onClose();
                   }}
+                  placeholder="e.g. quiet apartment near metro in Athens under 200k..."
+                  className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
                   disabled={loading}
-                  className="px-2.5 py-1.5 rounded-lg bg-secondary border border-border text-xs text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors disabled:opacity-50 text-left"
+                />
+
+                <button
+                  onClick={() => handleSearch()}
+                  disabled={loading || !query.trim()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-primary text-primary-foreground text-xs font-semibold disabled:opacity-50 transition-opacity"
                 >
-                  {s}
+                  {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowRight className="w-3.5 h-3.5" />}
+                  {loading ? "Searching…" : "Search"}
                 </button>
-              ))}
-            </div>
-          </div>
-          </>
+              </div>
+              <div className="mt-4">
+                <div className="flex items-center gap-1.5 mb-2.5">
+                  <Lightbulb className="w-3.5 h-3.5 text-muted-foreground" />
+                  <p className="text-[11px] text-muted-foreground font-medium">Try these examples</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {AI_SUGGESTIONS.map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => {
+                        setQuery(s);
+                        handleSearch(s);
+                      }}
+                      disabled={loading}
+                      className="px-2.5 py-1.5 rounded-lg bg-secondary border border-border text-xs text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors disabled:opacity-50 text-left"
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -816,7 +816,7 @@ function OSDashboardMockup() {
             </div>
           </div>
           <div className="text-center pb-1.5">
-            <span className="text-[5.5px] uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.2)" }}>
+            <span className="text-[5.5px] uppercase tracking-widest" style={{ color: "rgba(255,255,255,0)" }}>
               €/m² · Greek Real Estate Index
             </span>
           </div>
@@ -1244,14 +1244,24 @@ export default function Index() {
               <div className="relative inline-flex mb-3 sm:mb-7 animate-fade-in-up" style={{ animationDelay: "0s" }}>
                 <span
                   className="absolute inset-0 rounded-full animate-pulse"
-                  style={{ boxShadow: "0 0 0 4px hsl(var(--brand-cyan) / 0.16), 0 0 18px 4px hsl(var(--brand-purple) / 0.12)" }}
+                  style={{
+                    boxShadow: "0 0 0 4px hsl(var(--brand-cyan) / 0.16), 0 0 18px 4px hsl(var(--brand-purple) / 0.12)",
+                  }}
                 />
                 <div className="relative inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/15 border border-white/30 backdrop-blur-sm">
                   <span className="relative flex w-2 h-2 shrink-0">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-60" style={{ background: "hsl(var(--brand-cyan))" }} />
-                    <span className="relative inline-flex rounded-full w-2 h-2" style={{ background: "hsl(var(--brand-cyan))" }} />
+                    <span
+                      className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-60"
+                      style={{ background: "hsl(var(--brand-cyan))" }}
+                    />
+                    <span
+                      className="relative inline-flex rounded-full w-2 h-2"
+                      style={{ background: "hsl(var(--brand-cyan))" }}
+                    />
                   </span>
-                  <span className="text-[11px] sm:text-xs font-semibold text-white">Greece's #1 AI-Powered Property Platform</span>
+                  <span className="text-[11px] sm:text-xs font-semibold text-white">
+                    Greece's #1 AI-Powered Property Platform
+                  </span>
                 </div>
               </div>
 
@@ -1260,7 +1270,8 @@ export default function Index() {
                 className="font-display font-black leading-[1.1] mb-4 sm:mb-6 animate-fade-in-up text-white break-words"
                 style={{ fontSize: "clamp(1.4rem, 6.5vw, 4.5rem)", animationDelay: "0.08s" }}
               >
-                Find your perfect<br className="sm:hidden" /> property in Greece
+                Find your perfect
+                <br className="sm:hidden" /> property in Greece
                 <div className="mt-1">
                   <span
                     className="bg-gradient-to-r from-white via-brand-cyan to-brand-purple bg-clip-text text-transparent drop-shadow-[0_2px_14px_rgba(0,0,0,0.65)]"
@@ -1273,7 +1284,7 @@ export default function Index() {
 
               {/* ── Search Card ── */}
               <div className="animate-fade-in-up" style={{ animationDelay: "0.28s" }}>
-              <div
+                <div
                   className="bg-card/90 backdrop-blur-2xl border border-border/70 rounded-2xl shadow-elevated overflow-visible"
                   style={{
                     boxShadow:
@@ -1358,7 +1369,10 @@ export default function Index() {
             <div className="hidden lg:block animate-fade-in-up relative" style={{ animationDelay: "0.25s" }}>
               <div
                 className="absolute -inset-6 rounded-3xl blur-3xl opacity-15"
-                style={{ background: "radial-gradient(ellipse, hsl(var(--brand-cyan)), hsl(var(--brand-indigo)), hsl(var(--brand-purple)), transparent 70%)" }}
+                style={{
+                  background:
+                    "radial-gradient(ellipse, hsl(var(--brand-cyan)), hsl(var(--brand-indigo)), hsl(var(--brand-purple)), transparent 70%)",
+                }}
               />
               <div className="relative">
                 <MarketTicker />
@@ -1410,14 +1424,18 @@ export default function Index() {
                   <div className="font-display font-semibold text-xs sm:text-sm text-foreground group-hover:text-primary transition-colors leading-tight">
                     New Dev
                   </div>
-                  <div className="text-[9px] sm:text-[10px] text-muted-foreground mt-0.5 hidden sm:block">Off-plan &amp; new builds</div>
+                  <div className="text-[9px] sm:text-[10px] text-muted-foreground mt-0.5 hidden sm:block">
+                    Off-plan &amp; new builds
+                  </div>
                 </div>
               </div>
             </Link>
           </div>
 
           {/* ── ROW 2: Commercial subtypes + Open House + Auctions */}
-          <div className={`mt-2 sm:mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 reveal reveal-delay-2 ${browseInView ? "in-view" : ""}`}>
+          <div
+            className={`mt-2 sm:mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 reveal reveal-delay-2 ${browseInView ? "in-view" : ""}`}
+          >
             {[
               { label: "Retail Shop", emoji: "🛍️", href: "/listings?type=commercial&subtype=shop" },
               { label: "Mixed-Use", emoji: "🔀", href: "/listings?type=commercial&subtype=mixed_use" },
@@ -1960,18 +1978,29 @@ export default function Index() {
                     { emoji: "⚖️", title: "Lawyers", category: "lawyer", bg: "bg-brand-gold/15" },
                     { emoji: "📋", title: "Notaries", category: "notary", bg: "bg-brand-purple/15" },
                     { emoji: "🔧", title: "Civil Engineers", category: "civil_engineer", bg: "bg-primary/15" },
-                    { emoji: "🏠", title: "Real Estate Agents", category: "real_estate_agent", bg: "bg-brand-emerald/15" },
+                    {
+                      emoji: "🏠",
+                      title: "Real Estate Agents",
+                      category: "real_estate_agent",
+                      bg: "bg-brand-emerald/15",
+                    },
                     { emoji: "💰", title: "Financial Advisors", category: "financial_advisor", bg: "bg-brand-gold/10" },
                     { emoji: "🏗️", title: "Contractors", category: "contractor", bg: "bg-brand-purple-dark/15" },
                     { emoji: "🏡", title: "Property Managers", category: "property_manager", bg: "bg-brand-purple/10" },
                   ].map((pro) => (
                     <Link key={pro.title} to={`/professionals?category=${pro.category}`}>
                       <div className="relative group rounded-xl sm:rounded-2xl overflow-hidden">
-                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                          style={{ background: "radial-gradient(circle at 0 0, hsl(var(--brand-cyan-soft)/0.28), transparent 55%)" }}
+                        <div
+                          className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                          style={{
+                            background:
+                              "radial-gradient(circle at 0 0, hsl(var(--brand-cyan-soft)/0.28), transparent 55%)",
+                          }}
                         />
                         <div className="relative flex items-center gap-2 sm:gap-3 p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-background/8 border border-white/12 hover:border-brand-purple/40 backdrop-blur-md transition-all min-h-[56px]">
-                          <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl ${pro.bg} flex items-center justify-center text-base sm:text-xl shrink-0 shadow-sm`}>
+                          <div
+                            className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl ${pro.bg} flex items-center justify-center text-base sm:text-xl shrink-0 shadow-sm`}
+                          >
                             {pro.emoji}
                           </div>
                           <div className="font-semibold text-xs sm:text-sm text-white leading-tight">{pro.title}</div>
