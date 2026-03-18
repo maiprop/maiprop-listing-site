@@ -413,7 +413,8 @@ export default function Dashboard() {
         </aside>
 
         {/* Mobile horizontal nav */}
-        <div className="md:hidden fixed bottom-16 left-0 right-0 z-40 bg-card/95 backdrop-blur-xl border-t border-border overflow-x-auto scrollbar-none">
+        <div className="md:hidden fixed bottom-14 left-0 right-0 z-40 bg-card/95 backdrop-blur-xl border-t border-border overflow-x-auto scrollbar-none"
+          style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
           <div className="flex items-stretch h-11 min-w-max">
             {navItems.map(item => (
               "href" in item && item.href ? (
