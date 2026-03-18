@@ -281,10 +281,10 @@ export default function OpenHouses() {
         {/* ── Filter Bar ─────────────────────────────────────────────────────── */}
         <div className="sticky top-16 z-30 bg-background/95 backdrop-blur border-b border-border shadow-sm">
           <div className="container py-3 space-y-3">
-            {/* Row 1: city search + type pills + view toggle + advanced toggle */}
-            <div className="flex flex-wrap items-center gap-2">
+            {/* Row 1: city search + view toggle + filters button */}
+            <div className="flex items-center gap-2">
               {/* City search */}
-              <div className="relative flex-1 min-w-[160px] max-w-[220px]">
+              <div className="relative flex-1 min-w-0">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                 <input
                   type="text"
@@ -296,76 +296,71 @@ export default function OpenHouses() {
                 />
               </div>
 
-              {/* Property type pills */}
-              <div className="flex gap-1.5 flex-wrap">
-                {PROPERTY_TYPES.map((t) => (
-                  <Pill key={t.value} active={propertyType === t.value} onClick={() => setPropertyType(t.value)}>
-                    {t.label}
-                  </Pill>
-                ))}
-              </div>
-
-              <div className="flex items-center gap-2 ml-auto shrink-0">
-                {/* View mode toggle */}
-                <div className="flex rounded-lg border border-border overflow-hidden">
-                  <button
-                    onClick={() => setViewMode("grid")}
-                    className={cn(
-                      "px-2.5 py-1.5 text-xs flex items-center gap-1.5 transition-colors",
-                      viewMode === "grid"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-secondary text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    <LayoutGrid className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">List</span>
-                  </button>
-                  <button
-                    onClick={() => setViewMode("map")}
-                    className={cn(
-                      "px-2.5 py-1.5 text-xs flex items-center gap-1.5 transition-colors border-l border-border",
-                      viewMode === "map"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-secondary text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    <MapIcon className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">Map</span>
-                  </button>
-                </div>
-
-                {hasActiveFilters && (
-                  <button
-                    onClick={clearFilters}
-                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors"
-                  >
-                    <X className="w-3.5 h-3.5" /> Clear
-                  </button>
-                )}
+              {/* View mode toggle */}
+              <div className="flex rounded-lg border border-border overflow-hidden shrink-0">
                 <button
-                  onClick={() => setShowAdvanced(!showAdvanced)}
+                  onClick={() => setViewMode("grid")}
                   className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors",
-                    showAdvanced
-                      ? "bg-primary/10 text-primary border-primary/40"
-                      : "bg-secondary text-muted-foreground border-border hover:text-foreground"
+                    "px-2.5 py-1.5 text-xs flex items-center gap-1.5 transition-colors",
+                    viewMode === "grid"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-secondary text-muted-foreground hover:text-foreground"
                   )}
                 >
-                  <SlidersHorizontal className="w-3.5 h-3.5" />
-                  Filters
-                  {hasActiveFilters && (
-                    <span className="ml-1 bg-primary text-primary-foreground text-[10px] px-1.5 rounded-full">
-                      {[cityFilter, propertyType, minPrice, maxPrice, minSqm, maxSqm, bedroomsMin !== null ? "1" : "", energyClass, filterYearRange, ...selectedFeatures].filter(Boolean).length}
-                    </span>
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">List</span>
+                </button>
+                <button
+                  onClick={() => setViewMode("map")}
+                  className={cn(
+                    "px-2.5 py-1.5 text-xs flex items-center gap-1.5 transition-colors border-l border-border",
+                    viewMode === "map"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-secondary text-muted-foreground hover:text-foreground"
                   )}
-                  <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", showAdvanced && "rotate-180")} />
+                >
+                  <MapIcon className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Map</span>
                 </button>
               </div>
+
+              {/* Filters button */}
+              <button
+                onClick={() => setShowAdvanced(!showAdvanced)}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors shrink-0",
+                  showAdvanced
+                    ? "bg-primary/10 text-primary border-primary/40"
+                    : "bg-secondary text-muted-foreground border-border hover:text-foreground"
+                )}
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+                <span className="hidden xs:inline">Filters</span>
+                {hasActiveFilters && (
+                  <span className="bg-primary text-primary-foreground text-[10px] px-1.5 rounded-full">
+                    {[cityFilter, propertyType, minPrice, maxPrice, minSqm, maxSqm, bedroomsMin !== null ? "1" : "", energyClass, filterYearRange, ...selectedFeatures].filter(Boolean).length}
+                  </span>
+                )}
+                <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", showAdvanced && "rotate-180")} />
+              </button>
             </div>
 
             {/* Advanced filters panel */}
             {showAdvanced && (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-3 border-t border-border">
+
+                {/* Property Type */}
+                <div className="space-y-1 sm:col-span-2 lg:col-span-4">
+                  <span className="text-xs text-muted-foreground font-medium">Property Type</span>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {PROPERTY_TYPES.map((t) => (
+                      <Pill key={t.value} active={propertyType === t.value} onClick={() => setPropertyType(t.value)}>
+                        {t.label}
+                      </Pill>
+                    ))}
+                  </div>
+                </div>
+
                 {/* Price */}
                 <RangeInput
                   label="Price (€)"
@@ -391,7 +386,7 @@ export default function OpenHouses() {
                   <span className="text-xs text-muted-foreground font-medium flex items-center gap-1">
                     <BedDouble className="w-3.5 h-3.5" /> Min Bedrooms
                   </span>
-                  <div className="flex gap-1.5">
+                  <div className="flex gap-1.5 flex-wrap">
                     {[null, 1, 2, 3, 4, 5].map((b) => (
                       <button
                         key={b ?? "any"}
@@ -467,6 +462,18 @@ export default function OpenHouses() {
                     ))}
                   </div>
                 </div>
+
+                {/* Clear all */}
+                {hasActiveFilters && (
+                  <div className="sm:col-span-2 lg:col-span-4 flex justify-end">
+                    <button
+                      onClick={clearFilters}
+                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors"
+                    >
+                      <X className="w-3.5 h-3.5" /> Clear all filters
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>

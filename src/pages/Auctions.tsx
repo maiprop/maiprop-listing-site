@@ -789,51 +789,120 @@ export default function Auctions() {
 
         {/* Toolbar */}
         <div className="container pb-3 sm:pb-4">
-          <div className="flex items-center justify-between sm:justify-end gap-2">
-            {/* City select — visible on mobile as part of toolbar */}
-            <div className="sm:hidden relative flex-1 min-w-0">
-              <select
-                value={selectedCity}
-                onChange={(e) => setSelectedCity(e.target.value)}
-                className="w-full h-9 appearance-none bg-secondary border border-border rounded-xl pl-3 pr-8 text-sm text-foreground outline-none focus:border-primary cursor-pointer"
-              >
-                {cityOptions.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+          {/* ── MOBILE TOOLBAR ── */}
+          <div className="sm:hidden space-y-2 mb-3">
+            {/* Single row: city search + filter button + view toggle */}
+            <div className="flex gap-2 items-center">
+              <div className="relative flex-1 min-w-0">
+                <select
+                  value={selectedCity}
+                  onChange={(e) => setSelectedCity(e.target.value)}
+                  className="w-full h-9 appearance-none bg-secondary border border-border rounded-xl pl-3 pr-8 text-sm text-foreground outline-none focus:border-primary cursor-pointer"
+                >
+                  {cityOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+              </div>
+              <button
+                onClick={() => setShowFilters((v) => !v)}
+                className={`shrink-0 h-9 flex items-center gap-1.5 px-3 rounded-xl border text-sm font-medium transition-colors ${showFilters ? "bg-primary/10 border-primary/30 text-primary" : "bg-secondary border-border text-muted-foreground"}`}>
+                <SlidersHorizontal className="w-4 h-4" />
+                Filters
+                {activeFilterCount > 0 && <span className="w-4 h-4 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center">{activeFilterCount}</span>}
+              </button>
+              <div className="flex items-center gap-1 bg-secondary rounded-xl p-1 border border-border shrink-0">
+                <button onClick={() => setViewMode("list")}
+                  className={`px-2.5 py-1.5 rounded-lg transition-all ${viewMode === "list" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}>
+                  <List className="w-4 h-4" />
+                </button>
+                <button onClick={() => setViewMode("map")}
+                  className={`px-2.5 py-1.5 rounded-lg transition-all ${viewMode === "map" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}>
+                  <Map className="w-4 h-4" />
+                </button>
+              </div>
             </div>
-            {/* Filters toggle */}
+
+            {/* Mobile filter dropdown panel */}
+            {showFilters && (
+              <div className="border border-border rounded-xl bg-card/95 p-4 space-y-4">
+                {/* Property type */}
+                <div className="space-y-1.5">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Property Type</span>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {[{ value: "", label: "All Types" }, { value: "apartment", label: "Apartment" }, { value: "house", label: "House" }, { value: "villa", label: "Villa" }, { value: "land", label: "Land" }, { value: "commercial", label: "Commercial" }, { value: "office", label: "Office" }].map(t => (
+                      <button key={t.value} onClick={() => setFilterType(t.value)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors whitespace-nowrap ${filterType === t.value ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-muted-foreground border-border hover:border-primary/40"}`}>
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* Starting bid */}
+                <div className="space-y-1.5">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Starting Bid</span>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {BID_RANGES.map(r => (
+                      <button key={r.value} onClick={() => setFilterBidRange(filterBidRange === r.value ? "" : r.value)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors whitespace-nowrap ${filterBidRange === r.value ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-muted-foreground border-border hover:border-primary/40"}`}>
+                        {r.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* Construction year */}
+                <div className="space-y-1.5">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Construction Year</span>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {YEAR_RANGES.map(r => (
+                      <button key={r.value} onClick={() => setFilterYearRange(filterYearRange === r.value ? "" : r.value)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors whitespace-nowrap ${filterYearRange === r.value ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-muted-foreground border-border hover:border-primary/40"}`}>
+                        {r.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {activeFilterCount > 0 && (
+                  <button onClick={clearFilters}
+                    className="w-full py-2 text-xs text-muted-foreground border border-border rounded-lg hover:text-foreground hover:border-primary/30 transition-colors">
+                    Clear all filters
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Active filter chips — shown when panel is closed */}
+            {activeFilterCount > 0 && !showFilters && (
+              <div className="flex gap-1.5 overflow-x-auto scrollbar-none pb-0.5">
+                {filterType && <button onClick={() => setFilterType("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary shrink-0">{filterType} <X className="w-3 h-3" /></button>}
+                {filterBidRange && <button onClick={() => setFilterBidRange("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary shrink-0">{BID_RANGES.find(r => r.value === filterBidRange)?.label} <X className="w-3 h-3" /></button>}
+                {filterYearRange && <button onClick={() => setFilterYearRange("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary shrink-0">{YEAR_RANGES.find(r => r.value === filterYearRange)?.label} <X className="w-3 h-3" /></button>}
+                <button onClick={clearFilters} className="text-xs text-muted-foreground shrink-0 ml-1">Clear all</button>
+              </div>
+            )}
+          </div>
+
+          {/* ── DESKTOP TOOLBAR ── */}
+          <div className="hidden sm:flex items-center justify-end gap-2">
             <Button
               variant="outline"
               size="sm"
               className={`border-border gap-1.5 ${showFilters ? "bg-primary/10 border-primary/30 text-primary" : ""}`}
               onClick={() => setShowFilters((v) => !v)}>
               <SlidersHorizontal className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Filters</span>
+              Filters
               {activeFilterCount > 0 &&
               <span className="w-4 h-4 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center font-bold">{activeFilterCount}</span>
               }
             </Button>
-
-            {/* View mode toggle */}
             <div className="flex items-center gap-1 bg-secondary rounded-lg p-1 border border-border">
-              <button
-              onClick={() => setViewMode("list")}
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-              viewMode === "list" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`
-              }>
-                <List className="w-3.5 h-3.5" /> <span className="hidden sm:inline">List</span>
+              <button onClick={() => setViewMode("list")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === "list" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+                <List className="w-3.5 h-3.5" /> List
               </button>
-              <button
-              onClick={() => setViewMode("map")}
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-              viewMode === "map" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`
-              }>
-                <Map className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Map</span>
-              {!isLoading && mappableCount > 0 &&
-              <span className="ml-0.5 text-[10px] bg-primary/15 text-primary px-1.5 py-0.5 rounded-full font-bold">
-                    {mappableCount}
-                  </span>
-              }
+              <button onClick={() => setViewMode("map")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === "map" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+                <Map className="w-3.5 h-3.5" /> Map
+                {!isLoading && mappableCount > 0 && <span className="ml-0.5 text-[10px] bg-primary/15 text-primary px-1.5 py-0.5 rounded-full font-bold">{mappableCount}</span>}
               </button>
             </div>
           </div>

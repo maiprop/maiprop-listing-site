@@ -290,6 +290,93 @@ export type Database = {
         }
         Relationships: []
       }
+      email_send_log: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          id: string
+          message_id: string | null
+          metadata: Json | null
+          recipient_email: string
+          status: string
+          template_name: string
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          message_id?: string | null
+          metadata?: Json | null
+          recipient_email: string
+          status: string
+          template_name: string
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          message_id?: string | null
+          metadata?: Json | null
+          recipient_email?: string
+          status?: string
+          template_name?: string
+        }
+        Relationships: []
+      }
+      email_send_state: {
+        Row: {
+          auth_email_ttl_minutes: number
+          batch_size: number
+          id: number
+          retry_after_until: string | null
+          send_delay_ms: number
+          transactional_email_ttl_minutes: number
+          updated_at: string
+        }
+        Insert: {
+          auth_email_ttl_minutes?: number
+          batch_size?: number
+          id?: number
+          retry_after_until?: string | null
+          send_delay_ms?: number
+          transactional_email_ttl_minutes?: number
+          updated_at?: string
+        }
+        Update: {
+          auth_email_ttl_minutes?: number
+          batch_size?: number
+          id?: number
+          retry_after_until?: string | null
+          send_delay_ms?: number
+          transactional_email_ttl_minutes?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      email_unsubscribe_tokens: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          token: string
+          used_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          token: string
+          used_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          token?: string
+          used_at?: string | null
+        }
+        Relationships: []
+      }
       favorites: {
         Row: {
           created_at: string
@@ -341,6 +428,7 @@ export type Database = {
           notes: string | null
           offer_price: number | null
           property_type: Database["public"]["Enums"]["property_type"] | null
+          published_to_investors: boolean
           sqm: number
           status: string
           updated_at: string
@@ -361,6 +449,7 @@ export type Database = {
           notes?: string | null
           offer_price?: number | null
           property_type?: Database["public"]["Enums"]["property_type"] | null
+          published_to_investors?: boolean
           sqm: number
           status?: string
           updated_at?: string
@@ -381,12 +470,54 @@ export type Database = {
           notes?: string | null
           offer_price?: number | null
           property_type?: Database["public"]["Enums"]["property_type"] | null
+          published_to_investors?: boolean
           sqm?: number
           status?: string
           updated_at?: string
           user_id?: string | null
         }
         Relationships: []
+      }
+      firesale_requests_investor_feed: {
+        Row: {
+          address: string
+          asking_price: number | null
+          city: string
+          created_at: string
+          id: string
+          property_type: Database["public"]["Enums"]["property_type"] | null
+          sqm: number | null
+          status: string | null
+        }
+        Insert: {
+          address: string
+          asking_price?: number | null
+          city: string
+          created_at: string
+          id: string
+          property_type?: Database["public"]["Enums"]["property_type"] | null
+          sqm?: number | null
+          status?: string | null
+        }
+        Update: {
+          address?: string
+          asking_price?: number | null
+          city?: string
+          created_at?: string
+          id?: string
+          property_type?: Database["public"]["Enums"]["property_type"] | null
+          sqm?: number | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "firesale_requests_investor_feed_id_fkey"
+            columns: ["id"]
+            isOneToOne: true
+            referencedRelation: "firesale_requests"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       investor_subscriptions: {
         Row: {
@@ -1671,6 +1802,30 @@ export type Database = {
         }
         Relationships: []
       }
+      suppressed_emails: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          metadata: Json | null
+          reason: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          metadata?: Json | null
+          reason: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          metadata?: Json | null
+          reason?: string
+        }
+        Relationships: []
+      }
       sync_log: {
         Row: {
           created_at: string
@@ -1706,6 +1861,93 @@ export type Database = {
           status?: string
         }
         Relationships: []
+      }
+      usage_ai_valuations: {
+        Row: {
+          created_at: string
+          id: string
+          listing_id: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          listing_id?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          listing_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "usage_ai_valuations_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      usage_priority_ads: {
+        Row: {
+          created_at: string
+          id: string
+          listing_id: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          listing_id?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          listing_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "usage_priority_ads_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      usage_property_reports: {
+        Row: {
+          created_at: string
+          id: string
+          listing_id: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          listing_id?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          listing_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "usage_property_reports_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
@@ -1777,68 +2019,17 @@ export type Database = {
       }
     }
     Views: {
-      firesale_requests_investor_feed: {
-        Row: {
-          address: string | null
-          ai_estimate: number | null
-          asking_price: number | null
-          bedrooms: number | null
-          city: string | null
-          condition: string | null
-          contact_email: string | null
-          contact_phone: string | null
-          created_at: string | null
-          id: string | null
-          notes: string | null
-          offer_price: number | null
-          property_type: Database["public"]["Enums"]["property_type"] | null
-          sqm: number | null
-          status: string | null
-          updated_at: string | null
-          user_id: string | null
-        }
-        Insert: {
-          address?: string | null
-          ai_estimate?: number | null
-          asking_price?: number | null
-          bedrooms?: number | null
-          city?: string | null
-          condition?: string | null
-          contact_email?: string | null
-          contact_phone?: string | null
-          created_at?: string | null
-          id?: string | null
-          notes?: string | null
-          offer_price?: number | null
-          property_type?: Database["public"]["Enums"]["property_type"] | null
-          sqm?: number | null
-          status?: string | null
-          updated_at?: string | null
-          user_id?: string | null
-        }
-        Update: {
-          address?: string | null
-          ai_estimate?: number | null
-          asking_price?: number | null
-          bedrooms?: number | null
-          city?: string | null
-          condition?: string | null
-          contact_email?: string | null
-          contact_phone?: string | null
-          created_at?: string | null
-          id?: string | null
-          notes?: string | null
-          offer_price?: number | null
-          property_type?: Database["public"]["Enums"]["property_type"] | null
-          sqm?: number | null
-          status?: string | null
-          updated_at?: string | null
-          user_id?: string | null
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Functions: {
+      delete_email: {
+        Args: { message_id: number; queue_name: string }
+        Returns: boolean
+      }
+      enqueue_email: {
+        Args: { payload: Json; queue_name: string }
+        Returns: number
+      }
       get_my_role: {
         Args: never
         Returns: Database["public"]["Enums"]["user_role"]
@@ -1858,6 +2049,23 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      move_to_dlq: {
+        Args: {
+          dlq_name: string
+          message_id: number
+          payload: Json
+          source_queue: string
+        }
+        Returns: number
+      }
+      read_email_batch: {
+        Args: { batch_size: number; queue_name: string; vt: number }
+        Returns: {
+          message: Json
+          msg_id: number
+          read_ct: number
+        }[]
       }
     }
     Enums: {
