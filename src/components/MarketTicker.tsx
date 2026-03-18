@@ -249,7 +249,7 @@ export function MarketTicker() {
         className="px-4 pb-2 pt-0.5 text-[8px] tracking-widest uppercase flex items-center gap-1.5"
         style={{ color: "hsl(215 20% 30%)" }}
       >
-        <span className="w-1 h-1 rounded-full inline-block" style={{ background: "hsl(var(--brand-indigo) / 0.15)" }} />
+        <span className="w-1 h-1 rounded-full inline-block" style={{ background: "hsl(var(--brand-indigo) / 0.85)" }} />
         €/m² · Greek Real Estate Index
       </div>
     </div>
