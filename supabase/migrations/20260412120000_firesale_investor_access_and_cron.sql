@@ -27,7 +27,7 @@ CREATE POLICY "Subscribed investors view firesale deal feed"
 -- ── 2. Saved search alerts cron ─────────────────────────────────────────────
 -- Requires: pg_cron and pg_net extensions (enable in Dashboard > Database > Extensions)
 -- Requires: vault secrets - run once (replace with your anon key):
---   SELECT vault.create_secret('https://jglqlaynezspefoovqyc.supabase.co', 'saved_search_alerts_project_url');
+--   SELECT vault.create_secret('https://qvvicunqcrwpioqnvzxf.supabase.co', 'saved_search_alerts_project_url');
 --   SELECT vault.create_secret('YOUR_ANON_KEY', 'saved_search_alerts_anon_key');
 
 DO $$

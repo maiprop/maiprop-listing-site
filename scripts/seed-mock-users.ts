@@ -13,7 +13,7 @@ const SUPABASE_URL =
   process.env.VITE_SUPABASE_URL ??
   process.env.VITE_SUPABASE_PROJECT_URL ??
   process.env.SUPABASE_URL ??
-  "https://jglqlaynezspefoovqyc.supabase.co";
+  "https://qvvicunqcrwpioqnvzxf.supabase.co";
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!SERVICE_ROLE_KEY) {
