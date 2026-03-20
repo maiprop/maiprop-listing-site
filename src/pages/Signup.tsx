@@ -4,7 +4,7 @@ import { Eye, EyeOff, Loader2, ArrowRight, Home, Users, UserCheck, Building2, Br
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { useAuth } from "@/contexts/AuthContext";
-import { lovable } from "@/integrations/lovable/index";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
@@ -81,8 +81,9 @@ export default function Signup() {
       localStorage.setItem("signup_participant_type", selectedType);
     } catch (_) {}
     setGoogleLoading(true);
-    const { error } = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: `${window.location.origin}/onboarding`,
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}/onboarding` },
     });
     if (error) {
       toast.error("Google sign-in failed. Please try again.");
