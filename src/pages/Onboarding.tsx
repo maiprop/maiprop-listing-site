@@ -4,7 +4,7 @@ import {
   User, Building2, Wrench, Home,
   Check, ArrowRight, Loader2, Shield, Phone, FileText,
   Briefcase, ChevronRight, Sparkles, Video, Calendar,
-  Clock, Lock, Crown, Plus, Minus, Euro, TrendingUp,
+  Clock, Lock, Crown, Plus, Minus, Euro,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
@@ -22,9 +22,11 @@ import { usePricingConfigs, formatPrice, PRICING_KEYS } from "@/hooks/usePricing
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type RoleKey = "individual" | "seller_landlord" | "agent" | "professional" | "developer" | "investor" | "institutional";
+type RoleKey = "individual" | "seller_landlord" | "agent" | "professional" | "developer";
 type OnboardingStep =
-  | "pick-type"
+  | "pick-type"              // top-level choice when no preset (participant vs market_pro)
+  | "pick-participant-goal"  // participant sub-choice: buy/rent | sell/let
+  | "pick-pro-type"          // professional sub-choice: agent | developer | service pro
   | "pro-category"
   | "pro-verify"
   | "pro-services"
@@ -43,6 +45,8 @@ interface ParticipantType {
   features: string[];
   isPro?: boolean;
   section?: string;
+  /** If set, go to this step instead of "done" after selection (for top-level merged types) */
+  nextStep?: OnboardingStep;
 }
 
 interface SelectedService {
@@ -61,6 +65,24 @@ interface DayAvailability {
 // ── Participant catalog ────────────────────────────────────────────────────────
 
 const participants: ParticipantType[] = [
+  // ── Top-level merged types (from new Signup) ──────────────────────────────
+  {
+    id: "participant", role: "individual", icon: Home, color: "blue",
+    label: "Looking for Property", tagline: "Buy, rent, or sell privately",
+    desc: "Searching for a home or listing your own property",
+    features: ["Browse listings", "Book viewings", "List your property", "Search alerts"],
+    section: "Private",
+    nextStep: "pick-participant-goal",
+  },
+  {
+    id: "market_pro", role: "agent", icon: Briefcase, color: "cyan",
+    label: "Market Professional", tagline: "Agent, developer, or service provider",
+    desc: "Agent, developer, architect, lawyer, and more",
+    features: ["Manage listings", "CRM & leads", "Professional directory", "Client tools"],
+    section: "Professional",
+    nextStep: "pick-pro-type",
+  },
+  // ── Specific types (used internally after sub-choice or for backward compat) ─
   {
     id: "buyer", role: "individual", icon: Home, color: "blue",
     label: "Home Buyer / Renter", tagline: "Find your perfect property",
@@ -129,30 +151,6 @@ const participants: ParticipantType[] = [
     ],
     section: "Development",
   },
-  {
-    id: "investor", role: "investor", icon: TrendingUp, color: "emerald",
-    label: "Private Investor", tagline: "Access the deal pipeline",
-    desc: "Invest in off-market and Quick Sale™ opportunities",
-    features: [
-      "Quick Sale™ deal flow",
-      "Saved searches & auction alerts",
-      "ROI calculator",
-      "AI market summary",
-    ],
-    section: "Private",
-  },
-  {
-    id: "institutional", role: "institutional", icon: Building2, color: "amber",
-    label: "Institutional / Fund", tagline: "Buy-side and sell-side",
-    desc: "Fund or institution with deal flow and listing capabilities",
-    features: [
-      "Quick Sale™ deal flow",
-      "Listings & analytics",
-      "CRM & contacts",
-      "Projects & portfolios",
-    ],
-    section: "Institutional",
-  },
 ];
 
 // ── Color map ──────────────────────────────────────────────────────────────────
@@ -217,8 +215,11 @@ const DEFAULT_AVAILABILITY: DayAvailability[] = DAYS.map((_, i) => ({
   end: "18:00",
 }));
 
-const PRO_STEPS: OnboardingStep[] = ["pick-type", "pro-category", "pro-verify", "pro-services", "pro-availability", "pro-video", "done"];
-const OTHER_STEPS: OnboardingStep[] = ["pick-type", "done"];
+// Step sequences for progress indicator
+const PRO_FULL_STEPS: OnboardingStep[] = ["pick-pro-type", "pro-category", "pro-verify", "pro-services", "pro-availability", "pro-video", "done"];
+const PRO_SIMPLE_STEPS: OnboardingStep[] = ["pick-pro-type", "done"];
+const PARTICIPANT_STEPS: OnboardingStep[] = ["pick-participant-goal", "done"];
+const TOP_STEPS: OnboardingStep[] = ["pick-type", "done"];
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
@@ -233,7 +234,7 @@ export default function Onboarding() {
   const [selected, setSelected] = useState<ParticipantType | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Auto-advance past pick-type when type already set
+  // Auto-advance past pick-type when type already set from Signup
   useEffect(() => {
     if (!presetType) return;
     const p = participants.find(x => x.id === presetType);
@@ -241,6 +242,8 @@ export default function Onboarding() {
     setSelected(p);
     if (p.isPro) {
       setStep("pro-category");
+    } else if (p.nextStep) {
+      setStep(p.nextStep);
     } else {
       setStep("done");
     }
@@ -256,7 +259,13 @@ export default function Onboarding() {
   const [videoLink, setVideoLink] = useState("");
   const [calendarNotes, setCalendarNotes] = useState("");
 
-  const steps = selected?.isPro ? PRO_STEPS : OTHER_STEPS;
+  const steps: OnboardingStep[] = (() => {
+    if (!selected) return TOP_STEPS;
+    if (selected.id === "participant") return PARTICIPANT_STEPS;
+    if (selected.id === "market_pro") return PRO_SIMPLE_STEPS;
+    if (selected.isPro) return PRO_FULL_STEPS;
+    return TOP_STEPS;
+  })();
   const stepIndex = steps.indexOf(step);
   const totalSteps = steps.length - 1;
 
@@ -314,6 +323,8 @@ export default function Onboarding() {
         setSelected(p);
         if (p.isPro) {
           setStep("pro-category");
+        } else if (p.nextStep) {
+          setStep(p.nextStep);
         } else {
           setLoading(true);
           await updateProfile({ role: p.role as any });
@@ -331,9 +342,41 @@ export default function Onboarding() {
   const handleSelectNonPro = async (p: ParticipantType) => {
     setSelected(p);
     if (p.isPro) { setStep("pro-category"); return; }
+    if (p.nextStep) { setStep(p.nextStep); return; }
     setLoading(true);
     await updateProfile({ role: p.role as any });
     await supabase.from("profiles").update({ bio: `__type:${p.id}` }).eq("user_id", user!.id);
+    await refreshProfile();
+    setLoading(false);
+    setStep("done");
+  };
+
+  /** Handler for participant goal selection (buy/rent vs sell/let) */
+  const handleParticipantGoal = async (goal: "buyer" | "seller") => {
+    const role: RoleKey = goal === "seller" ? "seller_landlord" : "individual";
+    setLoading(true);
+    const p = participants.find(x => x.id === goal)!;
+    setSelected(p);
+    await updateProfile({ role: role as any });
+    await supabase.from("profiles").update({ bio: `__type:${goal}` }).eq("user_id", user!.id);
+    await refreshProfile();
+    setLoading(false);
+    setStep("done");
+  };
+
+  /** Handler for professional sub-type selection */
+  const handleProSubType = async (type: "agent" | "developer" | "service_pro") => {
+    if (type === "service_pro") {
+      const p = participants.find(x => x.id === "professional")!;
+      setSelected(p);
+      setStep("pro-category");
+      return;
+    }
+    const p = participants.find(x => x.id === type)!;
+    setSelected(p);
+    setLoading(true);
+    await updateProfile({ role: p.role as any });
+    await supabase.from("profiles").update({ bio: `__type:${type}` }).eq("user_id", user!.id);
     await refreshProfile();
     setLoading(false);
     setStep("done");
@@ -453,73 +496,216 @@ export default function Onboarding() {
 
   const stepContent = (() => {
 
-    // ── Pick type ──
-    if (step === "pick-type") return (
-      <div>
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-full px-4 py-1.5 text-xs font-medium text-primary mb-4">
-            <Sparkles className="w-3.5 h-3.5" /> Personalise your experience
+    // ── Pick type (top-level — shown when no preset from signup) ──
+    if (step === "pick-type") {
+      const topLevel = participants.filter(p => p.id === "participant" || p.id === "market_pro");
+      return (
+        <div>
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-full px-4 py-1.5 text-xs font-medium text-primary mb-4">
+              <Sparkles className="w-3.5 h-3.5" /> Personalise your experience
+            </div>
+            <h1 className="font-display font-bold text-2xl md:text-3xl text-foreground mb-2">How are you using maiProp?</h1>
+            <p className="text-muted-foreground text-sm max-w-sm mx-auto">Choose your profile. You can update it in settings later.</p>
           </div>
-          <h1 className="font-display font-bold text-2xl md:text-3xl text-foreground mb-2">How do you use the market?</h1>
-          <p className="text-muted-foreground text-sm max-w-sm mx-auto">Choose your profile. You can always update it in settings.</p>
-        </div>
-        <div className="space-y-6">
-          {(["Private", "Real estate agents", "Development", "Institutional", "Services"] as const).map(section => {
-            const sectionParticipants = participants.filter(p => p.section === section);
-            if (sectionParticipants.length === 0) return null;
-            return (
-              <div key={section}>
-                <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">{section}</h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {sectionParticipants.map(p => {
-                    const c = colorMap[p.color];
-                    return (
-                      <button
-                        key={p.id}
-                        onClick={() => handleSelectNonPro(p)}
-                        disabled={loading}
-                        className={cn(
-                          "group relative text-left rounded-2xl border p-4 transition-all duration-200",
-                          "hover:scale-[1.02] hover:shadow-lg hover:shadow-black/10",
-                          "bg-secondary/60 border-border hover:border-primary/40 hover:bg-secondary",
-                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                        )}
-                      >
-                        <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center mb-3", c.iconBg)}>
-                          <p.icon className={cn("w-5 h-5", c.text)} />
-                        </div>
-                        <div className="font-semibold text-sm text-foreground leading-tight">{p.label}</div>
-                        <div className={cn("text-xs font-medium mt-0.5 mb-2", c.text)}>{p.tagline}</div>
-                        <div className="text-xs text-muted-foreground leading-relaxed mb-3">{p.desc}</div>
-                        <div className="space-y-1">
-                          {p.features.slice(0, 3).map(f => (
-                            <div key={f} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                              <Check className={cn("w-3 h-3 shrink-0", c.text)} /> {f}
-                            </div>
-                          ))}
-                        </div>
-                        {p.isPro && (
-                          <div className="absolute top-3 right-3 flex items-center gap-1 bg-amber-500/15 border border-amber-500/30 rounded-full px-2 py-0.5">
-                            <Shield className="w-3 h-3 text-amber-400" />
-                            <span className="text-[10px] text-amber-400 font-medium">Verify</span>
+          <div className="grid grid-cols-1 gap-4">
+            {topLevel.map(p => {
+              const c = colorMap[p.color];
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => handleSelectNonPro(p)}
+                  disabled={loading}
+                  className={cn(
+                    "group relative text-left rounded-2xl border p-5 transition-all duration-200",
+                    "hover:scale-[1.01] hover:shadow-lg hover:shadow-black/10",
+                    "bg-secondary/60 border-border hover:border-primary/40 hover:bg-secondary",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  )}
+                >
+                  <div className="flex items-start gap-4">
+                    <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center shrink-0", c.iconBg)}>
+                      <p.icon className={cn("w-6 h-6", c.text)} />
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-bold text-base text-foreground leading-tight">{p.label}</div>
+                      <div className={cn("text-xs font-semibold mt-0.5 mb-2", c.text)}>{p.tagline}</div>
+                      <div className="text-xs text-muted-foreground leading-relaxed mb-3">{p.desc}</div>
+                      <div className="flex flex-wrap gap-x-4 gap-y-1">
+                        {p.features.map(f => (
+                          <div key={f} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                            <Check className={cn("w-3 h-3 shrink-0", c.text)} /> {f}
                           </div>
-                        )}
-                        <ChevronRight className="absolute bottom-4 right-4 w-4 h-4 text-muted-foreground/40 group-hover:text-primary transition-colors" />
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
+                        ))}
+                      </div>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-muted-foreground/40 group-hover:text-primary transition-colors mt-1 shrink-0" />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-center text-xs text-muted-foreground mt-6">
+            Not sure yet?{" "}
+            <button className="text-primary hover:underline" onClick={() => handleSelectNonPro(participants.find(p => p.id === "participant")!)}>Continue as a participant</button>
+          </p>
         </div>
-        <p className="text-center text-xs text-muted-foreground mt-6">
-          Not sure yet?{" "}
-          <button className="text-primary hover:underline" onClick={() => handleSelectNonPro(participants[0])}>Continue as a buyer</button>{" "}
-          and customise later.
-        </p>
-      </div>
-    );
+      );
+    }
+
+    // ── Participant goal (buy / sell) ──
+    if (step === "pick-participant-goal") {
+      const options = [
+        {
+          id: "buyer" as const,
+          label: "I'm looking to Buy or Rent",
+          desc: "Search listings, compare properties, book viewings & get AI property insights.",
+          icon: Home,
+          color: "blue",
+          features: ["Browse all listings", "Book viewings", "Save searches & alerts", "Mortgage calculator"],
+        },
+        {
+          id: "seller" as const,
+          label: "I'm looking to Sell or Let",
+          desc: "List your own property, manage viewings and connect with serious buyers directly.",
+          icon: User,
+          color: "violet",
+          features: ["List up to 2 properties free", "Manage viewing requests", "AI listing description", "Direct buyer messaging"],
+        },
+      ];
+      return (
+        <div>
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-full px-4 py-1.5 text-xs font-medium text-primary mb-4">
+              <Home className="w-3.5 h-3.5" /> One more thing
+            </div>
+            <h1 className="font-display font-bold text-2xl md:text-3xl text-foreground mb-2">What do you want to do?</h1>
+            <p className="text-muted-foreground text-sm max-w-sm mx-auto">You can do both later — just pick what matters most right now.</p>
+          </div>
+          <div className="grid grid-cols-1 gap-4 mb-4">
+            {options.map(opt => {
+              const c = colorMap[opt.color];
+              return (
+                <button
+                  key={opt.id}
+                  onClick={() => handleParticipantGoal(opt.id)}
+                  disabled={loading}
+                  className={cn(
+                    "group relative text-left rounded-2xl border p-5 transition-all duration-200",
+                    "hover:scale-[1.01] hover:shadow-lg hover:shadow-black/10",
+                    "bg-secondary/60 border-border hover:border-primary/40 hover:bg-secondary",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  )}
+                >
+                  <div className="flex items-start gap-4">
+                    <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center shrink-0", c.iconBg)}>
+                      <opt.icon className={cn("w-6 h-6", c.text)} />
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-bold text-base text-foreground leading-tight">{opt.label}</div>
+                      <div className="text-xs text-muted-foreground mt-1 mb-3 leading-relaxed">{opt.desc}</div>
+                      <div className="flex flex-wrap gap-x-4 gap-y-1">
+                        {opt.features.map(f => (
+                          <div key={f} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                            <Check className={cn("w-3 h-3 shrink-0", c.text)} /> {f}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    {loading ? <Loader2 className="w-4 h-4 animate-spin text-primary mt-1 shrink-0" /> : <ChevronRight className="w-5 h-5 text-muted-foreground/40 group-hover:text-primary transition-colors mt-1 shrink-0" />}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-center text-xs text-muted-foreground">You can always list a property later from your dashboard.</p>
+        </div>
+      );
+    }
+
+    // ── Pro sub-type (agent / developer / service professional) ──
+    if (step === "pick-pro-type") {
+      const proOptions = [
+        {
+          id: "agent" as const,
+          label: "Real Estate Agent / Agency",
+          desc: "Licensed to list and sell properties on behalf of clients.",
+          icon: Building2,
+          color: "cyan",
+          features: ["Unlimited listings", "CRM & contacts", "Auction alerts", "Branded video room"],
+        },
+        {
+          id: "developer" as const,
+          label: "Developer / Builder",
+          desc: "Launching residential or commercial development projects.",
+          icon: Briefcase,
+          color: "orange",
+          features: ["Project showcases", "Pre-sale management", "Portfolio pages", "Bulk inquiries"],
+        },
+        {
+          id: "service_pro" as const,
+          label: "Service Professional",
+          desc: "Architect, lawyer, notary, engineer, contractor & more.",
+          icon: Wrench,
+          color: "rose",
+          features: ["Professional directory", "Service catalog", "Client leads", "Verified badge"],
+          isPro: true,
+        },
+      ];
+      return (
+        <div>
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-full px-4 py-1.5 text-xs font-medium text-primary mb-4">
+              <Briefcase className="w-3.5 h-3.5" /> Professional setup
+            </div>
+            <h1 className="font-display font-bold text-2xl md:text-3xl text-foreground mb-2">Which best describes you?</h1>
+            <p className="text-muted-foreground text-sm max-w-sm mx-auto">Each profile unlocks different tools and capabilities.</p>
+          </div>
+          <div className="grid grid-cols-1 gap-4">
+            {proOptions.map(opt => {
+              const c = colorMap[opt.color];
+              return (
+                <button
+                  key={opt.id}
+                  onClick={() => handleProSubType(opt.id)}
+                  disabled={loading}
+                  className={cn(
+                    "group relative text-left rounded-2xl border p-5 transition-all duration-200",
+                    "hover:scale-[1.01] hover:shadow-lg hover:shadow-black/10",
+                    "bg-secondary/60 border-border hover:border-primary/40 hover:bg-secondary",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  )}
+                >
+                  {opt.isPro && (
+                    <div className="absolute top-3 right-3 flex items-center gap-1 bg-amber-500/15 border border-amber-500/30 rounded-full px-2 py-0.5">
+                      <Shield className="w-3 h-3 text-amber-400" />
+                      <span className="text-[10px] text-amber-400 font-medium">Verify required</span>
+                    </div>
+                  )}
+                  <div className="flex items-start gap-4">
+                    <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center shrink-0", c.iconBg)}>
+                      <opt.icon className={cn("w-6 h-6", c.text)} />
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-bold text-base text-foreground leading-tight">{opt.label}</div>
+                      <div className="text-xs text-muted-foreground mt-1 mb-3 leading-relaxed">{opt.desc}</div>
+                      <div className="flex flex-wrap gap-x-4 gap-y-1">
+                        {opt.features.map(f => (
+                          <div key={f} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                            <Check className={cn("w-3 h-3 shrink-0", c.text)} /> {f}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    {loading ? <Loader2 className="w-4 h-4 animate-spin text-primary mt-1 shrink-0" /> : <ChevronRight className="w-5 h-5 text-muted-foreground/40 group-hover:text-primary transition-colors mt-1 shrink-0" />}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
 
     // ── Pro category ──
     if (step === "pro-category") return (
@@ -869,7 +1055,9 @@ export default function Onboarding() {
   })();
 
   // Per-step back handler
-  const onBack = step === "pro-category" ? () => setStep("pick-type")
+  const onBack = step === "pick-participant-goal" ? () => setStep("pick-type")
+    : step === "pick-pro-type" ? () => setStep("pick-type")
+    : step === "pro-category" ? () => setStep("pick-pro-type")
     : step === "pro-verify" ? () => setStep("pro-category")
     : step === "pro-services" ? () => setStep("pro-verify")
     : step === "pro-availability" ? () => setStep("pro-services")

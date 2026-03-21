@@ -7,27 +7,26 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import {
   Check, Zap, Users, Briefcase, UserCheck,
-  TrendingUp, BarChart2, Bell, Star, Shield, Filter, ArrowRight,
+  BarChart2, Bell, Star, Shield, Filter, ArrowRight,
   Crown, Sparkles, Building2, Gavel, Home, Layers,
   MessageSquare, Eye, FileText, FolderKanban,
   Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
+import { getPricingAudienceFromProfile, type PricingAudienceId } from "@/lib/participantConfig";
 import { usePricingConfigs } from "@/hooks/usePricingConfigs";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 // ── Audience config ────────────────────────────────────────────────────────────
 
-type AudienceId = "buyer" | "seller" | "agent" | "developer" | "professional";
+type AudienceId = PricingAudienceId;
 
 const AUDIENCE_TABS: { id: AudienceId; label: string; mobileLabel: string; icon: React.ElementType }[] = [
-  { id: "buyer",         label: "Buyer / Renter",      mobileLabel: "Buyer",       icon: Home },
-  { id: "seller",        label: "Seller / Landlord",   mobileLabel: "Seller",      icon: Users },
+  { id: "participant",   label: "Participant",          mobileLabel: "Participant", icon: Home },
   { id: "agent",         label: "Agent",                mobileLabel: "Agent",       icon: UserCheck },
   { id: "developer",     label: "Developer",            mobileLabel: "Dev",         icon: Layers },
-  { id: "professional",  label: "Professional",        mobileLabel: "Pro",         icon: Briefcase },
+  { id: "professional",  label: "Professional",         mobileLabel: "Pro",         icon: Briefcase },
 ];
 
 // ── Plan feature type ──────────────────────────────────────────────────────────
@@ -35,45 +34,29 @@ type PlanFeature = { label: string; free?: boolean | string; paid?: boolean | st
 
 // ── Per-audience plan data ─────────────────────────────────────────────────────
 
-// BUYER
-const BUYER_FREE_LIST = [
+// PARTICIPANT (merged buyer + seller)
+const PARTICIPANT_FREE_LIST = [
   "Browse all listings",
   "View max 60 auction listings",
-  "No pro auction filters",
-  "Save up to 1 search",
-  "Set 1 search alert",
-  "Book 1 viewing per month (physical or video)",
-  "Send messages",
-  "1 Auction alert",
+  "Save up to 1 search & 1 alert",
+  "Book 1 viewing per month",
+  "List up to 2 of your own properties",
+  "Send & receive messages",
   "Professional directory access (up to 5 per category)",
 ];
-const BUYER_PRO: PlanFeature[] = [
+const PARTICIPANT_PRO: PlanFeature[] = [
   { label: "Property Valuation", icon: BarChart2, free: false, paid: "5/month, €3 each extra" },
   { label: "Property Reports", icon: FileText, free: false, paid: "3/month, €9 each extra" },
   { label: "All pro auction filters", icon: Filter, free: "None", paid: true },
   { label: "Priority auction alerts", icon: Bell, free: false, paid: true },
-  { label: "Unlimited Saved Searches", icon: Star, free: "1 max", paid: "Unlimited" },
-  { label: "Similar sales on each listing", icon: BarChart2, free: false, paid: true },
-  { label: "View max 600 auction listings", icon: Gavel, free: "60 max", paid: "600 max" },
-  { label: "Save up to 5 searches, 5 alerts", icon: Star, free: "1 search, 1 alert", paid: "5 each" },
+  { label: "Unlimited saved searches & alerts", icon: Star, free: "1 each", paid: "Unlimited" },
   { label: "Book up to 10 viewings per month", icon: MessageSquare, free: "1/month", paid: "10/month" },
-  { label: "5 Auction alerts", icon: Bell, free: "1", paid: "5" },
-  { label: "Unlimited professionals access", icon: Users, free: "5 per category", paid: "Unlimited" },
-];
-
-// SELLER
-const SELLER_FREE_LIST = [
-  "List up to 2 properties",
-  "No AI assistance",
-  "Send & receive messages",
-  "Basic listing dashboard (no analytics)",
-];
-const SELLER_PRO: PlanFeature[] = [
-  { label: "Up to 5 listings", icon: Layers, free: "2 max", paid: "5 max" },
+  { label: "View max 600 auction listings", icon: Gavel, free: "60 max", paid: "600 max" },
+  { label: "Up to 5 listings (sell/rent)", icon: Layers, free: "2 max", paid: "5 max" },
   { label: "AI listing description assist", icon: Sparkles, free: false, paid: true },
-  { label: "Featured badge", icon: Crown, free: false, paid: true },
+  { label: "Featured listing badge", icon: Crown, free: false, paid: true },
   { label: "Listing performance analytics", icon: BarChart2, free: false, paid: true },
-  { label: "Priority placement in search", icon: Star, free: false, paid: true },
+  { label: "Unlimited professionals access", icon: Users, free: "5 per category", paid: "Unlimited" },
 ];
 
 // AGENT
@@ -138,17 +121,11 @@ type PlanDef = {
 };
 
 const PLANS: Record<AudienceId, PlanDef> = {
-  buyer: {
-    freeLabel: "Free", freePrice: "€0", freeDesc: "Start your search", freeCTA: "Browse Free", freeHref: "/listings",
-    paidLabel: "Pro Plan", paidPrice: "€19", paidPriceUnit: "/ month", paidDesc: "AI valuations, reports, pro filters & more", paidCTA: "Get Pro Plan", paidHref: "/pricing",
-    freeList: BUYER_FREE_LIST, features: BUYER_PRO,
+  participant: {
+    freeLabel: "Free", freePrice: "€0", freeDesc: "Search, browse & list your own property", freeCTA: "Get Started Free", freeHref: "/signup",
+    paidLabel: "Pro Plan", paidPrice: "€19", paidPriceUnit: "/ month", paidDesc: "AI valuations, reports, pro filters & up to 5 listings", paidCTA: "Get Pro Plan", paidHref: "/pricing",
+    freeList: PARTICIPANT_FREE_LIST, features: PARTICIPANT_PRO,
     accent: "text-brand-gold", accentBg: "bg-brand-gold/10", accentBorder: "border-brand-gold/40",
-  },
-  seller: {
-    freeLabel: "Free", freePrice: "€0", freeDesc: "List up to 2 properties", freeCTA: "List a Property", freeHref: "/listings/new",
-    paidLabel: "Pro Plan", paidPrice: "€19", paidPriceUnit: "/ month", paidDesc: "Up to 5 listings, AI assist & analytics", paidCTA: "Get Pro Plan", paidHref: "/pricing",
-    freeList: SELLER_FREE_LIST, features: SELLER_PRO,
-    accent: "text-violet-400", accentBg: "bg-violet-500/10", accentBorder: "border-violet-500/40",
   },
   agent: {
     freeLabel: "Free", freePrice: "€0", freeDesc: "Up to 5 listings & basic tools", freeCTA: "Start Free", freeHref: "/signup",
@@ -178,14 +155,13 @@ export default function Pricing() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  const [activeTab, setActiveTab] = useState<AudienceId>("buyer");
+  const [activeTab, setActiveTab] = useState<AudienceId>("participant");
   const [hasAutoSelected, setHasAutoSelected] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
 
   const PLAN_KEYS: Record<AudienceId, string> = {
-    buyer: "pro",
-    seller: "seller_pro",
+    participant: "pro",
     agent: "agent_basic",
     developer: "agent_basic",
     professional: "professional_basic",
@@ -235,8 +211,8 @@ export default function Pricing() {
       return;
     }
     if (profile) {
-      const pt = getParticipantTypeFromProfile(profile);
-      const validTab = AUDIENCE_TABS.some(t => t.id === pt) ? pt : "buyer";
+      const pt = getPricingAudienceFromProfile(profile);
+      const validTab = AUDIENCE_TABS.some(t => t.id === pt) ? pt : "participant";
       setActiveTab(validTab as AudienceId);
     }
     setHasAutoSelected(true);
@@ -256,7 +232,7 @@ export default function Pricing() {
       }
     : basePlan;
 
-  const participant = getParticipantTypeFromProfile(profile);
+  const participant = getPricingAudienceFromProfile(profile);
   const hasAudiencePro = isPro && activeTab === participant;
 
   return (

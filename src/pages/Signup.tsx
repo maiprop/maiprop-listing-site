@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { Eye, EyeOff, Loader2, ArrowRight, Home, Users, UserCheck, Building2, Briefcase, ChevronLeft } from "lucide-react";
+import { Eye, EyeOff, Loader2, ArrowRight, Home, Briefcase, ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { useAuth } from "@/contexts/AuthContext";
@@ -20,21 +20,39 @@ const GoogleIcon = () => (
   </svg>
 );
 
-type ParticipantId = "buyer" | "seller" | "agent" | "developer" | "professional";
+/** Top-level signup choices — refined further in Onboarding */
+type SignupTopType = "participant" | "market_pro";
+
 const PARTICIPANT_TYPES: {
-  id: ParticipantId;
+  id: SignupTopType;
   label: string;
   sublabel: string;
+  desc: string;
   icon: React.ElementType;
   accent: string;
   accentBg: string;
   accentBorder: string;
 }[] = [
-  { id: "buyer",         label: "Buyer / Renter",      sublabel: "Browse, search & book viewings",         icon: Home,       accent: "text-brand-gold",  accentBg: "bg-brand-gold/10",  accentBorder: "border-brand-gold/40" },
-  { id: "seller",        label: "Seller / Landlord",   sublabel: "List & manage your property",            icon: Users,      accent: "text-violet-400",  accentBg: "bg-violet-500/10",  accentBorder: "border-violet-500/40" },
-  { id: "agent",         label: "Agent",                sublabel: "Listings, CRM & client management",      icon: UserCheck,  accent: "text-brand-purple", accentBg: "bg-brand-purple/10", accentBorder: "border-brand-purple/40" },
-  { id: "developer",     label: "Developer",            sublabel: "Project showcases & pre-sale management", icon: Building2, accent: "text-orange-400",  accentBg: "bg-orange-500/10",  accentBorder: "border-orange-500/40" },
-  { id: "professional",  label: "Professional",         sublabel: "Directory listing, leads & bookings",    icon: Briefcase,  accent: "text-rose-400",    accentBg: "bg-rose-500/10",    accentBorder: "border-rose-500/40" },
+  {
+    id: "participant",
+    label: "I'm Looking for Property",
+    sublabel: "Buy, rent, or sell your own home",
+    desc: "Search listings, book viewings, or list your own property — all in one place.",
+    icon: Home,
+    accent: "text-brand-gold",
+    accentBg: "bg-brand-gold/10",
+    accentBorder: "border-brand-gold/40",
+  },
+  {
+    id: "market_pro",
+    label: "Market Professional",
+    sublabel: "Agent, developer, or service provider",
+    desc: "List properties for clients, showcase projects, or offer professional services.",
+    icon: Briefcase,
+    accent: "text-brand-purple",
+    accentBg: "bg-brand-purple/10",
+    accentBorder: "border-brand-purple/40",
+  },
 ];
 
 export default function Signup() {
@@ -46,7 +64,7 @@ export default function Signup() {
   const isProfessionalIntent = searchParams.get("role") === "professional" || searchParams.get("type") === "professional";
 
   const [step, setStep] = useState<"role" | "details">(isProfessionalIntent ? "details" : "role");
-  const [selectedType, setSelectedType] = useState<ParticipantId | null>(isProfessionalIntent ? "professional" : null);
+  const [selectedType, setSelectedType] = useState<SignupTopType | null>(isProfessionalIntent ? "market_pro" : null);
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -132,7 +150,7 @@ export default function Signup() {
                   <p className="text-muted-foreground text-sm mt-1">Choose your participant type to personalise your dashboard</p>
                 </div>
 
-                <div className="grid grid-cols-1 gap-2 mb-6">
+                <div className="grid grid-cols-1 gap-3 mb-6">
                   {PARTICIPANT_TYPES.map(type => {
                     const Icon = type.icon;
                     const isSelected = selectedType === type.id;
@@ -142,26 +160,28 @@ export default function Signup() {
                         type="button"
                         onClick={() => setSelectedType(type.id)}
                         className={cn(
-                          "flex items-center gap-3 rounded-xl px-4 py-3 border text-left transition-all",
+                          "flex items-start gap-4 rounded-2xl px-5 py-4 border text-left transition-all",
                           isSelected
-                            ? `${type.accentBg} ${type.accentBorder} border`
-                            : "bg-secondary/50 border-border hover:border-muted-foreground/30"
+                            ? `${type.accentBg} ${type.accentBorder} border shadow-sm`
+                            : "bg-secondary/50 border-border hover:border-muted-foreground/30 hover:bg-secondary/70"
                         )}
                       >
-                        <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center shrink-0", type.accentBg)}>
-                          <Icon className={cn("w-4 h-4", type.accent)} />
+                        <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5", type.accentBg)}>
+                          <Icon className={cn("w-5 h-5", type.accent)} />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className={cn("text-sm font-semibold leading-tight", isSelected ? type.accent : "text-foreground")}>
+                          <p className={cn("text-sm font-bold leading-tight", isSelected ? type.accent : "text-foreground")}>
                             {type.label}
                           </p>
-                          <p className="text-xs text-muted-foreground truncate">{type.sublabel}</p>
+                          <p className={cn("text-xs font-medium mt-0.5", isSelected ? type.accent : "text-muted-foreground")}>{type.sublabel}</p>
+                          <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{type.desc}</p>
                         </div>
-                        {isSelected && (
-                          <div className={cn("w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0", type.accentBorder)}>
-                            <div className={cn("w-2 h-2 rounded-full", type.accent.replace("text-", "bg-"))} />
-                          </div>
-                        )}
+                        <div className={cn(
+                          "w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 mt-1 transition-all",
+                          isSelected ? type.accentBorder : "border-border"
+                        )}>
+                          {isSelected && <div className={cn("w-2 h-2 rounded-full", type.accent.replace("text-", "bg-"))} />}
+                        </div>
                       </button>
                     );
                   })}
