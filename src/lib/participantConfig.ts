@@ -3,12 +3,19 @@
  * Used by Dashboard, Pricing, Onboarding, and Signup for consistent role/audience mapping.
  */
 
+/** Detailed internal type — used by Dashboard nav and plan limits */
 export type ParticipantId =
   | "buyer"
   | "seller"
   | "agent"
   | "developer"
   | "professional";
+
+/**
+ * Top-level pricing audience — buyer and seller are merged into "participant".
+ * Used by Pricing page tab strip.
+ */
+export type PricingAudienceId = "participant" | "agent" | "developer" | "professional";
 
 /**
  * Derives the participant type (dashboard/audience key) from a user profile.
@@ -49,3 +56,15 @@ export const PARTICIPANT_LABELS: Record<ParticipantId, string> = {
   developer: "Developer",
   professional: "Professional",
 };
+
+/**
+ * Maps a profile to the pricing audience tab.
+ * Buyers and sellers are both "participant" on the pricing page.
+ */
+export function getPricingAudienceFromProfile(
+  profile: { role?: string; bio?: string | null } | null
+): PricingAudienceId {
+  const pt = getParticipantTypeFromProfile(profile);
+  if (pt === "buyer" || pt === "seller") return "participant";
+  return pt;
+}
