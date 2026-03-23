@@ -76,10 +76,10 @@ export default function AdminSubscribers() {
   const [editTier, setEditTier] = useState<string>("");
   const [editExpiry, setEditExpiry] = useState<string>("");
 
-  const loadAllSubs = async () => {
+  const loadAllSubs = async (): Promise<void> => {
     setSubsLoading(true);
     try {
-      const { data: subs, error } = await supabase.from("investor_subscriptions" as any).select("*").order("created_at", { ascending: false });
+      const { data: subs, error } = await supabase.from("investor_subscriptions").select("*").order("created_at", { ascending: false });
       if (error) throw error;
       const userIds = (subs || []).map((s: any) => s.user_id);
       const profileMap: Record<string, string> = {};
@@ -95,10 +95,10 @@ export default function AdminSubscribers() {
     }
   };
 
-  useEffect(() => { loadAllSubs(); }, []);
+  useEffect(() => { void loadAllSubs(); }, []);
 
   const handleSubUpdate = async (subId: string, updates: Partial<Subscription>) => {
-    const { error } = await supabase.from("investor_subscriptions" as any).update(updates).eq("id", subId);
+    const { error } = await supabase.from("investor_subscriptions").update(updates as any).eq("id", subId);
     if (error) { toast.error("Update failed"); return; }
     setAllSubs(prev => prev.map(s => s.id === subId ? { ...s, ...updates } : s));
     setEditingSubId(null);

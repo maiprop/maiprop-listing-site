@@ -229,6 +229,13 @@ export default function Pricing() {
     (profile as any)?.investor_mode === true ||
     isPlatformAdmin(profile);
 
+  // B2B / institutional data products: shown to institutional, developer, admin, or unauthenticated
+  const showB2B =
+    !user ||
+    (profile as any)?.participant_type === "institutional" ||
+    (profile as any)?.participant_type === "developer" ||
+    isPlatformAdmin(profile);
+
   const [activeTab, setActiveTab] = useState<AudienceId>("participant");
   const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
   const [hasAutoSelected, setHasAutoSelected] = useState(false);
@@ -654,8 +661,8 @@ export default function Pricing() {
           </div>
         </div>
 
-        {/* ── OS Data Products — B2B ────────────────────────────────────────── */}
-        <div className="border-t border-border bg-card/40 py-16">
+        {/* ── OS Data Products — B2B (institutional / developer / unauthenticated only) ── */}
+        {showB2B && <div className="border-t border-border bg-card/40 py-16">
           <div className="container max-w-5xl px-4">
             <div className="flex flex-col lg:flex-row gap-8 items-center">
               <div className="flex-1">
@@ -701,7 +708,7 @@ export default function Pricing() {
               </div>
             </div>
           </div>
-        </div>
+        </div>}
 
         {/* ── Quick Sale success fee (private: only shown to investors) ───── */}
         {isInvestorUser && <div className="border-t border-border py-12 bg-card/20">

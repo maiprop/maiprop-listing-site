@@ -347,7 +347,8 @@ export default function Onboarding() {
     if (p.nextStep) { setStep(p.nextStep); return; }
     setLoading(true);
     await updateProfile({ role: p.role as any });
-    await supabase.from("profiles").update({ bio: `__type:${p.id}`, participant_type: p.id } as any).eq("user_id", user!.id);
+    const { error: ptErr } = await supabase.from("profiles").update({ bio: `__type:${p.id}`, participant_type: p.id } as any).eq("user_id", user!.id);
+    if (ptErr) { toast.error("Could not save account type. Please try again."); setLoading(false); return; }
     await refreshProfile();
     setLoading(false);
     setStep("done");
@@ -367,7 +368,8 @@ export default function Onboarding() {
     if (goal === "buyer" && investorInterest) {
       profileUpdate.investor_mode = true;
     }
-    await supabase.from("profiles").update(profileUpdate as any).eq("user_id", user!.id);
+    const { error: goalErr } = await supabase.from("profiles").update(profileUpdate as any).eq("user_id", user!.id);
+    if (goalErr) { toast.error("Could not save account type. Please try again."); setLoading(false); return; }
     await refreshProfile();
     setLoading(false);
     setStep("done");
@@ -385,7 +387,8 @@ export default function Onboarding() {
     setSelected(p);
     setLoading(true);
     await updateProfile({ role: p.role as any });
-    await supabase.from("profiles").update({ bio: `__type:${type}`, participant_type: type } as any).eq("user_id", user!.id);
+    const { error: subErr } = await supabase.from("profiles").update({ bio: `__type:${type}`, participant_type: type } as any).eq("user_id", user!.id);
+    if (subErr) { toast.error("Could not save account type. Please try again."); setLoading(false); return; }
     await refreshProfile();
     setLoading(false);
     setStep("done");
@@ -422,7 +425,8 @@ export default function Onboarding() {
 
     if (error) { toast.error("Could not save professional profile. Please try again."); setLoading(false); return; }
     setProfessionalId((proData as any).id);
-    await supabase.from("profiles").update({ bio: `__type:professional`, participant_type: "professional" } as any).eq("user_id", user!.id);
+    const { error: proErr } = await supabase.from("profiles").update({ bio: `__type:professional`, participant_type: "professional" } as any).eq("user_id", user!.id);
+    if (proErr) { toast.error("Could not save account type. Please try again."); setLoading(false); return; }
     await refreshProfile();
     setLoading(false);
     setStep("done");

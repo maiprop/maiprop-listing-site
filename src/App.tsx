@@ -12,6 +12,7 @@ import { AdminRoute } from "@/components/AdminRoute";
 import { InvestorRoute } from "@/components/InvestorRoute";
 import { SellerRoute } from "@/components/SellerRoute";
 import { BottomNav } from "@/components/BottomNav";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useAiTranslation } from "@/hooks/useAiTranslation";
 const Index = lazy(() => import("./pages/Index"));
 const AIAssistantWidget = lazy(() => import("@/components/AIAssistantWidget"));
@@ -90,8 +91,8 @@ const App = () => (
                       <Route path="/listings/new" element={<SellerRoute><CreateListing /></SellerRoute>} />
                       <Route path="/listings/new-building" element={<SellerRoute><CreateNewBuildingListing /></SellerRoute>} />
                       <Route path="/listings" element={<Listings />} />
-                      <Route path="/property/:id" element={<PropertyDetail />} />
-                      <Route path="/auction/:id" element={<PropertyDetail />} />
+                      <Route path="/property/:id" element={<ErrorBoundary><PropertyDetail /></ErrorBoundary>} />
+                      <Route path="/auction/:id" element={<ErrorBoundary><PropertyDetail /></ErrorBoundary>} />
                       <Route path="/auctions" element={<Auctions />} />
                       <Route path="/firesale" element={<Firesale />} />
                       <Route path="/investor-dashboard" element={<InvestorRoute><InvestorDashboard /></InvestorRoute>} />
@@ -99,9 +100,9 @@ const App = () => (
                       <Route path="/professionals/me" element={<ProtectedRoute><ProfessionalProfileMe /></ProtectedRoute>} />
                       <Route path="/professionals/:id" element={<ProfessionalProfile />} />
                       <Route path="/video-room/:professionalId" element={<BrandedVideoRoom />} />
-                      <Route path="/new-build/:id" element={<NewBuildDetail />} />
+                      <Route path="/new-build/:id" element={<ErrorBoundary><NewBuildDetail /></ErrorBoundary>} />
                       <Route path="/open-houses" element={<OpenHouses />} />
-                      <Route path="/open-house/:id" element={<OpenHouseDetail />} />
+                      <Route path="/open-house/:id" element={<ErrorBoundary><OpenHouseDetail /></ErrorBoundary>} />
                       <Route path="/signup" element={<Signup />} />
                       <Route path="/login" element={<Login />} />
                       <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />

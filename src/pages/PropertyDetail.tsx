@@ -189,7 +189,9 @@ export default function PropertyDetail() {
     if (!dbListing || aiInsightsLoaded || !user) return;
     setAiInsightsLoaded(true);
     setAiInsightsLoading(true);
-    const listingId = id ?? dbListing.id;
+    // Capture snapshot to avoid stale closure if dbListing reference changes mid-flight
+    const snapshot = dbListing;
+    const listingId = id ?? snapshot.id;
     const invokeValuation = async () => {
       try {
         // Try OS report API first when we have a listing id
@@ -212,23 +214,23 @@ export default function PropertyDetail() {
         }
         const { data, error: fnErr } = await supabaseClient.functions.invoke("property-valuation", {
           body: {
-            title: dbListing.title,
-            city: dbListing.city,
-            address: dbListing.address,
-            price: Number(dbListing.price),
-            sqm: Number(dbListing.sqm),
-            bedrooms: dbListing.bedrooms,
-            bathrooms: dbListing.bathrooms,
-            propertyType: dbListing.property_type,
-            listingType: dbListing.listing_type,
-            floor: dbListing.floor,
-            yearBuilt: dbListing.year_built,
-            energyClass: dbListing.energy_class,
-            pricePerSqm: dbListing.price_per_sqm ? Number(dbListing.price_per_sqm) : undefined,
-            hasParking: dbListing.has_parking,
-            hasPool: dbListing.has_pool,
-            hasElevator: dbListing.has_elevator,
-            region: dbListing.region,
+            title: snapshot.title,
+            city: snapshot.city,
+            address: snapshot.address,
+            price: Number(snapshot.price),
+            sqm: Number(snapshot.sqm),
+            bedrooms: snapshot.bedrooms,
+            bathrooms: snapshot.bathrooms,
+            propertyType: snapshot.property_type,
+            listingType: snapshot.listing_type,
+            floor: snapshot.floor,
+            yearBuilt: snapshot.year_built,
+            energyClass: snapshot.energy_class,
+            pricePerSqm: snapshot.price_per_sqm ? Number(snapshot.price_per_sqm) : undefined,
+            hasParking: snapshot.has_parking,
+            hasPool: snapshot.has_pool,
+            hasElevator: snapshot.has_elevator,
+            region: snapshot.region,
             // Ownership info affects valuation for auction properties
             ownershipStatus: (() => {
               const t: string[] = (dbListing as any)?.tags ?? [];
@@ -246,7 +248,7 @@ export default function PropertyDetail() {
           setAiInsightsData({
             vsMarket: data.marketComparisonPct ?? 0,
             rentalYield: data.rentalYieldEstimate ?? 0,
-            estimatedValue: data.estimatedValue ?? Number(dbListing.price),
+            estimatedValue: data.estimatedValue ?? Number(snapshot.price),
             marketComparison: data.marketComparison ?? "at_market",
             confidenceLabel: data.confidenceLabel ?? "Medium"
           });

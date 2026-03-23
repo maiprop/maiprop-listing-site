@@ -16,7 +16,7 @@ export function useEligibleForQuickSale() {
     queryFn: async () => {
       if (!user?.id) return null;
       const { data } = await supabase
-        .from("investor_subscriptions" as any)
+        .from("investor_subscriptions")
         .select("status")
         .eq("user_id", user.id)
         .in("status", ["active", "trial"])
@@ -25,7 +25,7 @@ export function useEligibleForQuickSale() {
       return (data as unknown) as { status: string } | null;
     },
     enabled: !!user?.id,
-    staleTime: 60 * 1000,
+    staleTime: 10 * 1000,
   });
 
   const isAdmin = isPlatformAdmin(profile);
