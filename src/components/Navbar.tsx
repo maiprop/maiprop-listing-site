@@ -238,7 +238,7 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
                 }`}>
                   <div className="w-7 h-7 rounded-full bg-gradient-primary flex items-center justify-center text-xs font-bold text-primary-foreground">
                     {profile?.avatar_url
-                      ? <img src={profile.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
+                      ? <img src={profile.avatar_url} alt="" className="w-full h-full rounded-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
                       : initials}
                   </div>
                   <span className={`text-sm max-w-[80px] truncate ${forceLight ? "text-white" : "text-foreground"}`}>{displayName}</span>
