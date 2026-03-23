@@ -79,9 +79,10 @@ export default function OpenHouseOfferDialog({
     }
     try {
       await submitOffer.mutateAsync({ listingId, amount: num, message: message || undefined });
+      toast.success("Offer submitted successfully");
       onClose();
     } catch {
-      // handled
+      // handled by mutation onError
     }
   };
 
@@ -126,6 +127,8 @@ export default function OpenHouseOfferDialog({
                 <label className="text-xs font-semibold text-muted-foreground block mb-2">Amount (€)</label>
                 <input
                   type="number"
+                  min="0"
+                  step="0.01"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   placeholder={String(listingPrice)}

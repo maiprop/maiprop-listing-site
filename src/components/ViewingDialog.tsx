@@ -69,7 +69,10 @@ export default function ViewingDialog({ open, onClose, property, ownerId, canVid
   const handleBook = async () => {
     if (!user) { toast.error("Please sign in to request a viewing"); return; }
     if (!ownerId) { toast.error("Could not determine property owner."); return; }
-    if (!selectedIso || !selectedTime) return;
+    if (!selectedIso || !selectedTime) {
+      toast.error("Please select a date and time");
+      return;
+    }
     setLoading(true);
     const scheduledAt = new Date(`${selectedIso}T${selectedTime}:00`);
     const { error: viewErr } = await supabase.from("viewings").insert({

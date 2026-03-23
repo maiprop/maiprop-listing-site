@@ -19,6 +19,7 @@ function TransferAdminForm({ onSuccess }: { onSuccess: () => Promise<void> }) {
       toast.error("Enter the new admin's email");
       return;
     }
+    if (!window.confirm(`Transfer admin rights to ${trimmed}? You will lose admin access immediately.`)) return;
     setLoading(true);
     try {
       const { error } = await supabase.rpc("grant_platform_admin_by_email", { target_email: trimmed });

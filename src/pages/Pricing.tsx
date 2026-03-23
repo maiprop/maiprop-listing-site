@@ -215,7 +215,7 @@ const ADDONS = [
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function Pricing() {
   const { user, profile } = useAuth();
-  const { isPro } = useSubscription();
+  const { isPro, loading: subLoading, refreshSubscription } = useSubscription();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -282,6 +282,17 @@ export default function Pricing() {
   };
 
   useEffect(() => {
+    const checkoutStatus = searchParams.get("checkout");
+    if (checkoutStatus === "success") {
+      toast.success("Payment successful! Your plan has been activated.");
+      refreshSubscription();
+    } else if (checkoutStatus === "cancelled") {
+      toast.info("Checkout cancelled — no charge was made.");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
     if (hasAutoSelected) return;
     const audienceParam = searchParams.get("audience") as AudienceId | null;
     if (audienceParam && AUDIENCE_TABS.some(t => t.id === audienceParam)) {
@@ -316,7 +327,7 @@ export default function Pricing() {
     : basePlan;
 
   const participant = getPricingAudienceFromProfile(profile);
-  const hasAudiencePro = isPro && activeTab === participant;
+  const hasAudiencePro = !subLoading && isPro && activeTab === participant;
 
   return (
     <div className="min-h-screen bg-background">

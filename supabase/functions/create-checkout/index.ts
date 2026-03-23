@@ -70,10 +70,10 @@ Deno.serve(async (req) => {
       logStep("Existing Stripe customer found", { customerId });
     }
 
-    const origin = req.headers.get("origin") || "https://portal.maiprop.co/";
+    const origin = req.headers.get("origin") || Deno.env.get("SITE_URL") || "https://portal.maiprop.co/";
     const success =
-      successUrl ?? (plan.startsWith("professional") ? `${origin}/dashboard?pro=success` : `${origin}/pro?success=1`);
-    const cancel = cancelUrl ?? (plan.startsWith("professional") ? `${origin}/pricing` : `${origin}/pro?cancelled=1`);
+      successUrl ?? `${origin}/pricing?checkout=success`;
+    const cancel = cancelUrl ?? `${origin}/pricing?checkout=cancelled`;
 
     const session = await stripe.checkout.sessions.create({
       customer: customerId,

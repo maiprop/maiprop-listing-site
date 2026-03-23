@@ -652,6 +652,10 @@ export default function CreateListing() {
       toast.error("Please fill in all required fields");
       return;
     }
+    if (Number(form.price) <= 0 || Number(form.sqm) <= 0) {
+      toast.error("Price and area must be greater than zero");
+      return;
+    }
     setSubmitting(true);
     try {
       const coverImg = images.find(img => img.id === coverImageId);

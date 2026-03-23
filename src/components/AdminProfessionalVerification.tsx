@@ -475,17 +475,32 @@ export function AdminProfessionalVerification() {
     setModalPro(null);
   }
 
-  function handleRequestInfo(id: string, notes: string): void {
+  async function handleRequestInfo(id: string, notes: string): Promise<void> {
     const pro = professionals.find((p) => p.id === id);
     if (!pro) return;
+    if (!usingMock) {
+      // Log the request in a notification or note field if available; best-effort
+      await supabase.from("professionals").update({ notes: notes || null } as any).eq("id", id);
+    }
     toast.success(`Request for more info sent to ${pro.display_name}.`);
     if (notes.trim()) toast.info(`Note: "${notes.trim()}"`);
     setModalPro(null);
   }
 
-  function handleReject(id: string, notes: string): void {
+  async function handleReject(id: string, notes: string): Promise<void> {
     const pro = professionals.find((p) => p.id === id);
     if (!pro) return;
+
+    if (!usingMock) {
+      const { error } = await supabase
+        .from("professionals")
+        .update({ verified: false } as any)
+        .eq("id", id);
+      if (error) {
+        toast.error("Failed to reject. Please try again.");
+        return;
+      }
+    }
 
     setProfessionals((prev) =>
       prev.map((p) =>
