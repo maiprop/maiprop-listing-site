@@ -5,7 +5,6 @@ import { getAiErrorMessage } from "@/lib/aiErrorUtils";
 import { useAuth } from "@/contexts/AuthContext";
 import { SignInForAI } from "@/components/SignInForAI";
 import { computeWalkScore, walkScoreLabel, walkScoreColour } from "@/lib/walkScore";
-import { toast } from "sonner";
 
 type Listing = Record<string, any>;
 

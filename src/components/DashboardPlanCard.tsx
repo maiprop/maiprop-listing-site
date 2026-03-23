@@ -7,7 +7,7 @@ import { Link } from "react-router-dom";
 import { Crown, Zap, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { getPlanLimits, startOfCurrentMonth } from "@/hooks/usePlanLimits";
+import { getPlanLimits } from "@/hooks/usePlanLimits";
 import type { ParticipantId } from "@/lib/participantConfig";
 
 type Usage = {

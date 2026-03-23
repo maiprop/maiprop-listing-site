@@ -1643,6 +1643,44 @@ export type Database = {
         }
         Relationships: []
       }
+      notifications: {
+        Row: {
+          id: string
+          user_id: string
+          title: string
+          body: string | null
+          type: string
+          read: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          title: string
+          body?: string | null
+          type?: string
+          read?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          title?: string
+          body?: string | null
+          type?: string
+          read?: boolean
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -1653,8 +1691,10 @@ export type Database = {
           display_name: string | null
           first_name: string | null
           id: string
+          investor_mode: boolean
           is_platform_admin: boolean
           last_name: string | null
+          participant_type: string | null
           phone: string | null
           role: Database["public"]["Enums"]["user_role"]
           updated_at: string
@@ -1671,8 +1711,10 @@ export type Database = {
           display_name?: string | null
           first_name?: string | null
           id?: string
+          investor_mode?: boolean
           is_platform_admin?: boolean
           last_name?: string | null
+          participant_type?: string | null
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           updated_at?: string
@@ -1689,8 +1731,10 @@ export type Database = {
           display_name?: string | null
           first_name?: string | null
           id?: string
+          investor_mode?: boolean
           is_platform_admin?: boolean
           last_name?: string | null
+          participant_type?: string | null
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           updated_at?: string

@@ -5,7 +5,7 @@ import {
   ChevronLeft, Clock, Users, Briefcase, MessageSquare,
   Calendar, Shield, Loader2, Languages, ChevronRight,
   Phone, Euro, FileText, ThumbsUp, Zap, Building2, Video,
-  Search, Lock, BarChart3, List, Target, Megaphone
+  Lock, BarChart3, List, Target, Megaphone
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -20,7 +20,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { toast } from "sonner";
 import RequestCallbackModal from "@/components/RequestCallbackModal";
-import OnlineViewingModal from "@/components/OnlineViewingModal";
 import { AIServiceMatchModal } from "@/components/AIServiceMatchModal";
 
 const categoryLabels: Record<string, { label: string; emoji: string; description: string }> = {
@@ -122,39 +121,6 @@ const mockReviews = [
   { name: "Nikos A.", rating: 4, text: "Great service, very professional. Delivered on time and within budget. Minor communication delays but overall excellent.", date: "2 months ago", avatar: "N", project: "Golden Visa Application" },
 ];
 
-const categoryEmoji: Record<string, string> = {
-  real_estate_agent: "🏠", lawyer: "⚖️", notary: "📜", architect: "🏛️", civil_engineer: "⚙️",
-  contractor: "🏗️", interior_designer: "🎨", electrician: "⚡", plumber: "🔧",
-  financial_advisor: "💼", valuer: "📊", property_manager: "🏢", insurance_broker: "🛡️",
-  utility_certification_provider: "📄", esg_sustainability_consultant: "🌱",
-  relocation_immigration_consultant: "✈️", facility_manager: "🔑", short_term_rental_operator: "🏡",
-  hotel_hospitality_operator: "🏨", marketing_agency: "📸", crm_listing_data_provider: "📊",
-  concrete_contractor: "🧱", steel_structure_contractor: "🔩", carpenter: "🪚", tile_installer: "🔲",
-  painter: "🖌️", building_permit_consultant: "📝", urban_planning_consultant: "🗺️",
-  legalization_specialist: "📜", energy_certificate_inspector: "⚡", building_regulation_consultant: "✔️",
-  fire_protection_consultant: "🔥", drywall_installer: "📐", waterproofing_specialist: "💧",
-  insulation_contractor: "🧊", roofing_contractor: "🏠", window_aluminum_installer: "🪟",
-  elevator_installer: "🛗", smart_home_installer: "📱",
-};
-const categoryLabel: Record<string, string> = {
-  real_estate_agent: "Real Estate Agent", lawyer: "Real Estate Lawyer", notary: "Notary Public",
-  architect: "Architect", civil_engineer: "Civil Engineer", contractor: "Contractor",
-  interior_designer: "Interior Designer", electrician: "Electrician", plumber: "Plumber",
-  financial_advisor: "Financial Advisor", valuer: "Property Valuer", property_manager: "Property Manager",
-  insurance_broker: "Insurance Broker", utility_certification_provider: "Utility & Certification",
-  esg_sustainability_consultant: "ESG / Sustainability", relocation_immigration_consultant: "Relocation / Immigration",
-  facility_manager: "Facility Manager", short_term_rental_operator: "Short-Term Rental",
-  hotel_hospitality_operator: "Hotel / Hospitality", marketing_agency: "Marketing / Media",
-  crm_listing_data_provider: "CRM / Data Provider", concrete_contractor: "Concrete Contractor",
-  steel_structure_contractor: "Steel Structure", carpenter: "Carpenter", tile_installer: "Tile Installer",
-  painter: "Painter", building_permit_consultant: "Building Permit", urban_planning_consultant: "Urban Planning",
-  legalization_specialist: "Legalization Specialist", energy_certificate_inspector: "Energy Certificate (ΠΕΑ)",
-  building_regulation_consultant: "Regulation Compliance", fire_protection_consultant: "Fire Protection",
-  drywall_installer: "Drywall Installer", waterproofing_specialist: "Waterproofing",
-  insulation_contractor: "Insulation", roofing_contractor: "Roofing",
-  window_aluminum_installer: "Window / Aluminum", elevator_installer: "Elevator Installer",
-  smart_home_installer: "Smart Home",
-};
 
 const PRICING_LABELS: Record<string, string> = { hourly: "/hr", daily: "/day", fixed: " fixed" };
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];

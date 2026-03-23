@@ -36,7 +36,6 @@ const MEDIA_TYPES: { value: ProjectMediaType; label: string; mandatory?: boolean
 
 const KITCHEN_TYPES = ["open", "closed", "semi-open", "kitchenette", "none"];
 const ENERGY_CLASSES = ["A+", "A", "B+", "B", "C", "D", "E", "F", "G", "Exempt"];
-const HEATING_OPTIONS = ["autonomous", "central", "floor", "heat_pump", "none", "other"];
 
 function Section({ title, icon: Icon, children, defaultOpen = true }: { title: string; icon: React.ElementType; children: React.ReactNode; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -79,7 +78,7 @@ export default function ProjectDetail() {
   const [showUnitForm, setShowUnitForm] = useState(false);
   const [editingUnitId, setEditingUnitId] = useState<string | null>(null);
   const [showLeadForm, setShowLeadForm] = useState(false);
-  const [editingLeadId, setEditingLeadId] = useState<string | null>(null);
+  const [_editingLeadId, _setEditingLeadId] = useState<string | null>(null);
   const [leadForm, setLeadForm] = useState<Partial<ProjectLeadInsert>>({});
   const [showBulkPrice, setShowBulkPrice] = useState(false);
   const [bulkPricePct, setBulkPricePct] = useState("");

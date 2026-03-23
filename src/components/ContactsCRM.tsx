@@ -14,7 +14,6 @@ import {
   Loader2, Users, Plus, Mail, Phone, Trash2, Edit2, Calendar, CheckSquare,
   LayoutGrid, List, Clock, ExternalLink,
 } from "lucide-react";
-import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 

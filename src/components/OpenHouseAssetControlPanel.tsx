@@ -5,7 +5,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { useAuth } from "@/contexts/AuthContext";
 import {
   useOpenHouseSettings,
   useOpenHouseRegistrations,
@@ -13,6 +12,8 @@ import {
   useUpsertOpenHouseSettings,
   useUpdateOpenHouseRegistration,
   useUpdateOpenHouseOffer,
+  useAcceptOpenHouseOffer,
+  useRevealAllOffers,
   type OHTimeslot,
   type OHRegistrationStatus,
 } from "@/hooks/useOpenHouseAssetControl";
@@ -35,17 +36,19 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner }: Props
   const [registrationsOpen, setRegistrationsOpen] = useState(true);
   const [offersOpen, setOffersOpen] = useState(true);
 
-  const { data: settings, isLoading: settingsLoading } = useOpenHouseSettings(listingId);
+  const { data: settings, isLoading: _settingsLoading } = useOpenHouseSettings(listingId);
   const { data: registrations = [], isLoading: regLoading } = useOpenHouseRegistrations(listingId, isOwner);
   const { data: offers = [] } = useOpenHouseOffers(listingId);
 
   const upsertSettings = useUpsertOpenHouseSettings();
   const updateReg = useUpdateOpenHouseRegistration();
   const updateOffer = useUpdateOpenHouseOffer();
+  const acceptOffer = useAcceptOpenHouseOffer();
+  const revealAll = useRevealAllOffers();
 
   if (!isOwner) return null;
 
-  const timeslots = (settings?.timeslots ?? []) as OHTimeslot[];
+  const _timeslots = (settings?.timeslots ?? []) as OHTimeslot[];
   const pendingCount = registrations.filter((r: any) => r.status === "pending").length;
   const approvedCount = registrations.filter((r: any) => r.status === "approved").length;
   const attendedCount = registrations.filter((r: any) => r.status === "attended").length;
@@ -216,49 +219,111 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner }: Props
           onClick={() => setOffersOpen(!offersOpen)}
         >
           <span className="font-semibold flex items-center gap-2">
-            <Euro className="w-4 h-4" /> Offers {highestBid != null && (
-              <span className="text-xs font-bold bg-primary/20 text-primary rounded-full px-2 py-0.5">€{highestBid.toLocaleString()} max</span>
+            <Euro className="w-4 h-4" /> Sealed Bids {highestBid != null && (
+              <span className="text-xs font-bold bg-primary/20 text-primary rounded-full px-2 py-0.5">€{highestBid.toLocaleString()} highest</span>
+            )}
+            {offers.some((o: any) => o.status === "accepted") && (
+              <span className="text-xs font-bold bg-emerald-500/20 text-emerald-700 rounded-full px-2 py-0.5">Winner selected</span>
             )}
           </span>
           {offersOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
         </button>
         {offersOpen && (
-          <div className="border-t border-border max-h-48 overflow-y-auto">
+          <div className="border-t border-border">
             {offers.length === 0 ? (
-              <div className="p-8 text-center text-muted-foreground text-sm">No offers yet</div>
+              <div className="p-8 text-center text-muted-foreground text-sm">No bids yet</div>
             ) : (
-              <div className="divide-y divide-border">
-                {offers.map((o: any) => (
-                  <div key={o.id} className="p-4 flex items-center justify-between gap-4">
-                    <div>
-                      <div className="font-medium">
-                        {o.status === "submitted" ? "Sealed bid" : `€${Number(o.amount).toLocaleString()}`}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {o.profiles?.display_name || "Bidder"} • {o.status}
-                      </div>
-                    </div>
-                    {o.status === "submitted" && (
-                      <Button size="sm" variant="outline"
-                        onClick={() => updateOffer.mutate({ id: o.id, status: "revealed" })}>
-                        Reveal
+              <>
+                {/* Bulk actions bar */}
+                {!offers.some((o: any) => o.status === "accepted") && (
+                  <div className="flex items-center gap-3 px-4 py-3 bg-muted/30 border-b border-border">
+                    <span className="text-xs text-muted-foreground font-medium">{offers.length} bid{offers.length !== 1 ? "s" : ""} received</span>
+                    {offers.some((o: any) => o.status === "submitted") && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs gap-1"
+                        disabled={revealAll.isPending}
+                        onClick={() =>
+                          revealAll.mutate({
+                            listingId,
+                            offerIds: offers.filter((o: any) => o.status === "submitted").map((o: any) => o.id),
+                          })
+                        }
+                      >
+                        {revealAll.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                        Reveal All Bids
                       </Button>
                     )}
-                    {o.status === "revealed" && (
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="outline" className="text-emerald-600"
-                          onClick={() => updateOffer.mutate({ id: o.id, status: "accepted" })}>
-                          Accept
-                        </Button>
-                        <Button size="sm" variant="outline" className="text-destructive"
-                          onClick={() => updateOffer.mutate({ id: o.id, status: "rejected" })}>
-                          Reject
-                        </Button>
-                      </div>
-                    )}
                   </div>
-                ))}
-              </div>
+                )}
+
+                {/* Winner banner */}
+                {offers.some((o: any) => o.status === "accepted") && (() => {
+                  const winner = offers.find((o: any) => o.status === "accepted") as any;
+                  return (
+                    <div className="mx-4 mt-4 mb-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-bold text-emerald-700 uppercase tracking-widest mb-0.5">Winning Bid</p>
+                        <p className="font-display font-black text-xl text-emerald-700">€{Number(winner.amount).toLocaleString()}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {winner.profiles?.display_name || [winner.profiles?.first_name, winner.profiles?.last_name].filter(Boolean).join(" ") || "Bidder"}
+                        </p>
+                      </div>
+                      <Check className="w-8 h-8 text-emerald-500" />
+                    </div>
+                  );
+                })()}
+
+                <div className="divide-y divide-border max-h-64 overflow-y-auto">
+                  {[...offers].sort((a: any, b: any) => Number(b.amount) - Number(a.amount)).map((o: any) => {
+                    const bidderName = o.profiles?.display_name || [o.profiles?.first_name, o.profiles?.last_name].filter(Boolean).join(" ") || "Bidder";
+                    const isWinner = o.status === "accepted";
+                    const isRevealed = o.status === "revealed";
+                    const isSealed = o.status === "submitted";
+                    const allOfferIds = offers.map((x: any) => x.id);
+
+                    return (
+                      <div key={o.id} className={cn("p-4 flex items-center justify-between gap-4", isWinner && "bg-emerald-500/5")}>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-base">
+                              {isSealed ? "Sealed bid" : `€${Number(o.amount).toLocaleString()}`}
+                            </span>
+                            {isWinner && <span className="text-[10px] font-bold bg-emerald-500/20 text-emerald-700 px-2 py-0.5 rounded-full">ACCEPTED</span>}
+                            {o.status === "rejected" && <span className="text-[10px] font-bold bg-destructive/10 text-destructive px-2 py-0.5 rounded-full">REJECTED</span>}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5">{bidderName}{o.message && ` · "${o.message}"`}</div>
+                        </div>
+                        <div className="flex gap-2 shrink-0">
+                          {isSealed && (
+                            <Button size="sm" variant="outline" className="h-7 text-xs"
+                              disabled={updateOffer.isPending}
+                              onClick={() => updateOffer.mutate({ id: o.id, status: "revealed" })}>
+                              Reveal
+                            </Button>
+                          )}
+                          {isRevealed && (
+                            <>
+                              <Button size="sm" className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white border-0 gap-1"
+                                disabled={acceptOffer.isPending}
+                                onClick={() => acceptOffer.mutate({ acceptId: o.id, listingId, allOfferIds })}>
+                                {acceptOffer.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                                Accept
+                              </Button>
+                              <Button size="sm" variant="outline" className="h-7 text-xs text-destructive border-destructive/40"
+                                disabled={updateOffer.isPending}
+                                onClick={() => updateOffer.mutate({ id: o.id, status: "rejected" })}>
+                                <X className="w-3 h-3" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
             )}
           </div>
         )}
@@ -268,7 +333,7 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner }: Props
 }
 
 function OpenHouseSettingsForm({
-  listingId,
+  listingId: _listingId,
   settings,
   onSave,
   saving,

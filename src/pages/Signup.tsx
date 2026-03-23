@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { Eye, EyeOff, Loader2, ArrowRight, Home, Briefcase, ChevronLeft } from "lucide-react";
+import { Eye, EyeOff, Loader2, ArrowRight, Home, Briefcase, ChevronLeft, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { useAuth } from "@/contexts/AuthContext";
@@ -8,8 +8,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
-import logoImg from "@/assets/logo.png";
-import logoDarkImg from "@/assets/logo-dark.png";
+import { useTranslation } from "react-i18next";
+import logoImg from "@/assets/logo.webp";
+import logoDarkImg from "@/assets/logo-dark.webp";
 
 const GoogleIcon = () => (
   <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -23,7 +24,7 @@ const GoogleIcon = () => (
 /** Top-level signup choices — refined further in Onboarding */
 type SignupTopType = "participant" | "market_pro";
 
-const PARTICIPANT_TYPES: {
+type ParticipantTypeEntry = {
   id: SignupTopType;
   label: string;
   sublabel: string;
@@ -32,34 +33,50 @@ const PARTICIPANT_TYPES: {
   accent: string;
   accentBg: string;
   accentBorder: string;
-}[] = [
-  {
-    id: "participant",
-    label: "I'm Looking for Property",
-    sublabel: "Buy, rent, or sell your own home",
-    desc: "Search listings, book viewings, or list your own property — all in one place.",
-    icon: Home,
-    accent: "text-brand-gold",
-    accentBg: "bg-brand-gold/10",
-    accentBorder: "border-brand-gold/40",
-  },
-  {
-    id: "market_pro",
-    label: "Market Professional",
-    sublabel: "Agent, developer, or service provider",
-    desc: "List properties for clients, showcase projects, or offer professional services.",
-    icon: Briefcase,
-    accent: "text-brand-purple",
-    accentBg: "bg-brand-purple/10",
-    accentBorder: "border-brand-purple/40",
-  },
-];
+  features: string[];
+};
 
 export default function Signup() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { signUp, updateProfile, user, loading: authLoading } = useAuth();
   const { theme } = useTheme();
+  const { t } = useTranslation();
+
+  const PARTICIPANT_TYPES: ParticipantTypeEntry[] = [
+    {
+      id: "participant",
+      label: t("signupPage.lookingForProperty.title"),
+      sublabel: t("signupPage.lookingForProperty.subtitle"),
+      desc: "Search listings, book viewings, save searches, and get alerts on new properties.",
+      icon: Home,
+      accent: "text-brand-gold",
+      accentBg: "bg-brand-gold/10",
+      accentBorder: "border-brand-gold/40",
+      features: [
+        t("signupPage.lookingForProperty.features.1"),
+        t("signupPage.lookingForProperty.features.2"),
+        t("signupPage.lookingForProperty.features.3"),
+        t("signupPage.lookingForProperty.features.4"),
+      ],
+    },
+    {
+      id: "market_pro",
+      label: t("signupPage.workInRealEstate.title"),
+      sublabel: t("signupPage.workInRealEstate.subtitle"),
+      desc: "List properties for clients, manage leads, or offer professional services in the market.",
+      icon: Briefcase,
+      accent: "text-brand-purple",
+      accentBg: "bg-brand-purple/10",
+      accentBorder: "border-brand-purple/40",
+      features: [
+        t("signupPage.workInRealEstate.features.1"),
+        t("signupPage.workInRealEstate.features.2"),
+        t("signupPage.workInRealEstate.features.3"),
+        t("signupPage.workInRealEstate.features.4"),
+      ],
+    },
+  ];
 
   const isProfessionalIntent = searchParams.get("role") === "professional" || searchParams.get("type") === "professional";
 
@@ -97,7 +114,7 @@ export default function Signup() {
     try {
       sessionStorage.setItem("signup_participant_type", selectedType);
       localStorage.setItem("signup_participant_type", selectedType);
-    } catch (_) {}
+    } catch { /* ignore storage errors */ }
     setGoogleLoading(true);
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -147,7 +164,7 @@ export default function Signup() {
                     className="h-9 w-auto object-contain mx-auto mb-3"
                   />
                   <h1 className="font-display font-bold text-xl">Who are you on maiProp?</h1>
-                  <p className="text-muted-foreground text-sm mt-1">Choose your participant type to personalise your dashboard</p>
+                  <p className="text-muted-foreground text-sm mt-1">{t("auth.signup.subtitle")}</p>
                 </div>
 
                 <div className="grid grid-cols-1 gap-3 mb-6">
@@ -175,6 +192,13 @@ export default function Signup() {
                           </p>
                           <p className={cn("text-xs font-medium mt-0.5", isSelected ? type.accent : "text-muted-foreground")}>{type.sublabel}</p>
                           <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{type.desc}</p>
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
+                            {type.features.map(f => (
+                              <div key={f} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                                <Check className={cn("w-3 h-3 shrink-0", type.accent)} /> {f}
+                              </div>
+                            ))}
+                          </div>
                         </div>
                         <div className={cn(
                           "w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 mt-1 transition-all",
@@ -196,8 +220,8 @@ export default function Signup() {
                 </Button>
 
                 <p className="text-xs text-muted-foreground text-center mt-4">
-                  Already have an account?{" "}
-                  <Link to="/login" className="text-primary hover:underline">Sign in</Link>
+                  {t("auth.signup.haveAccount")}{" "}
+                  <Link to="/login" className="text-primary hover:underline">{t("auth.signup.signIn")}</Link>
                 </p>
               </>
             )}
@@ -219,7 +243,7 @@ export default function Signup() {
                       {selected.label}
                     </div>
                   )}
-                  <h1 className="font-display font-bold text-xl">Create your account</h1>
+                  <h1 className="font-display font-bold text-xl">{t("auth.signup.title")}</h1>
                   <p className="text-muted-foreground text-sm mt-1">Start free — upgrade anytime</p>
                 </div>
 
@@ -230,19 +254,19 @@ export default function Signup() {
                   className="w-full flex items-center justify-center gap-3 bg-secondary hover:bg-secondary/80 border border-border rounded-xl px-4 py-3 text-sm font-semibold transition-colors disabled:opacity-60 mb-4"
                 >
                   {googleLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <GoogleIcon />}
-                  Continue with Google
+                  {t("auth.signup.google")}
                 </button>
 
                 <div className="flex items-center gap-3 mb-4">
                   <div className="flex-1 h-px bg-border" />
-                  <span className="text-xs text-muted-foreground">or with email</span>
+                  <span className="text-xs text-muted-foreground">{t("auth.signup.orContinueWith")}</span>
                   <div className="flex-1 h-px bg-border" />
                 </div>
 
                 <form onSubmit={handleSignUp} className="space-y-4">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs font-medium text-muted-foreground block mb-1.5">First Name</label>
+                      <label className="text-xs font-medium text-muted-foreground block mb-1.5">{t("auth.signup.firstName")}</label>
                       <input
                         type="text"
                         placeholder="Nikos"
@@ -252,7 +276,7 @@ export default function Signup() {
                       />
                     </div>
                     <div>
-                      <label className="text-xs font-medium text-muted-foreground block mb-1.5">Last Name</label>
+                      <label className="text-xs font-medium text-muted-foreground block mb-1.5">{t("auth.signup.lastName")}</label>
                       <input
                         type="text"
                         placeholder="Papadopoulos"
@@ -264,7 +288,7 @@ export default function Signup() {
                   </div>
 
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">Email</label>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">{t("auth.signup.email")}</label>
                     <input
                       type="email"
                       placeholder="you@example.com"
@@ -276,7 +300,7 @@ export default function Signup() {
                   </div>
 
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">Password</label>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">{t("auth.signup.password")}</label>
                     <div className="relative">
                       <input
                         type={showPass ? "text" : "password"}
@@ -298,19 +322,19 @@ export default function Signup() {
                     disabled={loading || !form.email || !form.password}
                   >
                     {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                    Create Account <ArrowRight className="w-4 h-4 ml-2" />
+                    {t("auth.signup.createAccount")} <ArrowRight className="w-4 h-4 ml-2" />
                   </Button>
                 </form>
 
                 <p className="text-xs text-muted-foreground text-center mt-4">
-                  Already have an account?{" "}
-                  <Link to="/login" className="text-primary hover:underline">Sign in</Link>
+                  {t("auth.signup.haveAccount")}{" "}
+                  <Link to="/login" className="text-primary hover:underline">{t("auth.signup.signIn")}</Link>
                 </p>
 
                 <p className="text-xs text-muted-foreground text-center mt-3">
-                  By signing up you agree to our{" "}
-                  <Link to="/terms-of-service" className="text-primary hover:underline">Terms</Link> and{" "}
-                  <Link to="/privacy-policy" className="text-primary hover:underline">Privacy Policy</Link>
+                  {t("auth.signup.agreeToTerms")}{" "}
+                  <Link to="/terms-of-service" className="text-primary hover:underline">{t("auth.signup.terms")}</Link> {t("auth.signup.and")}{" "}
+                  <Link to="/privacy-policy" className="text-primary hover:underline">{t("auth.signup.privacy")}</Link>
                 </p>
               </>
             )}

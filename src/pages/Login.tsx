@@ -5,11 +5,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { useAuth } from "@/contexts/AuthContext";
-
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
-import logoImg from "@/assets/logo.png";
-import logoDarkImg from "@/assets/logo-dark.png";
+import logoImg from "@/assets/logo.webp";
+import logoDarkImg from "@/assets/logo-dark.webp";
 
 const GoogleIcon = () => (
   <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -25,6 +25,7 @@ export default function Login() {
   const location = useLocation();
   const { signIn, user, loading: authLoading } = useAuth();
   const { theme } = useTheme();
+  const { t } = useTranslation();
 
   const [view, setView] = useState<"login" | "forgot" | "forgot-sent">("login");
   const [email, setEmail] = useState("");
@@ -100,37 +101,37 @@ export default function Login() {
                     alt="maiProp"
                     className="h-10 w-auto object-contain mx-auto mb-2"
                   />
-                  <p className="text-muted-foreground text-sm mt-1">Sign in to your account</p>
+                  <p className="text-muted-foreground text-sm mt-1">{t("loginPage.title")}</p>
                 </div>
 
                 {/* Google */}
                 <button onClick={handleGoogleSignIn} disabled={googleLoading}
                   className="w-full flex items-center justify-center gap-3 bg-secondary hover:bg-secondary/80 border border-border rounded-xl px-4 py-3 text-sm font-semibold transition-colors disabled:opacity-60 mb-4">
                   {googleLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <GoogleIcon />}
-                  Continue with Google
+                  {t("loginPage.googleCta")}
                 </button>
 
                 <div className="flex items-center gap-3 mb-4">
                   <div className="flex-1 h-px bg-border" />
-                  <span className="text-xs text-muted-foreground">or with email</span>
+                  <span className="text-xs text-muted-foreground">{t("loginPage.orEmail")}</span>
                   <div className="flex-1 h-px bg-border" />
                 </div>
 
                 <form onSubmit={handleSignIn} className="space-y-4">
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">Email</label>
-                    <input type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} required
+                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">{t("loginPage.email")}</label>
+                    <input type="email" placeholder={t("loginPage.emailPlaceholder")} value={email} onChange={e => setEmail(e.target.value)} required
                       className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors" />
                   </div>
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-xs font-medium text-muted-foreground">Password</label>
+                      <label className="text-xs font-medium text-muted-foreground">{t("loginPage.password")}</label>
                       <button type="button" onClick={() => setView("forgot")} className="text-xs text-primary hover:underline">
-                        Forgot password?
+                        {t("loginPage.forgotPassword")}
                       </button>
                     </div>
                     <div className="relative">
-                      <input type={showPass ? "text" : "password"} placeholder="Your password" value={password} onChange={e => setPassword(e.target.value)} required
+                      <input type={showPass ? "text" : "password"} placeholder={t("loginPage.passwordPlaceholder")} value={password} onChange={e => setPassword(e.target.value)} required
                         className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 pr-10 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors" />
                       <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" onClick={() => setShowPass(v => !v)}>
                         {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -139,12 +140,12 @@ export default function Login() {
                   </div>
                   <Button type="submit" className="w-full bg-gradient-primary border-0 text-primary-foreground" disabled={loading || (didSignIn && authLoading)}>
                     {(loading || (didSignIn && authLoading)) && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-                    Sign In
+                    {t("loginPage.signIn")}
                   </Button>
                 </form>
                 <p className="text-xs text-muted-foreground text-center mt-4">
-                  Don't have an account?{" "}
-                  <Link to="/signup" className="text-primary hover:underline">Sign up free</Link>
+                  {t("loginPage.noAccount")}{" "}
+                  <Link to="/signup" className="text-primary hover:underline">{t("loginPage.signUpFree")}</Link>
                 </p>
               </>
             )}
@@ -153,24 +154,24 @@ export default function Login() {
             {view === "forgot" && (
               <>
                 <button onClick={() => setView("login")} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-5 transition-colors">
-                  <ArrowLeft className="w-3.5 h-3.5" /> Back to sign in
+                  <ArrowLeft className="w-3.5 h-3.5" /> {t("loginPage.backToSignIn")}
                 </button>
                 <div className="text-center mb-6">
                   <div className="w-12 h-12 rounded-xl bg-primary/10 border border-primary/25 flex items-center justify-center mx-auto mb-3">
                     <Mail className="w-6 h-6 text-primary" />
                   </div>
-                  <h2 className="font-display font-bold text-xl">Reset your password</h2>
-                  <p className="text-muted-foreground text-sm mt-1">We'll send you a reset link</p>
+                  <h2 className="font-display font-bold text-xl">{t("loginPage.forgotTitle")}</h2>
+                  <p className="text-muted-foreground text-sm mt-1">{t("loginPage.forgotSubtitle")}</p>
                 </div>
                 <form onSubmit={handleForgot} className="space-y-4">
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">Email address</label>
-                    <input type="email" placeholder="you@example.com" value={forgotEmail} onChange={e => setForgotEmail(e.target.value)} required
+                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">{t("loginPage.emailAddress")}</label>
+                    <input type="email" placeholder={t("loginPage.emailPlaceholder")} value={forgotEmail} onChange={e => setForgotEmail(e.target.value)} required
                       className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors" />
                   </div>
                   <Button type="submit" className="w-full bg-gradient-primary border-0 text-primary-foreground" disabled={loading || !forgotEmail}>
                     {loading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-                    Send Reset Link
+                    {t("loginPage.sendLink")}
                   </Button>
                 </form>
               </>
@@ -182,12 +183,12 @@ export default function Login() {
                 <div className="w-16 h-16 rounded-full bg-primary/10 border border-primary/25 flex items-center justify-center mx-auto mb-5">
                   <Mail className="w-8 h-8 text-primary" />
                 </div>
-                <h2 className="font-display font-bold text-xl mb-2">Check your inbox</h2>
-                <p className="text-muted-foreground text-sm mb-1">We sent a reset link to</p>
+                <h2 className="font-display font-bold text-xl mb-2">{t("loginPage.checkInbox")}</h2>
+                <p className="text-muted-foreground text-sm mb-1">{t("loginPage.resetSentTo")}</p>
                 <p className="font-semibold text-foreground mb-5">{forgotEmail}</p>
-                <p className="text-xs text-muted-foreground mb-5">Click the link in the email to set a new password. Check spam if you don't see it.</p>
+                <p className="text-xs text-muted-foreground mb-5">{t("loginPage.resetInstructions")}</p>
                 <Button variant="outline" className="w-full" onClick={() => setView("login")}>
-                  Back to Sign In
+                  {t("loginPage.backToSignIn")}
                 </Button>
               </div>
             )}

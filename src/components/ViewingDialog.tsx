@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import type { Property } from "@/components/PropertyCard";
 
 interface ViewingDialogProps {
@@ -20,9 +21,8 @@ const timeSlots = [
   "09:00", "10:00", "11:00", "12:00", "14:00", "15:00", "16:00", "17:00", "18:00"
 ];
 
-function buildDynamicDays(): { label: string; date: string; iso: string }[] {
+function buildDynamicDays(dayNames: string[]): { label: string; date: string; iso: string }[] {
   const days: { label: string; date: string; iso: string }[] = [];
-  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const now = new Date();
   for (let i = 1; i <= 7; i++) {
     const d = new Date(now);
@@ -40,6 +40,7 @@ function buildDynamicDays(): { label: string; date: string; iso: string }[] {
 
 export default function ViewingDialog({ open, onClose, property, ownerId, canVideoView = true }: ViewingDialogProps) {
   const { user, profile } = useAuth();
+  const { t } = useTranslation();
   const [viewType, setViewType] = useState<"in-person" | "video">("in-person");
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [selectedIso, setSelectedIso] = useState<string | null>(null);
@@ -48,7 +49,16 @@ export default function ViewingDialog({ open, onClose, property, ownerId, canVid
   const [confirmed, setConfirmed] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const days = useMemo(buildDynamicDays, [open]);
+  const translatedDayNames = [
+    t("viewingDialog.days.sun"),
+    t("viewingDialog.days.mon"),
+    t("viewingDialog.days.tue"),
+    t("viewingDialog.days.wed"),
+    t("viewingDialog.days.thu"),
+    t("viewingDialog.days.fri"),
+    t("viewingDialog.days.sat"),
+  ];
+  const days = useMemo(() => buildDynamicDays(translatedDayNames), [open]);
 
   const handleDaySelect = (day: { label: string; date: string; iso: string }) => {
     setSelectedDay(day.date);
@@ -98,7 +108,7 @@ export default function ViewingDialog({ open, onClose, property, ownerId, canVid
       <DialogContent className="bg-card border-border max-w-md">
         <DialogHeader>
           <DialogTitle className="font-display text-lg">
-            {confirmed ? "Viewing Request Sent! 🎉" : "Book a Viewing"}
+            {confirmed ? t("viewingDialog.successTitle") : t("viewingDialog.title")}
           </DialogTitle>
         </DialogHeader>
 
@@ -114,13 +124,13 @@ export default function ViewingDialog({ open, onClose, property, ownerId, canVid
               </p>
             </div>
             <div className="bg-secondary rounded-xl p-4 text-sm text-left space-y-2">
-              <p className="text-muted-foreground">Your request has been sent to the property owner. They will confirm the appointment and you will receive a notification.</p>
+              <p className="text-muted-foreground">{t("viewingDialog.successMessage")}</p>
               {viewType === "video" && (
-                <p className="text-primary">If video viewing is confirmed, a call link will be sent before the scheduled time.</p>
+                <p className="text-primary">{t("viewingDialog.videoNote")}</p>
               )}
             </div>
             <Button className="w-full bg-gradient-primary border-0 text-primary-foreground" onClick={onClose}>
-              Done
+              {t("viewingDialog.done")}
             </Button>
           </div>
         ) : (
@@ -139,7 +149,7 @@ export default function ViewingDialog({ open, onClose, property, ownerId, canVid
 
             {/* Viewing type */}
             <div>
-              <label className="text-sm font-medium block mb-2">Viewing Type</label>
+              <label className="text-sm font-medium block mb-2">{t("viewingDialog.viewingType")}</label>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={() => setViewType("in-person")}
@@ -150,7 +160,7 @@ export default function ViewingDialog({ open, onClose, property, ownerId, canVid
                   }`}
                 >
                   <MapPin className="w-4 h-4" />
-                  In-Person
+                  {t("viewingDialog.inPerson")}
                 </button>
                 <button
                   onClick={() => canVideoView && setViewType("video")}
@@ -162,7 +172,7 @@ export default function ViewingDialog({ open, onClose, property, ownerId, canVid
                   }`}
                 >
                   <Video className="w-4 h-4" />
-                  Video Call{!canVideoView && " (Pro or retailers)"}
+                  {t("viewingDialog.video")}{!canVideoView && " (Pro or retailers)"}
                 </button>
               </div>
             </div>

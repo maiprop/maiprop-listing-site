@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, lazy, Suspense } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useInView } from "@/hooks/useInView";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
@@ -8,7 +8,6 @@ import {
   Search,
   MapPin,
   ChevronDown,
-  Users,
   ArrowRight,
   Gavel,
   Flame,
@@ -22,12 +21,8 @@ import {
   Clock,
   TrendingUp,
   TrendingDown,
-  Shield,
-  Zap,
   Building2,
-  Star,
   Globe,
-  Brain,
   Store,
   Briefcase,
 } from "lucide-react";
@@ -35,17 +30,15 @@ import { getStreetViewProxyUrl, GOOGLE_MAPS_API_KEY } from "@/lib/config";
 import { getProfessionalSearchSuggestions } from "@/lib/professionalServiceCatalog";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
-import { MarketTicker } from "@/components/MarketTicker";
 import { PropertyCard } from "@/components/PropertyCard";
-import { Footer } from "@/components/Footer";
-import { CookieConsentBanner } from "@/components/CookieConsentBanner";
+const MarketTicker = lazy(() => import("@/components/MarketTicker").then(m => ({ default: m.MarketTicker })));
+const Footer = lazy(() => import("@/components/Footer").then(m => ({ default: m.Footer })));
+const CookieConsentBanner = lazy(() => import("@/components/CookieConsentBanner").then(m => ({ default: m.CookieConsentBanner })));
 
 import { PROPERTY_TYPES, PROPERTY_GROUPS, PROPERTY_TYPE_MAP, type PropertyTypeKey } from "@/lib/propertyTypes";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { SignInForAI } from "@/components/SignInForAI";
 import { toast } from "sonner";
-import heroBg from "@/assets/hero-bg.jpg";
 import thessalonikiLandmark from "@/assets/thessaloniki-landmark.webp";
 
 const RECENT_SEARCHES_KEY = "maiprop_recent_searches";
@@ -827,109 +820,6 @@ function OSDashboardMockup() {
   );
 }
 
-// ── Properties Portal Mockup (faithful to properties.maiprop.co) ──────────────
-function PropertiesMockup() {
-  const stats = [
-    { value: "€250K", label: "Minimum Investment" },
-    { value: "6-9 Months", label: "To Visa Approval" },
-    { value: "27 Countries", label: "Schengen Access" },
-  ];
-
-  return (
-    <div
-      className="w-full h-full overflow-hidden select-none font-sans relative"
-      style={{ background: "hsl(210 30% 8%)" }}
-    >
-      {/* Hero bg: Acropolis */}
-      <div className="absolute inset-0">
-        <img
-          src="https://images.unsplash.com/photo-1555993539-1732b0258235?w=600&q=50&fm=webp"
-          alt=""
-          className="w-full h-full object-cover opacity-30"
-        />
-
-        <div
-          className="absolute inset-0"
-          style={{ background: "linear-gradient(to bottom, hsl(200 40% 12% / 0.75) 0%, hsl(200 40% 6% / 0.95) 100%)" }}
-        />
-      </div>
-      {/* Navbar */}
-      <div className="relative z-10 flex items-center justify-between px-4 py-2">
-        <div className="flex items-center gap-1.5">
-          <div
-            className="w-5 h-5 rounded overflow-hidden flex items-center justify-center"
-            style={{ background: "rgba(255,255,255,0.08)" }}
-          >
-            <span className="text-[6px] font-black" style={{ color: "hsl(183 100% 60%)" }}>
-              mP
-            </span>
-          </div>
-          <span className="text-[9px] font-black text-white">mAI prop</span>
-        </div>
-        <div className="flex items-center gap-2">
-          {["Benefits", "Opportunities", "Track Record", "mAI Prop OS"].map((l) => (
-            <span key={l} className="text-[6px]" style={{ color: "rgba(255,255,255,0.5)" }}>
-              {l}
-            </span>
-          ))}
-        </div>
-        <div
-          className="text-[7px] font-bold px-2.5 py-1 rounded-full"
-          style={{ background: "hsl(183 100% 50%)", color: "hsl(220 30% 8%)" }}
-        >
-          Get Started
-        </div>
-      </div>
-      {/* Hero content */}
-      <div className="relative z-10 px-5 pt-3">
-        <div
-          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full mb-3 border text-[5.5px] font-bold uppercase tracking-wider"
-          style={{
-            borderColor: "rgba(255,255,255,0.2)",
-            color: "rgba(255,255,255,0.55)",
-            background: "rgba(255,255,255,0.06)",
-          }}
-        >
-          Greek Golden Visa Program | EU Residency Through Real Estate
-        </div>
-        <h2 className="text-[14px] font-black leading-snug mb-2">
-          <span className="text-white">Secure Your European</span>
-          <br />
-          <span style={{ color: "hsl(183 100% 60%)" }}>Golden </span>
-          <span style={{ color: "hsl(265 80% 72%)" }}>Visa in Greece</span>
-        </h2>
-        <p className="text-[7.5px] mb-1" style={{ color: "rgba(255,255,255,0.65)" }}>
-          EU residency through €250K+ Greek real estate investments.
-        </p>
-        <p className="text-[7px] italic mb-3.5" style={{ color: "rgba(255,255,255,0.4)" }}>
-          Live freely, invest wisely, and protect your global future.
-        </p>
-        <div className="flex items-center gap-2.5 mb-5">
-          <div
-            className="inline-flex items-center gap-1 text-[7.5px] font-bold px-3 py-1.5 rounded-full"
-            style={{ background: "hsl(183 100% 50%)", color: "hsl(220 30% 8%)" }}
-          >
-            Start Your Golden Visa →
-          </div>
-          <div className="text-[7px] font-semibold" style={{ color: "rgba(255,255,255,0.55)" }}>
-            View Properties
-          </div>
-        </div>
-        <div className="flex gap-6">
-          {stats.map((s) => (
-            <div key={s.value}>
-              <div className="text-[12px] font-black text-white">{s.value}</div>
-              <div className="text-[6px]" style={{ color: "rgba(255,255,255,0.4)" }}>
-                {s.label}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ── Main ───────────────────────────────────────────────────────────────────────
 // Hero video: use preload in index.html + deferred src so it loads faster.
 // Sources are re-encoded lightweight variants (720p/24fps) with WebM first and MP4 fallback.
@@ -990,8 +880,8 @@ export default function Index() {
   const { ref: locationsRef, inView: locationsInView } = useInView();
   const { ref: prosRef, inView: prosInView } = useInView();
   const { ref: osRef, inView: osInView } = useInView();
-  const { ref: goldenRef, inView: goldenInView } = useInView();
-  const { ref: trustRef, inView: trustInView } = useInView();
+  const { ref: _goldenRef, inView: _goldenInView } = useInView();
+  const { ref: _trustRef, inView: _trustInView } = useInView();
 
   // Timeout so listing queries never hang forever (e.g. Supabase unreachable)
   const queryTimeout = <T,>(p: Promise<T>, ms: number): Promise<T> =>
@@ -1033,7 +923,7 @@ export default function Index() {
 
   const {
     data: popularLocationsData,
-    isLoading: popularLocationsLoading,
+    isLoading: _popularLocationsLoading,
     isError: popularLocationsError,
   } = useQuery({
     queryKey: ["homepage-popular-locations", "v2"],
@@ -1169,7 +1059,7 @@ export default function Index() {
   const {
     data: auctionListings = [],
     isLoading: auctionsLoading,
-    isError: auctionsError,
+    isError: _auctionsError,
   } = useQuery({
     queryKey: ["homepage-auctions"],
     queryFn: async () => {
@@ -1295,7 +1185,9 @@ export default function Index() {
     <div className="min-h-screen bg-background pb-bottom-nav lg:pb-0">
       <Navbar />
       {showAI && <AISearchModal onFiltersApplied={handleAIFilters} onClose={() => setShowAI(false)} />}
-      <CookieConsentBanner />
+      <Suspense fallback={null}>
+        <CookieConsentBanner />
+      </Suspense>
 
       {/* Pull-to-refresh indicator — mobile only */}
       {(pulling || refreshing) && (
@@ -1491,7 +1383,9 @@ export default function Index() {
                 style={{ background: "radial-gradient(ellipse, hsl(var(--brand-cyan)), hsl(var(--brand-indigo)), hsl(var(--brand-purple)), transparent 70%)" }}
               />
               <div className="relative">
-                <MarketTicker />
+                <Suspense fallback={<div className="h-12 bg-muted animate-pulse rounded-lg" />}>
+                  <MarketTicker />
+                </Suspense>
               </div>
             </div>
           </div>
@@ -1653,6 +1547,8 @@ export default function Index() {
                         aiScore: l.ai_score,
                         views: l.views_count,
                         tags: l.tags || [],
+                        isPreSale: l.is_pre_sale ?? false,
+                        constructionStatus: l.construction_status ?? undefined,
                       }}
                     />
                   );
@@ -1723,6 +1619,8 @@ export default function Index() {
                     aiScore: l.ai_score,
                     views: l.views_count,
                     tags: l.tags || [],
+                    isPreSale: l.is_pre_sale ?? false,
+                    constructionStatus: l.construction_status ?? undefined,
                   }}
                 />
               );
@@ -1811,6 +1709,8 @@ export default function Index() {
                     aiScore: l.ai_score,
                     views: l.views_count,
                     tags: l.tags || [],
+                    isPreSale: l.is_pre_sale ?? false,
+                    constructionStatus: l.construction_status ?? undefined,
                   }}
                 />
               );
@@ -2175,7 +2075,9 @@ export default function Index() {
         </div>
       </section>
 
-      <Footer />
+      <Suspense fallback={null}>
+        <Footer />
+      </Suspense>
       {/* bottom spacing for mobile nav */}
       <div className="h-20 lg:hidden" />
     </div>

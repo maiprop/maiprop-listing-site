@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Video, CheckCircle2, Loader2, MapPin, Calendar, Clock, Wifi } from "lucide-react";
+import { Video, CheckCircle2, Loader2, MapPin, Wifi } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";

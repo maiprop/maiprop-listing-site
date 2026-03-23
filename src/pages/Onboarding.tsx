@@ -216,7 +216,7 @@ const DEFAULT_AVAILABILITY: DayAvailability[] = DAYS.map((_, i) => ({
 }));
 
 // Step sequences for progress indicator
-const PRO_FULL_STEPS: OnboardingStep[] = ["pick-pro-type", "pro-category", "pro-verify", "pro-services", "pro-availability", "pro-video", "done"];
+const PRO_FULL_STEPS: OnboardingStep[] = ["pick-pro-type", "pro-category", "pro-verify", "done"];
 const PRO_SIMPLE_STEPS: OnboardingStep[] = ["pick-pro-type", "done"];
 const PARTICIPANT_STEPS: OnboardingStep[] = ["pick-participant-goal", "done"];
 const TOP_STEPS: OnboardingStep[] = ["pick-type", "done"];
@@ -248,6 +248,8 @@ export default function Onboarding() {
       setStep("done");
     }
   }, [presetType]);
+
+  const [investorInterest, setInvestorInterest] = useState(false);
 
   const [proCategory, setProCategory] = useState("");
   const [professionalId, setProfessionalId] = useState<string | null>(null);
@@ -285,7 +287,7 @@ export default function Onboarding() {
       setSelected(p ?? null);
       setStep(draft.step);
       if (draft.proCategory) setProCategory(draft.proCategory);
-    } catch (_) { localStorage.removeItem(DRAFT_KEY); }
+    } catch { localStorage.removeItem(DRAFT_KEY); }
   }, [user?.id]);
 
   // ── Persist draft when step/selected changes ─────────────────────────────────
@@ -298,7 +300,7 @@ export default function Onboarding() {
         selectedId: selected?.id,
         proCategory: proCategory || undefined,
       }));
-    } catch (_) {}
+    } catch { /* ignore draft save failure */ }
   }, [user?.id, step, selected?.id, proCategory]);
 
   // ── Clear draft when done ────────────────────────────────────────────────────
@@ -328,12 +330,12 @@ export default function Onboarding() {
         } else {
           setLoading(true);
           await updateProfile({ role: p.role as any });
-          await supabase.from("profiles").update({ bio: `__type:${p.id}` }).eq("user_id", user.id);
+          await supabase.from("profiles").update({ bio: `__type:${p.id}`, participant_type: p.id } as any).eq("user_id", user.id);
           await refreshProfile();
           setLoading(false);
           setStep("done");
         }
-      } catch (_) {}
+      } catch { /* ignore auto-upgrade error */ }
     })();
   }, [user, updateProfile, refreshProfile]);
 
@@ -345,7 +347,7 @@ export default function Onboarding() {
     if (p.nextStep) { setStep(p.nextStep); return; }
     setLoading(true);
     await updateProfile({ role: p.role as any });
-    await supabase.from("profiles").update({ bio: `__type:${p.id}` }).eq("user_id", user!.id);
+    await supabase.from("profiles").update({ bio: `__type:${p.id}`, participant_type: p.id } as any).eq("user_id", user!.id);
     await refreshProfile();
     setLoading(false);
     setStep("done");
@@ -358,7 +360,14 @@ export default function Onboarding() {
     const p = participants.find(x => x.id === goal)!;
     setSelected(p);
     await updateProfile({ role: role as any });
-    await supabase.from("profiles").update({ bio: `__type:${goal}` }).eq("user_id", user!.id);
+    const profileUpdate: Record<string, unknown> = {
+      bio: `__type:${goal}`,
+      participant_type: goal,
+    };
+    if (goal === "buyer" && investorInterest) {
+      profileUpdate.investor_mode = true;
+    }
+    await supabase.from("profiles").update(profileUpdate as any).eq("user_id", user!.id);
     await refreshProfile();
     setLoading(false);
     setStep("done");
@@ -376,7 +385,7 @@ export default function Onboarding() {
     setSelected(p);
     setLoading(true);
     await updateProfile({ role: p.role as any });
-    await supabase.from("profiles").update({ bio: `__type:${type}` }).eq("user_id", user!.id);
+    await supabase.from("profiles").update({ bio: `__type:${type}`, participant_type: type } as any).eq("user_id", user!.id);
     await refreshProfile();
     setLoading(false);
     setStep("done");
@@ -413,10 +422,10 @@ export default function Onboarding() {
 
     if (error) { toast.error("Could not save professional profile. Please try again."); setLoading(false); return; }
     setProfessionalId((proData as any).id);
-    await supabase.from("profiles").update({ bio: `__type:professional` }).eq("user_id", user!.id);
+    await supabase.from("profiles").update({ bio: `__type:professional`, participant_type: "professional" } as any).eq("user_id", user!.id);
     await refreshProfile();
     setLoading(false);
-    setStep("pro-services");
+    setStep("done");
   };
 
   const toggleService = (svc: ServiceTemplate) => {
@@ -558,7 +567,7 @@ export default function Onboarding() {
       const options = [
         {
           id: "buyer" as const,
-          label: "I'm looking to Buy or Rent",
+          label: "I'm Looking to Buy or Rent",
           desc: "Search listings, compare properties, book viewings & get AI property insights.",
           icon: Home,
           color: "blue",
@@ -566,7 +575,7 @@ export default function Onboarding() {
         },
         {
           id: "seller" as const,
-          label: "I'm looking to Sell or Let",
+          label: "I'm Selling or Renting Out My Property",
           desc: "List your own property, manage viewings and connect with serious buyers directly.",
           icon: User,
           color: "violet",
@@ -611,6 +620,23 @@ export default function Onboarding() {
                           </div>
                         ))}
                       </div>
+                      {opt.id === "buyer" && (
+                        <div className="mt-3 pt-3 border-t border-border/50">
+                          <label className="flex items-start gap-3 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={investorInterest}
+                              onChange={e => setInvestorInterest(e.target.checked)}
+                              className="mt-0.5 rounded border-border"
+                              onClick={e => e.stopPropagation()}
+                            />
+                            <div>
+                              <p className="text-xs font-semibold text-foreground">I'm also interested in auction deals & quick sales</p>
+                              <p className="text-xs text-muted-foreground">Unlock the investor pipeline for below-market opportunities</p>
+                            </div>
+                          </label>
+                        </div>
+                      )}
                     </div>
                     {loading ? <Loader2 className="w-4 h-4 animate-spin text-primary mt-1 shrink-0" /> : <ChevronRight className="w-5 h-5 text-muted-foreground/40 group-hover:text-primary transition-colors mt-1 shrink-0" />}
                   </div>
@@ -645,7 +671,7 @@ export default function Onboarding() {
         {
           id: "service_pro" as const,
           label: "Service Professional",
-          desc: "Architect, lawyer, notary, engineer, contractor & more.",
+          desc: "Architect, lawyer, notary, engineer, contractor, financial advisor & more. Get listed in the professional directory and receive client leads.",
           icon: Wrench,
           color: "rose",
           features: ["Professional directory", "Service catalog", "Client leads", "Verified badge"],
@@ -1001,7 +1027,7 @@ export default function Onboarding() {
             className="w-full border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300"
             onClick={() => {
               toast.success("We'll notify you when Pro launches!");
-              try { localStorage.setItem("pro_launch_interest", "true"); } catch (_) {}
+              try { localStorage.setItem("pro_launch_interest", "true"); } catch { /* ignore */ }
             }}
           >
             <Crown className="w-3.5 h-3.5 mr-1.5" /> Notify me when Pro launches
@@ -1032,7 +1058,7 @@ export default function Onboarding() {
       buyer:         { primary: { label: "Browse Listings",       href: "/listings" },           secondary: [{ label: "View Auctions", href: "/auctions" }, { label: "Go to Dashboard", href: "/dashboard" }], subtitle: "Find your perfect property." },
       seller:        { primary: { label: "List My Property",       href: "/listings/new" },        secondary: [{ label: "Browse Market",  href: "/listings" }, { label: "Go to Dashboard", href: "/dashboard" }], subtitle: "Start with your first listing." },
       agent:         { primary: { label: "View Pricing & Plans",   href: "/pricing?audience=agent" },   secondary: [{ label: "Create Listing", href: "/listings/new" }, { label: "Go to Dashboard", href: "/dashboard" }], subtitle: "Choose your plan for listings and CRM." },
-      developer:     { primary: { label: "View Pricing & Plans",   href: "/pricing?audience=developer" },   secondary: [{ label: "Create Building", href: "/listings/new-building" }, { label: "Go to Dashboard", href: "/dashboard" }], subtitle: "Choose your plan for projects and portfolios." },
+      developer:     { primary: { label: "View Developer Pro Plan", href: "/pricing?audience=developer" },   secondary: [{ label: "Create Building", href: "/listings/new-building" }, { label: "Go to Dashboard", href: "/dashboard" }], subtitle: "Developer tools (unlimited listings, project showcases, pre-sale management) require a Pro plan. Start your 7-day free trial." },
       professional:  { primary: { label: "View My Profile",        href: "/professionals/me" },    secondary: [{ label: "Explore Dashboard", href: "/dashboard" }, { label: "Directory", href: "/professionals" }], subtitle: "Your profile is live in the directory." },
     };
 
@@ -1130,7 +1156,7 @@ function Shell({
   // Keep children in sync while not transitioning
   useEffect(() => {
     if (!isTransitioning) setDisplayedChildren(children);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [children, isTransitioning]);
 
   return (
@@ -1201,7 +1227,7 @@ function DoneScreen({
   selectedColor,
   SelectedIcon,
   isPro,
-  proCategory,
+  proCategory: _proCategory,
   selectedServicesCount,
   actions,
   navigate,

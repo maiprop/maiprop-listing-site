@@ -115,7 +115,7 @@ const categoryGroups = [
   },
 ];
 
-const ALL_CATEGORIES = categoryGroups.flatMap((g) => g.categories);
+
 
 const categoryInfo: Record<string, { emoji: string; label: string; group: string }> = {
   real_estate_agent: { emoji: "🏠", label: "Real Estate Agent", group: "agents" },

@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
-import logoImg from "@/assets/logo.png";
-import logoDarkImg from "@/assets/logo-dark.png";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import logoImg from "@/assets/logo.webp";
+import logoDarkImg from "@/assets/logo-dark.webp";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Bell, MessageSquare, User, Menu, X, ChevronDown, Plus, LogOut, LayoutDashboard, Building2, Sun, Moon, Home, List, Gavel, Flame, Zap, Sparkles, DoorOpen, Search } from "lucide-react";
+import { Bell, MessageSquare, Menu, X, ChevronDown, Plus, LogOut, LayoutDashboard, Building2, Sun, Moon, Home, Flame, DoorOpen, Search, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { useTheme } from "next-themes";
 import {
   DropdownMenu,
@@ -13,11 +14,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useEligibleForQuickSale } from "@/hooks/useEligibleForQuickSale";
-import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
+import { getParticipantTypeFromProfile, isInvestorMode } from "@/lib/participantConfig";
 import { isPlatformAdmin } from "@/lib/authUtils";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
 // Pages that have a full-width dark hero image at the top
 const DARK_HERO_ROUTES = ["/"];
@@ -30,11 +33,27 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
   const { user, profile, signOut } = useAuth();
   const { isPro } = useSubscription();
   const { theme, setTheme } = useTheme();
+  const { t } = useTranslation();
 
   const participantType = getParticipantTypeFromProfile(profile);
   const isDeveloper = participantType === "developer";
-  const canListProperty = ["seller", "agent", "developer"].includes(participantType);
+  const canListProperty = ["seller", "agent", "developer", "institutional"].includes(participantType);
   const { eligible: eligibleForQuickSale } = useEligibleForQuickSale();
+
+  const { data: unreadNotifCount = 0 } = useQuery({
+    queryKey: ["notifications_unread", user?.id],
+    queryFn: async (): Promise<number> => {
+      const { count } = await supabase
+        .from("notifications")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", user!.id)
+        .eq("read", false);
+      return count ?? 0;
+    },
+    enabled: !!user,
+    refetchInterval: 120_000,
+  });
+
   const hasDarkHero = DARK_HERO_ROUTES.includes(location.pathname);
   // When transparent AND over a dark hero, force white text; otherwise use semantic tokens
   const isTransparent = !scrolled;
@@ -61,12 +80,12 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
   };
 
   const navLinks = [
-    { label: "Buy", href: "/listings?listing_type=sale" },
-    { label: "Rent", href: "/listings?listing_type=rent" },
-    { label: "Auctions", href: "/auctions", badge: "Live" },
-    { label: "Quick Sale™", href: "/firesale", accent: "flame" },
-    { label: "Open Houses", href: "/open-houses", accent: "dooropen" },
-    { label: "Professionals", href: "/professionals", accent: "subtle" },
+    { label: t("listings.types.sale"), href: "/listings?listing_type=sale" },
+    { label: t("listings.types.rent"), href: "/listings?listing_type=rent" },
+    { label: t("nav.auctions"), href: "/auctions", badge: "Live" },
+    { label: `${t("nav.quickSale")}™`, href: "/firesale", accent: "flame" },
+    { label: t("nav.openHouses"), href: "/open-houses", accent: "dooropen" },
+    { label: t("nav.professionals"), href: "/professionals", accent: "subtle" },
   ];
 
   const displayName = profile?.display_name || profile?.first_name || user?.email?.split("@")[0] || "Account";
@@ -100,6 +119,23 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
 
         {/* Desktop nav */}
         <nav className="hidden lg:flex items-center gap-0.5">
+          {user && canListProperty && (
+            <Link
+              to="/dashboard/listings"
+              className={`relative px-3 py-2 text-sm font-medium rounded-md transition-colors flex items-center gap-1.5
+                ${isActive("/dashboard/listings")
+                  ? forceLight
+                    ? "text-white bg-white/20"
+                    : "text-primary bg-primary/10"
+                  : forceLight
+                    ? "text-white/80 hover:text-white hover:bg-white/10"
+                    : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                }`}
+            >
+              <Building2 className="w-3.5 h-3.5 shrink-0" />
+              My Listings
+            </Link>
+          )}
           {navLinks.map((link) => (
             <Link
               key={link.href}
@@ -149,6 +185,7 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
 
         {/* Right actions */}
         <div className="hidden lg:flex items-center gap-1">
+          <LanguageSwitcher />
           <button
             onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
             className={`p-2 rounded-lg transition-colors ${
@@ -179,10 +216,19 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
                     : "text-muted-foreground hover:text-foreground hover:bg-secondary"
                 }`} title="Notifications">
                   <Bell className="w-4 h-4" />
+                  {unreadNotifCount > 0 && (
+                    <span className="absolute top-1 right-1 min-w-[14px] h-[14px] px-[3px] rounded-full bg-destructive text-[9px] font-black text-white flex items-center justify-center leading-none">
+                      {unreadNotifCount > 99 ? "99+" : unreadNotifCount}
+                    </span>
+                  )}
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-72 bg-card border-border p-4">
                   <p className="text-sm font-medium mb-1">Notifications</p>
-                  <p className="text-xs text-muted-foreground">No notifications yet. Activity alerts and updates coming soon.</p>
+                  {unreadNotifCount > 0 ? (
+                    <p className="text-xs text-muted-foreground">You have {unreadNotifCount} unread notification{unreadNotifCount !== 1 ? "s" : ""}. Check your investor dashboard for new Quick Sale deals.</p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">No new notifications. You&apos;re all caught up!</p>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
 
@@ -196,6 +242,11 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
                       : initials}
                   </div>
                   <span className={`text-sm max-w-[80px] truncate ${forceLight ? "text-white" : "text-foreground"}`}>{displayName}</span>
+                  {isInvestorMode(profile) && (
+                    <span className="text-[10px] font-bold text-destructive bg-destructive/10 px-1.5 py-0.5 rounded-full">
+                      🔥 Investor
+                    </span>
+                  )}
                   <ChevronDown className={`w-3 h-3 ${forceLight ? "text-white/60" : "text-muted-foreground"}`} />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-52 bg-card border-border">
@@ -207,30 +258,30 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
                   </div>
                   <DropdownMenuItem asChild>
                     <Link to="/dashboard" className="flex items-center gap-2 cursor-pointer">
-                      <LayoutDashboard className="w-3.5 h-3.5" /> Dashboard
+                      <LayoutDashboard className="w-3.5 h-3.5" /> {t("nav.dashboard")}
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link to="/listings" className="flex items-center gap-2 cursor-pointer">
-                      <Search className="w-3.5 h-3.5" /> Browse Listings
+                      <Search className="w-3.5 h-3.5" /> {t("nav.listings")}
                     </Link>
                   </DropdownMenuItem>
                   {canListProperty && (
                     <DropdownMenuItem asChild>
                       <Link to="/dashboard/listings" className="flex items-center gap-2 cursor-pointer">
-                        <Building2 className="w-3.5 h-3.5" /> My Listings
+                        <Building2 className="w-3.5 h-3.5" /> {t("dashboard.myListings")}
                       </Link>
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuItem asChild>
                     <Link to="/messages" className="flex items-center gap-2 cursor-pointer">
-                      <MessageSquare className="w-3.5 h-3.5" /> Messages
+                      <MessageSquare className="w-3.5 h-3.5" /> {t("nav.messages")}
                     </Link>
                   </DropdownMenuItem>
                   {eligibleForQuickSale && (
                     <DropdownMenuItem asChild>
                       <Link to="/investor-dashboard" className="flex items-center gap-2 cursor-pointer">
-                        <Flame className="w-3.5 h-3.5" /> Quick Sale Deals
+                        <Flame className="w-3.5 h-3.5" /> {t("nav.quickSale")}
                       </Link>
                     </DropdownMenuItem>
                   )}
@@ -239,7 +290,7 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
                     onClick={handleSignOut}
                     className="flex items-center gap-2 text-destructive focus:text-destructive cursor-pointer"
                   >
-                    <LogOut className="w-3.5 h-3.5" /> Sign Out
+                    <LogOut className="w-3.5 h-3.5" /> {t("nav.signOut")}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -300,10 +351,10 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
                 className={forceLight ? "text-white/90 hover:text-white hover:bg-white/10" : "text-muted-foreground hover:text-foreground"}
                 asChild
               >
-                <Link to="/login">Sign In</Link>
+                <Link to="/login">{t("nav.signIn")}</Link>
               </Button>
               <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground hover:opacity-90" asChild>
-                <Link to="/signup">Get Started</Link>
+                <Link to="/signup">{t("common.getStarted")}</Link>
               </Button>
             </>
           )}
@@ -352,31 +403,34 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
             {user ? (
               <>
                 <Button variant="outline" size="sm" className="flex-1 border-border" asChild>
-                  <Link to="/dashboard" onClick={() => setMobileOpen(false)}>Dashboard</Link>
+                  <Link to="/dashboard" onClick={() => setMobileOpen(false)}>{t("nav.dashboard")}</Link>
                 </Button>
                 <Button size="sm" className="flex-1 bg-gradient-primary border-0 text-primary-foreground" onClick={handleSignOut}>
-                  Sign Out
+                  {t("nav.signOut")}
                 </Button>
               </>
             ) : (
               <>
                 <Button variant="outline" size="sm" className="flex-1 border-border" asChild>
-                  <Link to="/login" onClick={() => setMobileOpen(false)}>Sign In</Link>
+                  <Link to="/login" onClick={() => setMobileOpen(false)}>{t("nav.signIn")}</Link>
                 </Button>
                 <Button size="sm" className="flex-1 bg-gradient-primary border-0 text-primary-foreground" asChild>
-                  <Link to="/signup" onClick={() => setMobileOpen(false)}>Sign Up</Link>
+                  <Link to="/signup" onClick={() => setMobileOpen(false)}>{t("nav.signUp")}</Link>
                 </Button>
               </>
             )}
           </div>
-          <div className="pt-2 border-t border-border">
+          <div className="pt-2 border-t border-border space-y-1">
             <button
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
               className="flex items-center gap-2 px-3 py-2.5 w-full rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
             >
               {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-              Switch to {theme === "dark" ? "Light" : "Dark"} Mode
+              {theme === "dark" ? "Light Mode" : "Dark Mode"}
             </button>
+            <div className="px-1">
+              <LanguageSwitcher />
+            </div>
           </div>
         </div>
       )}

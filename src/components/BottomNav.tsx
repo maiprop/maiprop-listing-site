@@ -1,71 +1,135 @@
 import { Link, useLocation } from "react-router-dom";
+import {
+  Home,
+  Search,
+  Gavel,
+  User,
+  Building2,
+  Flame,
+  Calendar,
+  MessageSquare,
+  Briefcase,
+  Users,
+  Layers,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { Home, Search, Gavel, User } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { getParticipantTypeFromProfile, isInvestorMode } from "@/lib/participantConfig";
 import { cn } from "@/lib/utils";
 
-type BottomNavItem = {
+type BottomTab = {
   label: string;
-  href: string;
   icon: LucideIcon;
-  matchPath?: string;
-  matchListingType?: "sale" | "rent";
+  href: string;
+  matchPaths?: string[];
 };
 
-const BOTTOM_NAV_ITEMS: BottomNavItem[] = [
-  { label: "Home", href: "/", icon: Home },
-  { label: "Browse", href: "/listings?listing_type=sale", matchPath: "/listings", matchListingType: "sale", icon: Search },
-  { label: "Auctions", href: "/auctions", icon: Gavel },
-  { label: "Account", href: "/dashboard", matchPath: "/dashboard", icon: User },
-];
+function getBottomTabs(
+  type: string,
+  investorMode: boolean,
+  isLoggedIn: boolean
+): BottomTab[] {
+  const account: BottomTab = {
+    label: "Account",
+    icon: User,
+    href: isLoggedIn ? "/dashboard" : "/login",
+  };
+
+  switch (type) {
+    case "seller":
+      return [
+        { label: "Home", icon: Home, href: "/" },
+        {
+          label: "Listings",
+          icon: Building2,
+          href: "/dashboard/listings",
+          matchPaths: ["/listings/new", "/dashboard"],
+        },
+        { label: "Market", icon: Search, href: "/listings" },
+        { label: "Messages", icon: MessageSquare, href: "/messages" },
+        account,
+      ];
+    case "agent":
+      return [
+        { label: "Home", icon: Home, href: "/" },
+        { label: "Listings", icon: Building2, href: "/dashboard/listings" },
+        { label: "Leads", icon: Briefcase, href: "/dashboard/leads" },
+        { label: "Messages", icon: MessageSquare, href: "/messages" },
+        account,
+      ];
+    case "developer":
+      return [
+        { label: "Home", icon: Home, href: "/" },
+        { label: "Projects", icon: Layers, href: "/dashboard/projects" },
+        { label: "Listings", icon: Building2, href: "/dashboard/listings" },
+        { label: "Messages", icon: MessageSquare, href: "/messages" },
+        account,
+      ];
+    case "professional":
+      return [
+        { label: "Home", icon: Home, href: "/" },
+        { label: "Services", icon: Briefcase, href: "/professionals/me" },
+        { label: "Directory", icon: Users, href: "/professionals" },
+        { label: "Messages", icon: MessageSquare, href: "/messages" },
+        account,
+      ];
+    default: // buyer
+      return [
+        { label: "Home", icon: Home, href: "/" },
+        { label: "Browse", icon: Search, href: "/listings" },
+        {
+          label: investorMode ? "Deals" : "Auctions",
+          icon: investorMode ? Flame : Gavel,
+          href: investorMode ? "/firesale" : "/auctions",
+        },
+        { label: "Open Houses", icon: Calendar, href: "/open-houses" },
+        account,
+      ];
+  }
+}
 
 export function BottomNav() {
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
 
   // Hide on pages that have their own bottom navigation
   const hiddenRoutes = ["/messages", "/dashboard", "/onboarding", "/login", "/signup", "/ai-assistant"];
-  if (hiddenRoutes.some(r => location.pathname.startsWith(r))) return null;
+  if (hiddenRoutes.some((r) => location.pathname.startsWith(r))) return null;
 
-  const isActive = (item: BottomNavItem) => {
-    const matchPath = "matchPath" in item ? item.matchPath : undefined;
-    const pathToCheck = matchPath || item.href.split("?")[0];
-    if (pathToCheck === "/") return location.pathname === "/";
-    if (!location.pathname.startsWith(pathToCheck)) return false;
-    // listing_type highlighting when on /listings
-    if (pathToCheck === "/listings" && item.matchListingType) {
-      const have = new URLSearchParams(location.search).get("listing_type") || "sale";
-      return have === item.matchListingType;
+  const participantType = getParticipantTypeFromProfile(profile);
+  const investorMode = isInvestorMode(profile);
+  const tabs = getBottomTabs(participantType, investorMode, !!user);
+
+  const isActive = (tab: BottomTab): boolean => {
+    const pathsToCheck = tab.matchPaths
+      ? [tab.href.split("?")[0], ...tab.matchPaths]
+      : [tab.href.split("?")[0]];
+
+    for (const p of pathsToCheck) {
+      if (p === "/") {
+        if (location.pathname === "/") return true;
+      } else if (location.pathname.startsWith(p)) {
+        return true;
+      }
     }
-    return true;
+    return false;
   };
-
-  const baseAccount = BOTTOM_NAV_ITEMS[3];
-  const accountItem: BottomNavItem = user ? baseAccount : { ...baseAccount, href: "/login", label: "Sign In" };
-
-  const items: BottomNavItem[] = [
-    BOTTOM_NAV_ITEMS[0],
-    BOTTOM_NAV_ITEMS[1],
-    BOTTOM_NAV_ITEMS[2],
-    accountItem,
-  ];
 
   return (
     <nav
       className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-xl border-t border-border"
       style={{
         paddingBottom: "env(safe-area-inset-bottom, 0px)",
-        // Used by .pb-bottom-nav helper to reserve space for content
         ["--bottom-nav-h" as unknown as keyof React.CSSProperties]: "56px",
       }}
     >
       <div className="flex items-stretch h-14">
-        {items.map((item) => {
-          const active = isActive(item);
+        {tabs.map((tab) => {
+          const active = isActive(tab);
           return (
             <Link
-              key={item.label}
-              to={item.href}
+              key={tab.label}
+              to={tab.href}
               className={cn(
                 "flex-1 flex flex-col items-center justify-center gap-0.5 min-h-[44px] transition-colors",
                 active
@@ -73,12 +137,17 @@ export function BottomNav() {
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
-              <item.icon
+              <tab.icon
                 className={cn("w-5 h-5 shrink-0", active && "text-primary")}
                 strokeWidth={active ? 2.5 : 1.75}
               />
-              <span className={cn("text-[10px] font-semibold", active ? "text-primary" : "text-muted-foreground")}>
-                {item.label}
+              <span
+                className={cn(
+                  "text-[10px] font-semibold",
+                  active ? "text-primary" : "text-muted-foreground"
+                )}
+              >
+                {tab.label}
               </span>
             </Link>
           );

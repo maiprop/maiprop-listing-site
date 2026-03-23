@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, lazy, Suspense } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   Calendar, MapPin, Loader2, DoorOpen, SlidersHorizontal, X,
@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { PropertyCard } from "@/components/PropertyCard";
-import { MapView, MapListing } from "@/components/MapView";
+import type { MapListing } from "@/components/MapView";
+const MapView = lazy(() => import("@/components/MapView").then(m => ({ default: m.MapView })));
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getStreetViewProxyUrl } from "@/lib/config";
@@ -488,10 +489,12 @@ export default function OpenHouses() {
           ) : viewMode === "map" ? (
             /* ── Map view ── */
             mapListings.length > 0 ? (
-              <MapView
-                listings={mapListings}
-                height="100%"
-              />
+              <Suspense fallback={<div className="h-64 bg-muted animate-pulse rounded-lg" />}>
+                <MapView
+                  listings={mapListings}
+                  height="100%"
+                />
+              </Suspense>
             ) : (
               <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
                 <MapPin className="w-10 h-10 text-muted-foreground" />

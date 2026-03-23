@@ -23,7 +23,6 @@ function startOfMonth() {
 
 export function useValuationUsage() {
   const { user } = useAuth();
-  const { isPro } = useSubscription();
   const monthStart = startOfMonth();
 
   return useQuery({
@@ -44,12 +43,6 @@ export function useValuationUsage() {
 export function useRecordValuation() {
   const qc = useQueryClient();
   const { user } = useAuth();
-  const { isPro } = useSubscription();
-  const { data: count = 0 } = useValuationUsage();
-
-  const canUse = isPro && true; // Pro only feature
-  const includedRemaining = isPro ? Math.max(0, VALUATION_INCLUDED - count) : 0;
-  const needsExtra = count >= VALUATION_INCLUDED;
 
   return useMutation({
     mutationFn: async (listingId?: string) => {
@@ -69,7 +62,6 @@ export function useRecordValuation() {
 
 export function useReportUsage() {
   const { user } = useAuth();
-  const { isPro } = useSubscription();
   const monthStart = startOfMonth();
 
   return useQuery({
@@ -90,11 +82,6 @@ export function useReportUsage() {
 export function useRecordReport() {
   const qc = useQueryClient();
   const { user } = useAuth();
-  const { data: count = 0 } = useReportUsage();
-  const { isPro } = useSubscription();
-
-  const includedRemaining = isPro ? Math.max(0, REPORT_INCLUDED - count) : 0;
-  const needsExtra = count >= REPORT_INCLUDED;
 
   return useMutation({
     mutationFn: async (listingId?: string) => {
@@ -135,10 +122,6 @@ export function useRecordPriorityAd() {
   const qc = useQueryClient();
   const { user } = useAuth();
   const { isPro } = useSubscription();
-  const { data: count = 0 } = usePriorityAdsUsage();
-
-  const includedRemaining = isPro ? Math.max(0, PRIORITY_ADS_INCLUDED - count) : 0;
-  const needsExtra = count >= PRIORITY_ADS_INCLUDED;
 
   return useMutation({
     mutationFn: async (listingId: string) => {

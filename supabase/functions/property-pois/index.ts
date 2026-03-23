@@ -132,11 +132,12 @@ Rules:
         .replace(/,\s*]/g, "]")          // trailing commas in arrays
         .replace(/\)\s*\}/g, "}")        // stray ) before closing brace  ← fixes this specific bug
         .replace(/\)\s*,/g, ",")         // stray ) before commas
+        // eslint-disable-next-line no-control-regex
         .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ""); // control chars
 
       try {
         parsed = JSON.parse(repaired);
-      } catch (repairError) {
+      } catch {
         console.error("Failed to parse AI response:", jsonStr);
         throw new Error("AI returned invalid JSON");
       }

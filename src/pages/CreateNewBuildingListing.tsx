@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
-  Building2, ChevronLeft, Loader2, Check, MapPin, Image, LayoutGrid,
+  Building2, ChevronLeft, Loader2, Check, Image, LayoutGrid,
   FileText, Upload, Home, ChevronRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -119,17 +119,6 @@ export default function CreateNewBuildingListing() {
     navigate("/dashboard/settings", { replace: true });
   }, [user, profile, canCreateListing, navigate]);
 
-  if (user && profile && !canCreateListing) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <span className="text-sm text-muted-foreground">Redirecting…</span>
-        </div>
-      </div>
-    );
-  }
-
   const setProjectField = (key: string, value: string | number) =>
     setProject(p => ({ ...p, [key]: value }));
   const setUnitField = (key: string, value: string | number | boolean) =>
@@ -155,6 +144,18 @@ export default function CreateNewBuildingListing() {
     const { data } = supabase.storage.from("project-media").getPublicUrl(path);
     return data.publicUrl;
   }, [user]);
+
+  // Guard: redirect users who can't create building listings (must be after all hooks)
+  if (user && profile && !canCreateListing) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <span className="text-sm text-muted-foreground">Redirecting…</span>
+        </div>
+      </div>
+    );
+  }
 
   const handleListingFilesSelected = async (files: FileList | null) => {
     if (!files || !user) return;
@@ -304,7 +305,7 @@ export default function CreateNewBuildingListing() {
         cooling_system: unit.cooling_system || undefined,
       };
 
-      const { data: createdUnit, error: unitErr } = await (supabase as any)
+      const { data: _createdUnit, error: unitErr } = await (supabase as any)
         .from("project_units")
         .insert(unitPayload)
         .select()

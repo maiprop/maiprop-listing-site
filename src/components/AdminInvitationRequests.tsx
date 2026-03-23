@@ -6,7 +6,7 @@
 
 import { useState, useEffect } from "react";
 import {
-  MailPlus, Loader2, Check, X, ChevronDown, ChevronUp,
+  MailPlus, Loader2, Check, ChevronDown, ChevronUp,
   Building2, Globe, TrendingUp, DollarSign,
   ExternalLink, RefreshCw, Filter, MessageSquare, Mail
 } from "lucide-react";

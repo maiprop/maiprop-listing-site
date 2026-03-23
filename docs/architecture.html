@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>maiprop — Architecture Overview</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --cyan:        #3ef0d8;
+    --cyan-soft:   #a8f5eb;
+    --purple:      #9b6dff;
+    --purple-dark: #6b39d4;
+    --navy:        #04083b;
+    --navy-mid:    #0a0e2e;
+    --indigo:      #3d3a9e;
+    --surface1:    #111638;
+    --surface2:    #181d45;
+    --surface3:    #1f2560;
+    --text:        #e8ecff;
+    --muted:       #8892b8;
+    --border:      rgba(62, 240, 216, 0.15);
+    --card-bg:     rgba(17, 22, 56, 0.8);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+    background: var(--navy-mid);
+    color: var(--text);
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* ── Header ── */
+  header {
+    background: linear-gradient(135deg, var(--navy-mid) 0%, var(--indigo) 55%, var(--purple-dark) 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 48px 48px 40px;
+    position: relative;
+    overflow: hidden;
+  }
+  header::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 60% 80% at 80% 40%, rgba(155,109,255,0.18), transparent);
+    pointer-events: none;
+  }
+  header .logo-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 18px;
+  }
+  header .logo-dot {
+    width: 42px; height: 42px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, var(--cyan), var(--purple));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; font-weight: 800; color: var(--navy);
+    flex-shrink: 0;
+  }
+  header h1 {
+    font-size: 28px; font-weight: 800;
+    background: linear-gradient(90deg, var(--cyan), var(--purple));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: -0.5px;
+  }
+  header .subtitle {
+    font-size: 15px; color: var(--muted);
+    margin-top: 4px;
+    max-width: 640px;
+  }
+  header .meta {
+    margin-top: 20px;
+    display: flex; gap: 12px; flex-wrap: wrap;
+  }
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(62,240,216,0.1);
+    border: 1px solid rgba(62,240,216,0.25);
+    color: var(--cyan);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 12px; font-weight: 600; letter-spacing: 0.3px;
+  }
+  .badge.purple { background: rgba(155,109,255,0.1); border-color: rgba(155,109,255,0.25); color: var(--purple); }
+  .badge.muted  { background: rgba(136,146,184,0.1); border-color: rgba(136,146,184,0.2); color: var(--muted); }
+
+  /* ── TOC ── */
+  .toc {
+    background: var(--surface1);
+    border-bottom: 1px solid var(--border);
+    padding: 0 48px;
+    display: flex; gap: 0; overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .toc::-webkit-scrollbar { display: none; }
+  .toc a {
+    display: block;
+    padding: 14px 18px;
+    font-size: 13px; font-weight: 500;
+    color: var(--muted);
+    text-decoration: none;
+    white-space: nowrap;
+    border-bottom: 2px solid transparent;
+    transition: color .2s, border-color .2s;
+  }
+  .toc a:hover { color: var(--text); border-bottom-color: var(--border); }
+
+  /* ── Layout ── */
+  main {
+    max-width: 1320px;
+    margin: 0 auto;
+    padding: 48px 48px 80px;
+    display: grid;
+    gap: 48px;
+  }
+
+  section { scroll-margin-top: 80px; }
+
+  .section-header {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 24px;
+  }
+  .section-icon {
+    width: 36px; height: 36px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 17px; flex-shrink: 0;
+  }
+  .section-icon.cyan   { background: rgba(62,240,216,0.12); }
+  .section-icon.purple { background: rgba(155,109,255,0.12); }
+  .section-icon.indigo { background: rgba(61,58,158,0.25); }
+  .section-icon.amber  { background: rgba(251,191,36,0.12); }
+  .section-icon.green  { background: rgba(52,211,153,0.12); }
+  .section-icon.rose   { background: rgba(251,113,133,0.12); }
+
+  h2 {
+    font-size: 20px; font-weight: 700;
+    color: var(--text); letter-spacing: -0.3px;
+  }
+  h2 small {
+    font-size: 13px; font-weight: 400; color: var(--muted);
+    margin-left: 8px; letter-spacing: 0;
+  }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px;
+    backdrop-filter: blur(12px);
+  }
+  .card + .card { margin-top: 16px; }
+
+  /* ── Mermaid diagrams ── */
+  .diagram-wrap {
+    background: var(--surface1);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 32px 24px;
+    overflow: auto;
+  }
+  .diagram-wrap .mermaid {
+    display: flex; justify-content: center;
+  }
+
+  /* ── Grid layouts ── */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  @media (max-width: 900px) { .two-col, .three-col { grid-template-columns: 1fr; } }
+
+  /* ── Tables ── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+  }
+  th {
+    background: var(--surface2);
+    color: var(--muted);
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(62,240,216,0.06);
+    vertical-align: top;
+    color: var(--text);
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(62,240,216,0.03); }
+  td code, th code {
+    background: rgba(62,240,216,0.1);
+    color: var(--cyan);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 12px;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+  td .route { font-family: monospace; color: var(--purple); font-size: 12.5px; }
+  td .guard {
+    display: inline-block;
+    border-radius: 5px;
+    padding: 2px 8px;
+    font-size: 11px; font-weight: 600;
+  }
+  .guard-admin  { background: rgba(251,113,133,0.15); color: #fb7185; }
+  .guard-seller { background: rgba(251,191,36,0.15);  color: #fbbf24; }
+  .guard-invest { background: rgba(52,211,153,0.15);  color: #34d399; }
+  .guard-auth   { background: rgba(155,109,255,0.15); color: var(--purple); }
+  .guard-public { background: rgba(62,240,216,0.1);   color: var(--cyan); }
+
+  /* ── Perf table ── */
+  .perf-number { font-weight: 700; color: var(--cyan); font-family: monospace; }
+  .perf-before { color: var(--muted); text-decoration: line-through; font-family: monospace; font-size: 12px; }
+  .perf-after  { color: var(--cyan); font-family: monospace; font-size: 12px; }
+  .perf-delta  { font-weight: 700; color: #34d399; font-size: 13px; }
+  .perf-delta.warn { color: #fbbf24; }
+
+  /* ── Tag list ── */
+  .tag-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+  .tag {
+    background: rgba(61,58,158,0.3);
+    border: 1px solid rgba(155,109,255,0.2);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 3px 10px;
+    font-size: 12px;
+    font-family: monospace;
+  }
+  .tag.cyan { background: rgba(62,240,216,0.08); border-color: rgba(62,240,216,0.2); color: var(--cyan); }
+  .tag.dim  { background: rgba(136,146,184,0.08); border-color: rgba(136,146,184,0.15); color: var(--muted); }
+
+  /* ── List ── */
+  .info-list { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .info-list li {
+    display: flex; align-items: flex-start; gap: 10px;
+    font-size: 13.5px; color: var(--text);
+  }
+  .info-list li::before {
+    content: '▸';
+    color: var(--cyan);
+    font-size: 11px;
+    margin-top: 3px;
+    flex-shrink: 0;
+  }
+
+  /* ── Flow lanes ── */
+  .flow-lanes {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .flow-lane {
+    background: var(--surface1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .flow-lane h4 {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .fn-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(62,240,216,0.05);
+    font-size: 13px;
+  }
+  .fn-item:last-child { border-bottom: none; }
+  .fn-name { font-family: monospace; color: var(--text); }
+  .fn-desc { font-size: 11px; color: var(--muted); text-align: right; max-width: 160px; }
+
+  /* ── i18n flow ── */
+  .i18n-flow {
+    display: grid;
+    grid-template-columns: 1fr 24px 1fr;
+    align-items: start;
+    gap: 0;
+  }
+  .i18n-arrow {
+    display: flex; align-items: center; justify-content: center;
+    color: var(--border);
+    font-size: 20px;
+    padding-top: 22px;
+  }
+  .locale-card {
+    background: var(--surface1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .locale-card h4 {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.8px;
+    text-transform: uppercase; color: var(--muted);
+    margin-bottom: 12px;
+  }
+  .locale-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 0;
+    font-size: 13px;
+    border-bottom: 1px solid rgba(62,240,216,0.05);
+  }
+  .locale-item:last-child { border-bottom: none; }
+  .locale-flag { font-size: 16px; }
+  .locale-name { color: var(--text); }
+  .locale-note { font-size: 11px; color: var(--muted); margin-left: auto; }
+
+  /* ── Footer ── */
+  footer {
+    text-align: center;
+    padding: 40px;
+    color: var(--muted);
+    font-size: 12px;
+    border-top: 1px solid var(--border);
+  }
+  footer strong { color: var(--text); }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════ HEADER ══════════════════════════ -->
+<header>
+  <div class="logo-row">
+    <div class="logo-dot">M</div>
+    <div>
+      <h1>maiprop</h1>
+      <div class="subtitle">Architecture & Codebase Overview — Living document generated 2026-03-23</div>
+    </div>
+  </div>
+  <div class="meta">
+    <span class="badge">Vite + React 18</span>
+    <span class="badge">TypeScript strict</span>
+    <span class="badge purple">Supabase</span>
+    <span class="badge purple">React Query</span>
+    <span class="badge muted">34 pages · 50+ components · 40+ hooks · 35 edge functions</span>
+  </div>
+</header>
+
+<!-- ══════════════════════════ TOC ══════════════════════════ -->
+<nav class="toc">
+  <a href="#stack">Stack</a>
+  <a href="#routes">Routes</a>
+  <a href="#auth">Auth</a>
+  <a href="#data">Data Layer</a>
+  <a href="#functions">Edge Functions</a>
+  <a href="#i18n">i18n</a>
+  <a href="#components">Components</a>
+  <a href="#hooks">Hooks</a>
+  <a href="#perf">Performance</a>
+</nav>
+
+<!-- ══════════════════════════ MAIN ══════════════════════════ -->
+<main>
+
+  <!-- ── STACK ── -->
+  <section id="stack">
+    <div class="section-header">
+      <div class="section-icon cyan">⚡</div>
+      <h2>Stack <small>key dependencies</small></h2>
+    </div>
+    <div class="three-col">
+      <div class="card">
+        <div class="tag-list">
+          <span class="tag cyan">React 18.3</span>
+          <span class="tag cyan">Vite 5</span>
+          <span class="tag cyan">TypeScript strict</span>
+          <span class="tag cyan">React Router v6</span>
+          <span class="tag cyan">React Query 5</span>
+        </div>
+        <p style="margin-top:14px;font-size:13px;color:var(--muted)">Frontend SPA, all pages lazy-loaded, full strict type checking.</p>
+      </div>
+      <div class="card">
+        <div class="tag-list">
+          <span class="tag">Supabase 2.95</span>
+          <span class="tag">PostgreSQL (RLS)</span>
+          <span class="tag">Supabase Auth</span>
+          <span class="tag">Edge Functions</span>
+          <span class="tag">Stripe</span>
+        </div>
+        <p style="margin-top:14px;font-size:13px;color:var(--muted)">Backend-as-a-service. Deno edge functions. Stripe for subscriptions.</p>
+      </div>
+      <div class="card">
+        <div class="tag-list">
+          <span class="tag dim">Radix UI / shadcn</span>
+          <span class="tag dim">Tailwind CSS</span>
+          <span class="tag dim">Lucide icons</span>
+          <span class="tag dim">react-i18next</span>
+          <span class="tag dim">Sonner toasts</span>
+          <span class="tag dim">Mermaid</span>
+        </div>
+        <p style="margin-top:14px;font-size:13px;color:var(--muted)">UI layer. shadcn-ui components in <code>src/components/ui/</code> — do not edit directly.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── ROUTES ── -->
+  <section id="routes">
+    <div class="section-header">
+      <div class="section-icon purple">🗺</div>
+      <h2>Routes <small>34 pages</small></h2>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <table>
+        <thead>
+          <tr>
+            <th>Route</th>
+            <th>Page</th>
+            <th>Guard</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td class="route">/</td><td><code>Index</code></td><td><span class="guard guard-public">public</span></td><td>Hero, featured listings, guides</td></tr>
+          <tr><td class="route">/listings</td><td><code>Listings</code></td><td><span class="guard guard-public">public</span></td><td>Browse with filters, map, grid views</td></tr>
+          <tr><td class="route">/property/:id</td><td><code>PropertyDetail</code></td><td><span class="guard guard-public">public</span></td><td>Listing detail, images, valuation, viewings</td></tr>
+          <tr><td class="route">/auction/:id</td><td><code>PropertyDetail</code></td><td><span class="guard guard-public">public</span></td><td>Auction detail (same component)</td></tr>
+          <tr><td class="route">/auctions</td><td><code>Auctions</code></td><td><span class="guard guard-public">public</span></td><td>Browse court auctions</td></tr>
+          <tr><td class="route">/firesale</td><td><code>Firesale</code></td><td><span class="guard guard-public">public</span></td><td>Motivated-seller deal pipeline</td></tr>
+          <tr><td class="route">/new-build/:id</td><td><code>NewBuildDetail</code></td><td><span class="guard guard-public">public</span></td><td>New construction project detail</td></tr>
+          <tr><td class="route">/open-houses</td><td><code>OpenHouses</code></td><td><span class="guard guard-public">public</span></td><td>Browse open house events</td></tr>
+          <tr><td class="route">/open-house/:id</td><td><code>OpenHouseDetail</code></td><td><span class="guard guard-public">public</span></td><td>Open house event, registration</td></tr>
+          <tr><td class="route">/professionals</td><td><code>Professionals</code></td><td><span class="guard guard-public">public</span></td><td>Browse agents, lawyers, appraisers</td></tr>
+          <tr><td class="route">/professionals/:id</td><td><code>ProfessionalProfile</code></td><td><span class="guard guard-public">public</span></td><td>Individual professional profile</td></tr>
+          <tr><td class="route">/video-room/:id</td><td><code>BrandedVideoRoom</code></td><td><span class="guard guard-public">public</span></td><td>Jitsi video consultation room</td></tr>
+          <tr><td class="route">/ai-assistant</td><td><code>AIAssistantPage</code></td><td><span class="guard guard-public">public</span></td><td>Full-page AI chat</td></tr>
+          <tr><td class="route">/pricing</td><td><code>Pricing</code></td><td><span class="guard guard-public">public</span></td><td>Subscription plans</td></tr>
+          <tr><td class="route">/api-docs</td><td><code>ApiDocs</code></td><td><span class="guard guard-public">public</span></td><td>Developer API documentation</td></tr>
+          <tr><td class="route">/document-templates</td><td><code>DocumentTemplates</code></td><td><span class="guard guard-public">public</span></td><td>Legal document templates</td></tr>
+          <tr><td class="route">/contact</td><td><code>Contact</code></td><td><span class="guard guard-public">public</span></td><td>Enterprise / institutional contact form</td></tr>
+          <tr><td class="route">/signup · /login</td><td><code>Signup · Login</code></td><td><span class="guard guard-public">public</span></td><td>Auth pages</td></tr>
+          <tr><td class="route">/reset-password</td><td><code>ResetPassword</code></td><td><span class="guard guard-public">public</span></td><td>Password reset</td></tr>
+          <tr><td class="route">/privacy-policy</td><td><code>PrivacyPolicy</code></td><td><span class="guard guard-public">public</span></td><td>Legal</td></tr>
+          <tr><td class="route">/terms-of-service</td><td><code>TermsOfService</code></td><td><span class="guard guard-public">public</span></td><td>Legal</td></tr>
+          <tr><td class="route">/cookie-policy</td><td><code>CookiePolicy</code></td><td><span class="guard guard-public">public</span></td><td>Legal</td></tr>
+          <tr><td class="route">/onboarding</td><td><code>Onboarding</code></td><td><span class="guard guard-auth">auth</span></td><td>Role selection, KYC, document upload</td></tr>
+          <tr><td class="route">/dashboard · /:section</td><td><code>Dashboard</code></td><td><span class="guard guard-auth">auth</span></td><td>User hub: contacts, leads, deals, settings</td></tr>
+          <tr><td class="route">/messages</td><td><code>Messages</code></td><td><span class="guard guard-auth">auth</span></td><td>In-app messaging threads</td></tr>
+          <tr><td class="route">/professionals/me</td><td><code>ProfessionalProfileMe</code></td><td><span class="guard guard-auth">auth</span></td><td>Edit own professional profile</td></tr>
+          <tr><td class="route">/projects · /:id</td><td><code>Projects · ProjectDetail</code></td><td><span class="guard guard-auth">auth</span></td><td>Developer project portfolio</td></tr>
+          <tr><td class="route">/portfolios</td><td><code>Portfolios</code></td><td><span class="guard guard-auth">auth</span></td><td>Investment portfolios</td></tr>
+          <tr><td class="route">/listings/new</td><td><code>CreateListing</code></td><td><span class="guard guard-seller">seller</span></td><td>Create traditional listing</td></tr>
+          <tr><td class="route">/listings/new-building</td><td><code>CreateNewBuildingListing</code></td><td><span class="guard guard-seller">seller</span></td><td>Create new-build project listing</td></tr>
+          <tr><td class="route">/investor-dashboard</td><td><code>InvestorDashboard</code></td><td><span class="guard guard-invest">investor</span></td><td>Pre-market deals, Quick Sale flow</td></tr>
+          <tr><td class="route">/admin</td><td><code>AdminDashboard</code></td><td><span class="guard guard-admin">admin</span></td><td>Full admin panel (9 tabs)</td></tr>
+          <tr><td class="route">/platform-map</td><td><code>PlatformMap</code></td><td><span class="guard guard-admin">admin</span></td><td>Platform analytics map</td></tr>
+          <tr><td class="route">*</td><td><code>NotFound</code></td><td>—</td><td>404</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── AUTH ── -->
+  <section id="auth">
+    <div class="section-header">
+      <div class="section-icon rose">🔐</div>
+      <h2>Auth Flow</h2>
+    </div>
+    <div class="diagram-wrap">
+      <div class="mermaid">
+flowchart TD
+    SB[Supabase Auth] -->|onAuthStateChange| AC[AuthContext]
+    AC --> SESSION[session JWT]
+    AC --> PROFILE[profile\nrole · participant_type\ninvestor_mode · kyc_status]
+    AC --> SUB[subscription\ncheck-subscription fn\npoll every 5min]
+
+    SESSION -->|no session| LOGIN[→ /login]
+    SESSION -->|needs onboarding| ONB[→ /onboarding]
+
+    AC --> PR[ProtectedRoute\nrequires login]
+    PR --> SR[SellerRoute\nisSellSideRole\nagent · seller_landlord\ndeveloper · institutional]
+    PR --> IR[InvestorRoute\nuseEligibleForQuickSale\nverified + POF + subscription]
+    PR --> AR[AdminRoute\nisPlatformAdmin\nrole=admin OR is_platform_admin]
+
+    style AC fill:#1f2560,stroke:#3ef0d8,color:#e8ecff
+    style SR fill:#2a1d3d,stroke:#9b6dff,color:#e8ecff
+    style IR fill:#0f2d20,stroke:#34d399,color:#e8ecff
+    style AR fill:#2d0f18,stroke:#fb7185,color:#e8ecff
+      </div>
+    </div>
+    <div class="two-col" style="margin-top:16px">
+      <div class="card">
+        <h3 style="font-size:14px;font-weight:700;margin-bottom:14px;color:var(--muted)">AuthContext state</h3>
+        <ul class="info-list">
+          <li><code>session</code> — Supabase JWT session</li>
+          <li><code>user</code> — Auth User object</li>
+          <li><code>profile</code> — DB row from <code>profiles</code> table</li>
+          <li><code>subscription</code> — tier, productId, subscriptionEnd</li>
+          <li><code>needsOnboarding</code> — redirects new users</li>
+          <li><code>loading</code> — unblocks UI after 8s safety timer</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3 style="font-size:14px;font-weight:700;margin-bottom:14px;color:var(--muted)">Guard summary</h3>
+        <ul class="info-list">
+          <li><span class="guard guard-public">public</span> — No auth required</li>
+          <li><span class="guard guard-auth">auth</span> — Requires login + onboarding complete</li>
+          <li><span class="guard guard-seller">seller</span> — Requires sell-side role</li>
+          <li><span class="guard guard-invest">investor</span> — Verified + active sub + POF approved</li>
+          <li><span class="guard guard-admin">admin</span> — Platform admin flag or role</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── DATA LAYER ── -->
+  <section id="data">
+    <div class="section-header">
+      <div class="section-icon amber">📊</div>
+      <h2>Data Layer</h2>
+    </div>
+    <div class="diagram-wrap">
+      <div class="mermaid">
+flowchart LR
+    C[Component] -->|calls| H[Custom Hook\nsrc/hooks/]
+    H -->|useQuery / useMutation| RQ[React Query\nstaleTime 5min\ngcTime 30min\nretry 1]
+    RQ -->|SELECT / INSERT| SB[Supabase Client\n20s timeout\n120s for functions]
+    SB -->|Row returned| RQ
+    RQ -->|enriched data| C
+    RQ -->|onSuccess| INV[invalidateQueries]
+    INV --> RQ
+    RQ -->|onError| TOAST[toast.error]
+
+    style RQ fill:#1f2560,stroke:#9b6dff,color:#e8ecff
+    style SB fill:#0f2d20,stroke:#34d399,color:#e8ecff
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3 style="font-size:13px;font-weight:700;color:var(--muted);margin-bottom:12px;text-transform:uppercase;letter-spacing:.6px">Query Client Config</h3>
+      <div class="tag-list">
+        <span class="tag cyan">staleTime: 5 min</span>
+        <span class="tag cyan">gcTime: 30 min</span>
+        <span class="tag cyan">retry: 1</span>
+        <span class="tag cyan">refetchOnWindowFocus: false</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── EDGE FUNCTIONS ── -->
+  <section id="functions">
+    <div class="section-header">
+      <div class="section-icon green">⚙️</div>
+      <h2>Edge Functions <small>35 Deno functions</small></h2>
+    </div>
+    <div class="flow-lanes">
+      <div class="flow-lane">
+        <h4>🔒 Protected — verify_jwt = true</h4>
+        <div class="fn-item"><span class="fn-name">check-subscription</span><span class="fn-desc">Stripe subscription status</span></div>
+        <div class="fn-item"><span class="fn-name">property-chat</span><span class="fn-desc">AI chat about listing</span></div>
+        <div class="fn-item"><span class="fn-name">pro-ai-tools</span><span class="fn-desc">AI tools for professionals</span></div>
+        <div class="fn-item"><span class="fn-name">ai-service-match</span><span class="fn-desc">AI recommend professionals</span></div>
+        <div class="fn-item"><span class="fn-name">listing-ai-assist</span><span class="fn-desc">AI listing copywriting</span></div>
+        <div class="fn-item"><span class="fn-name">create-checkout</span><span class="fn-desc">Stripe checkout session</span></div>
+        <div class="fn-item"><span class="fn-name">customer-portal</span><span class="fn-desc">Stripe customer portal</span></div>
+        <div class="fn-item"><span class="fn-name">create-stripe-price</span><span class="fn-desc">Admin: create Stripe price</span></div>
+        <div class="fn-item"><span class="fn-name">process-email-queue</span><span class="fn-desc">Send queued emails</span></div>
+        <div class="fn-item"><span class="fn-name">sync-stripe-pricing</span><span class="fn-desc">Sync Stripe → DB</span></div>
+        <div class="fn-item"><span class="fn-name">get-invoices</span><span class="fn-desc">User Stripe invoices</span></div>
+      </div>
+      <div class="flow-lane">
+        <h4>🌐 Public — verify_jwt = false</h4>
+        <div class="fn-item"><span class="fn-name">ai-search</span><span class="fn-desc">Natural language listing search</span></div>
+        <div class="fn-item"><span class="fn-name">ai-translate</span><span class="fn-desc">Claude Haiku UI translation</span></div>
+        <div class="fn-item"><span class="fn-name">property-valuation</span><span class="fn-desc">AI AVM</span></div>
+        <div class="fn-item"><span class="fn-name">neighbourhood-report</span><span class="fn-desc">AI area report</span></div>
+        <div class="fn-item"><span class="fn-name">property-pois</span><span class="fn-desc">Google Places POIs</span></div>
+        <div class="fn-item"><span class="fn-name">smart-filters</span><span class="fn-desc">AI filter suggestions</span></div>
+        <div class="fn-item"><span class="fn-name">send-saved-search-alerts</span><span class="fn-desc">Email alerts</span></div>
+        <div class="fn-item"><span class="fn-name">poll-os-auctions</span><span class="fn-desc">OpenSale sync (cron)</span></div>
+        <div class="fn-item"><span class="fn-name">receive-from-os · sync-to-os</span><span class="fn-desc">OS webhook / export</span></div>
+        <div class="fn-item"><span class="fn-name">full-sync-from-os</span><span class="fn-desc">Full OS import</span></div>
+        <div class="fn-item"><span class="fn-name">os-sales-coordinates</span><span class="fn-desc">Sales map data</span></div>
+        <div class="fn-item"><span class="fn-name">auth-email-hook</span><span class="fn-desc">Supabase email trigger</span></div>
+        <div class="fn-item"><span class="fn-name">invitation-notify</span><span class="fn-desc">Investor invite email</span></div>
+        <div class="fn-item"><span class="fn-name">oh-registration-notify</span><span class="fn-desc">Open house email</span></div>
+        <div class="fn-item"><span class="fn-name">notify-new-lead</span><span class="fn-desc">Lead notification email</span></div>
+        <div class="fn-item"><span class="fn-name">submit-lead · contact-lead</span><span class="fn-desc">CRM lead capture</span></div>
+        <div class="fn-item"><span class="fn-name">scheduled-followups</span><span class="fn-desc">Cron email follow-ups</span></div>
+        <div class="fn-item"><span class="fn-name">generate-article · generate-description</span><span class="fn-desc">AI content</span></div>
+        <div class="fn-item"><span class="fn-name">sitemap</span><span class="fn-desc">XML sitemap generator</span></div>
+        <div class="fn-item"><span class="fn-name">streetview-proxy</span><span class="fn-desc">Google Street View proxy</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── i18n ── -->
+  <section id="i18n">
+    <div class="section-header">
+      <div class="section-icon cyan">🌐</div>
+      <h2>i18n System <small>10 languages</small></h2>
+    </div>
+    <div class="diagram-wrap" style="margin-bottom:16px">
+      <div class="mermaid">
+sequenceDiagram
+    participant B as Browser
+    participant I as i18n.ts
+    participant U as useAiTranslation
+    participant SS as sessionStorage
+    participant F as ai-translate fn
+    participant H as Claude Haiku
+
+    B->>I: import "./i18n" (main.tsx)
+    I-->>B: en.json + el.json bundled, LanguageDetector reads localStorage
+
+    B->>U: user picks FR (LanguageSwitcher)
+    U->>SS: check "maiprop_i18n_fr"
+    alt cached
+        SS-->>U: JSON bundle
+        U->>B: i18n.addResourceBundle → instant switch
+    else miss
+        U->>F: invoke("ai-translate", {locale:"fr", strings: FLAT_EN})
+        F->>H: translate ~500 keys
+        H-->>F: {key: translated_value, ...}
+        F-->>U: JSON bundle
+        U->>SS: cache "maiprop_i18n_fr"
+        U->>B: i18n.changeLanguage("fr")
+    end
+      </div>
+    </div>
+    <div class="two-col">
+      <div class="locale-card">
+        <h4>Static — bundled at build time</h4>
+        <div class="locale-item"><span class="locale-flag">🇬🇧</span><span class="locale-name">English</span><span class="locale-note">en.json · 28KB</span></div>
+        <div class="locale-item"><span class="locale-flag">🇬🇷</span><span class="locale-name">Ελληνικά</span><span class="locale-note">el.json · 41KB — verified vs Spitogatos / XE.gr / RE/MAX GR</span></div>
+      </div>
+      <div class="locale-card">
+        <h4>AI-translated — on demand, cached in sessionStorage</h4>
+        <div class="locale-item"><span class="locale-flag">🇫🇷</span><span class="locale-name">Français</span><span class="locale-note">Claude Haiku</span></div>
+        <div class="locale-item"><span class="locale-flag">🇩🇪</span><span class="locale-name">Deutsch</span><span class="locale-note">Claude Haiku</span></div>
+        <div class="locale-item"><span class="locale-flag">🇮🇹</span><span class="locale-name">Italiano</span><span class="locale-note">Claude Haiku</span></div>
+        <div class="locale-item"><span class="locale-flag">🇪🇸</span><span class="locale-name">Español</span><span class="locale-note">Claude Haiku</span></div>
+        <div class="locale-item"><span class="locale-flag">🇷🇺</span><span class="locale-name">Русский</span><span class="locale-note">Claude Haiku</span></div>
+        <div class="locale-item"><span class="locale-flag">🇸🇦</span><span class="locale-name">العربية</span><span class="locale-note">Claude Haiku</span></div>
+        <div class="locale-item"><span class="locale-flag">🇨🇳</span><span class="locale-name">中文</span><span class="locale-note">Claude Haiku</span></div>
+        <div class="locale-item"><span class="locale-flag">🇹🇷</span><span class="locale-name">Türkçe</span><span class="locale-note">Claude Haiku</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── COMPONENTS ── -->
+  <section id="components">
+    <div class="section-header">
+      <div class="section-icon indigo">🧩</div>
+      <h2>Components <small>grouped by feature</small></h2>
+    </div>
+    <div class="three-col">
+      <div class="card">
+        <h3 style="font-size:12px;font-weight:700;color:var(--cyan);letter-spacing:.6px;text-transform:uppercase;margin-bottom:12px">Layout & Nav</h3>
+        <ul class="info-list">
+          <li><code>Navbar</code> — top nav, user menu, notifications</li>
+          <li><code>LanguageSwitcher</code> — globe dropdown</li>
+          <li><code>BottomNav</code> — mobile navigation</li>
+          <li><code>Footer</code> — site footer</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3 style="font-size:12px;font-weight:700;color:var(--cyan);letter-spacing:.6px;text-transform:uppercase;margin-bottom:12px">AI & Search</h3>
+        <ul class="info-list">
+          <li><code>AIAssistantWidget</code> — floating chat</li>
+          <li><code>AISearchBar</code> — natural language search</li>
+          <li><code>AIServiceMatchModal</code> — pro recommendations</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3 style="font-size:12px;font-weight:700;color:var(--cyan);letter-spacing:.6px;text-transform:uppercase;margin-bottom:12px">Property & Listings</h3>
+        <ul class="info-list">
+          <li><code>PropertyCard</code> — grid card (memo + forwardRef)</li>
+          <li><code>PropertyValuation</code> — AI AVM tool</li>
+          <li><code>NeighbourhoodReport</code> — area analysis</li>
+          <li><code>MapView · PropertyMiniMap</code> — maps</li>
+          <li><code>CompareDrawer</code> — side-by-side compare</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3 style="font-size:12px;font-weight:700;color:var(--cyan);letter-spacing:.6px;text-transform:uppercase;margin-bottom:12px">Viewings & Bookings</h3>
+        <ul class="info-list">
+          <li><code>ViewingDialog</code> — book in-person / video</li>
+          <li><code>OnlineViewingModal</code> — video viewing</li>
+          <li><code>BookConsultationModal</code> — professional consult</li>
+          <li><code>RequestCallbackModal</code> — callback request</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3 style="font-size:12px;font-weight:700;color:var(--cyan);letter-spacing:.6px;text-transform:uppercase;margin-bottom:12px">Open Houses</h3>
+        <ul class="info-list">
+          <li><code>OpenHouseRegistrationDialog</code> — register</li>
+          <li><code>OpenHouseOfferDialog</code> — submit offer</li>
+          <li><code>OpenHouseAssetControlPanel</code> — manage assets</li>
+          <li><code>OpenHouseAnalytics</code> — statistics</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3 style="font-size:12px;font-weight:700;color:var(--cyan);letter-spacing:.6px;text-transform:uppercase;margin-bottom:12px">Admin</h3>
+        <ul class="info-list">
+          <li><code>AdminPanel</code> — main admin component</li>
+          <li><code>AdminProfessionalVerification</code> — KYC</li>
+          <li><code>POFVerificationPanel</code> — POF review</li>
+          <li><code>AdminFeaturedListings</code> — feature mgmt</li>
+          <li><code>AdminFiresalePipeline</code> — deals pipeline</li>
+          <li><code>AdminInvestorScreening</code> — investor KYC</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3 style="font-size:12px;font-weight:700;color:var(--cyan);letter-spacing:.6px;text-transform:uppercase;margin-bottom:12px">CRM & Deals</h3>
+        <ul class="info-list">
+          <li><code>ContactsCRM · LeadsCRM</code> — contact/lead mgmt</li>
+          <li><code>PastDealsTable</code> — transaction history</li>
+          <li><code>DealChecklist</code> — transaction checklist</li>
+          <li><code>ROICalculator</code> — investment calculator</li>
+          <li><code>SaveSearchModal</code> — save with email alerts</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3 style="font-size:12px;font-weight:700;color:var(--cyan);letter-spacing:.6px;text-transform:uppercase;margin-bottom:12px">Auctions</h3>
+        <ul class="info-list">
+          <li><code>AuctionAlertModal</code> — price alerts</li>
+          <li><code>AuctionBidHistory</code> — past bids</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3 style="font-size:12px;font-weight:700;color:var(--cyan);letter-spacing:.6px;text-transform:uppercase;margin-bottom:12px">UI Primitives</h3>
+        <ul class="info-list">
+          <li><code>src/components/ui/</code> — shadcn-ui (Radix)</li>
+          <li>Do <strong>not</strong> edit these files directly</li>
+          <li>Toast via Sonner: <code>toast</code> from <code>sonner</code></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── HOOKS ── -->
+  <section id="hooks">
+    <div class="section-header">
+      <div class="section-icon purple">🪝</div>
+      <h2>Hooks <small>40+ custom hooks</small></h2>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <table>
+        <thead>
+          <tr><th>Hook</th><th>Domain</th><th>What it does</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>useListings</code></td><td>Listings</td><td>Fetch paginated listings with filters, enrich with owner profiles, sort featured first</td></tr>
+          <tr><td><code>useListing(id)</code></td><td>Listings</td><td>Fetch single listing, increment view count, enrich owner + pro status</td></tr>
+          <tr><td><code>useSimilarListings</code></td><td>Listings</td><td>Fetch similar properties by type/location</td></tr>
+          <tr><td><code>useViewings(role)</code></td><td>Viewings</td><td>Fetch viewings as requester or property owner</td></tr>
+          <tr><td><code>useBookViewing</code></td><td>Viewings</td><td>Mutation: create viewing request</td></tr>
+          <tr><td><code>useUpdateViewingStatus</code></td><td>Viewings</td><td>Mutation: confirm / cancel / complete viewing</td></tr>
+          <tr><td><code>useConsultations</code></td><td>Consultations</td><td>Fetch consultation requests</td></tr>
+          <tr><td><code>useAuctionAlerts</code></td><td>Auctions</td><td>Fetch user's auction price alerts</td></tr>
+          <tr><td><code>useAuctionBidHistory</code></td><td>Auctions</td><td>Fetch past auction bids</td></tr>
+          <tr><td><code>useSavedSearches</code></td><td>Searches</td><td>Fetch saved searches with email alert settings</td></tr>
+          <tr><td><code>useCreateSavedSearch</code></td><td>Searches</td><td>Mutation: save a search</td></tr>
+          <tr><td><code>useProfessionals(category)</code></td><td>Pros</td><td>Fetch professionals ordered by rating</td></tr>
+          <tr><td><code>useProfessional(id)</code></td><td>Pros</td><td>Fetch single professional with services</td></tr>
+          <tr><td><code>useMessages</code></td><td>Messages</td><td>Fetch message threads for current user</td></tr>
+          <tr><td><code>useProjects</code></td><td>Projects</td><td>Fetch developer projects</td></tr>
+          <tr><td><code>useProjectUnits · useProjectLeads</code></td><td>Projects</td><td>Fetch project units and interested buyers</td></tr>
+          <tr><td><code>useSubscription</code></td><td>Billing</td><td>Fetch subscription tier, calls <code>check-subscription</code> edge fn</td></tr>
+          <tr><td><code>usePricingConfigs</code></td><td>Billing</td><td>Fetch available pricing plans from DB</td></tr>
+          <tr><td><code>usePlanLimits</code></td><td>Billing</td><td>Check remaining plan limits (contacts, leads, etc.)</td></tr>
+          <tr><td><code>useEligibleForQuickSale</code></td><td>Investor</td><td>Checks verified + POF approved + active subscription</td></tr>
+          <tr><td><code>useAiTranslation</code></td><td>i18n</td><td>On locale change: check sessionStorage → call Claude Haiku → load into i18next</td></tr>
+          <tr><td><code>useFavorites</code></td><td>UX</td><td>Save/unsave properties as favorites</td></tr>
+          <tr><td><code>useContacts · useLeads</code></td><td>CRM</td><td>Manage contacts and leads</td></tr>
+          <tr><td><code>useAnalytics</code></td><td>Analytics</td><td>Track page views and events (GA)</td></tr>
+          <tr><td><code>useCookieConsent</code></td><td>GDPR</td><td>Track consent state</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── PERFORMANCE ── -->
+  <section id="perf">
+    <div class="section-header">
+      <div class="section-icon amber">🚀</div>
+      <h2>Performance Optimisations</h2>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden;margin-bottom:16px">
+      <table>
+        <thead>
+          <tr><th>Area</th><th>Change</th><th>Before</th><th>After</th><th>Impact</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Render</td>
+            <td><code>PropertyCard</code> wrapped in <code>memo(forwardRef(...))</code></td>
+            <td>—</td><td>—</td>
+            <td><span class="perf-delta">Skips re-render on parent state changes — critical in 24–50 item grids</span></td>
+          </tr>
+          <tr>
+            <td>Network</td>
+            <td>Navbar notification polling</td>
+            <td class="perf-before">30s</td><td class="perf-after">120s</td>
+            <td><span class="perf-delta">4× fewer background requests</span></td>
+          </tr>
+          <tr>
+            <td>Network</td>
+            <td>AdminPanel OS sync polling</td>
+            <td class="perf-before">15s</td><td class="perf-after">60s</td>
+            <td><span class="perf-delta">4× fewer background requests</span></td>
+          </tr>
+          <tr>
+            <td>Cache</td>
+            <td>React Query <code>staleTime</code></td>
+            <td class="perf-before">30s</td><td class="perf-after">5 min</td>
+            <td><span class="perf-delta">Drastically fewer redundant refetches</span></td>
+          </tr>
+          <tr>
+            <td>Cache</td>
+            <td>React Query <code>gcTime</code></td>
+            <td class="perf-before">—</td><td class="perf-after">30 min</td>
+            <td><span class="perf-delta">Cache survives tab switches</span></td>
+          </tr>
+          <tr>
+            <td>Bundle</td>
+            <td>Index page lazy-loaded</td>
+            <td class="perf-before">eager</td><td class="perf-after">lazy()</td>
+            <td><span class="perf-delta">Removed from initial JS bundle</span></td>
+          </tr>
+          <tr>
+            <td>Build</td>
+            <td>Tailwind <code>content</code> globs</td>
+            <td class="perf-before">4 patterns</td><td class="perf-after">2 patterns</td>
+            <td><span class="perf-delta warn">Faster CSS build; removed non-existent paths</span></td>
+          </tr>
+          <tr>
+            <td>i18n</td>
+            <td>Duplicate <code>useAiTranslation()</code> call removed</td>
+            <td class="perf-before">2 callers</td><td class="perf-after">1 caller</td>
+            <td><span class="perf-delta">Eliminated double translation fetch per locale switch</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <table>
+        <thead>
+          <tr><th>Asset</th><th>Original</th><th>Optimised</th><th>Saving</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>thessaloniki-landmark.jpg</code></td>
+            <td class="perf-before">2.3 MB</td>
+            <td class="perf-after">186 KB (.webp)</td>
+            <td><span class="perf-delta">−92%</span></td>
+          </tr>
+          <tr>
+            <td><code>hero-bg.jpg</code></td>
+            <td class="perf-before">364 KB</td>
+            <td class="perf-after">261 KB (.webp)</td>
+            <td><span class="perf-delta">−28%</span></td>
+          </tr>
+          <tr>
+            <td><code>logo.png</code></td>
+            <td class="perf-before">24 KB</td>
+            <td class="perf-after">19 KB (.webp)</td>
+            <td><span class="perf-delta">−21%</span></td>
+          </tr>
+          <tr>
+            <td><code>logo-dark.png</code></td>
+            <td class="perf-before">19 KB</td>
+            <td class="perf-after">9.5 KB (.webp)</td>
+            <td><span class="perf-delta">−50%</span></td>
+          </tr>
+          <tr>
+            <td><strong>Total</strong></td>
+            <td class="perf-before">≈ 2.7 MB</td>
+            <td class="perf-after">≈ 476 KB</td>
+            <td><span class="perf-delta" style="font-size:15px">−2.24 MB per cold load</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  Generated <strong>2026-03-23</strong> &nbsp;·&nbsp;
+  <strong>maiprop listing platform</strong> &nbsp;·&nbsp;
+  Vite + React 18 + TypeScript + Supabase
+</footer>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    themeVariables: {
+      primaryColor:       '#1f2560',
+      primaryTextColor:   '#e8ecff',
+      primaryBorderColor: '#3ef0d8',
+      lineColor:          '#3ef0d8',
+      secondaryColor:     '#111638',
+      tertiaryColor:      '#0a0e2e',
+      background:         '#0a0e2e',
+      mainBkg:            '#1f2560',
+      nodeBorder:         '#3ef0d8',
+      clusterBkg:         '#111638',
+      titleColor:         '#e8ecff',
+      edgeLabelBackground:'#111638',
+      actorBkg:           '#1f2560',
+      actorBorder:        '#9b6dff',
+      actorTextColor:     '#e8ecff',
+      actorLineColor:     '#3ef0d8',
+      signalColor:        '#3ef0d8',
+      signalTextColor:    '#e8ecff',
+      labelBoxBkgColor:   '#1f2560',
+      labelBoxBorderColor:'#9b6dff',
+      labelTextColor:     '#e8ecff',
+      loopTextColor:      '#e8ecff',
+      noteBorderColor:    '#9b6dff',
+      noteBkgColor:       '#1f2560',
+      noteTextColor:      '#e8ecff',
+      activationBorderColor: '#3ef0d8',
+      activationBkgColor: '#1f2560',
+    },
+    flowchart: { curve: 'basis', padding: 20 },
+    sequence:  { actorMargin: 50, messageMargin: 20, mirrorActors: false }
+  });
+</script>
+</body>
+</html>

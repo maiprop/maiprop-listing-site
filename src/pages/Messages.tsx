@@ -29,8 +29,11 @@ export default function Messages() {
   const [search, setSearch] = useState("");
   const [pendingFiles, setPendingFiles] = useState<{ path: string; filename: string; mime_type: string }[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [otherIsTyping, setOtherIsTyping] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const typingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Mobile: show list or chat pane
   const [mobileView, setMobileView] = useState<"list" | "chat">("list");
 
@@ -69,6 +72,49 @@ export default function Messages() {
       markAsRead.mutate();
     }
   }, [activeConvId, hasUnreadFromOther]);
+
+  // Typing indicator: subscribe to presence on the active conversation channel
+  useEffect(() => {
+    if (typingChannelRef.current) {
+      supabase.removeChannel(typingChannelRef.current);
+      typingChannelRef.current = null;
+    }
+    setOtherIsTyping(false);
+
+    if (!activeConvId || !user) return;
+
+    const channel = supabase.channel(`typing:${activeConvId}`, {
+      config: { presence: { key: user.id } },
+    });
+
+    channel
+      .on("presence", { event: "sync" }, () => {
+        const state = channel.presenceState<{ typing: boolean }>();
+        const othersTyping = Object.entries(state).some(
+          ([presenceKey, presences]) =>
+            presenceKey !== user.id &&
+            (presences as { typing?: boolean }[]).some((p) => p.typing)
+        );
+        setOtherIsTyping(othersTyping);
+      })
+      .subscribe();
+
+    typingChannelRef.current = channel;
+
+    return () => {
+      supabase.removeChannel(channel);
+      typingChannelRef.current = null;
+    };
+  }, [activeConvId, user]);
+
+  const broadcastTyping = () => {
+    if (!typingChannelRef.current || !user) return;
+    typingChannelRef.current.track({ typing: true }).catch(() => undefined);
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      typingChannelRef.current?.track({ typing: false }).catch(() => undefined);
+    }, 3000);
+  };
 
   const handleSend = async () => {
     if ((!input.trim() && pendingFiles.length === 0) || !activeConvId) return;
@@ -311,6 +357,13 @@ export default function Messages() {
                 <div ref={bottomRef} />
               </div>
 
+              {/* Typing indicator */}
+              {otherIsTyping && (
+                <div className="px-4 sm:px-6 py-1 text-xs text-muted-foreground italic">
+                  {otherProfile?.display_name || "The other person"} is typing...
+                </div>
+              )}
+
               {/* Input */}
               <div className="p-3 sm:p-4 bg-card border-t border-border shrink-0 pb-safe">
                 {pendingFiles.length > 0 && (
@@ -365,7 +418,7 @@ export default function Messages() {
                   <input
                     type="text"
                     value={input}
-                    onChange={e => setInput(e.target.value)}
+                    onChange={e => { setInput(e.target.value); broadcastTyping(); }}
                     onKeyDown={e => e.key === "Enter" && !e.shiftKey && handleSend()}
                     placeholder="Type a message..."
                     className="flex-1 bg-secondary border border-border rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"

@@ -1,11 +1,10 @@
 import { useState, useEffect } from "react";
 import {
-  Wrench, Plus, Trash2, Video, Briefcase, Calendar,
+  Wrench, Plus, Trash2, Video, Calendar,
   Clock, Save, ChevronDown, ChevronUp, Loader2, Check, Link as LinkIcon,
   Phone, CalendarDays, RefreshCw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
 import {
   useMyProfessional,
   useProfessionalServices,
@@ -13,7 +12,6 @@ import {
   useUpsertProfessionalServices,
   useUpsertProfessionalAvailability,
   useUpdateProfessional,
-  type ProfessionalService,
 } from "@/hooks/useProfessionalServices";
 import { getServicesForCategory, type ServiceTemplate, type PricingModel } from "@/lib/professionalServiceCatalog";
 

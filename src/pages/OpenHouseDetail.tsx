@@ -24,7 +24,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { HEATING_TYPES, CONDITION_OPTIONS } from "@/lib/filterConfig";
 import { getStreetViewProxyUrl } from "@/lib/config";
-import { SignInForAI } from "@/components/SignInForAI";
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
@@ -153,7 +152,7 @@ export default function OpenHouseDetail() {
   };
   const handleShare = async () => {
     const url = window.location.href;
-    if (navigator.share) { try { await navigator.share({ title: db?.title, url }); } catch {} }
+    if (navigator.share) { try { await navigator.share({ title: db?.title, url }); } catch { /* share cancelled or not supported */ } }
     else { await navigator.clipboard.writeText(url); toast.success("Link copied"); }
   };
 

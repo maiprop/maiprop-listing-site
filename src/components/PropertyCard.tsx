@@ -1,13 +1,13 @@
-import { useState, forwardRef } from "react";
+import { forwardRef, memo } from "react";
+import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
 import {
   MapPin, Bed, Bath, Square, Heart, Gavel, Flame,
-  Eye, TrendingUp, Video, Zap, CheckCircle,
+  Eye, TrendingUp, Video, CheckCircle,
   Home, Calendar, Layers, MessageCircle,
   Share2, Flag, Crown, Clock,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { getSubtypeLabel, PROPERTY_TYPE_MAP, type PropertyTypeKey } from "@/lib/propertyTypes";
+import { getSubtypeLabel } from "@/lib/propertyTypes";
 import { useToggleFavorite, useIsFavorited } from "@/hooks/useFavorites";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -53,6 +53,9 @@ export interface Property {
   ownershipPercentage?: number;
   /** ISO date string for open house — used for countdown badge */
   openHouseDateIso?: string;
+  /** True when listing is a pre-sale / off-plan new build */
+  isPreSale?: boolean;
+  constructionStatus?: string;
 }
 
 interface PropertyCardProps {
@@ -72,7 +75,8 @@ const SYSTEM_TAG_PREFIXES = [
   "round:", "status:", "posted", "sync:", "land_type:", "commercial_type:",
 ];
 
-export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(function PropertyCard({ property, compact = false }, _ref) {
+export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(function PropertyCard({ property, compact = false }, _ref) {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const navigate = useNavigate();
   const { data: isFavorited = false } = useIsFavorited(property.id);
@@ -88,6 +92,8 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
     ? `/auction/${property.id}`
     : property.listingType === "open_house"
     ? `/open-house/${property.id}`
+    : (property.isPreSale || property.constructionStatus)
+    ? `/new-build/${property.id}`
     : `/property/${property.id}`;
 
   const handleShare = async (e: React.MouseEvent) => {
@@ -99,14 +105,14 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
         await navigator.share({ title: property.title, url });
       } else {
         await navigator.clipboard.writeText(url);
-        toast.success("Link copied!");
+        toast.success(t("propertyCard.linkCopied"));
       }
     } catch {
       try {
         await navigator.clipboard.writeText(url);
-        toast.success("Link copied!");
+        toast.success(t("propertyCard.linkCopied"));
       } catch {
-        toast.error("Could not copy link");
+        toast.error(t("propertyCard.copyFailed"));
       }
     }
   };
@@ -114,15 +120,15 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
   const handleReport = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!user) { toast.error("Sign in to report"); navigate("/login"); return; }
+    if (!user) { toast.error(t("propertyCard.signInToReport")); navigate("/login"); return; }
     const entityType = property.listingType === "firesale" ? "firesale_request" : "listing";
     const { error } = await supabase.from("listing_reports").insert({
       entity_type: entityType,
       entity_id: property.id,
       reporter_id: user.id,
     });
-    if (error) toast.error("Could not submit report");
-    else toast.success("Report submitted. Our team will review it.");
+    if (error) toast.error(t("propertyCard.copyFailed"));
+    else toast.success(t("propertyCard.reportSubmitted"));
   };
 
   const formatPrice = (price: number, type: string) => {
@@ -131,16 +137,17 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
   };
 
   const getBadge = () => {
-  if (property.listingType === "auction") return { label: "Auction", cls: "badge-auction" };
-    if (property.listingType === "open_house") return { label: "Open House", cls: "badge-open-house" };
-    if (property.listingType === "firesale") return { label: "Quick Sale", cls: "badge-firesale" };
-    if (property.isNew) return { label: "New", cls: "badge-new" };
-    if (property.isPremium) return { label: "Premium", cls: "bg-brand-purple/90 text-white" };
+  if (property.listingType === "auction") return { label: t("propertyCard.badges.auction"), cls: "badge-auction" };
+    if (property.listingType === "open_house") return { label: t("propertyCard.badges.openHouse"), cls: "badge-open-house" };
+    if (property.listingType === "firesale") return { label: t("propertyCard.badges.quickSale"), cls: "badge-firesale" };
+    if (property.isPreSale || property.constructionStatus) return { label: t("propertyCard.badges.newBuild"), cls: "bg-teal-600/90 text-white" };
+    if (property.isNew) return { label: t("propertyCard.badges.new"), cls: "badge-new" };
+    if (property.isPremium) return { label: t("propertyCard.badges.premium"), cls: "bg-brand-purple/90 text-white" };
     return null;
   };
 
   const badge = getBadge();
-  const badges = [...(badge ? [badge] : []), ...(property.isFeatured ? [{ label: "Featured", cls: "bg-brand-gold/90 text-white flex items-center gap-1" }] : [])];
+  const badges = [...(badge ? [badge] : []), ...(property.isFeatured ? [{ label: t("propertyCard.badges.featured"), cls: "bg-brand-gold/90 text-white flex items-center gap-1" }] : [])];
   const countdown = property.listingType === "open_house" && property.openHouseDateIso ? (() => {
     const diff = new Date(property.openHouseDateIso).getTime() - Date.now();
     if (diff <= 0) return null;
@@ -208,7 +215,7 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center gap-2">
             <Home className="w-10 h-10 text-muted-foreground/20" />
-            <span className="text-xs text-muted-foreground/40">No photo</span>
+            <span className="text-xs text-muted-foreground/40">{t("propertyCard.noPhoto")}</span>
           </div>
         )}
         {/* Soft gradient overlay */}
@@ -260,7 +267,7 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
                 : "bg-white/90 backdrop-blur-sm text-foreground hover:bg-white hover:scale-105"
             }`}
             onClick={handleFavorite}
-            aria-label={isFavorited ? "Remove from saved" : "Save property"}
+            aria-label={isFavorited ? t("propertyCard.actions.unsave") : t("propertyCard.actions.save")}
           >
             <Heart className={`w-4 h-4 transition-all ${isFavorited ? "fill-current" : ""}`} />
           </button>
@@ -323,7 +330,7 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
             <div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-secondary/80 border border-border/60">
                 <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                {property.ownerParticipantType === "agent" ? "Agent listing" : "Private seller"}
+                {property.ownerParticipantType === "agent" ? t("propertyCard.agentListing") : t("propertyCard.privateSeller")}
               </span>
             </div>
           )}
@@ -347,7 +354,7 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
           {property.floor != null && (
             <span className="flex items-center gap-1 bg-secondary text-muted-foreground border border-border px-2.5 py-1 rounded-lg font-medium">
               <Layers className="w-3.5 h-3.5" />
-              {property.floor === -1 ? "Basement" : property.floor === 0 ? "Ground" : `${property.floor}F`}
+              {property.floor === -1 ? t("propertyCard.basement") : property.floor === 0 ? t("propertyCard.groundFloor") : `${property.floor}${t("propertyCard.floor")}`}
               {property.totalFloors != null && `/${property.totalFloors}`}
             </span>
           )}
@@ -364,10 +371,10 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
           {/* Ownership status pill */}
           {property.ownershipStatus && (() => {
             const ownershipMap: Record<string, { label: string; cls: string }> = {
-              full:    { label: "Πλήρης κυριότητα", cls: "bg-primary/15 text-primary border border-primary/30" },
-              partial: { label: "Μερική κυριότητα", cls: "bg-brand-gold/15 text-brand-gold border border-brand-gold/30" },
-              common:  { label: "Εξ αδιαιρέτου", cls: "bg-brand-purple/15 text-brand-purple border border-brand-purple/30" },
-              none:    { label: "Χωρίς κυριότητα", cls: "bg-destructive/15 text-destructive border border-destructive/30" },
+              full:    { label: t("propertyCard.ownership.full"), cls: "bg-primary/15 text-primary border border-primary/30" },
+              partial: { label: t("propertyCard.ownership.partial"), cls: "bg-brand-gold/15 text-brand-gold border border-brand-gold/30" },
+              common:  { label: t("propertyCard.ownership.undivided"), cls: "bg-brand-purple/15 text-brand-purple border border-brand-purple/30" },
+              none:    { label: t("propertyCard.ownership.none"), cls: "bg-destructive/15 text-destructive border border-destructive/30" },
             };
             const ow = ownershipMap[property.ownershipStatus] || { label: property.ownershipStatus, cls: "bg-secondary border border-border" };
             return (
@@ -409,8 +416,8 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
           <div className="flex items-center gap-2 bg-destructive/10 rounded-xl p-2.5 border border-destructive/20">
             <Flame className="w-4 h-4 text-destructive shrink-0" />
             <div className="flex-1">
-              <div className="text-xs font-semibold text-destructive">Quick Sale</div>
-              <div className="text-[11px] text-muted-foreground">Motivated seller · fast close</div>
+              <div className="text-xs font-semibold text-destructive">{t("propertyCard.badges.quickSale")}</div>
+              <div className="text-[11px] text-muted-foreground">{t("propertyCard.motivatedSeller")}</div>
             </div>
           </div>
         )}
@@ -456,7 +463,7 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
               <Link to={detailPath} className="flex-1">
                 <button className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-primary text-primary-foreground font-semibold text-sm transition-all hover:opacity-90 hover:shadow-md active:scale-[0.98]">
                   <MessageCircle className="w-4 h-4" />
-                  Contact Agent
+                  {t("propertyCard.actions.contactAgent")}
                 </button>
               </Link>
             )}
@@ -464,7 +471,7 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
               <Link to={detailPath} className="flex-1">
                 <button className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-gradient-primary text-primary-foreground font-semibold text-sm transition-all hover:opacity-90 hover:shadow-md active:scale-[0.98]">
                   <Calendar className="w-4 h-4" />
-                  View Open House
+                  {t("propertyCard.actions.viewOpenHouse")}
                 </button>
               </Link>
             )}
@@ -472,21 +479,21 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
               <Link to={detailPath} className="flex-1">
                 <button className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-brand-auction/80 text-white font-semibold text-sm transition-all hover:bg-brand-auction hover:shadow-md active:scale-[0.98]">
                   <Gavel className="w-4 h-4" />
-                  View Auction
+                  {t("propertyCard.actions.viewAuction")}
                 </button>
               </Link>
             )}
             <button
               onClick={handleShare}
               className="p-2.5 rounded-xl border border-border bg-secondary text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-all"
-              aria-label="Share"
+              aria-label={t("propertyCard.actions.share")}
             >
               <Share2 className="w-4 h-4" />
             </button>
             <button
               onClick={handleReport}
               className="p-2.5 rounded-xl border border-border bg-secondary text-muted-foreground/50 hover:text-muted-foreground transition-all"
-              aria-label="Report"
+              aria-label={t("propertyCard.actions.report")}
             >
               <Flag className="w-4 h-4" />
             </button>
@@ -495,7 +502,7 @@ export const PropertyCard = forwardRef<HTMLDivElement, PropertyCardProps>(functi
       </div>
     </div>
   );
-});
+}));
 
 PropertyCard.displayName = "PropertyCard";
 export default PropertyCard;

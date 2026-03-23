@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from "react";
 import { Link, useSearchParams, useNavigate } from "react-router-dom";
-import { Shield, Flame, Users, Wifi, SlidersHorizontal, ArrowLeft, DoorOpen, FolderKanban, Flag, MailPlus, FileText } from "lucide-react";
+import { Shield, Flame, Users, Wifi, SlidersHorizontal, ArrowLeft, DoorOpen, FolderKanban, MailPlus, FileText, Star, BadgeCheck, Wallet } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import AdminFiresalePipeline from "@/components/AdminFiresalePipeline";
@@ -16,16 +16,19 @@ import { AdminPricingContent } from "@/pages/AdminPricing";
 import OpenHouseDashboardSection from "@/components/OpenHouseDashboardSection";
 import AdminReports from "@/components/AdminReports";
 import AdminInvitationRequests from "@/components/AdminInvitationRequests";
+import AdminFeaturedListings from "@/components/AdminFeaturedListings";
+import { AdminProfessionalVerification } from "@/components/AdminProfessionalVerification";
+import { POFVerificationPanel } from "@/components/POFVerificationPanel";
 import { useMyListings } from "@/hooks/useListings";
 import { Button } from "@/components/ui/button";
 
-type AdminTab = "pipeline" | "investor-screening" | "subscribers" | "pricing" | "os-sync" | "open-houses" | "reports" | "invitations";
+type AdminTab = "pipeline" | "investor-screening" | "subscribers" | "pricing" | "os-sync" | "open-houses" | "reports" | "invitations" | "featured" | "pro-verification" | "pof-review";
 
 export default function AdminDashboard() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { data: myListings = [] } = useMyListings();
-  const validTabs = ["pipeline", "investor-screening", "subscribers", "pricing", "os-sync", "open-houses", "reports", "invitations"];
+  const validTabs = ["pipeline", "investor-screening", "subscribers", "pricing", "os-sync", "open-houses", "reports", "invitations", "featured", "pro-verification", "pof-review"];
   const tabParam = searchParams.get("tab") as AdminTab | null;
   const [activeTab, setActiveTab] = useState<AdminTab>(
     tabParam && validTabs.includes(tabParam) ? tabParam : "pipeline"
@@ -52,6 +55,9 @@ export default function AdminDashboard() {
     { key: "invitations", label: "Invitations", icon: MailPlus },
     { key: "pricing", label: "Pricing", icon: SlidersHorizontal },
     { key: "os-sync", label: "OS Sync", icon: Wifi },
+    { key: "featured", label: "Featured Ads", icon: Star },
+    { key: "pro-verification", label: "Pro Verification", icon: BadgeCheck },
+    { key: "pof-review", label: "POF Review", icon: Wallet },
   ];
 
   return (
@@ -70,7 +76,7 @@ export default function AdminDashboard() {
                 <Shield className="w-6 h-6 text-primary" />
                 <div>
                   <h1 className="font-display text-2xl font-bold">Admin Dashboard</h1>
-                  <p className="text-sm text-muted-foreground">Firesale pipeline, subscribers, OS sync</p>
+                  <p className="text-sm text-muted-foreground">Listings, firesale, auctions, pricing, users, featured ads & more</p>
                 </div>
               </div>
             </div>
@@ -109,6 +115,9 @@ export default function AdminDashboard() {
           {activeTab === "os-sync" && <AdminPanel />}
           {activeTab === "invitations" && <AdminInvitationRequests />}
           {activeTab === "reports" && <AdminReports />}
+          {activeTab === "featured" && <AdminFeaturedListings />}
+          {activeTab === "pro-verification" && <AdminProfessionalVerification />}
+          {activeTab === "pof-review" && <POFVerificationPanel />}
         </div>
       </div>
       <Footer />

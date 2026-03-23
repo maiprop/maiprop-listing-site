@@ -1,13 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import {
   Home, Plus, BarChart2, MessageSquare, Heart, Settings, User,
-  Eye, Bell, BellOff, LogOut, Building2, Gavel, CheckCircle,
+  Eye, Bell, LogOut, Building2, Gavel, CheckCircle,
   Loader2, Calendar, Trash2, ToggleLeft, ToggleRight, Bookmark,
-  Search, Activity, Wrench, Shield, MapPin, Euro, Edit2,
+  Search, Wrench, Shield, CreditCard,
   FolderKanban, Users, Briefcase, TrendingUp, Globe2, Flame,
-  ArrowRight, Clock, CheckCircle2, AlertCircle, Phone, ExternalLink, Star, Crown,
-  FolderOpen, LayoutGrid, Lock, Zap,
+  ArrowRight, Clock, CheckCircle2, AlertCircle, ExternalLink, Star, Crown,
+  Lock, Zap,
 } from "lucide-react";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useEligibleForQuickSale } from "@/hooks/useEligibleForQuickSale";
@@ -24,23 +24,36 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useMyListings, useUpdateListing, useDeleteListing } from "@/hooks/useListings";
 import { useListingViewTrends, useLeadFunnel } from "@/hooks/useAnalytics";
 import { useFavorites } from "@/hooks/useFavorites";
-import { useViewings, useUpdateViewing } from "@/hooks/useViewings";
-import { useSavedSearches, useDeleteSavedSearch, useToggleSavedSearchAlert } from "@/hooks/useSavedSearches";
-import { useAuctionAlerts, useDeleteAuctionAlert, useUpdateAuctionAlert } from "@/hooks/useAuctionAlerts";
-import { usePrivateOwnerAdAlert } from "@/hooks/usePrivateOwnerAdAlert";
+import { useViewings } from "@/hooks/useViewings";
+import { useSavedSearches } from "@/hooks/useSavedSearches";
+import { useAuctionAlerts } from "@/hooks/useAuctionAlerts";
 import { useMyProfessional, useProfessionalServices, useUpdateProfessional } from "@/hooks/useProfessionalServices";
 import { useStartConversation } from "@/hooks/useMessages";
-import { AuctionAlertModal } from "@/components/AuctionAlertModal";
 import { PropertyCard } from "@/components/PropertyCard";
 import ProfessionalServicesEditor from "@/components/ProfessionalServicesEditor";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { getParticipantTypeFromProfile, getOwnerParticipantType, type ParticipantId } from "@/lib/participantConfig";
+import { getParticipantTypeFromProfile, type ParticipantId } from "@/lib/participantConfig";
 import { dbListingToCard } from "@/lib/listingUtils";
-import { useProjects, useCreateProject, useUpdateProject, useDeleteProject } from "@/hooks/useProjects";
-import { usePortfolios, usePortfolio, useCreatePortfolio, useUpdatePortfolio, useDeletePortfolio } from "@/hooks/usePortfolios";
+import { ProGate } from "@/components/gates/ProGate";
+
+// Lazy-loaded tab components — only mounted when the tab is active
+const ViewingsTab = lazy(() => import("./dashboard/ViewingsTab"));
+const SavedSearchesTab = lazy(() => import("./dashboard/SavedSearchesTab"));
+const AuctionsTab = lazy(() => import("./dashboard/AuctionsTab"));
+const ProjectsTab = lazy(() => import("./dashboard/ProjectsTab"));
+const PortfoliosTab = lazy(() => import("./dashboard/PortfoliosTab"));
+const AnalyticsTab = lazy(() => import("./dashboard/AnalyticsTab"));
+const BillingTab = lazy(() => import("./dashboard/BillingTab"));
+
+const TAB_FALLBACK = (
+  <div className="p-8 text-center text-muted-foreground">
+    <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-primary" />
+    Loading...
+  </div>
+);
 
 function ContactsAndLeadsSection({ initialTab = "contacts" }: { initialTab?: "contacts" | "leads" }) {
   const [tab, setTab] = useState<"contacts" | "leads">(initialTab);
@@ -155,9 +168,9 @@ type NavKey =
   | "overview" | "listings" | "analytics" | "saved" | "saved-searches"
   | "messages" | "viewings" | "auctions" | "open-houses" | "services" | "booking" | "leads"
   | "deal-flow" | "contacts" | "projects" | "portfolios"
-  | "profile" | "settings";
+  | "billing" | "profile" | "settings";
 
-type DashboardRole = "individual" | "seller_landlord" | "agent" | "professional" | "developer" | "admin";
+type DashboardRole = "individual" | "seller_landlord" | "agent" | "professional" | "developer" | "investor" | "institutional" | "admin";
 
 const ALL_NAV_ITEMS: { icon: React.ElementType; label: string; key: NavKey; href?: string }[] = [
   { icon: Home,          label: "Overview",       key: "overview"       },
@@ -176,33 +189,46 @@ const ALL_NAV_ITEMS: { icon: React.ElementType; label: string; key: NavKey; href
   { icon: Users,         label: "Contacts",         key: "contacts"       },
   { icon: Globe2,        label: "Projects",         key: "projects"       },
   { icon: TrendingUp,    label: "Portfolios",       key: "portfolios"     },
+  { icon: CreditCard,    label: "Billing",          key: "billing"        },
   { icon: User,          label: "Profile",          key: "profile"        },
   { icon: Settings,      label: "Settings",         key: "settings"       },
 ];
 
 // ── Nav per bio-type (spec-accurate) ──────────────────────────────────────────
 const NAV_BY_TYPE: Record<string, NavKey[]> = {
-  buyer:         ["overview", "saved", "saved-searches", "open-houses", "messages", "viewings", "auctions", "profile", "settings"],
-  seller:        ["overview", "listings", "saved", "saved-searches", "messages", "viewings", "open-houses", "profile", "settings"],
-  agent:         ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "open-houses", "leads", "contacts", "profile", "settings"],
-  developer:     ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "leads", "contacts", "projects", "portfolios", "profile", "settings"],
-  professional:  ["overview", "services", "booking", "leads", "contacts", "analytics", "messages", "viewings", "profile", "settings"],
-  admin:         ["overview", "deal-flow", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "open-houses", "services", "booking", "leads", "contacts", "projects", "portfolios", "profile", "settings"],
+  buyer:         ["overview", "saved", "saved-searches", "open-houses", "messages", "viewings", "auctions", "billing", "profile", "settings"],
+  seller:        ["overview", "listings", "saved", "saved-searches", "messages", "viewings", "open-houses", "billing", "profile", "settings"],
+  agent:         ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "open-houses", "leads", "contacts", "billing", "profile", "settings"],
+  developer:     ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "leads", "contacts", "projects", "portfolios", "billing", "profile", "settings"],
+  professional:  ["overview", "services", "booking", "leads", "contacts", "analytics", "messages", "viewings", "billing", "profile", "settings"],
+  investor:      ["overview", "saved", "saved-searches", "open-houses", "messages", "viewings", "auctions", "billing", "profile", "settings"],
+  institutional: ["overview", "saved", "saved-searches", "listings", "messages", "viewings", "auctions", "open-houses", "contacts", "billing", "profile", "settings"],
+  admin:         ["overview", "deal-flow", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "open-houses", "services", "booking", "leads", "contacts", "projects", "portfolios", "billing", "profile", "settings"],
 };
 
-// Free tier: fewer nav items (no analytics, no CRM/contacts for agent)
+// Free tier: same nav as pro — gating happens inside the section content, not by hiding nav items
 const NAV_BY_TYPE_FREE: Record<string, NavKey[]> = {
-  buyer:         ["overview", "saved", "saved-searches", "messages", "viewings", "auctions", "profile", "settings"],
-  seller:        ["overview", "listings", "messages", "viewings", "profile", "settings"],
-  agent:         ["overview", "listings", "saved", "messages", "viewings", "auctions", "profile", "settings"],
-  developer:     ["overview", "listings", "messages", "profile", "settings"],
-  professional:  ["overview", "services", "leads", "messages", "profile", "settings"],
-  admin:         ["overview", "deal-flow", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "open-houses", "services", "booking", "leads", "contacts", "projects", "portfolios", "profile", "settings"],
+  buyer:         ["overview", "saved", "saved-searches", "open-houses", "messages", "viewings", "auctions", "billing", "profile", "settings"],
+  seller:        ["overview", "listings", "saved", "messages", "viewings", "open-houses", "billing", "profile", "settings"],
+  agent:         ["overview", "listings", "saved", "messages", "viewings", "auctions", "open-houses", "leads", "billing", "profile", "settings"],
+  developer:     ["overview", "listings", "messages", "leads", "billing", "profile", "settings"],
+  professional:  ["overview", "services", "leads", "messages", "billing", "profile", "settings"],
+  investor:      ["overview", "saved", "messages", "viewings", "auctions", "billing", "profile", "settings"],
+  institutional: ["overview", "saved", "listings", "messages", "viewings", "auctions", "billing", "profile", "settings"],
+  admin:         ["overview", "deal-flow", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "open-houses", "services", "booking", "leads", "contacts", "projects", "portfolios", "billing", "profile", "settings"],
 };
 
 function getNavItemsForBioType(bioType: string | null, role: DashboardRole, isPro: boolean, eligibleForQuickSale = false) {
   if (role === "admin") return ALL_NAV_ITEMS.filter(i => NAV_BY_TYPE.admin.includes(i.key));
-  const key = bioType ?? (role === "seller_landlord" ? "seller" : role === "professional" ? "professional" : role === "agent" ? "agent" : role === "developer" ? "developer" : "buyer");
+  const key = bioType ?? (
+    role === "seller_landlord" ? "seller" :
+    role === "professional"   ? "professional" :
+    role === "agent"          ? "agent" :
+    role === "developer"      ? "developer" :
+    role === "investor"       ? "investor" :
+    role === "institutional"  ? "institutional" :
+    "buyer"
+  );
   const navMap = !isPro && key !== "admin" ? NAV_BY_TYPE_FREE : NAV_BY_TYPE;
   let keys = navMap[key] ?? navMap.buyer;
   if (eligibleForQuickSale && key === "buyer" && !keys.includes("deal-flow")) {
@@ -219,11 +245,59 @@ const LEAD_STATUS_COLORS: Record<string, string> = {
   cancelled: "bg-muted text-muted-foreground",
 };
 
-const REQUEST_TYPE_LABELS: Record<string, string> = {
-  consultation: "📋 Consultation",
-  callback:     "📞 Callback",
-  message:      "💬 Message",
-};
+
+// ── Profile Completion nudge card (agent / professional) ─────────────────────
+function ProfileCompletionCard({ bioType, profile }: { bioType: string; profile: any }) {
+  const steps = bioType === "agent" ? [
+    { label: "Add profile photo",        done: !!profile?.avatar_url,    gain: "+15% leads" },
+    { label: "Add license number",       done: !!profile?.license_number, gain: "Verified badge" },
+    { label: "Set your working areas",   done: !!profile?.city,           gain: "+20% leads" },
+    { label: "Complete bio",             done: (profile?.bio?.length ?? 0) > 50, gain: "+10% trust" },
+  ] : [
+    { label: "Add profile photo",        done: !!profile?.avatar_url,    gain: "+15% leads" },
+    { label: "Add service catalog",      done: false,                     gain: "+25% leads" },
+    { label: "Set availability hours",   done: false,                     gain: "+20% leads" },
+    { label: "Upload license/certificate", done: false,                  gain: "Verified badge" },
+    { label: "Connect video room",       done: false,                     gain: "+10% conversion" },
+  ];
+
+  const completed = steps.filter(s => s.done).length;
+  const pct = Math.round((completed / steps.length) * 100);
+  if (pct === 100) return null;
+
+  return (
+    <div className="glass-card rounded-xl border border-primary/20 p-4 bg-primary/5">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <h3 className="font-semibold text-sm">Complete your profile</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">Get more leads by completing your profile</p>
+        </div>
+        <div className="text-right">
+          <span className="text-2xl font-black text-primary">{pct}%</span>
+          <p className="text-[10px] text-muted-foreground">complete</p>
+        </div>
+      </div>
+      <div className="w-full h-1.5 bg-secondary rounded-full mb-3">
+        <div className="h-1.5 bg-primary rounded-full transition-all" style={{ width: `${pct}%` }} />
+      </div>
+      <div className="space-y-1.5">
+        {steps.filter(s => !s.done).slice(0, 3).map(s => (
+          <div key={s.label} className="flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <div className="w-3.5 h-3.5 rounded-full border border-muted-foreground/40 shrink-0" />
+              {s.label}
+            </div>
+            <span className="text-primary font-medium">{s.gain}</span>
+          </div>
+        ))}
+      </div>
+      <Button size="sm" variant="outline" className="w-full mt-3 border-primary/30 text-primary text-xs h-8"
+        onClick={() => {}}>
+        Complete profile →
+      </Button>
+    </div>
+  );
+}
 
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 export default function Dashboard() {
@@ -240,8 +314,6 @@ export default function Dashboard() {
   const defaultSection = (sectionNavItems[0]?.key ?? "overview") as NavKey;
   const [activeSection, setActiveSection] = useState<NavKey>((section as NavKey) || defaultSection);
   const [listingFilter, setListingFilter] = useState<"all" | "off_market" | "pre_sale">("all");
-  const [alertModalOpen, setAlertModalOpen] = useState(false);
-  const [editingAlert, setEditingAlert] = useState<any>(null);
 
   // Quick Sale access application status (invitation_requests) for buyers / non-investors
   const [invitationRequestStatus, setInvitationRequestStatus] = useState<"none" | "pending" | "approved" | "rejected">("none");
@@ -270,36 +342,20 @@ export default function Dashboard() {
 
   const { data: myListings = [], isLoading: listingsLoading } = useMyListings();
   const { data: favorites = [], isLoading: favLoading } = useFavorites();
-  const { data: viewings = [], isLoading: viewingsLoading } = useViewings("requester");
+  const { data: viewings = [] } = useViewings("requester");
   const { data: ownViewings = [] } = useViewings("owner");
-  const { data: savedSearches = [], isLoading: savedSearchesLoading } = useSavedSearches();
-  const { data: auctionAlerts = [], isLoading: alertsLoading } = useAuctionAlerts();
+  const { data: savedSearches = [] } = useSavedSearches();
+  const { data: auctionAlerts = [] } = useAuctionAlerts();
   const { data: myProfessional } = useMyProfessional();
   const listingIds = myListings.map((l: any) => l.id).filter(Boolean);
   const { data: viewTrends = [] } = useListingViewTrends(listingIds);
   const { data: leadFunnel } = useLeadFunnel(myProfessional?.id);
   const { data: professionalServices = [] } = useProfessionalServices(myProfessional?.id || "");
-  const { data: leads = [], isLoading: leadsLoading } = useMyLeads(myProfessional?.id);
+  const { data: leads = [], isLoading: _leadsLoading } = useMyLeads(myProfessional?.id);
   const updateListing = useUpdateListing();
   const deleteListing = useDeleteListing();
-  const deleteSavedSearch = useDeleteSavedSearch();
-  const toggleAlert = useToggleSavedSearchAlert();
-  const deleteAuctionAlert = useDeleteAuctionAlert();
-  const toggleAuctionAlert = useUpdateAuctionAlert();
-  const privateOwnerAlert = usePrivateOwnerAdAlert();
-  const updateLeadStatus = useUpdateLeadStatus();
-  const updateViewing = useUpdateViewing();
-  const startConversation = useStartConversation();
-
-  // Projects & Portfolios (developer)
-  const { data: myProjects = [], isLoading: projectsLoading } = useProjects(user?.id);
-  const createProject = useCreateProject();
-  const updateProject = useUpdateProject();
-  const deleteProject = useDeleteProject();
-  const { data: portfolios = [], isLoading: portfoliosLoading } = usePortfolios();
-  const createPortfolio = useCreatePortfolio();
-  const updatePortfolio = useUpdatePortfolio();
-  const deletePortfolio = useDeletePortfolio();
+  const _updateLeadStatus = useUpdateLeadStatus();
+  const _startConversation = useStartConversation();
 
   const handleSignOut = async () => { await signOut(); navigate("/"); };
   const toggleListingStatus = (id: string, currentStatus: string) => {
@@ -539,40 +595,84 @@ export default function Dashboard() {
 
               {/* Buyer overview */}
               {(role === "individual" || bioType === "buyer") && !isInvestorLike && !isSellerLike && (
-                <div className="grid md:grid-cols-2 gap-6">
-                  <div className="glass-card rounded-xl p-6 border border-destructive/20">
-                    <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Flame className="w-4 h-4 text-destructive" /> Quick Sale™ Access</h2>
-                    <p className="text-sm text-muted-foreground mb-3">
-                      {invitationRequestStatus === "pending" && "Your application for Quick Sale™ deal access is under review. We'll notify you within 48 hours."}
-                      {invitationRequestStatus === "approved" && "You have access to the Quick Sale™ deal flow. View exclusive off-market opportunities."}
-                      {invitationRequestStatus === "rejected" && "Your application was not approved. You may browse auctions and saved searches."}
-                      {invitationRequestStatus === "none" && "Apply for access to exclusive Quick Sale™ deals. Invitation-only."}
-                    </p>
-                    {invitationRequestStatus === "approved" ? (
-                      <Button size="sm" className="bg-gradient-gold border-0 text-background" asChild><Link to="/investor-dashboard">Open Deal Flow</Link></Button>
-                    ) : invitationRequestStatus === "none" ? (
-                      <Button variant="outline" size="sm" className="border-destructive/40 text-destructive" asChild><Link to="/investor-dashboard">Apply for Access</Link></Button>
-                    ) : null}
+                <div className="space-y-6">
+                  <div className="grid md:grid-cols-2 gap-6">
+                    <div className="glass-card rounded-xl p-6 border border-destructive/20">
+                      <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Flame className="w-4 h-4 text-destructive" /> Quick Sale™ Access</h2>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        {invitationRequestStatus === "pending" && "Your application for Quick Sale™ deal access is under review. We'll notify you within 48 hours."}
+                        {invitationRequestStatus === "approved" && "You have access to the Quick Sale™ deal flow. View exclusive off-market opportunities."}
+                        {invitationRequestStatus === "rejected" && "Your application was not approved. You may browse auctions and saved searches."}
+                        {invitationRequestStatus === "none" && "Apply for access to exclusive Quick Sale™ deals. Invitation-only."}
+                      </p>
+                      {invitationRequestStatus === "approved" ? (
+                        <Button size="sm" className="bg-gradient-gold border-0 text-background" asChild><Link to="/investor-dashboard">Open Deal Flow</Link></Button>
+                      ) : invitationRequestStatus === "none" ? (
+                        <Button variant="outline" size="sm" className="border-destructive/40 text-destructive" asChild><Link to="/investor-dashboard">Apply for Access</Link></Button>
+                      ) : null}
+                    </div>
+                    <div className="glass-card rounded-xl p-6">
+                      <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Heart className="w-4 h-4 text-destructive" /> Saved Properties</h2>
+                      <p className="text-sm text-muted-foreground mb-3">{favorites.length > 0 ? `${favorites.length} saved — open Saved to view.` : "Save listings you like to find them here."}</p>
+                      <Button variant="outline" size="sm" className="border-border" onClick={() => setActiveSection("saved")}>View Saved</Button>
+                    </div>
+                    <div className="glass-card rounded-xl p-6">
+                      <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Gavel className="w-4 h-4 text-brand-gold" /> Auction Alerts</h2>
+                      <p className="text-sm text-muted-foreground mb-3">Get notified when new auctions match your criteria.</p>
+                      <Button variant="outline" size="sm" className="border-brand-gold/40 text-brand-gold" onClick={() => setActiveSection("auctions")}>
+                        {auctionAlerts.length > 0 ? "Manage Alerts" : "Create Alert"}
+                      </Button>
+                    </div>
+                    <BuyerOpenHousesCard onOpen={() => setActiveSection("open-houses")} />
                   </div>
-                  <div className="glass-card rounded-xl p-6">
-                    <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Heart className="w-4 h-4 text-destructive" /> Saved Properties</h2>
-                    <p className="text-sm text-muted-foreground mb-3">{favorites.length > 0 ? `${favorites.length} saved — open Saved to view.` : "Save listings you like to find them here."}</p>
-                    <Button variant="outline" size="sm" className="border-border" onClick={() => setActiveSection("saved")}>View Saved</Button>
-                  </div>
-                  <div className="glass-card rounded-xl p-6">
-                    <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Gavel className="w-4 h-4 text-brand-gold" /> Auction Alerts</h2>
-                    <p className="text-sm text-muted-foreground mb-3">Get notified when new auctions match your criteria.</p>
-                    <Button variant="outline" size="sm" className="border-brand-gold/40 text-brand-gold" onClick={() => setActiveSection("auctions")}>
-                      {auctionAlerts.length > 0 ? "Manage Alerts" : "Create Alert"}
-                    </Button>
-                  </div>
-                  <BuyerOpenHousesCard onOpen={() => setActiveSection("open-houses")} />
+                  {/* Investor mode cross-sell */}
+                  {bioType === "buyer" && !profile?.investor_mode && (
+                    <div className="glass-card rounded-xl border border-amber-500/20 p-4 flex items-center gap-4">
+                      <Flame className="w-8 h-8 text-amber-400 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm">Investor mode</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Get access to below-market deals, auction pipeline &amp; quick sales.</p>
+                      </div>
+                      <Button size="sm" className="shrink-0 text-xs h-8 bg-amber-500 hover:bg-amber-600 border-0 text-white"
+                        onClick={async () => {
+                          await supabase.from("profiles").update({ investor_mode: true }).eq("user_id", user?.id);
+                          await refreshProfile();
+                          toast.success("Investor mode enabled!");
+                        }}>
+                        Enable
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
 
               {/* Seller / Agent overview */}
               {isSellerLike && (
                 <>
+                  {/* Developer Pro upgrade CTA */}
+                  {bioType === "developer" && !isPro && (
+                    <div className="glass-card rounded-xl border border-orange-500/30 p-5 bg-orange-500/5">
+                      <div className="flex items-start gap-4">
+                        <div className="w-10 h-10 rounded-xl bg-orange-500/20 flex items-center justify-center shrink-0">
+                          <Building2 className="w-5 h-5 text-orange-400" />
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="font-bold">Developer tools require Pro</h3>
+                          <p className="text-sm text-muted-foreground mt-1 mb-3">
+                            Unlimited listings, project showcases, pre-sale management, and featured placement are all part of the Developer Pro plan.
+                          </p>
+                          <div className="flex gap-2">
+                            <Button size="sm" className="bg-orange-500 hover:bg-orange-600 border-0 text-white" asChild>
+                              <Link to="/pricing?audience=developer">Start 7-day free trial →</Link>
+                            </Button>
+                            <Button size="sm" variant="outline" className="border-orange-500/30 text-orange-400" asChild>
+                              <Link to="/listings/new-building">Preview listing tools</Link>
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   {!isPro && (
                     <div className="glass-card rounded-xl p-5 border border-primary/30 bg-primary/5 flex items-center justify-between flex-wrap gap-3">
                       <div>
@@ -612,38 +712,61 @@ export default function Dashboard() {
                       </Button>
                     </div>
                   )}
+                  {/* Seller → buyer cross-sell */}
+                  {bioType === "seller" && (
+                    <div className="glass-card rounded-xl border border-border p-4 flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                        <Search className="w-5 h-5 text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm">Looking for your next home?</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Browse listings while you sell — all in one place.</p>
+                      </div>
+                      <Button size="sm" variant="outline" className="shrink-0 border-border text-xs h-8" asChild>
+                        <Link to="/listings">Browse →</Link>
+                      </Button>
+                    </div>
+                  )}
+                  {/* Agent profile completion nudge */}
+                  {(bioType === "agent" || bioType === "developer") && (
+                    <ProfileCompletionCard bioType={bioType} profile={profile} />
+                  )}
                 </>
               )}
 
               {/* Professional overview */}
               {role === "professional" && (
-                <div className="grid md:grid-cols-3 gap-5">
-                  <div className="glass-card rounded-xl p-6">
-                    <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Wrench className="w-4 h-4 text-primary" /> My Services</h2>
-                    <p className="text-sm text-muted-foreground mb-3">{professionalServices.length > 0 ? `${professionalServices.length} service(s) configured.` : "Add the services you offer so clients can find and book you."}</p>
-                    <Button variant="outline" size="sm" className="border-border" onClick={() => setActiveSection("services")}>
-                      {professionalServices.length > 0 ? "Edit Services" : "Add Services"}
-                    </Button>
+                <div className="space-y-5">
+                  <div className="grid md:grid-cols-3 gap-5">
+                    <div className="glass-card rounded-xl p-6">
+                      <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Wrench className="w-4 h-4 text-primary" /> My Services</h2>
+                      <p className="text-sm text-muted-foreground mb-3">{professionalServices.length > 0 ? `${professionalServices.length} service(s) configured.` : "Add the services you offer so clients can find and book you."}</p>
+                      <Button variant="outline" size="sm" className="border-border" onClick={() => setActiveSection("services")}>
+                        {professionalServices.length > 0 ? "Edit Services" : "Add Services"}
+                      </Button>
+                    </div>
+                    <div className="glass-card rounded-xl p-6 border border-brand-gold/20">
+                      <h2 className="font-display font-semibold mb-3 flex items-center gap-2">
+                        <Briefcase className="w-4 h-4 text-brand-gold" /> Incoming Leads
+                        {pendingLeadsCount > 0 && (
+                          <span className="ml-auto text-xs font-bold bg-brand-gold text-background rounded-full px-2 py-0.5">{pendingLeadsCount} new</span>
+                        )}
+                      </h2>
+                      <p className="text-sm text-muted-foreground mb-3">{(leads as any[]).length > 0 ? `${(leads as any[]).length} total request(s).` : "Client consultation and callback requests will appear here."}</p>
+                      <Button variant="outline" size="sm" className="border-brand-gold/40 text-brand-gold hover:bg-brand-gold/10" onClick={() => setActiveSection("leads")}>
+                        View Leads <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
+                      </Button>
+                    </div>
+                    <div className="glass-card rounded-xl p-6 border border-primary/20">
+                      <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Calendar className="w-4 h-4 text-primary" /> Calendar & Calls</h2>
+                      <p className="text-sm text-muted-foreground mb-3">Manage your availability, video links, and calendar sync for client bookings.</p>
+                      <Button variant="outline" size="sm" className="border-primary/40 text-primary hover:bg-primary/10" onClick={() => setActiveSection("services")}>
+                        Configure <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
+                      </Button>
+                    </div>
                   </div>
-                  <div className="glass-card rounded-xl p-6 border border-brand-gold/20">
-                    <h2 className="font-display font-semibold mb-3 flex items-center gap-2">
-                      <Briefcase className="w-4 h-4 text-brand-gold" /> Incoming Leads
-                      {pendingLeadsCount > 0 && (
-                        <span className="ml-auto text-xs font-bold bg-brand-gold text-background rounded-full px-2 py-0.5">{pendingLeadsCount} new</span>
-                      )}
-                    </h2>
-                    <p className="text-sm text-muted-foreground mb-3">{(leads as any[]).length > 0 ? `${(leads as any[]).length} total request(s).` : "Client consultation and callback requests will appear here."}</p>
-                    <Button variant="outline" size="sm" className="border-brand-gold/40 text-brand-gold hover:bg-brand-gold/10" onClick={() => setActiveSection("leads")}>
-                      View Leads <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
-                    </Button>
-                  </div>
-                  <div className="glass-card rounded-xl p-6 border border-primary/20">
-                    <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Calendar className="w-4 h-4 text-primary" /> Calendar & Calls</h2>
-                    <p className="text-sm text-muted-foreground mb-3">Manage your availability, video links, and calendar sync for client bookings.</p>
-                    <Button variant="outline" size="sm" className="border-primary/40 text-primary hover:bg-primary/10" onClick={() => setActiveSection("services")}>
-                      Configure <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
-                    </Button>
-                  </div>
+                  {/* Professional profile completion nudge */}
+                  <ProfileCompletionCard bioType="professional" profile={profile} />
                 </div>
               )}
             </div>
@@ -651,7 +774,9 @@ export default function Dashboard() {
 
           {/* ── LEADS & CONTACTS CRM — all users who need contacts ───────────── */}
           {activeSection === "leads" && navItems.some(i => i.key === "leads") && (
-            <ContactsAndLeadsSection initialTab="leads" />
+            <ProGate>
+              <ContactsAndLeadsSection initialTab="leads" />
+            </ProGate>
           )}
 
           {/* ── MY LISTINGS ──────────────────────────────────────────────── */}
@@ -764,242 +889,23 @@ export default function Dashboard() {
 
           {/* ── SAVED SEARCHES ───────────────────────────────────────────── */}
           {activeSection === "saved-searches" && navItems.some(i => i.key === "saved-searches") && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h1 className="font-display text-2xl font-bold">Saved Searches</h1>
-                  <p className="text-sm text-muted-foreground mt-1">Your saved filter sets — click to re-run or set email alerts.</p>
-                </div>
-                <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" asChild>
-                  <Link to="/listings"><Search className="w-4 h-4" /> Browse Listings</Link>
-                </Button>
-              </div>
-              {savedSearchesLoading ? (
-                <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
-              ) : savedSearches.length === 0 ? (
-                <div className="glass-card rounded-xl p-12 text-center">
-                  <Bookmark className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-                  <p className="font-semibold">No saved searches yet</p>
-                  <p className="text-sm text-muted-foreground mt-1">Go to Listings, apply filters, and click "Save Search"</p>
-                  <Button variant="outline" className="border-border mt-4" asChild><Link to="/listings">Browse Listings</Link></Button>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {savedSearches.map((s: any) => {
-                    const filterCount = Object.keys(s.filters || {}).filter(k => s.filters[k]).length;
-                    const params = new URLSearchParams(s.filters || {});
-                    return (
-                      <div key={s.id} className="glass-card rounded-xl p-4 flex items-center gap-4">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <p className="font-semibold text-sm">{s.name}</p>
-                            {s.email_alerts && (
-                              <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
-                                <Bell className="w-3 h-3" /> Alerts ON
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {filterCount > 0 ? Object.entries(s.filters).filter(([, v]) => v).map(([k, v]) => `${k.replace(/_/g, " ")}: ${v}`).join(", ") : "All listings"}
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            Saved {new Date(s.created_at).toLocaleDateString()}
-                            {s.last_alert_sent_at && (
-                              <span className="ml-1">· Last alert {new Date(s.last_alert_sent_at).toLocaleDateString()}</span>
-                            )}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <button onClick={() => toggleAlert.mutate({ id: s.id, emailAlerts: !s.email_alerts })}
-                            className={`p-2 rounded-lg border transition-colors ${s.email_alerts ? "border-primary bg-primary/10 text-primary hover:bg-primary/20" : "border-border bg-secondary text-muted-foreground hover:text-foreground hover:border-primary/40"}`}>
-                            {s.email_alerts ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
-                          </button>
-                          <Button size="sm" variant="outline" className="border-border text-xs gap-1.5" asChild>
-                            <Link to={`/listings?${params.toString()}`}><Search className="w-3 h-3" /> Run</Link>
-                          </Button>
-                          <button onClick={() => { if (confirm("Delete this saved search?")) deleteSavedSearch.mutate(s.id); }} className="p-2 rounded-lg hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+            <Suspense fallback={TAB_FALLBACK}>
+              <SavedSearchesTab />
+            </Suspense>
           )}
 
           {/* ── VIEWINGS ─────────────────────────────────────────────────── */}
           {activeSection === "viewings" && navItems.some(i => i.key === "viewings") && (
-            <div className="space-y-6">
-              <h1 className="font-display text-2xl font-bold">Viewings</h1>
-              {viewingsLoading ? (
-                <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
-              ) : (
-                <>
-                  {[...viewings, ...ownViewings].length === 0 ? (
-                    <div className="glass-card rounded-xl p-12 text-center">
-                      <Calendar className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-                      <p className="font-semibold">No viewings scheduled</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {(() => {
-                        const all = [...viewings, ...ownViewings] as any[];
-                        const byDate = all.reduce((acc: Record<string, any[]>, v) => {
-                          const d = new Date(v.scheduled_at).toLocaleDateString("en-GB");
-                          if (!acc[d]) acc[d] = [];
-                          acc[d].push(v);
-                          return acc;
-                        }, {});
-                        const sortedDates = Object.keys(byDate).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
-                        return sortedDates.map((dateStr) => (
-                          <div key={dateStr}>
-                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">{dateStr}</p>
-                            <div className="space-y-2">
-                              {byDate[dateStr].map((v: any) => {
-                                const isOwner = ownViewings.some((o: any) => o.id === v.id);
-                                const isVideo = v.viewing_type === "video";
-                                const hasVideoLink = !!v.video_link;
-                                return (
-                                  <div key={v.id} className="glass-card rounded-xl p-4 flex flex-wrap items-start gap-4">
-                                    <div className={`w-2 h-10 rounded-full shrink-0 ${v.status === "confirmed" ? "bg-brand-emerald" : v.status === "pending" ? "bg-brand-gold" : "bg-muted-foreground"}`} />
-                                    <div className="flex-1 min-w-0">
-                                      <p className="font-semibold text-sm">{v.listings?.title || "Property"}</p>
-                                      <p className="text-xs text-muted-foreground">{new Date(v.scheduled_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · {isVideo ? "📹 Video" : "🏠 In-person"}</p>
-                                      <span className={`text-xs px-2 py-0.5 rounded-full capitalize inline-block mt-1 ${v.status === "confirmed" ? "bg-brand-emerald/20 text-brand-emerald" : "bg-brand-gold/20 text-brand-gold"}`}>{v.status}</span>
-                                      {isVideo && isOwner && !hasVideoLink && v.status === "confirmed" && (
-                                        <div className="mt-2 flex items-center gap-2 flex-wrap">
-                                          <input
-                                            type="url"
-                                            placeholder="Paste video call link (Zoom, Whereby...)"
-                                            defaultValue={(profile as any)?.video_link || ""}
-                                            className="flex-1 min-w-[200px] bg-secondary border border-border rounded-lg px-3 py-1.5 text-xs"
-                                            onKeyDown={(e) => {
-                                              if (e.key === "Enter") {
-                                                const url = (e.target as HTMLInputElement).value.trim();
-                                                if (url) updateViewing.mutate({ id: v.id, updates: { video_link: url } });
-                                              }
-                                            }}
-                                          />
-                                          <Button size="sm" className="text-xs h-8" onClick={(e) => {
-                                            const input = (e.currentTarget as HTMLElement).previousElementSibling as HTMLInputElement | null;
-                                            const url = input?.value?.trim();
-                                            if (url) updateViewing.mutate({ id: v.id, updates: { video_link: url } });
-                                          }}>Set link</Button>
-                                        </div>
-                                      )}
-                                      {isVideo && hasVideoLink && (
-                                        <a href={v.video_link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-2 text-xs text-primary hover:underline">
-                                          <ExternalLink className="w-3 h-3" /> Join video call
-                                        </a>
-                                      )}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ));
-                      })()}
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
+            <Suspense fallback={TAB_FALLBACK}>
+              <ViewingsTab />
+            </Suspense>
           )}
 
           {/* ── AUCTION ALERTS ───────────────────────────────────────────── */}
           {activeSection === "auctions" && navItems.some(i => i.key === "auctions") && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h1 className="font-display text-2xl font-bold">Auction Alerts</h1>
-                  <p className="text-sm text-muted-foreground mt-1">Get notified when new auctions match your criteria.</p>
-                </div>
-                <Button className="bg-gradient-gold border-0 text-background font-semibold gap-2"
-                  onClick={() => { setEditingAlert(null); setAlertModalOpen(true); }}>
-                  <Bell className="w-4 h-4" /> New Alert
-                </Button>
-              </div>
-              {alertsLoading ? (
-                <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-brand-gold" /></div>
-              ) : auctionAlerts.length === 0 ? (
-                <div className="glass-card rounded-xl p-12 text-center">
-                  <Bell className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-                  <p className="font-semibold">No auction alerts yet</p>
-                  <p className="text-sm text-muted-foreground mt-1 mb-4">Create an alert to get notified of matching auctions</p>
-                  <Button className="bg-gradient-gold border-0 text-background font-semibold gap-2" onClick={() => { setEditingAlert(null); setAlertModalOpen(true); }}>
-                    <Bell className="w-4 h-4" /> Create First Alert
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {auctionAlerts.map((a: any) => (
-                    <div key={a.id} className="glass-card rounded-xl p-4 flex items-center gap-4">
-                      <div className={`w-2 h-10 rounded-full shrink-0 ${a.active ? "bg-brand-gold" : "bg-muted-foreground/30"}`} />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1 flex-wrap">
-                          {a.city && <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-secondary border border-border text-foreground"><MapPin className="w-3 h-3" />{a.city}</span>}
-                          {a.property_type && <span className="text-xs px-2 py-0.5 rounded-full bg-brand-gold/15 text-brand-gold border border-brand-gold/20 capitalize">{a.property_type}</span>}
-                          {(a.min_price || a.max_price) && (
-                            <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-secondary border border-border text-foreground">
-                              <Euro className="w-3 h-3" />
-                              {a.min_price ? `€${Number(a.min_price).toLocaleString()}` : "Any"} – {a.max_price ? `€${Number(a.max_price).toLocaleString()}` : "Any"}
-                            </span>
-                          )}
-                          {!a.city && !a.property_type && !a.min_price && !a.max_price && <span className="text-xs text-muted-foreground">All auctions</span>}
-                        </div>
-                        {a.court_name && <p className="text-xs text-muted-foreground truncate">{a.court_name}</p>}
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${a.active ? "bg-brand-emerald/20 text-brand-emerald" : "bg-secondary text-muted-foreground"}`}>{a.active ? "Active" : "Paused"}</span>
-                          {a.email_notify && <span className="text-xs text-muted-foreground">📧 Email on</span>}
-                          <span className="text-xs text-muted-foreground">Created {new Date(a.created_at).toLocaleDateString()}</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button onClick={() => toggleAuctionAlert.mutate({ id: a.id, updates: { active: !a.active } })}
-                          className={`p-2 rounded-lg border transition-colors ${a.active ? "border-brand-gold/30 bg-brand-gold/10 text-brand-gold hover:bg-brand-gold/20" : "border-border bg-secondary text-muted-foreground hover:text-foreground"}`}>
-                          {a.active ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
-                        </button>
-                        <button onClick={() => { setEditingAlert(a); setAlertModalOpen(true); }} className="p-2 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground">
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => { if (confirm("Delete this alert?")) deleteAuctionAlert.mutate(a.id); }} className="p-2 rounded-lg hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Private Owner Ad Alert — Pro agents only */}
-              {(bioType === "agent" || role === "agent") && isPro && (
-                <div className="glass-card rounded-xl p-5 border border-primary/20 mt-6">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <h2 className="font-display font-semibold mb-1 flex items-center gap-2">
-                        <Bell className="w-4 h-4 text-primary" /> Alert for Private Owner&apos;s Ad
-                      </h2>
-                      <p className="text-sm text-muted-foreground">Get notified when private sellers list new properties.</p>
-                    </div>
-                    <button
-                      onClick={() => privateOwnerAlert.toggle.mutate(!privateOwnerAlert.isEnabled)}
-                      disabled={privateOwnerAlert.toggle.isPending}
-                      className={cn(
-                        "px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
-                        privateOwnerAlert.isEnabled
-                          ? "bg-primary/10 border-primary text-primary"
-                          : "border-border bg-secondary text-muted-foreground hover:text-foreground"
-                      )}
-                    >
-                      {privateOwnerAlert.isEnabled ? "Enabled" : "Enable"}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+            <Suspense fallback={TAB_FALLBACK}>
+              <AuctionsTab />
+            </Suspense>
           )}
 
           {/* ── PROFILE ──────────────────────────────────────────────────── */}
@@ -1033,7 +939,9 @@ export default function Dashboard() {
 
           {/* ── CONTACTS & LEADS CRM ───────────────────────────────────── */}
           {activeSection === "contacts" && navItems.some(i => i.key === "contacts") && (
-            <ContactsAndLeadsSection />
+            <ProGate>
+              <ContactsAndLeadsSection initialTab="contacts" />
+            </ProGate>
           )}
 
           {/* ── OPEN HOUSES ─────────────────────────────────────────────── */}
@@ -1041,44 +949,32 @@ export default function Dashboard() {
             <OpenHouseDashboardSection myListings={myListings} />
           )}
 
-          {/* ── PROJECTS — inline section ─────────────────────────────── */}
+          {/* ── PROJECTS ─────────────────────────────────────────────────── */}
           {activeSection === "projects" && navItems.some(i => i.key === "projects") && (
-            <DashboardProjectsSection
-              projects={myProjects}
-              isLoading={projectsLoading}
-              myListings={myListings}
-              createProject={createProject}
-              updateProject={updateProject}
-              deleteProject={deleteProject}
-              updateListing={updateListing}
-            />
+            <Suspense fallback={TAB_FALLBACK}>
+              <ProjectsTab />
+            </Suspense>
           )}
 
-          {/* ── PORTFOLIOS — inline section ──────────────────────────────── */}
+          {/* ── PORTFOLIOS ───────────────────────────────────────────────── */}
           {activeSection === "portfolios" && navItems.some(i => i.key === "portfolios") && (
-            <DashboardPortfoliosSection
-              portfolios={portfolios}
-              isLoading={portfoliosLoading}
-              favorites={favorites}
-              createPortfolio={createPortfolio}
-              updatePortfolio={updatePortfolio}
-              deletePortfolio={deletePortfolio}
-            />
+            <Suspense fallback={TAB_FALLBACK}>
+              <PortfoliosTab />
+            </Suspense>
           )}
 
-          {/* ── ANALYTICS — minimal listing analytics ─────────────────── */}
+          {/* ── ANALYTICS — full analytics dashboard ──────────────────── */}
           {activeSection === "analytics" && navItems.some(i => i.key === "analytics") && (
-            <AnalyticsSection
-              myListings={myListings}
-              leads={leads as any[]}
-              role={role}
-              listingsLoading={listingsLoading}
-              viewTrends={viewTrends}
-              leadFunnel={leadFunnel}
-              myProfessional={myProfessional}
-              onGoToProfile={() => setActiveSection("profile")}
-              onGoToServices={() => setActiveSection("services")}
-            />
+            <Suspense fallback={TAB_FALLBACK}>
+              <AnalyticsTab />
+            </Suspense>
+          )}
+
+          {/* ── BILLING ──────────────────────────────────────────────── */}
+          {activeSection === "billing" && navItems.some(i => i.key === "billing") && (
+            <Suspense fallback={TAB_FALLBACK}>
+              <BillingTab />
+            </Suspense>
           )}
 
           {/* ── SETTINGS ─────────────────────────────────────────────── */}
@@ -1089,11 +985,6 @@ export default function Dashboard() {
         </main>
       </div>
 
-      <AuctionAlertModal
-        open={alertModalOpen}
-        onClose={() => { setAlertModalOpen(false); setEditingAlert(null); }}
-        editAlert={editingAlert}
-      />
     </div>
   );
 }
@@ -1188,456 +1079,6 @@ function BookingCalendarSection({
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-// ── Leads section ──────────────────────────────────────────────────────────────
-function LeadsSection({
-  leads,
-  onUpdateStatus,
-  onMessage,
-  startConversationLoading,
-}: {
-  leads: any[];
-  onUpdateStatus: (id: string, status: string) => void;
-  onMessage?: (lead: any) => void;
-  startConversationLoading?: boolean;
-}) {
-  const [statusFilter, setStatusFilter] = useState("all");
-  const statuses = ["all", "pending", "reviewed", "confirmed", "cancelled"];
-  const filtered = statusFilter === "all" ? leads : leads.filter(l => l.status === statusFilter);
-
-  return (
-    <div className="space-y-4">
-      <div className="flex gap-2 flex-wrap">
-        {statuses.map(s => (
-          <button key={s} onClick={() => setStatusFilter(s)}
-            className={cn("px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors capitalize",
-              statusFilter === s ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-muted-foreground border-border hover:border-primary/40 hover:text-foreground"
-            )}>
-            {s} {s === "all" ? `(${leads.length})` : `(${leads.filter(l => l.status === s).length})`}
-          </button>
-        ))}
-      </div>
-      <div className="space-y-3">
-        {filtered.map((lead: any) => (
-          <div key={lead.id} className="glass-card rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-4">
-            <div className={cn("w-2 h-full min-h-[40px] rounded-full shrink-0 hidden sm:block",
-              lead.status === "pending" ? "bg-brand-gold" :
-              lead.status === "confirmed" ? "bg-brand-emerald" :
-              lead.status === "reviewed" ? "bg-blue-400" : "bg-muted-foreground/30"
-            )} />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap mb-1">
-                <span className="font-semibold text-sm">{lead.requester_name}</span>
-                <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium capitalize", LEAD_STATUS_COLORS[lead.status] ?? "bg-secondary text-muted-foreground")}>{lead.status}</span>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-secondary border border-border text-muted-foreground">
-                  {REQUEST_TYPE_LABELS[lead.request_type] ?? lead.request_type}
-                </span>
-              </div>
-              {lead.service && <p className="text-xs text-primary font-medium mb-0.5">Service: {lead.service}</p>}
-              {lead.message && <p className="text-xs text-muted-foreground line-clamp-2">{lead.message}</p>}
-              <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground flex-wrap">
-                <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{new Date(lead.created_at).toLocaleDateString()}</span>
-                {lead.requester_email && <span>{lead.requester_email}</span>}
-                {lead.requester_phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{lead.requester_phone}</span>}
-                {lead.preferred_date && <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{lead.preferred_date}</span>}
-                {lead.callback_time && <span>Callback: {lead.callback_time}</span>}
-              </div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto flex-wrap">
-              {onMessage && (
-                <Button size="sm" variant="outline" className="border-primary/40 text-primary hover:bg-primary/10 text-xs gap-1"
-                  onClick={() => onMessage(lead)} disabled={startConversationLoading}>
-                  {startConversationLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <MessageSquare className="w-3 h-3" />} Message
-                </Button>
-              )}
-              {lead.status === "pending" && (
-                <>
-                  <Button size="sm" variant="outline" className="border-brand-emerald/40 text-brand-emerald hover:bg-brand-emerald/10 text-xs gap-1"
-                    onClick={() => onUpdateStatus(lead.id, "reviewed")}>
-                    <CheckCircle2 className="w-3 h-3" /> Mark Reviewed
-                  </Button>
-                  <Button size="sm" variant="outline" className="border-primary/40 text-primary hover:bg-primary/10 text-xs gap-1"
-                    onClick={() => onUpdateStatus(lead.id, "confirmed")}>
-                    <CheckCircle2 className="w-3 h-3" /> Confirm
-                  </Button>
-                </>
-              )}
-              {lead.status === "reviewed" && (
-                <Button size="sm" variant="outline" className="border-primary/40 text-primary hover:bg-primary/10 text-xs gap-1"
-                  onClick={() => onUpdateStatus(lead.id, "confirmed")}>
-                  <CheckCircle2 className="w-3 h-3" /> Confirm
-                </Button>
-              )}
-              {(lead.status === "confirmed" || lead.status === "reviewed") && (
-                <Button size="sm" variant="outline" className="border-muted text-muted-foreground hover:bg-secondary text-xs gap-1"
-                  onClick={() => onUpdateStatus(lead.id, "cancelled")}>
-                  <AlertCircle className="w-3 h-3" /> Cancel
-                </Button>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ── Inline Projects section ────────────────────────────────────────────────────
-function DashboardProjectsSection({
-  projects, isLoading, myListings, createProject, updateProject, deleteProject, updateListing,
-}: {
-  projects: any[];
-  isLoading: boolean;
-  myListings: any[];
-  createProject: ReturnType<typeof useCreateProject>;
-  updateProject: ReturnType<typeof useUpdateProject>;
-  deleteProject: ReturnType<typeof useDeleteProject>;
-  updateListing: ReturnType<typeof useUpdateListing>;
-}) {
-  const navigate = useNavigate();
-  const [showCreate, setShowCreate] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newDesc, setNewDesc] = useState("");
-  const [newCity, setNewCity] = useState("");
-  const [newPermit, setNewPermit] = useState("");
-  const [editingId, setEditingId] = useState<string | null>(null);
-
-  const handleCreate = () => {
-    if (!newName.trim()) { toast.error("Project name is required"); return; }
-    createProject.mutate(
-      { name: newName.trim(), description: newDesc.trim() || undefined, city: newCity.trim() || undefined, building_permit_number: newPermit.trim() || undefined },
-      { onSuccess: (data: any) => { setNewName(""); setNewDesc(""); setNewCity(""); setNewPermit(""); setShowCreate(false); if (data?.id) navigate(`/projects/${data.id}`); } }
-    );
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="font-display text-2xl font-bold flex items-center gap-2">
-            <Globe2 className="w-6 h-6 text-primary" /> Projects
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">Showcase development projects and link listings</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" className="border-border gap-2" asChild>
-            <Link to="/projects"><ExternalLink className="w-4 h-4" /> Full View</Link>
-          </Button>
-          <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" onClick={() => setShowCreate(true)}>
-            <Plus className="w-4 h-4" /> New Project
-          </Button>
-        </div>
-      </div>
-
-      {showCreate && (
-        <div className="glass-card rounded-xl p-6 border border-border">
-          <h3 className="font-display font-semibold mb-4">Create project</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs text-muted-foreground block mb-1.5">Name *</label>
-              <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="e.g. Marina Heights"
-                className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors" />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground block mb-1.5">City</label>
-              <input value={newCity} onChange={e => setNewCity(e.target.value)} placeholder="e.g. Athens"
-                className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors" />
-            </div>
-            <div className="md:col-span-2">
-              <label className="text-xs text-muted-foreground block mb-1.5">Description</label>
-              <textarea value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="Brief description..." rows={2}
-                className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm resize-none text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors" />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground block mb-1.5">Building Permit #</label>
-              <input value={newPermit} onChange={e => setNewPermit(e.target.value)} placeholder="e.g. 12345/2024"
-                className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors" />
-            </div>
-          </div>
-          <div className="flex gap-2 mt-4">
-            <Button onClick={handleCreate} disabled={createProject.isPending} className="bg-gradient-primary border-0 text-primary-foreground">
-              {createProject.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Create
-            </Button>
-            <Button variant="outline" className="border-border" onClick={() => setShowCreate(false)}>Cancel</Button>
-          </div>
-        </div>
-      )}
-
-      {isLoading ? (
-        <div className="flex justify-center py-16"><Loader2 className="w-7 h-7 animate-spin text-primary" /></div>
-      ) : projects.length === 0 ? (
-        <div className="glass-card rounded-xl p-12 text-center">
-          <FolderOpen className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-          <h2 className="font-semibold">No projects yet</h2>
-          <p className="text-sm text-muted-foreground mt-2 mb-4">Create a project to group and showcase your listings</p>
-          <Button className="bg-gradient-primary border-0 text-primary-foreground" onClick={() => setShowCreate(true)}>Create your first project</Button>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {projects.map((p: any) => {
-            const isEditing = editingId === p.id;
-            return (
-              <div key={p.id} className="glass-card rounded-xl border border-border overflow-hidden">
-                <div className="p-5 flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <Link to={`/projects/${p.id}`} className="font-display font-semibold hover:text-primary transition-colors">{p.name}</Link>
-                      <span className={cn("text-[10px] px-2 py-0.5 rounded-full",
-                        p.status === "active" ? "bg-primary/10 text-primary" : p.status === "completed" ? "bg-brand-emerald/20 text-brand-emerald" : "bg-muted text-muted-foreground"
-                      )}>{p.status}</span>
-                    </div>
-                    {p.city && <p className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="w-3 h-3" />{p.city}</p>}
-                    {p.description && <p className="text-sm text-muted-foreground mt-1 line-clamp-1">{p.description}</p>}
-                    {p.building_permit_number && <p className="text-xs text-muted-foreground mt-0.5">Permit: {p.building_permit_number}</p>}
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <Button variant="outline" size="sm" className="border-border text-xs" asChild>
-                      <Link to={`/projects/${p.id}`}><Edit2 className="w-3 h-3 mr-1" />Edit</Link>
-                    </Button>
-                    <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => {
-                      if (confirm("Delete this project?")) deleteProject.mutate(p.id);
-                    }}>
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-                {Array.isArray(p.listings) && p.listings.length > 0 && (
-                  <div className="border-t border-border px-5 py-3 bg-muted/20">
-                    <p className="text-xs text-muted-foreground mb-2">{p.listings.length} linked listing(s)</p>
-                    <div className="flex flex-wrap gap-2">
-                      {p.listings.map((l: any) => (
-                        <Link key={l.id} to={`/property/${l.id}`}
-                          className="text-xs px-2 py-1 bg-secondary rounded-lg border border-border hover:border-primary/40 transition-colors truncate max-w-[180px]">
-                          {l.title}
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Inline Portfolios section ──────────────────────────────────────────────────
-function DashboardPortfoliosSection({
-  portfolios, isLoading, favorites, createPortfolio, updatePortfolio, deletePortfolio,
-}: {
-  portfolios: any[];
-  isLoading: boolean;
-  favorites: any[];
-  createPortfolio: ReturnType<typeof useCreatePortfolio>;
-  updatePortfolio: ReturnType<typeof useUpdatePortfolio>;
-  deletePortfolio: ReturnType<typeof useDeletePortfolio>;
-}) {
-  const [showCreate, setShowCreate] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editName, setEditName] = useState("");
-  const [addFromSavedPortfolioId, setAddFromSavedPortfolioId] = useState<string | null>(null);
-
-  const handleCreate = () => {
-    if (!newName.trim()) { toast.error("Portfolio name is required"); return; }
-    createPortfolio.mutate(newName.trim(), { onSuccess: () => { setNewName(""); setShowCreate(false); } });
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="font-display text-2xl font-bold flex items-center gap-2">
-            <TrendingUp className="w-6 h-6 text-primary" /> Portfolios
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">Group properties for bulk analysis and tracking</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" className="border-border gap-2" asChild>
-            <Link to="/portfolios"><ExternalLink className="w-4 h-4" /> Full View</Link>
-          </Button>
-          <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" onClick={() => setShowCreate(true)}>
-            <Plus className="w-4 h-4" /> New Portfolio
-          </Button>
-        </div>
-      </div>
-
-      {showCreate && (
-        <div className="glass-card rounded-xl p-6 border border-border">
-          <h3 className="font-display font-semibold mb-4">Create portfolio</h3>
-          <div className="flex gap-3">
-            <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="e.g. Athens Buy-to-Let"
-              className="flex-1 bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors" />
-            <Button onClick={handleCreate} disabled={createPortfolio.isPending} className="bg-gradient-primary border-0 text-primary-foreground">
-              {createPortfolio.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Create
-            </Button>
-            <Button variant="outline" className="border-border" onClick={() => setShowCreate(false)}>Cancel</Button>
-          </div>
-        </div>
-      )}
-
-      {isLoading ? (
-        <div className="flex justify-center py-16"><Loader2 className="w-7 h-7 animate-spin text-primary" /></div>
-      ) : portfolios.length === 0 ? (
-        <div className="glass-card rounded-xl p-12 text-center">
-          <LayoutGrid className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-          <h2 className="font-semibold">No portfolios yet</h2>
-          <p className="text-sm text-muted-foreground mt-2 mb-4">Create a portfolio to group properties for analysis</p>
-          <Button className="bg-gradient-primary border-0 text-primary-foreground" onClick={() => setShowCreate(true)}>Create your first portfolio</Button>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {portfolios.map((p: any) => {
-            const listingIds: string[] = p.listing_ids || [];
-            const totalValue = (p.listings || []).reduce((s: number, l: any) => s + Number(l?.price || 0), 0);
-            const isEditing = editingId === p.id;
-            return (
-              <div key={p.id} className="glass-card rounded-xl border border-border overflow-hidden">
-                <div className="p-5 flex items-center justify-between gap-4">
-                  {isEditing ? (
-                    <div className="flex items-center gap-2 flex-1">
-                      <input value={editName} onChange={e => setEditName(e.target.value)}
-                        className="flex-1 bg-secondary border border-border rounded-xl px-3 py-2 text-sm font-semibold text-foreground outline-none focus:border-primary transition-colors" />
-                      <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground" onClick={() => {
-                        if (!editName.trim()) return;
-                        updatePortfolio.mutate({ id: p.id, updates: { name: editName.trim() } }, { onSuccess: () => { setEditingId(null); setEditName(""); } });
-                      }}>Save</Button>
-                      <Button size="sm" variant="outline" className="border-border" onClick={() => { setEditingId(null); setEditName(""); }}>Cancel</Button>
-                    </div>
-                  ) : (
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-display font-semibold">{p.name}</h3>
-                      <p className="text-sm text-muted-foreground mt-0.5">
-                        {listingIds.length} properties{totalValue > 0 && ` · €${totalValue.toLocaleString()} total`}
-                      </p>
-                    </div>
-                  )}
-                  {!isEditing && (
-                    <div className="flex items-center gap-1 shrink-0">
-                      <Button variant="ghost" size="icon" onClick={() => { setEditingId(p.id); setEditName(p.name); }} aria-label="Rename">
-                        <Edit2 className="w-4 h-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => {
-                        if (confirm("Delete this portfolio?")) deletePortfolio.mutate(p.id);
-                      }}>
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  )}
-                </div>
-                {(p.listings || []).length > 0 && (
-                  <div className="border-t border-border px-5 py-3 bg-muted/20">
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                      {(p.listings || []).map((l: any) => (
-                        <div key={l.id} className="relative">
-                          <PropertyCard property={dbListingToCard(l)} />
-                          <Button variant="ghost" size="sm"
-                            className="absolute top-2 right-2 bg-background/80 backdrop-blur-sm text-xs"
-                            onClick={() => {
-                              const ids = listingIds.filter((id: string) => id !== l.id);
-                              updatePortfolio.mutate({ id: p.id, updates: { listing_ids: ids } });
-                            }}>
-                            Remove
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                <div className="border-t border-border px-5 py-3 bg-muted/30">
-                  {addFromSavedPortfolioId === p.id ? (
-                    <div className="space-y-2">
-                      <p className="text-xs font-semibold text-foreground mb-2">Add from Saved Properties:</p>
-                      {favorites.filter((f: any) => f.listings && !listingIds.includes(f.listings.id)).length === 0 ? (
-                        <p className="text-xs text-muted-foreground">No saved properties available to add.</p>
-                      ) : (
-                        <div className="flex flex-wrap gap-2">
-                          {favorites.filter((f: any) => f.listings && !listingIds.includes(f.listings.id)).map((f: any) => (
-                            <button key={f.listings.id}
-                              className="text-xs px-2.5 py-1.5 bg-secondary border border-border rounded-lg hover:border-primary/50 hover:bg-primary/10 transition-colors truncate max-w-[200px]"
-                              onClick={() => {
-                                const newIds = [...listingIds, f.listings.id];
-                                updatePortfolio.mutate({ id: p.id, updates: { listing_ids: newIds } }, {
-                                  onSuccess: () => toast.success("Added to portfolio"),
-                                });
-                              }}>
-                              + {f.listings.title || f.listings.city}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                      <button onClick={() => setAddFromSavedPortfolioId(null)} className="text-xs text-muted-foreground hover:text-foreground mt-1 underline underline-offset-2">
-                        Close
-                      </button>
-                    </div>
-                  ) : (
-                    <button onClick={() => setAddFromSavedPortfolioId(p.id)}
-                      className="text-xs text-primary underline underline-offset-2 hover:opacity-80 transition-opacity">
-                      + Add from saved properties
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Link section (legacy — kept for potential reuse) ───────────────────────────
-function LinkSection({
-  icon: Icon,
-  title,
-  desc,
-  href,
-  cta,
-  stats,
-}: {
-  icon: React.ElementType;
-  title: string;
-  desc: string;
-  href: string;
-  cta: string;
-  stats?: { label: string; value: number }[];
-}) {
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="font-display text-2xl font-bold flex items-center gap-2">
-            <Icon className="w-6 h-6 text-primary" /> {title}
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">{desc}</p>
-        </div>
-        <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" asChild>
-          <Link to={href}><ArrowRight className="w-4 h-4" /> {cta}</Link>
-        </Button>
-      </div>
-      {stats && stats.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {stats.map(s => (
-            <div key={s.label} className="glass-card rounded-xl p-4">
-              <span className="text-xs text-muted-foreground">{s.label}</span>
-              <div className="font-display text-2xl font-bold text-primary mt-1">{s.value}</div>
-            </div>
-          ))}
-        </div>
-      )}
-      <div className="glass-card rounded-xl p-10 text-center">
-        <Icon className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-        <p className="font-semibold text-foreground mb-1">{title}</p>
-        <p className="text-sm text-muted-foreground mb-4 max-w-sm mx-auto">{desc}</p>
-        <Button variant="outline" className="border-border gap-2" asChild>
-          <Link to={href}>{cta} <ArrowRight className="w-4 h-4" /></Link>
-        </Button>
-      </div>
     </div>
   );
 }
@@ -1890,7 +1331,7 @@ function AnalyticsSection({
               <h2 className="font-display font-semibold mb-3">Views (last 14 days)</h2>
               <div className="glass-card rounded-xl p-4">
                 <div className="flex items-end gap-1 h-24">
-                  {viewTrends.map((t, i) => (
+                  {viewTrends.map((t) => (
                     <div key={t.date} className="flex-1 flex flex-col items-center gap-1" title={`${t.date}: ${t.count} views`}>
                       <div
                         className="w-full min-w-[4px] rounded-t bg-primary/60 transition-all hover:bg-primary"

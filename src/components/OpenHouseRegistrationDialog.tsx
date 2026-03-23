@@ -1,9 +1,17 @@
 import { useState, useRef, useEffect } from "react";
 import {
-  Calendar, Upload, FileCheck, Shield, Loader2, Check, FileSignature
+  Calendar, Upload, FileCheck, Shield, Loader2, Check, FileSignature, ClipboardCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   useOpenHouseSettings,
@@ -22,12 +30,21 @@ const WAIVER_TEXT = `I understand and agree that by attending this open house vi
 - Accept that the property owner and platform are not liable for any personal injury or property damage
 - Consent to my ID being verified for admission`;
 
+const BUDGET_OPTIONS = [
+  { value: "under_100k", label: "Under €100k" },
+  { value: "100k_200k", label: "€100k – €200k" },
+  { value: "200k_500k", label: "€200k – €500k" },
+  { value: "500k_1m", label: "€500k – €1M" },
+  { value: "over_1m", label: "Over €1M" },
+];
+
 interface Props {
   open: boolean;
   onClose: () => void;
   listingId: string;
   listingTitle: string;
   hasAssetControl: boolean;
+  listingPrice?: number;
 }
 
 export default function OpenHouseRegistrationDialog({
@@ -36,6 +53,7 @@ export default function OpenHouseRegistrationDialog({
   listingId,
   listingTitle,
   hasAssetControl,
+  listingPrice,
 }: Props) {
   const { user } = useAuth();
   const { data: settings } = useOpenHouseSettings(hasAssetControl ? listingId : undefined);
@@ -43,8 +61,18 @@ export default function OpenHouseRegistrationDialog({
   const createReg = useCreateOpenHouseRegistration();
   const updateReg = useUpdateOpenHouseRegistration();
 
-  const [step, setStep] = useState<"timeslot" | "id" | "waiver" | "qualified" | "done">("timeslot");
+  // Require screening when property is >= €200k or a screening flag is set
+  const requiresScreening = (listingPrice ?? 0) >= 200_000;
+
+  const [step, setStep] = useState<"timeslot" | "screening" | "id" | "waiver" | "qualified" | "done">("timeslot");
   const [timeslotIndex, setTimeslotIndex] = useState<number | null>(null);
+  // Screening fields
+  const [mortgageStatus, setMortgageStatus] = useState<string>("");
+  const [budgetRange, setBudgetRange] = useState<string>("");
+  const [workingWithAgent, setWorkingWithAgent] = useState<string>("");
+  const [screeningDocFile, setScreeningDocFile] = useState<File | null>(null);
+  const [screeningDocPreview, setScreeningDocPreview] = useState<string | null>(null);
+  // Asset control fields
   const [idDocType, setIdDocType] = useState<OHIdDocType>("id_card");
   const [idDocFile, setIdDocFile] = useState<File | null>(null);
   const [waiverAccepted, setWaiverAccepted] = useState(false);
@@ -55,12 +83,28 @@ export default function OpenHouseRegistrationDialog({
   const [registrationId, setRegistrationId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const proofInputRef = useRef<HTMLInputElement>(null);
+  const screeningDocInputRef = useRef<HTMLInputElement>(null);
 
   const timeslots = (settings?.timeslots ?? []) as OHTimeslot[];
-  const myReg = registrations.find((r: any) => r.requester_id === user?.id);
+  const myReg = registrations.find((r: { requester_id: string }) => r.requester_id === user?.id);
   const regId = registrationId || myReg?.id;
   const requirePOF = settings?.require_proof_of_funds ?? false;
   const requireInvestor = settings?.require_investor_declaration ?? false;
+
+  // Determine step order based on configuration
+  const stepOrder: Array<typeof step> = (() => {
+    const steps: Array<typeof step> = ["timeslot"];
+    if (requiresScreening) steps.push("screening");
+    if (hasAssetControl) {
+      steps.push("id");
+      steps.push("waiver");
+      if (requirePOF || requireInvestor) steps.push("qualified");
+    }
+    steps.push("done");
+    return steps;
+  })();
+  const currentStepIdx = stepOrder.indexOf(step);
+  const totalSteps = stepOrder.length - 1; // exclude "done"
 
   const handleStartRegistration = async () => {
     if (!user) {
@@ -71,16 +115,70 @@ export default function OpenHouseRegistrationDialog({
     try {
       if (myReg) {
         setRegistrationId(myReg.id);
-        setStep(hasAssetControl ? "id" : "done");
+        // Jump to correct next step
+        if (requiresScreening) setStep("screening");
+        else if (hasAssetControl) setStep("id");
+        else setStep("done");
       } else {
         const data = await createReg.mutateAsync({
           listingId,
           timeslotIndex: timeslots.length ? (timeslotIndex ?? 0) : undefined,
           note: undefined,
         });
-        setRegistrationId((data as any)?.id ?? null);
-        setStep(hasAssetControl ? "id" : "done");
+        setRegistrationId((data as { id?: string })?.id ?? null);
+        if (requiresScreening) setStep("screening");
+        else if (hasAssetControl) setStep("id");
+        else setStep("done");
       }
+    } catch {
+      // handled by mutation
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleScreeningDoc = (file: File) => {
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("File must be under 5 MB");
+      return;
+    }
+    setScreeningDocFile(file);
+    if (file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onload = (e) => setScreeningDocPreview(e.target?.result as string);
+      reader.readAsDataURL(file);
+    } else {
+      setScreeningDocPreview(null);
+    }
+  };
+
+  const handleScreeningSubmit = async () => {
+    if (!regId || !mortgageStatus || !budgetRange || !workingWithAgent) {
+      toast.error("Please answer all required questions");
+      return;
+    }
+    setLoading(true);
+    try {
+      const updates: Parameters<typeof updateReg.mutateAsync>[0]["updates"] = {
+        mortgage_status: mortgageStatus,
+        budget_range: budgetRange,
+        working_with_agent: workingWithAgent,
+      };
+      // Upload screening doc to storage (optional)
+      if (screeningDocFile && user?.id) {
+        const ext = screeningDocFile.name.split(".").pop() ?? "pdf";
+        const path = `${user.id}/${listingId}/screening_${Date.now()}.${ext}`;
+        try {
+          const storedPath = await uploadOpenHouseDoc(screeningDocFile, path);
+          updates.screening_doc_url = storedPath;
+        } catch {
+          // Non-fatal — proceed without doc
+          toast.warning("ID document upload failed — submission will continue without it.");
+        }
+      }
+      await updateReg.mutateAsync({ id: regId, updates });
+      if (hasAssetControl) setStep("id");
+      else setStep("done");
     } catch {
       // handled by mutation
     } finally {
@@ -92,7 +190,7 @@ export default function OpenHouseRegistrationDialog({
     if (!regId || !idDocFile || !user?.id) return;
     setLoading(true);
     try {
-      const ext = idDocFile.name.split(".").pop() || "jpg";
+      const ext = idDocFile.name.split(".").pop() ?? "jpg";
       const path = `${user.id}/${listingId}/id_${Date.now()}.${ext}`;
       const storedPath = await uploadOpenHouseDoc(idDocFile, path);
       await updateReg.mutateAsync({
@@ -100,8 +198,8 @@ export default function OpenHouseRegistrationDialog({
         updates: { id_doc_type: idDocType, id_doc_url: storedPath },
       });
       setStep("waiver");
-    } catch (e: any) {
-      toast.error(e?.message || "Upload failed");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Upload failed");
     } finally {
       setLoading(false);
     }
@@ -129,12 +227,12 @@ export default function OpenHouseRegistrationDialog({
 
   const handleQualifiedSubmit = async () => {
     if (!regId) return;
-    const updates: any = {};
+    const updates: Parameters<typeof updateReg.mutateAsync>[0]["updates"] = {};
     if (requireInvestor && investorDeclared) {
       updates.investor_declaration_signed_at = new Date().toISOString();
     }
     if (requirePOF && proofFile && user?.id) {
-      const ext = proofFile.name.split(".").pop() || "pdf";
+      const ext = proofFile.name.split(".").pop() ?? "pdf";
       const path = `${user.id}/${listingId}/proof_${Date.now()}.${ext}`;
       updates.proof_of_funds_url = await uploadOpenHouseDoc(proofFile, path);
       if (proofAmount) updates.proof_amount = parseFloat(proofAmount);
@@ -144,8 +242,8 @@ export default function OpenHouseRegistrationDialog({
       await updateReg.mutateAsync({ id: regId, updates });
       setStep("done");
       toast.success("Registration complete. Awaiting approval from asset manager.");
-    } catch (e: any) {
-      toast.error(e?.message || "Update failed");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Update failed");
     } finally {
       setLoading(false);
     }
@@ -156,6 +254,11 @@ export default function OpenHouseRegistrationDialog({
     if (!open) {
       setStep("timeslot");
       setTimeslotIndex(null);
+      setMortgageStatus("");
+      setBudgetRange("");
+      setWorkingWithAgent("");
+      setScreeningDocFile(null);
+      setScreeningDocPreview(null);
       setIdDocFile(null);
       setWaiverAccepted(false);
       setProofFile(null);
@@ -164,12 +267,6 @@ export default function OpenHouseRegistrationDialog({
       setRegistrationId(null);
     }
   }, [open]);
-
-  const stepOrder: Array<typeof step> = hasAssetControl
-    ? ["timeslot", "id", "waiver", ...(requirePOF || requireInvestor ? ["qualified" as const] : []), "done"]
-    : ["timeslot", "done"];
-  const currentStepIdx = stepOrder.indexOf(step);
-  const totalSteps = stepOrder.length - 1; // exclude done
 
   if (!open) return null;
 
@@ -197,18 +294,23 @@ export default function OpenHouseRegistrationDialog({
           </div>
         ) : (
           <div className="space-y-5">
+            {/* Progress indicator */}
             {currentStepIdx < totalSteps && totalSteps > 1 && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span>Step {currentStepIdx + 1} of {totalSteps}</span>
                 <div className="flex-1 h-1.5 bg-secondary rounded-full overflow-hidden">
-                  <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${((currentStepIdx + 1) / totalSteps) * 100}%` }} />
+                  <div
+                    className="h-full bg-primary rounded-full transition-all"
+                    style={{ width: `${((currentStepIdx + 1) / totalSteps) * 100}%` }}
+                  />
                 </div>
               </div>
             )}
-            {/* Step: Timeslot (or skip if none) */}
-            {hasAssetControl && step === "timeslot" && (
+
+            {/* Step: Timeslot */}
+            {step === "timeslot" && (
               <>
-                {timeslots.length > 0 ? (
+                {hasAssetControl && timeslots.length > 0 && (
                   <div>
                     <p className="text-xs font-semibold text-muted-foreground mb-2">Select a timeslot</p>
                     <div className="space-y-2">
@@ -225,11 +327,11 @@ export default function OpenHouseRegistrationDialog({
                       ))}
                     </div>
                   </div>
-                ) : null}
+                )}
                 <Button
                   className="w-full gap-2"
                   onClick={handleStartRegistration}
-                  disabled={loading || (timeslots.length > 0 && timeslotIndex === null)}
+                  disabled={loading || (hasAssetControl && timeslots.length > 0 && timeslotIndex === null)}
                 >
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
                   {myReg ? "Continue" : "Register"}
@@ -237,6 +339,143 @@ export default function OpenHouseRegistrationDialog({
               </>
             )}
 
+            {/* Step: Pre-qualification screening */}
+            {step === "screening" && (
+              <>
+                <div className="flex items-center gap-2 mb-1">
+                  <ClipboardCheck className="w-4 h-4 text-primary" />
+                  <p className="text-sm font-semibold">Pre-qualification</p>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  A few quick questions help the host qualify serious buyers. Your answers are only shared with the listing host.
+                </p>
+
+                {/* Q1: Mortgage / funds */}
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold text-muted-foreground">
+                    Are you currently pre-approved for a mortgage or have funds available? <span className="text-destructive">*</span>
+                  </Label>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { value: "yes", label: "Yes" },
+                      { value: "no", label: "No" },
+                      { value: "exploring", label: "Exploring options" },
+                    ].map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setMortgageStatus(opt.value)}
+                        className={`px-4 py-2 rounded-lg text-sm border transition-colors ${
+                          mortgageStatus === opt.value
+                            ? "border-primary bg-primary/10 font-medium"
+                            : "border-border hover:bg-secondary/50"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Q2: Budget range */}
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold text-muted-foreground">
+                    What is your approximate budget range? <span className="text-destructive">*</span>
+                  </Label>
+                  <Select value={budgetRange} onValueChange={setBudgetRange}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select budget range" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {BUDGET_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Q3: Working with agent */}
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold text-muted-foreground">
+                    Are you working with an agent? <span className="text-destructive">*</span>
+                  </Label>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { value: "yes", label: "Yes" },
+                      { value: "no", label: "No" },
+                      { value: "i_am_agent", label: "I am the agent" },
+                    ].map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setWorkingWithAgent(opt.value)}
+                        className={`px-4 py-2 rounded-lg text-sm border transition-colors ${
+                          workingWithAgent === opt.value
+                            ? "border-primary bg-primary/10 font-medium"
+                            : "border-border hover:bg-secondary/50"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Q4: ID document upload (optional) */}
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold text-muted-foreground">
+                    ID document upload <span className="text-muted-foreground font-normal">(optional but recommended)</span>
+                  </Label>
+                  <input
+                    ref={screeningDocInputRef}
+                    type="file"
+                    accept="image/*,application/pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) handleScreeningDoc(f);
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full gap-2"
+                    onClick={() => screeningDocInputRef.current?.click()}
+                  >
+                    <Upload className="w-4 h-4" />
+                    {screeningDocFile ? screeningDocFile.name : "Upload ID / passport"}
+                  </Button>
+                  {screeningDocPreview && (
+                    <div className="mt-2 rounded-lg overflow-hidden border border-border">
+                      <img
+                        src={screeningDocPreview}
+                        alt="ID preview"
+                        className="w-full max-h-40 object-contain bg-secondary/40"
+                      />
+                    </div>
+                  )}
+                  {screeningDocFile && !screeningDocPreview && (
+                    <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                      <FileCheck className="w-3.5 h-3.5 text-emerald-600" />
+                      {screeningDocFile.name} selected
+                    </p>
+                  )}
+                </div>
+
+                <Button
+                  className="w-full gap-2"
+                  onClick={handleScreeningSubmit}
+                  disabled={loading || !mortgageStatus || !budgetRange || !workingWithAgent}
+                >
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ClipboardCheck className="w-4 h-4" />}
+                  Continue
+                </Button>
+              </>
+            )}
+
+            {/* Step: ID verification (asset control) */}
             {step === "id" && (
               <>
                 <div>
@@ -273,6 +512,7 @@ export default function OpenHouseRegistrationDialog({
               </>
             )}
 
+            {/* Step: Waiver */}
             {step === "waiver" && (
               <>
                 <div className="bg-secondary rounded-xl p-4 text-sm text-muted-foreground max-h-32 overflow-y-auto">
@@ -294,11 +534,14 @@ export default function OpenHouseRegistrationDialog({
               </>
             )}
 
+            {/* Step: Qualified (proof of funds / investor declaration) */}
             {step === "qualified" && (
               <>
                 {requirePOF && (
                   <div>
-                    <p className="text-xs font-semibold text-muted-foreground mb-2">Proof of funds {requirePOF ? "(required)" : "(optional)"}</p>
+                    <p className="text-xs font-semibold text-muted-foreground mb-2">
+                      Proof of funds {requirePOF ? "(required)" : "(optional)"}
+                    </p>
                     <input
                       ref={proofInputRef}
                       type="file"
@@ -334,13 +577,6 @@ export default function OpenHouseRegistrationDialog({
                   Submit
                 </Button>
               </>
-            )}
-
-            {!hasAssetControl && step === "timeslot" && (
-              <Button className="w-full gap-2" onClick={handleStartRegistration} disabled={loading}>
-                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
-                Register to attend
-              </Button>
             )}
           </div>
         )}
