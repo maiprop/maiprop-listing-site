@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import {
   Building2, Volume2, Shield, TrendingUp, TrendingDown,
   Minus, Loader2, Zap, MapPin, HardHat, CheckCircle2,
-  AlertCircle,
+  AlertCircle, Clock,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { getAiErrorMessage } from "@/lib/aiErrorUtils";
