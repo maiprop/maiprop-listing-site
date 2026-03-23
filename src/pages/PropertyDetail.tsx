@@ -366,7 +366,7 @@ export default function PropertyDetail() {
 
   const dbImages = [
   ...(db.cover_image_url ? [db.cover_image_url] : []),
-  ...((dbListing as any).listing_images?.map((img: any) => img.url) || [])];
+  ...((dbListing as any).listing_images?.flatMap((img: any) => (img?.url ? [img.url] : [])) ?? [])];
 
 
   // Street View fallback via proxy (key never in client URLs)

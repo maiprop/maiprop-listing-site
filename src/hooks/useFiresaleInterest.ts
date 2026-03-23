@@ -29,7 +29,7 @@ export function useMyFiresaleInterest(dealId: string | undefined) {
       const uid = (await supabase.auth.getUser()).data.user?.id;
       if (!uid || !dealId) return null;
       const { data } = await supabase
-        .from("firesale_interest" as any)
+        .from("firesale_interest")
         .select("*")
         .eq("deal_id", dealId)
         .eq("investor_id", uid)
@@ -48,7 +48,7 @@ export function useMyFiresaleInterests() {
       const uid = (await supabase.auth.getUser()).data.user?.id;
       if (!uid) return new Set<string>();
       const { data } = await supabase
-        .from("firesale_interest" as any)
+        .from("firesale_interest")
         .select("deal_id, status, proof_of_funds_url")
         .eq("investor_id", uid);
       return new Map(
@@ -65,7 +65,7 @@ export function useFiresaleInterestQueue(dealId: string | undefined) {
     queryFn: async () => {
       if (!dealId) return [];
       const { data, error } = await supabase
-        .from("firesale_interest" as any)
+        .from("firesale_interest")
         .select(`*, profiles:investor_id (first_name, last_name, display_name, investor_mode)`)
         .eq("deal_id", dealId)
         .order("created_at", { ascending: true });
@@ -112,7 +112,7 @@ export function useExpressInterest() {
       }
 
       const { data, error } = await supabase
-        .from("firesale_interest" as any)
+        .from("firesale_interest")
         .upsert(
           {
             deal_id: dealId,
@@ -145,7 +145,7 @@ export function useUpdateInterestStatus() {
   return useMutation({
     mutationFn: async ({ id, dealId, status }: { id: string; dealId: string; status: InterestStatus }) => {
       const { error } = await supabase
-        .from("firesale_interest" as any)
+        .from("firesale_interest")
         .update({ status })
         .eq("id", id);
       if (error) throw error;

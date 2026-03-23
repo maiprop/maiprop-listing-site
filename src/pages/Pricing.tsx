@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getPricingAudienceFromProfile, type PricingAudienceId } from "@/lib/participantConfig";
+import { isPlatformAdmin } from "@/lib/authUtils";
 import { usePricingConfigs } from "@/hooks/usePricingConfigs";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -217,6 +218,16 @@ export default function Pricing() {
   const { isPro } = useSubscription();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+
+  // Investor section visibility: show only to unauthenticated visitors (discovery),
+  // confirmed investor/institutional users, users with investor_mode, or admins.
+  // Hide from regular buyers, sellers, agents, developers who are logged in.
+  const isInvestorUser =
+    !user ||
+    (profile as any)?.participant_type === "investor" ||
+    (profile as any)?.participant_type === "institutional" ||
+    (profile as any)?.investor_mode === true ||
+    isPlatformAdmin(profile);
 
   const [activeTab, setActiveTab] = useState<AudienceId>("participant");
   const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
@@ -510,8 +521,8 @@ export default function Pricing() {
           </p>
         </div>
 
-        {/* ── Investor Access — two tiers ───────────────────────────────────── */}
-        <div className="border-t border-border bg-gradient-to-br from-orange-950/30 to-background py-16">
+        {/* ── Investor Access — two tiers (private: only shown to investors / unauthenticated) ── */}
+        {isInvestorUser && <div className="border-t border-border bg-gradient-to-br from-orange-950/30 to-background py-16">
           <div className="container max-w-5xl px-4">
             <div className="text-center mb-10">
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-orange-500/15 border border-orange-500/30 text-orange-400 text-xs font-bold uppercase tracking-widest mb-4">
@@ -596,7 +607,7 @@ export default function Pricing() {
               </p>
             </div>
           </div>
-        </div>
+        </div>}
 
         {/* ── Per-listing add-ons & pay-as-you-go ──────────────────────────── */}
         <div className="border-t border-border py-16">
@@ -692,8 +703,8 @@ export default function Pricing() {
           </div>
         </div>
 
-        {/* ── Quick Sale success fee ────────────────────────────────────────── */}
-        <div className="border-t border-border py-12 bg-card/20">
+        {/* ── Quick Sale success fee (private: only shown to investors) ───── */}
+        {isInvestorUser && <div className="border-t border-border py-12 bg-card/20">
           <div className="container max-w-3xl px-4">
             <div className="text-center mb-6">
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary border border-border text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">
@@ -733,7 +744,7 @@ export default function Pricing() {
               Full terms available in the <Link to="/terms" className="underline hover:text-foreground">Platform Terms of Service</Link>. Quick Sale fees are separate from and in addition to any subscription plan.
             </p>
           </div>
-        </div>
+        </div>}
 
       </div>
       <Footer />

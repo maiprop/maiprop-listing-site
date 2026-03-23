@@ -1589,13 +1589,10 @@ function SettingsSection({
   const [switching, setSwitching] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  // ── SECURITY: only the __type: prefix in bio is cleared ──────────────────
-  // The actual `role` column (which controls RLS permissions) is NEVER touched here.
-  // RLS on the profiles table also blocks any self-escalation of the role column.
+  // ── SECURITY: clears participant_type + bio tag only; role column handled by onboarding ──
   const handleSwitchRole = async () => {
     setSwitching(true);
-    // Wipe ONLY the participant-type tag from bio — never touches role
-    const { error } = await onUpdate({ bio: null });
+    const { error } = await onUpdate({ bio: null, participant_type: null } as any);
     if (error) {
       toast.error("Could not reset participant type: " + error.message);
       setSwitching(false);
