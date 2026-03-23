@@ -221,6 +221,7 @@ export default function PropertyValuation(props: PropertyValuationProps) {
       const { data, error } = await supabase.functions.invoke("property-valuation", { body: valuationProps });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
+      if (!data?.estimatedValue) throw new Error("Valuation returned no result");
       await recordValuation.mutateAsync(listingId ?? undefined);
       setResult(data as ValuationResult);
       setExpanded(true);

@@ -114,7 +114,7 @@ const EMPTY_GJ = { type: "FeatureCollection" as const, features: [] };
 function buildGeoJSON(listings: MapListing[]) {
   return {
     type: "FeatureCollection" as const,
-    features: listings.map(l => ({
+    features: listings.filter(l => l.latitude != null && l.longitude != null).map(l => ({
       type: "Feature" as const,
       properties: {
         id: l.id,
