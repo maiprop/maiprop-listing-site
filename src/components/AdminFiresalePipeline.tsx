@@ -408,7 +408,7 @@ export default function AdminFiresalePipeline() {
   const [adminLoading, setAdminLoading] = useState(false);
   const [adminFilter, setAdminFilter] = useState("all");
 
-  const loadAdminDeals = async () => {
+  const loadAdminDeals = async (): Promise<void> => {
     setAdminLoading(true);
     try {
       const { data, error } = await supabase.from("firesale_requests").select("*").order("created_at", { ascending: false });
@@ -421,7 +421,7 @@ export default function AdminFiresalePipeline() {
     }
   };
 
-  useEffect(() => { loadAdminDeals(); }, []);
+  useEffect(() => { void loadAdminDeals(); }, []);
 
   const handleAdminUpdate = async (id: string, status: string, admin_notes: string, offerPrice?: number) => {
     const updates: Record<string, unknown> = { status, admin_notes };

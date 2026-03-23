@@ -159,12 +159,12 @@ function PlatformOverviewTab() {
         const som = firstOfMonth();
 
         const [r1, r2, r3, r4, r5, r6] = await Promise.all([
-          supabase.from("listings" as never).select("id", { count: "exact", head: true }),
-          supabase.from("listings" as never).select("id", { count: "exact", head: true }).eq("status", "active"),
-          supabase.from("profiles" as never).select("id", { count: "exact", head: true }),
-          supabase.from("profiles" as never).select("id", { count: "exact", head: true }).gte("created_at", som),
-          supabase.from("firesale_requests" as never).select("id", { count: "exact", head: true }),
-          supabase.from("open_house_settings" as never).select("id", { count: "exact", head: true }),
+          supabase.from("listings" ).select("id", { count: "exact", head: true }),
+          supabase.from("listings" ).select("id", { count: "exact", head: true }).eq("status", "active"),
+          supabase.from("profiles" ).select("id", { count: "exact", head: true }),
+          supabase.from("profiles" ).select("id", { count: "exact", head: true }).gte("created_at", som),
+          supabase.from("firesale_requests" ).select("id", { count: "exact", head: true }),
+          supabase.from("open_house_settings" ).select("id", { count: "exact", head: true }),
         ]);
 
         // Throw on first error so the catch block shows mock data
@@ -326,7 +326,7 @@ function ContentReportsTab() {
     async function load() {
       setLoading(true);
       const { data, error } = await supabase
-        .from("listing_reports" as never)
+        .from("listing_reports" )
         .select("id, entity_type, entity_id, reporter_id, created_at, status")
         .order("created_at", { ascending: false });
       if (!mounted) return;
@@ -356,8 +356,8 @@ function ContentReportsTab() {
       prev.map((r) => r.id === id ? { ...r, status: "resolved" } : r)
     );
     const { error } = await supabase
-      .from("listing_reports" as never)
-      .update({ status: "resolved" } as never)
+      .from("listing_reports" )
+      .update({ status: "resolved" } )
       .eq("id", id);
     if (error) {
       // Revert on error

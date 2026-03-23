@@ -63,7 +63,12 @@ function buildListingsQuery(filters?: ListingsFilters, from = 0, pageSize = 500)
   }
   if (filters?.property_type) query = query.eq("property_type", filters.property_type as any);
   if (filters?.owner_id) query = query.eq("owner_id", filters.owner_id);
-  if (!filters?.owner_id) query = query.eq("status", (filters?.status || "active") as any);
+  // Always apply status filter; for owner queries don't default to 'active' so all own listings show
+  if (filters?.owner_id) {
+    if (filters?.status) query = query.eq("status", filters.status as any);
+  } else {
+    query = query.eq("status", (filters?.status || "active") as any);
+  }
 
   // Numeric filters
   if (filters?.price_min != null) query = query.gte("price", filters.price_min);

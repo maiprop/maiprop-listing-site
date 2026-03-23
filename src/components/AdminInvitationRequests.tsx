@@ -97,10 +97,10 @@ export default function AdminInvitationRequests() {
 
   const isAdmin = isPlatformAdmin(profile);
 
-  const load = async () => {
+  const load = async (): Promise<void> => {
     setLoading(true);
     const { data, error } = await supabase
-      .from("invitation_requests" as any)
+      .from("invitation_requests")
       .select("*")
       .order("created_at", { ascending: false });
     if (!error) setRequests((data as any) || []);
@@ -109,7 +109,7 @@ export default function AdminInvitationRequests() {
 
   useEffect(() => {
     if (!isAdmin) return;
-    load();
+    void load();
   }, [isAdmin]);
 
   const getTier = (id: string) => tierMap[id] ?? "private";
@@ -124,7 +124,7 @@ export default function AdminInvitationRequests() {
     try {
       // 1. Mark invitation as approved
       const { error: invErr } = await supabase
-        .from("invitation_requests" as any)
+        .from("invitation_requests")
         .update({ status: "approved" })
         .eq("id", req.id);
       if (invErr) throw invErr;
@@ -133,7 +133,7 @@ export default function AdminInvitationRequests() {
       const tier = getTier(req.id);
       const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
       const { error: subErr } = await supabase
-        .from("investor_subscriptions" as any)
+        .from("investor_subscriptions")
         .upsert(
           {
             user_id: req.user_id,
@@ -174,7 +174,7 @@ export default function AdminInvitationRequests() {
     const reason = getRejectionReason(req.id);
     try {
       const { error } = await supabase
-        .from("invitation_requests" as any)
+        .from("invitation_requests")
         .update({ status: "rejected" })
         .eq("id", req.id);
       if (error) throw error;
