@@ -526,7 +526,11 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
                                   size="icon"
                                   variant="outline"
                                   className="h-7 w-7"
-                                  onClick={() => deleteMutation.mutate(row.id)}
+                                  onClick={() => {
+                                    if (window.confirm(`Delete "${row.label}"? This cannot be undone.`)) {
+                                      deleteMutation.mutate(row.id);
+                                    }
+                                  }}
                                 >
                                   {deleteMutation.isPending ? (
                                     <Loader2 className="w-3 h-3 animate-spin" />

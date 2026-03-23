@@ -99,7 +99,7 @@ const App = () => (
                       <Route path="/professionals" element={<Professionals />} />
                       <Route path="/professionals/me" element={<ProtectedRoute><ProfessionalProfileMe /></ProtectedRoute>} />
                       <Route path="/professionals/:id" element={<ProfessionalProfile />} />
-                      <Route path="/video-room/:professionalId" element={<BrandedVideoRoom />} />
+                      <Route path="/video-room/:professionalId" element={<ProtectedRoute><BrandedVideoRoom /></ProtectedRoute>} />
                       <Route path="/new-build/:id" element={<ErrorBoundary><NewBuildDetail /></ErrorBoundary>} />
                       <Route path="/open-houses" element={<OpenHouses />} />
                       <Route path="/open-house/:id" element={<ErrorBoundary><OpenHouseDetail /></ErrorBoundary>} />

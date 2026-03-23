@@ -71,7 +71,7 @@ export default function Messages() {
     if (activeConvId && hasUnreadFromOther && !markAsRead.isPending) {
       markAsRead.mutate();
     }
-  }, [activeConvId, hasUnreadFromOther]);
+  }, [activeConvId, hasUnreadFromOther, markAsRead]);
 
   // Typing indicator: subscribe to presence on the active conversation channel
   useEffect(() => {
@@ -131,6 +131,14 @@ export default function Messages() {
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files?.length || !activeConvId || !user) return;
+    const MAX_SIZE = 10 * 1024 * 1024;
+    for (let i = 0; i < files.length; i++) {
+      if (files[i].size > MAX_SIZE) {
+        toast.error(`"${files[i].name}" exceeds the 10 MB limit`);
+        e.target.value = "";
+        return;
+      }
+    }
     setUploading(true);
     try {
       const uploaded: { path: string; filename: string; mime_type: string }[] = [];

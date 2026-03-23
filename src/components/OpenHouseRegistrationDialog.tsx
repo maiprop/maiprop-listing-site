@@ -188,6 +188,11 @@ export default function OpenHouseRegistrationDialog({
 
   const handleIdUpload = async () => {
     if (!regId || !idDocFile || !user?.id) return;
+    const MAX_DOC_SIZE = 5 * 1024 * 1024;
+    if (idDocFile.size > MAX_DOC_SIZE) {
+      toast.error("ID document must be under 5 MB");
+      return;
+    }
     setLoading(true);
     try {
       const ext = idDocFile.name.split(".").pop() ?? "jpg";
@@ -555,6 +560,8 @@ export default function OpenHouseRegistrationDialog({
                     <input
                       type="number"
                       placeholder="Amount (€)"
+                      min="0"
+                      step="0.01"
                       value={proofAmount}
                       onChange={(e) => setProofAmount(e.target.value)}
                       className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm"

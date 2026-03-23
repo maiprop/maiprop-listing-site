@@ -363,7 +363,7 @@ export default function AdminInvitationRequests() {
                           <Button
                             size="sm"
                             className="h-8 text-xs gap-1.5 bg-brand-emerald hover:bg-brand-emerald/90 text-primary-foreground border-0"
-                            onClick={() => approve(req)}
+                            onClick={() => { if (window.confirm(`Approve investor access for ${req.display_name || req.email}?`)) approve(req); }}
                             disabled={isUpdating}
                           >
                             {isUpdating && !isRejectOpen ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
