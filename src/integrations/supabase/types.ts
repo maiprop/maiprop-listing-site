@@ -10,10 +10,52 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.1"
+    PostgrestVersion: "14.4"
   }
   public: {
     Tables: {
+      articles: {
+        Row: {
+          category: string
+          content: Json
+          created_at: string
+          id: string
+          meta_description: string
+          published: boolean
+          read_time: string
+          slug: string
+          title: string
+          topic: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          content?: Json
+          created_at?: string
+          id?: string
+          meta_description?: string
+          published?: boolean
+          read_time?: string
+          slug: string
+          title?: string
+          topic: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          content?: Json
+          created_at?: string
+          id?: string
+          meta_description?: string
+          published?: boolean
+          read_time?: string
+          slug?: string
+          title?: string
+          topic?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       auction_alerts: {
         Row: {
           active: boolean | null
@@ -58,7 +100,9 @@ export type Database = {
           callback_time: string | null
           created_at: string
           id: string
+          lead_status: string | null
           message: string | null
+          notes: string | null
           preferred_date: string | null
           preferred_time: string | null
           professional_id: string
@@ -75,7 +119,9 @@ export type Database = {
           callback_time?: string | null
           created_at?: string
           id?: string
+          lead_status?: string | null
           message?: string | null
+          notes?: string | null
           preferred_date?: string | null
           preferred_time?: string | null
           professional_id: string
@@ -92,7 +138,9 @@ export type Database = {
           callback_time?: string | null
           created_at?: string
           id?: string
+          lead_status?: string | null
           message?: string | null
+          notes?: string | null
           preferred_date?: string | null
           preferred_time?: string | null
           professional_id?: string
@@ -209,48 +257,28 @@ export type Database = {
           created_at: string
           id: string
           last_message_at: string | null
-          listing_id: string | null
-          participant_a: string
-          participant_b: string
+          participant_1: string
+          participant_2: string
+          participant_a: string | null
+          participant_b: string | null
         }
         Insert: {
           created_at?: string
           id?: string
           last_message_at?: string | null
-          listing_id?: string | null
-          participant_a: string
-          participant_b: string
+          participant_1: string
+          participant_2: string
+          participant_a?: string | null
+          participant_b?: string | null
         }
         Update: {
           created_at?: string
           id?: string
           last_message_at?: string | null
-          listing_id?: string | null
-          participant_a?: string
-          participant_b?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "conversations_listing_id_fkey"
-            columns: ["listing_id"]
-            isOneToOne: false
-            referencedRelation: "listings"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      cron_config: {
-        Row: {
-          key: string
-          value: string
-        }
-        Insert: {
-          key: string
-          value: string
-        }
-        Update: {
-          key?: string
-          value?: string
+          participant_1?: string
+          participant_2?: string
+          participant_a?: string | null
+          participant_b?: string | null
         }
         Relationships: []
       }
@@ -409,6 +437,57 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "listings"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      firesale_interest: {
+        Row: {
+          created_at: string
+          deal_id: string
+          id: string
+          investor_id: string
+          message: string | null
+          proof_amount: number | null
+          proof_of_funds_url: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          deal_id: string
+          id?: string
+          investor_id: string
+          message?: string | null
+          proof_amount?: number | null
+          proof_of_funds_url?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          deal_id?: string
+          id?: string
+          investor_id?: string
+          message?: string | null
+          proof_amount?: number | null
+          proof_of_funds_url?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "firesale_interest_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "firesale_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "firesale_interest_investor_id_fkey"
+            columns: ["investor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -624,51 +703,69 @@ export type Database = {
       leads: {
         Row: {
           created_at: string
-          email: string | null
+          email: string
           follow_up_at: string | null
+          followup_step: number
+          full_name: string
           id: string
+          investment_budget: number
+          investment_timeline: string
           listing_id: string | null
           message: string | null
-          name: string
+          nationality: string
           notes: string | null
-          owner_id: string
-          phone: string | null
+          owner_id: string | null
+          phone: string
+          preferred_location: string
           professional_id: string | null
           project_id: string | null
+          property_type: string
           source: string
           status: string
           updated_at: string
         }
         Insert: {
           created_at?: string
-          email?: string | null
+          email: string
           follow_up_at?: string | null
+          followup_step?: number
+          full_name: string
           id?: string
+          investment_budget: number
+          investment_timeline?: string
           listing_id?: string | null
           message?: string | null
-          name: string
+          nationality: string
           notes?: string | null
-          owner_id: string
-          phone?: string | null
+          owner_id?: string | null
+          phone: string
+          preferred_location?: string
           professional_id?: string | null
           project_id?: string | null
+          property_type?: string
           source?: string
           status?: string
           updated_at?: string
         }
         Update: {
           created_at?: string
-          email?: string | null
+          email?: string
           follow_up_at?: string | null
+          followup_step?: number
+          full_name?: string
           id?: string
+          investment_budget?: number
+          investment_timeline?: string
           listing_id?: string | null
           message?: string | null
-          name?: string
+          nationality?: string
           notes?: string | null
-          owner_id?: string
-          phone?: string | null
+          owner_id?: string | null
+          phone?: string
+          preferred_location?: string
           professional_id?: string | null
           project_id?: string | null
+          property_type?: string
           source?: string
           status?: string
           updated_at?: string
@@ -874,6 +971,7 @@ export type Database = {
           price: number
           price_per_sqm: number | null
           priority_placement: number
+          project_id: string | null
           property_type: Database["public"]["Enums"]["property_type"]
           region: string | null
           road_type: string | null
@@ -988,6 +1086,7 @@ export type Database = {
           price: number
           price_per_sqm?: number | null
           priority_placement?: number
+          project_id?: string | null
           property_type: Database["public"]["Enums"]["property_type"]
           region?: string | null
           road_type?: string | null
@@ -1102,6 +1201,7 @@ export type Database = {
           price?: number
           price_per_sqm?: number | null
           priority_placement?: number
+          project_id?: string | null
           property_type?: Database["public"]["Enums"]["property_type"]
           region?: string | null
           road_type?: string | null
@@ -1125,7 +1225,15 @@ export type Database = {
           year_built?: number | null
           zone_type?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "listings_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       message_attachments: {
         Row: {
@@ -1171,6 +1279,8 @@ export type Database = {
           conversation_id: string
           created_at: string
           id: string
+          read_at: string | null
+          receiver_id: string
           sender_id: string
           status: Database["public"]["Enums"]["message_status"]
         }
@@ -1179,6 +1289,8 @@ export type Database = {
           conversation_id: string
           created_at?: string
           id?: string
+          read_at?: string | null
+          receiver_id: string
           sender_id: string
           status?: Database["public"]["Enums"]["message_status"]
         }
@@ -1187,6 +1299,8 @@ export type Database = {
           conversation_id?: string
           created_at?: string
           id?: string
+          read_at?: string | null
+          receiver_id?: string
           sender_id?: string
           status?: Database["public"]["Enums"]["message_status"]
         }
@@ -1199,6 +1313,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      notifications: {
+        Row: {
+          body: string | null
+          created_at: string
+          id: string
+          read: boolean
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          read?: boolean
+          title: string
+          type?: string
+          user_id: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          read?: boolean
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       open_house_offers: {
         Row: {
@@ -1262,6 +1406,7 @@ export type Database = {
           approved_at: string | null
           approved_by: string | null
           attended_at: string | null
+          budget_range: string | null
           created_at: string | null
           id: string
           id_doc_type: Database["public"]["Enums"]["oh_id_doc_type"] | null
@@ -1269,21 +1414,26 @@ export type Database = {
           id_verified_at: string | null
           investor_declaration_signed_at: string | null
           listing_id: string
+          mortgage_status: string | null
           note: string | null
           proof_amount: number | null
           proof_of_funds_url: string | null
           rejection_reason: string | null
           requester_id: string
+          screening_doc_url: string | null
+          screening_score: number | null
           status: Database["public"]["Enums"]["oh_registration_status"] | null
           timeslot_index: number | null
           updated_at: string | null
           waiver_signed_at: string | null
           waiver_url: string | null
+          working_with_agent: string | null
         }
         Insert: {
           approved_at?: string | null
           approved_by?: string | null
           attended_at?: string | null
+          budget_range?: string | null
           created_at?: string | null
           id?: string
           id_doc_type?: Database["public"]["Enums"]["oh_id_doc_type"] | null
@@ -1291,21 +1441,26 @@ export type Database = {
           id_verified_at?: string | null
           investor_declaration_signed_at?: string | null
           listing_id: string
+          mortgage_status?: string | null
           note?: string | null
           proof_amount?: number | null
           proof_of_funds_url?: string | null
           rejection_reason?: string | null
           requester_id: string
+          screening_doc_url?: string | null
+          screening_score?: number | null
           status?: Database["public"]["Enums"]["oh_registration_status"] | null
           timeslot_index?: number | null
           updated_at?: string | null
           waiver_signed_at?: string | null
           waiver_url?: string | null
+          working_with_agent?: string | null
         }
         Update: {
           approved_at?: string | null
           approved_by?: string | null
           attended_at?: string | null
+          budget_range?: string | null
           created_at?: string | null
           id?: string
           id_doc_type?: Database["public"]["Enums"]["oh_id_doc_type"] | null
@@ -1313,16 +1468,20 @@ export type Database = {
           id_verified_at?: string | null
           investor_declaration_signed_at?: string | null
           listing_id?: string
+          mortgage_status?: string | null
           note?: string | null
           proof_amount?: number | null
           proof_of_funds_url?: string | null
           rejection_reason?: string | null
           requester_id?: string
+          screening_doc_url?: string | null
+          screening_score?: number | null
           status?: Database["public"]["Enums"]["oh_registration_status"] | null
           timeslot_index?: number | null
           updated_at?: string | null
           waiver_signed_at?: string | null
           waiver_url?: string | null
+          working_with_agent?: string | null
         }
         Relationships: [
           {
@@ -1472,6 +1631,39 @@ export type Database = {
           sort_order?: number
           unit?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      private_owner_ad_alerts: {
+        Row: {
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      pro_product_ids: {
+        Row: {
+          created_at: string
+          product_id: string
+        }
+        Insert: {
+          created_at?: string
+          product_id: string
+        }
+        Update: {
+          created_at?: string
+          product_id?: string
         }
         Relationships: []
       }
@@ -1643,44 +1835,6 @@ export type Database = {
         }
         Relationships: []
       }
-      notifications: {
-        Row: {
-          id: string
-          user_id: string
-          title: string
-          body: string | null
-          type: string
-          read: boolean
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          title: string
-          body?: string | null
-          type?: string
-          read?: boolean
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          title?: string
-          body?: string | null
-          type?: string
-          read?: boolean
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "notifications_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          }
-        ]
-      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -1697,9 +1851,11 @@ export type Database = {
           participant_type: string | null
           phone: string | null
           role: Database["public"]["Enums"]["user_role"]
+          subscription_product_id: string | null
           updated_at: string
           user_id: string
           verified: boolean
+          video_link: string | null
           website_url: string | null
         }
         Insert: {
@@ -1717,9 +1873,11 @@ export type Database = {
           participant_type?: string | null
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
+          subscription_product_id?: string | null
           updated_at?: string
           user_id: string
           verified?: boolean
+          video_link?: string | null
           website_url?: string | null
         }
         Update: {
@@ -1737,9 +1895,11 @@ export type Database = {
           participant_type?: string | null
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
+          subscription_product_id?: string | null
           updated_at?: string
           user_id?: string
           verified?: boolean
+          video_link?: string | null
           website_url?: string | null
         }
         Relationships: []
@@ -1771,42 +1931,387 @@ export type Database = {
         }
         Relationships: []
       }
+      project_leads: {
+        Row: {
+          created_at: string
+          email: string | null
+          id: string
+          metadata: Json | null
+          name: string
+          notes: string | null
+          phone: string | null
+          project_id: string
+          source: string | null
+          status: string
+          unit_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          metadata?: Json | null
+          name: string
+          notes?: string | null
+          phone?: string | null
+          project_id: string
+          source?: string | null
+          status?: string
+          unit_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          metadata?: Json | null
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          project_id?: string
+          source?: string | null
+          status?: string
+          unit_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_leads_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_media: {
+        Row: {
+          created_at: string
+          id: string
+          media_type: string
+          project_id: string
+          sort_order: number
+          title: string | null
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          media_type: string
+          project_id: string
+          sort_order?: number
+          title?: string | null
+          url: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          media_type?: string
+          project_id?: string
+          sort_order?: number
+          title?: string | null
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_media_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_units: {
+        Row: {
+          availability_status: string
+          balcony_sqm: number | null
+          bathrooms: number | null
+          bedrooms: number | null
+          city_view: boolean | null
+          cooling_system: string | null
+          created_at: string
+          energy_class: string | null
+          floor: number | null
+          heating_system: string | null
+          id: string
+          internal_sqm: number | null
+          kitchen_type: string | null
+          listing_id: string | null
+          living_rooms: number | null
+          mountain_view: boolean | null
+          parking_price: number | null
+          parking_sqm: number | null
+          price: number | null
+          price_per_sqm: number | null
+          project_id: string
+          sea_view: boolean | null
+          storage_price: number | null
+          storage_sqm: number | null
+          unit_id: string | null
+          unit_number: string | null
+          updated_at: string
+          vat_included: boolean | null
+        }
+        Insert: {
+          availability_status?: string
+          balcony_sqm?: number | null
+          bathrooms?: number | null
+          bedrooms?: number | null
+          city_view?: boolean | null
+          cooling_system?: string | null
+          created_at?: string
+          energy_class?: string | null
+          floor?: number | null
+          heating_system?: string | null
+          id?: string
+          internal_sqm?: number | null
+          kitchen_type?: string | null
+          listing_id?: string | null
+          living_rooms?: number | null
+          mountain_view?: boolean | null
+          parking_price?: number | null
+          parking_sqm?: number | null
+          price?: number | null
+          price_per_sqm?: number | null
+          project_id: string
+          sea_view?: boolean | null
+          storage_price?: number | null
+          storage_sqm?: number | null
+          unit_id?: string | null
+          unit_number?: string | null
+          updated_at?: string
+          vat_included?: boolean | null
+        }
+        Update: {
+          availability_status?: string
+          balcony_sqm?: number | null
+          bathrooms?: number | null
+          bedrooms?: number | null
+          city_view?: boolean | null
+          cooling_system?: string | null
+          created_at?: string
+          energy_class?: string | null
+          floor?: number | null
+          heating_system?: string | null
+          id?: string
+          internal_sqm?: number | null
+          kitchen_type?: string | null
+          listing_id?: string | null
+          living_rooms?: number | null
+          mountain_view?: boolean | null
+          parking_price?: number | null
+          parking_sqm?: number | null
+          price?: number | null
+          price_per_sqm?: number | null
+          project_id?: string
+          sea_view?: boolean | null
+          storage_price?: number | null
+          storage_sqm?: number | null
+          unit_id?: string | null
+          unit_number?: string | null
+          updated_at?: string
+          vat_included?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_units_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_units_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_views: {
+        Row: {
+          id: string
+          project_id: string
+          viewed_at: string
+          viewer_id: string | null
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          viewed_at?: string
+          viewer_id?: string | null
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          viewed_at?: string
+          viewer_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_views_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           address: string | null
+          architect_group: string | null
+          area_description: string | null
+          building_permit_number: string | null
           city: string | null
+          construction_company: string | null
+          construction_start_date: string | null
           cover_image_url: string | null
           created_at: string
+          delivery_date: string | null
           description: string | null
+          developer_company: string | null
           id: string
+          latitude: number | null
+          longitude: number | null
+          municipality: string | null
           name: string
           owner_id: string
+          permit_approval_date: string | null
           status: string
+          structural_completion_date: string | null
           updated_at: string
         }
         Insert: {
           address?: string | null
+          architect_group?: string | null
+          area_description?: string | null
+          building_permit_number?: string | null
           city?: string | null
+          construction_company?: string | null
+          construction_start_date?: string | null
           cover_image_url?: string | null
           created_at?: string
+          delivery_date?: string | null
           description?: string | null
+          developer_company?: string | null
           id?: string
+          latitude?: number | null
+          longitude?: number | null
+          municipality?: string | null
           name: string
           owner_id: string
+          permit_approval_date?: string | null
           status?: string
+          structural_completion_date?: string | null
           updated_at?: string
         }
         Update: {
           address?: string | null
+          architect_group?: string | null
+          area_description?: string | null
+          building_permit_number?: string | null
           city?: string | null
+          construction_company?: string | null
+          construction_start_date?: string | null
           cover_image_url?: string | null
           created_at?: string
+          delivery_date?: string | null
           description?: string | null
+          developer_company?: string | null
           id?: string
+          latitude?: number | null
+          longitude?: number | null
+          municipality?: string | null
           name?: string
           owner_id?: string
+          permit_approval_date?: string | null
           status?: string
+          structural_completion_date?: string | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      properties: {
+        Row: {
+          after_image: string
+          bedrooms: number | null
+          before_image: string
+          construction_year: string
+          created_at: string
+          date_added: string
+          description: string
+          floor: string
+          floor_plan: string
+          id: string
+          images: string[]
+          location: string
+          market_report: string
+          poi: string[]
+          poi_cache: Json | null
+          price: number | null
+          project_type: string
+          size: number | null
+          sort_order: number
+          status: string
+          tags: string[]
+          title: string
+          updated_at: string
+          yield: string
+        }
+        Insert: {
+          after_image?: string
+          bedrooms?: number | null
+          before_image?: string
+          construction_year?: string
+          created_at?: string
+          date_added?: string
+          description?: string
+          floor?: string
+          floor_plan?: string
+          id?: string
+          images?: string[]
+          location?: string
+          market_report?: string
+          poi?: string[]
+          poi_cache?: Json | null
+          price?: number | null
+          project_type?: string
+          size?: number | null
+          sort_order?: number
+          status?: string
+          tags?: string[]
+          title: string
+          updated_at?: string
+          yield?: string
+        }
+        Update: {
+          after_image?: string
+          bedrooms?: number | null
+          before_image?: string
+          construction_year?: string
+          created_at?: string
+          date_added?: string
+          description?: string
+          floor?: string
+          floor_plan?: string
+          id?: string
+          images?: string[]
+          location?: string
+          market_report?: string
+          poi?: string[]
+          poi_cache?: Json | null
+          price?: number | null
+          project_type?: string
+          size?: number | null
+          sort_order?: number
+          status?: string
+          tags?: string[]
+          title?: string
+          updated_at?: string
+          yield?: string
         }
         Relationships: []
       }
@@ -1996,17 +2501,17 @@ export type Database = {
       user_roles: {
         Row: {
           id: string
-          role: Database["public"]["Enums"]["user_role"]
+          role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Insert: {
           id?: string
-          role: Database["public"]["Enums"]["user_role"]
+          role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Update: {
           id?: string
-          role?: Database["public"]["Enums"]["user_role"]
+          role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
         }
         Relationships: []
@@ -2074,9 +2579,53 @@ export type Database = {
         Args: { payload: Json; queue_name: string }
         Returns: number
       }
+      get_auction_alert_limit: { Args: { p_user_id: string }; Returns: number }
+      get_listing_limit: { Args: { p_user_id: string }; Returns: number }
       get_my_role: {
         Args: never
         Returns: Database["public"]["Enums"]["user_role"]
+      }
+      get_professionals_with_priority: {
+        Args: { p_category?: string }
+        Returns: {
+          avatar_url: string | null
+          average_deal_size: string | null
+          average_portfolio_asset_size: string | null
+          bio: string | null
+          calendar_notes: string | null
+          category: Database["public"]["Enums"]["professional_category"]
+          city: string | null
+          created_at: string
+          display_name: string | null
+          experience_years: number | null
+          hourly_rate: number | null
+          id: string
+          languages: string[] | null
+          license_number: string | null
+          projects_count: number | null
+          rating: number | null
+          reviews_count: number | null
+          specialties: string[] | null
+          subscription_tier: string | null
+          title: string
+          updated_at: string
+          user_id: string
+          verified: boolean
+          video_link: string | null
+          website_url: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "professionals"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_saved_search_limit: { Args: { p_user_id: string }; Returns: number }
+      get_search_alert_limit: { Args: { p_user_id: string }; Returns: number }
+      get_viewing_limit: {
+        Args: { p_is_requester: boolean; p_user_id: string }
+        Returns: number
       }
       grant_platform_admin: {
         Args: { target_user_id: string }
@@ -2086,14 +2635,24 @@ export type Database = {
         Args: { target_email: string }
         Returns: undefined
       }
+      has_buy_side_role: { Args: { _user_id: string }; Returns: boolean }
       has_platform_admin: { Args: { _user_id?: string }; Returns: boolean }
-      has_role: {
-        Args: {
-          _role: Database["public"]["Enums"]["user_role"]
-          _user_id: string
-        }
-        Returns: boolean
-      }
+      has_role:
+        | {
+            Args: {
+              _role: Database["public"]["Enums"]["app_role"]
+              _user_id: string
+            }
+            Returns: boolean
+          }
+        | {
+            Args: {
+              _role: Database["public"]["Enums"]["user_role"]
+              _user_id: string
+            }
+            Returns: boolean
+          }
+      has_sell_side_role: { Args: { _user_id: string }; Returns: boolean }
       move_to_dlq: {
         Args: {
           dlq_name: string
@@ -2111,8 +2670,17 @@ export type Database = {
           read_ct: number
         }[]
       }
+      seed_grant_agent_role: {
+        Args: { user_ids: string[] }
+        Returns: undefined
+      }
+      seed_grant_role: {
+        Args: { target_role: string; user_ids: string[] }
+        Returns: undefined
+      }
     }
     Enums: {
+      app_role: "admin" | "moderator" | "user"
       listing_status:
         | "draft"
         | "active"
@@ -2187,10 +2755,10 @@ export type Database = {
         | "agent"
         | "professional"
         | "seller_landlord"
+        | "admin"
         | "investor"
         | "institutional"
         | "developer"
-        | "admin"
       viewing_status: "pending" | "confirmed" | "cancelled" | "completed"
       viewing_type: "in_person" | "video"
     }
@@ -2320,6 +2888,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      app_role: ["admin", "moderator", "user"],
       listing_status: [
         "draft",
         "active",
@@ -2399,10 +2968,10 @@ export const Constants = {
         "agent",
         "professional",
         "seller_landlord",
+        "admin",
         "investor",
         "institutional",
         "developer",
-        "admin",
       ],
       viewing_status: ["pending", "confirmed", "cancelled", "completed"],
       viewing_type: ["in_person", "video"],
