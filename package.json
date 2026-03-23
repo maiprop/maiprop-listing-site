@@ -9,6 +9,7 @@
     "simulate": "npx tsx scripts/simulate-platform-interactions.ts",
     "seed:listings": "npx tsx scripts/seed-mock-listings.ts",
     "seed:professionals": "npx tsx scripts/seed-mock-professionals.ts",
+    "seed:open-houses": "npx tsx scripts/seed-mock-open-houses.ts",
     "db:push": "supabase db push",
     "build": "vite build",
     "compress:images": "node scripts/compress-images.mjs",
