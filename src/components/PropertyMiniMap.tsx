@@ -100,7 +100,7 @@ interface PropertyMiniMapProps {
 }
 
 export default function PropertyMiniMap({
-  latitude, longitude, address, city, title, onWalkScoreChange,
+  latitude, longitude, address, city, title: _title, onWalkScoreChange,
 }: PropertyMiniMapProps) {
   const { user } = useAuth();
   const mapRef = useRef<MapRef>(null);
@@ -144,7 +144,6 @@ export default function PropertyMiniMap({
     : [];
 
   // Street view URL — opens Google Maps street view mode
-  const locationQuery = lat && lng ? `${lat},${lng}` : encodeURIComponent(`${address}, ${city}, Greece`);
   const streetViewUrl = lat && lng
     ? `https://www.google.com/maps?q=${lat},${lng}&layer=c&cbll=${lat},${lng}&cbp=12,0,,0,0`
     : `https://www.google.com/maps/search/${encodeURIComponent(address + ", " + city + ", Greece")}`;

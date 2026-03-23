@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { useNavigate, Navigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
   ChevronLeft, ChevronRight, Check, Upload, X, Loader2,
   Home, Building2, Zap, MapPin, DollarSign, Image as ImageIcon,
@@ -19,10 +19,8 @@ import { HEATING_TYPES, CONDITION_OPTIONS } from "@/lib/filterConfig";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const PROPERTY_TYPE_KEYS = ["apartment", "house", "villa", "land", "commercial", "office"] as const;
-type PropertyType = typeof PROPERTY_TYPE_KEYS[number];
-const LISTING_TYPES = ["sale", "rent", "auction", "open_house"] as const;
-type ListingType = typeof LISTING_TYPES[number];
+type PropertyType = "apartment" | "house" | "villa" | "land" | "commercial" | "office";
+type ListingType = "sale" | "rent" | "auction" | "open_house";
 const ENERGY_CLASSES = ["A+", "A", "B+", "B", "C", "D", "E", "F", "G", "Exempt"];
 const SLOPES = ["flat", "slight", "steep"];
 const ZONE_TYPES = ["residential", "agricultural", "tourist", "industrial", "commercial", "mixed"];
@@ -237,17 +235,6 @@ export default function CreateListing() {
     toast.error("Creating listings is for sellers, agents, institutions, and developers. Switch your participant type in Settings.");
     navigate("/dashboard/settings", { replace: true });
   }, [user, profile, canCreateListing, navigate]);
-
-  if (user && profile && !canCreateListing) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <span className="text-sm text-muted-foreground">Redirecting…</span>
-        </div>
-      </div>
-    );
-  }
 
   const [step, setStep] = useState(1);
   const [images, setImages] = useState<UploadedImage[]>([]);
@@ -488,14 +475,30 @@ export default function CreateListing() {
 
   const uploadImage = useCallback(async (file: File): Promise<UploadedImage> => {
     if (!user) throw new Error("Must be logged in");
-    const ext = file.name.split(".").pop();
+    const { compressListingImage } = await import("@/lib/compressImage");
+    const compressed = await compressListingImage(file);
+    const ext = compressed.name.split(".").pop();
     const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const path = `${user.id}/${id}.${ext}`;
-    const { error } = await supabase.storage.from("listing-images").upload(path, file, { upsert: true });
+    const { error } = await supabase.storage
+      .from("listing-images")
+      .upload(path, compressed, { upsert: true, contentType: compressed.type });
     if (error) throw error;
     const { data } = supabase.storage.from("listing-images").getPublicUrl(path);
     return { id, url: data.publicUrl };
   }, [user]);
+
+  // Guard: redirect users who can't create listings (must be after all hooks)
+  if (user && profile && !canCreateListing) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <span className="text-sm text-muted-foreground">Redirecting…</span>
+        </div>
+      </div>
+    );
+  }
 
   const handleFilesSelected = async (files: FileList | null) => {
     if (!files || !user) return;
@@ -768,7 +771,12 @@ export default function CreateListing() {
       }
 
       toast.success(asDraft ? "Listing saved as draft!" : "Listing published successfully!");
-      navigate(lt === "open_house" ? `/open-house/${data.id}` : `/property/${data.id}`);
+      const detailRoute = lt === "open_house"
+        ? `/open-house/${data.id}`
+        : form.is_pre_sale
+        ? `/new-build/${data.id}`
+        : `/property/${data.id}`;
+      navigate(detailRoute);
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -854,11 +862,49 @@ export default function CreateListing() {
 
                 {/* Pre-sale / Off-market flags — backed by DB columns */}
                 {(lt === "sale" || !lt) && (
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" checked={form.is_pre_sale} onChange={() => toggle("is_pre_sale")} className="rounded border-border" />
-                    <span className="text-sm font-medium">🏗️ Pre-sale / Off-plan</span>
-                    <span className="text-xs text-muted-foreground">New development before completion</span>
-                  </label>
+                  <div className="space-y-3">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={form.is_pre_sale} onChange={() => toggle("is_pre_sale")} className="rounded border-border" />
+                      <span className="text-sm font-medium">🏗️ Pre-sale / Off-plan</span>
+                      <span className="text-xs text-muted-foreground">New development before completion</span>
+                    </label>
+
+                    {/* New build configuration — shown when pre-sale is checked */}
+                    {form.is_pre_sale && (
+                      <div className="ml-6 p-4 rounded-xl border border-primary/30 bg-primary/5 space-y-3">
+                        <p className="text-xs font-semibold text-primary uppercase tracking-wide">New Build Details</p>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <FieldLabel>Construction Phase</FieldLabel>
+                            <Select value={form.construction_status} onChange={e => set("construction_status", e.target.value)}>
+                              <option value="">Select phase…</option>
+                              <option value="planning">📋 Planning / Permits</option>
+                              <option value="foundation">🏗️ Foundation stage</option>
+                              <option value="under_construction">🧱 Under construction</option>
+                              <option value="topping_out">🏛️ Topping out (structure done)</option>
+                              <option value="shell_complete">🪟 Shell complete (fitting out)</option>
+                              <option value="new">✅ Completed / New</option>
+                            </Select>
+                            <p className="text-[11px] text-muted-foreground mt-0.5">Shown on the project page with a progress indicator</p>
+                          </div>
+                          <div>
+                            <FieldLabel>Estimated Delivery Year</FieldLabel>
+                            <Input
+                              type="number"
+                              placeholder={String(new Date().getFullYear() + 1)}
+                              value={form.year_built}
+                              onChange={e => set("year_built", e.target.value)}
+                            />
+                            <p className="text-[11px] text-muted-foreground mt-0.5">Shown as "Expected completion"</p>
+                          </div>
+                        </div>
+                        <div className="rounded-lg bg-background/60 border border-border px-3 py-2 text-xs text-muted-foreground flex items-start gap-2">
+                          <Info className="w-3.5 h-3.5 shrink-0 mt-0.5 text-primary" />
+                          <span>Your listing will appear in the <strong className="text-foreground">New Builds</strong> section with a dedicated project showcase page. Add floor plan images in the Photos step.</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )}
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" checked={form.is_off_market} onChange={() => toggle("is_off_market")} className="rounded border-border" />

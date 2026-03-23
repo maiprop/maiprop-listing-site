@@ -1,4 +1,5 @@
-import { useState, useCallback, useRef, useEffect, forwardRef } from "react";
+import { useState, useCallback, useRef, useEffect, forwardRef, useMemo, lazy, Suspense } from "react";
+import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import { useSearchParams, Link } from "react-router-dom";
 import {
@@ -11,8 +12,8 @@ import { Navbar } from "@/components/Navbar";
 
 import { PropertyCard } from "@/components/PropertyCard";
 import { Footer } from "@/components/Footer";
-import { MapView } from "@/components/MapView";
-import { CompareDrawer } from "@/components/CompareDrawer";
+const MapView = lazy(() => import("@/components/MapView").then(m => ({ default: m.MapView })));
+const CompareDrawer = lazy(() => import("@/components/CompareDrawer").then(m => ({ default: m.CompareDrawer })));
 import { SaveSearchModal } from "@/components/SaveSearchModal";
 import { AISearchBar } from "@/components/AISearchBar";
 
@@ -21,7 +22,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useCookieConsent } from "@/hooks/useCookieConsent";
 import { PROPERTY_GROUPS, PROPERTY_TYPE_MAP, TYPE_STYLE_FILTERS, getTypeLabel, getSubtypeLabel, type PropertyTypeKey } from "@/lib/propertyTypes";
 import {
-  ENERGY_CLASSES, HEATING_TYPES, CONSTRUCTION_STATUSES, ROAD_TYPES, SLOPE_TYPES,
+  HEATING_TYPES, CONSTRUCTION_STATUSES, ROAD_TYPES, SLOPE_TYPES,
 } from "@/lib/filterConfig";
 import { useSmartFilters } from "@/hooks/useSmartFilters";
 import { dbListingToCard } from "@/lib/listingUtils";
@@ -47,22 +48,29 @@ const rentPriceRanges = [
 ];
 
 const listingTypeOptions = [
-  { label: "All", value: "", icon: "🏘️" },
-  { label: "Buy", value: "sale", icon: "🏷️" },
-  { label: "Rent", value: "rent", icon: "🔑" },
+  { labelKey: "listingsPage.listingTypes.all", value: "", icon: "🏘️" },
+  { labelKey: "listingsPage.listingTypes.buy", value: "sale", icon: "🏷️" },
+  { labelKey: "listingsPage.listingTypes.rent", value: "rent", icon: "🔑" },
 ];
 
 const sortOptions = [
-  { label: "Most Relevant", value: "relevant" },
-  { label: "⭐ Featured First", value: "featured" },
-  { label: "Price: Low → High", value: "price-asc" },
-  { label: "Price: High → Low", value: "price-desc" },
-  { label: "Newest First", value: "newest" },
-  { label: "AI Score", value: "ai-score" },
-  { label: "Most Viewed", value: "views" },
+  { labelKey: "listingsPage.sortOptions.relevant", value: "relevant" },
+  { labelKey: "listingsPage.sortOptions.featured", value: "featured" },
+  { labelKey: "listingsPage.sortOptions.priceAsc", value: "price-asc" },
+  { labelKey: "listingsPage.sortOptions.priceDesc", value: "price-desc" },
+  { labelKey: "listingsPage.sortOptions.newest", value: "newest" },
+  { labelKey: "listingsPage.sortOptions.aiScore", value: "ai-score" },
+  { labelKey: "listingsPage.sortOptions.mostViewed", value: "views" },
 ];
 
 
+
+const bathsOpts = ["1", "2", "3", "4"].map(v => ({ label: v, value: v }));
+const floorOpts = ["-1", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10+"].map(v => ({
+  label: v === "-1" ? "Basement" : v === "0" ? "Ground" : v,
+  value: v,
+}));
+const yearOpts = ["1950", "1960", "1970", "1980", "1990", "2000", "2005", "2010", "2015", "2018", "2020", "2022", "2024", "2025"].map(v => ({ label: v, value: v }));
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -77,40 +85,6 @@ function listingToCard(l: any) {
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
-
-function RangeSelector({
-  label, value, onChange, options,
-}: {
-  label: string;
-  value: [string, string];
-  onChange: (v: [string, string]) => void;
-  options: { label: string; value: string }[];
-}) {
-  return (
-    <div>
-      <label className="text-xs text-muted-foreground font-medium mb-2 block">{label}</label>
-      <div className="flex items-center gap-1">
-        <select
-          value={value[0]}
-          onChange={e => onChange([e.target.value, value[1]])}
-          className="flex-1 bg-secondary border border-border rounded-lg px-2 py-2 text-xs text-foreground outline-none focus:border-primary appearance-none"
-        >
-          <option value="">Min</option>
-          {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
-        <span className="text-muted-foreground text-xs">–</span>
-        <select
-          value={value[1]}
-          onChange={e => onChange([value[0], e.target.value])}
-          className="flex-1 bg-secondary border border-border rounded-lg px-2 py-2 text-xs text-foreground outline-none focus:border-primary appearance-none"
-        >
-          <option value="">Max</option>
-          {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
-      </div>
-    </div>
-  );
-}
 
 const FilterChip = forwardRef<HTMLButtonElement, {
   active: boolean; onClick: () => void; children: React.ReactNode;
@@ -164,6 +138,7 @@ function usePortalDropdown() {
 }
 
 function ListingTypeButton({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const { t } = useTranslation();
   const { open, setOpen, pos, triggerRef, portalRef, toggle } = usePortalDropdown();
   const current = listingTypeOptions.find(o => o.value === value) || listingTypeOptions[0];
 
@@ -178,7 +153,7 @@ function ListingTypeButton({ value, onChange }: { value: string; onChange: (v: s
         }`}
       >
         <span>{current.icon}</span>
-        <span>{current.label}</span>
+        <span>{t(current.labelKey)}</span>
         <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && createPortal(
@@ -196,7 +171,7 @@ function ListingTypeButton({ value, onChange }: { value: string; onChange: (v: s
               }`}
             >
               <span>{o.icon}</span>
-              <span>{o.label}</span>
+              <span>{t(o.labelKey)}</span>
               {value === o.value && <Check className="w-3.5 h-3.5 ml-auto" />}
             </button>
           ))}
@@ -209,12 +184,19 @@ function ListingTypeButton({ value, onChange }: { value: string; onChange: (v: s
 
 // ─── PropertyTypeButton ───────────────────────────────────────────────────────
 
+const PROPERTY_GROUP_TRANSLATION_KEYS: Record<string, string> = {
+  residence: "listingsPage.propertyTypeGroups.residential",
+  commercial: "listingsPage.propertyTypeGroups.commercial",
+  land: "listingsPage.propertyTypeGroups.land",
+};
+
 function PropertyTypeButton({
   value, subtype, onChange,
 }: {
   value: string; subtype: string;
   onChange: (type: string, subtype: string) => void;
 }) {
+  const { t } = useTranslation();
   const { open, setOpen, pos, triggerRef, portalRef, toggle } = usePortalDropdown();
   const commercialType = PROPERTY_TYPE_MAP["commercial"];
   const currentType = value ? PROPERTY_TYPE_MAP[value as PropertyTypeKey] : null;
@@ -223,7 +205,7 @@ function PropertyTypeButton({
     ? `${currentType!.emoji} ${currentSubtype.label}`
     : currentType
     ? `${currentType.emoji} ${currentType.label}`
-    : "🏘️ All Types";
+    : `🏘️ ${t("listings.filters.allTypes")}`;
 
   return (
     <div ref={triggerRef} className="relative shrink-0">
@@ -250,14 +232,14 @@ function PropertyTypeButton({
               !value ? "text-primary bg-primary/10" : "text-foreground"
             }`}
           >
-            <Building2 className="w-4 h-4 shrink-0" /><span className="font-medium">All Types</span>
+            <Building2 className="w-4 h-4 shrink-0" /><span className="font-medium">{t("listings.filters.allTypes")}</span>
             {!value && <Check className="w-3.5 h-3.5 ml-auto" />}
           </button>
           <div className="h-px bg-border mx-2" />
           {PROPERTY_GROUPS.map((group, gi) => (
             <div key={group.id}>
               <div className="flex items-center gap-2 px-3 pt-2.5 pb-1">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{group.label}</span>
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t(PROPERTY_GROUP_TRANSLATION_KEYS[group.id] || group.label)}</span>
               </div>
               {group.id === "commercial" ? (
                 commercialType.subtypes.map(st => {
@@ -341,6 +323,7 @@ function MapGate({ consent, accept, children, height }: {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function Listings() {
+  const { t } = useTranslation();
 
   const [searchParams, setSearchParams] = useSearchParams();
   const [viewMode, setViewMode] = useState<"grid" | "split" | "map">("grid");
@@ -445,7 +428,6 @@ export default function Listings() {
     }
   }, [isError, error]);
 
-  const hasActiveFilters = !!(searchQuery || selectedListingType || selectedType);
   const sourceListings = dbListings.map(listingToCard);
 
   // Client-side filtering
@@ -553,12 +535,12 @@ export default function Listings() {
 
   // Contextual filter options — buy uses purchase context, rent uses rental context
   const isRent = selectedListingType === "rent";
-  const bedsOpts = isRent
-    ? [{ label: "Studio", value: "0" }, ...["1", "2", "3", "4", "5"].map(v => ({ label: `${v} bed`, value: v }))]
-    : ["1", "2", "3", "4", "5", "6"].map(v => ({ label: v, value: v }));
-  const bathsOpts = ["1", "2", "3", "4"].map(v => ({ label: v, value: v }));
-  const floorOpts = ["-1", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10+"].map(v => ({ label: v === "-1" ? "Basement" : v === "0" ? "Ground" : v, value: v }));
-  const yearOpts = ["1950", "1960", "1970", "1980", "1990", "2000", "2005", "2010", "2015", "2018", "2020", "2022", "2024", "2025"].map(v => ({ label: v, value: v }));
+  const bedsOpts = useMemo(
+    () => isRent
+      ? [{ label: "Studio", value: "0" }, ...["1", "2", "3", "4", "5"].map(v => ({ label: `${v} bed`, value: v }))]
+      : ["1", "2", "3", "4", "5", "6"].map(v => ({ label: v, value: v })),
+    [isRent]
+  );
 
   return (
     <div className="min-h-screen bg-background pb-bottom-nav lg:pb-0">
@@ -585,7 +567,7 @@ export default function Listings() {
                           : "text-muted-foreground hover:text-foreground"
                       }`}
                     >
-                      {o.label}
+                      {t(o.labelKey)}
                     </button>
                   ))}
                 </div>
@@ -630,30 +612,30 @@ export default function Listings() {
                 <div className="border border-border rounded-xl bg-card/95 p-4 space-y-4">
                   {/* Property type */}
                   <div className="space-y-1.5">
-                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Property Type</span>
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("listings.filters.propertyType")}</span>
                     <div className="flex gap-1.5 flex-wrap">
                       {[
-                        { value: "", label: "All" },
-                        { value: "apartment", label: "Apartment" },
-                        { value: "house", label: "House" },
-                        { value: "villa", label: "Villa" },
-                        { value: "land", label: "Land" },
-                        { value: "commercial", label: "Commercial" },
-                        { value: "office", label: "Office" },
-                      ].map(t => (
-                        <button key={t.value}
-                          onClick={() => { setParam("type", t.value); setParam("subtype", ""); }}
+                        { value: "", label: t("listings.filters.allTypes") },
+                        { value: "apartment", label: t("listings.propertyTypes.apartment") },
+                        { value: "house", label: t("listings.propertyTypes.house") },
+                        { value: "villa", label: t("listings.propertyTypes.villa") },
+                        { value: "land", label: t("listings.propertyTypes.land") },
+                        { value: "commercial", label: t("listings.propertyTypes.commercial") },
+                        { value: "office", label: t("listings.propertyTypes.office") },
+                      ].map(typeOpt => (
+                        <button key={typeOpt.value}
+                          onClick={() => { setParam("type", typeOpt.value); setParam("subtype", ""); }}
                           className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors whitespace-nowrap ${
-                            selectedType === t.value
+                            selectedType === typeOpt.value
                               ? "bg-primary text-primary-foreground border-primary"
                               : "bg-secondary text-muted-foreground border-border hover:border-primary/40"
-                          }`}>{t.label}</button>
+                          }`}>{typeOpt.label}</button>
                       ))}
                     </div>
                   </div>
                   {/* Price */}
                   <div className="space-y-1.5">
-                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Price</span>
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("listings.filters.priceRange")}</span>
                     <div className="flex gap-1.5 flex-wrap">
                       {(selectedListingType === "rent" ? rentPriceRanges : buyPriceRanges).map(o => (
                         <button key={o.value}
@@ -680,7 +662,7 @@ export default function Listings() {
                   </div>
                   {/* Bedrooms */}
                   <div className="space-y-1.5">
-                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Bedrooms</span>
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("listings.filters.bedrooms")}</span>
                     <div className="flex gap-1.5 flex-wrap">
                       {["", "1", "2", "3", "4", "5"].map(b => (
                         <button key={b}
@@ -689,7 +671,7 @@ export default function Listings() {
                             bedsRange[0] === b
                               ? "bg-primary text-primary-foreground border-primary"
                               : "bg-secondary text-muted-foreground border-border hover:border-primary/40"
-                          }`}>{b === "" ? "Any" : `${b}+`}</button>
+                          }`}>{b === "" ? t("listings.filters.allTypes") : `${b}+`}</button>
                       ))}
                     </div>
                   </div>
@@ -775,7 +757,7 @@ export default function Listings() {
               <div className="relative">
                 <select value={selectedSort} onChange={e => setParam("sort", e.target.value)}
                   className="appearance-none bg-secondary border border-border rounded-xl px-3 py-2.5 pr-7 text-sm text-foreground cursor-pointer outline-none focus:border-primary">
-                  {sortOptions.map(o => <option key={o.value} value={o.value} className="bg-card">{o.label}</option>)}
+                  {sortOptions.map(o => <option key={o.value} value={o.value} className="bg-card">{t(o.labelKey)}</option>)}
                 </select>
                 <ArrowUpDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
               </div>
@@ -793,7 +775,7 @@ export default function Listings() {
                 <Button variant="outline" className="border-border gap-2 shrink-0"
                   onClick={() => setShowSaveModal(true)}>
                   <Bookmark className="w-4 h-4" />
-                  Save Search
+                  {t("listings.saveSearch")}
                 </Button>
               )}
               <div className="flex rounded-xl border border-border overflow-hidden shrink-0">
@@ -1216,7 +1198,7 @@ export default function Listings() {
                 </Button>
                 <Button size="sm" variant="ghost" className="text-muted-foreground hover:text-foreground gap-1" onClick={clearAllFilters}>
                   <X className="w-3 h-3" />
-                  Reset All
+                  {t("listings.filters.reset")}
                 </Button>
               </div>
             </div>
@@ -1336,12 +1318,14 @@ export default function Listings() {
                 {/* Right: map — hidden on mobile when list tab active */}
                 <div className={`flex-1 ${mobileTab === "list" ? "hidden md:block" : "block"} md:h-full h-[calc(100vh-12rem)]`}>
                   <MapGate consent={consent} accept={accept} height="100%">
-                    <MapView
-                      listings={filtered}
-                      onVisibleListingsChange={setViewportIds}
-                      onPolygonFilter={ids => { setPolygonFilterIds(ids); }}
-                      height="100%"
-                    />
+                    <Suspense fallback={<div className="h-64 bg-muted animate-pulse rounded-lg" />}>
+                      <MapView
+                        listings={filtered}
+                        onVisibleListingsChange={setViewportIds}
+                        onPolygonFilter={ids => { setPolygonFilterIds(ids); }}
+                        height="100%"
+                      />
+                    </Suspense>
                   </MapGate>
                 </div>
               </div>
@@ -1361,11 +1345,11 @@ export default function Listings() {
             ) : filtered.length === 0 ? (
               <div className="glass-card rounded-xl p-16 text-center">
                 <Building2 className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-                <p className="font-semibold">No properties found</p>
-                <p className="text-sm text-muted-foreground mt-1">Try adjusting your filters</p>
+                <p className="font-semibold">{t("listings.noResults")}</p>
+                <p className="text-sm text-muted-foreground mt-1">{t("listings.noResultsSubtitle")}</p>
                 {activeFilterCount > 0 && (
                   <Button size="sm" variant="outline" className="mt-4" onClick={clearAllFilters}>
-                    Clear Filters
+                    {t("listings.filters.reset")}
                   </Button>
                 )}
               </div>
@@ -1395,11 +1379,13 @@ export default function Listings() {
           ) : (
             /* Full map view */
             <MapGate consent={consent} accept={accept}>
-              <MapView
-                listings={filtered}
-                onVisibleListingsChange={setViewportIds}
-                onPolygonFilter={setPolygonFilterIds}
-              />
+              <Suspense fallback={<div className="h-64 bg-muted animate-pulse rounded-lg" />}>
+                <MapView
+                  listings={filtered}
+                  onVisibleListingsChange={setViewportIds}
+                  onPolygonFilter={setPolygonFilterIds}
+                />
+              </Suspense>
             </MapGate>
           )}
         </div>
@@ -1439,11 +1425,13 @@ export default function Listings() {
       </div>
 
       {/* Compare drawer */}
-      <CompareDrawer
-        listings={compareList}
-        onRemove={id => setCompareList(prev => prev.filter(l => l.id !== id))}
-        onClear={() => setCompareList([])}
-      />
+      <Suspense fallback={null}>
+        <CompareDrawer
+          listings={compareList}
+          onRemove={id => setCompareList(prev => prev.filter(l => l.id !== id))}
+          onClear={() => setCompareList([])}
+        />
+      </Suspense>
 
       {/* Save search modal */}
       {showSaveModal && (

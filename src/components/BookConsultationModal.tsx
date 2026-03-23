@@ -7,7 +7,6 @@ import { useSubmitConsultation } from "@/hooks/useConsultations";
 import { useProfessionalServices, useProfessionalAvailability } from "@/hooks/useProfessionalServices";
 import { toast } from "sonner";
 
-const DAYS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const PRICING_LABELS: Record<string, string> = { hourly: "/hr", daily: "/day", fixed: "fixed" };
 
 function getAvailableDays(availability: { day_of_week: number; start_time: string; end_time: string }[], count = 14) {

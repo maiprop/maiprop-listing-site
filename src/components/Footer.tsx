@@ -1,7 +1,9 @@
 import { Link } from "react-router-dom";
 import { Facebook, Twitter, Instagram, Linkedin, Youtube, Mail, Phone, MapPin, ExternalLink } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 export function Footer() {
+  const { t } = useTranslation();
   return (
     <footer className="bg-card border-t border-border">
       <div className="container py-10 sm:py-16">
@@ -9,7 +11,7 @@ export function Footer() {
           {/* Brand */}
           <div className="col-span-2 lg:col-span-2">
             <p className="text-sm text-muted-foreground max-w-xs leading-relaxed mb-4">
-              Greece's most advanced real estate platform. Data-driven listings, Greek auctions, instant offers, and AI-powered market insights.
+              {t("footerFull.tagline")}
             </p>
             <div className="flex items-center gap-2">
               {["Facebook", "Twitter", "Instagram", "LinkedIn", "YouTube"].map((name, i) => {
@@ -25,16 +27,16 @@ export function Footer() {
 
           {/* Platform */}
           <div>
-            <h4 className="font-display font-semibold text-sm mb-3">Platform</h4>
+            <h4 className="font-display font-semibold text-sm mb-3">{t("footerFull.platform.title")}</h4>
             <ul className="space-y-2">
               {[
-              { label: "Buy Property", to: "/listings?listing_type=sale" },
-              { label: "Rent Property", to: "/listings?listing_type=rent" },
-              { label: "Greek Auctions", to: "/auctions" },
-              { label: "Quick Sale™", to: "/firesale" },
-              { label: "Professionals", to: "/professionals" },
-              { label: "Open Houses", to: "/open-houses" },
-              { label: "Pricing", to: "/pricing" }].
+              { label: t("footerFull.platform.buy"), to: "/listings?listing_type=sale" },
+              { label: t("footerFull.platform.rent"), to: "/listings?listing_type=rent" },
+              { label: t("footerFull.platform.auctions"), to: "/auctions" },
+              { label: t("footerFull.platform.quickSale"), to: "/firesale" },
+              { label: t("footerFull.platform.professionals"), to: "/professionals" },
+              { label: t("footerFull.platform.openHouses"), to: "/open-houses" },
+              { label: t("footerFull.platform.pricing"), to: "/pricing" }].
               map((item) =>
               <li key={item.label}>
                   <Link to={item.to} className="text-sm text-muted-foreground hover:text-foreground transition-colors">{item.label}</Link>
@@ -45,18 +47,18 @@ export function Footer() {
 
           {/* Professionals */}
           <div>
-            <h4 className="font-display font-semibold text-sm mb-3">Professionals</h4>
+            <h4 className="font-display font-semibold text-sm mb-3">{t("footerFull.professionals.title")}</h4>
             <ul className="space-y-2">
               {[
-              { label: "Real Estate Agents", to: "/professionals?category=real_estate_agent" },
-              { label: "Legal & Title", to: "/professionals?category=lawyer" },
-              { label: "Finance & Insurance", to: "/professionals?category=financial_advisor" },
-              { label: "Design & Planning", to: "/professionals?category=architect" },
-              { label: "Construction & Trades", to: "/professionals?category=contractor" },
-              { label: "Consultants & Compliance", to: "/professionals?category=utility_certification_provider" },
-              { label: "Property & Hospitality", to: "/professionals?category=property_manager" },
-              { label: "Advisory & Tech", to: "/professionals?category=relocation_immigration_consultant" },
-              { label: "Join as Pro", to: "/signup" }].
+              { label: t("footerFull.professionals.agents"), to: "/professionals?category=real_estate_agent" },
+              { label: t("footerFull.professionals.legal"), to: "/professionals?category=lawyer" },
+              { label: t("footerFull.professionals.finance"), to: "/professionals?category=financial_advisor" },
+              { label: t("footerFull.professionals.design"), to: "/professionals?category=architect" },
+              { label: t("footerFull.professionals.construction"), to: "/professionals?category=contractor" },
+              { label: t("footerFull.professionals.consultants"), to: "/professionals?category=utility_certification_provider" },
+              { label: t("footerFull.professionals.hospitality"), to: "/professionals?category=property_manager" },
+              { label: t("footerFull.professionals.advisory"), to: "/professionals?category=relocation_immigration_consultant" },
+              { label: t("footerFull.professionals.join"), to: "/signup" }].
               map((item) =>
               <li key={item.label}>
                   <Link to={item.to} className="text-sm text-muted-foreground hover:text-foreground transition-colors">{item.label}</Link>
@@ -67,12 +69,12 @@ export function Footer() {
 
           {/* Legal + Contact */}
           <div>
-            <h4 className="font-display font-semibold text-sm mb-3">Legal</h4>
+            <h4 className="font-display font-semibold text-sm mb-3">{t("footerFull.legal.title")}</h4>
             <ul className="space-y-2">
               {[
-              { label: "Privacy Policy", to: "/privacy-policy" },
-              { label: "Terms of Service", to: "/terms-of-service" },
-              { label: "Cookie Policy", to: "/cookie-policy" }].
+              { label: t("footerFull.legal.privacy"), to: "/privacy-policy" },
+              { label: t("footerFull.legal.terms"), to: "/terms-of-service" },
+              { label: t("footerFull.legal.cookies"), to: "/cookie-policy" }].
               map((item) =>
               <li key={item.label}>
                   <Link to={item.to} className="text-sm text-muted-foreground hover:text-foreground transition-colors">{item.label}</Link>
@@ -87,7 +89,7 @@ export function Footer() {
                 <Phone className="w-3 h-3" /> +30 210 123 4567
               </a>
               <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                <MapPin className="w-3 h-3" /> Athens, Greece
+                <MapPin className="w-3 h-3" /> {t("footerFull.location")}
               </span>
             </div>
           </div>
@@ -139,7 +141,7 @@ export function Footer() {
         </div>
 
         <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-muted-foreground">
-          <span>© 2026 maiProp. All rights reserved. Powered by mAI prop OS.</span>
+          <span>{t("footer.copyright", { year: new Date().getFullYear() })}</span>
           <div className="flex items-center gap-1">
             <span>Powered by</span>
             <a href="https://os.maiprop.co" target="_blank" rel="noreferrer" className="flex items-center gap-1 text-primary hover:underline">

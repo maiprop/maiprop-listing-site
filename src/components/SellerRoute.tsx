@@ -1,7 +1,8 @@
-import { Navigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { isSellSideRole, isPlatformAdmin } from "@/lib/authUtils";
 import { ProtectedRoute } from "./ProtectedRoute";
+import { Button } from "@/components/ui/button";
 
 /** Protects listing-creation routes. Sell-side roles (agent, seller_landlord, developer, institutional) or platform admin can access. */
 export function SellerRoute({ children }: { children: React.ReactNode }) {
@@ -24,7 +25,29 @@ function SellerGate({ children }: { children: React.ReactNode }) {
   }
 
   if (!isSellSideRole(profile) && !isPlatformAdmin(profile)) {
-    return <Navigate to="/dashboard" replace />;
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center px-4">
+        <div className="max-w-md w-full text-center space-y-5">
+          <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
+            <span className="text-2xl">🏠</span>
+          </div>
+          <div>
+            <h1 className="font-display text-2xl font-bold mb-2">Seller or Agent Account Required</h1>
+            <p className="text-muted-foreground text-sm">
+              Creating listings requires an Agent, Seller, Developer, or Institutional account. Your current account type does not have listing creation access.
+            </p>
+          </div>
+          <div className="flex gap-3 justify-center">
+            <Button asChild>
+              <Link to="/onboarding">Upgrade Account Type</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link to="/dashboard">Back to Dashboard</Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return <>{children}</>;

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { isPlatformAdmin } from "@/lib/authUtils";
-import { SlidersHorizontal, Save, Plus, Loader2, Shield, Euro, Trash2, Sparkles, X as XIcon, CreditCard } from "lucide-react";
+import { SlidersHorizontal, Save, Plus, Loader2, Shield, Euro, Trash2, Sparkles, X as XIcon, CreditCard, RefreshCw, CheckCircle2, AlertCircle } from "lucide-react";
 
 type PricingConfig = {
   id: string;
@@ -28,47 +28,74 @@ type PricingConfig = {
 
 /** Predefined sections so admin can manage all pricings: users, professionals, agents, valuation, investors, ad-hoc */
 const PRICING_SECTIONS = [
-  { key: "users", label: "Users (consumers)", module: "user_subscription", audience: "user" },
-  { key: "professionals", label: "Professionals", module: "professional_subscription", audience: "professional" },
-  { key: "agents", label: "Agents", module: "agent_subscription", audience: "agent" },
-  { key: "valuation", label: "Valuation reports", module: "valuation_reports", audience: "user" },
-  { key: "adhoc_user", label: "Ad-hoc (listings / users)", module: "adhoc_charges", audience: "user" },
-  { key: "adhoc_pro", label: "Ad-hoc (professionals)", module: "adhoc_charges", audience: "professional" },
+  { key: "users",       label: "Users (consumers)",         module: "user_subscription",         audience: "user" },
+  { key: "agents",      label: "Agents",                    module: "agent_subscription",         audience: "agent" },
+  { key: "developers",  label: "Developers",                module: "developer_subscription",     audience: "agent" },
+  { key: "professionals",label: "Professionals",            module: "professional_subscription",  audience: "professional" },
+  { key: "investors",   label: "Investors",                 module: "investor_subscription",      audience: "investor" },
+  { key: "valuation",   label: "Valuation / AI reports",   module: "valuation_reports",          audience: "user" },
+  { key: "adhoc_user",  label: "Ad-hoc — listings / users",module: "adhoc_charges",              audience: "user" },
+  { key: "adhoc_pro",   label: "Ad-hoc — professionals",   module: "adhoc_charges",              audience: "professional" },
+  { key: "os_data",     label: "OS Data Products (B2B)",   module: "os_data_products",           audience: "user" },
 ] as const;
 
 const MODULES = [
   "user_subscription",
   "professional_subscription",
   "agent_subscription",
+  "developer_subscription",
+  "investor_subscription",
   "valuation_reports",
   "firesale_dashboard",
   "adhoc_charges",
   "pro_tools",
   "listings",
+  "os_data_products",
 ] as const;
 
-const AUDIENCES = ["user", "professional", "agent"] as const;
+const AUDIENCES = ["user", "professional", "agent", "investor"] as const;
 
-/** Default rows to seed when admin clicks "Seed default pricing" — aligned with Pricing page and all consumers */
+/**
+ * Default pricing — Greek market rates (aligned with /pricing page).
+ * Participant Pro €29/mo · Agent Pro €149/mo · Developer Pro €129/mo
+ * Professional Pro €69/mo · Investor Private €49/mo · Institutional €199/mo
+ */
 const DEFAULT_SEED: Omit<PricingConfig, "id" | "created_at" | "updated_at">[] = [
-  // User / Buyer / Seller (Pricing page)
-  { key: "free", label: "Free", description: "Basic search & limited features", audience: "user", module: "user_subscription", unit: "monthly", currency: "EUR", amount: 0, is_active: true, sort_order: 1, metadata: {} },
-  { key: "pro", label: "mAI Prop Pro (Buyer)", description: "AI-powered investor intelligence", audience: "user", module: "user_subscription", unit: "monthly", currency: "EUR", amount: 29, is_active: true, sort_order: 2, metadata: {} },
-  { key: "seller_pro", label: "Seller Pro", description: "Unlimited listings, AI assist & analytics", audience: "user", module: "user_subscription", unit: "monthly", currency: "EUR", amount: 19, is_active: true, sort_order: 3, metadata: {} },
-  // Professionals (Pricing page)
-  { key: "professional_basic", label: "Pro Plan", description: "Priority leads, booking page & AI tools", audience: "professional", module: "professional_subscription", unit: "monthly", currency: "EUR", amount: 49, is_active: true, sort_order: 1, metadata: {} },
-  { key: "professional_premium", label: "Premium", description: "Full pro tools & API", audience: "professional", module: "professional_subscription", unit: "monthly", currency: "EUR", amount: 149, is_active: true, sort_order: 2, metadata: {} },
-  // Agents (Pricing page: Agency Pro, Developer Pro)
-  { key: "agent_basic", label: "Agency Pro", description: "Unlimited listings, CRM & analytics", audience: "agent", module: "agent_subscription", unit: "monthly", currency: "EUR", amount: 89, is_active: true, sort_order: 1, metadata: {} },
-  { key: "agent_plus", label: "Agent Plus", description: "Unlimited listings & valuation", audience: "agent", module: "agent_subscription", unit: "monthly", currency: "EUR", amount: 199, is_active: true, sort_order: 2, metadata: {} },
-  // Valuation reports (PropertyDetail, etc.)
-  { key: "valuation_single", label: "Single report", description: "One-off valuation report", audience: "user", module: "valuation_reports", unit: "per_report", currency: "EUR", amount: 29, is_active: true, sort_order: 1, metadata: {} },
-  { key: "valuation_bundle", label: "Bundle (5 reports)", description: "5 reports pack", audience: "user", module: "valuation_reports", unit: "bundle", currency: "EUR", amount: 99, is_active: true, sort_order: 2, metadata: {} },
-  // Ad-hoc charges
-  { key: "extra_listing", label: "Extra ad listing", description: "Additional listing beyond plan limit", audience: "user", module: "adhoc_charges", unit: "per_listing", currency: "EUR", amount: 9, is_active: true, sort_order: 1, metadata: {} },
-  { key: "featured_listing", label: "Featured listing", description: "Highlight listing in search / homepage", audience: "user", module: "adhoc_charges", unit: "per_listing", currency: "EUR", amount: 19, is_active: true, sort_order: 2, metadata: {} },
-  { key: "premium_ad", label: "Premium ad", description: "Premium placement for a listing", audience: "user", module: "adhoc_charges", unit: "per_listing", currency: "EUR", amount: 29, is_active: true, sort_order: 3, metadata: {} },
-  { key: "featured_professional", label: "Featured professional", description: "Featured profile / badge for professionals", audience: "professional", module: "adhoc_charges", unit: "monthly", currency: "EUR", amount: 49, is_active: true, sort_order: 1, metadata: {} },
+  // ── Participants (Buyer / Seller) ─────────────────────────────────────────
+  { key: "participant_free",          label: "Free",                    description: "Basic search, limited features",                                           audience: "user",         module: "user_subscription",        unit: "monthly",    currency: "EUR", amount: 0,    is_active: true, sort_order: 1,  metadata: {} },
+  { key: "pro",                       label: "Participant Pro",          description: "AI insights, analytics, priority matching & up to 5 listings",             audience: "user",         module: "user_subscription",        unit: "monthly",    currency: "EUR", amount: 29,   is_active: true, sort_order: 2,  metadata: {} },
+  // ── Agents ────────────────────────────────────────────────────────────────
+  { key: "agent_free",                label: "Agent Free",              description: "Up to 5 active listings + basic tools",                                    audience: "agent",        module: "agent_subscription",       unit: "monthly",    currency: "EUR", amount: 0,    is_active: true, sort_order: 1,  metadata: {} },
+  { key: "agent_basic",               label: "Agent Pro",               description: "Unlimited listings, full CRM, AI tools, analytics & 10 priority ads",      audience: "agent",        module: "agent_subscription",       unit: "monthly",    currency: "EUR", amount: 149,  is_active: true, sort_order: 2,  metadata: {} },
+  { key: "agency_starter",            label: "Agency Starter",          description: "Up to 3 agent seats, shared listing pool, branded profile",                audience: "agent",        module: "agent_subscription",       unit: "monthly",    currency: "EUR", amount: 249,  is_active: true, sort_order: 3,  metadata: {} },
+  { key: "agency_growth",             label: "Agency Growth",           description: "Up to 10 seats + priority placement & dedicated manager",                  audience: "agent",        module: "agent_subscription",       unit: "monthly",    currency: "EUR", amount: 449,  is_active: true, sort_order: 4,  metadata: {} },
+  { key: "agency_enterprise",         label: "Agency Enterprise",       description: "Unlimited seats + white-label, SLA & dedicated support",                   audience: "agent",        module: "agent_subscription",       unit: "monthly",    currency: "EUR", amount: 749,  is_active: true, sort_order: 5,  metadata: {} },
+  // ── Developers ────────────────────────────────────────────────────────────
+  { key: "developer_pro",             label: "Developer Pro",           description: "Unlimited projects, new build showcase, pre-sale & floor plans",            audience: "agent",        module: "developer_subscription",   unit: "monthly",    currency: "EUR", amount: 129,  is_active: true, sort_order: 1,  metadata: {} },
+  // ── Professionals (architects, lawyers, valuers) ──────────────────────────
+  { key: "professional_basic",        label: "Professional Pro",        description: "Priority leads, booking calendar, verified badge & AI tools",              audience: "professional", module: "professional_subscription", unit: "monthly",    currency: "EUR", amount: 69,   is_active: true, sort_order: 1,  metadata: {} },
+  { key: "professional_premium",      label: "Professional Premium",    description: "Full tools, API access & referral network",                                audience: "professional", module: "professional_subscription", unit: "monthly",    currency: "EUR", amount: 129,  is_active: true, sort_order: 2,  metadata: {} },
+  // ── Investors ─────────────────────────────────────────────────────────────
+  { key: "investor_private",          label: "Private Investor",        description: "Pre-market deal flow, OS auction routing, real-time alerts & yield tools", audience: "investor",     module: "investor_subscription",    unit: "monthly",    currency: "EUR", amount: 49,   is_active: true, sort_order: 1,  metadata: {} },
+  { key: "investor_institutional",    label: "Institutional Investor",  description: "Full deal pipeline, bulk view, OS market intelligence & dedicated manager", audience: "investor",     module: "investor_subscription",    unit: "monthly",    currency: "EUR", amount: 199,  is_active: true, sort_order: 2,  metadata: {} },
+  // ── Valuation / AI reports ────────────────────────────────────────────────
+  { key: "valuation_single",          label: "AI Valuation (single)",   description: "Full AI valuation: market comp, yield estimate & confidence score",        audience: "user",         module: "valuation_reports",        unit: "per_report", currency: "EUR", amount: 39,   is_active: true, sort_order: 1,  metadata: {} },
+  { key: "valuation_bundle",          label: "AI Valuation × 5",        description: "5 valuation reports — save 24% vs single",                                 audience: "user",         module: "valuation_reports",        unit: "bundle",     currency: "EUR", amount: 149,  is_active: true, sort_order: 2,  metadata: {} },
+  { key: "property_report_single",    label: "Property Report (single)","description": "Full property-level report: ownership history, liens & legal status",    audience: "user",         module: "valuation_reports",        unit: "per_report", currency: "EUR", amount: 49,   is_active: true, sort_order: 3,  metadata: {} },
+  { key: "neighbourhood_report_single",label:"Neighbourhood Report",    description: "Price trends, safety, POIs, development projects & investment outlook",    audience: "user",         module: "valuation_reports",        unit: "per_report", currency: "EUR", amount: 19,   is_active: true, sort_order: 4,  metadata: {} },
+  { key: "neighbourhood_report_bundle",label:"Neighbourhood Bundle × 3",description: "3 neighbourhood reports — save 31% vs single",                             audience: "user",         module: "valuation_reports",        unit: "bundle",     currency: "EUR", amount: 39,   is_active: true, sort_order: 5,  metadata: {} },
+  // ── Ad-hoc / add-on charges (users / sellers) ─────────────────────────────
+  { key: "extra_listing",             label: "Extra listing slot",      description: "One additional listing beyond plan quota",                                  audience: "user",         module: "adhoc_charges",            unit: "per_listing",currency: "EUR", amount: 12,   is_active: true, sort_order: 1,  metadata: {} },
+  { key: "featured_listing",          label: "Featured listing",        description: "Homepage carousel + search spotlight for 30 days (avg 3× more views)",     audience: "user",         module: "adhoc_charges",            unit: "per_listing",currency: "EUR", amount: 39,   is_active: true, sort_order: 2,  metadata: {} },
+  { key: "priority_placement",        label: "Priority placement",      description: "Pinned above all non-priority results in area & type for 30 days",          audience: "user",         module: "adhoc_charges",            unit: "per_listing",currency: "EUR", amount: 59,   is_active: true, sort_order: 3,  metadata: {} },
+  { key: "featured_priority_bundle",  label: "Featured + Priority",     description: "Both boosts combined — maximum exposure, bundled rate, 30 days",           audience: "user",         module: "adhoc_charges",            unit: "per_listing",currency: "EUR", amount: 79,   is_active: true, sort_order: 4,  metadata: {} },
+  // ── Ad-hoc / add-on charges (professionals) ───────────────────────────────
+  { key: "featured_professional",     label: "Featured professional",   description: "Top-of-category placement in Professional directory (monthly)",             audience: "professional", module: "adhoc_charges",            unit: "monthly",    currency: "EUR", amount: 59,   is_active: true, sort_order: 1,  metadata: {} },
+  { key: "extra_priority_ad",         label: "Extra priority ad",       description: "Push any listing to top of search for its area (per ad)",                  audience: "professional", module: "adhoc_charges",            unit: "per_ad",     currency: "EUR", amount: 8,    is_active: true, sort_order: 2,  metadata: {} },
+  // ── OS Data Products (B2B) ────────────────────────────────────────────────
+  { key: "market_intelligence",       label: "Market Intelligence",     description: "Greek property price index, transaction comps, trend reports by region",   audience: "user",         module: "os_data_products",         unit: "monthly",    currency: "EUR", amount: 199,  is_active: true, sort_order: 1,  metadata: {} },
+  { key: "avm_api",                   label: "AVM API",                 description: "Automated valuation endpoint for mortgage lenders, advisors & RICS valuers",audience: "user",         module: "os_data_products",         unit: "monthly",    currency: "EUR", amount: 299,  is_active: true, sort_order: 2,  metadata: {} },
+  { key: "auction_intelligence",      label: "Auction Intelligence",    description: "Full court auction schedule, minimum bids & outcome DB for legal pros",    audience: "user",         module: "os_data_products",         unit: "monthly",    currency: "EUR", amount: 149,  is_active: true, sort_order: 3,  metadata: {} },
 ];
 
 function usePricingConfigs() {
@@ -96,7 +123,7 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
   const { data: configs = [], isLoading } = usePricingConfigs();
   const mutation = useMutation({
     mutationFn: async (items: PricingConfig[]) => {
-      const payload = items.map(({ id, created_at, updated_at, ...rest }) => ({
+      const payload = items.map(({ id, created_at: _created_at, updated_at: _updated_at, ...rest }) => ({
         id,
         ...rest,
         metadata: (rest.metadata ?? {}) as any,
@@ -162,6 +189,9 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [addModule, setAddModule] = useState<string>(PRICING_SECTIONS[0].module);
   const [addAudience, setAddAudience] = useState<string>(PRICING_SECTIONS[0].audience);
+  const [stripeCreatingId, setStripeCreatingId] = useState<string | null>(null);
+  const [stripeSyncing, setStripeSyncing] = useState(false);
+  const [stripeSyncResult, setStripeSyncResult] = useState<{ summary: Record<string, number>; errors: string[] } | null>(null);
 
   if (!embed && !isAdmin) {
     return (
@@ -227,6 +257,25 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
     mutation.mutate(current);
   };
 
+  const handleSyncStripe = async () => {
+    setStripeSyncing(true);
+    setStripeSyncResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("sync-stripe-pricing", { body: {} });
+      if (error || data?.error) throw new Error(data?.error ?? error?.message ?? "Sync failed");
+      const results: Array<{ action: string; error?: string; key: string }> = data.results ?? [];
+      const errors = results.filter(r => r.action === "error").map(r => `${r.key}: ${r.error}`);
+      setStripeSyncResult({ summary: data.summary ?? {}, errors });
+      qc.invalidateQueries({ queryKey: ["admin-pricing-configs"] });
+      if (errors.length === 0) toast.success(`Stripe sync complete — ${data.summary?.created ?? 0} created, ${data.summary?.price_updated ?? 0} updated`);
+      else toast.error(`Sync finished with ${errors.length} error(s)`);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Stripe sync failed");
+    } finally {
+      setStripeSyncing(false);
+    }
+  };
+
   const handleFieldChange = (id: string, field: keyof PricingConfig, value: any) => {
     qc.setQueryData<PricingConfig[]>(["admin-pricing-configs"], (prev = []) =>
       prev.map((row) => (row.id === id ? { ...row, [field]: value } : row)),
@@ -243,7 +292,6 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
     );
   };
 
-  const [stripeCreatingId, setStripeCreatingId] = useState<string | null>(null);
   const handleCreateStripePrice = async (row: PricingConfig) => {
     if (row.amount <= 0) {
       toast.error("Set amount > 0 before creating Stripe price");
@@ -286,11 +334,15 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
             <div className="flex items-center gap-2 flex-wrap">
               <Button variant="outline" size="sm" className="gap-1.5" onClick={() => seedMutation.mutate()} disabled={seedMutation.isPending}>
                 {seedMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                Seed default pricing
+                Seed defaults
               </Button>
               <Button variant="outline" size="sm" className="gap-1.5" onClick={handleAddRow}>
                 <Plus className="w-3.5 h-3.5" />
                 Add item
+              </Button>
+              <Button size="sm" variant="outline" className="gap-1.5 border-primary/40 text-primary hover:bg-primary/10" onClick={handleSyncStripe} disabled={stripeSyncing || configs.length === 0}>
+                {stripeSyncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                Sync to Stripe
               </Button>
               <Button size="sm" className="gap-1.5" onClick={handleSave} disabled={mutation.isPending}>
                 {mutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
@@ -298,6 +350,22 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
               </Button>
             </div>
           </header>
+
+          {/* Stripe sync result banner */}
+          {stripeSyncResult && (
+            <div className={`rounded-xl border px-4 py-3 text-sm flex items-start gap-3 ${stripeSyncResult.errors.length ? "border-destructive/40 bg-destructive/5 text-destructive" : "border-brand-emerald/40 bg-brand-emerald/5 text-brand-emerald"}`}>
+              {stripeSyncResult.errors.length ? <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" /> : <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />}
+              <div className="flex-1">
+                <p className="font-medium">
+                  {stripeSyncResult.errors.length === 0
+                    ? `Stripe sync complete — ${stripeSyncResult.summary.created ?? 0} created, ${stripeSyncResult.summary.price_updated ?? 0} price updates, ${stripeSyncResult.summary.product_updated ?? 0} product updates, ${stripeSyncResult.summary.no_change ?? 0} unchanged`
+                    : `Stripe sync finished with errors`}
+                </p>
+                {stripeSyncResult.errors.map((e, i) => <p key={i} className="text-xs mt-1 opacity-80">{e}</p>)}
+              </div>
+              <button className="shrink-0 opacity-60 hover:opacity-100" onClick={() => setStripeSyncResult(null)}>×</button>
+            </div>
+          )}
 
           {isLoading ? (
             <div className="flex items-center justify-center py-20 gap-3 text-muted-foreground">

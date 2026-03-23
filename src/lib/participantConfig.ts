@@ -9,7 +9,9 @@ export type ParticipantId =
   | "seller"
   | "agent"
   | "developer"
-  | "professional";
+  | "professional"
+  | "investor"
+  | "institutional";
 
 /**
  * Top-level pricing audience — buyer and seller are merged into "participant".
@@ -17,24 +19,39 @@ export type ParticipantId =
  */
 export type PricingAudienceId = "participant" | "agent" | "developer" | "professional";
 
+function isValidParticipantId(v: string): v is ParticipantId {
+  return ["buyer", "seller", "agent", "developer", "professional", "investor", "institutional"].includes(v);
+}
+
 /**
  * Derives the participant type (dashboard/audience key) from a user profile.
- * Uses bio __type: prefix for sub-roles; falls back to role when bio is absent.
+ * Resolution order:
+ *   1. participant_type column (clean path, post-migration)
+ *   2. bio __type: prefix (legacy fallback)
+ *   3. role column (final fallback)
  */
 export function getParticipantTypeFromProfile(
-  profile: { role?: string; bio?: string | null } | null
+  profile: { role?: string; bio?: string | null; participant_type?: string | null } | null
 ): ParticipantId {
   if (!profile) return "buyer";
+  // Primary: dedicated column (clean path)
+  if (profile.participant_type && isValidParticipantId(profile.participant_type)) {
+    return profile.participant_type as ParticipantId;
+  }
+  // Fallback: bio __type: prefix (legacy)
   const bio = profile.bio ?? "";
-  if (bio.startsWith("__type:developer")) return "developer";
-  if (bio.startsWith("__type:seller")) return "seller";
+  if (bio.startsWith("__type:developer"))    return "developer";
+  if (bio.startsWith("__type:seller"))       return "seller";
   if (bio.startsWith("__type:professional")) return "professional";
-  if (bio.startsWith("__type:agent")) return "agent";
-  if (bio.startsWith("__type:buyer")) return "buyer";
+  if (bio.startsWith("__type:agent"))        return "agent";
+  if (bio.startsWith("__type:buyer"))        return "buyer";
+  // Fallback: role column
   if (profile.role === "admin" || profile.role === "agent") return "agent";
-  if (profile.role === "professional") return "professional";
+  if (profile.role === "professional")    return "professional";
   if (profile.role === "seller_landlord") return "seller";
-  if (profile.role === "developer") return "developer";
+  if (profile.role === "developer")       return "developer";
+  if (profile.role === "investor")        return "investor";
+  if (profile.role === "institutional")   return "institutional";
   return "buyer";
 }
 
@@ -50,11 +67,13 @@ export function getOwnerParticipantType(profile: { role?: string; bio?: string |
 }
 
 export const PARTICIPANT_LABELS: Record<ParticipantId, string> = {
-  buyer: "Buyer / Renter",
-  seller: "Seller / Landlord",
-  agent: "Agent",
-  developer: "Developer",
-  professional: "Professional",
+  buyer:         "Looking for Property",
+  seller:        "Selling / Renting Out",
+  agent:         "Agent / Agency",
+  developer:     "Developer / Builder",
+  professional:  "Service Professional",
+  investor:      "Investor",
+  institutional: "Institutional Investor",
 };
 
 /**
@@ -62,9 +81,19 @@ export const PARTICIPANT_LABELS: Record<ParticipantId, string> = {
  * Buyers and sellers are both "participant" on the pricing page.
  */
 export function getPricingAudienceFromProfile(
-  profile: { role?: string; bio?: string | null } | null
+  profile: { role?: string; bio?: string | null; participant_type?: string | null } | null
 ): PricingAudienceId {
   const pt = getParticipantTypeFromProfile(profile);
   if (pt === "buyer" || pt === "seller") return "participant";
   return pt;
+}
+
+/**
+ * Returns true when the user has opted into investor mode.
+ * investor_mode is a boolean feature toggle available to any participant type.
+ */
+export function isInvestorMode(
+  profile: { investor_mode?: boolean | null } | null
+): boolean {
+  return profile?.investor_mode === true;
 }

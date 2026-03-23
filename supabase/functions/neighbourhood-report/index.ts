@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
   if (authErr) return authErr;
 
   try {
-    const { city, address, region, propertyType, lat, lng } = await req.json();
+    const { city, address, region, propertyType: _propertyType, lat, lng } = await req.json();
 
     if (!city) {
       return new Response(
@@ -144,6 +144,7 @@ Rules:
         .replace(/,\s*]/g, "]")
         .replace(/\)\s*}/g, "}")
         .replace(/\)\s*,/g, ",")
+        // eslint-disable-next-line no-control-regex
         .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
       try {
         parsed = JSON.parse(repaired);

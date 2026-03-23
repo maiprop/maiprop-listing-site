@@ -6,11 +6,13 @@
 import { useState, useEffect } from "react";
 import {
   MapPin, Phone, Mail, RefreshCw, ChevronDown, Check, Save, FileText,
-  SendHorizonal, ThumbsUp, ThumbsDown, ArrowLeftRight, X as XIcon
+  SendHorizonal, ThumbsUp, ThumbsDown, ArrowLeftRight, X as XIcon,
+  Users, Crown, Wallet, ChevronUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useFiresaleInterestQueue, useUpdateInterestStatus, type InterestStatus } from "@/hooks/useFiresaleInterest";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   pending:     { label: "Pending",     color: "bg-brand-gold/15 text-brand-gold border-brand-gold/20" },
@@ -53,6 +55,117 @@ function parseSellerResponse(notes: string | null): { response: string | null; c
   const match = notes.match(/^\[SELLER:(\w+)\]\s*/);
   if (match) return { response: match[1], cleanNotes: notes.slice(match[0].length) };
   return { response: null, cleanNotes: notes };
+}
+
+const INTEREST_STATUS_CONFIG: Record<InterestStatus, { label: string; color: string }> = {
+  interested:  { label: "Interested",  color: "bg-primary/15 text-primary border-primary/20" },
+  shortlisted: { label: "Shortlisted", color: "bg-brand-gold/15 text-brand-gold border-brand-gold/20" },
+  engaged:     { label: "Engaged",     color: "bg-brand-emerald/15 text-brand-emerald border-brand-emerald/20" },
+  passed:      { label: "Passed",      color: "bg-muted text-muted-foreground border-border" },
+};
+
+function InvestorQueue({ dealId }: { dealId: string }) {
+  const [open, setOpen] = useState(false);
+  const { data: queue = [], isLoading } = useFiresaleInterestQueue(open ? dealId : undefined);
+  const updateStatus = useUpdateInterestStatus();
+
+  const total = queue.length;
+  const withPOF = queue.filter(e => e.proof_of_funds_url).length;
+
+  return (
+    <div className="rounded-xl border border-border overflow-hidden">
+      <button
+        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-muted/30 transition-colors"
+        onClick={() => setOpen(o => !o)}
+      >
+        <span className="flex items-center gap-2 text-sm font-semibold">
+          <Users className="w-4 h-4 text-primary" />
+          Investor Queue
+          {total > 0 && (
+            <span className="text-[10px] font-bold bg-primary/15 text-primary border border-primary/20 px-2 py-0.5 rounded-full">
+              {total} interested{withPOF > 0 ? ` · ${withPOF} POF` : ""}
+            </span>
+          )}
+        </span>
+        {open ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+      </button>
+
+      {open && (
+        <div className="border-t border-border">
+          {isLoading ? (
+            <div className="p-6 flex justify-center"><RefreshCw className="w-4 h-4 animate-spin text-muted-foreground" /></div>
+          ) : queue.length === 0 ? (
+            <p className="p-6 text-center text-xs text-muted-foreground">No investors have expressed interest yet.</p>
+          ) : (
+            <>
+              {/* Priority legend */}
+              <div className="px-4 py-2 bg-brand-gold/5 border-b border-border flex items-center gap-2 text-[10px] text-muted-foreground">
+                <Crown className="w-3 h-3 text-brand-gold" />
+                <span>Sorted by priority — investors with proof of funds appear first</span>
+              </div>
+              <div className="divide-y divide-border max-h-72 overflow-y-auto">
+                {queue.map((entry, idx) => {
+                  const name = (entry.profiles as any)?.display_name ||
+                    [(entry.profiles as any)?.first_name, (entry.profiles as any)?.last_name].filter(Boolean).join(" ") ||
+                    "Investor";
+                  const hasPOF = !!entry.proof_of_funds_url;
+                  const cfg = INTEREST_STATUS_CONFIG[entry.status];
+                  return (
+                    <div key={entry.id} className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        {/* Priority number */}
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${hasPOF ? "bg-brand-gold/20 text-brand-gold" : "bg-muted text-muted-foreground"}`}>
+                          {idx + 1}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-semibold truncate">{name}</span>
+                            {hasPOF && (
+                              <span className="flex items-center gap-1 text-[10px] font-bold text-brand-gold bg-brand-gold/10 border border-brand-gold/20 px-2 py-0.5 rounded-full shrink-0">
+                                <Crown className="w-2.5 h-2.5" /> POF
+                                {entry.proof_amount ? ` €${Number(entry.proof_amount).toLocaleString()}` : " ✓"}
+                              </span>
+                            )}
+                            <span className={`text-[10px] font-bold border px-2 py-0.5 rounded-full ${cfg.color}`}>
+                              {cfg.label}
+                            </span>
+                          </div>
+                          {entry.message && (
+                            <p className="text-xs text-muted-foreground mt-0.5 italic truncate">"{entry.message}"</p>
+                          )}
+                          <div className="flex items-center gap-2 mt-0.5">
+                            {hasPOF ? (
+                              <span className="flex items-center gap-1 text-[10px] text-emerald-600">
+                                <Wallet className="w-2.5 h-2.5" /> Funds verified
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                                <Wallet className="w-2.5 h-2.5" /> No POF uploaded
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      {/* Status selector */}
+                      <select
+                        value={entry.status}
+                        onChange={e => updateStatus.mutate({ id: entry.id, dealId, status: e.target.value as InterestStatus })}
+                        className="bg-background border border-border rounded-lg px-2 py-1.5 text-xs outline-none focus:border-primary shrink-0"
+                      >
+                        {(Object.keys(INTEREST_STATUS_CONFIG) as InterestStatus[]).map(s => (
+                          <option key={s} value={s}>{INTEREST_STATUS_CONFIG[s].label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function AdminDealRow({ deal, onUpdate }: { deal: AdminDeal; onUpdate: (id: string, status: string, notes: string, offerPrice?: number) => Promise<void> }) {
@@ -244,6 +357,8 @@ function AdminDealRow({ deal, onUpdate }: { deal: AdminDeal; onUpdate: (id: stri
               <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground text-xs h-8 gap-1.5" onClick={handleSave} disabled={saving}>{saving ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />} Save Notes</Button>
             </div>
           </div>
+
+          <InvestorQueue dealId={deal.id} />
         </div>
       )}
 
@@ -299,7 +414,7 @@ export default function AdminFiresalePipeline() {
       const { data, error } = await supabase.from("firesale_requests").select("*").order("created_at", { ascending: false });
       if (error) throw error;
       setAdminDeals((data || []) as AdminDeal[]);
-    } catch (e) {
+    } catch {
       toast.error("Could not load requests.");
     } finally {
       setAdminLoading(false);
@@ -314,7 +429,48 @@ export default function AdminFiresalePipeline() {
     const { error } = await supabase.from("firesale_requests").update(updates as any).eq("id", id);
     if (error) { toast.error("Failed to update"); return; }
     setAdminDeals(prev => prev.map(d => d.id === id ? { ...d, status, admin_notes, ...(offerPrice !== undefined ? { offer_price: offerPrice } : {}) } : d));
-    toast.success(status === "offer_sent" ? "Offer sent!" : status === "closed" ? "Deal closed!" : "Deal updated");
+
+    if (status === "offer_sent") {
+      // Find the deal address for the notification body
+      const deal = adminDeals.find(d => d.id === id);
+      const dealAddress = deal ? `${deal.address}, ${deal.city}` : "a distressed property";
+
+      // Fetch all investors
+      const { data: investors, error: investorsError } = await supabase
+        .from("profiles")
+        .select("user_id")
+        .eq("investor_mode", true);
+
+      if (investorsError) {
+        console.warn("Could not fetch investors for notification:", investorsError.message);
+        toast.success("Offer sent!");
+        return;
+      }
+
+      const investorCount = investors?.length ?? 0;
+
+      if (investorCount > 0) {
+        const notifications = investors.map((inv) => ({
+          user_id: inv.user_id,
+          title: "New Quick Sale Deal Available",
+          body: `A new distressed property at ${dealAddress} is available. Offer sent.`,
+          type: "investor_alert",
+          read: false,
+        }));
+
+        const { error: notifError } = await supabase
+          .from("notifications")
+          .insert(notifications);
+
+        if (notifError) {
+          console.warn("Could not insert investor notifications:", notifError.message);
+        }
+      }
+
+      toast.success(`Offer sent — ${investorCount} investor${investorCount !== 1 ? "s" : ""} notified`);
+    } else {
+      toast.success(status === "closed" ? "Deal closed!" : "Deal updated");
+    }
   };
 
   const adminStats = {

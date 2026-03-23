@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, ReactNode } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
@@ -50,7 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const fetchProfile = async (userId: string) => {
     const { data } = await supabase
       .from("profiles")
-      .select("user_id, display_name, avatar_url, role, bio, first_name, last_name, city, country, phone, website_url, is_platform_admin, verified, created_at, updated_at, id")
+      .select("user_id, display_name, avatar_url, role, bio, first_name, last_name, city, country, phone, website_url, is_platform_admin, verified, created_at, updated_at, id, participant_type, investor_mode")
       .eq("user_id", userId)
       .single();
     if (data) setProfile(data);
@@ -132,7 +132,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const signUp = async (
+  const signUp = useCallback(async (
     email: string,
     password: string,
     meta: { full_name: string; role: string; business_name?: string; tax_id?: string; phone?: string; license_number?: string }
@@ -152,42 +152,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq("user_id", data.user.id);
     }
     return { error: error as Error | null };
-  };
+  }, []);
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     return { error: error as Error | null };
-  };
+  }, []);
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     await supabase.auth.signOut();
     setProfile(null);
     setSubscription({ subscribed: false, productId: null, subscriptionEnd: null, loading: false });
-  };
+  }, []);
 
-  const updateProfile = async (updates: Partial<Profile>) => {
+  const updateProfile = useCallback(async (updates: Partial<Profile>) => {
     if (!user) return { error: new Error("Not authenticated") };
     const { error } = await supabase.from("profiles").update(updates).eq("user_id", user.id);
     if (!error) await fetchProfile(user.id);
     return { error: error as Error | null };
-  };
+  }, [user]);
 
-  const refreshProfile = async () => {
+  const refreshProfile = useCallback(async () => {
     if (user) await fetchProfile(user.id);
-  };
+  }, [user]);
 
-  const refreshSubscription = async () => {
+  const refreshSubscription = useCallback(async () => {
     const { data: { session: sess } } = await supabase.auth.getSession();
     await checkSubscription(sess);
-  };
+  }, []);
 
   const needsOnboarding = profileNeedsOnboarding(profile);
 
+  const contextValue = useMemo(() => ({
+    session, user, profile, loading, subscription, needsOnboarding,
+    signUp, signIn, signOut, updateProfile, refreshProfile, refreshSubscription,
+  }), [session, user, profile, loading, subscription, needsOnboarding,
+       signUp, signIn, signOut, updateProfile, refreshProfile, refreshSubscription]);
+
   return (
-    <AuthContext.Provider value={{
-      session, user, profile, loading, subscription, needsOnboarding,
-      signUp, signIn, signOut, updateProfile, refreshProfile, refreshSubscription,
-    }}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

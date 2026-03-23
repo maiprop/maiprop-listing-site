@@ -3,7 +3,6 @@
 // No hardcoded fallbacks — use .env (copy from .env.example) for all environments.
 
 const env = (import.meta as any).env ?? {};
-const isProd = env.PROD === true || env.MODE === "production";
 
 const _url = env.VITE_SUPABASE_URL ?? env.VITE_SUPABASE_PROJECT_URL;
 const _anonKey = env.VITE_SUPABASE_PUBLISHABLE_KEY ?? env.VITE_SUPABASE_ANON_KEY;

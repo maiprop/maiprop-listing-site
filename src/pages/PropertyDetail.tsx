@@ -1,15 +1,15 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { supabase as supabaseClient } from "@/integrations/supabase/client";
 import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import {
   MapPin, Bed, Bath, Square, Heart, Share2, Phone, MessageSquare,
-  Calendar, Video, ChevronLeft, ChevronRight, Star, TrendingUp,
-  Shield, FileText, Zap, ExternalLink, Lock, BarChart2, Eye,
+  Calendar, Video, ChevronLeft, ChevronRight, Star,
+  Shield, FileText, Zap, ExternalLink, Lock, Eye,
   Home, Clock, Check, Gavel, Download, Loader2, CheckCircle,
   Thermometer, Wrench, TreePine, Flame, Wifi, Car, Building2,
-  Info, ChevronDown, ChevronUp, Euro, Tag, Layers, LayoutGrid, Bell, Globe, Scale, History, ClipboardList } from
+  Info, ChevronDown, ChevronUp, Tag, Layers, LayoutGrid, Globe, Scale, History, ClipboardList } from
 "lucide-react";
-import { getSubtypeLabel, PROPERTY_TYPE_MAP, type PropertyTypeKey } from "@/lib/propertyTypes";
+import { getSubtypeLabel } from "@/lib/propertyTypes";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 
@@ -22,15 +22,15 @@ import { useFavorites, useToggleFavorite } from "@/hooks/useFavorites";
 import { useStartConversation } from "@/hooks/useMessages";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
-import { usePricingConfigs, formatPrice, PRICING_KEYS } from "@/hooks/usePricingConfigs";
+import { usePricingConfigs } from "@/hooks/usePricingConfigs";
 import { useReportUsage, useRecordReport, REPORT_INCLUDED, REPORT_EXTRA_COST } from "@/hooks/useUsageAddons";
 import { toast } from "sonner";
 import PropertyMiniMap from "@/components/PropertyMiniMap";
 import PropertyValuation from "@/components/PropertyValuation";
-import NeighbourhoodReport from "@/components/NeighbourhoodReport";
+const NeighbourhoodReport = lazy(() => import("@/components/NeighbourhoodReport"));
 import { walkScoreLabel, walkScoreColour } from "@/lib/walkScore";
 import { HEATING_TYPES, CONDITION_OPTIONS } from "@/lib/filterConfig";
-import AIAssistantWidget from "@/components/AIAssistantWidget";
+const AIAssistantWidget = lazy(() => import("@/components/AIAssistantWidget"));
 import { AuctionAlertModal } from "@/components/AuctionAlertModal";
 import { PastDealsTable } from "@/components/PastDealsTable";
 import { getStreetViewProxyUrl } from "@/lib/config";
@@ -137,7 +137,7 @@ export default function PropertyDetail() {
   const location = useLocation();
   const { user, profile } = useAuth();
   const { isPro } = useSubscription();
-  const { data: pricingConfigs = {} } = usePricingConfigs();
+  const { data: _pricingConfigs = {} } = usePricingConfigs();
   const { data: reportCount = 0 } = useReportUsage();
   const recordReport = useRecordReport();
 
@@ -156,9 +156,13 @@ export default function PropertyDetail() {
   });
 
   // Redirect: if auction opened via /property/:id, send to /auction/:id
+  // Redirect: if new build listing, send to /new-build/:id
   useEffect(() => {
-    if (dbListing && dbListing.listing_type === "auction" && location.pathname.startsWith("/property/")) {
+    if (!dbListing) return;
+    if (dbListing.listing_type === "auction" && location.pathname.startsWith("/property/")) {
       navigate(`/auction/${id}`, { replace: true });
+    } else if (((dbListing as any).is_pre_sale || (dbListing as any).construction_status)) {
+      navigate(`/new-build/${id}`, { replace: true });
     }
   }, [dbListing, location.pathname, id, navigate]);
 
@@ -353,7 +357,7 @@ export default function PropertyDetail() {
   const handleShare = async () => {
     const url = window.location.href;
     if (navigator.share) {
-      try {await navigator.share({ title, url });} catch {}
+      try {await navigator.share({ title, url });} catch { /* share cancelled or not supported */ }
     } else {
       await navigator.clipboard.writeText(url);
       toast.success("Link copied to clipboard");
@@ -985,14 +989,16 @@ export default function PropertyDetail() {
               </div>
 
               {/* ── Neighbourhood Report — sign-in only ── */}
-              <NeighbourhoodReport
-                city={city}
-                address={address}
-                region={db?.region}
-                propertyType={propertyType}
-                lat={db?.latitude ? Number(db.latitude) : undefined}
-                lng={db?.longitude ? Number(db.longitude) : undefined}
-                listingId={id ?? undefined} />
+              <Suspense fallback={<div className="h-64 bg-muted animate-pulse rounded-lg" />}>
+                <NeighbourhoodReport
+                  city={city}
+                  address={address}
+                  region={db?.region}
+                  propertyType={propertyType}
+                  lat={db?.latitude ? Number(db.latitude) : undefined}
+                  lng={db?.longitude ? Number(db.longitude) : undefined}
+                  listingId={id ?? undefined} />
+              </Suspense>
               
 
             </div>
@@ -1093,8 +1099,10 @@ export default function PropertyDetail() {
                       className="w-full border-border gap-2 h-9 text-xs"
                       onClick={() => {
                         if (!user) {toast.error("Sign in to request a viewing");navigate("/login");return;}
-                        if (canVideoView) setViewingOpen(true);else
-                        toast.info("Video viewing is available for Pro users, or free for retailers."), navigate("/pricing");
+                        if (canVideoView) { setViewingOpen(true); } else {
+                          toast.info("Video viewing is available for Pro users, or free for retailers.");
+                          navigate("/pricing");
+                        }
                       }}>
                       
                         <Video className="w-3.5 h-3.5" />Video Viewing{!canVideoView && <Lock className="w-3 h-3 ml-0.5 opacity-60" />}
@@ -1391,38 +1399,40 @@ export default function PropertyDetail() {
         }} />
       
 
-      <AIAssistantWidget
-        propertyContext={{
-          title: db.title,
-          city: db.city,
-          address: db.address,
-          price: Number(db.price),
-          pricePerSqm: db.price_per_sqm ? Number(db.price_per_sqm) : undefined,
-          sqm: Number(db.sqm),
-          bedrooms: db.bedrooms,
-          bathrooms: db.bathrooms,
-          propertyType: db.property_type,
-          listingType: db.listing_type,
-          floor: db.floor,
-          yearBuilt: db.year_built,
-          energyClass: db.energy_class,
-          heatingSystem: (db as any).heating_system,
-          hasParking: db.has_parking,
-          hasPool: db.has_pool,
-          hasElevator: db.has_elevator,
-          hasGarden: db.has_garden,
-          hasBalcony: (db as any).has_balcony,
-          hasAC: (db as any).has_ac,
-          hasFireplace: (db as any).has_fireplace,
-          hasFurnished: (db as any).has_furnished,
-          hasStorage: db.has_storage,
-          hasSmartHome: db.has_smart_home,
-          petsAllowed: (db as any).pets_allowed,
-          hasView: (db as any).has_view,
-          latitude: db.latitude,
-          longitude: db.longitude,
-          region: db.region
-        }} />
+      <Suspense fallback={null}>
+        <AIAssistantWidget
+          propertyContext={{
+            title: db.title,
+            city: db.city,
+            address: db.address,
+            price: Number(db.price),
+            pricePerSqm: db.price_per_sqm ? Number(db.price_per_sqm) : undefined,
+            sqm: Number(db.sqm),
+            bedrooms: db.bedrooms,
+            bathrooms: db.bathrooms,
+            propertyType: db.property_type,
+            listingType: db.listing_type,
+            floor: db.floor,
+            yearBuilt: db.year_built,
+            energyClass: db.energy_class,
+            heatingSystem: (db as any).heating_system,
+            hasParking: db.has_parking,
+            hasPool: db.has_pool,
+            hasElevator: db.has_elevator,
+            hasGarden: db.has_garden,
+            hasBalcony: (db as any).has_balcony,
+            hasAC: (db as any).has_ac,
+            hasFireplace: (db as any).has_fireplace,
+            hasFurnished: (db as any).has_furnished,
+            hasStorage: db.has_storage,
+            hasSmartHome: db.has_smart_home,
+            petsAllowed: (db as any).pets_allowed,
+            hasView: (db as any).has_view,
+            latitude: db.latitude,
+            longitude: db.longitude,
+            region: db.region
+          }} />
+      </Suspense>
       
 
       {/* Auction Alert Modal */}

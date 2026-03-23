@@ -119,7 +119,7 @@ Deno.serve(async (req) => {
         body: JSON.stringify({ sortBy: "AUCTION_DATE" }),
       });
       comp = await compRes.json().catch(() => null);
-    } catch (_) {
+    } catch {
       comp = { note: "count-comparison endpoint unavailable on OS API (server-side bug)" };
     }
 
@@ -129,7 +129,7 @@ Deno.serve(async (req) => {
       const fullRes = await fetch(`${OS_URL}/api/auctions/future?limit=9999`, { headers: authHeaders });
       const fullJson = await fullRes.json().catch(() => null);
       futureFullTotal = fullJson?.total ?? fullJson?.data?.length ?? futureTotal;
-    } catch (_) {
+    } catch {
       /* non-critical */
     }
 

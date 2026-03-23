@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useStartConversation, useSendMessage } from "@/hooks/useMessages";
 import { useSubmitConsultation } from "@/hooks/useConsultations";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 interface SendMessageModalProps {

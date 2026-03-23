@@ -1,0 +1,877 @@
+{
+  "nav": {
+    "listings": "Listings",
+    "auctions": "Auctions",
+    "quickSale": "Quick Sale",
+    "professionals": "Professionals",
+    "openHouses": "Open Houses",
+    "newBuilds": "New Builds",
+    "projects": "Projects",
+    "aiAssistant": "AI Assistant",
+    "dashboard": "Dashboard",
+    "adminDashboard": "Admin Dashboard",
+    "investorDashboard": "Investor Dashboard",
+    "apiDocs": "API Docs",
+    "signIn": "Sign in",
+    "signUp": "Sign up",
+    "signOut": "Sign out",
+    "profile": "Profile",
+    "settings": "Settings",
+    "messages": "Messages",
+    "pricing": "Pricing",
+    "contact": "Contact"
+  },
+  "home": {
+    "hero": {
+      "badge": "AI-Powered Real Estate",
+      "title": "Greece's Smartest Property Platform",
+      "subtitle": "Discover verified listings, distressed assets, auctions and pre-market deals — powered by AI, backed by real data.",
+      "searchPlaceholder": "Search by area, postcode or property type…",
+      "searchButton": "Search",
+      "exploreListings": "Explore listings",
+      "viewAuctions": "View auctions",
+      "stats": {
+        "activeListings": "Active listings",
+        "courtAuctions": "Court auctions",
+        "verifiedProfessionals": "Verified professionals",
+        "aiTools": "AI tools"
+      }
+    },
+    "features": {
+      "title": "Everything you need in one platform",
+      "subtitle": "From AI-powered search to court auction tracking, maiProp gives buyers, sellers and professionals an edge.",
+      "aiSearch": {
+        "title": "AI Property Search",
+        "description": "Describe what you want in plain language. Our AI finds matching properties instantly."
+      },
+      "auctions": {
+        "title": "Court Auction Intelligence",
+        "description": "Real-time data on court auctions across Greece. Track bidding history, comparable sales and distressed asset opportunities."
+      },
+      "quickSale": {
+        "title": "Quick Sale Deal Flow",
+        "description": "Access pre-market distressed properties before they hit the open market. Exclusive to verified investors."
+      },
+      "professionals": {
+        "title": "Verified Professionals",
+        "description": "Connect with licensed agents, lawyers, notaries and engineers — all verified and rated by real transactions."
+      },
+      "openHouses": {
+        "title": "Managed Open Houses",
+        "description": "Book viewings, upload proof of funds, make offers and close — all in one workflow."
+      },
+      "analytics": {
+        "title": "Market Analytics",
+        "description": "Neighbourhood reports, comparable sales, price trends and valuation estimates — AI-generated, OS-data backed."
+      }
+    },
+    "cta": {
+      "title": "Ready to find your next property?",
+      "subtitle": "Join thousands of buyers, sellers and professionals using maiProp.",
+      "getStarted": "Get started free",
+      "viewPricing": "View pricing"
+    },
+    "sections": {
+      "newListings": "New Listings",
+      "featuredProperties": "Featured Properties",
+      "upcomingAuctions": "Upcoming Auctions",
+      "viewAll": "View all",
+      "forSale": "For Sale",
+      "forRent": "For Rent",
+      "auctions": "Auctions",
+      "newBuilds": "New Builds",
+      "quickSale": "Quick Sale"
+    }
+  },
+  "listings": {
+    "title": "Property Listings",
+    "subtitle": "Browse verified listings across Greece",
+    "filters": {
+      "title": "Filters",
+      "propertyType": "Property Type",
+      "listingType": "Listing Type",
+      "priceRange": "Price Range",
+      "areaRange": "Area (m²)",
+      "bedrooms": "Bedrooms",
+      "location": "Location",
+      "features": "Features",
+      "apply": "Apply filters",
+      "reset": "Reset",
+      "allTypes": "All types",
+      "minPrice": "Min price",
+      "maxPrice": "Max price",
+      "minArea": "Min area",
+      "maxArea": "Max area",
+      "anyBedrooms": "Any",
+      "sortBy": "Sort by",
+      "newest": "Newest first",
+      "priceAsc": "Price: low to high",
+      "priceDesc": "Price: high to low",
+      "areaDesc": "Largest first"
+    },
+    "types": {
+      "sale": "For Sale",
+      "rent": "For Rent",
+      "auction": "Auction",
+      "firesale": "Quick Sale",
+      "new_build": "New Build"
+    },
+    "propertyTypes": {
+      "apartment": "Apartment",
+      "house": "House",
+      "villa": "Villa",
+      "commercial": "Commercial",
+      "land": "Land",
+      "office": "Office",
+      "warehouse": "Warehouse",
+      "hotel": "Hotel"
+    },
+    "noResults": "No properties found",
+    "noResultsSubtitle": "Try adjusting your filters or broadening your search area.",
+    "loadMore": "Load more",
+    "showing": "Showing {{count}} properties",
+    "map": "Map view",
+    "grid": "Grid view",
+    "saveSearch": "Save search",
+    "searchSaved": "Search saved"
+  },
+  "property": {
+    "overview": "Overview",
+    "details": "Details",
+    "location": "Location",
+    "gallery": "Gallery",
+    "contact": "Contact",
+    "similarProperties": "Similar properties",
+    "pricePerSqm": "Price per m²",
+    "bedrooms": "Bedrooms",
+    "bathrooms": "Bathrooms",
+    "floor": "Floor",
+    "area": "Area",
+    "yearBuilt": "Year built",
+    "energyClass": "Energy class",
+    "parking": "Parking",
+    "storage": "Storage",
+    "garden": "Garden",
+    "pool": "Pool",
+    "elevator": "Elevator",
+    "furnished": "Furnished",
+    "petFriendly": "Pet friendly",
+    "alarm": "Alarm",
+    "airConditioning": "A/C",
+    "heating": "Heating",
+    "askingPrice": "Asking price",
+    "minimumBid": "Minimum bid",
+    "requestViewing": "Request a viewing",
+    "makeOffer": "Make an offer",
+    "contactAgent": "Contact agent",
+    "saveProperty": "Save property",
+    "share": "Share",
+    "reportListing": "Report listing",
+    "neighbourhood": "Neighbourhood report",
+    "valuation": "AI valuation",
+    "comparableSales": "Comparable sales",
+    "auctionDetails": "Auction details",
+    "auctionDate": "Auction date",
+    "openHouseRegistration": "Register for open house",
+    "description": "Description",
+    "features": "Features",
+    "documents": "Documents",
+    "virtualTour": "Virtual tour",
+    "floorPlan": "Floor plan",
+    "status": {
+      "active": "Active",
+      "pending": "Pending",
+      "sold": "Sold",
+      "rented": "Rented",
+      "withdrawn": "Withdrawn",
+      "auction": "Auction",
+      "firesale": "Quick Sale"
+    }
+  },
+  "auctions": {
+    "title": "Court Auctions",
+    "subtitle": "Track live and upcoming court auction listings across Greece",
+    "upcoming": "Upcoming",
+    "live": "Live now",
+    "completed": "Completed",
+    "startingBid": "Starting bid",
+    "currentBid": "Current bid",
+    "bidHistory": "Bid history",
+    "auctionDate": "Auction date",
+    "court": "Court",
+    "lawyer": "Lawyer",
+    "round": "Round",
+    "deposit": "Deposit required",
+    "viewDetails": "View details",
+    "syncStatus": "Sync status",
+    "lastSync": "Last synced",
+    "noAuctions": "No auctions found",
+    "filters": {
+      "allCourts": "All courts",
+      "allTypes": "All types",
+      "dateRange": "Date range"
+    }
+  },
+  "firesale": {
+    "title": "Quick Sale",
+    "subtitle": "Pre-market distressed and motivated-seller properties",
+    "accessRequired": "Investor access required",
+    "accessDescription": "Quick Sale deal flow is exclusive to approved maiProp investors.",
+    "applyForAccess": "Apply for access",
+    "dealStatus": {
+      "new": "New",
+      "reviewing": "Under review",
+      "approved": "Approved",
+      "negotiating": "Negotiating",
+      "closed": "Closed",
+      "rejected": "Rejected"
+    },
+    "discount": "discount to market",
+    "submitDeal": "Submit a deal",
+    "expressInterest": "Express interest",
+    "makeOffer": "Make an offer",
+    "requestDocuments": "Request documents",
+    "proofOfFunds": "Proof of funds",
+    "uploadPOF": "Upload proof of funds",
+    "dealTerms": "Deal terms",
+    "closingFee": "Closing fee"
+  },
+  "professionals": {
+    "title": "Verified Professionals",
+    "subtitle": "Connect with licensed agents, lawyers, notaries and engineers",
+    "categories": {
+      "agent": "Estate Agent",
+      "lawyer": "Lawyer",
+      "notary": "Notary",
+      "engineer": "Engineer",
+      "valuator": "Valuator",
+      "accountant": "Accountant",
+      "architect": "Architect"
+    },
+    "verified": "Verified",
+    "featured": "Featured",
+    "rating": "Rating",
+    "reviews": "reviews",
+    "experience": "Experience",
+    "languages": "Languages",
+    "specialisation": "Specialisation",
+    "contactPro": "Contact",
+    "bookConsultation": "Book consultation",
+    "videoCall": "Video call",
+    "viewProfile": "View profile",
+    "noResults": "No professionals found",
+    "searchPlaceholder": "Search professionals…",
+    "filterByCategory": "Filter by category"
+  },
+  "openHouses": {
+    "title": "Open Houses",
+    "subtitle": "Book managed viewings with verified hosts",
+    "registerInterest": "Register interest",
+    "registered": "Registered",
+    "attended": "Attended",
+    "approved": "Approved",
+    "pending": "Pending review",
+    "rejected": "Not approved",
+    "slots": "Available slots",
+    "bookSlot": "Book a slot",
+    "uploadDocuments": "Upload documents",
+    "makeOffer": "Make an offer",
+    "host": "Host",
+    "viewingDate": "Viewing date",
+    "requirements": "Requirements",
+    "idRequired": "ID required",
+    "pofRequired": "Proof of funds required",
+    "waiverRequired": "NDA / waiver required"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "welcome": "Welcome back",
+    "myListings": "My Listings",
+    "savedProperties": "Saved Properties",
+    "viewings": "Viewings",
+    "offers": "Offers",
+    "messages": "Messages",
+    "analytics": "Analytics",
+    "subscription": "Subscription",
+    "settings": "Settings",
+    "createListing": "Create listing",
+    "listingStats": {
+      "views": "Views",
+      "enquiries": "Enquiries",
+      "viewings": "Viewings",
+      "offers": "Offers"
+    },
+    "tabs": {
+      "overview": "Overview",
+      "listings": "My Listings",
+      "saved": "Saved",
+      "viewings": "Viewings",
+      "analytics": "Analytics",
+      "subscription": "Subscription"
+    }
+  },
+  "pricing": {
+    "title": "Simple, transparent pricing",
+    "subtitle": "Choose the plan that fits your needs. Upgrade or downgrade at any time.",
+    "monthly": "Monthly",
+    "annual": "Annual",
+    "annualSaving": "Save 20%",
+    "mostPopular": "Most popular",
+    "currentPlan": "Current plan",
+    "getStarted": "Get started",
+    "upgrade": "Upgrade",
+    "contactSales": "Contact sales",
+    "free": "Free",
+    "perMonth": "/month",
+    "perYear": "/year",
+    "perReport": "/report",
+    "perListing": "/listing",
+    "includes": "Includes",
+    "addOns": "Add-ons",
+    "enterprise": "Enterprise",
+    "customPricing": "Custom pricing",
+    "allPlansInclude": "All plans include"
+  },
+  "auth": {
+    "login": {
+      "title": "Welcome back",
+      "subtitle": "Sign in to your maiProp account",
+      "email": "Email",
+      "password": "Password",
+      "forgotPassword": "Forgot password?",
+      "signIn": "Sign in",
+      "noAccount": "Don't have an account?",
+      "signUp": "Sign up",
+      "orContinueWith": "Or continue with",
+      "google": "Continue with Google"
+    },
+    "signup": {
+      "title": "Create your account",
+      "subtitle": "Join maiProp and start your property journey",
+      "firstName": "First name",
+      "lastName": "Last name",
+      "email": "Email",
+      "password": "Password",
+      "confirmPassword": "Confirm password",
+      "agreeToTerms": "I agree to the",
+      "terms": "Terms of Service",
+      "and": "and",
+      "privacy": "Privacy Policy",
+      "createAccount": "Create account",
+      "haveAccount": "Already have an account?",
+      "signIn": "Sign in",
+      "orContinueWith": "Or continue with",
+      "google": "Continue with Google"
+    },
+    "onboarding": {
+      "title": "Tell us about yourself",
+      "subtitle": "This helps us personalise your experience",
+      "selectRole": "Select your role",
+      "roles": {
+        "participant": "Buyer / Tenant",
+        "agent": "Estate Agent",
+        "seller_landlord": "Seller / Landlord",
+        "developer": "Developer",
+        "institutional": "Institutional",
+        "professional": "Professional (lawyer, notary, etc.)"
+      },
+      "continue": "Continue",
+      "skip": "Skip for now"
+    },
+    "resetPassword": {
+      "title": "Reset your password",
+      "subtitle": "Enter your email to receive a reset link",
+      "email": "Email",
+      "sendLink": "Send reset link",
+      "backToLogin": "Back to login"
+    }
+  },
+  "messages": {
+    "title": "Messages",
+    "newMessage": "New message",
+    "searchConversations": "Search conversations…",
+    "noMessages": "No messages yet",
+    "noMessagesSubtitle": "Start a conversation with a seller, agent or professional.",
+    "typeMessage": "Type a message…",
+    "send": "Send",
+    "regarding": "Regarding",
+    "inquiry": "Inquiry",
+    "offer": "Offer",
+    "viewing": "Viewing request",
+    "general": "General"
+  },
+  "contact": {
+    "title": "Contact maiProp",
+    "subtitle": "For enterprise plans, institutional access, API partnerships or any other enquiry.",
+    "name": "Name",
+    "email": "Email",
+    "company": "Company / Organisation",
+    "message": "Message",
+    "send": "Send message",
+    "sending": "Sending…",
+    "successMessage": "Message sent! We'll get back to you within one business day.",
+    "namePlaceholder": "Your full name",
+    "emailPlaceholder": "you@company.com",
+    "companyPlaceholder": "e.g. Eurobank, Briq Properties, Ministry of Finance",
+    "messagePlaceholder": "Tell us about your use case, data needs, or the plan you're interested in…",
+    "required": "Required",
+    "getInTouch": "Get in touch",
+    "generalEmail": "Email",
+    "enterpriseEmail": "Enterprise & API",
+    "phone": "Phone (GR)",
+    "suitableFor": "Suitable for",
+    "orgTypes": {
+      "banks": "Banks & financial institutions",
+      "reits": "Real estate investment trusts (REITs)",
+      "law": "Law firms & notaries",
+      "government": "Government bodies & municipalities",
+      "proptech": "PropTech integrations & API access"
+    }
+  },
+  "common": {
+    "loading": "Loading…",
+    "error": "Something went wrong",
+    "retry": "Try again",
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "edit": "Edit",
+    "view": "View",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous",
+    "submit": "Submit",
+    "close": "Close",
+    "search": "Search",
+    "filter": "Filter",
+    "sort": "Sort",
+    "clear": "Clear",
+    "apply": "Apply",
+    "upload": "Upload",
+    "download": "Download",
+    "share": "Share",
+    "copy": "Copy",
+    "copied": "Copied!",
+    "yes": "Yes",
+    "no": "No",
+    "or": "or",
+    "and": "and",
+    "optional": "Optional",
+    "required": "Required",
+    "new": "New",
+    "updated": "Updated",
+    "active": "Active",
+    "inactive": "Inactive",
+    "pending": "Pending",
+    "approved": "Approved",
+    "rejected": "Rejected",
+    "verified": "Verified",
+    "unverified": "Unverified",
+    "featured": "Featured",
+    "premium": "Premium",
+    "pro": "Pro",
+    "free": "Free",
+    "perMonth": "/mo",
+    "sqm": "m²",
+    "bed": "bed",
+    "beds": "beds",
+    "bath": "bath",
+    "baths": "baths",
+    "floor": "floor",
+    "noData": "No data available",
+    "sampleData": "Sample data",
+    "viewAll": "View all",
+    "showMore": "Show more",
+    "showLess": "Show less",
+    "comingSoon": "Coming soon",
+    "beta": "Beta",
+    "learnMore": "Learn more",
+    "getStarted": "Get started",
+    "upgradeNow": "Upgrade now",
+    "contactUs": "Contact us",
+    "backToHome": "Back to home",
+    "notFound": "Page not found",
+    "notFoundSubtitle": "The page you're looking for doesn't exist.",
+    "unauthorized": "Access denied",
+    "unauthorizedSubtitle": "You don't have permission to view this page.",
+    "proRequired": "Pro subscription required",
+    "proRequiredSubtitle": "Upgrade to access this feature.",
+    "sessionExpired": "Session expired. Please sign in again."
+  },
+  "footer": {
+    "tagline": "Greece's AI-powered property platform",
+    "platform": "Platform",
+    "forProfessionals": "For Professionals",
+    "legal": "Legal",
+    "company": "Company",
+    "links": {
+      "listings": "Listings",
+      "auctions": "Court Auctions",
+      "quickSale": "Quick Sale",
+      "openHouses": "Open Houses",
+      "newBuilds": "New Builds",
+      "aiAssistant": "AI Assistant",
+      "professionals": "Find Professionals",
+      "listYourServices": "List Your Services",
+      "apiDocs": "API Documentation",
+      "pricing": "Pricing",
+      "privacy": "Privacy Policy",
+      "terms": "Terms of Service",
+      "cookies": "Cookie Policy",
+      "about": "About Us",
+      "contact": "Contact",
+      "blog": "Blog"
+    },
+    "copyright": "© {{year}} maiProp. All rights reserved.",
+    "madeIn": "Made in Greece"
+  },
+  "language": {
+    "select": "Language",
+    "translating": "Translating…",
+    "translatedBy": "Translated by AI",
+    "switchTo": "Switch to {{lang}}"
+  },
+  "propertyCard": {
+    "badges": {
+      "auction": "Auction",
+      "openHouse": "Open House",
+      "quickSale": "Quick Sale",
+      "newBuild": "New Build",
+      "new": "New",
+      "premium": "Premium",
+      "featured": "Featured",
+      "verified": "Verified"
+    },
+    "noPhoto": "No photo",
+    "agentListing": "Agent listing",
+    "privateSeller": "Private seller",
+    "basement": "Basement",
+    "groundFloor": "Ground",
+    "floor": "F",
+    "ownership": {
+      "full": "Full ownership",
+      "partial": "Partial ownership",
+      "undivided": "Undivided ownership",
+      "none": "No ownership"
+    },
+    "actions": {
+      "contactAgent": "Contact Agent",
+      "viewOpenHouse": "View Open House",
+      "viewAuction": "View Auction",
+      "save": "Save property",
+      "unsave": "Remove from saved",
+      "share": "Share",
+      "report": "Report"
+    },
+    "openHouseDate": "Open House",
+    "auctionDate": "Auction Date",
+    "startingFrom": "From €{{price}}",
+    "motivatedSeller": "Motivated seller · fast close",
+    "linkCopied": "Link copied!",
+    "copyFailed": "Could not copy link",
+    "signInToReport": "Sign in to report",
+    "reportSubmitted": "Report submitted. Our team will review it."
+  },
+  "listingsPage": {
+    "sortOptions": {
+      "relevant": "Most Relevant",
+      "featured": "Featured First",
+      "priceAsc": "Price: Low → High",
+      "priceDesc": "Price: High → Low",
+      "newest": "Newest First",
+      "aiScore": "AI Score",
+      "mostViewed": "Most Viewed"
+    },
+    "listingTypes": {
+      "all": "All",
+      "buy": "Buy",
+      "rent": "Rent"
+    },
+    "priceRanges": {
+      "buy": {
+        "any": "Any Price",
+        "under80k": "Under €80k",
+        "80to150k": "€80k – €150k",
+        "150to300k": "€150k – €300k",
+        "300to600k": "€300k – €600k",
+        "600to1m": "€600k – €1M",
+        "over1m": "€1M+"
+      },
+      "rent": {
+        "any": "Any Rent",
+        "under400": "Under €400/mo",
+        "400to700": "€400 – €700/mo",
+        "700to1200": "€700 – €1,200/mo",
+        "1200to2500": "€1,200 – €2,500/mo",
+        "over2500": "€2,500+/mo"
+      }
+    },
+    "floorOptions": {
+      "basement": "Basement",
+      "ground": "Ground",
+      "number": "{{n}}{{suffix}}"
+    },
+    "propertyTypeGroups": {
+      "residential": "Residential",
+      "commercial": "Commercial",
+      "land": "Land & Plot",
+      "offices": "Offices"
+    },
+    "aiSuggestions": {
+      "1": "Quiet apartment near metro in Athens under 200k",
+      "2": "3 bed villa with pool for rent in Mykonos",
+      "3": "Studio with parking in Thessaloniki under 80k",
+      "4": "New build energy A+ apartment in Athens"
+    }
+  },
+  "loginPage": {
+    "title": "Sign in to your account",
+    "googleCta": "Continue with Google",
+    "orEmail": "or with email",
+    "email": "Email",
+    "emailPlaceholder": "you@example.com",
+    "password": "Password",
+    "passwordPlaceholder": "Your password",
+    "forgotPassword": "Forgot password?",
+    "signIn": "Sign In",
+    "noAccount": "Don't have an account?",
+    "signUpFree": "Sign up free",
+    "forgotTitle": "Reset your password",
+    "forgotSubtitle": "We'll send you a reset link",
+    "emailAddress": "Email address",
+    "sendLink": "Send Reset Link",
+    "backToSignIn": "Back to sign in",
+    "checkInbox": "Check your inbox",
+    "resetSentTo": "We sent a reset link to",
+    "resetInstructions": "Click the link in the email to set a new password. Check spam if you don't see it."
+  },
+  "signupPage": {
+    "lookingForProperty": {
+      "title": "I'm Looking for Property",
+      "subtitle": "Buy, rent, or find your next home",
+      "features": {
+        "1": "Browse all listings (sale, rent, auctions)",
+        "2": "Save searches & get alerts",
+        "3": "Book viewings & open houses",
+        "4": "List your own property (free)"
+      }
+    },
+    "workInRealEstate": {
+      "title": "I Work in Real Estate",
+      "subtitle": "Agent, developer, or service professional",
+      "features": {
+        "1": "Manage listings",
+        "2": "Professional directory",
+        "3": "Client tools",
+        "4": "CRM & leads"
+      }
+    }
+  },
+  "onboardingPage": {
+    "roles": {
+      "lookingForProperty": {
+        "title": "Looking for Property",
+        "subtitle": "Searching for a home or listing your own property"
+      },
+      "buyer": {
+        "title": "Home Buyer / Renter",
+        "subtitle": "Find your perfect property"
+      },
+      "seller": {
+        "title": "Property Seller / Landlord",
+        "subtitle": "Rent or sell your property"
+      },
+      "marketPro": {
+        "title": "Market Professional",
+        "subtitle": "Agent, developer, architect, lawyer, and more"
+      },
+      "agent": {
+        "title": "Real Estate Agent",
+        "subtitle": "List properties, manage clients and sales"
+      },
+      "developer": {
+        "title": "Developer",
+        "subtitle": "Sell new buildings and manage projects"
+      },
+      "servicePro": {
+        "title": "Service Professional",
+        "subtitle": "Legal, design, construction, finance & more"
+      }
+    }
+  },
+  "viewingDialog": {
+    "title": "Book a Viewing",
+    "successTitle": "Viewing Request Sent!",
+    "viewingType": "Viewing Type",
+    "inPerson": "In-Person",
+    "video": "Video",
+    "successMessage": "Your request has been sent to the property owner. They will confirm the appointment and you will receive a notification.",
+    "videoNote": "If video viewing is confirmed, a call link will be sent before the scheduled time.",
+    "done": "Done",
+    "days": {
+      "sun": "Sun",
+      "mon": "Mon",
+      "tue": "Tue",
+      "wed": "Wed",
+      "thu": "Thu",
+      "fri": "Fri",
+      "sat": "Sat"
+    }
+  },
+  "investorForm": {
+    "focus": {
+      "label": "Investment Focus",
+      "placeholder": "Select focus",
+      "residential": "Residential",
+      "commercial": "Commercial",
+      "land": "Land & development",
+      "mixed": "Mixed portfolio",
+      "distressed": "Distressed / opportunistic"
+    },
+    "dealSize": {
+      "label": "Deal Size",
+      "placeholder": "Select range",
+      "100to500k": "€100k – €500k",
+      "500kto2m": "€500k – €2M",
+      "2to5m": "€2M – €5M",
+      "5to15m": "€5M – €15M",
+      "over15m": "€15M+"
+    },
+    "vehicle": {
+      "label": "Investment Vehicle",
+      "placeholder": "Select vehicle",
+      "personal": "Personal / HNWI",
+      "family": "Family office",
+      "fund": "Fund / PE",
+      "institutional": "Institutional",
+      "developer": "Developer"
+    },
+    "experience": {
+      "label": "Years Experience",
+      "placeholder": "Select",
+      "0to2": "0 – 2 years",
+      "3to5": "3 – 5 years",
+      "6to10": "6 – 10 years",
+      "11to20": "11 – 20 years",
+      "over20": "20+ years"
+    },
+    "aum": {
+      "label": "Assets Under Management",
+      "placeholder": "Select (optional)",
+      "under1m": "Under €1M",
+      "1to10m": "€1M – €10M",
+      "10to50m": "€10M – €50M",
+      "50to200m": "€50M – €200M",
+      "over200m": "€200M+"
+    },
+    "source": {
+      "label": "How did you hear about us?",
+      "referral": "Referral",
+      "search": "Search / online",
+      "linkedin": "LinkedIn",
+      "event": "Event / conference",
+      "press": "Press / media",
+      "other": "Other"
+    }
+  },
+  "firesaleForm": {
+    "steps": {
+      "1": {
+        "title": "Property Details",
+        "subtitle": "Address, KAEK, type, size — takes 2 minutes."
+      },
+      "2": {
+        "title": "AI Valuation Engine",
+        "subtitle": "100+ data points analyzed from mAI Prop OS."
+      },
+      "3": {
+        "title": "Confidential Offer",
+        "subtitle": "Guaranteed cash offer within 96 hours."
+      },
+      "4": {
+        "title": "Close in 96h",
+        "subtitle": "Accept and close. We handle title, notary, everything."
+      }
+    },
+    "propertyTypes": {
+      "apartment": "Apartment",
+      "house": "House",
+      "villa": "Villa",
+      "land": "Land / Plot",
+      "office": "Office",
+      "retail": "Retail Shop",
+      "warehouse": "Warehouse / Storage",
+      "hotel": "Hotel / B&B",
+      "restaurant": "Restaurant / Café",
+      "clinic": "Clinic / Medical",
+      "industrial": "Industrial Space",
+      "showroom": "Showroom",
+      "hall": "Hall / Event Space",
+      "mixed": "Mixed-Use Building"
+    },
+    "validation": {
+      "addressRequired": "Please enter a full address (min 5 characters).",
+      "kaekRequired": "KAEK is required.",
+      "kaekInvalid": "KAEK format looks invalid (e.g. 050240601001/0/1).",
+      "typeRequired": "Property type is required.",
+      "sizeRequired": "Size (m²) is required.",
+      "sizeRange": "Size (m²) must be between 10 and 5000.",
+      "priceRequired": "Asking price is required.",
+      "priceRange": "Asking price must be between €5,000 and €100,000,000.",
+      "yearRequired": "Construction year is required.",
+      "yearRange": "Construction year must be between 1800 and {{year}}."
+    }
+  },
+  "notificationsPanel": {
+    "title": "Notifications",
+    "unread": "You have {{count}} unread notification{{plural}}. Check your investor dashboard for new Quick Sale deals.",
+    "allClear": "No new notifications. You're all caught up!"
+  },
+  "footerFull": {
+    "tagline": "Greece's most advanced real estate platform. Data-driven listings, Greek auctions, instant offers, and AI-powered market insights.",
+    "platform": {
+      "title": "Platform",
+      "buy": "Buy Property",
+      "rent": "Rent Property",
+      "auctions": "Greek Auctions",
+      "quickSale": "Quick Sale™",
+      "professionals": "Professionals",
+      "openHouses": "Open Houses",
+      "pricing": "Pricing"
+    },
+    "professionals": {
+      "title": "For Professionals",
+      "agents": "Real Estate Agents",
+      "legal": "Legal & Title",
+      "finance": "Finance & Insurance",
+      "design": "Design & Planning",
+      "construction": "Construction & Trades",
+      "consultants": "Consultants & Compliance",
+      "hospitality": "Property & Hospitality",
+      "advisory": "Advisory & Tech",
+      "join": "Join as Pro"
+    },
+    "legal": {
+      "title": "Legal",
+      "privacy": "Privacy Policy",
+      "terms": "Terms of Service",
+      "cookies": "Cookie Policy"
+    },
+    "location": "Athens, Greece"
+  },
+  "auctionsPage": {
+    "propertyTypes": {
+      "all": "All Types",
+      "apartment": "Apartment",
+      "house": "House",
+      "villa": "Villa",
+      "landAny": "Land / Plot (any)",
+      "landNoBuilding": "Land (no building)",
+      "landWithBuilding": "Land with building",
+      "agricultural": "Agricultural plot",
+      "plotWithBuilding": "Plot with building",
+      "commercial": "All Commercial & Offices"
+    }
+  }
+}

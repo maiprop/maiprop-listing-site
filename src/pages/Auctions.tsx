@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect } from "react";
-import { Gavel, TrendingUp, Bell, ExternalLink, AlertCircle, Loader2, MapPin, Calendar, Euro, Map, List, Clock, SlidersHorizontal, X, Lock, Star, Heart, Share2, Flag, Building2, ChevronDown, Zap, Crown } from "lucide-react";
+import { useState, useMemo, useEffect, lazy, Suspense } from "react";
+import { Gavel, TrendingUp, Bell, ExternalLink, AlertCircle, Loader2, MapPin, Calendar, Euro, Map, List, Clock, SlidersHorizontal, X, Lock, Heart, Share2, Flag, Building2, ChevronDown, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
@@ -7,7 +7,8 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { format } from "date-fns";
-import { MapView, MapListing } from "@/components/MapView";
+import type { MapListing } from "@/components/MapView";
+const MapView = lazy(() => import("@/components/MapView").then(m => ({ default: m.MapView })));
 import { AuctionAlertModal } from "@/components/AuctionAlertModal";
 import { getStreetViewProxyUrl } from "@/lib/config";
 import { useAuth } from "@/contexts/AuthContext";
@@ -359,7 +360,7 @@ function AuctionCard({ a, favoritedIds, onToggleFav
     e.preventDefault();
     const url = `${window.location.origin}/auction/${a.id}`;
     if (navigator.share) {
-      try {await navigator.share({ title: a.title, url });} catch {}
+      try {await navigator.share({ title: a.title, url });} catch { /* share cancelled or not supported */ }
     } else {
       await navigator.clipboard.writeText(url);
       toast.success("Link copied to clipboard");
@@ -525,7 +526,7 @@ function AuctionCard({ a, favoritedIds, onToggleFav
 }
 
 export default function Auctions() {
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const { isPro } = useSubscription();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -695,7 +696,7 @@ export default function Auctions() {
 
   // Compute % of auctions that have a starting bid below stated price
   const withDiscount = visibleFiltered.filter((a) => a.auction_starting_bid && a.price && a.auction_starting_bid < a.price).length;
-  const discountPct = visibleFiltered.length > 0 ? Math.round(withDiscount / visibleFiltered.length * 100) : 0;
+  const _discountPct = visibleFiltered.length > 0 ? Math.round(withDiscount / visibleFiltered.length * 100) : 0;
 
   const auctionStats = [
   { value: isLoading ? "—" : String(thisWeek), label: "This Week", icon: Gavel },
@@ -1070,7 +1071,9 @@ export default function Auctions() {
                   Showing <span className="font-semibold text-foreground">{mappableCount}</span> pinned auction{mappableCount !== 1 ? "s" : ""} on map
                   {visibleFiltered.length > mappableCount && ` (${visibleFiltered.length - mappableCount} without coordinates hidden)`}
                 </p>
-                <MapView listings={mapListings} height="560px" />
+                <Suspense fallback={<div className="h-64 bg-muted animate-pulse rounded-lg" />}>
+                  <MapView listings={mapListings} height="560px" />
+                </Suspense>
               </div>
           }
           </div>

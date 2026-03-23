@@ -24,8 +24,8 @@ interface SignupEmailProps {
 }
 
 export const SignupEmail = ({
-  siteName,
-  siteUrl,
+  siteName: _siteName,
+  siteUrl: _siteUrl,
   recipient,
   confirmationUrl,
 }: SignupEmailProps) => (

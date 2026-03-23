@@ -8,7 +8,7 @@ import Map, {
 } from "react-map-gl";
 import type { LayerProps } from "react-map-gl";
 import {
-  MapPin, Ruler, Maximize2, PenLine,
+  MapPin, Maximize2, PenLine,
   X, Flame, CheckCircle2, Building2, Calendar, Layers, Square,
 } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -284,7 +284,7 @@ function getAuctionImage(listing: MapListing): string {
   return "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400&q=60";
 }
 
-function PropertyPopup({ listing, onClose }: { listing: MapListing; onClose: () => void }) {
+function PropertyPopup({ listing, onClose: _onClose }: { listing: MapListing; onClose: () => void }) {
   const raw = listing._raw ?? listing;
   const image = getAuctionImage(listing);
   const isAuction = listing.listingType === "auction";
@@ -604,7 +604,7 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
       setHoverPoint([e.lngLat.lng, e.lngLat.lat]);
   }, []);
 
-  const getCursor = useCallback(({ isDragging }: { isDragging: boolean; isHovering: boolean }) => {
+  const _getCursor = useCallback(({ isDragging }: { isDragging: boolean; isHovering: boolean }) => {
     const { drawMode, polygonClosed } = stateRef.current;
     if (drawMode && !polygonClosed) return "crosshair";
     return isDragging ? "grabbing" : "grab";

@@ -69,7 +69,7 @@ export default function Firesale() {
   const [requestId, setRequestId] = useState<string | null>(null);
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
-  const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const [_uploadingPhotos, setUploadingPhotos] = useState(false);
   const [addressSuggestions, setAddressSuggestions] = useState<string[]>([]);
   const [addressLoading, setAddressLoading] = useState(false);
   const addressAbortRef = useRef<AbortController | null>(null);
@@ -251,7 +251,7 @@ export default function Firesale() {
 
   // Downscale and compress images client-side before upload
   const compressImage = (file: File, maxDim = 1600, quality = 0.75): Promise<Blob> => {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve, _reject) => {
       const img = new Image();
       const reader = new FileReader();
 
@@ -288,7 +288,7 @@ export default function Firesale() {
               type,
               quality,
             );
-          } catch (err) {
+          } catch {
             resolve(file);
           }
         };
@@ -366,7 +366,7 @@ export default function Firesale() {
         try {
           sessionStorage.setItem("signup_participant_type", "seller");
           localStorage.setItem("signup_participant_type", "seller");
-        } catch (_) {}
+        } catch { /* ignore storage errors */ }
         navigate("/onboarding");
       }
       return;
@@ -394,7 +394,7 @@ export default function Firesale() {
       try {
         sessionStorage.setItem("signup_participant_type", "seller");
         localStorage.setItem("signup_participant_type", "seller");
-      } catch (_) {}
+      } catch { /* ignore storage errors */ }
       navigate("/onboarding");
       return;
     }
@@ -635,7 +635,7 @@ export default function Firesale() {
                                     try {
                                       sessionStorage.setItem("signup_participant_type", "seller");
                                       localStorage.setItem("signup_participant_type", "seller");
-                                    } catch (_) {}
+                                    } catch { /* ignore storage errors */ }
                                     navigate("/onboarding");
                                   }}
                                 >

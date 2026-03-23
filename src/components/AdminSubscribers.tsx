@@ -82,7 +82,7 @@ export default function AdminSubscribers() {
       const { data: subs, error } = await supabase.from("investor_subscriptions" as any).select("*").order("created_at", { ascending: false });
       if (error) throw error;
       const userIds = (subs || []).map((s: any) => s.user_id);
-      let profileMap: Record<string, string> = {};
+      const profileMap: Record<string, string> = {};
       if (userIds.length > 0) {
         const { data: profiles } = await supabase.from("profiles_public").select("user_id, display_name").in("user_id", userIds);
         (profiles || []).forEach((p: any) => { profileMap[p.user_id] = p.display_name || p.user_id.slice(0, 8); });

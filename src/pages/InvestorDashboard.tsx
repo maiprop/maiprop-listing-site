@@ -1,15 +1,15 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { Link } from "react-router-dom";
 import {
   Flame, Lock, BarChart2, TrendingUp, TrendingDown, MapPin,
-  Building2, ChevronRight, Zap,
-  SlidersHorizontal, Check, Clock,
-  Users, DollarSign, Activity, ArrowUpRight, Phone, Mail,
-  Crown, Sparkles, AlertCircle, RefreshCw,
-  ChevronDown, Save, LayoutGrid,
-  Calendar, Ban, ArrowUpCircle,
-  SendHorizonal, ThumbsUp, ThumbsDown, MessageCircle, Trophy, X as XIcon,
-  ExternalLink, Target, Loader2, MailPlus, Briefcase
+  Building2,
+  SlidersHorizontal, Clock,
+  Users, DollarSign, Activity,
+  Crown, AlertCircle, RefreshCw,
+  LayoutGrid,
+  Ban,
+  MessageCircle, X as XIcon,
+  Loader2, MailPlus, Briefcase, Upload, CheckCircle2, FileCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -19,6 +19,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
 import { isPlatformAdmin } from "@/lib/authUtils";
+import { useMyFiresaleInterests, useExpressInterest } from "@/hooks/useFiresaleInterest";
 
 type Subscription = {
   id: string;
@@ -368,20 +369,19 @@ function timeAgo(iso: string) {
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function InvestorDashboard() {
   const { user, profile } = useAuth();
-  const navigate = useNavigate();
 
   const [activeTab] = useState<"deals">("deals");
 
   const participantType = getParticipantTypeFromProfile(profile);
 
   const [subscription, setSubscription] = useState<Subscription | null>(null);
-  const [subLoading, setSubLoading] = useState(true);
+  const [_subLoading, setSubLoading] = useState(true);
   const subscribed = subscription?.status === "active" || subscription?.status === "trial";
 
-  const isRealEstateAgent = participantType === "agent";
+  const _isRealEstateAgent = participantType === "agent";
   const canAccessDealFlow = isPlatformAdmin(profile) || subscribed;
-  const [showGate, setShowGate] = useState(false);
-  const [selectedTier, setSelectedTier] = useState<string | null>(null);
+  const [_showGate, setShowGate] = useState(false);
+  const [_selectedTier, _setSelectedTier] = useState<string | null>(null);
   const [showInvitationModal, setShowInvitationModal] = useState(false);
 
   // Invitation request pending state
@@ -440,6 +440,15 @@ export default function InvestorDashboard() {
   const [liveDeals, setLiveDeals] = useState<LiveDeal[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Express Interest dialog
+  const [interestDealId, setInterestDealId] = useState<string | null>(null);
+  const [interestMessage, setInterestMessage] = useState("");
+  const [interestProofFile, setInterestProofFile] = useState<File | null>(null);
+  const [interestProofAmount, setInterestProofAmount] = useState("");
+  const interestFileRef = useRef<HTMLInputElement>(null);
+  const { data: myInterestsMap = new Map() } = useMyFiresaleInterests();
+  const expressInterest = useExpressInterest();
+
   // Load investor feed — only deals admin has published to main dashboard
   useEffect(() => {
     const loadDeals = async () => {
@@ -473,7 +482,7 @@ export default function InvestorDashboard() {
         }));
 
         setLiveDeals(realDeals);
-      } catch (e) {
+      } catch {
         setLiveDeals([]);
         toast.error("Could not load deals. Please try again.");
       } finally {
@@ -504,7 +513,6 @@ export default function InvestorDashboard() {
       return acc;
     }, {});
     const total = liveDeals.length;
-    const totalVal = liveDeals.reduce((s, d) => s + (d.asking_price || 0), 0);
     return Object.entries(byCity)
       .map(([city, { count, value }]) => ({
         city,
@@ -904,9 +912,25 @@ export default function InvestorDashboard() {
                             </div>
                             {!isBlurred && (
                               <div className="flex gap-2 mt-4">
-                                <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground text-xs h-8 flex-1" onClick={() => canAccessDealFlow ? toast.info("Connecting you with seller...") : setShowGate(true)}>
-                                  {canAccessDealFlow ? "Contact Seller" : <><Lock className="w-3 h-3 mr-1" />Unlock Contact</>}
-                                </Button>
+                                {canAccessDealFlow ? (
+                                  myInterestsMap.has(deal.id) ? (
+                                    <div className="flex-1 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-xs font-semibold text-emerald-700">
+                                      <CheckCircle2 className="w-3.5 h-3.5" />
+                                      Interest Registered
+                                      {myInterestsMap.get(deal.id)?.proof_of_funds_url && (
+                                        <span className="ml-auto text-[10px] bg-brand-gold/20 text-brand-gold px-1.5 py-0.5 rounded-full font-bold">POF ✓</span>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground text-xs h-8 flex-1" onClick={() => setInterestDealId(deal.id)}>
+                                      <Flame className="w-3 h-3 mr-1" /> Express Interest
+                                    </Button>
+                                  )
+                                ) : (
+                                  <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground text-xs h-8 flex-1" onClick={() => setShowGate(true)}>
+                                    <Lock className="w-3 h-3 mr-1" /> Unlock Deal Flow
+                                  </Button>
+                                )}
                                 <Button size="sm" variant="outline" className="border-border text-xs h-8" onClick={() => canAccessDealFlow ? toast.success("AI report downloading...") : setShowGate(true)}>
                                   <BarChart2 className="w-3 h-3 mr-1" />
                                   {canAccessDealFlow ? "AI Report" : "Report"}
@@ -931,6 +955,89 @@ export default function InvestorDashboard() {
                   </div>
                 )}
               </div>
+
+              {/* ── Express Interest Dialog ─────────────────────────────── */}
+              {interestDealId && (() => {
+                const deal = liveDeals.find(d => d.id === interestDealId);
+                return (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
+                    <div className="glass-card rounded-2xl border border-border w-full max-w-md p-6 space-y-5 shadow-elevated">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h3 className="font-display font-bold text-lg">Express Interest</h3>
+                          <p className="text-xs text-muted-foreground mt-0.5">{deal?.address}, {deal?.city} · €{deal?.asking_price.toLocaleString()}</p>
+                        </div>
+                        <button className="p-1 rounded-lg text-muted-foreground hover:text-foreground" onClick={() => { setInterestDealId(null); setInterestMessage(""); setInterestProofFile(null); setInterestProofAmount(""); }}>
+                          <XIcon className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {/* Priority callout */}
+                      <div className="rounded-xl bg-brand-gold/10 border border-brand-gold/30 px-4 py-3 flex gap-3">
+                        <Crown className="w-4 h-4 text-brand-gold shrink-0 mt-0.5" />
+                        <p className="text-xs text-muted-foreground"><span className="font-semibold text-foreground">Priority queue:</span> Investors who upload proof of funds get first-look access before other interested parties.</p>
+                      </div>
+
+                      <div className="space-y-4">
+                        {/* Optional message */}
+                        <div>
+                          <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground block mb-1.5">Message to admin (optional)</label>
+                          <textarea
+                            value={interestMessage}
+                            onChange={e => setInterestMessage(e.target.value)}
+                            placeholder="e.g. I'm a cash buyer, can close within 30 days..."
+                            rows={3}
+                            className="w-full bg-muted border border-border rounded-xl px-3 py-2 text-sm outline-none focus:border-primary resize-none"
+                          />
+                        </div>
+
+                        {/* Proof of funds */}
+                        <div>
+                          <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground block mb-1.5">
+                            Proof of funds <span className="font-normal text-brand-gold">(priority)</span>
+                          </label>
+                          <input ref={interestFileRef} type="file" accept="image/*,application/pdf" className="hidden"
+                            onChange={e => setInterestProofFile(e.target.files?.[0] ?? null)} />
+                          <Button type="button" variant="outline" className="w-full gap-2 mb-2" onClick={() => interestFileRef.current?.click()}>
+                            {interestProofFile ? <FileCheck className="w-4 h-4 text-emerald-600" /> : <Upload className="w-4 h-4" />}
+                            {interestProofFile ? interestProofFile.name : "Upload bank statement / LOF"}
+                          </Button>
+                          {interestProofFile && (
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-bold">€</span>
+                              <input
+                                type="number"
+                                value={interestProofAmount}
+                                onChange={e => setInterestProofAmount(e.target.value)}
+                                placeholder="Available amount"
+                                className="w-full bg-background border border-border rounded-xl pl-8 pr-4 py-2.5 text-sm outline-none focus:border-primary"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2 pt-1">
+                        <Button variant="outline" size="sm" className="flex-1" onClick={() => { setInterestDealId(null); setInterestMessage(""); setInterestProofFile(null); setInterestProofAmount(""); }}>
+                          Cancel
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="flex-1 bg-gradient-primary border-0 text-primary-foreground gap-1.5"
+                          disabled={expressInterest.isPending}
+                          onClick={async () => {
+                            await expressInterest.mutateAsync({ dealId: interestDealId, proofFile: interestProofFile, proofAmount: interestProofAmount, message: interestMessage });
+                            setInterestDealId(null); setInterestMessage(""); setInterestProofFile(null); setInterestProofAmount("");
+                          }}
+                        >
+                          {expressInterest.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Flame className="w-3.5 h-3.5" />}
+                          Register Interest
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Right sidebar analytics */}
               <div className="space-y-4 lg:sticky lg:top-24 self-start">

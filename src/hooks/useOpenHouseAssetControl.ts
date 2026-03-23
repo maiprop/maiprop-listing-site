@@ -45,7 +45,13 @@ export interface OpenHouseRegistration {
   note: string | null;
   created_at: string;
   updated_at: string;
-  profiles?: { display_name: string; first_name: string; last_name: string; avatar_url: string } | null;
+  // Pre-qualification / screening fields
+  mortgage_status: string | null;
+  budget_range: string | null;
+  working_with_agent: string | null;
+  screening_doc_url: string | null;
+  screening_score: number | null;
+  profiles?: { display_name: string; first_name: string; last_name: string; avatar_url: string; email?: string } | null;
 }
 
 export interface OpenHouseOffer {
@@ -120,7 +126,7 @@ export function useUpsertOpenHouseSettings() {
   });
 }
 
-export function useOpenHouseRegistrations(listingId: string | undefined, asOwner: boolean) {
+export function useOpenHouseRegistrations(listingId: string | undefined, _asOwner: boolean) {
   return useQuery({
     queryKey: ["open_house_registrations", listingId],
     queryFn: async () => {
@@ -129,7 +135,7 @@ export function useOpenHouseRegistrations(listingId: string | undefined, asOwner
         .from("open_house_registrations")
         .select(`
           *,
-          profiles:requester_id (display_name, first_name, last_name, avatar_url)
+          profiles:requester_id (display_name, first_name, last_name, avatar_url, email)
         `)
         .eq("listing_id", listingId)
         .order("created_at", { ascending: false });
@@ -217,6 +223,11 @@ export function useUpdateOpenHouseRegistration() {
         approved_at: string;
         attended_at: string;
         rejection_reason: string;
+        // Pre-qualification screening fields
+        mortgage_status: string;
+        budget_range: string;
+        working_with_agent: string;
+        screening_doc_url: string;
       }>;
     }) => {
       const { data, error } = await supabase
@@ -347,6 +358,64 @@ export function useUpdateOpenHouseOffer() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["open_house_offers"] });
       toast.success("Offer updated");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+/** Accept one offer and automatically reject all other active offers for the same listing. */
+export function useAcceptOpenHouseOffer() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      acceptId,
+      listingId,
+      allOfferIds,
+    }: {
+      acceptId: string;
+      listingId: string;
+      allOfferIds: string[];
+    }) => {
+      const uid = (await supabase.auth.getUser()).data.user?.id;
+      const now = new Date().toISOString();
+      const { error: e1 } = await supabase
+        .from("open_house_offers")
+        .update({ status: "accepted", decided_by: uid, decided_at: now, revealed_at: now })
+        .eq("id", acceptId);
+      if (e1) throw e1;
+      const otherIds = allOfferIds.filter((id) => id !== acceptId);
+      if (otherIds.length > 0) {
+        const { error: e2 } = await supabase
+          .from("open_house_offers")
+          .update({ status: "rejected", decided_by: uid, decided_at: now })
+          .in("id", otherIds)
+          .neq("status", "withdrawn");
+        if (e2) throw e2;
+      }
+    },
+    onSuccess: (_, v) => {
+      qc.invalidateQueries({ queryKey: ["open_house_offers", v.listingId] });
+      toast.success("Offer accepted — other bids automatically rejected");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+/** Reveal all submitted (sealed) bids at once. */
+export function useRevealAllOffers() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ listingId, offerIds }: { listingId: string; offerIds: string[] }) => {
+      const { error } = await supabase
+        .from("open_house_offers")
+        .update({ status: "revealed", revealed_at: new Date().toISOString() })
+        .in("id", offerIds)
+        .eq("status", "submitted");
+      if (error) throw error;
+    },
+    onSuccess: (_, v) => {
+      qc.invalidateQueries({ queryKey: ["open_house_offers", v.listingId] });
+      toast.success("All bids revealed");
     },
     onError: (e: Error) => toast.error(e.message),
   });

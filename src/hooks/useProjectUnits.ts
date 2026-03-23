@@ -75,7 +75,7 @@ export function useCreateProjectUnit() {
 export function useUpdateProjectUnit() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, projectId, updates }: { id: string; projectId: string; updates: ProjectUnitUpdate }) => {
+    mutationFn: async ({ id, projectId: _projectId, updates }: { id: string; projectId: string; updates: ProjectUnitUpdate }) => {
       const { data, error } = await db
         .from("project_units")
         .update(updates)
@@ -97,7 +97,7 @@ export function useUpdateProjectUnit() {
 export function useDeleteProjectUnit() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, projectId }: { id: string; projectId: string }) => {
+    mutationFn: async ({ id, projectId: _projectId }: { id: string; projectId: string }) => {
       const { error } = await db.from("project_units").delete().eq("id", id);
       if (error) throw error;
     },

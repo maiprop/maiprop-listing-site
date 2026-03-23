@@ -29,5 +29,8 @@ COMMIT_HISTORY*.txt*
 # Local / separate project (not part of this repo)
 mai-pro-os/
 
+# Claude Code internals
+.claude/
+
 # Supabase local temp (generated)
 supabase/.temp/

@@ -67,6 +67,8 @@ export function dbListingToCard(
   ownershipPercentage?: number;
   isFeatured?: boolean;
   priorityPlacement?: number;
+  isPreSale?: boolean;
+  constructionStatus?: string;
   _raw?: any;
 } {
   const {
@@ -144,6 +146,8 @@ export function dbListingToCard(
     hasVirtualTour: l.has_virtual_tour,
     isFeatured: !!(l as any).is_featured,
     priorityPlacement: Number((l as any).priority_placement) || 0,
+    isPreSale: l.is_pre_sale ?? false,
+    constructionStatus: l.construction_status ?? undefined,
   };
 
   if (includeOwnership) {

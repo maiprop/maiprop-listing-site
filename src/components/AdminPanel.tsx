@@ -18,7 +18,6 @@ import {
   WifiOff,
   RefreshCw,
   Loader2,
-  CheckCircle2,
   AlertCircle,
   ArrowDownLeft,
   ArrowUpRight,
@@ -29,7 +28,6 @@ import {
   ChevronDown,
   ChevronRight,
   Database,
-  Server,
   Play,
   TerminalSquare,
   Calendar,
@@ -62,7 +60,7 @@ function useSyncLogs() {
       if (error) throw error;
       return data ?? [];
     },
-    refetchInterval: 15_000,
+    refetchInterval: 60_000,
   });
 }
 

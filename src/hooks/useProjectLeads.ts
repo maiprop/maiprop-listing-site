@@ -57,7 +57,7 @@ export function useCreateProjectLead() {
 export function useUpdateProjectLead() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, projectId, updates }: { id: string; projectId: string; updates: ProjectLeadUpdate }) => {
+    mutationFn: async ({ id, projectId: _projectId, updates }: { id: string; projectId: string; updates: ProjectLeadUpdate }) => {
       const { data, error } = await db
         .from("project_leads")
         .update(updates)

@@ -29,28 +29,30 @@ type RoleKey = "individual" | "seller_landlord" | "investor" | "agent" | "instit
 
 const ROLES: RoleKey[] = ["individual", "seller_landlord", "investor", "agent", "institutional", "developer", "professional"];
 
-const MOCK_USERS: Array<{ email: string; firstName: string; lastName: string; role: RoleKey }> = [
-  { email: "buyer1@maiprop.demo", firstName: "Alex", lastName: "Buyer", role: "individual" },
-  { email: "buyer2@maiprop.demo", firstName: "Maria", lastName: "Consumer", role: "individual" },
-  { email: "buyer3@maiprop.demo", firstName: "Nikos", lastName: "HomeSeeker", role: "individual" },
-  { email: "seller1@maiprop.demo", firstName: "Elena", lastName: "Seller", role: "seller_landlord" },
-  { email: "seller2@maiprop.demo", firstName: "Yannis", lastName: "Landlord", role: "seller_landlord" },
-  { email: "seller3@maiprop.demo", firstName: "Sofia", lastName: "Owner", role: "seller_landlord" },
-  { email: "investor1@maiprop.demo", firstName: "Dimitris", lastName: "Investor", role: "investor" },
-  { email: "investor2@maiprop.demo", firstName: "Anna", lastName: "DealHunter", role: "investor" },
-  { email: "investor3@maiprop.demo", firstName: "Christos", lastName: "Capital", role: "investor" },
-  { email: "agent1@maiprop.demo", firstName: "Katerina", lastName: "Agent", role: "agent" },
-  { email: "agent2@maiprop.demo", firstName: "Stefanos", lastName: "Broker", role: "agent" },
-  { email: "agent3@maiprop.demo", firstName: "Georgia", lastName: "Realtor", role: "agent" },
-  { email: "institutional1@maiprop.demo", firstName: "Fund Alpha", lastName: "Institutional", role: "institutional" },
-  { email: "institutional2@maiprop.demo", firstName: "Fund Beta", lastName: "Capital", role: "institutional" },
-  { email: "institutional3@maiprop.demo", firstName: "Fund Gamma", lastName: "Investments", role: "institutional" },
-  { email: "developer1@maiprop.demo", firstName: "Panos", lastName: "Developer", role: "developer" },
-  { email: "developer2@maiprop.demo", firstName: "Vasilis", lastName: "Builder", role: "developer" },
-  { email: "developer3@maiprop.demo", firstName: "Ioannis", lastName: "Project", role: "developer" },
-  { email: "professional1@maiprop.demo", firstName: "Stella", lastName: "Architect", role: "professional" },
-  { email: "professional2@maiprop.demo", firstName: "Michalis", lastName: "Lawyer", role: "professional" },
-  { email: "professional3@maiprop.demo", firstName: "Fotini", lastName: "Valuer", role: "professional" },
+type ParticipantType = "buyer" | "seller" | "investor" | "agent" | "developer" | "professional";
+
+const MOCK_USERS: Array<{ email: string; firstName: string; lastName: string; role: RoleKey; participantType: ParticipantType; investorMode?: boolean }> = [
+  { email: "buyer1@maiprop.demo", firstName: "Alex", lastName: "Buyer", role: "individual", participantType: "buyer" },
+  { email: "buyer2@maiprop.demo", firstName: "Maria", lastName: "Consumer", role: "individual", participantType: "buyer" },
+  { email: "buyer3@maiprop.demo", firstName: "Nikos", lastName: "HomeSeeker", role: "individual", participantType: "buyer" },
+  { email: "seller1@maiprop.demo", firstName: "Elena", lastName: "Seller", role: "seller_landlord", participantType: "seller" },
+  { email: "seller2@maiprop.demo", firstName: "Yannis", lastName: "Landlord", role: "seller_landlord", participantType: "seller" },
+  { email: "seller3@maiprop.demo", firstName: "Sofia", lastName: "Owner", role: "seller_landlord", participantType: "seller" },
+  { email: "investor1@maiprop.demo", firstName: "Dimitris", lastName: "Investor", role: "investor", participantType: "investor", investorMode: true },
+  { email: "investor2@maiprop.demo", firstName: "Anna", lastName: "DealHunter", role: "investor", participantType: "investor", investorMode: true },
+  { email: "investor3@maiprop.demo", firstName: "Christos", lastName: "Capital", role: "investor", participantType: "investor", investorMode: true },
+  { email: "agent1@maiprop.demo", firstName: "Katerina", lastName: "Agent", role: "agent", participantType: "agent" },
+  { email: "agent2@maiprop.demo", firstName: "Stefanos", lastName: "Broker", role: "agent", participantType: "agent" },
+  { email: "agent3@maiprop.demo", firstName: "Georgia", lastName: "Realtor", role: "agent", participantType: "agent" },
+  { email: "institutional1@maiprop.demo", firstName: "Fund Alpha", lastName: "Institutional", role: "institutional", participantType: "investor", investorMode: true },
+  { email: "institutional2@maiprop.demo", firstName: "Fund Beta", lastName: "Capital", role: "institutional", participantType: "investor", investorMode: true },
+  { email: "institutional3@maiprop.demo", firstName: "Fund Gamma", lastName: "Investments", role: "institutional", participantType: "investor", investorMode: true },
+  { email: "developer1@maiprop.demo", firstName: "Panos", lastName: "Developer", role: "developer", participantType: "developer" },
+  { email: "developer2@maiprop.demo", firstName: "Vasilis", lastName: "Builder", role: "developer", participantType: "developer" },
+  { email: "developer3@maiprop.demo", firstName: "Ioannis", lastName: "Project", role: "developer", participantType: "developer" },
+  { email: "professional1@maiprop.demo", firstName: "Stella", lastName: "Architect", role: "professional", participantType: "professional" },
+  { email: "professional2@maiprop.demo", firstName: "Michalis", lastName: "Lawyer", role: "professional", participantType: "professional" },
+  { email: "professional3@maiprop.demo", firstName: "Fotini", lastName: "Valuer", role: "professional", participantType: "professional" },
 ];
 
 const INDICES = {
@@ -96,18 +98,24 @@ async function main() {
     console.log(`  ✓ ${u.email} (${u.role})`);
   }
 
-  console.log("\nGranting roles (agent + professional via RPC, others via update)...");
-  const agentIds = INDICES.agent.map((i) => userIds[i]);
-  const professionalIds = INDICES.professional.map((i) => userIds[i]);
-  await supabase.rpc("seed_grant_role", { user_ids: agentIds, target_role: "agent" });
-  await supabase.rpc("seed_grant_role", { user_ids: professionalIds, target_role: "professional" });
-  for (const role of ["seller_landlord", "investor", "institutional", "developer"] as const) {
-    const ids = INDICES[role].map((i) => userIds[i]);
-    await supabase.from("profiles").update({ role }).in("user_id", ids);
+  console.log("\nGranting roles via seed_grant_role RPC (bypasses profile guard trigger)...");
+  const rpcRoles: Array<{ indicesKey: keyof typeof INDICES; role: string }> = [
+    { indicesKey: "agent",         role: "agent" },
+    { indicesKey: "professional",  role: "professional" },
+    { indicesKey: "seller",        role: "seller_landlord" },
+    { indicesKey: "investor",      role: "investor" },
+    { indicesKey: "institutional", role: "institutional" },
+    { indicesKey: "developer",     role: "developer" },
+  ];
+  for (const { indicesKey, role } of rpcRoles) {
+    const ids = INDICES[indicesKey].map((i) => userIds[i]);
+    const { error } = await supabase.rpc("seed_grant_role", { user_ids: ids, target_role: role });
+    if (error) console.error(`  ✗ seed_grant_role(${role}):`, error.message);
+    else console.log(`  ✓ ${role} (${ids.length} users)`);
   }
   console.log("  Roles set");
 
-  console.log("\nUpdating profile details...");
+  console.log("\nUpdating profile details + participant_type...");
   const cities = ["Athens", "Thessaloniki", "Patras", "Athens", "Heraklion", "Volos", "Athens", "Thessaloniki", "Athens", "Athens", "Thessaloniki", "Patras", "Athens", "Athens", "London", "Athens", "Thessaloniki", "Patras", "Athens", "Thessaloniki", "Athens"];
   for (let i = 0; i < MOCK_USERS.length; i++) {
     const u = MOCK_USERS[i];
@@ -118,10 +126,12 @@ async function main() {
         last_name: u.lastName,
         display_name: `${u.firstName} ${u.lastName}`,
         city: cities[i],
+        participant_type: u.participantType,
+        investor_mode: u.investorMode ?? false,
       })
       .eq("user_id", userIds[i]);
   }
-  console.log("  Profiles updated");
+  console.log("  Profiles updated (including participant_type + investor_mode)");
 
   // ── Listings: agents + sellers + developer ─────────────────────────────────
   console.log("\nCreating listings...");
@@ -268,6 +278,7 @@ async function main() {
 
   // ── Consultation requests (buyers/investors → professionals) ─────────────────
   console.log("\nCreating consultation requests...");
+  const professionalIds = INDICES.professional.map((i) => userIds[i]);
   const { data: profRows } = await supabase.from("professionals").select("id, user_id").in("user_id", professionalIds);
   const profIdByUser = new Map(profRows?.map((p) => [p.user_id, p.id]) ?? []);
   const consulReqs = [
@@ -402,7 +413,6 @@ async function main() {
 
   // ── Firesale (Quick Sale) requests ───────────────────────────────────────────
   console.log("\nCreating firesale (Quick Sale) requests...");
-  const sellerIds = INDICES.seller.map((i) => userIds[i]);
   const firesaleReqs = [
     { userIdx: 3, address: "Aristotelous 42", city: "Thessaloniki", property_type: "apartment", sqm: 95, bedrooms: 3, condition: "good", asking_price: 145000, ai_estimate: 162000, offer_price: null, status: "pending", contact_email: MOCK_USERS[3].email, contact_phone: "+30 231 555 1001", notes: "Need quick sale due to relocation. Property in good condition.", admin_notes: null },
     { userIdx: 4, address: "Ermou 18", city: "Athens", property_type: "apartment", sqm: 72, bedrooms: 2, condition: "fair", asking_price: 98000, ai_estimate: 115000, offer_price: null, status: "pending", contact_email: MOCK_USERS[4].email, contact_phone: "+30 210 555 2002", notes: "Inherited property, want to sell fast.", admin_notes: null },
@@ -435,9 +445,9 @@ async function main() {
   console.log("\n✅ Seed complete. 21 accounts across 7 types with full cross-type interactions including open house and firesale pipeline.");
   console.log("\nPassword for all: Demo2025!");
   console.log("\nAccounts by type:");
-  ROLES.forEach((r) => {
-    const emails = INDICES[r as keyof typeof INDICES].map((i) => MOCK_USERS[i].email);
-    console.log(`  ${r}: ${emails.join(", ")}`);
+  (Object.keys(INDICES) as Array<keyof typeof INDICES>).forEach((key) => {
+    const emails = INDICES[key].map((i) => MOCK_USERS[i].email);
+    console.log(`  ${key}: ${emails.join(", ")}`);
   });
 }
 

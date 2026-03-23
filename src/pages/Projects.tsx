@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Building2, Plus, Loader2, MapPin, Edit2, Trash2, ChevronRight,
-  FolderOpen, ExternalLink
+  FolderOpen
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
