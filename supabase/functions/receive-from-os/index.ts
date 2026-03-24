@@ -23,7 +23,15 @@ Deno.serve(async (req) => {
 
   try {
     const signature = req.headers.get("x-os-signature");
-    if (!signature || signature !== WEBHOOK_SECRET) {
+    const timingSafeEqual = (a: string, b: string): boolean => {
+      const aBytes = new TextEncoder().encode(a);
+      const bBytes = new TextEncoder().encode(b);
+      if (aBytes.length !== bBytes.length) return false;
+      let diff = 0;
+      for (let i = 0; i < aBytes.length; i++) diff |= aBytes[i] ^ bBytes[i];
+      return diff === 0;
+    };
+    if (!signature || !timingSafeEqual(signature, WEBHOOK_SECRET)) {
       return new Response(JSON.stringify({ error: "Unauthorized: invalid signature" }), {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

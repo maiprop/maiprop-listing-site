@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import logoImg from "@/assets/logo.webp";
 import logoDarkImg from "@/assets/logo-dark.webp";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Bell, MessageSquare, Menu, X, ChevronDown, Plus, LogOut, LayoutDashboard, Building2, Sun, Moon, Home, Flame, DoorOpen, Search, Zap } from "lucide-react";
+import { Bell, MessageSquare, Menu, X, ChevronDown, Plus, LogOut, LayoutDashboard, Building2, Sun, Moon, Home, Flame, DoorOpen, Search, Zap, Gavel, Calendar, CheckCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "next-themes";
 import {
@@ -40,6 +40,8 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
   const canListProperty = ["seller", "agent", "developer", "institutional"].includes(participantType);
   const { eligible: eligibleForQuickSale } = useEligibleForQuickSale();
 
+  const queryClient = useQueryClient();
+
   const { data: unreadNotifCount = 0 } = useQuery({
     queryKey: ["notifications_unread", user?.id],
     queryFn: async (): Promise<number> => {
@@ -53,6 +55,44 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
     enabled: !!user,
     refetchInterval: 120_000,
   });
+
+  type NotifItem = { id: string; title: string; body: string | null; type: string; read: boolean; created_at: string };
+  const { data: notifItems = [] } = useQuery<NotifItem[]>({
+    queryKey: ["notifications_list", user?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("notifications")
+        .select("id, title, body, type, read, created_at")
+        .eq("user_id", user!.id)
+        .order("created_at", { ascending: false })
+        .limit(10);
+      return (data ?? []) as NotifItem[];
+    },
+    enabled: !!user,
+    refetchInterval: 120_000,
+  });
+
+  const markNotifRead = async (id: string) => {
+    await supabase.from("notifications").update({ read: true }).eq("id", id);
+    queryClient.invalidateQueries({ queryKey: ["notifications_unread", user?.id] });
+    queryClient.invalidateQueries({ queryKey: ["notifications_list", user?.id] });
+  };
+
+  const markAllRead = async () => {
+    await supabase.from("notifications").update({ read: true }).eq("user_id", user!.id).eq("read", false);
+    queryClient.invalidateQueries({ queryKey: ["notifications_unread", user?.id] });
+    queryClient.invalidateQueries({ queryKey: ["notifications_list", user?.id] });
+  };
+
+  const formatTimeAgo = (iso: string) => {
+    const diff = Date.now() - new Date(iso).getTime();
+    const m = Math.floor(diff / 60000);
+    if (m < 1) return "just now";
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h ago`;
+    return `${Math.floor(h / 24)}d ago`;
+  };
 
   const hasDarkHero = DARK_HERO_ROUTES.includes(location.pathname);
   // When transparent AND over a dark hero, force white text; otherwise use semantic tokens
@@ -222,12 +262,52 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
                     </span>
                   )}
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-72 bg-card border-border p-4">
-                  <p className="text-sm font-medium mb-1">Notifications</p>
-                  {unreadNotifCount > 0 ? (
-                    <p className="text-xs text-muted-foreground">You have {unreadNotifCount} unread notification{unreadNotifCount !== 1 ? "s" : ""}. Check your investor dashboard for new Quick Sale deals.</p>
+                <DropdownMenuContent align="end" className="w-80 bg-card border-border p-0 overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                    <p className="text-sm font-semibold flex items-center gap-2">
+                      Notifications
+                      {unreadNotifCount > 0 && (
+                        <span className="text-[10px] font-bold bg-destructive text-white px-1.5 py-0.5 rounded-full">{unreadNotifCount}</span>
+                      )}
+                    </p>
+                    {unreadNotifCount > 0 && (
+                      <button onClick={markAllRead} className="text-xs text-primary hover:underline flex items-center gap-1">
+                        <CheckCheck className="w-3 h-3" /> Mark all read
+                      </button>
+                    )}
+                  </div>
+                  {notifItems.length === 0 ? (
+                    <div className="px-4 py-8 text-center">
+                      <Bell className="w-8 h-8 text-muted-foreground/25 mx-auto mb-2" />
+                      <p className="text-xs text-muted-foreground">You&apos;re all caught up!</p>
+                    </div>
                   ) : (
-                    <p className="text-xs text-muted-foreground">No new notifications. You&apos;re all caught up!</p>
+                    <div className="divide-y divide-border max-h-80 overflow-y-auto">
+                      {notifItems.map((n) => (
+                        <button
+                          key={n.id}
+                          onClick={() => markNotifRead(n.id)}
+                          className={`w-full text-left px-4 py-3 hover:bg-muted/40 transition-colors ${!n.read ? "bg-primary/5" : ""}`}
+                        >
+                          <div className="flex items-start gap-2.5">
+                            <div className={`mt-0.5 shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${!n.read ? "bg-primary/15" : "bg-secondary"}`}>
+                              {n.type === "quick_sale" || n.type === "firesale" ? <Flame className="w-3.5 h-3.5 text-destructive" /> :
+                               n.type === "auction_alert" || n.type === "auction" ? <Gavel className="w-3.5 h-3.5 text-primary" /> :
+                               n.type === "viewing" ? <Calendar className="w-3.5 h-3.5 text-primary" /> :
+                               n.type === "open_house" ? <DoorOpen className="w-3.5 h-3.5 text-primary" /> :
+                               n.type === "message" ? <MessageSquare className="w-3.5 h-3.5 text-primary" /> :
+                               <Bell className="w-3.5 h-3.5 text-primary" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className={`text-xs leading-snug ${!n.read ? "font-semibold text-foreground" : "text-foreground"}`}>{n.title}</p>
+                              {n.body && <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2 leading-snug">{n.body}</p>}
+                              <p className="text-[10px] text-muted-foreground/60 mt-1">{formatTimeAgo(n.created_at)}</p>
+                            </div>
+                            {!n.read && <span className="mt-2 w-2 h-2 rounded-full bg-primary shrink-0" />}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
                   )}
                 </DropdownMenuContent>
               </DropdownMenu>

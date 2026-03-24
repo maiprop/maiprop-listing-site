@@ -6,7 +6,7 @@
 
 import { useState, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Star, Search, ImageOff, TrendingUp } from "lucide-react";
+import { Star, Search, ImageOff, TrendingUp, ExternalLink } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +32,8 @@ type FeaturedListing = {
   views_count: number;
   /** updated_at used as a proxy for when is_featured was last changed */
   featured_since: string | null;
+  featured_until: string | null;
+  listing_type: string;
 };
 
 type RawListingRow = {
@@ -47,6 +49,8 @@ type RawListingRow = {
   owner_id: string | null;
   views_count: number;
   updated_at: string | null;
+  featured_until: string | null;
+  listing_type: string;
 };
 
 type ProfilesPublicRow = {
@@ -95,7 +99,7 @@ async function fetchFeaturedListings(): Promise<FeaturedListing[]> {
   const { data: listings, error: listingsError } = await supabase
     .from("listings")
     .select(
-      "id, title, city, property_type, price, cover_image_url, is_featured, priority_placement, status, owner_id, views_count, updated_at",
+      "id, title, city, property_type, listing_type, price, cover_image_url, is_featured, priority_placement, featured_until, status, owner_id, views_count, updated_at",
     )
     .order("is_featured", { ascending: false })
     .order("priority_placement", { ascending: false })
@@ -130,6 +134,8 @@ async function fetchFeaturedListings(): Promise<FeaturedListing[]> {
     seller_name: l.owner_id ? (profileMap[l.owner_id] ?? null) : null,
     views_count: l.views_count ?? 0,
     featured_since: l.updated_at ?? null,
+    featured_until: l.featured_until ?? null,
+    listing_type: l.listing_type ?? "sale",
   }));
 }
 
@@ -139,6 +145,7 @@ export default function AdminFeaturedListings() {
   const [pendingPriority, setPendingPriority] = useState<Record<string, string>>({});
   const [toggling, setToggling] = useState<Record<string, boolean>>({});
   const [updatingPriority, setUpdatingPriority] = useState<Record<string, boolean>>({});
+  const [updatingUntil, setUpdatingUntil] = useState<Record<string, boolean>>({});
 
   const { data: listings = [], isLoading, error } = useQuery<FeaturedListing[]>({
     queryKey: ["admin-featured-listings"],
@@ -226,6 +233,33 @@ export default function AdminFeaturedListings() {
     [pendingPriority, queryClient],
   );
 
+  const handleUntilChange = useCallback(
+    async (listing: FeaturedListing, dateValue: string) => {
+      setUpdatingUntil((prev) => ({ ...prev, [listing.id]: true }));
+      const newVal = dateValue ? new Date(dateValue).toISOString() : null;
+      try {
+        const { error: updateError } = await supabase
+          .from("listings")
+          .update({ featured_until: newVal } as any)
+          .eq("id", listing.id);
+        if (updateError) throw updateError;
+        await queryClient.invalidateQueries({ queryKey: ["admin-featured-listings"] });
+        toast.success(newVal ? `Expires ${formatDate(newVal)}` : "Expiry cleared");
+      } catch (e: unknown) {
+        toast.error((e as Error)?.message ?? "Failed to update expiry");
+      } finally {
+        setUpdatingUntil((prev) => ({ ...prev, [listing.id]: false }));
+      }
+    },
+    [queryClient],
+  );
+
+  const getDetailPath = (listing: FeaturedListing): string => {
+    if (listing.listing_type === "auction") return `/auction/${listing.id}`;
+    if (listing.listing_type === "open_house") return `/open-house/${listing.id}`;
+    return `/property/${listing.id}`;
+  };
+
   const getPriorityValue = (listing: FeaturedListing): string => {
     return pendingPriority[listing.id] !== undefined
       ? pendingPriority[listing.id]
@@ -309,8 +343,10 @@ export default function AdminFeaturedListings() {
                 <th className="text-center px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Views</th>
                 <th className="text-center px-4 py-3 font-medium text-muted-foreground hidden xl:table-cell">Since</th>
                 <th className="text-center px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Perf.</th>
+                <th className="text-center px-4 py-3 font-medium text-muted-foreground hidden xl:table-cell">Expires</th>
                 <th className="text-center px-4 py-3 font-medium text-muted-foreground">Featured</th>
                 <th className="text-center px-4 py-3 font-medium text-muted-foreground">Priority</th>
+                <th className="text-center px-4 py-3 font-medium text-muted-foreground w-10"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -319,6 +355,7 @@ export default function AdminFeaturedListings() {
                   STATUS_BADGE[listing.status] ?? { label: listing.status, variant: "outline" as const };
                 const isTogglingThis = toggling[listing.id] ?? false;
                 const isUpdatingPriorityThis = updatingPriority[listing.id] ?? false;
+                const isUpdatingUntilThis = updatingUntil[listing.id] ?? false;
                 const dotClass = performanceDotClass(listing.views_count);
                 const perfLabel = performanceLabel(listing.views_count);
 
@@ -392,6 +429,24 @@ export default function AdminFeaturedListings() {
                       </div>
                     </td>
 
+                    {/* Expires column */}
+                    <td className="px-4 py-3 text-center hidden xl:table-cell">
+                      <input
+                        type="date"
+                        disabled={isUpdatingUntilThis}
+                        value={listing.featured_until ? listing.featured_until.slice(0, 10) : ""}
+                        min={new Date().toISOString().slice(0, 10)}
+                        onChange={(e) => handleUntilChange(listing, e.target.value)}
+                        className={`w-32 h-8 px-2 rounded-md border bg-background text-xs outline-none focus:border-primary disabled:opacity-50 ${
+                          listing.featured_until && new Date(listing.featured_until) < new Date()
+                            ? "border-destructive text-destructive"
+                            : "border-border text-foreground"
+                        }`}
+                        aria-label={`Featured until for ${listing.title}`}
+                        title={listing.featured_until ? `Expires ${formatDate(listing.featured_until)}` : "No expiry set"}
+                      />
+                    </td>
+
                     {/* Featured toggle */}
                     <td className="px-4 py-3 text-center">
                       <Switch
@@ -425,6 +480,19 @@ export default function AdminFeaturedListings() {
                         className="w-16 h-8 text-center rounded-md border border-border bg-background text-sm outline-none focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed"
                         aria-label={`Priority for ${listing.title}`}
                       />
+                    </td>
+
+                    {/* View listing link */}
+                    <td className="px-4 py-3 text-center">
+                      <a
+                        href={getDetailPath(listing)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors inline-flex"
+                        title="View listing"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
                     </td>
                   </tr>
                 );

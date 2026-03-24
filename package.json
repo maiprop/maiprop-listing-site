@@ -10,6 +10,8 @@
     "seed:listings": "npx tsx scripts/seed-mock-listings.ts",
     "seed:professionals": "npx tsx scripts/seed-mock-professionals.ts",
     "seed:open-houses": "npx tsx scripts/seed-mock-open-houses.ts",
+    "seed:new-builds": "npx tsx scripts/seed-mock-new-builds.ts",
+    "seed:notifications": "npx tsx scripts/seed-mock-notifications.ts",
     "db:push": "supabase db push",
     "build": "vite build",
     "compress:images": "node scripts/compress-images.mjs",
