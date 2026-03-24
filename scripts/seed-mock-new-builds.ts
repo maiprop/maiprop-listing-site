@@ -168,6 +168,118 @@ const NEW_BUILDS = [
   },
 ];
 
+// ── New-build FOR RENT ────────────────────────────────────────────────────────
+// Developer-managed rental units in newly completed or near-complete buildings
+const NEW_BUILD_RENTALS = [
+  {
+    title: "Kolonaki Residences — Managed Rental Studio",
+    description: "Brand-new A+ studio (34m²) in the newly delivered Kolonaki Residences. Fully furnished and equipped. Managed by the developer — utilities and building maintenance included. Ideal for professionals or expats. Minimum 6-month lease. Available immediately.",
+    city: "Athens", address: "14 Skoufa St, Kolonaki", region: "Attica",
+    property_type: "apartment", listing_type: "rent",
+    price: 1450, price_per_sqm: 43, sqm: 34,
+    bedrooms: 0, bathrooms: 1, floor: 2, total_floors: 8,
+    year_built: 2025, energy_class: "A+",
+    construction_status: "new",
+    is_pre_sale: false, is_featured: true, priority_placement: 5,
+    has_elevator: true, has_parking: false, has_smart_home: true,
+    has_security: true, has_furnished: true, has_ac: true, has_balcony: true,
+    min_rental_months: 6, deposit_months: 2,
+    latitude: 37.9795, longitude: 23.7424, views_count: 220,
+    cover_image_url: COVER_IMAGES[0],
+    tags: ["new-build", "managed-rental", "furnished", "A+"],
+  },
+  {
+    title: "Glyfada Riviera — New 2BR Sea-View Rental",
+    description: "Freshly completed 2-bedroom apartment in Glyfada Riviera. Direct sea views from the living room and master bedroom. Fully furnished to hotel standard — linen, appliances, smart TV included. Underground parking space included. Available on 12-month lease.",
+    city: "Glyfada", address: "3 Poseidonos Ave, Glyfada", region: "Attica",
+    property_type: "apartment", listing_type: "rent",
+    price: 2800, price_per_sqm: 41, sqm: 68,
+    bedrooms: 2, bathrooms: 2, floor: 4, total_floors: 6,
+    year_built: 2025, energy_class: "A+",
+    construction_status: "new",
+    is_pre_sale: false, is_featured: true, priority_placement: 4,
+    has_elevator: true, has_parking: true, has_pool: true,
+    has_security: true, has_view: true, has_furnished: true, has_ac: true, has_balcony: true,
+    min_rental_months: 12, deposit_months: 2,
+    short_term_rental: false,
+    latitude: 37.8630, longitude: 23.7516, views_count: 380,
+    cover_image_url: COVER_IMAGES[1],
+    tags: ["new-build", "sea-view", "furnished", "parking"],
+  },
+  {
+    title: "Marousi Central — New 1BR Corporate Rental",
+    description: "Just completed 1-bedroom apartment in Marousi Central, ideal for business professionals. 5-minute walk to Marousi metro. High-speed fibre, ergonomic workspace, fully fitted kitchen. Flexible lease terms from 3 months. Bills not included.",
+    city: "Marousi", address: "32 Amarousiou-Chalandriou St", region: "Attica",
+    property_type: "apartment", listing_type: "rent",
+    price: 1100, price_per_sqm: 22, sqm: 50,
+    bedrooms: 1, bathrooms: 1, floor: 5, total_floors: 9,
+    year_built: 2026, energy_class: "A",
+    construction_status: "new",
+    is_pre_sale: false, is_featured: false, priority_placement: 0,
+    has_elevator: true, has_parking: true, has_furnished: true, has_ac: true,
+    has_security: true,
+    min_rental_months: 3, deposit_months: 1,
+    short_term_rental: false,
+    latitude: 38.0556, longitude: 23.8080, views_count: 95,
+    cover_image_url: COVER_IMAGES[5],
+    tags: ["new-build", "corporate-rental", "metro", "furnished"],
+  },
+  {
+    title: "Thessaloniki Waterfront — New 2BR Long-Let",
+    description: "Newly delivered 2-bedroom apartment with stunning sea views over the Thermaic Gulf. Contemporary design, marble bathrooms, American kitchen, 2 full bathrooms. Underground parking. Quiet residential building with concierge. 12-month lease preferred.",
+    city: "Thessaloniki", address: "5 Nikis Ave, Paralía", region: "Central Macedonia",
+    property_type: "apartment", listing_type: "rent",
+    price: 1600, price_per_sqm: 26, sqm: 62,
+    bedrooms: 2, bathrooms: 2, floor: 6, total_floors: 10,
+    year_built: 2026, energy_class: "A",
+    construction_status: "new",
+    is_pre_sale: false, is_featured: false, priority_placement: 0,
+    has_elevator: true, has_parking: true, has_view: true, has_balcony: true,
+    has_furnished: false, has_ac: true,
+    has_security: true,
+    min_rental_months: 12, deposit_months: 2,
+    latitude: 40.6284, longitude: 22.9474, views_count: 112,
+    cover_image_url: COVER_IMAGES[4],
+    tags: ["new-build", "sea-view", "thessaloniki", "long-let"],
+  },
+  {
+    title: "Athens Skyline Tower — New Studio for Rent",
+    description: "Brand-new studio apartment on the 10th floor of Athens Skyline Tower with unobstructed city-wide views. A-rated energy, triple-glazed windows, heat-pump HVAC. Suitable for single professional or couple. Short or long-term available. Ideal Airbnb / serviced apartment opportunity.",
+    city: "Athens", address: "88 Pireos St, Metaxourgeio", region: "Attica",
+    property_type: "apartment", listing_type: "rent",
+    price: 950, price_per_sqm: 28, sqm: 34,
+    bedrooms: 0, bathrooms: 1, floor: 10, total_floors: 15,
+    year_built: 2026, energy_class: "A",
+    construction_status: "new",
+    is_pre_sale: false, is_featured: false, priority_placement: 0,
+    has_elevator: true, has_parking: false, has_smart_home: true,
+    has_security: true, has_view: true, has_ac: true, has_furnished: true,
+    min_rental_months: 1, deposit_months: 1,
+    short_term_rental: true,
+    latitude: 37.9803, longitude: 23.7188, views_count: 67,
+    cover_image_url: COVER_IMAGES[2],
+    tags: ["new-build", "city-view", "short-term", "airbnb-ready"],
+  },
+  {
+    title: "Kifisia — New 3BR Family Villa for Rent",
+    description: "Newly completed standalone villa with private garden and pool in prime Kifisia. Spacious 3-bedroom layout across 2 floors, fully equipped kitchen, 2 bathrooms + guest WC. Large covered terrace, BBQ area, 2-car garage. Ideal for families seeking long-term rental in a safe, green neighbourhood.",
+    city: "Kifisia", address: "5 Kastanias St, Kifisia", region: "Attica",
+    property_type: "villa", listing_type: "rent",
+    price: 4500, price_per_sqm: 20, sqm: 230,
+    bedrooms: 3, bathrooms: 2, floor: 0, total_floors: 2,
+    year_built: 2025, energy_class: "A+",
+    construction_status: "new",
+    is_pre_sale: false, is_featured: true, priority_placement: 3,
+    has_elevator: false, has_parking: true, has_pool: true, has_garden: true,
+    has_smart_home: true, has_security: true, has_ac: true,
+    has_underfloor_heating: true, has_view: false,
+    min_rental_months: 12, deposit_months: 3,
+    latitude: 38.0780, longitude: 23.8090, views_count: 290,
+    cover_image_url: COVER_IMAGES[3],
+    tags: ["new-build", "villa", "family", "pool", "garden"],
+  },
+];
+
 async function main() {
   console.log("🔍  Looking up developer account...");
   const ownerId = await getDeveloperOwnerId();
@@ -175,17 +287,23 @@ async function main() {
     console.warn("⚠️  No developer/agent found. Listings will have owner_id = null. Run seed-mock-users.ts first.");
   }
 
-  const listings = NEW_BUILDS.map(l => ({ ...l, owner_id: ownerId, status: "active" as const }));
+  const saleListings = NEW_BUILDS.map(l => ({ ...l, owner_id: ownerId, status: "active" as const }));
+  const rentListings = NEW_BUILD_RENTALS.map(l => ({ ...l, owner_id: ownerId, status: "active" as const }));
+  const allListings = [...saleListings, ...rentListings];
 
-  console.log(`🏗️  Seeding ${listings.length} new-build listings...`);
-  const { error } = await supabase.from("listings").insert(listings);
-  if (error) {
-    console.error("❌  Error:", error.message);
-    process.exit(1);
-  }
-  console.log(`✅  ${listings.length} new-build listings seeded successfully`);
-  console.log(`    ${listings.filter(l => l.is_featured).length} are featured`);
-  console.log(`    ${listings.filter(l => l.is_pre_sale).length} are pre-sale`);
+  console.log(`🏗️  Seeding ${saleListings.length} new-build FOR SALE listings...`);
+  const { error: saleErr } = await supabase.from("listings").insert(saleListings);
+  if (saleErr) { console.error("❌  Sale error:", saleErr.message); process.exit(1); }
+  console.log(`  ✅  ${saleListings.length} inserted`);
+
+  console.log(`🏠  Seeding ${rentListings.length} new-build FOR RENT listings...`);
+  const { error: rentErr } = await supabase.from("listings").insert(rentListings);
+  if (rentErr) { console.error("❌  Rent error:", rentErr.message); process.exit(1); }
+  console.log(`  ✅  ${rentListings.length} inserted`);
+
+  console.log(`\n✅  Total: ${allListings.length} new-build listings seeded`);
+  console.log(`    ${allListings.filter(l => (l as any).is_featured).length} featured`);
+  console.log(`    ${saleListings.length} for sale (pre-sale), ${rentListings.length} for rent (new)`);
 }
 
 main().catch(err => { console.error(err); process.exit(1); });
