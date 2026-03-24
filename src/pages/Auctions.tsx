@@ -546,6 +546,7 @@ export default function Auctions() {
   const [filterRound, setFilterRound] = useState("");
   const [filterYield, setFilterYield] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [polygonFilterIds, setPolygonFilterIds] = useState<Set<string> | null>(null);
 
   // Prefill city from URL when data loads
   useEffect(() => {
@@ -649,11 +650,16 @@ export default function Auctions() {
     });
   }, [cappedAuctions, selectedCity, filterType, filterBidRange, filterYearRange, filterOwnership, filterRound, filterYield, isPro, isMaiPropOsUser]);
 
-  const totalPages = Math.max(1, Math.ceil(visibleFiltered.length / PAGE_SIZE));
+  const polygonFiltered = useMemo(() => {
+    if (!polygonFilterIds) return visibleFiltered;
+    return visibleFiltered.filter((a) => polygonFilterIds.has(a.id));
+  }, [visibleFiltered, polygonFilterIds]);
+
+  const totalPages = Math.max(1, Math.ceil(polygonFiltered.length / PAGE_SIZE));
   const paginated = useMemo(() => {
     const start = (currentPage - 1) * PAGE_SIZE;
-    return visibleFiltered.slice(start, start + PAGE_SIZE);
-  }, [visibleFiltered, currentPage]);
+    return polygonFiltered.slice(start, start + PAGE_SIZE);
+  }, [polygonFiltered, currentPage]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -1072,7 +1078,11 @@ export default function Auctions() {
                   {visibleFiltered.length > mappableCount && ` (${visibleFiltered.length - mappableCount} without coordinates hidden)`}
                 </p>
                 <Suspense fallback={<div className="h-64 bg-muted animate-pulse rounded-lg" />}>
-                  <MapView listings={mapListings} height="560px" />
+                  <MapView
+                    listings={mapListings}
+                    height="560px"
+                    onPolygonFilter={(ids) => { setPolygonFilterIds(ids); setCurrentPage(1); }}
+                  />
                 </Suspense>
               </div>
           }
@@ -1112,9 +1122,10 @@ export default function Auctions() {
             {!isLoading && visibleFiltered.length > 0 &&
           <>
                  <p className="text-xs text-muted-foreground mb-4">
-                   Showing <span className="font-semibold text-foreground">{(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, visibleFiltered.length)}</span>
+                   Showing <span className="font-semibold text-foreground">{(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, polygonFiltered.length)}</span>
                    {" of "}
-                   <span className="font-semibold text-foreground">{visibleFiltered.length}</span> auctions
+                   <span className="font-semibold text-foreground">{polygonFiltered.length}</span> auctions
+                   {polygonFilterIds && <span className="text-primary"> · area filter active</span>}
                    {selectedCity !== "All Cities" ? ` in ${selectedCity}` : ""}
                    {" · "}ordered by date
                  </p>

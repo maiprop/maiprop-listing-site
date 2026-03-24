@@ -202,8 +202,7 @@ const priceLabelLayer: LayerProps = {
 const heatmapLayer: LayerProps = {
   id: "price-heatmap",
   type: "heatmap",
-  source: "listings",
-  filter: ["!", ["has", "point_count"]],
+  source: "heatmap-data",
   paint: {
     "heatmap-weight": [
       "interpolate", ["linear"], ["get", "price_per_sqm"],
@@ -648,9 +647,15 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
       >
         <NavigationControl position="bottom-right" />
 
+        {/* ── Heatmap source — separate non-clustered source so heatmap sees raw points ── */}
+        {showHeatmap && (
+          <Source id="heatmap-data" type="geojson" data={geoJSON}>
+            <Layer {...heatmapLayer} id="price-heatmap" source="heatmap-data" />
+          </Source>
+        )}
+
         {/* ── Main listings source — GPU rendered, no DOM markers ── */}
         <Source id="listings" type="geojson" data={geoJSON} cluster clusterMaxZoom={13} clusterRadius={55}>
-          {showHeatmap && <Layer {...heatmapLayer} />}
           <Layer {...clusterCircle} />
           <Layer {...clusterCount} />
           <Layer {...unclusteredHit} />
@@ -785,19 +790,6 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
         </div>
       )}
 
-      {/* ── Type legend ── */}
-      <div className="absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none">
-        {Object.entries(TYPE_HEX).map(([type, colour]) => (
-          <div
-            key={type}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold backdrop-blur-md"
-            style={{ background: `${colour}18`, border: `1px solid ${colour}44`, color: colour }}
-          >
-            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: colour }} />
-            {type.charAt(0).toUpperCase() + type.slice(1)}
-          </div>
-        ))}
-      </div>
 
       {/* ── Cluster hint ── */}
       <div className="absolute bottom-12 left-3 pointer-events-none">
