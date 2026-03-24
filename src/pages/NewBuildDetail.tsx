@@ -281,6 +281,8 @@ export default function NewBuildDetail() {
   const { user } = useAuth();
   const startConv = useStartConversation();
   const [contactLoading, setContactLoading] = useState(false);
+  const [interestForm, setInterestForm] = useState({ name: "", phone: "", message: "" });
+  const [interestSubmitted, setInterestSubmitted] = useState(false);
 
   // AI Market Insights
   const [aiInsightsData, setAiInsightsData] = useState<{
@@ -307,6 +309,35 @@ export default function NewBuildDetail() {
     },
     enabled: !!id,
   });
+
+  const handleInterestSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!listing?.owner_id) return;
+    setContactLoading(true);
+    try {
+      if (!user) { navigate("/login"); return; }
+      const msg = [
+        `Hi, I'm interested in ${listing.title}.`,
+        interestForm.message ? `\n\n${interestForm.message}` : "",
+        interestForm.phone ? `\nContact: ${interestForm.phone}` : "",
+      ].join("").trim();
+      await startConv.mutateAsync({ other_user_id: listing.owner_id, listing_id: id });
+      await supabase.from("leads").insert({
+        owner_id: listing.owner_id,
+        name: interestForm.name || user.email?.split("@")[0] || "Interested buyer",
+        phone: interestForm.phone || null,
+        notes: msg,
+        source: "project",
+        status: "new",
+      }).then(() => {});
+      setInterestSubmitted(true);
+      toast.success("Interest registered — the developer will be in touch");
+    } catch {
+      toast.error("Could not register interest. Please try again.");
+    } finally {
+      setContactLoading(false);
+    }
+  };
 
   const handleContact = async () => {
     if (!user) { navigate("/login"); return; }
@@ -394,7 +425,7 @@ export default function NewBuildDetail() {
         {/* Back link */}
         <div className="container max-w-5xl px-4 pt-6 pb-2">
           <Link
-            to="/listings?type=new_build"
+            to="/listings?pre_sale=1"
             className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="w-4 h-4" /> Back to new builds
@@ -639,13 +670,58 @@ export default function NewBuildDetail() {
                     </div>
                   )}
 
-                  <Button className="w-full gap-2 mb-2" onClick={handleContact} disabled={contactLoading}>
-                    {contactLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
-                    Register interest
-                  </Button>
+                  {interestSubmitted ? (
+                    <div className="rounded-xl bg-primary/10 border border-primary/20 p-4 text-center">
+                      <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-2">
+                        <MessageSquare className="w-5 h-5 text-primary" />
+                      </div>
+                      <p className="text-sm font-semibold text-primary">Interest registered!</p>
+                      <p className="text-xs text-muted-foreground mt-1">The developer will contact you shortly.</p>
+                      <button
+                        onClick={() => navigate("/messages")}
+                        className="mt-3 text-xs text-primary hover:underline"
+                      >
+                        View messages →
+                      </button>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleInterestSubmit} className="space-y-2.5">
+                      <div>
+                        <input
+                          type="text"
+                          placeholder="Your name"
+                          value={interestForm.name}
+                          onChange={e => setInterestForm(f => ({ ...f, name: e.target.value }))}
+                          className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+                        />
+                      </div>
+                      <div>
+                        <input
+                          type="tel"
+                          placeholder="Phone (optional)"
+                          value={interestForm.phone}
+                          onChange={e => setInterestForm(f => ({ ...f, phone: e.target.value }))}
+                          className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+                        />
+                      </div>
+                      <div>
+                        <textarea
+                          placeholder="Message (optional)"
+                          rows={2}
+                          value={interestForm.message}
+                          onChange={e => setInterestForm(f => ({ ...f, message: e.target.value }))}
+                          className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:border-primary resize-none"
+                        />
+                      </div>
+                      <Button type="submit" className="w-full gap-2" disabled={contactLoading}>
+                        {contactLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
+                        Register interest
+                      </Button>
+                    </form>
+                  )}
 
-                  {owner?.phone && (
-                    <a href={`tel:${owner.phone}`}>
+                  {owner?.phone && !interestSubmitted && (
+                    <a href={`tel:${owner.phone}`} className="mt-2 block">
                       <Button variant="outline" className="w-full gap-2">
                         <Phone className="w-4 h-4" /> Call developer
                       </Button>
