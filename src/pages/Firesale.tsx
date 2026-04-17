@@ -28,7 +28,7 @@ export default function Firesale() {
   // Load invitation status for logged-in non-eligible users
   useEffect(() => {
     if (!user || eligible) return;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     supabase.from("invitation_requests")
       .select("status")
       .eq("user_id", user.id)

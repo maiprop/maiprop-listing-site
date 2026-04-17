@@ -10,7 +10,7 @@ import { getOwnerParticipantType } from "@/lib/participantConfig";
 
 /**
  * A listings row augmented with joined tables and computed fields added by useListing().
- * Using this type eliminates `(db as any)` casts in consuming components.
+ * Using this type eliminates type casting in consuming components.
  */
 export type ListingWithJoins = Database["public"]["Tables"]["listings"]["Row"] & {
   /** Images joined from listing_images table */
@@ -132,7 +132,7 @@ function buildListingsQuery(filters?: ListingsFilters, from = 0, pageSize = 24) 
   for (const feat of filters?.features ?? []) {
     if (!ALLOWED_FEATURE_COLUMNS.has(feat)) continue;
      
-    query = (query as any).eq(feat, true);
+    query = query.eq(feat, true);
   }
 
   return query;
@@ -271,8 +271,8 @@ export function useTrackListingView() {
 
       const { data: authData } = await supabase.auth.getUser();
       await Promise.all([
-        (supabase.rpc as any)("increment_listing_views", { p_listing_id: listingId }),
-        (supabase.rpc as any)("record_listing_view_event", {
+        supabase.rpc("increment_listing_views", { p_listing_id: listingId }),
+        supabase.rpc("record_listing_view_event", {
           p_listing_id: listingId,
           p_viewer_id: authData.user?.id ?? null,
         }),

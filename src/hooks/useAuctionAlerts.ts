@@ -40,7 +40,7 @@ export function useCreateAuctionAlert() {
     mutationFn: async (payload: AlertPayload) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const { error } = await supabase.from("auction_alerts").insert({ user_id: user.id, ...payload });
       if (error) throw error;
     },

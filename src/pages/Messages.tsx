@@ -237,8 +237,8 @@ export default function Messages() {
                           </span>
                         )}
                       </div>
-                      {(conv as any).listings && (
-                        <div className="text-xs text-primary/70 truncate">{(conv as any).listings.title} · {(conv as any).listings.city}</div>
+                      {conv.listings && (
+                        <div className="text-xs text-primary/70 truncate">{conv.listings.title} · {conv.listings.city}</div>
                       )}
                       {lastMsg && (
                         <div className="text-xs text-muted-foreground truncate mt-0.5">
@@ -290,9 +290,9 @@ export default function Messages() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold text-sm">{otherProfile?.display_name || "User"}</div>
-                  {(activeConv as any)?.listings && (
-                    <Link to={`/property/${(activeConv as any).listing_id}`} className="text-xs text-primary/70 hover:text-primary truncate block">
-                      {(activeConv as any).listings.title} · {(activeConv as any).listings.city}
+                  {activeConv?.listings && (
+                    <Link to={`/property/${activeConv.listing_id}`} className="text-xs text-primary/70 hover:text-primary truncate block">
+                      {activeConv.listings.title} · {activeConv.listings.city}
                     </Link>
                   )}
                 </div>
@@ -413,10 +413,10 @@ export default function Messages() {
                   >
                     {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
                   </button>
-                  {(activeConv as any)?.listing_id && (
+                  {activeConv?.listing_id && (
                     <button
                       type="button"
-                      onClick={() => setInput((prev) => (prev ? `${prev} /property/${(activeConv as any).listing_id}` : `/property/${(activeConv as any).listing_id}`))}
+                      onClick={() => setInput((prev) => (prev ? `${prev} /property/${activeConv.listing_id}` : `/property/${activeConv.listing_id}`))}
                       className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
                       title="Share property link"
                       aria-label="Share property link"

@@ -256,12 +256,12 @@ export default function ProjectDetail() {
     structural_completion_date: project.structural_completion_date, delivery_date: project.delivery_date, status: project.status,
   };
 
-  const listings = Array.isArray((project as any).listings) ? (project as any).listings : [];
-  const linkedListingIds = new Set(listings.map((l: any) => l.id));
-  const availableCount = units.filter((u: any) => u.availability_status === "available").length;
-  const reservedCount = units.filter((u: any) => u.availability_status === "reserved").length;
-  const soldCount = units.filter((u: any) => u.availability_status === "sold").length;
-  const totalViews = (listings.reduce((s: number, l: any) => s + (l.views_count || 0), 0)) + (viewsData?.count ?? 0);
+  const listings = Array.isArray(project.listings) ? project.listings : [];
+  const linkedListingIds = new Set(listings.map((l) => l.id));
+  const availableCount = units.filter((u) => u.availability_status === "available").length;
+  const reservedCount = units.filter((u) => u.availability_status === "reserved").length;
+  const soldCount = units.filter((u) => u.availability_status === "sold").length;
+  const totalViews = (listings.reduce((s: number, l) => s + (l.views_count || 0), 0)) + (viewsData?.count ?? 0);
 
   return (
     <div className="min-h-screen flex flex-col bg-background">

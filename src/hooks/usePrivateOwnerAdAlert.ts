@@ -11,7 +11,7 @@ export function usePrivateOwnerAdAlert() {
     queryKey: ["private_owner_ad_alert", user?.id],
     enabled: !!user,
     queryFn: async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const { data, error } = await supabase.from("private_owner_ad_alerts")
         .select("id")
         .eq("user_id", user!.id)
@@ -25,14 +25,14 @@ export function usePrivateOwnerAdAlert() {
     mutationFn: async (enable: boolean) => {
       if (!user) throw new Error("Not authenticated");
       if (enable) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         const { error } = await supabase.from("private_owner_ad_alerts").upsert(
           { user_id: user.id },
           { onConflict: "user_id" }
         );
         if (error) throw error;
       } else {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         const { error } = await supabase.from("private_owner_ad_alerts")
           .delete()
           .eq("user_id", user.id);

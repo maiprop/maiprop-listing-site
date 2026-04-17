@@ -39,7 +39,7 @@ export function useSubmitConsultation() {
       // Create lead for professional
       const { data: pro } = await supabase.from("professionals").select("user_id").eq("id", input.professional_id).single();
       if (pro?.user_id) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         supabase.from("leads").insert({
           owner_id: pro.user_id,
           source: input.request_type === "callback" ? "callback" : input.request_type === "message" ? "message" : "consultation",

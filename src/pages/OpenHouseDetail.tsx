@@ -128,7 +128,7 @@ export default function OpenHouseDetail() {
 
   useEffect(() => {
     // Redirect if not an open house listing
-    if (db?.listing_type && (db.listing_type as any) !== "open_house") {
+    if (db?.listing_type && db.listing_type !== "open_house") {
       navigate(`/property/${id}`, { replace: true });
     }
   }, [db?.listing_type, id, navigate]);

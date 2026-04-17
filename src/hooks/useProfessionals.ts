@@ -6,8 +6,7 @@ export function useProfessionals(category?: string) {
   return useQuery({
     queryKey: ["professionals", category],
     queryFn: async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase.rpc as any)("get_professionals_with_priority", {
+      const { data, error } = await supabase.rpc("get_professionals_with_priority", {
         p_category: category ?? null,
       });
       if (error) {

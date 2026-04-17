@@ -1,4 +1,4 @@
-﻿/**
+/**
  * LegalDocumentModal â€” Greek property legal document template library with mock e-sign.
  * Left panel: template list. Right panel: document preview + signature capture.
  */
@@ -54,7 +54,7 @@ interface Template {
 const TEMPLATES: Template[] = [
   {
     id: "preliminary",
-    titleEl: "Î ÏÎ¿ÏƒÏÎ¼Ï†Ï‰Î½Î¿ Î ÏŽÎ»Î·ÏƒÎ·Ï‚",
+    titleEl: "Î ÏÎ¿ÏƒÏÎ¼Ï†Ï‰Î½Î¿ Î ÏŽÎ»Î·ÏƒÎ·Ï‚",
     titleEn: "Preliminary Purchase Agreement",
     tag: "Most common",
     description: "Binding pre-contract locking in price, terms, and completion timeline before the final notarial deed.",
@@ -75,7 +75,7 @@ const TEMPLATES: Template[] = [
   },
   {
     id: "poa",
-    titleEl: "Î Î»Î·ÏÎµÎ¾Î¿ÏÏƒÎ¹Î¿",
+    titleEl: "Î Î»Î·ÏÎµÎ¾Î¿ÏÏƒÎ¹Î¿",
     titleEn: "Power of Attorney",
     tag: "Legal proxy",
     description: "Grants a representative authority to act on your behalf in property transactions.",
@@ -100,19 +100,19 @@ function getDocumentBody(tpl: Template, seller: string, buyer: string, listing: 
   switch (tpl.id) {
     case "preliminary":
       return `
-Î Î¡ÎŸÎ£Î¥ÎœÎ¦Î©ÎÎŸ Î Î©Î›Î—Î£Î—Î£ Î‘ÎšÎ™ÎÎ—Î¤ÎŸÎ¥
+Î Î¡ÎŸÎ£Î¥ÎœÎ¦Î©ÎÎŸ Î Î©Î›Î—Î£Î—Î£ Î‘ÎšÎ™ÎÎ—Î¤ÎŸÎ¥
 PRELIMINARY AGREEMENT FOR THE SALE OF REAL PROPERTY
 
 Î£Ï„Î·Î½ Î‘Î¸Î®Î½Î±, ÏƒÎ®Î¼ÎµÏÎ± ${date}, Î¿Î¹ ÎºÎ¬Ï„Ï‰Î¸Î¹ ÏƒÏ…Î¼Î²Î±Î»Î»ÏŒÎ¼ÎµÎ½Î¿Î¹:
 
-Î Î©Î›Î—Î¤Î—Î£ / SELLER: ${seller}
+Î Î©Î›Î—Î¤Î—Î£ / SELLER: ${seller}
 Î‘Î“ÎŸÎ¡Î‘Î£Î¤Î—Î£ / BUYER: ${buyer}
 
 Î‘ÎÎ¤Î™ÎšÎ•Î™ÎœÎ•ÎÎŸ / SUBJECT PROPERTY:
 ${listing}
 
-Î¤Î™ÎœÎ— Î Î©Î›Î—Î£Î—Î£ / SALE PRICE: ${priceTxt}
-Î ÏÎ¿ÎºÎ±Ï„Î±Î²Î¿Î»Î® / Deposit (10%): ${fmt(price * 0.1)}
+Î¤Î™ÎœÎ— Î Î©Î›Î—Î£Î—Î£ / SALE PRICE: ${priceTxt}
+Î ÏÎ¿ÎºÎ±Ï„Î±Î²Î¿Î»Î® / Deposit (10%): ${fmt(price * 0.1)}
 
 Î£Ï…Î¼Ï†Ï‰Î½Î¿ÏÎ½ Ï„Î± ÎµÎ¾Î®Ï‚ / Agree as follows:
 1. ÎŸ Ï€Ï‰Î»Î·Ï„Î®Ï‚ Î´ÎµÏƒÎ¼ÎµÏÎµÏ„Î±Î¹ Î½Î± Î¼ÎµÏ„Î±Î²Î¹Î²Î¬ÏƒÎµÎ¹ Ï„Î¿ Î±ÎºÎ¯Î½Î·Ï„Î¿ ÎµÎ»ÎµÏÎ¸ÎµÏÎ¿ Î²Î±ÏÏŽÎ½.
@@ -129,18 +129,18 @@ ${listing}
       `;
     case "final":
       return `
-ÎŸÎ¡Î™Î£Î¤Î™ÎšÎŸ Î£Î¥ÎœÎ’ÎŸÎ›Î‘Î™ÎŸ Î Î©Î›Î—Î£Î—Î£
+ÎŸÎ¡Î™Î£Î¤Î™ÎšÎŸ Î£Î¥ÎœÎ’ÎŸÎ›Î‘Î™ÎŸ Î Î©Î›Î—Î£Î—Î£
 FINAL DEED OF SALE
 
 Î•Î½ÏŽÏ€Î¹Î¿Î½ Ï„Î¿Ï…/Ï„Î·Ï‚ Î£Ï…Î¼Î²Î¿Î»Î±Î¹Î¿Î³ÏÎ¬Ï†Î¿Ï… Î‘Î¸Î·Î½ÏŽÎ½, ÏƒÎ®Î¼ÎµÏÎ± ${date}:
 
-Î Î©Î›Î—Î¤Î—Î£ / SELLER: ${seller}
+Î Î©Î›Î—Î¤Î—Î£ / SELLER: ${seller}
 Î‘Î“ÎŸÎ¡Î‘Î£Î¤Î—Î£ / BUYER: ${buyer}
 
-Î Î•Î¡Î™Î“Î¡Î‘Î¦Î— Î‘ÎšÎ™ÎÎ—Î¤ÎŸÎ¥ / PROPERTY DESCRIPTION:
+Î Î•Î¡Î™Î“Î¡Î‘Î¦Î— Î‘ÎšÎ™ÎÎ—Î¤ÎŸÎ¥ / PROPERTY DESCRIPTION:
 ${listing}
 
-Î¤Î™ÎœÎ— Î Î©Î›Î—Î£Î—Î£ / SALE PRICE: ${priceTxt}
+Î¤Î™ÎœÎ— Î Î©Î›Î—Î£Î—Î£ / SALE PRICE: ${priceTxt}
 
 ÎŸ Ï€Ï‰Î»Î·Ï„Î®Ï‚ Î¼ÎµÏ„Î±Î²Î¹Î²Î¬Î¶ÎµÎ¹ ÏƒÏ„Î¿Î½ Î±Î³Î¿ÏÎ±ÏƒÏ„Î®, Î¿ Î¿Ï€Î¿Î¯Î¿Ï‚ Î±Ï€Î¿Î´Î­Ï‡ÎµÏ„Î±Î¹, Ï€Î»Î®ÏÎ· ÎºÏ…ÏÎ¹ÏŒÏ„Î·Ï„Î±, Î½Î¿Î¼Î® ÎºÎ±Î¹ ÎºÎ±Ï„Î¿Ï‡Î® ÎµÏ€Î¯ Ï„Î¿Ï… Î±Î½Ï‰Ï„Î­ÏÏ‰ Î±ÎºÎ¹Î½Î®Ï„Î¿Ï…, ÎµÎ»ÎµÏÎ¸ÎµÏÎ¿Ï… Ï€Î±Î½Ï„ÏŒÏ‚ Î²Î¬ÏÎ¿Ï…Ï‚, Î´ÎµÏƒÎ¼ÎµÏÏƒÎµÏ‰Ï‚, ÎµÎ¼Ï€ÏÎ¬Î³Î¼Î±Ï„Î¿Ï… Î´Î¹ÎºÎ±Î¹ÏŽÎ¼Î±Ï„Î¿Ï‚ Ï„ÏÎ¯Ï„Î¿Ï…, Ï…Ï€Î¿Î¸Î®ÎºÎ·Ï‚, Ï€ÏÎ¿ÏƒÎ·Î¼ÎµÎ¯Ï‰ÏƒÎ·Ï‚, ÎºÎ±Ï„Î¬ÏƒÏ‡ÎµÏƒÎ·Ï‚, Î´Î¹ÎµÎºÎ´Î¯ÎºÎ·ÏƒÎ·Ï‚ Î® Î¿Ï€Î¿Î¹Î¿Ï…Î´Î®Ï€Î¿Ï„Îµ Î¬Î»Î»Î¿Ï… Î´Î¹ÎºÎ±Î¹ÏŽÎ¼Î±Ï„Î¿Ï‚ Ï„ÏÎ¯Ï„Î¿Ï….
 
@@ -173,7 +173,7 @@ ${listing}
       `;
     case "poa":
       return `
-Î Î›Î—Î¡Î•ÎžÎŸÎ¥Î£Î™ÎŸ
+Î Î›Î—Î¡Î•ÎžÎŸÎ¥Î£Î™ÎŸ
 POWER OF ATTORNEY
 
 Î•Î³ÏŽ, Î¿/Î· ${buyer}, Î´Î¹Î± Ï„Î¿Ï… Ï€Î±ÏÏŒÎ½Ï„Î¿Ï‚ Ï€Î±ÏÎ­Ï‡Ï‰ Ï€Î»Î·ÏÎµÎ¾Î¿Ï…ÏƒÎ¹ÏŒÏ„Î·Ï„Î± ÏƒÏ„Î¿Î½/ÏƒÏ„Î·Î½ ${seller}:
@@ -195,11 +195,11 @@ POWER OF ATTORNEY
       `;
     case "mou":
       return `
-ÎœÎÎ—ÎœÎŸÎÎ™ÎŸ Î£Î¥ÎœÎ¦Î©ÎÎ™Î‘Î£ â€” Î“Î¡Î—Î“ÎŸÎ¡Î— Î Î©Î›Î—Î£Î—
+ÎœÎÎ—ÎœÎŸÎÎ™ÎŸ Î£Î¥ÎœÎ¦Î©ÎÎ™Î‘Î£ â€” Î“Î¡Î—Î“ÎŸÎ¡Î— Î Î©Î›Î—Î£Î—
 MEMORANDUM OF UNDERSTANDING â€” QUICK SALE
 
 ÎœÎµÏ„Î±Î¾Ï / Between:
-Î Î©Î›Î—Î¤Î—Î£ / SELLER: ${seller}
+Î Î©Î›Î—Î¤Î—Î£ / SELLER: ${seller}
 Î‘Î“ÎŸÎ¡Î‘Î£Î¤Î—Î£ / BUYER: ${buyer}
 
 Î‘ÎšÎ™ÎÎ—Î¤ÎŸ / PROPERTY: ${listing}
@@ -343,7 +343,7 @@ export function LegalDocumentModal({ open, onClose, listingTitle = "Property", s
   async function handleShare() {
     if (!shareEmail.includes("@")) { toast.error("Enter a valid email address."); return; }
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const { error } = await supabase.from("contact_submissions").insert({
         type: "document_share",
         email: shareEmail,
@@ -442,7 +442,7 @@ export function LegalDocumentModal({ open, onClose, listingTitle = "Property", s
                           <span className="text-lg text-primary" style={{ fontFamily: "cursive" }}>{typedSig}</span>
                         )}
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1">Seller / Î Ï‰Î»Î·Ï„Î®Ï‚</p>
+                      <p className="text-xs text-muted-foreground mt-1">Seller / Î Ï‰Î»Î·Ï„Î®Ï‚</p>
                       <p className="text-xs font-medium">{sellerName}</p>
                     </div>
                     <div>

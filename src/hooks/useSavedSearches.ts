@@ -47,7 +47,7 @@ export function useCreateSavedSearch() {
     }) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const { error } = await supabase.from("saved_searches").insert({
         user_id: user.id,
         name,

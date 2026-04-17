@@ -114,7 +114,7 @@ export function InvitationRequestModal({ user, onClose, onSuccess }: Props) {
     if (!termsAccepted) { toast.error("Please accept the terms and privacy policy"); return; }
     setLoading(true);
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const { error } = await supabase.from("invitation_requests").insert({
         email: trimmedEmail,
         full_name: fullName.trim() || null,

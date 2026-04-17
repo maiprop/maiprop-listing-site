@@ -158,7 +158,7 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner }: Props
                   <div key={r.id} className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div className="min-w-0 flex-1">
                       <div className="font-medium">
-                        {r.profiles?.display_name || [(r.profiles as any)?.first_name, (r.profiles as any)?.last_name].filter(Boolean).join(" ") || "Visitor"}
+                        {r.profiles?.display_name || [r.profiles?.first_name, r.profiles?.last_name].filter(Boolean).join(" ") || "Visitor"}
                       </div>
                       <div className="flex flex-wrap gap-2 mt-2 text-[11px]">
                         <span className={cn(
@@ -267,7 +267,7 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner }: Props
                         <p className="text-xs font-bold text-emerald-700 uppercase tracking-widest mb-0.5">Winning Bid</p>
                         <p className="font-display font-black text-xl text-emerald-700">€{Number(winner.amount).toLocaleString()}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          {winner.profiles?.display_name || [(winner.profiles as any)?.first_name, (winner.profiles as any)?.last_name].filter(Boolean).join(" ") || "Bidder"}
+                          {winner.profiles?.display_name || [winner.profiles?.first_name, winner.profiles?.last_name].filter(Boolean).join(" ") || "Bidder"}
                         </p>
                       </div>
                       <Check className="w-8 h-8 text-emerald-500" />
@@ -276,8 +276,8 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner }: Props
                 })()}
 
                 <div className="divide-y divide-border max-h-64 overflow-y-auto">
-                  {[...offers].sort((a: any, b: any) => Number(b.amount) - Number(a.amount)).map((o: any) => {
-                    const bidderName = o.profiles?.display_name || [(o.profiles as any)?.first_name, (o.profiles as any)?.last_name].filter(Boolean).join(" ") || "Bidder";
+                  {[...offers].sort((a, b) => Number(b.amount) - Number(a.amount)).map((o) => {
+                    const bidderName = o.profiles?.display_name || [o.profiles?.first_name, o.profiles?.last_name].filter(Boolean).join(" ") || "Bidder";
                     const isWinner = o.status === "accepted";
                     const isRevealed = o.status === "revealed";
                     const isSealed = o.status === "submitted";

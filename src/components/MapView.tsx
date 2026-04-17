@@ -1,16 +1,8 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
-import Map, {
-  Source,
-  Layer,
-  Popup,
-  NavigationControl,
-  MapRef,
-} from "react-map-gl";
 import {
   MapPin, Maximize2, PenLine,
   X, Flame, CheckCircle2,
 } from "lucide-react";
-import "mapbox-gl/dist/mapbox-gl.css";
 import { MAPBOX_TOKEN } from "@/lib/config";
 import {
   type MapListing,
@@ -33,7 +25,27 @@ export interface MapViewProps {
 }
 
 export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, height }: MapViewProps) {
-  const mapRef = useRef<MapRef>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [MapComponents, setMapComponents] = useState<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mapRef = useRef<any>(null);
+
+  // Lazy load mapbox-gl
+  useEffect(() => {
+    const loadMap = async () => {
+      const mapModule = await import('react-map-gl');
+      setMapComponents({
+        Map: mapModule.Map,
+        Source: mapModule.Source,
+        Layer: mapModule.Layer,
+        Popup: mapModule.Popup,
+        NavigationControl: mapModule.NavigationControl
+      });
+      // Dynamically import CSS
+      await import('mapbox-gl/dist/mapbox-gl.css');
+    };
+    loadMap();
+  }, []);
 
   // Popup
   const [popupInfo, setPopupInfo] = useState<{ listing: MapListing; lng: number; lat: number } | null>(null);
@@ -178,7 +190,7 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
     if (clusters.length) {
       const clusterId = clusters[0].properties?.cluster_id;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (map.getSource("listings") as any).getClusterExpansionZoom(clusterId, (_err: unknown, zoom: number) => {
+      (map.getSource("listings") as { getClusterExpansionZoom: (id: number, callback: (err: unknown, zoom: number) => void) => void }).getClusterExpansionZoom(clusterId, (_err: unknown, zoom: number) => {
         if (_err) return;
         map.easeTo({ center: (clusters[0].geometry as unknown as { coordinates: [number, number] }).coordinates, zoom: zoom + 0.5, duration: 450 });
       });
@@ -227,12 +239,26 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
     );
   }
 
+  if (!MapComponents) {
+    return (
+      <div
+        className="rounded-2xl overflow-hidden border border-border shadow-card relative flex items-center justify-center bg-secondary"
+        style={{ height: height ?? "calc(100vh - 14rem)" }}
+      >
+        <div className="text-center p-6">
+          <MapPin className="w-12 h-12 text-muted-foreground mx-auto mb-3 animate-pulse" />
+          <p className="text-sm text-muted-foreground">Loading map...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className="rounded-2xl overflow-hidden border border-border shadow-card relative"
       style={{ height: height ?? "calc(100vh - 14rem)" }}
     >
-      <Map
+      <MapComponents.Map
         ref={mapRef}
         mapboxAccessToken={MAPBOX_TOKEN}
         initialViewState={{ longitude: 23.7275, latitude: 38.5, zoom: 6 }}
@@ -246,38 +272,38 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
         onLoad={computeVisible}
         cursor={drawMode && !polygonClosed ? "crosshair" : undefined}
       >
-        <NavigationControl position="bottom-right" />
+        <MapComponents.NavigationControl position="bottom-right" />
 
         {/* Heatmap source */}
         {showHeatmap && (
-          <Source id="heatmap-data" type="geojson" data={geoJSON}>
-            <Layer {...heatmapLayer} id="price-heatmap" source="heatmap-data" />
-          </Source>
+          <MapComponents.Source id="heatmap-data" type="geojson" data={geoJSON}>
+            <MapComponents.Layer {...heatmapLayer} id="price-heatmap" source="heatmap-data" />
+          </MapComponents.Source>
         )}
 
         {/* Main listings source */}
-        <Source id="listings" type="geojson" data={geoJSON} cluster clusterMaxZoom={13} clusterRadius={55}>
-          <Layer {...clusterCircle} />
-          <Layer {...clusterCount} />
-          <Layer {...unclusteredHit} />
-          <Layer {...priceLabelLayer} />
-        </Source>
+        <MapComponents.Source id="listings" type="geojson" data={geoJSON} cluster clusterMaxZoom={13} clusterRadius={55}>
+          <MapComponents.Layer {...clusterCircle} />
+          <MapComponents.Layer {...clusterCount} />
+          <MapComponents.Layer {...unclusteredHit} />
+          <MapComponents.Layer {...priceLabelLayer} />
+        </MapComponents.Source>
 
         {/* Draw sources */}
-        <Source id="draw-poly" type="geojson" data={drawPolyGJ}>
-          <Layer {...drawFillLyr} />
-          <Layer {...drawOutlineLyr} />
-        </Source>
-        <Source id="draw-line" type="geojson" data={drawLineGJ}>
-          <Layer {...drawLineLyr} />
-        </Source>
-        <Source id="draw-dots" type="geojson" data={drawDotsGJ}>
-          <Layer {...drawDotLyr} />
-        </Source>
+        <MapComponents.Source id="draw-poly" type="geojson" data={drawPolyGJ}>
+          <MapComponents.Layer {...drawFillLyr} />
+          <MapComponents.Layer {...drawOutlineLyr} />
+        </MapComponents.Source>
+        <MapComponents.Source id="draw-line" type="geojson" data={drawLineGJ}>
+          <MapComponents.Layer {...drawLineLyr} />
+        </MapComponents.Source>
+        <MapComponents.Source id="draw-dots" type="geojson" data={drawDotsGJ}>
+          <MapComponents.Layer {...drawDotLyr} />
+        </MapComponents.Source>
 
         {/* Popup */}
         {popupInfo && (
-          <Popup
+          <MapComponents.Popup
             longitude={popupInfo.lng}
             latitude={popupInfo.lat}
             anchor="top"
@@ -286,9 +312,9 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
             onClose={() => setPopupInfo(null)}
           >
             <PropertyPopup listing={popupInfo.listing} onClose={() => setPopupInfo(null)} />
-          </Popup>
+          </MapComponents.Popup>
         )}
-      </Map>
+      </MapComponents.Map>
 
       {/* ── Toolbar (top right) ── */}
       <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5 flex-wrap justify-end">

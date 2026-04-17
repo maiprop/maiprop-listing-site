@@ -23,7 +23,7 @@ export default function Contact() {
     }
     setLoading(true);
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const { error } = await supabase.from("contact_submissions").insert({
         type: "contact",
         name: form.name,

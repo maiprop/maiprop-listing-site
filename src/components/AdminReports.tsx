@@ -329,7 +329,7 @@ function ContentReportsTab() {
 
   const resolveMutation = useMutation({
     mutationFn: async (id: string) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const { error } = await supabase.from("listing_reports")
         .update({ status: "resolved" })
         .eq("id", id);

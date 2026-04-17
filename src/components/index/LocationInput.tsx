@@ -46,7 +46,7 @@ export function LocationInput({
     const input = inputRef.current;
     const initGoogle = () => {
        
-      const g = (window as unknown as Record<string, unknown>).google as any;
+      const g = (window as unknown as Record<string, unknown>).google as typeof google;
       if (!g?.maps?.places?.Autocomplete) return;
       if (autocompleteRef.current) return;
       const autocomplete = new g.maps.places.Autocomplete(input, {
@@ -71,7 +71,7 @@ export function LocationInput({
       autocompleteRef.current = autocomplete;
     };
      
-    if ((window as any).google?.maps?.places) {
+    if ((window as typeof globalThis & { google?: typeof google }).google?.maps?.places) {
       initGoogle();
       return;
     }

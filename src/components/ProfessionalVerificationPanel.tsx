@@ -187,15 +187,14 @@ export function ProfessionalVerificationPanel() {
   async function load() {
     setLoading(true);
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const { data, error } = await supabase.from("profiles")
         .select("id, full_name, verification_status, created_at")
         .eq("verification_status", "pending")
         .limit(50);
       if (error) throw error;
       if (data && data.length > 0) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const mapped: Professional[] = (data as any[]).map((p: { id: string; full_name: string | null; verification_status: string | null; created_at: string | null }) => ({
+        const mapped: Professional[] = data.map((p: { id: string; full_name: string | null; verification_status: string | null; created_at: string | null }) => ({
           id: p.id,
           name: p.full_name ?? "Unknown",
           category: "Real Estate Agent",

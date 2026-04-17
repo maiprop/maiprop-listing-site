@@ -297,30 +297,24 @@ export type Database = {
           id: string
           last_message_at: string | null
           listing_id: string | null
-          participant_1: string
-          participant_2: string
-          participant_a: string | null
-          participant_b: string | null
+          participant_a: string
+          participant_b: string
         }
         Insert: {
           created_at?: string
           id?: string
           last_message_at?: string | null
           listing_id?: string | null
-          participant_1: string
-          participant_2: string
-          participant_a?: string | null
-          participant_b?: string | null
+          participant_a: string
+          participant_b: string
         }
         Update: {
           created_at?: string
           id?: string
           last_message_at?: string | null
           listing_id?: string | null
-          participant_1?: string
-          participant_2?: string
-          participant_a?: string | null
-          participant_b?: string | null
+          participant_a?: string
+          participant_b?: string
         }
         Relationships: [
           {
@@ -328,6 +322,20 @@ export type Database = {
             columns: ["listing_id"]
             isOneToOne: false
             referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_participant_a_fkey"
+            columns: ["participant_a"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_participant_b_fkey"
+            columns: ["participant_b"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]

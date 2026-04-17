@@ -365,7 +365,7 @@ export default function Onboarding() {
       is_premium: s.template.isPremiumFeature,
       is_active: true,
     }));
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const { error } = await supabase.from("professional_services").insert(rows);
     if (error) { toast.error("Could not save services. Please try again."); setLoading(false); return; }
     setLoading(false);
@@ -382,7 +382,7 @@ export default function Onboarding() {
       end_time: d.end,
       is_active: true,
     }));
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     if (rows.length > 0) await supabase.from("professional_availability").insert(rows);
     setLoading(false);
     setStep("pro-video");

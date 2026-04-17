@@ -99,7 +99,7 @@ export default function Dashboard() {
   const { data: invitationRequestStatus = "none" } = useQuery<"none" | "pending" | "approved" | "rejected">({
     queryKey: ["invitation-request-status", user?.id],
     queryFn: async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const { data } = await supabase.from("invitation_requests")
         .select("status")
         .eq("user_id", user!.id)
