@@ -1,6 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useRef } from "react";
+import { Helmet } from "react-helmet-async";
 import { useSearchParams } from "react-router-dom";
-import { Search, Star, MapPin, CheckCircle, Loader2, MessageSquare, ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Star, MapPin, CheckCircle, Loader2, MessageSquare, ArrowRight, ChevronLeft, ChevronRight, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
@@ -242,6 +244,22 @@ export default function Professionals() {
 
   return (
     <div className="min-h-screen bg-background pb-bottom-nav lg:pb-0">
+      <Helmet>
+        <title>Find Property Professionals in Greece — maiProp</title>
+        <meta name="description" content="Connect with verified architects, lawyers, agents and contractors for your Greek property transaction." />
+        <link rel="canonical" href="https://maiprop.co/professionals" />
+        <meta property="og:title" content="Property Professionals Directory — maiProp" />
+        <meta property="og:description" content="Verified architects, lawyers, agents and contractors across Greece." />
+        <meta property="og:url" content="https://maiprop.co/professionals" />
+        <script type="application/ld+json">{JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "ItemList",
+          "name": "Greek Property Professionals Directory",
+          "url": "https://maiprop.co/professionals",
+          "description": "Verified architects, lawyers, agents and contractors across Greece.",
+          "provider": { "@type": "Organization", "name": "maiProp", "url": "https://maiprop.co" },
+        })}</script>
+      </Helmet>
       <Navbar />
       {aiMatchOpen && <AIServiceMatchModal onClose={() => setAiMatchOpen(false)} onNavigate={(cat) => { setSearchParams((p) => { const n = new URLSearchParams(p); n.set("category", cat); return n; }); setSelectedGroup(categoryGroups.find((g) => g.categories.includes(cat))?.id ?? null); }} />}
       <div className="pt-16">
@@ -324,6 +342,7 @@ export default function Professionals() {
               <Button
                 variant="outline"
                 size="icon"
+                aria-label="Scroll categories left"
                 className="shrink-0 h-9 w-9 rounded-full border-border hover:bg-secondary hidden sm:flex"
                 onClick={() => scrollCategories("left")}
               >
@@ -376,6 +395,7 @@ export default function Professionals() {
               <Button
                 variant="outline"
                 size="icon"
+                aria-label="Scroll categories right"
                 className="shrink-0 h-9 w-9 rounded-full border-border hover:bg-secondary hidden sm:flex"
                 onClick={() => scrollCategories("right")}
               >
@@ -393,6 +413,7 @@ export default function Professionals() {
               <Search className="w-4 h-4 text-muted-foreground shrink-0" />
               <input
                 type="text"
+                aria-label="Search professionals by name, specialty, or city"
                 placeholder="Search by name, specialty, city..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -412,7 +433,7 @@ export default function Professionals() {
             </div> :
 
           <>
-              <p className="text-sm text-muted-foreground mb-4">{filtered.length} professional{filtered.length !== 1 ? "s" : ""} found{activeGroup ? ` in ${activeGroup.label}` : ""}</p>
+              <p className="text-sm text-muted-foreground mb-4" aria-live="polite" aria-atomic="true">{filtered.length} professional{filtered.length !== 1 ? "s" : ""} found{activeGroup ? ` in ${activeGroup.label}` : ""}</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                 {filtered.map((pro: any) => {
                 const name = pro.display_name || "Professional";
@@ -446,9 +467,14 @@ export default function Professionals() {
                         initials}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="font-display font-semibold text-sm truncate text-foreground">{name}</span>
                             {pro.verified && <CheckCircle className="w-3.5 h-3.5 text-primary shrink-0" />}
+                            {(pro.subscription_tier || "").toLowerCase() === "pro" && (
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-brand-gold/15 border border-brand-gold/30 text-brand-gold text-[10px] font-semibold shrink-0">
+                                <Crown className="w-2.5 h-2.5" /> Pro
+                              </span>
+                            )}
                           </div>
                           <div className="text-xs text-muted-foreground">
                             <span className="mr-1">{catData.emoji}</span>{pro.title || catData.label}
@@ -474,7 +500,7 @@ export default function Professionals() {
                       </div>
 
                       {/* Hourly rate */}
-                      {pro.hourly_rate &&
+                      {!!pro.hourly_rate &&
                     <div className="text-xs text-muted-foreground">
                           From <span className="font-semibold text-foreground">€{pro.hourly_rate}/hr</span>
                         </div>
@@ -503,8 +529,8 @@ export default function Professionals() {
                         >
                           <Link to={`/professionals/${pro.id}`}>View Profile <ArrowRight className="w-3 h-3" /></Link>
                         </Button>
-                        <Button size="sm" variant="outline" className="border-border px-3" asChild title="Message">
-                          <Link to={`/professionals/${pro.id}`}><MessageSquare className="w-3.5 h-3.5" /></Link>
+                        <Button size="sm" variant="outline" className="border-border px-3" asChild aria-label={`Contact ${pro.display_name}`}>
+                          <Link to={`/professionals/${pro.id}?contact=1`}><MessageSquare className="w-3.5 h-3.5" /></Link>
                         </Button>
                       </div>
                     </div>);

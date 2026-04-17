@@ -108,7 +108,7 @@ export default function OnlineViewingModal({ open, onClose, listing, professiona
         return;
       }
       setDone(true);
-    } catch {
+    } catch (_err: unknown) {
       toast.error("Could not book viewing. Please try again.");
     }
   };

@@ -19,7 +19,6 @@ import {
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import { STATIC_LOCALES } from "@/hooks/useAiTranslation";
-import { LOCALE_LABELS } from "@/i18n";
 
 const STATIC_LOCALE_LIST = [
   { code: "en", label: "English", flag: "🇬🇧" },
@@ -61,6 +60,8 @@ export function LanguageSwitcher() {
     setPendingLocale(code);
     // changeLanguage triggers useAiTranslation effect via locale change
     await i18n.changeLanguage(code);
+    // Explicitly persist — guards against async timing with the bundle load
+    try { localStorage.setItem("maiprop_lang", code); } catch (_e: unknown) { /* quota */ }
     setPendingLocale(null);
   };
 

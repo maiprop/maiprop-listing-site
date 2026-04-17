@@ -1,7 +1,12 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import type { Database } from "@/integrations/supabase/types";
+
+type OHRegUpdate = Database["public"]["Tables"]["open_house_registrations"]["Update"];
+type OHOfferInsert = Database["public"]["Tables"]["open_house_offers"]["Insert"];
 
 export type OHTimeslot = { start: string; end: string; max_visitors: number };
 export type OHRegistrationStatus = "pending" | "approved" | "rejected" | "attended" | "cancelled";
@@ -76,7 +81,7 @@ export function useOpenHouseSettings(listingId: string | undefined) {
       if (!listingId) return null;
       const { data, error } = await supabase
         .from("open_house_settings")
-        .select("*")
+        .select("id, listing_id, timeslots, max_visitors_per_slot, max_total_visitors, require_proof_of_funds, min_proof_amount, require_investor_declaration, allow_sealed_bids, offer_deadline, broker_required, created_at, updated_at")
         .eq("listing_id", listingId)
         .maybeSingle();
       if (error) throw error;
@@ -122,7 +127,7 @@ export function useUpsertOpenHouseSettings() {
       qc.invalidateQueries({ queryKey: ["open_house_registrations", v.listingId] });
       toast.success("Settings saved");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: () => toast.error("Something went wrong. Please try again."),
   });
 }
 
@@ -140,7 +145,7 @@ export function useOpenHouseRegistrations(listingId: string | undefined, _asOwne
         .eq("listing_id", listingId)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data ?? []) as OpenHouseRegistration[];
+      return (data ?? []) as unknown as OpenHouseRegistration[];
     },
     enabled: !!listingId,
   });
@@ -179,15 +184,17 @@ export function useCreateOpenHouseRegistration() {
       timeslotIndex?: number;
       note?: string;
     }) => {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) throw new Error("Not authenticated");
       const { data, error } = await supabase
         .from("open_house_registrations")
         .insert({
           listing_id: listingId,
-          requester_id: (await supabase.auth.getUser()).data.user?.id,
+          requester_id: authUser.id,
           timeslot_index: timeslotIndex ?? null,
-          status: "pending",
+          status: "pending" as OHRegistrationStatus,
           note: note || null,
-        } as any)
+        })
         .select()
         .single();
       if (error) throw error;
@@ -198,7 +205,7 @@ export function useCreateOpenHouseRegistration() {
       qc.invalidateQueries({ queryKey: ["open_house_registrations_mine"] });
       toast.success("Registration submitted. Complete ID verification and waiver to be considered.");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: () => toast.error("Something went wrong. Please try again."),
   });
 }
 
@@ -232,7 +239,7 @@ export function useUpdateOpenHouseRegistration() {
     }) => {
       const { data, error } = await supabase
         .from("open_house_registrations")
-        .update(updates as any)
+        .update(updates as OHRegUpdate)
         .eq("id", id)
         .select()
         .single();
@@ -244,7 +251,7 @@ export function useUpdateOpenHouseRegistration() {
       qc.invalidateQueries({ queryKey: ["open_house_registrations_mine"] });
       toast.success("Updated");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: () => toast.error("Something went wrong. Please try again."),
   });
 }
 
@@ -312,7 +319,7 @@ export function useSubmitOpenHouseOffer() {
             amount,
             message: message || null,
             status: "submitted",
-          } as any,
+          } as OHOfferInsert,
           { onConflict: "listing_id,bidder_id" }
         )
         .select()
@@ -325,7 +332,7 @@ export function useSubmitOpenHouseOffer() {
       qc.invalidateQueries({ queryKey: ["open_house_offers_mine"] });
       toast.success("Offer submitted");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: () => toast.error("Something went wrong. Please try again."),
   });
 }
 
@@ -359,7 +366,7 @@ export function useUpdateOpenHouseOffer() {
       qc.invalidateQueries({ queryKey: ["open_house_offers"] });
       toast.success("Offer updated");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: () => toast.error("Something went wrong. Please try again."),
   });
 }
 
@@ -369,7 +376,7 @@ export function useAcceptOpenHouseOffer() {
   return useMutation({
     mutationFn: async ({
       acceptId,
-      listingId,
+      listingId: _listingId,
       allOfferIds,
     }: {
       acceptId: string;
@@ -397,7 +404,7 @@ export function useAcceptOpenHouseOffer() {
       qc.invalidateQueries({ queryKey: ["open_house_offers", v.listingId] });
       toast.success("Offer accepted — other bids automatically rejected");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: () => toast.error("Something went wrong. Please try again."),
   });
 }
 
@@ -405,7 +412,7 @@ export function useAcceptOpenHouseOffer() {
 export function useRevealAllOffers() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ listingId, offerIds }: { listingId: string; offerIds: string[] }) => {
+    mutationFn: async ({ listingId: _listingId, offerIds }: { listingId: string; offerIds: string[] }) => {
       const { error } = await supabase
         .from("open_house_offers")
         .update({ status: "revealed", revealed_at: new Date().toISOString() })
@@ -417,7 +424,7 @@ export function useRevealAllOffers() {
       qc.invalidateQueries({ queryKey: ["open_house_offers", v.listingId] });
       toast.success("All bids revealed");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: () => toast.error("Something went wrong. Please try again."),
   });
 }
 

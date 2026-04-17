@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Mail, Building2, Phone } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function Contact() {
   const { t } = useTranslation();
@@ -21,11 +22,23 @@ export default function Contact() {
       return;
     }
     setLoading(true);
-    // Simulate submission — replace with Supabase insert or email edge function when ready
-    await new Promise((r) => setTimeout(r, 1200));
-    setLoading(false);
-    toast.success(t("contact.successMessage"));
-    setForm({ name: "", email: "", company: "", message: "" });
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await supabase.from("contact_submissions").insert({
+        type: "contact",
+        name: form.name,
+        email: form.email,
+        company: form.company || null,
+        message: form.message,
+      });
+      if (error) throw error;
+      toast.success(t("contact.successMessage"));
+      setForm({ name: "", email: "", company: "", message: "" });
+    } catch (_err: unknown) {
+      toast.error("Failed to send message. Please try again or email us directly.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

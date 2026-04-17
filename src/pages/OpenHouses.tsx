@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useMemo, lazy, Suspense } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
@@ -8,83 +9,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
-import { PropertyCard } from "@/components/PropertyCard";
 import type { MapListing } from "@/components/MapView";
 const MapView = lazy(() => import("@/components/MapView").then(m => ({ default: m.MapView })));
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getStreetViewProxyUrl } from "@/lib/config";
-import { cn } from "@/lib/utils";
 import { ENERGY_CLASSES, FEATURES_RESIDENTIAL } from "@/lib/filterConfig";
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-GB", {
-    weekday: "short", day: "numeric", month: "short",
-  });
-}
-function fmtTime(iso: string) {
-  return new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-}
-
-// ── Pill button ───────────────────────────────────────────────────────────────
-function Pill({
-  active, children, onClick,
-}: { active?: boolean; children: React.ReactNode; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "px-3 py-1.5 rounded-full text-xs font-medium border transition-colors whitespace-nowrap",
-        active
-          ? "bg-primary text-primary-foreground border-primary"
-          : "bg-secondary text-muted-foreground border-border hover:border-primary/40 hover:text-foreground"
-      )}
-    >
-      {children}
-    </button>
-  );
-}
-
-// ── Range input ───────────────────────────────────────────────────────────────
-function RangeInput({
-  label, minVal, maxVal, onMinChange, onMaxChange, prefix,
-}: {
-  label: string;
-  minVal: string;
-  maxVal: string;
-  onMinChange: (v: string) => void;
-  onMaxChange: (v: string) => void;
-  prefix?: string;
-}) {
-  return (
-    <div className="space-y-1">
-      <span className="text-xs text-muted-foreground font-medium">{label}</span>
-      <div className="flex gap-2">
-        <input
-          type="number"
-          placeholder={`Min${prefix ? " " + prefix : ""}`}
-          value={minVal}
-          onChange={(e) => onMinChange(e.target.value)}
-          className="w-full px-2 py-1.5 text-xs rounded-lg border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary"
-        />
-        <input
-          type="number"
-          placeholder={`Max${prefix ? " " + prefix : ""}`}
-          value={maxVal}
-          onChange={(e) => onMaxChange(e.target.value)}
-          className="w-full px-2 py-1.5 text-xs rounded-lg border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary"
-        />
-      </div>
-    </div>
-  );
-}
-
-// ── Open House card: uses PropertyCard (same as buy/rent) with openHouseDateIso for countdown ─
-function OpenHouseCard({ card }: { listing: any; card: any }) {
-  return <PropertyCard property={card} />;
-}
+import { fmtDate, fmtTime, Pill, RangeInput, OpenHouseCard } from "@/components/open-houses/OpenHousePrimitives";
+import { cn } from "@/lib/utils";
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function OpenHouses() {
@@ -242,7 +174,7 @@ export default function OpenHouses() {
       price: card.price,
       sqm: card.sqm,
       bedrooms: card.bedrooms,
-      bathrooms: (card as any).bathrooms,
+      bathrooms: card.bathrooms,
       latitude: card.latitude,
       longitude: card.longitude,
       images: card.images,

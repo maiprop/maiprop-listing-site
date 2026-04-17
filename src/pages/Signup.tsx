@@ -1,16 +1,14 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { Eye, EyeOff, Loader2, ArrowRight, Home, Briefcase, ChevronLeft, Check } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { Eye, EyeOff, Loader2, ArrowRight, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { APP_ORIGIN } from "@/lib/config";
 import { toast } from "sonner";
-import { useTheme } from "next-themes";
-import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
-import logoImg from "@/assets/logo.webp";
-import logoDarkImg from "@/assets/logo-dark.webp";
+import logoImg from "@/assets/logo.png";
 
 const GoogleIcon = () => (
   <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -21,104 +19,31 @@ const GoogleIcon = () => (
   </svg>
 );
 
-/** Top-level signup choices — refined further in Onboarding */
-type SignupTopType = "participant" | "market_pro";
-
-type ParticipantTypeEntry = {
-  id: SignupTopType;
-  label: string;
-  sublabel: string;
-  desc: string;
-  icon: React.ElementType;
-  accent: string;
-  accentBg: string;
-  accentBorder: string;
-  features: string[];
-};
-
 export default function Signup() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const { signUp, updateProfile, user, loading: authLoading } = useAuth();
-  const { theme } = useTheme();
+  const { signUp, user, loading: authLoading } = useAuth();
   const { t } = useTranslation();
 
-  const PARTICIPANT_TYPES: ParticipantTypeEntry[] = [
-    {
-      id: "participant",
-      label: t("signupPage.lookingForProperty.title"),
-      sublabel: t("signupPage.lookingForProperty.subtitle"),
-      desc: "Search listings, book viewings, save searches, and get alerts on new properties.",
-      icon: Home,
-      accent: "text-brand-gold",
-      accentBg: "bg-brand-gold/10",
-      accentBorder: "border-brand-gold/40",
-      features: [
-        t("signupPage.lookingForProperty.features.1"),
-        t("signupPage.lookingForProperty.features.2"),
-        t("signupPage.lookingForProperty.features.3"),
-        t("signupPage.lookingForProperty.features.4"),
-      ],
-    },
-    {
-      id: "market_pro",
-      label: t("signupPage.workInRealEstate.title"),
-      sublabel: t("signupPage.workInRealEstate.subtitle"),
-      desc: "List properties for clients, manage leads, or offer professional services in the market.",
-      icon: Briefcase,
-      accent: "text-brand-purple",
-      accentBg: "bg-brand-purple/10",
-      accentBorder: "border-brand-purple/40",
-      features: [
-        t("signupPage.workInRealEstate.features.1"),
-        t("signupPage.workInRealEstate.features.2"),
-        t("signupPage.workInRealEstate.features.3"),
-        t("signupPage.workInRealEstate.features.4"),
-      ],
-    },
-  ];
-
-  const isProfessionalIntent = searchParams.get("role") === "professional" || searchParams.get("type") === "professional";
-
-  const [step, setStep] = useState<"role" | "details">(isProfessionalIntent ? "details" : "role");
-  const [selectedType, setSelectedType] = useState<SignupTopType | null>(isProfessionalIntent ? "market_pro" : null);
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [didSignUp, setDidSignUp] = useState(false);
+  // "confirm" = waiting for email click; "done" = session established, navigating
+  const [view, setView] = useState<"form" | "confirm">("form");
+  const [submittedEmail, setSubmittedEmail] = useState("");
 
   const [form, setForm] = useState({ firstName: "", lastName: "", email: "", password: "" });
 
-  // After signup, write the bio __type: tag then go to onboarding
+  // When session arrives (after email confirmation link is clicked), navigate to onboarding.
+  // Also handles already-logged-in users landing on /signup.
   useEffect(() => {
-    if (authLoading || !didSignUp) return;
-    if (!user) return;
-    let cancelled = false;
-    (async () => {
-      if (selectedType) {
-        const { error } = await updateProfile({ bio: `__type:${selectedType}` });
-        if (cancelled) return;
-        if (error) {
-          toast.error("Could not save your profile. Please try again.");
-          return;
-        }
-      }
-      navigate("/onboarding", { replace: true });
-    })();
-    return () => { cancelled = true; };
-  }, [authLoading, user, didSignUp, selectedType, navigate, updateProfile]);
+    if (!authLoading && user) navigate("/onboarding", { replace: true });
+  }, [authLoading, user, navigate]);
 
   const handleGoogleSignIn = async () => {
-    if (!selectedType) return;
-    // Persist type for post-OAuth so Onboarding can apply it (both storage types for robustness)
-    try {
-      sessionStorage.setItem("signup_participant_type", selectedType);
-      localStorage.setItem("signup_participant_type", selectedType);
-    } catch { /* ignore storage errors */ }
     setGoogleLoading(true);
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/onboarding` },
+      options: { redirectTo: `${APP_ORIGIN}/onboarding` },
     });
     if (error) {
       toast.error("Google sign-in failed. Please try again.");
@@ -133,118 +58,76 @@ export default function Signup() {
       return;
     }
     setLoading(true);
-    const { error } = await signUp(form.email, form.password, {
+    const { error, needsEmailConfirm } = await signUp(form.email, form.password, {
       full_name: `${form.firstName} ${form.lastName}`.trim(),
-      role: "individual",
+      role: "buyer",
     });
     setLoading(false);
     if (error) {
-      toast.error(error.message);
+      const msg = error.message?.toLowerCase() ?? "";
+      if (msg.includes("rate limit") || msg.includes("over_email_send_rate_limit") || msg.includes("too many")) {
+        toast.error("Too many attempts. Please wait a few minutes before trying again.");
+      } else if (msg.includes("already registered") || msg.includes("user already exists")) {
+        toast.error("An account with this email already exists.", {
+          description: "Try signing in instead.",
+          action: { label: "Sign in", onClick: () => { window.location.href = "/login"; } },
+        });
+      } else {
+        toast.error(error.message);
+      }
+    } else if (needsEmailConfirm) {
+      // Email confirmation required — show "check your inbox" screen.
+      // The confirmation link (emailRedirectTo) points to /onboarding, so after the
+      // user clicks the link, they land there with a live session automatically.
+      setSubmittedEmail(form.email);
+      setView("confirm");
     } else {
-      setDidSignUp(true);
+      // Email confirmation disabled — session exists immediately.
+      // The useEffect above will fire when user is set and navigate to /onboarding.
     }
   };
-
-  const selected = PARTICIPANT_TYPES.find(t => t.id === selectedType);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Navbar />
       <div className="flex-1 flex items-center justify-center pt-16 px-4 py-10">
-        <div className="w-full max-w-lg">
+        <div className="w-full max-w-md">
           <div className="glass-card rounded-2xl p-8 border border-border">
 
-            {/* ── STEP 1: ROLE PICKER ── */}
-            {step === "role" && (
+            {/* ── CHECK YOUR EMAIL ── */}
+            {view === "confirm" && (
+              <div className="text-center py-2">
+                <div className="w-16 h-16 rounded-full bg-primary/10 border border-primary/25 flex items-center justify-center mx-auto mb-5">
+                  <Mail className="w-8 h-8 text-primary" />
+                </div>
+                <h2 className="font-display font-bold text-xl mb-2">Check your inbox</h2>
+                <p className="text-muted-foreground text-sm mb-1">We sent a confirmation link to</p>
+                <p className="font-semibold text-foreground mb-4">{submittedEmail}</p>
+                <p className="text-xs text-muted-foreground mb-6">
+                  Click the link in that email to activate your account and set up your profile.
+                  The link expires in 24 hours.
+                </p>
+                <Button variant="outline" className="w-full mb-3" onClick={() => setView("form")}>
+                  Use a different email
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  Already have an account?{" "}
+                  <Link to="/login" className="text-primary hover:underline">Sign in</Link>
+                </p>
+              </div>
+            )}
+
+            {/* ── SIGNUP FORM ── */}
+            {view === "form" && (
               <>
                 <div className="text-center mb-6">
                   <img
-                    src={theme === "dark" ? logoDarkImg : logoImg}
+                    src={logoImg}
                     alt="maiProp"
                     className="h-9 w-auto object-contain mx-auto mb-3"
                   />
-                  <h1 className="font-display font-bold text-xl">Who are you on maiProp?</h1>
-                  <p className="text-muted-foreground text-sm mt-1">{t("auth.signup.subtitle")}</p>
-                </div>
-
-                <div className="grid grid-cols-1 gap-3 mb-6">
-                  {PARTICIPANT_TYPES.map(type => {
-                    const Icon = type.icon;
-                    const isSelected = selectedType === type.id;
-                    return (
-                      <button
-                        key={type.id}
-                        type="button"
-                        onClick={() => setSelectedType(type.id)}
-                        className={cn(
-                          "flex items-start gap-4 rounded-2xl px-5 py-4 border text-left transition-all",
-                          isSelected
-                            ? `${type.accentBg} ${type.accentBorder} border shadow-sm`
-                            : "bg-secondary/50 border-border hover:border-muted-foreground/30 hover:bg-secondary/70"
-                        )}
-                      >
-                        <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5", type.accentBg)}>
-                          <Icon className={cn("w-5 h-5", type.accent)} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className={cn("text-sm font-bold leading-tight", isSelected ? type.accent : "text-foreground")}>
-                            {type.label}
-                          </p>
-                          <p className={cn("text-xs font-medium mt-0.5", isSelected ? type.accent : "text-muted-foreground")}>{type.sublabel}</p>
-                          <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{type.desc}</p>
-                          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
-                            {type.features.map(f => (
-                              <div key={f} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                                <Check className={cn("w-3 h-3 shrink-0", type.accent)} /> {f}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                        <div className={cn(
-                          "w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 mt-1 transition-all",
-                          isSelected ? type.accentBorder : "border-border"
-                        )}>
-                          {isSelected && <div className={cn("w-2 h-2 rounded-full", type.accent.replace("text-", "bg-"))} />}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <Button
-                  className="w-full bg-gradient-primary border-0 text-primary-foreground"
-                  disabled={!selectedType}
-                  onClick={() => setStep("details")}
-                >
-                  Continue <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
-
-                <p className="text-xs text-muted-foreground text-center mt-4">
-                  {t("auth.signup.haveAccount")}{" "}
-                  <Link to="/login" className="text-primary hover:underline">{t("auth.signup.signIn")}</Link>
-                </p>
-              </>
-            )}
-
-            {/* ── STEP 2: ACCOUNT DETAILS ── */}
-            {step === "details" && (
-              <>
-                <button
-                  onClick={() => setStep("role")}
-                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-5 transition-colors"
-                >
-                  <ChevronLeft className="w-3.5 h-3.5" /> Back
-                </button>
-
-                <div className="text-center mb-5">
-                  {selected && (
-                    <div className={cn("inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold mb-3", selected.accentBg, selected.accent, "border", selected.accentBorder)}>
-                      <selected.icon className="w-3.5 h-3.5" />
-                      {selected.label}
-                    </div>
-                  )}
                   <h1 className="font-display font-bold text-xl">{t("auth.signup.title")}</h1>
-                  <p className="text-muted-foreground text-sm mt-1">Start free — upgrade anytime</p>
+                  <p className="text-muted-foreground text-sm mt-1">Start free — set your profile in the next step</p>
                 </div>
 
                 {/* Google */}

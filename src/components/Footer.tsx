@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Facebook, Twitter, Instagram, Linkedin, Youtube, Mail, Phone, MapPin, ExternalLink } from "lucide-react";
+import { Mail, MapPin, ExternalLink } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 export function Footer() {
@@ -13,16 +13,6 @@ export function Footer() {
             <p className="text-sm text-muted-foreground max-w-xs leading-relaxed mb-4">
               {t("footerFull.tagline")}
             </p>
-            <div className="flex items-center gap-2">
-              {["Facebook", "Twitter", "Instagram", "LinkedIn", "YouTube"].map((name, i) => {
-              const Icon = [Facebook, Twitter, Instagram, Linkedin, Youtube][i];
-              return (
-              <button key={i} className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors" aria-label={`Follow us on ${name}`}>
-                  <Icon className="w-4 h-4" />
-                </button>
-              );
-              })}
-            </div>
           </div>
 
           {/* Platform */}
@@ -85,8 +75,8 @@ export function Footer() {
               <a href="mailto:hello@maiprop.co" className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors">
                 <Mail className="w-3 h-3" /> hello@maiprop.co
               </a>
-              <a href="tel:+302101234567" className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors">
-                <Phone className="w-3 h-3" /> +30 210 123 4567
+              <a href="mailto:hello@maiprop.com" className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                <Mail className="w-3 h-3" /> hello@maiprop.com
               </a>
               <span className="flex items-center gap-2 text-xs text-muted-foreground">
                 <MapPin className="w-3 h-3" /> {t("footerFull.location")}

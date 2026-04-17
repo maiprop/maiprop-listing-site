@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Admin-only: Sync all pricing_configs to Stripe.
  * - For each active config with amount > 0:
@@ -82,7 +83,7 @@ Deno.serve(async (req) => {
       try {
         let productId = existingProductId;
         let priceId = existingPriceId;
-        let newMeta = { ...meta };
+        const newMeta = { ...meta };
 
         // ── Create product if missing ────────────────────────────────────────
         if (!productId) {

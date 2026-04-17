@@ -3,16 +3,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
-const projectsClient = supabase as any;
-
 export function useProjects(ownerId?: string) {
   const { user } = useAuth();
   return useQuery({
     queryKey: ["projects", user?.id, ownerId],
     queryFn: async () => {
-      let query = projectsClient
+      let query = supabase
         .from("projects")
-        .select("*")
+        .select("id, owner_id, name, description, city, address, municipality, cover_image_url, status, latitude, longitude, building_permit_number, developer_company, architect_group, construction_company, area_description, permit_approval_date, construction_start_date, structural_completion_date, delivery_date, created_at, updated_at")
         .order("updated_at", { ascending: false });
       if (ownerId) query = query.eq("owner_id", ownerId);
       const { data, error } = await query;
@@ -28,9 +26,9 @@ export function useProject(id: string | undefined) {
     queryKey: ["project", id],
     queryFn: async () => {
       if (!id) return null;
-      const { data, error } = await projectsClient
+      const { data, error } = await supabase
         .from("projects")
-        .select("*")
+        .select("id, owner_id, name, description, city, address, municipality, cover_image_url, status, latitude, longitude, building_permit_number, developer_company, architect_group, construction_company, area_description, permit_approval_date, construction_start_date, structural_completion_date, delivery_date, created_at, updated_at")
         .eq("id", id)
         .single();
       if (error) throw error;
@@ -64,7 +62,7 @@ export function useCreateProject() {
   const { user } = useAuth();
   return useMutation({
     mutationFn: async (project: ProjectInsert) => {
-      const { data, error } = await projectsClient
+      const { data, error } = await supabase
         .from("projects")
         .insert({ ...project, owner_id: user!.id })
         .select()
@@ -76,18 +74,21 @@ export function useCreateProject() {
       qc.invalidateQueries({ queryKey: ["projects"] });
       toast.success("Project created");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: () => toast.error("Something went wrong. Please try again."),
   });
 }
 
 export function useUpdateProject() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Record<string, unknown> }) => {
-      const { data, error } = await projectsClient
+      if (!user) throw new Error("Must be logged in");
+      const { data, error } = await supabase
         .from("projects")
         .update(updates)
         .eq("id", id)
+        .eq("owner_id", user.id)
         .select()
         .single();
       if (error) throw error;
@@ -98,21 +99,23 @@ export function useUpdateProject() {
       qc.invalidateQueries({ queryKey: ["project", id] });
       toast.success("Project updated");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: () => toast.error("Something went wrong. Please try again."),
   });
 }
 
 export function useDeleteProject() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await projectsClient.from("projects").delete().eq("id", id);
+      if (!user) throw new Error("Must be logged in");
+      const { error } = await supabase.from("projects").delete().eq("id", id).eq("owner_id", user.id);
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["projects"] });
       toast.success("Project deleted");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: () => toast.error("Something went wrong. Please try again."),
   });
 }

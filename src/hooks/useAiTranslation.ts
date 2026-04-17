@@ -9,6 +9,7 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
+import { logger } from "@/lib/logger";
 import en from "@/locales/en.json";
 
 export const STATIC_LOCALES = ["en", "el"];
@@ -57,7 +58,7 @@ export function useAiTranslation() {
         i18n.addResourceBundle(locale, "translation", parsed, true, true);
         setStatus("ready");
         return;
-      } catch {
+      } catch (_err: unknown) {
         sessionStorage.removeItem(cacheKey);
       }
     }
@@ -70,19 +71,19 @@ export function useAiTranslation() {
       .invoke("ai-translate", { body: { locale, strings: FLAT_EN } })
       .then(({ data, error: fnErr }) => {
         if (fnErr || !data?.strings) {
-          console.warn("ai-translate error:", fnErr ?? "no strings returned");
+          logger.warn("ai-translate error:", fnErr ?? "no strings returned");
           setError("Translation unavailable");
           setStatus("error");
           return;
         }
         const strings = data.strings as Record<string, string>;
         i18n.addResourceBundle(locale, "translation", strings, true, true);
-        try { sessionStorage.setItem(cacheKey, JSON.stringify(strings)); } catch { /* quota full */ }
+        try { sessionStorage.setItem(cacheKey, JSON.stringify(strings)); } catch (_err: unknown) { /* quota full */ }
         setStatus("ready");
       })
       .catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : "Unknown error";
-        console.warn("ai-translate fetch failed:", msg);
+        logger.warn("ai-translate fetch failed:", msg);
         setError(msg);
         setStatus("error");
       });

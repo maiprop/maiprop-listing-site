@@ -5,11 +5,6 @@
  * Rate limited by IP to reduce abuse (security audit).
  */
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
-
 const RATE_LIMIT_PER_MIN = 60;
 const RATE_WINDOW_MS = 60_000;
 const ipCounts = new Map<string, { count: number; resetAt: number }>();
@@ -32,7 +27,10 @@ function checkRateLimit(ip: string): boolean {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const corsPreflightResponse = handleCors(req);
+  if (corsPreflightResponse) return corsPreflightResponse;
+  const corsHeaders = getCorsHeaders(req);
+
 
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? req.headers.get("x-real-ip") ?? "unknown";
   if (!checkRateLimit(ip)) {

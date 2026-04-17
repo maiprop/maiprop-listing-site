@@ -27,8 +27,8 @@ const timeoutFetch: typeof fetch = async (input, init) => {
   );
   try {
     return await fetch(input, { ...init, signal: controller.signal });
-  } catch (error: any) {
-    if (error?.name === "AbortError") {
+  } catch (error: unknown) {
+    if (error instanceof Error && error.name === "AbortError") {
       throw new Error(`Supabase request timed out after ${Math.round(timeoutMs / 1000)}s`);
     }
     throw error;

@@ -10,11 +10,12 @@ import {
   BarChart2, Bell, Star, Shield, Filter, ArrowRight,
   Crown, Sparkles, Building2, Gavel, Home, Layers,
   MessageSquare, Eye, FileText, FolderKanban,
-  Loader2, Flame, Database, TrendingUp, Lock, Tag,
+  Loader2, Database,
   Wallet, Globe, ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getPricingAudienceFromProfile, type PricingAudienceId } from "@/lib/participantConfig";
+import { getPricingAudienceFromProfile, getParticipantTypeFromProfile, type PricingAudienceId } from "@/lib/participantConfig";
+import { ROLE_PLAN_MAP } from "@/lib/rolePlanMap";
 import { isPlatformAdmin } from "@/lib/authUtils";
 import { usePricingConfigs } from "@/hooks/usePricingConfigs";
 import { supabase } from "@/integrations/supabase/client";
@@ -112,28 +113,6 @@ const PROFESSIONAL_PRO: PlanFeature[] = [
   { label: "CRM & client management",         icon: Users,   free: false,       paid: true },
 ];
 
-// ── Investor tiers (standalone section) ───────────────────────────────────────
-
-const INVESTOR_PRIVATE_FEATURES: PlanFeature[] = [
-  { label: "Pre-market Quick Sale deal flow",  icon: Flame },
-  { label: "Investor dashboard & pipeline",    icon: BarChart2 },
-  { label: "Real-time distressed property alerts", icon: Bell },
-  { label: "Court auction deal flow (OS-routed)", icon: Gavel },
-  { label: "Proof-of-funds priority queue",    icon: Star },
-  { label: "ROI & yield calculator",           icon: TrendingUp },
-  { label: "Express interest with 1 click",    icon: Zap },
-];
-
-const INVESTOR_INSTITUTIONAL_FEATURES: PlanFeature[] = [
-  { label: "Everything in Private Investor",   icon: Check },
-  { label: "Priority queue position (auto-elevated)", icon: Crown },
-  { label: "Bulk deal pipeline view",          icon: Layers },
-  { label: "OS market intelligence reports",   icon: Database },
-  { label: "Dedicated account manager",        icon: Users },
-  { label: "Custom alert rules & deal matching", icon: Filter },
-  { label: "API access for portfolio tools",   icon: Globe },
-];
-
 // ── Pricing plan definitions ───────────────────────────────────────────────────
 type PlanDef = {
   freeLabel: string; freePrice: string; freeDesc: string; freeCTA: string; freeHref: string;
@@ -178,40 +157,6 @@ const PLANS: Record<AudienceId, PlanDef> = {
   },
 };
 
-// ── Per-listing add-ons ────────────────────────────────────────────────────────
-
-const ADDONS = [
-  {
-    category: "Listing Boosts",
-    accent: "bg-amber-500/10 border-amber-500/30 text-amber-500",
-    items: [
-      { name: "Featured Listing",        price: "€39", unit: "/ 30 days", desc: "Homepage carousel + search top placement. Avg. 3× more views.", icon: Crown },
-      { name: "Priority Placement",      price: "€59", unit: "/ 30 days", desc: "Pinned above all non-priority results for your area and type.", icon: Star },
-      { name: "Featured + Priority",     price: "€79", unit: "/ 30 days", desc: "Both boosts together — maximum exposure at a bundled rate.", icon: Sparkles, badge: "Best value" },
-      { name: "Extra Listing Slot",      price: "€12", unit: "/ listing", desc: "Add one listing beyond your plan quota.", icon: Layers },
-    ],
-  },
-  {
-    category: "AI Reports (pay-as-you-go)",
-    accent: "bg-primary/10 border-primary/30 text-primary",
-    items: [
-      { name: "Single AI Valuation",     price: "€39", unit: "/ report", desc: "Full AI valuation with market comparison, yield estimate & confidence score.", icon: BarChart2 },
-      { name: "Valuation Bundle × 5",    price: "€149", unit: "bundle",  desc: "Save 24% vs. single. Ideal for buyers comparing multiple properties.", icon: TrendingUp, badge: "Save 24%" },
-      { name: "Property Report",         price: "€49", unit: "/ report", desc: "Ownership history, registered liens, legal encumbrances & cadastral data for a specific property.", icon: FileText },
-      { name: "Neighbourhood Report",    price: "€19", unit: "/ report", desc: "Price trends, safety index, POIs, development projects & investment outlook.", icon: Globe },
-      { name: "Neighbourhood Bundle × 3",price: "€39", unit: "bundle",  desc: "Save 31% vs. single. Insights on three areas or properties.", icon: Users, badge: "Save 31%" },
-    ],
-  },
-  {
-    category: "Professional Upgrades",
-    accent: "bg-rose-500/10 border-rose-500/30 text-rose-400",
-    items: [
-      { name: "Featured Professional",   price: "€59", unit: "/ month", desc: "Top-of-category placement in the Professionals directory.", icon: Shield },
-      { name: "Extra Priority Ad",       price: "€8",  unit: "/ ad",    desc: "Push any listing to the top of search results for its area.", icon: Bell },
-    ],
-  },
-];
-
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function Pricing() {
   const { user, profile } = useAuth();
@@ -219,21 +164,12 @@ export default function Pricing() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  // Investor section visibility: show only to unauthenticated visitors (discovery),
-  // confirmed investor/institutional users, users with investor_mode, or admins.
-  // Hide from regular buyers, sellers, agents, developers who are logged in.
-  const isInvestorUser =
-    !user ||
-    (profile as any)?.participant_type === "investor" ||
-    (profile as any)?.participant_type === "institutional" ||
-    (profile as any)?.investor_mode === true ||
-    isPlatformAdmin(profile);
-
   // B2B / institutional data products: shown to institutional, developer, admin, or unauthenticated
+  const participantType = getParticipantTypeFromProfile(profile);
   const showB2B =
     !user ||
-    (profile as any)?.participant_type === "institutional" ||
-    (profile as any)?.participant_type === "developer" ||
+    participantType === "institutional" ||
+    participantType === "developer" ||
     isPlatformAdmin(profile);
 
   const [activeTab, setActiveTab] = useState<AudienceId>("participant");
@@ -243,10 +179,10 @@ export default function Pricing() {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
 
   const PLAN_KEYS: Record<AudienceId, string> = {
-    participant: "pro",
-    agent: "agent_basic",
-    developer: "developer_pro",
-    professional: "professional_basic",
+    participant:  ROLE_PLAN_MAP.participant.planKey,
+    agent:        ROLE_PLAN_MAP.agent.planKey,
+    developer:    ROLE_PLAN_MAP.developer.planKey,
+    professional: ROLE_PLAN_MAP.professional.planKey,
   };
 
   const handleCheckout = async () => {
@@ -352,6 +288,9 @@ export default function Pricing() {
             <div className="flex items-center justify-center gap-3 mb-6">
               <span className={cn("text-sm font-medium", billingCycle === "monthly" ? "text-foreground" : "text-muted-foreground")}>Monthly</span>
               <button
+                role="switch"
+                aria-checked={billingCycle === "annual"}
+                aria-label="Annual billing"
                 onClick={() => setBillingCycle(c => c === "monthly" ? "annual" : "monthly")}
                 className={cn(
                   "relative w-12 h-6 rounded-full transition-colors duration-200 border",
@@ -401,33 +340,49 @@ export default function Pricing() {
           )}>
 
             {/* Free card */}
-            {!plan.proOnly && (
-              <div className="glass-card rounded-2xl border border-border overflow-hidden flex flex-col">
-                <div className="px-6 sm:px-8 py-6 border-b border-border">
-                  <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">{plan.freeLabel}</p>
-                  <div className="flex items-baseline gap-1 mb-1">
-                    <span className="font-display text-4xl font-black text-foreground">{plan.freePrice}</span>
-                    {plan.freePrice !== "€0" && <span className="text-muted-foreground text-sm">/ month</span>}
+            {!plan.proOnly && (() => {
+              const isCurrentFreePlan = !!user && !subLoading && !hasAudiencePro && activeTab === participant;
+              return (
+                <div className={cn("glass-card rounded-2xl overflow-hidden flex flex-col relative", isCurrentFreePlan ? "border-2 border-primary/40" : "border border-border")}>
+                  {isCurrentFreePlan && (
+                    <div className="absolute top-4 right-4">
+                      <span className="flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider bg-primary/10 border border-primary/30 text-primary">
+                        <Check className="w-2.5 h-2.5" /> Current Plan
+                      </span>
+                    </div>
+                  )}
+                  <div className="px-6 sm:px-8 py-6 border-b border-border">
+                    <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">{plan.freeLabel}</p>
+                    <div className="flex items-baseline gap-1 mb-1">
+                      <span className="font-display text-4xl font-black text-foreground">{plan.freePrice}</span>
+                      {plan.freePrice !== "€0" && <span className="text-muted-foreground text-sm">/ month</span>}
+                    </div>
+                    <p className="text-xs text-muted-foreground">{plan.freeDesc}</p>
                   </div>
-                  <p className="text-xs text-muted-foreground">{plan.freeDesc}</p>
+                  <div className="p-6 sm:p-8 flex-1">
+                    <ul className="space-y-3">
+                      {plan.freeList.map((f) => (
+                        <li key={f} className="flex items-center gap-2.5 text-sm">
+                          <Check className="w-4 h-4 text-primary shrink-0" />
+                          <span className="text-muted-foreground">{f}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className="px-6 sm:px-8 pb-6 sm:pb-8">
+                    {isCurrentFreePlan ? (
+                      <Button variant="outline" className="w-full h-11 border-primary/30 text-primary" disabled>
+                        <Check className="w-4 h-4 mr-2" /> Your Current Plan
+                      </Button>
+                    ) : (
+                      <Button variant="outline" className="w-full h-11 border-border" asChild>
+                        <Link to={plan.freeHref}>Get Started Free</Link>
+                      </Button>
+                    )}
+                  </div>
                 </div>
-                <div className="p-6 sm:p-8 flex-1">
-                  <ul className="space-y-3">
-                    {plan.freeList.map((f) => (
-                      <li key={f} className="flex items-center gap-2.5 text-sm">
-                        <Check className="w-4 h-4 text-primary shrink-0" />
-                        <span className="text-muted-foreground">{f}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                <div className="px-6 sm:px-8 pb-6 sm:pb-8">
-                  <Button variant="outline" className="w-full h-11 border-border" asChild>
-                    <Link to={plan.freeHref}>Get Started Free</Link>
-                  </Button>
-                </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Paid card */}
             <div className={cn("relative glass-card rounded-2xl border-2 overflow-hidden flex flex-col shadow-elevated", plan.accentBorder)}>
@@ -539,228 +494,42 @@ export default function Pricing() {
           </p>
         </div>
 
-        {/* ── Investor Access — two tiers (private: only shown to investors / unauthenticated) ── */}
-        {isInvestorUser && <div className="border-t border-border bg-gradient-to-br from-orange-950/30 to-background py-16">
-          <div className="container max-w-5xl px-4">
-            <div className="text-center mb-10">
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-orange-500/15 border border-orange-500/30 text-orange-400 text-xs font-bold uppercase tracking-widest mb-4">
-                <Flame className="w-3.5 h-3.5" /> Investor Access
-              </div>
-              <h2 className="text-2xl sm:text-3xl font-bold mb-3">Deal flow before the open market</h2>
-              <p className="text-muted-foreground max-w-2xl mx-auto text-sm">
-                Quick Sale deals, court auction flow, and distressed properties routed directly from <strong>maiProp OS</strong> — verified, structured, and delivered in real time. Pick the tier that matches your deal volume.
-              </p>
-            </div>
+        {/* ── maiProp OS user discount banner ── */}
+        {showB2B && <div className="border-t border-border py-10">
+          <div className="container max-w-4xl px-4">
+            <div className="relative rounded-2xl overflow-hidden border border-primary/30 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent p-6 sm:p-8 flex flex-col sm:flex-row items-center gap-6">
+              {/* decorative blob */}
+              <div className="absolute -right-12 -top-12 w-48 h-48 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
 
-            <div className="grid sm:grid-cols-2 gap-6 items-start max-w-3xl mx-auto">
-
-              {/* Private Investor */}
-              <div className="rounded-2xl border border-orange-500/30 bg-card p-6 shadow-sm flex flex-col">
-                <p className="text-xs font-bold uppercase tracking-widest text-orange-400 mb-3">Private Investor</p>
-                <div className="flex items-end gap-1 mb-0.5">
-                  <span className="text-4xl font-bold">
-                    {billingCycle === "annual" ? "€41" : "€49"}
-                  </span>
-                  <span className="text-muted-foreground text-sm mb-1.5">/ month</span>
+              <div className="flex-1 min-w-0 relative">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/15 border border-primary/25 text-primary text-[11px] font-bold uppercase tracking-widest mb-3">
+                  <Database className="w-3 h-3" /> maiProp OS
                 </div>
-                {billingCycle === "annual"
-                  ? <p className="text-xs text-emerald-600 font-semibold mb-4">€490/year · 2 months free</p>
-                  : <p className="text-xs text-muted-foreground mb-4">or €490/year (save €98)</p>
-                }
-                <ul className="space-y-2.5 mb-6 flex-1">
-                  {INVESTOR_PRIVATE_FEATURES.map((f) => (
-                    <li key={f.label} className="flex items-start gap-2.5 text-sm">
-                      <Check className="w-4 h-4 text-orange-400 mt-0.5 shrink-0" />
-                      <span>{f.label}</span>
-                    </li>
-                  ))}
-                </ul>
-                <Button
-                  className="w-full bg-orange-500 hover:bg-orange-600 text-white gap-2"
-                  onClick={() => navigate(user ? "/investor-dashboard" : "/signup?intent=investor")}
-                >
-                  <Flame className="w-4 h-4" /> Start Investor Access
-                </Button>
-              </div>
-
-              {/* Institutional */}
-              <div className="rounded-2xl border-2 border-orange-400 bg-card p-6 shadow-lg flex flex-col relative">
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <span className="text-[10px] font-bold px-3 py-1 rounded-full bg-orange-500 text-white uppercase tracking-wide">
-                    Most Powerful
-                  </span>
-                </div>
-                <p className="text-xs font-bold uppercase tracking-widest text-orange-400 mb-3 mt-2">Institutional</p>
-                <div className="flex items-end gap-1 mb-0.5">
-                  <span className="text-4xl font-bold">
-                    {billingCycle === "annual" ? "€166" : "€199"}
-                  </span>
-                  <span className="text-muted-foreground text-sm mb-1.5">/ month</span>
-                </div>
-                {billingCycle === "annual"
-                  ? <p className="text-xs text-emerald-600 font-semibold mb-4">€1,990/year · 2 months free</p>
-                  : <p className="text-xs text-muted-foreground mb-4">or €1,990/year (save €398)</p>
-                }
-                <ul className="space-y-2.5 mb-6 flex-1">
-                  {INVESTOR_INSTITUTIONAL_FEATURES.map((f) => (
-                    <li key={f.label} className="flex items-start gap-2.5 text-sm">
-                      <Check className="w-4 h-4 text-orange-400 mt-0.5 shrink-0" />
-                      <span>{f.label}</span>
-                    </li>
-                  ))}
-                </ul>
-                <Button
-                  className="w-full bg-gradient-to-r from-orange-500 to-orange-600 text-white gap-2 font-bold"
-                  onClick={() => navigate(user ? "/investor-dashboard" : "/signup?intent=investor_institutional")}
-                >
-                  <Crown className="w-4 h-4" /> Get Institutional Access
-                </Button>
-              </div>
-            </div>
-
-            <div className="mt-6 text-center">
-              <p className="text-xs text-muted-foreground">
-                <strong className="text-foreground">Seller?</strong> Submitting a Quick Sale application is always free.
-                The investor tiers are for buyers seeking exclusive deal flow access.
-              </p>
-            </div>
-          </div>
-        </div>}
-
-        {/* ── Per-listing add-ons & pay-as-you-go ──────────────────────────── */}
-        <div className="border-t border-border py-16">
-          <div className="container max-w-5xl px-4">
-            <div className="text-center mb-10">
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary border border-border text-xs font-bold uppercase tracking-widest mb-4 text-muted-foreground">
-                <Tag className="w-3.5 h-3.5" /> Add-ons & Pay-as-you-go
-              </div>
-              <h2 className="text-2xl sm:text-3xl font-bold mb-3">Only pay for what you use</h2>
-              <p className="text-muted-foreground text-sm max-w-xl mx-auto">
-                Every plan includes a generous baseline. When you need more, add exactly what you need — no plan upgrade required.
-              </p>
-            </div>
-
-            <div className="space-y-8">
-              {ADDONS.map((section) => (
-                <div key={section.category}>
-                  <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4">{section.category}</h3>
-                  <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    {section.items.map((item) => (
-                      <div key={item.name} className={cn("relative rounded-xl border bg-card p-4 flex flex-col gap-2", section.accent.includes("amber") ? "border-amber-500/20" : section.accent.includes("primary") ? "border-primary/20" : "border-rose-500/20")}>
-                        {item.badge && (
-                          <div className="absolute -top-2.5 right-3">
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 border border-emerald-500/30">{item.badge}</span>
-                          </div>
-                        )}
-                        <div className="flex items-start justify-between gap-2">
-                          <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center shrink-0", section.accent.includes("amber") ? "bg-amber-500/10" : section.accent.includes("primary") ? "bg-primary/10" : "bg-rose-500/10")}>
-                            <item.icon className={cn("w-4 h-4", section.accent.includes("amber") ? "text-amber-500" : section.accent.includes("primary") ? "text-primary" : "text-rose-400")} />
-                          </div>
-                          <div className="text-right">
-                            <p className="font-display font-black text-lg leading-none">{item.price}</p>
-                            <p className="text-[10px] text-muted-foreground">{item.unit}</p>
-                          </div>
-                        </div>
-                        <p className="font-semibold text-sm">{item.name}</p>
-                        <p className="text-xs text-muted-foreground leading-relaxed">{item.desc}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* ── OS Data Products — B2B (institutional / developer / unauthenticated only) ── */}
-        {showB2B && <div className="border-t border-border bg-card/40 py-16">
-          <div className="container max-w-5xl px-4">
-            <div className="flex flex-col lg:flex-row gap-8 items-center">
-              <div className="flex-1">
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold uppercase tracking-widest mb-4">
-                  <Database className="w-3.5 h-3.5" /> maiProp OS Data Platform
-                </div>
-                <h2 className="text-2xl sm:text-3xl font-bold mb-3">Institutional & B2B data products</h2>
-                <p className="text-muted-foreground text-sm mb-6 max-w-lg">
-                  maiProp OS aggregates Greek property transaction data, court auction outcomes, and market trends at scale. Access it as an API or managed data feed for your organisation.
+                <h2 className="text-xl sm:text-2xl font-bold mb-2 leading-snug">
+                  Already a maiProp OS user?{" "}
+                  <span className="text-primary">Get 20% off</span> your maiProp plan.
+                </h2>
+                <p className="text-sm text-muted-foreground max-w-md">
+                  Active maiProp OS subscribers — Market Intelligence, AVM API, or Auction Intelligence — are eligible for a 20% discount on any maiProp subscription plan. Apply your OS licence key at checkout.
                 </p>
-                <div className="space-y-3">
-                  {[
-                    { icon: TrendingUp, title: "Market Intelligence", price: "€199/month", desc: "Greek property price index, transaction comps, trend reports by region & type." },
-                    { icon: BarChart2,  title: "AVM API",             price: "€299/month", desc: "Automated valuation endpoint for mortgage lenders, advisors & RICS valuers." },
-                    { icon: Gavel,      title: "Auction Intelligence", price: "€149/month", desc: "Full court auction schedule, minimum bids, and outcome database for legal professionals." },
-                  ].map((p) => (
-                    <div key={p.title} className="flex items-start gap-3 rounded-xl border border-border bg-card p-3.5">
-                      <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
-                        <p.icon className="w-4 h-4 text-primary" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2 mb-0.5">
-                          <p className="font-semibold text-sm">{p.title}</p>
-                          <span className="text-xs font-bold text-primary whitespace-nowrap">{p.price}</span>
-                        </div>
-                        <p className="text-xs text-muted-foreground">{p.desc}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
               </div>
-              <div className="lg:w-64 shrink-0 text-center lg:text-left">
-                <div className="rounded-2xl border border-primary/30 bg-primary/5 p-6">
-                  <Lock className="w-8 h-8 text-primary mb-3 mx-auto lg:mx-0" />
-                  <p className="font-bold text-sm mb-2">Enterprise &amp; custom data agreements</p>
-                  <p className="text-xs text-muted-foreground mb-5">For banks, REITs, law firms, and government agencies requiring custom data schemas, SLAs, or white-label integration.</p>
-                  <Link to="/contact">
-                    <Button className="w-full gap-2 bg-gradient-primary border-0 text-primary-foreground">
-                      <Wallet className="w-4 h-4" /> Talk to us
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>}
 
-        {/* ── Quick Sale success fee (private: only shown to investors) ───── */}
-        {isInvestorUser && <div className="border-t border-border py-12 bg-card/20">
-          <div className="container max-w-3xl px-4">
-            <div className="text-center mb-6">
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary border border-border text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">
-                <Flame className="w-3.5 h-3.5" /> Quick Sale — Success Fee
-              </div>
-              <h2 className="text-xl font-bold mb-2">0.5% at completion · minimum €500</h2>
-              <p className="text-sm text-muted-foreground max-w-xl mx-auto">
-                Submitting a Quick Sale application is always free. Our fee is strictly success-based — you pay only when the deal closes.
-              </p>
-            </div>
-            <div className="grid sm:grid-cols-2 gap-3 text-sm">
-              {[
-                {
-                  title: "Who pays",
-                  body: "The seller. Buyers on an Investor subscription pay nothing beyond their plan. The fee is 0.5% of the gross agreed sale price, minimum €500.",
-                },
-                {
-                  title: "When it triggers",
-                  body: "Only on legal completion — exchange of contracts or equivalent transfer. Offer acceptance alone does not trigger the fee. If a deal collapses before completion, no fee is owed.",
-                },
-                {
-                  title: "How it's collected",
-                  body: "Coordinated through the notary or legal representative handling the transfer, or invoiced directly by maiProp with a 14-day payment window post-completion. Never upfront.",
-                },
-                {
-                  title: "VAT & exclusions",
-                  body: "The fee is subject to Greek VAT (24%) where applicable and invoiced separately. Deals where a pre-existing buyer–seller relationship is documented before platform engagement are excluded.",
-                },
-              ].map((item) => (
-                <div key={item.title} className="rounded-xl border border-border bg-card p-4">
-                  <p className="font-semibold text-foreground mb-1">{item.title}</p>
-                  <p className="text-xs text-muted-foreground leading-relaxed">{item.body}</p>
+              <div className="shrink-0 flex flex-col items-center sm:items-end gap-3 relative">
+                <div className="rounded-xl border border-primary/30 bg-primary/10 px-5 py-3 text-center">
+                  <p className="text-3xl font-black text-primary leading-none">20%</p>
+                  <p className="text-[11px] font-semibold text-muted-foreground mt-0.5 uppercase tracking-wide">discount</p>
                 </div>
-              ))}
+                <Link to="/contact">
+                  <Button size="sm" className="gap-2 bg-gradient-primary border-0 text-primary-foreground">
+                    <Wallet className="w-3.5 h-3.5" /> Claim your discount
+                  </Button>
+                </Link>
+                <p className="text-[10px] text-muted-foreground text-center">
+                  Not on OS yet?{" "}
+                  <Link to="/contact" className="underline hover:text-foreground">Talk to sales</Link>
+                </p>
+              </div>
             </div>
-            <p className="text-center text-[11px] text-muted-foreground mt-5">
-              Full terms available in the <Link to="/terms" className="underline hover:text-foreground">Platform Terms of Service</Link>. Quick Sale fees are separate from and in addition to any subscription plan.
-            </p>
           </div>
         </div>}
 

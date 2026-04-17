@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { logger } from "@/lib/logger";
 
 export interface SmartFilterConfig {
   sections: string[];
@@ -77,7 +78,7 @@ export function useSmartFilters(type: string, subtype: string, listingType: stri
       })
       .then(({ data, error }) => {
         if (error || !data || data.error) {
-          console.warn("smart-filters fallback:", error || data?.error);
+          logger.warn("smart-filters fallback:", error || data?.error);
           setLoading(false);
           return;
         }
@@ -88,7 +89,7 @@ export function useSmartFilters(type: string, subtype: string, listingType: stri
       });
 
     return () => abortRef.current?.abort();
-  }, [cacheKey, type, user]);
+  }, [cacheKey, type, subtype, listingType, user]);
 
   return { config, loading };
 }

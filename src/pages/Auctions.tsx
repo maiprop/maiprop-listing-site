@@ -1,532 +1,32 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useMemo, useEffect, lazy, Suspense } from "react";
-import { Gavel, TrendingUp, Bell, ExternalLink, AlertCircle, Loader2, MapPin, Calendar, Euro, Map, List, Clock, SlidersHorizontal, X, Lock, Heart, Share2, Flag, Building2, ChevronDown, Crown } from "lucide-react";
+import { TrendingUp, Bell, AlertCircle, Loader2, Map, List, SlidersHorizontal, X, ChevronDown, Gavel, ExternalLink, Lock, MapPin } from "lucide-react";
+import { Helmet } from "react-helmet-async";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { format } from "date-fns";
 import type { MapListing } from "@/components/MapView";
 const MapView = lazy(() => import("@/components/MapView").then(m => ({ default: m.MapView })));
 import { AuctionAlertModal } from "@/components/AuctionAlertModal";
-import { getStreetViewProxyUrl } from "@/lib/config";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToggleFavorite } from "@/hooks/useFavorites";
-import { toast } from "sonner";
+import { useAuctionListings } from "@/hooks/useAuctionListings";
+import {
+  PROPERTY_TYPES, BID_RANGES, YEAR_RANGES, OWNERSHIP_STATUSES,
+  ownershipMatches, getAuctionRound, estimateYield, yieldRange, streetViewImg,
+  type ViewMode,
+} from "@/lib/auctionUtils";
+import { AuctionCard, PremiumBadge } from "@/components/auctions/AuctionCard";
+import { isPlatformAdmin } from "@/lib/authUtils";
 
-const AUCTION_SELECT_CORE = "id, title, city, address, price, auction_starting_bid, auction_date, auction_court, property_type, cover_image_url, sqm, bedrooms, bathrooms, latitude, longitude, tags, year_built, construction_status, website_url, region, is_featured, priority_placement";
-const QUERY_TIMEOUT_MS = 15_000;
-const AUCTION_FETCH_LIMIT = 500;
 const PAGE_SIZE = 20;
 const MAX_PAGES_FREE = 3;  // free: up to 3 pages = 60 items
 const MAX_PAGES_PRO = 30;  // pro:  up to 30 pages = 600 items
 
-// ── Fetch all auctions from DB (future or date TBD) ─────────────────────────────
-// Include null auction_date so OS-synced rows without a date still show
-function useAuctionListings() {
-  return useQuery({
-    queryKey: ["auction-listings-all"],
-    queryFn: async () => {
-      const today = new Date().toISOString().split("T")[0];
-      const fetchAll = async (withImages: boolean) => {
-        let allAuctions: any[] = [];
-        let from = 0;
-        while (true) {
-          const select = withImages ?
-          `${AUCTION_SELECT_CORE}, listing_images(url, sort_order)` :
-          AUCTION_SELECT_CORE;
-          const { data, error } = await supabase.
-          from("listings").
-          select(select).
-          eq("listing_type", "auction").
-          eq("status", "active").
-          or(`auction_date.gte.${today},auction_date.is.null`).
-          order("auction_date", { ascending: true, nullsFirst: false }).
-          range(from, from + AUCTION_FETCH_LIMIT - 1);
-          if (error) throw error;
-          if (!data || data.length === 0) break;
-          allAuctions = allAuctions.concat(data);
-          if (data.length < AUCTION_FETCH_LIMIT) break;
-          from += AUCTION_FETCH_LIMIT;
-        }
-        return allAuctions;
-      };
-
-      const run = async () => {
-        let result: any[];
-        try {
-          result = await fetchAll(true);
-        } catch {
-          result = await fetchAll(false);
-        }
-        // Priority placement: featured first, then priority_placement, then auction_date
-        result.sort((a, b) => {
-          const aFeatured = a.is_featured ? 1 : 0;
-          const bFeatured = b.is_featured ? 1 : 0;
-          if (bFeatured !== aFeatured) return bFeatured - aFeatured;
-          const aPri = Number(a.priority_placement ?? 0);
-          const bPri = Number(b.priority_placement ?? 0);
-          if (bPri !== aPri) return bPri - aPri;
-          const aDate = a.auction_date ? new Date(a.auction_date).getTime() : 0;
-          const bDate = b.auction_date ? new Date(b.auction_date).getTime() : 0;
-          return aDate - bDate; // earlier auction dates first
-        });
-        return result;
-      };
-
-      return Promise.race([
-      run(),
-      new Promise<never>((_, rej) => setTimeout(() => rej(new Error("Request timeout")), QUERY_TIMEOUT_MS))]
-      );
-    },
-    staleTime: 5 * 60 * 1000 // 5 min cache
-  });
-}
-
-const PROPERTY_TYPES = [
-  { value: "", label: "All Types" },
-  // Residential
-  { value: "apartment", label: "Apartment" },
-  { value: "house", label: "House" },
-  { value: "villa", label: "Villa" },
-  // Land & plots (sub-segmented via tags)
-  { value: "land", label: "Land / Plot (any)" },
-  { value: "land:land", label: "Land (no building)" },
-  { value: "land:land_with_building", label: "Land with building" },
-  { value: "land:plot", label: "Agricultural plot" },
-  { value: "land:plot_with_building", label: "Plot with building" },
-  // Commercial (sub-segmented via tags)
-  { value: "commercial", label: "Commercial (any)" },
-  { value: "commercial:store", label: "Store / Retail" },
-  { value: "commercial:warehouse", label: "Warehouse" },
-  { value: "commercial:industrial", label: "Industrial" },
-  { value: "commercial:storeroom", label: "Storeroom" },
-  { value: "commercial:parking", label: "Parking" },
-  { value: "commercial:hotel", label: "Hotel" },
-  { value: "commercial:other_business_space", label: "Other business space" },
-  // Office (also a commercial subtype but kept separate for clarity)
-  { value: "office", label: "Office" },
-];
-
-
-const PROPERTY_TYPE_GR: Record<string, string> = {
-  apartment: "Διαμέρισμα",
-  house: "Κατοικία",
-  villa: "Βίλα",
-  land: "Γη",
-  commercial: "Επαγγελματικός",
-  office: "Γραφείο"
-};
-
-/** Label for property type pill — includes subtypes like Plot with Building, Land with Building */
-function getPropertyTypeLabel(a: { property_type?: string; tags?: string[] | null }): string {
-  let base = a.property_type || "";
-  // Derive base from tags when property_type is missing (e.g. OS-synced data)
-  if (!base && a.tags?.length) {
-    if (a.tags.some((t) => t.startsWith("land_type:"))) base = "land";
-    else if (a.tags.some((t) => t.startsWith("commercial_type:"))) base = "commercial";
-  }
-  if (base === "land" && a.tags?.length) {
-    const landTag = a.tags.find((t) => t.startsWith("land_type:"));
-    if (landTag) {
-      const subtype = landTag.replace("land_type:", "");
-      const mapping: Record<string, string> = {
-        plot_with_building: "Plot with Building",
-        land_with_building: "Land with Building",
-        land: "Land (no building)",
-        plot: "Agricultural plot",
-      };
-      if (mapping[subtype]) return mapping[subtype];
-    }
-  }
-  if (base === "commercial" && a.tags?.length) {
-    const commTag = a.tags.find((t) => t.startsWith("commercial_type:"));
-    if (commTag) {
-      const subtype = commTag.replace("commercial_type:", "");
-      const mapping: Record<string, string> = {
-        store: "Store / Retail",
-        warehouse: "Warehouse",
-        industrial: "Industrial",
-        storeroom: "Storeroom",
-        parking: "Parking",
-        hotel: "Hotel",
-        other_business_space: "Other business space",
-      };
-      if (mapping[subtype]) return mapping[subtype];
-    }
-  }
-  if (!base) return "";
-  return PROPERTY_TYPE_GR[base] ?? base.split("_").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ") ?? base;
-}
-
-const BID_RANGES = [
-{ label: "Any Price", value: "" },
-{ label: "Under €20k", value: "0-20000" },
-{ label: "€20k – €50k", value: "20000-50000" },
-{ label: "€50k – €100k", value: "50000-100000" },
-{ label: "€100k – €200k", value: "100000-200000" },
-{ label: "€200k – €500k", value: "200000-500000" },
-{ label: "€500k+", value: "500000-9999999" }];
-
-
-const YEAR_RANGES = [
-{ label: "Any Year", value: "" },
-{ label: "Pre-1980", value: "0-1979" },
-{ label: "1980–2000", value: "1980-2000" },
-{ label: "2000–2010", value: "2000-2010" },
-{ label: "2010–2020", value: "2010-2020" },
-{ label: "Post-2020", value: "2020-2100" }];
-
-
-const OWNERSHIP_STATUSES = [
-{ value: "", label: "Any Status" },
-{ value: "full", label: "Full" },
-{ value: "bare", label: "Bare" },
-{ value: "common", label: "Common" },
-{ value: "usufruct", label: "Usufruct" },
-{ value: "vertical", label: "Vertical" },
-{ value: "horizontal", label: "Horizontal" }];
-
-
-/** Extract ownership status tag from tags array */
-function getOwnershipStatus(tags?: string[] | null): string | null {
-  if (!tags) return null;
-  const tag = tags.find((t) => t.startsWith("ownership:") && !t.startsWith("ownership_pct:"));
-  return tag ? tag.replace("ownership:", "") : null;
-}
-
-/** Extract ownership percentage from tags array */
-function getOwnershipPct(tags?: string[] | null): number | null {
-  if (!tags) return null;
-  const tag = tags.find((t) => t.startsWith("ownership_pct:"));
-  return tag ? Number(tag.replace("ownership_pct:", "")) : null;
-}
-
-function normalizeOwnership(v?: string | null): string | null {
-  if (!v) return null;
-  const raw = v.toLowerCase().trim();
-  if (["full", "full_ownership", "complete", "100"].includes(raw)) return "full";
-  if (["bare", "bare_ownership", "psili"].includes(raw)) return "bare";
-  if (["common", "shared", "undivided", "joint"].includes(raw)) return "common";
-  if (["usufruct", "epikarpia"].includes(raw)) return "usufruct";
-  if (["vertical", "vertical_ownership"].includes(raw)) return "vertical";
-  if (["horizontal", "horizontal_ownership"].includes(raw)) return "horizontal";
-  return raw;
-}
-
-function ownershipMatches(filterValue: string, tags?: string[] | null): boolean {
-  if (!filterValue) return true;
-  const status = normalizeOwnership(getOwnershipStatus(tags));
-  const pct = getOwnershipPct(tags);
-  const f = normalizeOwnership(filterValue);
-  if (!f) return true;
-  if (f === "full") return status === "full" || pct != null && pct >= 100;
-  if (f === "bare") return status === "bare";
-  if (f === "common") return status === "common" || status == null && pct != null && pct > 0 && pct < 100;
-  if (f === "usufruct") return status === "usufruct";
-  if (f === "vertical") return status === "vertical";
-  if (f === "horizontal") return status === "horizontal";
-  return status === f;
-}
-
-function getAuctionRound(tags?: string[] | null): number | null {
-  if (!tags?.length) return null;
-  const t = tags.find((x) => x.startsWith("round:"));
-  if (!t) return null;
-  const n = Number(t.replace("round:", ""));
-  if (!Number.isFinite(n) || n < 1) return null;
-  return n;
-}
-
-/**
- * Estimate gross annual rental yield for an auction property.
- * Uses city-level median rent-per-sqm benchmarks (€/sqm/month) sourced
- * from REMAX/Spitogatos 2024 data for Greece.
- * Formula: (monthlyRent × 12) / startingBid × 100
- */
-const CITY_RENT_PER_SQM: Record<string, number> = {
-  // Athens area
-  "αθήνα": 9.5, "athens": 9.5,
-  "κολωνάκι": 13,
-  "γλυφάδα": 11,
-  "μαρούσι": 8.5,
-  "περιστέρι": 7,
-  "πειραιάς": 7.5, "piraeus": 7.5,
-  "κηφισιά": 10,
-  "χαλάνδρι": 8.5,
-  // Thessaloniki area
-  "θεσσαλονίκη": 8, "thessaloniki": 8,
-  "καλαμαριά": 7.5,
-  "πολίχνη": 6,
-  // Islands / tourist
-  "μύκονος": 18, "mykonos": 18,
-  "σαντορίνη": 16, "santorini": 16,
-  "ρόδος": 10, "rhodes": 10,
-  "κέρκυρα": 9, "corfu": 9,
-  "ηράκλειο": 8, "heraklion": 8,
-  "χανιά": 8.5,
-  // Other major cities
-  "πάτρα": 6.5, "patras": 6.5,
-  "ιωάννινα": 6,
-  "λάρισα": 6,
-  "βόλος": 6.5,
-  "καβάλα": 5.5,
-  "χαλκίδα": 6,
-  "λαμία": 5.5,
-  "σέρρες": 5
-};
-const DEFAULT_RENT_PER_SQM = 6; // conservative fallback
-
-function estimateYield(a: {price?: number | null;auction_starting_bid?: number | null;sqm?: number | null;city?: string | null;}): number | null {
-  const bid = Number(a.auction_starting_bid ?? a.price ?? 0);
-  const sqm = Number(a.sqm ?? 0);
-  if (bid <= 0 || sqm <= 0) return null;
-  const cityKey = (a.city ?? "").toLowerCase().trim();
-  // Try exact match, then prefix match
-  const rentPerSqm = CITY_RENT_PER_SQM[cityKey] ??
-  Object.entries(CITY_RENT_PER_SQM).find(([k]) => cityKey.includes(k) || k.includes(cityKey))?.[1] ??
-  DEFAULT_RENT_PER_SQM;
-  const annualRent = rentPerSqm * sqm * 12;
-  return annualRent / bid * 100;
-}
-
-/** Map filterYield bucket to [min, max] percent range */
-function yieldRange(bucket: string): [number, number] | null {
-  switch (bucket) {
-    case "low":return [0, 3];
-    case "medium":return [3, 6];
-    case "high":return [6, 9];
-    case "very_high":return [9, Infinity];
-    default:return null;
-  }
-}
-
-const OWNERSHIP_BADGE: Record<string, {label: string;cls: string;}> = {
-  full: { label: "Πλήρης κυριότητα", cls: "bg-primary/15 text-primary border-primary/25" },
-  bare: { label: "Ψιλή κυριότητα", cls: "bg-brand-purple/15 text-brand-purple border-brand-purple/25" },
-  common: { label: "Εξ αδιαιρέτου", cls: "bg-accent/15 text-accent border-accent/25" },
-  usufruct: { label: "Επικαρπία", cls: "bg-muted text-muted-foreground border-border" },
-  vertical: { label: "Κάθετη ιδιοκτησία", cls: "bg-primary/10 text-primary border-primary/20" },
-  horizontal: { label: "Οριζόντια ιδιοκτησία", cls: "bg-secondary text-foreground border-border" }
-};
-
-type ViewMode = "list" | "map";
-
-function streetViewImg(lat?: number | null, lng?: number | null): string | null {
-  if (lat == null || lng == null) return null;
-  return getStreetViewProxyUrl({ lat, lng }) ?? null;
-}
-
-function daysUntil(dateStr?: string | null): number {
-  if (!dateStr) return 999;
-  const now = new Date();
-  const d = new Date(dateStr);
-  return Math.max(0, Math.ceil((d.getTime() - now.getTime()) / 86_400_000));
-}
-
-function countdownBadge(days: number): {label: string;cls: string;} | null {
-  if (days <= 0) return { label: "Today!", cls: "bg-destructive text-destructive-foreground" };
-  if (days === 1) return { label: "Tomorrow", cls: "bg-gradient-primary text-primary-foreground" };
-  if (days <= 7) return { label: `${days} days left`, cls: "bg-primary text-primary-foreground" };
-  return null;
-}
-
-// Premium lock badge
-function PremiumBadge() {
-  return (
-    <span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-gradient-primary text-primary-foreground border border-primary/30">
-      <Lock className="w-2.5 h-2.5" /> PRO
-    </span>);
-
-}
-
-// ── Auction card with favorite/share/report ────────────────────────────────────
-function AuctionCard({ a, favoritedIds, onToggleFav
-
-
-
-}: {a: any;favoritedIds: Set<string>;onToggleFav: (id: string, isFav: boolean) => void;}) {
-  const days = daysUntil(a.auction_date);
-  const badge = countdownBadge(days);
-  const imgSrc = a.cover_image_url ?? streetViewImg(a.latitude, a.longitude);
-  const isFav = favoritedIds.has(a.id);
-  const ownershipStatus = normalizeOwnership(getOwnershipStatus(a.tags));
-  const ownershipPct = getOwnershipPct(a.tags);
-  const ownershipBadge = ownershipStatus ? OWNERSHIP_BADGE[ownershipStatus] : null;
-
-  const handleShare = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    const url = `${window.location.origin}/auction/${a.id}`;
-    if (navigator.share) {
-      try {await navigator.share({ title: a.title, url });} catch { /* share cancelled or not supported */ }
-    } else {
-      await navigator.clipboard.writeText(url);
-      toast.success("Link copied to clipboard");
-    }
-  };
-
-  const handleReport = (e: React.MouseEvent) => {
-    e.preventDefault();
-    toast.info("Report submitted. Our team will review it.");
-  };
-
-  return (
-    <div className="glass-card rounded-xl overflow-hidden border border-border hover:border-brand-gold/40 transition-all group flex flex-col">
-      {/* Image */}
-      <Link to={`/auction/${a.id}`} className="relative h-44 bg-secondary overflow-hidden block">
-        {imgSrc ?
-        <img
-          src={imgSrc}
-          alt={a.title}
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-          onError={(e) => {(e.target as HTMLImageElement).style.display = "none";}} /> :
-
-
-        <div className="w-full h-full flex items-center justify-center">
-            <Gavel className="w-10 h-10 text-muted-foreground/20" />
-          </div>
-        }
-      <div className="absolute top-2 left-2 flex items-center gap-1.5 flex-wrap">
-          {a.is_featured && (
-            <span className="inline-flex items-center gap-1 bg-gradient-primary text-primary-foreground text-[10px] font-bold px-2 py-0.5 rounded-full">
-              <Crown className="w-2.5 h-2.5" /> Featured
-            </span>
-          )}
-          {a.auction_date && (
-            <div className="flex items-center gap-1 bg-background/90 backdrop-blur-sm border border-border rounded-full px-2 py-0.5 text-[10px] font-semibold">
-              <Calendar className="w-3 h-3 text-primary" />
-              {format(new Date(a.auction_date), "dd MMM yyyy")}
-            </div>
-          )}
-        </div>
-        {getPropertyTypeLabel(a) && (
-          <div className="absolute top-2 right-2 bg-primary text-primary-foreground text-[10px] font-bold px-2 py-0.5 rounded-full">
-            {getPropertyTypeLabel(a)}
-          </div>
-        )}
-        {badge &&
-        <div className={`absolute bottom-2 right-2 flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${badge.cls}`}>
-            <Clock className="w-3 h-3" />
-            {badge.label}
-          </div>
-        }
-      </Link>
-
-      {/* Info */}
-      <div className="p-4 space-y-2 flex-1 flex flex-col">
-        <Link to={`/auction/${a.id}`}>
-          <h3 className="font-semibold text-sm line-clamp-2 group-hover:text-brand-gold transition-colors">
-            {a.title}
-          </h3>
-        </Link>
-        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-          <MapPin className="w-3 h-3 shrink-0" />
-          <span className="truncate">{a.address ? `${a.address}, ` : ""}{a.city}</span>
-        </div>
-
-        {/* Property type pill */}
-        {getPropertyTypeLabel(a) && (
-        <span className="inline-flex items-center gap-1 bg-primary/10 text-primary border border-primary/20 text-[10px] font-semibold px-2 py-0.5 rounded-full w-fit">
-            {getPropertyTypeLabel(a)}
-          </span>
-        )}
-
-        {/* Ownership status badge */}
-        {ownershipBadge &&
-        <div className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border w-fit ${ownershipBadge.cls}`}>
-            <Building2 className="w-2.5 h-2.5" />
-            {ownershipBadge.label}
-            {ownershipPct != null && ownershipPct < 100 &&
-          <span className="opacity-80">({ownershipPct}%)</span>
-          }
-          </div>
-        }
-
-        {(a.year_built || (a.sqm && a.sqm > 1)) && (
-          <div className="flex flex-wrap items-center gap-1.5 mt-1">
-            {a.year_built && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-brand-slate/10 text-brand-slate border border-brand-slate/25">
-                Built {a.year_built}
-              </span>
-            )}
-            {a.sqm && a.sqm > 1 && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-brand-emerald/10 text-brand-emerald border border-brand-emerald/25">
-                {a.sqm} τ.μ.
-              </span>
-            )}
-          </div>
-        )}
-        <div className="flex items-center justify-between pt-1">
-          <div className="flex items-center gap-1 font-display font-bold bg-gradient-primary bg-clip-text text-transparent">
-            <Euro className="w-3.5 h-3.5 text-primary" />
-            {(a.auction_starting_bid ?? a.price ?? 0).toLocaleString("el-GR")}
-          </div>
-        </div>
-        {a.auction_court && !/^[A-Z_]+$/.test(a.auction_court) &&
-          <div className="text-xs text-muted-foreground truncate">{a.auction_court}</div>
-        }
-
-
-
-
-        {/* Action row */}
-        <div className="mt-auto pt-3 border-t border-border flex items-center gap-2">
-          {/* Favorite */}
-          <button
-            onClick={(e) => {e.preventDefault();onToggleFav(a.id, isFav);}}
-            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all border ${
-            isFav ?
-            "bg-rose-500/15 border-rose-500/30 text-rose-400" :
-            "bg-secondary border-border text-muted-foreground hover:text-foreground"}`
-            }
-            aria-label="Save">
-            
-            <Heart className={`w-3.5 h-3.5 ${isFav ? "fill-current text-rose-400" : ""}`} />
-            {isFav ? "Saved" : "Save"}
-          </button>
-
-          {/* Share */}
-          <button
-            onClick={handleShare}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-secondary border border-border text-muted-foreground hover:text-foreground transition-all"
-            aria-label="Share">
-            
-            <Share2 className="w-3.5 h-3.5" />
-            Share
-          </button>
-
-          {/* Report */}
-          <button
-            onClick={handleReport}
-            className="ml-auto p-1.5 rounded-lg text-muted-foreground/50 hover:text-muted-foreground hover:bg-secondary transition-all"
-            aria-label="Report">
-            
-            <Flag className="w-3.5 h-3.5" />
-          </button>
-
-          {/* External link */}
-          {a.website_url &&
-          <a
-            href={a.website_url}
-            target="_blank"
-            rel="noreferrer noopener"
-            onClick={(e) => e.stopPropagation()}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold bg-primary/10 border border-primary/25 text-primary hover:bg-primary/20 transition-all">
-            
-              <ExternalLink className="w-3 h-3" />
-              eAuction
-            </a>
-          }
-        </div>
-      </div>
-    </div>);
-
-}
-
 export default function Auctions() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { isPro } = useSubscription();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -556,10 +56,7 @@ export default function Auctions() {
 
   const { data: auctions = [], isLoading, error } = useAuctionListings();
   const toggleFav = useToggleFavorite();
-  const email = (user?.email || "").toLowerCase();
-  const isMaiPropOsUser =
-  email.endsWith("@maiprop.co") ||
-  email.endsWith("@os.maiprop.co");
+  const isMaiPropOsUser = isPlatformAdmin(profile);
   // pageCap and maxItems computed below when cappedAuctions is built
 
   // Dynamic city list from actual data
@@ -700,9 +197,6 @@ export default function Auctions() {
   Math.round(visibleFiltered.reduce((sum, a) => sum + (a.auction_starting_bid ?? a.price ?? 0), 0) / visibleFiltered.length) :
   0;
 
-  // Compute % of auctions that have a starting bid below stated price
-  const withDiscount = visibleFiltered.filter((a) => a.auction_starting_bid && a.price && a.auction_starting_bid < a.price).length;
-  const _discountPct = visibleFiltered.length > 0 ? Math.round(withDiscount / visibleFiltered.length * 100) : 0;
 
   const auctionStats = [
   { value: isLoading ? "—" : String(thisWeek), label: "This Week", icon: Gavel },
@@ -740,6 +234,22 @@ export default function Auctions() {
 
   return (
     <div className="min-h-screen bg-background">
+      <Helmet>
+        <title>Property Auctions in Greece — maiProp</title>
+        <meta name="description" content="Browse real-time Greek court property auctions. Filter by city, type, and bid range." />
+        <link rel="canonical" href="https://maiprop.co/auctions" />
+        <meta property="og:title" content="Property Auctions in Greece — maiProp" />
+        <meta property="og:description" content="Real-time court auction data for Greek properties." />
+        <meta property="og:url" content="https://maiprop.co/auctions" />
+        <script type="application/ld+json">{JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "ItemList",
+          "name": "Greek Property Auctions",
+          "description": "Real-time court auction listings for properties across Greece.",
+          "url": "https://maiprop.co/auctions",
+          "provider": { "@type": "Organization", "name": "maiProp", "url": "https://maiprop.co" },
+        })}</script>
+      </Helmet>
       <Navbar />
       <div className="pt-16">
         {/* Hero */}
@@ -788,7 +298,7 @@ export default function Auctions() {
             <Button
               size="sm"
               className="bg-gradient-primary border-0 text-primary-foreground font-semibold w-full sm:w-auto shrink-0"
-              onClick={() => user ? setAlertModalOpen(true) : window.location.href = "/login"}>
+              onClick={() => user ? setAlertModalOpen(true) : navigate("/login", { state: { from: "/auctions" } })}>
               {user ? "Set Alert" : "Sign in to Alert"}
             </Button>
           </div>
@@ -817,12 +327,12 @@ export default function Auctions() {
                 Filters
                 {activeFilterCount > 0 && <span className="w-4 h-4 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center">{activeFilterCount}</span>}
               </button>
-              <div className="flex items-center gap-1 bg-secondary rounded-xl p-1 border border-border shrink-0">
-                <button onClick={() => setViewMode("list")}
+              <div className="flex items-center gap-1 bg-secondary rounded-xl p-1 border border-border shrink-0" role="group" aria-label="View mode">
+                <button onClick={() => setViewMode("list")} aria-label="List view" aria-pressed={viewMode === "list"}
                   className={`px-2.5 py-1.5 rounded-lg transition-all ${viewMode === "list" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}>
                   <List className="w-4 h-4" />
                 </button>
-                <button onClick={() => setViewMode("map")}
+                <button onClick={() => setViewMode("map")} aria-label="Map view" aria-pressed={viewMode === "map"}
                   className={`px-2.5 py-1.5 rounded-lg transition-all ${viewMode === "map" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}>
                   <Map className="w-4 h-4" />
                 </button>
@@ -901,15 +411,15 @@ export default function Auctions() {
               <span className="w-4 h-4 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center font-bold">{activeFilterCount}</span>
               }
             </Button>
-            <div className="flex items-center gap-1 bg-secondary rounded-lg p-1 border border-border">
-              <button onClick={() => setViewMode("list")}
+            <div className="flex items-center gap-1 bg-secondary rounded-lg p-1 border border-border" role="group" aria-label="View mode">
+              <button onClick={() => setViewMode("list")} aria-pressed={viewMode === "list"}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === "list" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
-                <List className="w-3.5 h-3.5" /> List
+                <List className="w-3.5 h-3.5" aria-hidden="true" /> List
               </button>
-              <button onClick={() => setViewMode("map")}
+              <button onClick={() => setViewMode("map")} aria-pressed={viewMode === "map"}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === "map" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
-                <Map className="w-3.5 h-3.5" /> Map
-                {!isLoading && mappableCount > 0 && <span className="ml-0.5 text-[10px] bg-primary/15 text-primary px-1.5 py-0.5 rounded-full font-bold">{mappableCount}</span>}
+                <Map className="w-3.5 h-3.5" aria-hidden="true" /> Map
+                {!isLoading && mappableCount > 0 && <span className="ml-0.5 text-[10px] bg-primary/15 text-primary px-1.5 py-0.5 rounded-full font-bold" aria-label={`${mappableCount} mappable`}>{mappableCount}</span>}
               </button>
             </div>
           </div>

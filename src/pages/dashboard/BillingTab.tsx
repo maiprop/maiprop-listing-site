@@ -2,10 +2,17 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { CreditCard, FileText, ExternalLink, Loader2, CheckCircle2, AlertCircle, Calendar, RefreshCw, Zap } from "lucide-react";
+import {
+  CreditCard, FileText, ExternalLink, Loader2, CheckCircle2, AlertCircle,
+  Calendar, RefreshCw, Zap, Tag, Crown, Star, BarChart2, Globe,
+  Bell, Layers, Shield, TrendingUp,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
+import { cn } from "@/lib/utils";
+import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
 
 interface Invoice {
   id: string;
@@ -35,6 +42,166 @@ interface BillingInfo {
   } | null;
 }
 
+// ── Role-specific add-ons ──────────────────────────────────────────────────
+type AddonItem = {
+  name: string;
+  price: string;
+  unit: string;
+  desc: string;
+  icon: React.ElementType;
+  badge?: string;
+};
+type AddonSection = { category: string; accent: string; items: AddonItem[] };
+
+const ADDONS_BY_ROLE: Record<string, AddonSection[]> = {
+  buyer: [
+    {
+      category: "AI Reports — pay as you go",
+      accent: "primary",
+      items: [
+        { name: "Single AI Valuation",      price: "€39", unit: "/ report", desc: "Full AI valuation with market comparison, yield estimate & confidence score.", icon: BarChart2 },
+        { name: "Valuation Bundle × 5",     price: "€149", unit: "bundle",  desc: "Save 24% vs. single. Ideal when comparing several properties.", icon: TrendingUp, badge: "Save 24%" },
+        { name: "Property Report",          price: "€49", unit: "/ report", desc: "Ownership history, registered liens, legal encumbrances & cadastral data.", icon: FileText },
+        { name: "Neighbourhood Report",     price: "€19", unit: "/ report", desc: "Price trends, safety index, POIs, development projects & investment outlook.", icon: Globe },
+        { name: "Neighbourhood Bundle × 3", price: "€39", unit: "bundle",   desc: "Save 31% vs. single. Insights on three areas at once.", icon: Globe, badge: "Save 31%" },
+      ],
+    },
+  ],
+  seller: [
+    {
+      category: "Listing Boosts",
+      accent: "amber",
+      items: [
+        { name: "Featured Listing",     price: "€39", unit: "/ 30 days", desc: "Homepage carousel + search top placement. Avg. 3× more views.", icon: Crown },
+        { name: "Priority Placement",   price: "€59", unit: "/ 30 days", desc: "Pinned above all non-priority results for your area and type.", icon: Star },
+        { name: "Featured + Priority",  price: "€79", unit: "/ 30 days", desc: "Both boosts together — maximum exposure at a bundled rate.", icon: Zap, badge: "Best value" },
+        { name: "Extra Listing Slot",   price: "€12", unit: "/ listing",  desc: "Add one listing beyond your plan quota.", icon: Layers },
+      ],
+    },
+    {
+      category: "AI Reports",
+      accent: "primary",
+      items: [
+        { name: "Property Report",      price: "€49", unit: "/ report", desc: "Full ownership history, liens & legal status — ideal before listing.", icon: FileText },
+        { name: "Neighbourhood Report", price: "€19", unit: "/ report", desc: "Price trends & comparable sales to help price your property.", icon: Globe },
+      ],
+    },
+  ],
+  agent: [
+    {
+      category: "Listing Boosts",
+      accent: "amber",
+      items: [
+        { name: "Featured Listing",     price: "€39", unit: "/ 30 days", desc: "Homepage carousel + search top placement. Avg. 3× more views.", icon: Crown },
+        { name: "Priority Placement",   price: "€59", unit: "/ 30 days", desc: "Pinned above all non-priority results for your area and type.", icon: Star },
+        { name: "Featured + Priority",  price: "€79", unit: "/ 30 days", desc: "Both boosts together — maximum exposure at a bundled rate.", icon: Zap, badge: "Best value" },
+        { name: "Extra Listing Slot",   price: "€12", unit: "/ listing",  desc: "Add one listing beyond your plan quota.", icon: Layers },
+      ],
+    },
+    {
+      category: "AI Reports",
+      accent: "primary",
+      items: [
+        { name: "Single AI Valuation",  price: "€39", unit: "/ report", desc: "Full AI valuation for client presentations or offer pricing.", icon: BarChart2 },
+        { name: "Valuation Bundle × 5", price: "€149", unit: "bundle",  desc: "Save 24% — ideal for busy agents handling multiple clients.", icon: TrendingUp, badge: "Save 24%" },
+        { name: "Neighbourhood Report", price: "€19", unit: "/ report", desc: "Area intel to share with buyers — price trends, safety, POIs.", icon: Globe },
+      ],
+    },
+    {
+      category: "Agency Add-ons",
+      accent: "rose",
+      items: [
+        { name: "Extra Priority Ad",    price: "€8",  unit: "/ ad",    desc: "Push any listing to the top of search results for its area.", icon: Bell },
+        { name: "Featured Directory",   price: "€59", unit: "/ month", desc: "Top-of-category placement in the Professionals directory.", icon: Shield },
+      ],
+    },
+  ],
+  developer: [
+    {
+      category: "Listing Boosts",
+      accent: "amber",
+      items: [
+        { name: "Featured New Build",   price: "€39", unit: "/ 30 days", desc: "Showcase at the top of the New Builds section — high-intent buyers.", icon: Crown },
+        { name: "Priority Placement",   price: "€59", unit: "/ 30 days", desc: "Pinned above all non-priority results across all listing types.", icon: Star },
+        { name: "Extra Project Listing",price: "€12", unit: "/ listing",  desc: "Add a project listing beyond your plan quota.", icon: Layers },
+      ],
+    },
+    {
+      category: "Market Intelligence",
+      accent: "primary",
+      items: [
+        { name: "Neighbourhood Report", price: "€19", unit: "/ report", desc: "Price trends, demand signals & comparable sales for site selection.", icon: Globe },
+        { name: "AI Property Valuation",price: "€39", unit: "/ report", desc: "Pre-launch pricing intelligence for individual units.", icon: BarChart2 },
+        { name: "Market Intelligence",  price: "€199", unit: "/ month", desc: "Greek property price index, transaction comps, regional trend reports.", icon: TrendingUp },
+      ],
+    },
+  ],
+  professional: [
+    {
+      category: "Directory & Lead Boosts",
+      accent: "rose",
+      items: [
+        { name: "Featured Professional", price: "€59", unit: "/ month", desc: "Top-of-category placement in the Professionals directory for 30 days.", icon: Crown },
+        { name: "Extra Priority Ad",     price: "€8",  unit: "/ ad",    desc: "Push a listing to the top of search results when acting as a property manager.", icon: Bell },
+      ],
+    },
+    {
+      category: "AI Tools",
+      accent: "primary",
+      items: [
+        { name: "AI Property Valuation", price: "€39", unit: "/ report", desc: "Full AI-backed valuation — useful for valuers and legal due diligence.", icon: BarChart2 },
+        { name: "Neighbourhood Report",  price: "€19", unit: "/ report", desc: "Area analysis to accompany legal opinions or architectural briefs.", icon: Globe },
+        { name: "Property Report",       price: "€49", unit: "/ report", desc: "Ownership history, registered liens & cadastral data for legal review.", icon: FileText },
+      ],
+    },
+  ],
+  investor: [
+    {
+      category: "AI Deal Intelligence",
+      accent: "primary",
+      items: [
+        { name: "Single AI Valuation",      price: "€39", unit: "/ report", desc: "Full AI valuation with yield estimate — sharpen your offer pricing.", icon: BarChart2 },
+        { name: "Valuation Bundle × 5",     price: "€149", unit: "bundle",  desc: "Save 24% — ideal when assessing multiple Quick Sale opportunities.", icon: TrendingUp, badge: "Save 24%" },
+        { name: "Property Report",          price: "€49", unit: "/ report", desc: "Liens, encumbrances & legal status before committing to a deal.", icon: FileText },
+        { name: "Neighbourhood Report",     price: "€19", unit: "/ report", desc: "Price trends, rental demand & investment outlook for the target area.", icon: Globe },
+        { name: "Neighbourhood Bundle × 3", price: "€39", unit: "bundle",   desc: "Save 31% — compare three micro-markets side by side.", icon: Globe, badge: "Save 31%" },
+      ],
+    },
+  ],
+};
+
+// investor and institutional share the same add-ons
+ADDONS_BY_ROLE["institutional"] = ADDONS_BY_ROLE["investor"];
+
+function AddonCard({ item, accent }: { item: AddonItem; accent: string }) {
+  const accentClasses = {
+    amber:   { border: "border-amber-500/20",   bg: "bg-amber-500/10",  icon: "text-amber-500" },
+    primary: { border: "border-primary/20",     bg: "bg-primary/10",    icon: "text-primary" },
+    rose:    { border: "border-rose-500/20",    bg: "bg-rose-500/10",   icon: "text-rose-400" },
+  }[accent] ?? { border: "border-border", bg: "bg-secondary", icon: "text-foreground" };
+
+  return (
+    <div className={cn("relative rounded-xl border bg-card p-4 flex flex-col gap-2", accentClasses.border)}>
+      {item.badge && (
+        <div className="absolute -top-2.5 right-3">
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 border border-emerald-500/30">{item.badge}</span>
+        </div>
+      )}
+      <div className="flex items-start justify-between gap-2">
+        <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center shrink-0", accentClasses.bg)}>
+          <item.icon className={cn("w-4 h-4", accentClasses.icon)} />
+        </div>
+        <div className="text-right">
+          <p className="font-bold text-lg leading-none">{item.price}</p>
+          <p className="text-[10px] text-muted-foreground">{item.unit}</p>
+        </div>
+      </div>
+      <p className="font-semibold text-sm">{item.name}</p>
+      <p className="text-xs text-muted-foreground leading-relaxed">{item.desc}</p>
+    </div>
+  );
+}
+
 function useBillingInfo() {
   return useQuery<BillingInfo>({
     queryKey: ["billing-info"],
@@ -51,9 +218,7 @@ function formatAmount(amount: number, currency: string) {
   return new Intl.NumberFormat("el-GR", { style: "currency", currency, minimumFractionDigits: 2 }).format(amount);
 }
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-}
+import { formatDate } from "@/lib/format";
 
 function StatusBadge({ status }: { status: string | null }) {
   const map: Record<string, { cls: string; label: string }> = {
@@ -70,8 +235,12 @@ function StatusBadge({ status }: { status: string | null }) {
 export default function BillingTab() {
   const navigate = useNavigate();
   const { isPro, subscriptionEnd, loading: subLoading } = useSubscription();
+  const { profile } = useAuth();
   const { data, isLoading, refetch, isRefetching } = useBillingInfo();
   const [portalLoading, setPortalLoading] = useState(false);
+
+  const participantType = getParticipantTypeFromProfile(profile) ?? "buyer";
+  const addonSections: AddonSection[] = ADDONS_BY_ROLE[participantType] ?? ADDONS_BY_ROLE["buyer"];
 
   const openPortal = async () => {
     setPortalLoading(true);
@@ -79,8 +248,8 @@ export default function BillingTab() {
       const { data: pData, error } = await supabase.functions.invoke("customer-portal");
       if (error || !pData?.url) throw new Error(pData?.error ?? error?.message ?? "Could not open billing portal");
       window.location.href = pData.url;
-    } catch (e: any) {
-      toast.error(e.message ?? "Could not open billing portal");
+    } catch (e: unknown) {
+      toast.error((e instanceof Error ? e.message : null) ?? "Could not open billing portal");
       setPortalLoading(false);
     }
   };
@@ -247,6 +416,35 @@ export default function BillingTab() {
           <p>Need help? <a href="mailto:support@maiprop.co" className="underline hover:text-foreground">support@maiprop.co</a></p>
         </div>
       )}
+
+      {/* ── Role-specific add-ons & pay-as-you-go ──────────────────── */}
+      <div className="pt-4 border-t border-border">
+        <div className="flex items-center gap-2 mb-1">
+          <Tag className="w-4 h-4 text-muted-foreground" />
+          <h2 className="font-display text-lg font-bold">Add-ons & Pay-as-you-go</h2>
+        </div>
+        <p className="text-sm text-muted-foreground mb-6">
+          Your plan includes a generous baseline. Add exactly what you need — no upgrade required.
+        </p>
+
+        <div className="space-y-8">
+          {addonSections.map((section) => (
+            <div key={section.category}>
+              <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">{section.category}</h3>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {section.items.map((item) => (
+                  <AddonCard key={item.name} item={item} accent={section.accent} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <p className="text-[11px] text-muted-foreground mt-6">
+          To purchase add-ons, click <button className="underline hover:text-foreground" onClick={() => navigate("/pricing")}>view all pricing</button> or contact{" "}
+          <a href="mailto:support@maiprop.co" className="underline hover:text-foreground">support@maiprop.co</a>.
+        </p>
+      </div>
     </div>
   );
 }

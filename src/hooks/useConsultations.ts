@@ -1,7 +1,8 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+﻿import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { logger } from "@/lib/logger";
 
 export type ConsultationRequestInput = {
   professional_id: string;
@@ -38,23 +39,24 @@ export function useSubmitConsultation() {
       // Create lead for professional
       const { data: pro } = await supabase.from("professionals").select("user_id").eq("id", input.professional_id).single();
       if (pro?.user_id) {
-        await supabase.from("leads").insert({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        supabase.from("leads").insert({
           owner_id: pro.user_id,
           source: input.request_type === "callback" ? "callback" : input.request_type === "message" ? "message" : "consultation",
           professional_id: input.professional_id,
-          name: input.requester_name,
+          full_name: input.requester_name,
           email: input.requester_email,
-          phone: input.requester_phone ?? null,
+          phone: input.requester_phone ?? "",
           message: input.message ?? null,
           status: "new",
-        } as any).then(({ error: leadErr }) => { if (leadErr) console.warn("Lead create:", leadErr); });
+        }).then(({ error: leadErr }: { error: Error | null }) => { if (leadErr) logger.warn("Lead create:", leadErr); });
       }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["consultation-requests"] });
       toast.success("Request sent! The professional will contact you soon.");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: () => toast.error("Could not send consultation request. Please try again."),
   });
 }
 
@@ -73,7 +75,7 @@ export function useMyConsultationRequests() {
 
       const { data, error } = await supabase
         .from("consultation_requests")
-        .select("*")
+        .select("id, professional_id, requester_id, requester_name, requester_email, requester_phone, request_type, service, message, preferred_date, preferred_time, callback_time, status, lead_status, notes, created_at, updated_at")
         .eq("professional_id", pro.id)
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -106,7 +108,7 @@ export function useUpdateConsultationRequest() {
       qc.invalidateQueries({ queryKey: ["consultation-requests"] });
       toast.success("Request updated");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: () => toast.error("Could not update consultation. Please try again."),
   });
 }
 
@@ -130,6 +132,6 @@ export function useBulkUpdateConsultationRequests() {
       qc.invalidateQueries({ queryKey: ["consultation-requests"] });
       toast.success("Requests updated");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: () => toast.error("Could not update consultation. Please try again."),
   });
 }

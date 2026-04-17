@@ -1,10 +1,9 @@
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import logoImg from "@/assets/logo.webp";
-import logoDarkImg from "@/assets/logo-dark.webp";
+import logoImg from "@/assets/logo.png";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Bell, MessageSquare, Menu, X, ChevronDown, Plus, LogOut, LayoutDashboard, Building2, Sun, Moon, Home, Flame, DoorOpen, Search, Zap, Gavel, Calendar, CheckCheck } from "lucide-react";
+import { Bell, MessageSquare, Menu, X, ChevronDown, Plus, LogOut, LayoutDashboard, Building2, Sun, Moon, Home, Flame, DoorOpen, Search, Zap, Gavel, Calendar, CheckCheck, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "next-themes";
 import {
@@ -18,7 +17,8 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useEligibleForQuickSale } from "@/hooks/useEligibleForQuickSale";
-import { getParticipantTypeFromProfile, isInvestorMode } from "@/lib/participantConfig";
+import { getParticipantTypeFromProfile, isInvestorMode, PARTICIPANT_LABELS, type ParticipantId } from "@/lib/participantConfig";
+import { formatTimeAgo } from "@/lib/format";
 import { isPlatformAdmin } from "@/lib/authUtils";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
@@ -37,7 +37,7 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
 
   const participantType = getParticipantTypeFromProfile(profile);
   const isDeveloper = participantType === "developer";
-  const canListProperty = ["seller", "agent", "developer", "institutional"].includes(participantType);
+  const canListProperty = ["seller", "agent", "developer", "institutional"].includes(participantType) || isPlatformAdmin(profile);
   const { eligible: eligibleForQuickSale } = useEligibleForQuickSale();
 
   const queryClient = useQueryClient();
@@ -84,16 +84,6 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
     queryClient.invalidateQueries({ queryKey: ["notifications_list", user?.id] });
   };
 
-  const formatTimeAgo = (iso: string) => {
-    const diff = Date.now() - new Date(iso).getTime();
-    const m = Math.floor(diff / 60000);
-    if (m < 1) return "just now";
-    if (m < 60) return `${m}m ago`;
-    const h = Math.floor(m / 60);
-    if (h < 24) return `${h}h ago`;
-    return `${Math.floor(h / 24)}d ago`;
-  };
-
   const hasDarkHero = DARK_HERO_ROUTES.includes(location.pathname);
   // When transparent AND over a dark hero, force white text; otherwise use semantic tokens
   const isTransparent = !scrolled;
@@ -138,6 +128,13 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
 
   return (
     <>
+    {/* Skip-to-main link — visible only on keyboard focus (WCAG 2.1 SC 2.4.1) */}
+    <a
+      href="#main-content"
+      className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[9999] focus:px-4 focus:py-2 focus:rounded-md focus:bg-primary focus:text-primary-foreground focus:text-sm focus:font-medium focus:shadow-lg"
+    >
+      Skip to main content
+    </a>
     <header
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         scrolled
@@ -151,7 +148,7 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
         {/* Logo */}
         <Link to="/" className="flex items-center shrink-0">
           <img
-            src={forceLight || theme === "dark" ? logoDarkImg : logoImg}
+            src={logoImg}
             alt="maiProp — Real estate | Real decisions."
             className="h-10 w-auto object-contain transition-all duration-300"
           />
@@ -333,7 +330,7 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
                   <div className="px-3 py-2 border-b border-border">
                     <p className="text-xs font-semibold truncate">{displayName}</p>
                     <p className="text-xs text-muted-foreground capitalize">
-                    {isPlatformAdmin(profile) ? "Admin" : (profile?.role as string) === "seller_landlord" ? "Seller / Landlord" : (profile?.role as string) === "agent" ? "Agent" : (profile?.role as string) === "professional" ? "Professional" : (profile?.role as string) === "developer" ? "Developer" : (profile?.role as string) === "individual" ? "Buyer / Renter" : (profile?.role || "Buyer / Renter")}
+                    {isPlatformAdmin(profile) ? "Admin" : PARTICIPANT_LABELS[participantType as ParticipantId] ?? (profile?.role || "Buyer / Renter")}
                   </p>
                   </div>
                   <DropdownMenuItem asChild>
@@ -362,6 +359,13 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
                     <DropdownMenuItem asChild>
                       <Link to="/investor-dashboard" className="flex items-center gap-2 cursor-pointer">
                         <Flame className="w-3.5 h-3.5" /> {t("nav.quickSale")}
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+                  {isPlatformAdmin(profile) && (
+                    <DropdownMenuItem asChild>
+                      <Link to="/admin" className="flex items-center gap-2 cursor-pointer">
+                        <Shield className="w-3.5 h-3.5" /> Admin Panel
                       </Link>
                     </DropdownMenuItem>
                   )}

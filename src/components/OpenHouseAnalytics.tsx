@@ -10,7 +10,6 @@ import {
 } from "recharts";
 import { Users, CheckCircle, TrendingUp, FileText } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -54,27 +53,6 @@ type TimeslotUtil = {
 
 type MortgageDist = { name: string; value: number; color: string };
 
-// ── Mock data ─────────────────────────────────────────────────────────────────────
-const MOCK_KPI: KpiData = {
-  registered: 24,
-  approved: 18,
-  attended: 12,
-  offers: 5,
-  conversion: 20.8,
-};
-
-const MOCK_TIMESLOTS: TimeslotUtil[] = [
-  { id: "1", label: "Sat 10:00 – 11:00", registered: 9,  max_visitors: 10 },
-  { id: "2", label: "Sat 11:30 – 12:30", registered: 8,  max_visitors: 10 },
-  { id: "3", label: "Sun 14:00 – 15:00", registered: 7,  max_visitors: 10 },
-];
-
-const MOCK_MORTGAGE: MortgageDist[] = [
-  { name: "Approved",    value: 10, color: "#22c55e" },
-  { name: "In Progress", value: 7,  color: "#f59e0b" },
-  { name: "Cash",        value: 5,  color: "#3b82f6" },
-  { name: "Unknown",     value: 2,  color: "#94a3b8" },
-];
 
 const MORTGAGE_COLORS: Record<string, string> = {
   approved:    "#22c55e",
@@ -89,7 +67,6 @@ export default function OpenHouseAnalytics({ listingId }: { listingId: string })
   const [offers, setOffers] = useState<Offer[]>([]);
   const [timeslots, setTimeslots] = useState<Timeslot[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isMock, setIsMock] = useState(false);
 
   useEffect(() => {
     if (!listingId) return;
@@ -122,9 +99,8 @@ export default function OpenHouseAnalytics({ listingId }: { listingId: string })
         setRegistrations(regs);
         setOffers(offs);
         setTimeslots(slots);
-        setIsMock(regs.length === 0);
-      } catch {
-        if (mounted) setIsMock(true);
+      } catch (_err: unknown) {
+        // leave state empty — UI shows empty state below
       } finally {
         if (mounted) setLoading(false);
       }
@@ -135,19 +111,15 @@ export default function OpenHouseAnalytics({ listingId }: { listingId: string })
   }, [listingId]);
 
   // ── Derived KPIs ───────────────────────────────────────────────────────────────
-  const kpi: KpiData = isMock
-    ? MOCK_KPI
-    : (() => {
-        const attended = registrations.filter((r) => r.status === "attended").length;
-        const approved = registrations.filter((r) => r.status === "approved" || r.status === "attended").length;
-        return {
-          registered: registrations.length,
-          approved,
-          attended,
-          offers: offers.length,
-          conversion: attended > 0 ? Math.round((offers.length / attended) * 1000) / 10 : 0,
-        };
-      })();
+  const attended = registrations.filter((r) => r.status === "attended").length;
+  const approved = registrations.filter((r) => r.status === "approved" || r.status === "attended").length;
+  const kpi: KpiData = {
+    registered: registrations.length,
+    approved,
+    attended,
+    offers: offers.length,
+    conversion: attended > 0 ? Math.round((offers.length / attended) * 1000) / 10 : 0,
+  };
 
   // ── Funnel data ────────────────────────────────────────────────────────────────
   const funnelData = [
@@ -158,30 +130,26 @@ export default function OpenHouseAnalytics({ listingId }: { listingId: string })
   ];
 
   // ── Timeslot utilization ───────────────────────────────────────────────────────
-  const timeslotUtil: TimeslotUtil[] = isMock
-    ? MOCK_TIMESLOTS
-    : timeslots.map((slot) => ({
-        id: slot.id,
-        label: slot.label,
-        max_visitors: slot.max_visitors,
-        registered: registrations.filter((r) => r.timeslot_id === slot.id).length,
-      }));
+  const timeslotUtil: TimeslotUtil[] = timeslots.map((slot) => ({
+    id: slot.id,
+    label: slot.label,
+    max_visitors: slot.max_visitors,
+    registered: registrations.filter((r) => r.timeslot_id === slot.id).length,
+  }));
 
   // ── Mortgage distribution ──────────────────────────────────────────────────────
-  const mortgageDist: MortgageDist[] = isMock
-    ? MOCK_MORTGAGE
-    : (() => {
-        const counts: Record<string, number> = {};
-        registrations.forEach((r) => {
-          const key = r.mortgage_status ?? "unknown";
-          counts[key] = (counts[key] || 0) + 1;
-        });
-        return Object.entries(counts).map(([name, value]) => ({
-          name: name.charAt(0).toUpperCase() + name.slice(1).replace("-", " "),
-          value,
-          color: MORTGAGE_COLORS[name] ?? "#94a3b8",
-        }));
-      })();
+  const mortgageDist: MortgageDist[] = (() => {
+    const counts: Record<string, number> = {};
+    registrations.forEach((r) => {
+      const key = r.mortgage_status ?? "unknown";
+      counts[key] = (counts[key] || 0) + 1;
+    });
+    return Object.entries(counts).map(([name, value]) => ({
+      name: name.charAt(0).toUpperCase() + name.slice(1).replace("-", " "),
+      value,
+      color: MORTGAGE_COLORS[name] ?? "#94a3b8",
+    }));
+  })();
 
   if (loading) {
     return (
@@ -193,15 +161,18 @@ export default function OpenHouseAnalytics({ listingId }: { listingId: string })
     );
   }
 
+  if (!loading && registrations.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <Users className="w-10 h-10 text-muted-foreground mb-3" />
+        <p className="font-semibold text-sm">No registrations yet</p>
+        <p className="text-xs text-muted-foreground mt-1">Analytics will appear once visitors register for this open house.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {/* ── Sample data notice ─────────────────────────────────────────── */}
-      {isMock && (
-        <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-muted/60 border border-border text-sm text-muted-foreground">
-          <Badge variant="secondary" className="shrink-0">Sample data</Badge>
-          No registrations yet — showing representative demo figures.
-        </div>
-      )}
 
       {/* ── KPI cards ──────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

@@ -1,10 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+const valuationLimiter = makeRateLimiter({ maxRequests: 15, windowMs: 60_000 });
 
 async function requireAuth(req: Request): Promise<Response | null> {
   const authHeader = req.headers.get("Authorization");
@@ -225,7 +222,12 @@ Use benchmark table. Apply condition, location, feature adjustments. Range: ±15
 
 // ── Main handler ───────────────────────────────────────────────────────────────
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const corsPreflightResponse = handleCors(req);
+  if (corsPreflightResponse) return corsPreflightResponse;
+  const corsHeaders = getCorsHeaders(req);
+  const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
+  if (valuationLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
+
 
   const authErr = await requireAuth(req);
   if (authErr) return authErr;

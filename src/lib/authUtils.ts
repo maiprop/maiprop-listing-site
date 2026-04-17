@@ -1,6 +1,10 @@
 /**
- * Auth/role helpers. Use role='admin' as single source of truth.
- * Keeps is_platform_admin fallback for backward compat during migration.
+ * Auth/role helpers.
+ *
+ * Source of truth: `role` column in the `profiles` DB table.
+ * `is_platform_admin` boolean is kept as a backward-compat fallback only.
+ *
+ * Do NOT use email-based admin checks — role is authoritative and server-enforced.
  */
 
 export function isPlatformAdmin(
@@ -10,18 +14,12 @@ export function isPlatformAdmin(
   return profile.role === "admin" || !!(profile as { is_platform_admin?: boolean }).is_platform_admin;
 }
 
-/** Sell-side: can create listings (agent, seller, developer, institutional).
- *  Checks both `role` (legacy) and `participant_type` (current) — whichever is set. */
+/** Sell-side: can create listings (agent, seller, developer, institutional). */
 export function isSellSideRole(
   profile: { role?: string; participant_type?: string | null } | null
 ): boolean {
   if (!profile) return false;
-  const sellRoles = ["agent", "seller_landlord", "developer", "institutional"];
-  const sellTypes = ["agent", "seller", "developer", "institutional"];
-  return sellRoles.includes(profile.role ?? "") || sellTypes.includes(profile.participant_type ?? "");
+  const sellValues = ["agent", "seller", "developer", "institutional"];
+  return sellValues.includes(profile.role ?? "") || sellValues.includes(profile.participant_type ?? "");
 }
 
-/** Buy-side: can access investor dashboard (legacy — no longer used; admin-only access via isPlatformAdmin) */
-export function isBuySideRole(_profile: { role?: string } | null): boolean {
-  return false;
-}

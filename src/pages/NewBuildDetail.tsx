@@ -1,3 +1,4 @@
+﻿/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -6,283 +7,58 @@ import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import {
-  ArrowLeft, Building2, MapPin, Calendar, Home, Star, ChevronLeft, ChevronRight,
-  Zap, Loader2, MessageSquare, Phone, BedDouble, Bath, Maximize2,
-  Layers, HardHat, ClipboardList, CheckCircle2, Circle, FileImage, Info,
-  Ruler, SquareStack, Trees,
+  ArrowLeft, Building2, MapPin, Calendar, Home,
+  Zap, Eye, Thermometer, Check,
+  ChevronDown, ChevronUp, Shield, Flame, Wifi, Car, TreePine, Phone,
+  Loader2, Maximize2, BedDouble, Bath, Layers, FileImage,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useIsFavorited, useToggleFavorite } from "@/hooks/useFavorites";
+import { PropertyScoresSection } from "@/components/property/PropertyScoresSection";
 import { useStartConversation } from "@/hooks/useMessages";
 import { toast } from "sonner";
 import PropertyValuation from "@/components/PropertyValuation";
 import NeighbourhoodReport from "@/components/NeighbourhoodReport";
 import PropertyMiniMap from "@/components/PropertyMiniMap";
+import { ENERGY_SCALE, ENERGY_COLORS } from "@/types";
+import { CONSTRUCTION_PHASES, formatNewBuildPrice as formatPrice } from "@/lib/newBuildConfig";
+import { FeatureSection } from "@/components/property/DetailPrimitives";
+import { PropertyGallery as Gallery } from "@/components/new-build/PropertyGallery";
+import { ConstructionTimeline } from "@/components/new-build/ConstructionTimeline";
+import { FloorPlanSection } from "@/components/new-build/FloorPlanSection";
+import { ConstructionSpecs } from "@/components/new-build/ConstructionSpecs";
+import { UnitShowcase } from "@/components/new-build/UnitShowcase";
+import { RegisterInterestCard } from "@/components/new-build/RegisterInterestCard";
 
-function formatPrice(n: number) {
-  return "€" + n.toLocaleString("el-GR");
-}
-
-// ── Image gallery ─────────────────────────────────────────────────────────────
-function Gallery({ images }: { images: string[] }) {
-  const [idx, setIdx] = useState(0);
-  if (!images.length) return (
-    <div className="aspect-video bg-muted rounded-2xl flex items-center justify-center">
-      <Building2 className="w-16 h-16 text-muted-foreground/40" />
-    </div>
-  );
+// â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function EnergyBadge({ cls }: { cls: string }) {
+  const colorClass = (ENERGY_COLORS as Record<string, string>)[cls] ?? "bg-muted text-muted-foreground";
   return (
-    <div className="relative rounded-2xl overflow-hidden aspect-video bg-muted">
-      <img
-        src={images[idx]}
-        alt=""
-        className="w-full h-full object-cover"
-      />
-      {images.length > 1 && (
-        <>
-          <button
-            onClick={() => setIdx((i) => (i - 1 + images.length) % images.length)}
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-background/80 backdrop-blur flex items-center justify-center hover:bg-background transition-colors"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-          <button
-            onClick={() => setIdx((i) => (i + 1) % images.length)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-background/80 backdrop-blur flex items-center justify-center hover:bg-background transition-colors"
-          >
-            <ChevronRight className="w-5 h-5" />
-          </button>
-          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
-            {images.map((_, i) => (
-              <button
-                key={i}
-                onClick={() => setIdx(i)}
-                className={`w-1.5 h-1.5 rounded-full transition-all ${i === idx ? "bg-white w-4" : "bg-white/50"}`}
-              />
-            ))}
-          </div>
-        </>
-      )}
-      <div className="absolute top-3 left-3">
-        <span className="inline-flex items-center gap-1.5 bg-primary text-primary-foreground text-xs font-bold px-3 py-1 rounded-full">
-          <Building2 className="w-3.5 h-3.5" /> New Build
-        </span>
-      </div>
-    </div>
+    <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${colorClass}`}>{cls}</span>
   );
 }
 
-// ── Construction timeline ─────────────────────────────────────────────────────
-const CONSTRUCTION_PHASES = [
-  { key: "planning",          label: "Planning & Permits",   icon: ClipboardList },
-  { key: "foundation",        label: "Foundation",           icon: HardHat },
-  { key: "under_construction",label: "Structural Work",      icon: Building2 },
-  { key: "topping_out",       label: "Topping Out",          icon: Layers },
-  { key: "shell_complete",    label: "Fitting Out",          icon: Home },
-  { key: "new",               label: "Completed",            icon: CheckCircle2 },
-];
-
-function ConstructionTimeline({ status }: { status: string | null }) {
-  if (!status) return null;
-  const currentIdx = CONSTRUCTION_PHASES.findIndex(p => p.key === status);
-  const activeIdx = currentIdx === -1 ? 0 : currentIdx;
-
-  return (
-    <div className="bg-card border border-border rounded-xl p-5">
-      <h2 className="font-display font-semibold mb-4 flex items-center gap-2">
-        <HardHat className="w-4 h-4 text-orange-500" /> Construction Progress
-      </h2>
-      <div className="relative">
-        {/* Connecting line */}
-        <div className="absolute left-4 top-4 bottom-4 w-0.5 bg-border" />
-        <div
-          className="absolute left-4 top-4 w-0.5 bg-orange-500 transition-all"
-          style={{ height: `${(activeIdx / (CONSTRUCTION_PHASES.length - 1)) * 100}%` }}
-        />
-        <div className="space-y-4">
-          {CONSTRUCTION_PHASES.map((phase, idx) => {
-            const done = idx < activeIdx;
-            const active = idx === activeIdx;
-            const Icon = phase.icon;
-            return (
-              <div key={phase.key} className="flex items-center gap-4 relative">
-                <div className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all ${
-                  done   ? "bg-orange-500 text-white" :
-                  active ? "bg-orange-500 text-white ring-4 ring-orange-500/20" :
-                           "bg-muted text-muted-foreground"
-                }`}>
-                  {done ? <CheckCircle2 className="w-4 h-4" /> : active ? <Icon className="w-4 h-4" /> : <Circle className="w-3.5 h-3.5" />}
-                </div>
-                <div>
-                  <p className={`text-sm font-medium ${active ? "text-orange-600" : done ? "text-foreground" : "text-muted-foreground"}`}>
-                    {phase.label}
-                    {active && <span className="ml-2 text-xs font-bold bg-orange-500/15 text-orange-600 px-2 py-0.5 rounded-full">Current</span>}
-                    {done && <span className="ml-2 text-xs text-muted-foreground">Done</span>}
-                  </p>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Floor plan section ────────────────────────────────────────────────────────
-function FloorPlanSection({
-  images,
-  onRequestPlans,
-}: {
-  images: string[];
-  onRequestPlans: () => void;
-}) {
-  const [activeFloor, setActiveFloor] = useState(0);
-  const floorPlanImages = images.filter((_url, i) => i > 0); // first is always cover; rest may include floor plans
-
-  return (
-    <div className="bg-card border border-border rounded-xl p-5">
-      <h2 className="font-display font-semibold mb-1 flex items-center gap-2">
-        <FileImage className="w-4 h-4 text-primary" /> Floor Plans
-      </h2>
-      <p className="text-xs text-muted-foreground mb-4">
-        Available unit layouts and building sections
-      </p>
-
-      {floorPlanImages.length > 0 ? (
-        <div className="space-y-3">
-          {/* Thumbnail selector */}
-          {floorPlanImages.length > 1 && (
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {floorPlanImages.map((url, i) => (
-                <button
-                  key={i}
-                  onClick={() => setActiveFloor(i)}
-                  className={`relative shrink-0 w-16 h-12 rounded-lg overflow-hidden border-2 transition-all ${
-                    i === activeFloor ? "border-primary" : "border-border opacity-60 hover:opacity-100"
-                  }`}
-                >
-                  <img src={url} alt="" className="w-full h-full object-cover" />
-                </button>
-              ))}
-            </div>
-          )}
-          {/* Main floor plan view */}
-          <div className="rounded-xl overflow-hidden border border-border bg-muted aspect-[4/3]">
-            <img
-              src={floorPlanImages[activeFloor]}
-              alt="Floor plan"
-              className="w-full h-full object-contain"
-            />
-          </div>
-          <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-            <Info className="w-3.5 h-3.5 shrink-0" />
-            Floor plans are indicative — final dimensions confirmed at reservation
-          </p>
-        </div>
-      ) : (
-        <div className="rounded-xl border-2 border-dashed border-border bg-muted/30 p-8 flex flex-col items-center gap-3 text-center">
-          <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-            <FileImage className="w-6 h-6 text-primary" />
-          </div>
-          <div>
-            <p className="font-medium text-sm">Floor plans available on request</p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Contact the developer to receive detailed unit layouts, dimensions, and specifications
-            </p>
-          </div>
-          <Button size="sm" variant="outline" className="gap-2" onClick={onRequestPlans}>
-            <MessageSquare className="w-3.5 h-3.5" /> Request Floor Plans
-          </Button>
-        </div>
-      )}
-
-      {/* Unit type quick reference */}
-      <div className="mt-4 border-t border-border pt-4">
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Typical Unit Types</p>
-        <div className="grid grid-cols-2 gap-2">
-          {[
-            { icon: BedDouble, label: "Studio",  sqm: "30–45 m²", desc: "Compact / investor" },
-            { icon: BedDouble, label: "1 Bed",   sqm: "45–65 m²", desc: "Couple / rental" },
-            { icon: BedDouble, label: "2 Bed",   sqm: "65–90 m²", desc: "Family starter" },
-            { icon: BedDouble, label: "3 Bed",   sqm: "90–130 m²",desc: "Larger family" },
-          ].map(u => (
-            <div key={u.label} className="flex items-center gap-2.5 rounded-lg bg-secondary/60 border border-border p-2.5">
-              <u.icon className="w-4 h-4 text-primary shrink-0" />
-              <div className="min-w-0">
-                <p className="text-xs font-semibold truncate">{u.label} · {u.sqm}</p>
-                <p className="text-[10px] text-muted-foreground">{u.desc}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-        <p className="text-[11px] text-muted-foreground mt-2 flex items-center gap-1">
-          <Info className="w-3 h-3 shrink-0" /> Exact availability and pricing confirmed by developer
-        </p>
-      </div>
-    </div>
-  );
-}
-
-// ── Construction specs summary ────────────────────────────────────────────────
-function ConstructionSpecs({ listing }: { listing: any }) {
-  const specs = [
-    listing.total_floors   && { icon: SquareStack, label: "Total floors",      value: `${listing.total_floors}` },
-    listing.sqm            && { icon: Ruler,       label: "Unit area from",    value: `${listing.sqm} m²` },
-    listing.has_parking    && { icon: Home,         label: "Parking",           value: "Included" },
-    listing.has_elevator   && { icon: Layers,       label: "Elevator",          value: "Yes" },
-    listing.has_pool       && { icon: Trees,        label: "Swimming pool",     value: "Common area" },
-    listing.has_garden     && { icon: Trees,        label: "Garden / Grounds",  value: "Yes" },
-    listing.has_smart_home && { icon: Zap,          label: "Smart home system", value: "Standard" },
-    listing.energy_class   && { icon: Zap,          label: "Energy rating",     value: listing.energy_class },
-  ].filter(Boolean) as { icon: React.ComponentType<{ className?: string }>; label: string; value: string }[];
-
-  if (!specs.length) return null;
-
-  return (
-    <div className="bg-card border border-border rounded-xl p-5">
-      <h2 className="font-display font-semibold mb-3 flex items-center gap-2">
-        <Ruler className="w-4 h-4" /> Building Specifications
-      </h2>
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5">
-        {specs.map(spec => (
-          <div key={spec.label} className="flex items-start gap-2">
-            <spec.icon className="w-3.5 h-3.5 text-primary mt-0.5 shrink-0" />
-            <div>
-              <dt className="text-[10px] text-muted-foreground leading-tight">{spec.label}</dt>
-              <dd className="text-xs font-semibold">{spec.value}</dd>
-            </div>
-          </div>
-        ))}
-      </dl>
-    </div>
-  );
-}
-
-// ── Energy badge ──────────────────────────────────────────────────────────────
-const ENERGY_COLORS: Record<string, string> = {
-  "A+": "bg-green-500", "A": "bg-green-400", "B+": "bg-lime-500",
-  "B": "bg-lime-400", "C": "bg-yellow-400", "D": "bg-orange-400",
-  "E": "bg-red-400", "Z": "bg-red-600", "H": "bg-red-700",
-};
-
-function EnergyBadge({ cls }: { cls: string | null }) {
-  if (!cls) return null;
-  return (
-    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-white text-xs font-bold ${ENERGY_COLORS[cls] ?? "bg-muted text-muted-foreground"}`}>
-      <Zap className="w-3 h-3" /> {cls}
-    </span>
-  );
-}
-
-// ── Main page ─────────────────────────────────────────────────────────────────
+// â”€â”€ Main page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export default function NewBuildDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const startConv = useStartConversation();
   const [contactLoading, setContactLoading] = useState(false);
-  const [interestForm, setInterestForm] = useState({ name: "", phone: "", message: "" });
-  const [interestSubmitted, setInterestSubmitted] = useState(false);
+  const [descExpanded, setDescExpanded] = useState(false);
+  const [walkScore, setWalkScore] = useState<number | null>(null);
+
+  const { data: isFavorited = false } = useIsFavorited(id ?? "");
+  const toggleFav = useToggleFavorite();
+  const handleFavorite = () => {
+    if (!user) { toast.error("Sign in to save properties"); return; }
+    if (id) toggleFav.mutate({ listing_id: id, isFavorited });
+  };
+  const handleShare = async () => {
+    const url = window.location.href;
+    if (navigator.share) { try { await navigator.share({ title: listing?.title, url }); } catch (_err: unknown) { /* cancelled */ } }
+    else { await navigator.clipboard.writeText(url); toast.success("Link copied to clipboard"); }
+  };
 
   // AI Market Insights
   const [aiInsightsData, setAiInsightsData] = useState<{
@@ -303,40 +79,46 @@ export default function NewBuildDetail() {
           listing_images(url, sort_order)
         `)
         .eq("id", id)
-        .single();
+        .maybeSingle();
       if (error) throw error;
-      return data;
+      return (data ?? null) as typeof data & {
+        walkability_score?: number | null;
+        safety_score?: number | null;
+        noise_score?: number | null;
+      } | null;
     },
     enabled: !!id,
   });
 
-  const handleInterestSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleRegisterInterest = async (form: { name: string; phone: string; message: string }) => {
     if (!listing?.owner_id) return;
-    setContactLoading(true);
-    try {
-      if (!user) { navigate("/login"); return; }
-      const msg = [
-        `Hi, I'm interested in ${listing.title}.`,
-        interestForm.message ? `\n\n${interestForm.message}` : "",
-        interestForm.phone ? `\nContact: ${interestForm.phone}` : "",
-      ].join("").trim();
-      await startConv.mutateAsync({ other_user_id: listing.owner_id, listing_id: id });
-      await supabase.from("leads").insert({
-        owner_id: listing.owner_id,
-        name: interestForm.name || user.email?.split("@")[0] || "Interested buyer",
-        phone: interestForm.phone || null,
-        notes: msg,
-        source: "project",
-        status: "new",
-      }).then(() => {});
-      setInterestSubmitted(true);
-      toast.success("Interest registered — the developer will be in touch");
-    } catch {
-      toast.error("Could not register interest. Please try again.");
-    } finally {
-      setContactLoading(false);
-    }
+    if (!user) { navigate("/login"); return; }
+    const contactName = form.name || profile?.display_name || profile?.first_name || "Interested buyer";
+    const msg = [
+      `Hi, I'm interested in ${listing.title}.`,
+      form.message ? `\n\n${form.message}` : "",
+      form.phone ? `\nContact: ${form.phone}` : "",
+    ].join("").trim();
+    void msg; // message constructed for future use
+    await startConv.mutateAsync({ other_user_id: listing.owner_id, listing_id: id });
+    const { error: _leadInsertError } = await supabase.from("new_building_leads").insert({
+      new_building_id: id,
+      user_id: user.id,
+      email: user.email ?? "",
+      full_name: profile?.display_name || "",
+      phone: profile?.phone || null,
+      investment_budget: 0,
+      notes: "",
+      utm_source: "newbuild_detail_register",
+    });
+    await supabase.from("notifications").insert({
+      user_id: listing.owner_id,
+      type: "new_interest",
+      title: "New interest registered",
+      body: `${contactName} registered interest in ${listing.title}`,
+      link: `/listings/${listing.id}`,
+    });
+    toast.success("Interest registered â€” the developer will be in touch");
   };
 
   const handleContact = async () => {
@@ -346,7 +128,7 @@ export default function NewBuildDetail() {
     try {
       const convId = await startConv.mutateAsync({ other_user_id: listing.owner_id, listing_id: id });
       navigate(`/messages?conv=${convId}`);
-    } catch {
+    } catch (_err: unknown) {
       toast.error("Could not start conversation");
     } finally {
       setContactLoading(false);
@@ -388,6 +170,7 @@ export default function NewBuildDetail() {
         });
       }
     }).finally(() => setAiInsightsLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listing?.id, user]);
 
   if (isLoading) return (
@@ -433,191 +216,296 @@ export default function NewBuildDetail() {
         </div>
 
         <div className="container max-w-5xl px-4">
-          <div className="grid lg:grid-cols-3 gap-8">
+          <div className="grid lg:grid-cols-[1fr_340px] gap-8">
 
-            {/* ── Left: main content ──────────────────────────────── */}
-            <div className="lg:col-span-2 space-y-6">
-              <Gallery images={allImages} />
+            {/* â”€â”€ Left: main content â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+            <div className="space-y-6">
+              <Gallery
+                images={allImages}
+                isFavorited={isFavorited}
+                onFavorite={handleFavorite}
+                onShare={handleShare}
+              />
 
-              {/* Title + highlights */}
-              <div>
-                <div className="flex flex-wrap items-center gap-2 mb-2">
-                  {listing.construction_status && (
-                    <span className="text-xs font-semibold bg-orange-500/15 text-orange-600 rounded-full px-3 py-0.5 capitalize">
-                      {listing.construction_status.replace(/_/g, " ")}
-                    </span>
-                  )}
-                  {listing.is_pre_sale && (
-                    <span className="text-xs font-semibold bg-primary/15 text-primary rounded-full px-3 py-0.5">Pre-sale</span>
-                  )}
-                  {listing.energy_class && <EnergyBadge cls={listing.energy_class} />}
+              {/* Title + Price hero row */}
+              <div className="space-y-4">
+                <div className="flex items-start justify-between gap-6 flex-wrap">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2 mb-2">
+                      {listing.construction_status && (
+                        <span className="text-[10px] font-bold uppercase tracking-widest bg-orange-500/15 text-orange-600 rounded-full px-2 py-0.5 capitalize">
+                          {listing.construction_status.replace(/_/g, " ")}
+                        </span>
+                      )}
+                      {listing.is_pre_sale && (
+                        <span className="text-[10px] font-bold uppercase tracking-widest bg-primary/15 text-primary rounded-full px-2 py-0.5">Pre-sale</span>
+                      )}
+                      {listing.energy_class && <EnergyBadge cls={listing.energy_class} />}
+                    </div>
+                    <h1 className="font-display text-2xl sm:text-3xl font-bold leading-tight">{listing.title}</h1>
+                    <div className="flex items-center gap-1.5 mt-2 text-muted-foreground text-sm">
+                      <MapPin className="w-4 h-4 shrink-0" />
+                      <span>{[listing.address, listing.city, listing.region].filter(Boolean).join(", ")}</span>
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="font-display text-3xl font-black text-foreground">
+                      {formatPrice(Number(listing.price))}
+                    </div>
+                    {listing.price_per_sqm != null && (
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        {formatPrice(Number(listing.price_per_sqm))} per mÂ²
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <h1 className="font-display text-2xl sm:text-3xl font-bold leading-tight">{listing.title}</h1>
-                <div className="flex items-center gap-1.5 mt-2 text-muted-foreground text-sm">
-                  <MapPin className="w-4 h-4 shrink-0" />
-                  <span>{[listing.address, listing.city, listing.region].filter(Boolean).join(", ")}</span>
+
+                {/* Key stats bar â€” wrapped flex pills */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  {listing.sqm != null && (
+                    <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
+                      <Maximize2 className="w-3.5 h-3.5 text-primary" />{listing.sqm} mÂ²
+                    </div>
+                  )}
+                  {listing.bedrooms != null && (
+                    <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
+                      <BedDouble className="w-3.5 h-3.5 text-primary" />{listing.bedrooms} bed
+                    </div>
+                  )}
+                  {listing.bathrooms != null && (
+                    <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
+                      <Bath className="w-3.5 h-3.5 text-primary" />{listing.bathrooms} bath
+                    </div>
+                  )}
+                  {!!listing.total_floors && (
+                    <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
+                      <Layers className="w-3.5 h-3.5 text-primary" />{listing.total_floors} floors
+                    </div>
+                  )}
+                  {listing.year_built != null && (
+                    <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
+                      <Calendar className="w-3.5 h-3.5 text-primary" />Delivery {listing.year_built}
+                    </div>
+                  )}
+                  {listing.energy_class && (
+                    <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
+                      <Zap className="w-3.5 h-3.5 text-primary" />Energy {listing.energy_class}
+                    </div>
+                  )}
+                  {listing.heating_system && (
+                    <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
+                      <Thermometer className="w-3.5 h-3.5 text-primary" />{String(listing.heating_system).replace(/_/g, " ")}
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* Specs bar */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {listing.sqm != null && (
-                  <div className="bg-card border border-border rounded-xl p-3 text-center">
-                    <Maximize2 className="w-4 h-4 text-primary mx-auto mb-1" />
-                    <p className="font-bold text-lg">{listing.sqm} m²</p>
-                    <p className="text-xs text-muted-foreground">Area</p>
-                  </div>
-                )}
-                {listing.bedrooms != null && (
-                  <div className="bg-card border border-border rounded-xl p-3 text-center">
-                    <BedDouble className="w-4 h-4 text-primary mx-auto mb-1" />
-                    <p className="font-bold text-lg">{listing.bedrooms}</p>
-                    <p className="text-xs text-muted-foreground">Bedrooms</p>
-                  </div>
-                )}
-                {listing.bathrooms != null && (
-                  <div className="bg-card border border-border rounded-xl p-3 text-center">
-                    <Bath className="w-4 h-4 text-primary mx-auto mb-1" />
-                    <p className="font-bold text-lg">{listing.bathrooms}</p>
-                    <p className="text-xs text-muted-foreground">Bathrooms</p>
-                  </div>
-                )}
-                {listing.year_built != null && (
-                  <div className="bg-card border border-border rounded-xl p-3 text-center">
-                    <Calendar className="w-4 h-4 text-primary mx-auto mb-1" />
-                    <p className="font-bold text-lg">{listing.year_built}</p>
-                    <p className="text-xs text-muted-foreground">Delivery year</p>
-                  </div>
-                )}
-              </div>
+              {/* Type-specific: Unit showcase */}
+              <UnitShowcase listing={listing as Record<string, unknown>} onContact={handleContact} />
 
-              {/* Description */}
-              {listing.description && (
-                <div className="bg-card border border-border rounded-xl p-5">
-                  <h2 className="font-display font-semibold mb-3">Project description</h2>
-                  <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">
-                    {listing.description}
-                  </p>
-                </div>
-              )}
-
-              {/* Features */}
-              {(listing.has_elevator || listing.has_parking || listing.has_pool ||
-                listing.has_smart_home || listing.has_security || listing.has_underfloor_heating) && (
-                <div className="bg-card border border-border rounded-xl p-5">
-                  <h2 className="font-display font-semibold mb-3">Features & amenities</h2>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {[
-                      { flag: listing.has_elevator, label: "Elevator" },
-                      { flag: listing.has_parking, label: "Parking" },
-                      { flag: listing.has_pool, label: "Swimming pool" },
-                      { flag: listing.has_smart_home, label: "Smart home" },
-                      { flag: listing.has_security, label: "Security system" },
-                      { flag: listing.has_underfloor_heating, label: "Underfloor heating" },
-                      { flag: listing.has_solar_water, label: "Solar water heater" },
-                      { flag: listing.has_storage, label: "Storage room" },
-                      { flag: listing.has_garden, label: "Garden" },
-                      { flag: listing.has_view, label: "View" },
-                      { flag: listing.has_ac, label: "A/C" },
-                      { flag: listing.has_video_tour, label: "Video tour" },
-                    ]
-                      .filter((f) => f.flag)
-                      .map((f) => (
-                        <div key={f.label} className="flex items-center gap-2 text-sm">
-                          <Star className="w-3.5 h-3.5 text-primary shrink-0" />
-                          {f.label}
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Construction timeline */}
+              {/* Type-specific: Construction timeline */}
               {listing.construction_status && (
-                <ConstructionTimeline status={listing.construction_status} />
+                <ConstructionTimeline status={listing.construction_status as string} />
               )}
 
-              {/* Floor plans + unit types */}
+              {/* Type-specific: Floor plans / gallery */}
               <FloorPlanSection
                 images={allImages}
                 onRequestPlans={handleContact}
               />
 
-              {/* Building specs */}
+              {/* Type-specific: Building specs */}
               <ConstructionSpecs listing={listing} />
 
-              {/* Location */}
-              <div className="bg-card border border-border rounded-xl p-5">
-                <h2 className="font-display font-semibold mb-3 flex items-center gap-2">
-                  <MapPin className="w-4 h-4" /> Location
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                  {[listing.address, listing.city, listing.postal_code, listing.region].filter(Boolean).join(", ")}
-                </p>
+              {/* AI Market Insights */}
+              <div className="glass-card rounded-2xl border border-border overflow-hidden">
+                <div className="flex items-center gap-2.5 px-5 py-4 border-b border-border">
+                  <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <Zap className="w-3.5 h-3.5 text-primary" />
+                  </div>
+                  <h4 className="font-display font-semibold text-sm">AI Market Insights</h4>
+                  <span className="ml-auto text-[10px] text-muted-foreground">Powered by mAI Prop OS</span>
+                </div>
+                <div className="p-5">
+                  {aiInsightsLoading && (
+                    <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span className="text-xs">Analysing market dataâ€¦</span>
+                    </div>
+                  )}
+                  {!aiInsightsLoading && aiInsightsData && (() => {
+                    const cmpCfg: Record<string, { label: string; color: string; bg: string }> = {
+                      below_market: { label: "Below Market", color: "text-emerald-400", bg: "bg-emerald-400/10 border-emerald-400/20" },
+                      at_market:    { label: "At Market",    color: "text-yellow-400",  bg: "bg-yellow-400/10 border-yellow-400/20" },
+                      above_market: { label: "Above Market", color: "text-destructive",  bg: "bg-destructive/10 border-destructive/20" },
+                    };
+                    const cmp = cmpCfg[aiInsightsData.marketComparison] ?? cmpCfg.at_market;
+                    return (
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className={`rounded-xl border p-4 flex flex-col gap-1 ${cmp.bg}`}>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest">vs Market</p>
+                          <span className={`font-display font-black text-3xl ${cmp.color}`}>
+                            {aiInsightsData.vsMarket > 0 ? "+" : ""}{aiInsightsData.vsMarket}%
+                          </span>
+                          <p className={`text-[10px] font-semibold ${cmp.color}`}>{cmp.label}</p>
+                        </div>
+                        <div className="rounded-xl border border-border bg-secondary/50 p-4 flex flex-col gap-1">
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Rental Yield</p>
+                          <span className="font-display font-black text-3xl text-primary">{aiInsightsData.rentalYield}%</span>
+                          <p className="text-[10px] text-muted-foreground">Est. gross annual yield</p>
+                        </div>
+                        <div className="rounded-xl border border-border bg-secondary/50 p-4 flex flex-col gap-1">
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest">AI Estimate</p>
+                          <span className="font-display font-black text-3xl text-foreground">
+                            â‚¬{(aiInsightsData.estimatedValue / 1000).toFixed(0)}k
+                          </span>
+                          <p className="text-[10px] text-muted-foreground">Confidence: {aiInsightsData.confidenceLabel}</p>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  {user && !aiInsightsLoading && !aiInsightsData && (
+                    <p className="text-xs text-muted-foreground text-center py-4">Market analysis unavailable</p>
+                  )}
+                  {!user && (
+                    <p className="text-xs text-muted-foreground text-center py-4">
+                      <Link to="/login" className="text-primary hover:underline">Sign in</Link> to view AI market analysis
+                    </p>
+                  )}
+                </div>
               </div>
 
-              {/* Map */}
-              <div className="rounded-xl overflow-hidden">
+              {/* Description */}
+              {listing.description && (
+                <div className="glass-card rounded-2xl border border-border overflow-hidden">
+                  <div className="flex items-center gap-2.5 px-5 py-4 border-b border-border">
+                    <h4 className="font-display font-semibold text-sm">Project Description</h4>
+                  </div>
+                  <div className="p-6">
+                    <div className={`text-sm text-muted-foreground leading-relaxed whitespace-pre-line ${!descExpanded ? "line-clamp-4" : ""}`}>
+                      {listing.description}
+                    </div>
+                    {listing.description.length > 200 && (
+                      <button
+                        onClick={() => setDescExpanded(!descExpanded)}
+                        className="flex items-center gap-1 text-xs text-primary mt-3 hover:underline font-medium"
+                      >
+                        {descExpanded
+                          ? (<><ChevronUp className="w-3 h-3" />Show less</>)
+                          : (<><ChevronDown className="w-3 h-3" />Read more</>)
+                        }
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Energy Performance Certificate */}
+              {listing.energy_class && listing.energy_class !== "Exempt" && (ENERGY_COLORS as Record<string, string>)[listing.energy_class] && (() => {
+                const energyData = ENERGY_SCALE.find((e) => e.cls === listing.energy_class);
+                return (
+                  <div className="glass-card rounded-2xl border border-border overflow-hidden">
+                    <div className="flex items-center gap-2.5 px-5 py-4 border-b border-border">
+                      <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <Zap className="w-3.5 h-3.5 text-primary" />
+                      </div>
+                      <h4 className="font-display font-semibold text-sm">Energy Performance Certificate</h4>
+                    </div>
+                    <div className="p-6">
+                      <div className="flex gap-1 items-end mb-2">
+                        {ENERGY_SCALE.map((e, i) => {
+                          const isActive = e.cls === listing.energy_class;
+                          const barH = 16 + i * 4;
+                          return (
+                            <div key={e.cls} className="flex-1 flex flex-col items-center gap-0.5">
+                              {isActive && <div className="text-[8px] font-black text-foreground">â–¼</div>}
+                              <div
+                                style={{ backgroundColor: e.hex, height: `${barH}px`, opacity: isActive ? 1 : 0.4 }}
+                                className={`w-full rounded-sm flex items-end justify-center pb-0.5 transition-all ${isActive ? "ring-2 ring-white/30 ring-offset-1 ring-offset-card" : ""}`}
+                              >
+                                <span className="text-[8px] font-black leading-none"
+                                  style={{ color: ["B", "C", "D"].includes(e.cls) ? "#000" : "#fff" }}>
+                                  {e.cls}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {energyData && (
+                        <div className="flex items-center gap-2 mt-3">
+                          <div className={`px-2 py-0.5 rounded text-xs font-black ${(ENERGY_COLORS as Record<string, string>)[listing.energy_class]}`}>
+                            {listing.energy_class}
+                          </div>
+                          <span className="text-xs text-muted-foreground">{energyData.desc}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Features & Amenities */}
+              {(() => {
+                const internalFeatures: { icon?: any; label: string }[] = [];
+                const externalFeatures: { icon?: any; label: string }[] = [];
+                const constructionFeatures: { icon?: any; label: string }[] = [];
+
+                if (listing.has_elevator) internalFeatures.push({ icon: Building2, label: "Elevator" });
+                if (listing.has_ac) internalFeatures.push({ icon: Thermometer, label: "Air Conditioning" });
+                if (listing.has_solar_water) internalFeatures.push({ icon: Zap, label: "Solar Water Heating" });
+                if (listing.has_storage) internalFeatures.push({ icon: Home, label: "Storage Space" });
+                if (listing.has_security) internalFeatures.push({ icon: Shield, label: "Security System" });
+                if (listing.has_fireplace) internalFeatures.push({ icon: Flame, label: "Fireplace" });
+                if (listing.has_underfloor_heating) internalFeatures.push({ icon: Thermometer, label: "Underfloor Heating" });
+                if (listing.has_smart_home) internalFeatures.push({ icon: Wifi, label: "Smart Home" });
+
+                if (listing.has_parking) externalFeatures.push({ icon: Car, label: "Parking Space" });
+                if (listing.has_garden) externalFeatures.push({ icon: TreePine, label: "Garden" });
+                if (listing.has_pool) externalFeatures.push({ label: "Swimming Pool" });
+                if (listing.has_view) externalFeatures.push({ icon: Eye, label: "View" });
+
+                if (listing.has_video_tour) constructionFeatures.push({ label: "Video Tour" });
+                if (listing.has_virtual_tour) constructionFeatures.push({ label: "Virtual Tour" });
+
+                const total = internalFeatures.length + externalFeatures.length + constructionFeatures.length;
+                if (total === 0) return null;
+                return (
+                  <div className="glass-card rounded-2xl border border-border overflow-hidden">
+                    <div className="flex items-center gap-2.5 px-5 py-4 border-b border-border">
+                      <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <Check className="w-3.5 h-3.5 text-primary" />
+                      </div>
+                      <h4 className="font-display font-semibold text-sm">Features & Amenities</h4>
+                      <span className="ml-auto text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full border border-border">{total} features</span>
+                    </div>
+                    <div className="p-6 space-y-6">
+                      <FeatureSection title="Internal" features={internalFeatures} accent="bg-primary" />
+                      <FeatureSection title="External" features={externalFeatures} accent="bg-brand-emerald" />
+                      <FeatureSection title="Construction" features={constructionFeatures} accent="bg-accent" />
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Mini Map */}
+              <div className="rounded-2xl overflow-hidden">
                 <PropertyMiniMap
                   latitude={listing.latitude}
                   longitude={listing.longitude}
-                  address={listing.address}
-                  city={listing.city}
+                  address={listing.address ?? ""}
+                  city={listing.city ?? undefined}
                   title={listing.title}
+                  onWalkScoreChange={setWalkScore}
                 />
-              </div>
-
-              {/* AI Market Insights */}
-              <div className="bg-card border border-border rounded-xl p-5">
-                <h2 className="font-display font-semibold mb-4 flex items-center gap-2">
-                  <Zap className="w-4 h-4 text-primary" /> AI Market Insights
-                </h2>
-                {aiInsightsLoading && (
-                  <div className="flex justify-center py-6">
-                    <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-                  </div>
-                )}
-                {!aiInsightsLoading && aiInsightsData && (
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className={`rounded-xl border p-4 ${
-                      aiInsightsData.vsMarket > 0 ? "bg-emerald-400/10 border-emerald-400/20" :
-                      aiInsightsData.vsMarket < 0 ? "bg-destructive/10 border-destructive/20" :
-                      "bg-yellow-400/10 border-yellow-400/20"
-                    }`}>
-                      <p className="text-[10px] text-muted-foreground uppercase">vs Market</p>
-                      <p className={`font-display font-black text-2xl ${
-                        aiInsightsData.vsMarket > 0 ? "text-emerald-600" :
-                        aiInsightsData.vsMarket < 0 ? "text-destructive" : "text-amber-600"
-                      }`}>
-                        {aiInsightsData.vsMarket > 0 ? "+" : ""}{aiInsightsData.vsMarket}%
-                      </p>
-                    </div>
-                    <div className="rounded-xl border border-border bg-secondary/50 p-4">
-                      <p className="text-[10px] text-muted-foreground uppercase">Rental Yield</p>
-                      <p className="font-display font-black text-2xl text-primary">{aiInsightsData.rentalYield}%</p>
-                    </div>
-                    <div className="rounded-xl border border-border bg-secondary/50 p-4">
-                      <p className="text-[10px] text-muted-foreground uppercase">AI Estimate</p>
-                      <p className="font-display font-black text-2xl">€{(aiInsightsData.estimatedValue / 1000).toFixed(0)}k</p>
-                    </div>
-                  </div>
-                )}
-                {user && !aiInsightsLoading && !aiInsightsData && (
-                  <p className="text-xs text-muted-foreground text-center py-4">Market analysis unavailable</p>
-                )}
-                {!user && (
-                  <p className="text-xs text-muted-foreground text-center py-4">
-                    <Link to="/login" className="text-primary hover:underline">Sign in</Link> to view AI market analysis
-                  </p>
-                )}
               </div>
 
               {/* Neighbourhood Report */}
               {listing.address && (
                 <NeighbourhoodReport
-                  city={listing.city}
-                  address={listing.address}
-                  region={listing.region}
+                  city={listing.city ?? undefined}
+                  address={listing.address ?? ""}
+                  region={listing.region ?? undefined}
                   lat={listing.latitude != null ? Number(listing.latitude) : undefined}
                   lng={listing.longitude != null ? Number(listing.longitude) : undefined}
                   listingId={id ?? undefined}
@@ -629,8 +517,8 @@ export default function NewBuildDetail() {
                 <PropertyValuation
                   listingId={id}
                   title={listing.title}
-                  city={listing.city}
-                  address={listing.address}
+                  city={listing.city ?? undefined}
+                  address={listing.address ?? undefined}
                   price={Number(listing.price)}
                   sqm={Number(listing.sqm)}
                   bedrooms={listing.bedrooms}
@@ -650,84 +538,24 @@ export default function NewBuildDetail() {
               )}
             </div>
 
-            {/* ── Right: price + contact sticky card ─────────────── */}
-            <div className="lg:col-span-1">
-              <div className="sticky top-24 space-y-4">
-                <div className="bg-card border border-border rounded-2xl p-5 shadow-sm">
-                  <div className="mb-4">
-                    <p className="text-xs text-muted-foreground mb-0.5">Starting from</p>
-                    <p className="font-display text-3xl font-bold text-primary">{formatPrice(listing.price)}</p>
-                    {listing.price_per_sqm && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {formatPrice(listing.price_per_sqm)} / m²
-                      </p>
-                    )}
-                  </div>
+            {/* â”€â”€ Right: sticky sidebar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+            <div className="sticky top-24 space-y-4 self-start">
+                {/* Register Interest card */}
+                <RegisterInterestCard
+                  listing={listing as Record<string, unknown>}
+                  user={user}
+                  onLogin={() => navigate("/login")}
+                  onContact={handleRegisterInterest}
+                />
 
-                  {listing.is_pre_sale && (
-                    <div className="mb-4 rounded-lg bg-primary/10 border border-primary/20 px-3 py-2 text-xs text-primary font-medium">
-                      Pre-sale pricing applies — contact for availability
-                    </div>
-                  )}
-
-                  {interestSubmitted ? (
-                    <div className="rounded-xl bg-primary/10 border border-primary/20 p-4 text-center">
-                      <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-2">
-                        <MessageSquare className="w-5 h-5 text-primary" />
-                      </div>
-                      <p className="text-sm font-semibold text-primary">Interest registered!</p>
-                      <p className="text-xs text-muted-foreground mt-1">The developer will contact you shortly.</p>
-                      <button
-                        onClick={() => navigate("/messages")}
-                        className="mt-3 text-xs text-primary hover:underline"
-                      >
-                        View messages →
-                      </button>
-                    </div>
-                  ) : (
-                    <form onSubmit={handleInterestSubmit} className="space-y-2.5">
-                      <div>
-                        <input
-                          type="text"
-                          placeholder="Your name"
-                          value={interestForm.name}
-                          onChange={e => setInterestForm(f => ({ ...f, name: e.target.value }))}
-                          className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:border-primary"
-                        />
-                      </div>
-                      <div>
-                        <input
-                          type="tel"
-                          placeholder="Phone (optional)"
-                          value={interestForm.phone}
-                          onChange={e => setInterestForm(f => ({ ...f, phone: e.target.value }))}
-                          className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:border-primary"
-                        />
-                      </div>
-                      <div>
-                        <textarea
-                          placeholder="Message (optional)"
-                          rows={2}
-                          value={interestForm.message}
-                          onChange={e => setInterestForm(f => ({ ...f, message: e.target.value }))}
-                          className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:border-primary resize-none"
-                        />
-                      </div>
-                      <Button type="submit" className="w-full gap-2" disabled={contactLoading}>
-                        {contactLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
-                        Register interest
-                      </Button>
-                    </form>
-                  )}
-
-                  {owner?.phone && !interestSubmitted && (
-                    <a href={`tel:${owner.phone}`} className="mt-2 block">
-                      <Button variant="outline" className="w-full gap-2">
-                        <Phone className="w-4 h-4" /> Call developer
-                      </Button>
-                    </a>
-                  )}
-                </div>
+                {/* Call button (always accessible) */}
+                {owner?.phone && (
+                  <a href={`tel:${owner.phone}`} className="block">
+                    <Button variant="outline" className="w-full gap-2">
+                      <Phone className="w-4 h-4" /> Call developer
+                    </Button>
+                  </a>
+                )}
 
                 {/* Developer card */}
                 {owner && (
@@ -774,7 +602,7 @@ export default function NewBuildDetail() {
                       <EnergyBadge cls={listing.energy_class} />
                     </div>
                   )}
-                  {listing.total_floors && (
+                  {!!listing.total_floors && (
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Total floors</span>
                       <span className="font-medium">{listing.total_floors}</span>
@@ -789,7 +617,7 @@ export default function NewBuildDetail() {
                   {listing.sqm != null && (
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Unit area from</span>
-                      <span className="font-medium">{listing.sqm} m²</span>
+                      <span className="font-medium">{listing.sqm} mÂ²</span>
                     </div>
                   )}
                   {listing.has_parking && (
@@ -821,7 +649,14 @@ export default function NewBuildDetail() {
                   {contactLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileImage className="w-4 h-4 text-primary" />}
                   Request floor plans
                 </button>
-              </div>
+
+              {/* Walk Score + Safety + Noise */}
+              <PropertyScoresSection
+                walkScore={walkScore}
+                walkabilityScore={listing?.walkability_score != null ? Number(listing.walkability_score) : null}
+                safetyScore={listing?.safety_score != null ? Number(listing.safety_score) : null}
+                noiseScore={listing?.noise_score != null ? Number(listing.noise_score) : null}
+              />
             </div>
 
           </div>

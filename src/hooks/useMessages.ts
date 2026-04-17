@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+﻿import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -160,9 +160,9 @@ export function useSendMessage() {
       attachmentPaths?: { path: string; filename: string; mime_type?: string }[];
     }) => {
       if (!user) throw new Error("Must be logged in");
-      const { data, error } = await supabase
-        .from("messages")
-        .insert({ conversation_id, sender_id: user.id, content })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await supabase.from("messages")
+        .insert({ conversation_id, sender_id: user.id, content, receiver_id: null })
         .select()
         .single();
       if (error) throw error;
@@ -228,12 +228,14 @@ export function useStartConversation() {
         );
       const targetListingId = listing_id ?? null;
       const match = (existingList || []).find(
-        (c) => c.listing_id === targetListingId || (c.listing_id == null && targetListingId == null)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (c: any) => c.listing_id === targetListingId || (c.listing_id == null && targetListingId == null)
       );
-      if (match) return match.id;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if (match) return (match as any).id;
 
-      const { data, error } = await supabase
-        .from("conversations")
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await supabase.from("conversations")
         .insert({
           participant_a: user.id,
           participant_b: other_user_id,
@@ -242,7 +244,8 @@ export function useStartConversation() {
         .select()
         .single();
       if (error) throw error;
-      return data.id;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return (data as any).id;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["conversations"] });

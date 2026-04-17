@@ -1,151 +1,67 @@
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect, lazy, Suspense, useMemo } from "react";
+import type { ElementType } from "react";
+import { useTranslation } from "react-i18next";
+import { Helmet } from "react-helmet-async";
+import { useModal } from "@/hooks/useModal";
 import { supabase as supabaseClient } from "@/integrations/supabase/client";
 import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import {
-  MapPin, Bed, Bath, Square, Heart, Share2, Phone, MessageSquare,
-  Calendar, Video, ChevronLeft, ChevronRight, Star,
-  Shield, FileText, Zap, ExternalLink, Lock, Eye,
-  Home, Clock, Check, Gavel, Download, Loader2, CheckCircle,
+  ChevronRight,
+  Shield, FileText, Zap, ExternalLink, Eye,
+  Home, Loader2,
   Thermometer, Wrench, TreePine, Flame, Wifi, Car, Building2,
-  Info, ChevronDown, ChevronUp, Tag, Layers, LayoutGrid, Globe, Scale, History, ClipboardList } from
+  Info, ChevronDown, ChevronUp, LayoutGrid, Globe, Scale } from
 "lucide-react";
-import { getSubtypeLabel } from "@/lib/propertyTypes";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 
 import { Footer } from "@/components/Footer";
 import { PropertyCard } from "@/components/PropertyCard";
 import ViewingDialog from "@/components/ViewingDialog";
-import { useListing } from "@/hooks/useListings";
+import { useListing, useTrackListingView } from "@/hooks/useListings";
+import type { ListingWithJoins } from "@/hooks/useListings";
 import { useSimilarListings } from "@/hooks/useSimilarListings";
 import { useFavorites, useToggleFavorite } from "@/hooks/useFavorites";
 import { useStartConversation } from "@/hooks/useMessages";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
-import { usePricingConfigs } from "@/hooks/usePricingConfigs";
-import { useReportUsage, useRecordReport, REPORT_INCLUDED, REPORT_EXTRA_COST } from "@/hooks/useUsageAddons";
+import { PropertyReportCard } from "@/components/property/PropertyReportCard";
+import { PropertyAuctionSection } from "@/components/property/PropertyAuctionSection";
 import { toast } from "sonner";
 import PropertyMiniMap from "@/components/PropertyMiniMap";
 import PropertyValuation from "@/components/PropertyValuation";
 const NeighbourhoodReport = lazy(() => import("@/components/NeighbourhoodReport"));
-import { walkScoreLabel, walkScoreColour } from "@/lib/walkScore";
 import { HEATING_TYPES, CONDITION_OPTIONS } from "@/lib/filterConfig";
 const AIAssistantWidget = lazy(() => import("@/components/AIAssistantWidget"));
 import { AuctionAlertModal } from "@/components/AuctionAlertModal";
-import { PastDealsTable } from "@/components/PastDealsTable";
 import { getStreetViewProxyUrl } from "@/lib/config";
 import { dbListingToCard } from "@/lib/listingUtils";
-import { isAiUsageLimitError } from "@/lib/aiErrorUtils";
-import { SignInForAI } from "@/components/SignInForAI";
-
-// ─── Energy class data ──────────────────────────────────────────────────────
-const ENERGY_SCALE = [
-{ cls: "A+", hex: "#1a9e4f", pct: 8, desc: "< 33 kWh/m²·yr — Excellent" },
-{ cls: "A", hex: "#2db84e", pct: 17, desc: "33–50 kWh/m²·yr — Very Good" },
-{ cls: "B+", hex: "#7dc73a", pct: 26, desc: "50–75 kWh/m²·yr — Good" },
-{ cls: "B", hex: "#b5d934", pct: 35, desc: "75–100 kWh/m²·yr — Above Average" },
-{ cls: "C", hex: "#f5d31b", pct: 50, desc: "100–125 kWh/m²·yr — Average" },
-{ cls: "D", hex: "#f5a623", pct: 62, desc: "125–160 kWh/m²·yr — Below Average" },
-{ cls: "E", hex: "#f07320", pct: 74, desc: "160–200 kWh/m²·yr — Poor" },
-{ cls: "F", hex: "#e84020", pct: 86, desc: "200–250 kWh/m²·yr — Very Poor" },
-{ cls: "G", hex: "#cc1414", pct: 100, desc: "> 250 kWh/m²·yr — Extremely Poor" }];
-
-const ENERGY_COLORS: Record<string, string> = {
-  "A+": "bg-[#1a9e4f] text-white",
-  "A": "bg-[#2db84e] text-white",
-  "B+": "bg-[#7dc73a] text-white",
-  "B": "bg-[#b5d934] text-black",
-  "C": "bg-[#f5d31b] text-black",
-  "D": "bg-[#f5a623] text-black",
-  "E": "bg-[#f07320] text-white",
-  "F": "bg-[#e84020] text-white",
-  "G": "bg-[#cc1414] text-white"
-};
-
-// ─── Feature chip ────────────────────────────────────────────────────────────
-function FeatureChip({ icon: Icon, label }: {icon?: any;label: string;}) {
-  return (
-    <div className="flex items-center gap-2 text-xs bg-muted border border-border rounded-lg px-3 py-2 text-foreground hover:border-primary/30 hover:bg-secondary transition-all duration-200">
-      <Check className="w-3 h-3 text-primary shrink-0" />
-      {Icon && <Icon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
-      <span className="font-medium">{label}</span>
-    </div>);
-
-}
-
-// ─── Feature section ─────────────────────────────────────────────────────────
-function FeatureSection({ title, features, accent }: {title: string;features: {icon?: any;label: string;}[];accent: string;}) {
-  if (features.length === 0) return null;
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        <div className={`w-1 h-3.5 rounded-full ${accent}`} />
-        <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{title}</p>
-        <div className="flex-1 h-px bg-border" />
-        <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full border border-border">{features.length}</span>
-      </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-        {features.map((f) => <FeatureChip key={f.label} icon={f.icon} label={f.label} />)}
-      </div>
-    </div>);
-
-}
-
-// ─── Section wrapper ─────────────────────────────────────────────────────────
-function Section({ children, className = "" }: {children: React.ReactNode;className?: string;}) {
-  return (
-    <div className={`glass-card rounded-2xl border border-border overflow-hidden ${className}`}>
-      {children}
-    </div>);
-
-}
-
-function SectionHeader({ icon: Icon, title, badge }: {icon?: any;title: string;badge?: React.ReactNode;}) {
-  return (
-    <div className="flex items-center gap-2.5 px-5 py-4 border-b border-border">
-      {Icon && (
-        <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
-          <Icon className="w-3.5 h-3.5 text-primary" />
-        </div>
-      )}
-      <h4 className="font-display font-semibold text-sm">{title}</h4>
-      {badge && <span className="ml-auto">{badge}</span>}
-    </div>
-  );
-
-
-
-
-
-
-}
-
-// ─── Detail row ───────────────────────────────────────────────────────────────
-function DetailRow({ label, value }: {label: string;value: string | number;}) {
-  return (
-    <div className="flex items-start justify-between py-2.5 border-b border-border/50 last:border-0 gap-4">
-      <span className="text-xs text-muted-foreground shrink-0">{label}</span>
-      <span className="text-xs font-semibold text-right capitalize">{value}</span>
-    </div>);
-
-}
+import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
+import { ENERGY_SCALE, ENERGY_COLORS } from "@/types";
+import { Section, SectionHeader, DetailRow } from "@/components/property/DetailPrimitives";
+import PropertyGallery from "@/components/property/PropertyGallery";
+import PropertyFeatureList from "@/components/property/PropertyFeatureList";
+import PropertyOwnerCard from "@/components/property/PropertyOwnerCard";
+import { PropertyAIInsightsSection } from "@/components/property/PropertyAIInsightsSection";
+import { PropertyScoresSection } from "@/components/property/PropertyScoresSection";
+import { PropertyTitleSection } from "@/components/property/PropertyTitleSection";
+import { usePropertyAIInsights } from "@/hooks/usePropertyAIInsights";
 
 // ─── Main component ──────────────────────────────────────────────────────────
 export default function PropertyDetail() {
   const { id } = useParams<{id: string;}>();
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useTranslation();
   const { user, profile } = useAuth();
   const { isPro } = useSubscription();
-  const { data: _pricingConfigs = {} } = usePricingConfigs();
-  const { data: reportCount = 0 } = useReportUsage();
-  const recordReport = useRecordReport();
 
-  const { data: dbListing, isLoading } = useListing(id || "");
-  const ownerIsPro = !!(dbListing as any)?.ownerIsPro;
-  // Video viewing: Pro users or retailers (individuals) get access; others must upgrade
-  const isRetailer = profile?.role === "individual";
-  const canVideoView = isPro || isRetailer;
+  const { data: dbListing, isLoading, isError } = useListing(id || "");
+  const trackView = useTrackListingView();
+  const ownerIsPro = !!(dbListing as ListingWithJoins | null)?.ownerIsPro;
+  // Video viewing: free for buyers, Pro required for all other roles
+  const isBuyer = getParticipantTypeFromProfile(profile) === "buyer";
+  const canVideoView = isPro || isBuyer;
   const { data: similarFromDb = [] } = useSimilarListings({
     excludeId: id ?? dbListing?.id,
     city: dbListing?.city,
@@ -155,136 +71,56 @@ export default function PropertyDetail() {
     limit: 8
   });
 
+  // Track view once per session when the listing data is available
+  useEffect(() => {
+    if (id && dbListing) trackView.mutate(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, !!dbListing]);
+
   // Redirect: if auction opened via /property/:id, send to /auction/:id
   // Redirect: if new build listing, send to /new-build/:id
   useEffect(() => {
     if (!dbListing) return;
-    if (dbListing.listing_type === "auction" && location.pathname.startsWith("/property/")) {
+    const _db = dbListing as ListingWithJoins;
+    if (_db.listing_type === "auction" && location.pathname.startsWith("/property/")) {
       navigate(`/auction/${id}`, { replace: true });
-    } else if (((dbListing as any).is_pre_sale || (dbListing as any).construction_status)) {
+    } else if (_db.is_pre_sale || _db.construction_status) {
       navigate(`/new-build/${id}`, { replace: true });
     }
   }, [dbListing, location.pathname, id, navigate]);
 
-  const [currentImage, setCurrentImage] = useState(0);
-  const [viewingOpen, setViewingOpen] = useState(false);
-  const [reportLoaded, setReportLoaded] = useState(false);
-  const [reportLoading, setReportLoading] = useState(false);
+  const modal = useModal<"viewing" | "auctionAlert">();
   const [descExpanded, setDescExpanded] = useState(false);
   const [walkScore, setWalkScore] = useState<number | null>(null);
-  const [auctionAlertOpen, setAuctionAlertOpen] = useState(false);
 
-  // AI Market Insights — dynamically loaded from property-valuation edge function
-  const [aiInsightsData, setAiInsightsData] = useState<{
-    vsMarket: number;
-    rentalYield: number;
-    estimatedValue: number;
-    marketComparison: string;
-    confidenceLabel: string;
-  } | null>(null);
-  const [aiInsightsLoading, setAiInsightsLoading] = useState(false);
-  const [aiInsightsLoaded, setAiInsightsLoaded] = useState(false);
-
-  useEffect(() => {
-    if (!dbListing || aiInsightsLoaded || !user) return;
-    setAiInsightsLoaded(true);
-    setAiInsightsLoading(true);
-    // Capture snapshot to avoid stale closure if dbListing reference changes mid-flight
-    const snapshot = dbListing;
-    const listingId = id ?? snapshot.id;
-    const invokeValuation = async () => {
-      try {
-        // Try OS report API first when we have a listing id
-        if (listingId) {
-          const { data: osRes } = await supabaseClient.functions.invoke("fetch-report-from-os", {
-            body: { listing_id: listingId, report_type: "valuation" }
-          });
-          if (osRes?.ok && osRes.report && typeof (osRes.report as any).estimatedValue === "number") {
-            const r = osRes.report as any;
-            setAiInsightsData({
-              vsMarket: r.marketComparisonPct ?? 0,
-              rentalYield: r.rentalYieldEstimate ?? 0,
-              estimatedValue: r.estimatedValue ?? 0,
-              marketComparison: r.marketComparison ?? "at_market",
-              confidenceLabel: r.confidenceLabel ?? "Medium"
-            });
-            setAiInsightsLoading(false);
-            return;
-          }
-        }
-        const { data, error: fnErr } = await supabaseClient.functions.invoke("property-valuation", {
-          body: {
-            title: snapshot.title,
-            city: snapshot.city,
-            address: snapshot.address,
-            price: Number(snapshot.price),
-            sqm: Number(snapshot.sqm),
-            bedrooms: snapshot.bedrooms,
-            bathrooms: snapshot.bathrooms,
-            propertyType: snapshot.property_type,
-            listingType: snapshot.listing_type,
-            floor: snapshot.floor,
-            yearBuilt: snapshot.year_built,
-            energyClass: snapshot.energy_class,
-            pricePerSqm: snapshot.price_per_sqm ? Number(snapshot.price_per_sqm) : undefined,
-            hasParking: snapshot.has_parking,
-            hasPool: snapshot.has_pool,
-            hasElevator: snapshot.has_elevator,
-            region: snapshot.region,
-            // Ownership info affects valuation for auction properties
-            ownershipStatus: (() => {
-              const t: string[] = (dbListing as any)?.tags ?? [];
-              const tag = t.find((x: string) => x.startsWith("ownership:") && !x.startsWith("ownership_pct:"));
-              return tag ? tag.replace("ownership:", "") : undefined;
-            })(),
-            ownershipPercentage: (() => {
-              const t: string[] = (dbListing as any)?.tags ?? [];
-              const tag = t.find((x: string) => x.startsWith("ownership_pct:"));
-              return tag ? Number(tag.replace("ownership_pct:", "")) : undefined;
-            })()
-          }
-        });
-        if (data && !data.error) {
-          setAiInsightsData({
-            vsMarket: data.marketComparisonPct ?? 0,
-            rentalYield: data.rentalYieldEstimate ?? 0,
-            estimatedValue: data.estimatedValue ?? Number(snapshot.price),
-            marketComparison: data.marketComparison ?? "at_market",
-            confidenceLabel: data.confidenceLabel ?? "Medium"
-          });
-        } else if (isAiUsageLimitError(fnErr, data)) {
-          toast.error("AI insights are temporarily unavailable due to usage limits. Please try again later.");
-        }
-      } catch (e) {
-        if (isAiUsageLimitError(e, null)) toast.error("AI insights are temporarily unavailable due to usage limits. Please try again later.");
-      } finally {
-        setAiInsightsLoading(false);
-      }
-    };
-    invokeValuation();
-  }, [dbListing, aiInsightsLoaded, user]);
+  // AI Market Insights — delegated to custom hook
+  const { aiInsightsData, aiInsightsLoading } = usePropertyAIInsights(
+    dbListing as ListingWithJoins | null,
+    user,
+    id,
+  );
 
   const { data: favorites = [] } = useFavorites();
   const toggleFav = useToggleFavorite();
   const startConversation = useStartConversation();
 
-  const isFavorited = favorites.some((f: any) => f.listing_id === id);
+  const isFavorited = useMemo(() => favorites.some((f: { listing_id: string }) => f.listing_id === id), [favorites, id]);
 
   const handleFavorite = () => {
-    if (!user) {toast.error("Sign in to save properties");return;}
+    if (!user) {toast.error(t("property.signInToSave"));return;}
     if (id) toggleFav.mutate({ listing_id: id, isFavorited });
   };
 
   const handleContact = async () => {
-    if (!user) {toast.error("Sign in to contact the owner");navigate("/login");return;}
+    if (!user) {toast.error(t("property.signInToContact"));navigate("/login");return;}
     const ownerId = dbListing ?
-    (dbListing as any).profiles?.user_id ?? (dbListing as any).owner_id :
+    (dbListing as ListingWithJoins).profiles?.user_id ?? (dbListing as ListingWithJoins).owner_id :
     undefined;
-    if (!ownerId) {toast.info("Contact details not available");return;}
+    if (!ownerId) {toast.info(t("property.contactUnavailable"));return;}
     try {
       const convId = await startConversation.mutateAsync({ other_user_id: ownerId, listing_id: id });
       navigate("/messages", { state: { openConversationId: convId } });
-    } catch {toast.error("Could not start conversation");}
+    } catch (_err: unknown) {toast.error(t("property.errorStartConversation"));}
   };
 
   if (isLoading) {
@@ -295,20 +131,23 @@ export default function PropertyDetail() {
 
   }
 
-  if (!dbListing) {
+  if (!isLoading && (isError || !dbListing)) {
     return (
       <div className="min-h-screen bg-background">
         <Navbar />
         <div className="container pt-32 text-center">
-          <p className="text-muted-foreground">Property not found.</p>
-          <Button className="mt-4" onClick={() => navigate("/listings")}>Back to Listings</Button>
+          <p className="text-muted-foreground">
+            {isError ? t("property.errorLoad") : t("property.notAvailable")}
+          </p>
+          <Button className="mt-4" onClick={() => navigate("/listings")}>{t("property.backToListings")}</Button>
         </div>
         <Footer />
       </div>);
 
   }
 
-  const db = dbListing;
+  // Single cast — all fields are typed via ListingWithJoins
+  const db = dbListing as ListingWithJoins;
   const title = db.title;
   const city = db.city;
   // Use DB address; fall back to city
@@ -319,38 +158,43 @@ export default function PropertyDetail() {
   const bathrooms = db.bathrooms;
   const listingType = db.listing_type;
   const propertyType = db.property_type;
-  const subtype = (db as any)?.commercial_subtype as string | null;
   const description = db.description;
-  const ownerProfile = (dbListing as any).profiles;
-  const ownerParticipantType = (dbListing as any).ownerParticipantType ?? null;
+  const ownerProfile = db.profiles
+    ? {
+        display_name: db.profiles.display_name,
+        avatar_url: db.profiles.avatar_url,
+        verified: db.profiles.verified ?? undefined,
+      }
+    : null;
+  const ownerParticipantType = db.ownerParticipantType ?? null;
   const pricePerSqm = db.price_per_sqm;
   const energyClass = db.energy_class;
   const isLandType = propertyType === "land";
   const isAuction = listingType === "auction";
-  const websiteUrl = (db as any)?.website_url as string | null;
+  const websiteUrl = db.website_url;
 
   // Extract ownership info from tags (for auction listings)
-  const tags: string[] = (db as any)?.tags ?? [];
-  const ownershipTag = tags.find((t: string) => t.startsWith("ownership:") && !t.startsWith("ownership_pct:"));
+  const tags: string[] = db.tags ?? [];
+  const ownershipTag = tags.find((t) => t.startsWith("ownership:") && !t.startsWith("ownership_pct:"));
   const ownershipStatus = ownershipTag ? ownershipTag.replace("ownership:", "") : null;
-  const ownershipPctTag = tags.find((t: string) => t.startsWith("ownership_pct:"));
+  const ownershipPctTag = tags.find((t) => t.startsWith("ownership_pct:"));
   const ownershipPct = ownershipPctTag ? Number(ownershipPctTag.replace("ownership_pct:", "")) : null;
 
   const OWNERSHIP_LABEL: Record<string, {label: string;cls: string;}> = {
     full: {
-      label: "Πλήρης κυριότητα (100%)",
+      label: t("property.ownership.full"),
       cls: "bg-gradient-primary text-white border border-white/20 shadow-[0_0_0_1px_hsl(var(--brand-indigo)/0.35)]",
     },
     partial: {
-      label: "Μερική κυριότητα",
+      label: t("property.ownership.partial"),
       cls: "bg-brand-purple/15 text-brand-purple border border-brand-purple/30",
     },
     common: {
-      label: "Εξ αδιαιρέτου",
+      label: t("property.ownership.common"),
       cls: "bg-accent/15 text-accent border border-accent/25",
     },
     none: {
-      label: "Χωρίς κυριότητα",
+      label: t("property.ownership.none"),
       cls: "bg-destructive/15 text-destructive border border-destructive/30",
     },
   };
@@ -359,16 +203,17 @@ export default function PropertyDetail() {
   const handleShare = async () => {
     const url = window.location.href;
     if (navigator.share) {
-      try {await navigator.share({ title, url });} catch { /* share cancelled or not supported */ }
+      try {await navigator.share({ title, url });} catch (_err: unknown) { /* share cancelled or not supported */ }
     } else {
       await navigator.clipboard.writeText(url);
-      toast.success("Link copied to clipboard");
+      toast.success(t("property.linkCopied"));
     }
   };
 
   const dbImages = [
-  ...(db.cover_image_url ? [db.cover_image_url] : []),
-  ...((dbListing as any).listing_images?.flatMap((img: any) => (img?.url ? [img.url] : [])) ?? [])];
+    ...(db.cover_image_url ? [db.cover_image_url] : []),
+    ...(db.listing_images?.map((img) => img.url).filter(Boolean) ?? []),
+  ];
 
 
   // Street View fallback via proxy (key never in client URLs)
@@ -390,66 +235,62 @@ export default function PropertyDetail() {
   [];
 
   // ── Feature groups ──────────────────────────────────────────────────────────
-  const internalFeatures: {icon?: any;label: string;}[] = [];
-  const externalFeatures: {icon?: any;label: string;}[] = [];
-  const constructionFeatures: {icon?: any;label: string;}[] = [];
-  const suitabilityFeatures: {icon?: any;label: string;}[] = [];
+  const internalFeatures: {icon?: ElementType;label: string;}[] = [];
+  const externalFeatures: {icon?: ElementType;label: string;}[] = [];
+  const constructionFeatures: {icon?: ElementType;label: string;}[] = [];
+  const suitabilityFeatures: {icon?: ElementType;label: string;}[] = [];
 
   if (db.has_elevator) internalFeatures.push({ icon: Building2, label: "Elevator" });
-  if ((db as any).has_ac) internalFeatures.push({ icon: Thermometer, label: "Air Conditioning" });
-  if ((db as any).has_solar_water) internalFeatures.push({ icon: Zap, label: "Solar Water Heating" });
+  if (db.has_ac) internalFeatures.push({ icon: Thermometer, label: "Air Conditioning" });
+  if (db.has_solar_water) internalFeatures.push({ icon: Zap, label: "Solar Water Heating" });
   if (db.has_storage) internalFeatures.push({ icon: Home, label: "Storage Space" });
-  if ((db as any).has_secure_door) internalFeatures.push({ icon: Shield, label: "Secure Door" });
-  if ((db as any).has_alarm) internalFeatures.push({ icon: Shield, label: "Alarm" });
-  if ((db as any).has_cctv) internalFeatures.push({ icon: Eye, label: "CCTV" });
+  if (db.has_secure_door) internalFeatures.push({ icon: Shield, label: "Secure Door" });
+  if (db.has_alarm) internalFeatures.push({ icon: Shield, label: "Alarm" });
+  if (db.has_cctv) internalFeatures.push({ icon: Eye, label: "CCTV" });
   if (db.has_security) internalFeatures.push({ icon: Shield, label: "Security System" });
-  if ((db as any).has_fireplace) internalFeatures.push({ icon: Flame, label: "Fireplace" });
-  if ((db as any).has_underfloor_heating) internalFeatures.push({ icon: Thermometer, label: "Underfloor Heating" });
-  if ((db as any).has_furnished) internalFeatures.push({ icon: Home, label: "Furnished" });
-  if ((db as any).has_internal_staircase) internalFeatures.push({ label: "Internal Staircase" });
-  if ((db as any).has_double_glazing) internalFeatures.push({ label: "Double Glazed Windows" });
-  if ((db as any).has_window_screens) internalFeatures.push({ label: "Window Screens" });
-  if ((db as any).has_night_power) internalFeatures.push({ icon: Zap, label: "Night Power Rate" });
-  if ((db as any).has_attic) internalFeatures.push({ label: "Attic" });
-  if ((db as any).has_satellite) internalFeatures.push({ icon: Wifi, label: "Satellite Receiver" });
+  if (db.has_fireplace) internalFeatures.push({ icon: Flame, label: "Fireplace" });
+  if (db.has_underfloor_heating) internalFeatures.push({ icon: Thermometer, label: "Underfloor Heating" });
+  if (db.has_furnished) internalFeatures.push({ icon: Home, label: "Furnished" });
+  if (db.has_internal_staircase) internalFeatures.push({ label: "Internal Staircase" });
+  if (db.has_double_glazing) internalFeatures.push({ label: "Double Glazed Windows" });
+  if (db.has_window_screens) internalFeatures.push({ label: "Window Screens" });
+  if (db.has_night_power) internalFeatures.push({ icon: Zap, label: "Night Power Rate" });
+  if (db.has_attic) internalFeatures.push({ label: "Attic" });
+  if (db.has_satellite) internalFeatures.push({ icon: Wifi, label: "Satellite Receiver" });
   if (db.has_smart_home) internalFeatures.push({ icon: Wifi, label: "Smart Home" });
-  if ((db as any).has_equipped) internalFeatures.push({ icon: Wrench, label: "Equipped / Fitted-out" });
-  if ((db as any).has_three_phase_power) internalFeatures.push({ icon: Zap, label: "3-Phase Electricity" });
-  if ((db as any).has_structured_cabling) internalFeatures.push({ label: "Structured Cabling" });
+  if (db.has_equipped) internalFeatures.push({ icon: Wrench, label: "Equipped / Fitted-out" });
+  if (db.has_three_phase_power) internalFeatures.push({ icon: Zap, label: "3-Phase Electricity" });
+  if (db.has_structured_cabling) internalFeatures.push({ label: "Structured Cabling" });
 
   if (db.has_parking) externalFeatures.push({ icon: Car, label: "Parking Space" });
-  if ((db as any).has_balcony) externalFeatures.push({ label: "Balcony" });
+  if (db.has_balcony) externalFeatures.push({ label: "Balcony" });
   if (db.has_garden) externalFeatures.push({ icon: TreePine, label: "Garden" });
   if (db.has_pool) externalFeatures.push({ label: "Swimming Pool" });
-  if ((db as any).has_view) externalFeatures.push({ icon: Eye, label: "View" });
-  if ((db as any).has_facade) externalFeatures.push({ label: "Facade" });
-  if ((db as any).has_awning) externalFeatures.push({ label: "Awning" });
-  if ((db as any).has_disability_access) externalFeatures.push({ label: "Disability Access" });
-  if ((db as any).is_corner) externalFeatures.push({ label: "Corner Property" });
-  if ((db as any).has_loading_dock) externalFeatures.push({ label: "Loading Dock" });
-  if ((db as any).is_buildable) externalFeatures.push({ label: "Buildable" });
-  if ((db as any).within_city_plan) externalFeatures.push({ label: "Within City Plan" });
-  if ((db as any).within_settlement) externalFeatures.push({ label: "Within Settlement" });
-  if ((db as any).has_water_supply) externalFeatures.push({ icon: Wrench, label: "Water Supply" });
-  if ((db as any).has_electricity_supply) externalFeatures.push({ icon: Zap, label: "Electricity Supply" });
-  if ((db as any).has_land_concession) externalFeatures.push({ label: "Land Concession" });
+  if (db.has_view) externalFeatures.push({ icon: Eye, label: "View" });
+  if (db.has_facade) externalFeatures.push({ label: "Facade" });
+  if (db.has_awning) externalFeatures.push({ label: "Awning" });
+  if (db.has_disability_access) externalFeatures.push({ label: "Disability Access" });
+  if (db.is_corner) externalFeatures.push({ label: "Corner Property" });
+  if (db.has_loading_dock) externalFeatures.push({ label: "Loading Dock" });
+  if (db.is_buildable) externalFeatures.push({ label: "Buildable" });
+  if (db.within_city_plan) externalFeatures.push({ label: "Within City Plan" });
+  if (db.within_settlement) externalFeatures.push({ label: "Within Settlement" });
+  if (db.has_water_supply) externalFeatures.push({ icon: Wrench, label: "Water Supply" });
+  if (db.has_electricity_supply) externalFeatures.push({ icon: Zap, label: "Electricity Supply" });
+  if (db.has_land_concession) externalFeatures.push({ label: "Land Concession" });
 
-  if ((db as any).is_penthouse) constructionFeatures.push({ label: "Penthouse" });
-  if ((db as any).is_neoclassical) constructionFeatures.push({ label: "Neoclassical" });
-  if ((db as any).is_preserved) constructionFeatures.push({ label: "Preserved Building" });
+  if (db.is_penthouse) constructionFeatures.push({ label: "Penthouse" });
+  if (db.is_neoclassical) constructionFeatures.push({ label: "Neoclassical" });
+  if (db.is_preserved) constructionFeatures.push({ label: "Preserved Building" });
   if (db.has_virtual_tour) constructionFeatures.push({ label: "Virtual Tour" });
   if (db.has_video_tour) constructionFeatures.push({ label: "Video Tour" });
 
-  if ((db as any).suitable_student) suitabilityFeatures.push({ label: "Students" });
-  if ((db as any).suitable_holiday) suitabilityFeatures.push({ label: "Holiday Home" });
-  if ((db as any).suitable_investment) suitabilityFeatures.push({ label: "Investment" });
-  if ((db as any).suitable_commercial_use) suitabilityFeatures.push({ label: "Commercial Use" });
+  if (db.suitable_student) suitabilityFeatures.push({ label: "Students" });
+  if (db.suitable_holiday) suitabilityFeatures.push({ label: "Holiday Home" });
+  if (db.suitable_investment) suitabilityFeatures.push({ label: "Investment" });
+  if (db.suitable_commercial_use) suitabilityFeatures.push({ label: "Commercial Use" });
 
-  const hasAnyFeatures = internalFeatures.length + externalFeatures.length + constructionFeatures.length + suitabilityFeatures.length > 0;
-
-  const similarListings = (similarFromDb as any[]).
-  filter((l: any) => l.id !== id).
-  slice(0, 6);
+  const similarListings = similarFromDb.filter(l => l.id !== id).slice(0, 6);
 
   // Build property details rows grouped
   const detailRows: {label: string;value: string;}[] = [
@@ -458,55 +299,101 @@ export default function PropertyDetail() {
   { label: "Surface", value: `${sqm} m²` },
   ...(db.year_built ? [{ label: "Year Built", value: String(db.year_built) }] : []),
   ...(db.floor != null ? [{ label: "Floor", value: db.floor === 0 ? "Ground" : `${db.floor}${db.total_floors ? ` of ${db.total_floors}` : ""}` }] : []),
-  ...((db as any)?.levels ? [{ label: "Levels", value: String((db as any).levels) }] : []),
-  ...((db as any)?.kitchens ? [{ label: "Kitchens", value: String((db as any).kitchens) }] : []),
-  ...((db as any)?.living_rooms ? [{ label: "Living Rooms", value: String((db as any).living_rooms) }] : []),
-  ...((db as any)?.wc_count ? [{ label: "WC", value: String((db as any).wc_count) }] : []),
-  ...((db as any)?.heating_system ? [{ label: "Heating", value: HEATING_TYPES.find((h) => h.value === (db as any).heating_system)?.label ?? (db as any).heating_system.replace(/_/g, " ") }] : []),
+  ...(db?.levels ? [{ label: "Levels", value: String(db.levels) }] : []),
+  ...(db?.kitchens ? [{ label: "Kitchens", value: String(db.kitchens) }] : []),
+  ...(db?.living_rooms ? [{ label: "Living Rooms", value: String(db.living_rooms) }] : []),
+  ...(db?.wc_count ? [{ label: "WC", value: String(db.wc_count) }] : []),
+  ...(db?.heating_system ? [{ label: "Heating", value: HEATING_TYPES.find((h) => h.value === db.heating_system)?.label ?? db.heating_system.replace(/_/g, " ") }] : []),
   ...(db.energy_class ? [{ label: "Energy Class", value: db.energy_class }] : []),
-  ...((db as any)?.construction_status ? [{ label: "Condition", value: CONDITION_OPTIONS.find((c) => c.value === (db as any).construction_status)?.label ?? (db as any).construction_status.replace(/_/g, " ") }] : []),
+  ...(db?.construction_status ? [{ label: "Condition", value: CONDITION_OPTIONS.find((c) => c.value === db.construction_status)?.label ?? db.construction_status.replace(/_/g, " ") }] : []),
   ...(db.cadastre_number ? [{ label: "Cadastre No.", value: db.cadastre_number }] : []),
   ...(db.enfia_zone ? [{ label: "ENFIA Zone", value: db.enfia_zone }] : []),
   ...(db.postal_code ? [{ label: "Postal Code", value: db.postal_code }] : []),
   ...(db.region ? [{ label: "Region", value: db.region }] : []),
   // Land
-  ...(isLandType && (db as any)?.coverage_ratio ? [{ label: "Coverage Ratio", value: `${(db as any).coverage_ratio}%` }] : []),
-  ...(isLandType && (db as any)?.building_allowance ? [{ label: "Build Allowance", value: `${(db as any).building_allowance} m²` }] : []),
-  ...(isLandType && (db as any)?.facade_length ? [{ label: "Facade Length", value: `${(db as any).facade_length} m` }] : []),
-  ...(isLandType && (db as any)?.plot_depth ? [{ label: "Plot Depth", value: `${(db as any).plot_depth} m` }] : []),
-  ...(isLandType && (db as any)?.slope ? [{ label: "Slope", value: (db as any).slope }] : []),
-  ...(isLandType && (db as any)?.zone_type ? [{ label: "Zone", value: (db as any).zone_type }] : []),
-  ...(isLandType && (db as any)?.road_type ? [{ label: "Road Type", value: (db as any).road_type }] : []),
-  ...(isLandType && (db as any)?.distance_from_sea ? [{ label: "From Sea", value: `${(db as any).distance_from_sea} m` }] : []),
-  ...(isLandType && (db as any)?.distance_from_city ? [{ label: "From City", value: `${(db as any).distance_from_city} m` }] : []),
+  ...(isLandType && db?.coverage_ratio ? [{ label: "Coverage Ratio", value: `${db.coverage_ratio}%` }] : []),
+  ...(isLandType && db?.building_allowance ? [{ label: "Build Allowance", value: `${db.building_allowance} m²` }] : []),
+  ...(isLandType && db?.facade_length ? [{ label: "Facade Length", value: `${db.facade_length} m` }] : []),
+  ...(isLandType && db?.plot_depth ? [{ label: "Plot Depth", value: `${db.plot_depth} m` }] : []),
+  ...(isLandType && db?.slope ? [{ label: "Slope", value: db.slope }] : []),
+  ...(isLandType && db?.zone_type ? [{ label: "Zone", value: db.zone_type }] : []),
+  ...(isLandType && db?.road_type ? [{ label: "Road Type", value: db.road_type }] : []),
+  ...(isLandType && db?.distance_from_sea ? [{ label: "From Sea", value: `${db.distance_from_sea} m` }] : []),
+  ...(isLandType && db?.distance_from_city ? [{ label: "From City", value: `${db.distance_from_city} m` }] : []),
   // Commercial
-  ...((db as any)?.commercial_subtype ? [{ label: "Subtype", value: (db as any).commercial_subtype }] : []),
-  ...((db as any)?.plot_surface ? [{ label: "Plot Surface", value: `${(db as any).plot_surface} m²` }] : []),
-  ...((db as any)?.floor_height ? [{ label: "Floor Height", value: `${(db as any).floor_height} m` }] : []),
+  ...(db?.commercial_subtype ? [{ label: "Subtype", value: db.commercial_subtype }] : []),
+  ...(db?.plot_surface ? [{ label: "Plot Surface", value: `${db.plot_surface} m²` }] : []),
+  ...(db?.floor_height ? [{ label: "Floor Height", value: `${db.floor_height} m` }] : []),
   // Meta
   { label: "System Code", value: db.id.slice(0, 8).toUpperCase() },
   { label: "Published", value: new Date(db.created_at).toLocaleDateString("en-GB") },
   { label: "Last Updated", value: new Date(db.updated_at).toLocaleDateString("en-GB") }];
 
 
+  const ogImage = images[0] ?? "https://maiprop.co/og-default.jpg";
+  const ogDescription = description
+    ? description.slice(0, 160)
+    : `${propertyType?.replace(/_/g, " ")} in ${city} — ${sqm} m² · €${price.toLocaleString()}`;
+  const canonicalUrl = `https://maiprop.co/${isAuction ? "auction" : "property"}/${db.id}`;
+
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "RealEstateListing",
+    name: title,
+    description: ogDescription,
+    url: canonicalUrl,
+    image: ogImage,
+    offers: {
+      "@type": "Offer",
+      price: price,
+      priceCurrency: "EUR",
+      availability: "https://schema.org/InStock",
+    },
+    address: {
+      "@type": "PostalAddress",
+      addressLocality: city,
+      addressCountry: "GR",
+      ...(db.postal_code ? { postalCode: db.postal_code } : {}),
+    },
+    numberOfRooms: bedrooms ?? undefined,
+    floorSize: sqm ? { "@type": "QuantitativeValue", value: sqm, unitCode: "MTK" } : undefined,
+  };
+
   return (
     <div className="min-h-screen bg-background pb-bottom-nav lg:pb-0">
+      <Helmet>
+        <title>{`${title} — maiProp`}</title>
+        <meta name="description" content={ogDescription} />
+        <link rel="canonical" href={canonicalUrl} />
+        <meta property="og:title" content={`${title} — maiProp`} />
+        <meta property="og:description" content={ogDescription} />
+        <meta property="og:image" content={ogImage} />
+        <meta property="og:url" content={canonicalUrl} />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={`${title} — maiProp`} />
+        <meta name="twitter:description" content={ogDescription} />
+        <meta name="twitter:image" content={ogImage} />
+        <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
+      </Helmet>
       <Navbar />
 
-      <div className="pt-16">
+      <main id="main-content" className="pt-16">
         {/* Breadcrumb */}
-        <div className="container py-2 sm:py-3">
-          <div className="flex items-center gap-1 sm:gap-1.5 text-xs text-muted-foreground overflow-x-auto scrollbar-none">
-            <Link to="/" className="hover:text-foreground transition-colors shrink-0">Home</Link>
-            <ChevronRight className="w-3 h-3 shrink-0" />
-            {isAuction ?
-            <Link to="/auctions" className="hover:text-foreground transition-colors shrink-0">Auctions</Link> :
-            <Link to="/listings" className="hover:text-foreground transition-colors shrink-0">Listings</Link>
-            }
-            <ChevronRight className="w-3 h-3 shrink-0" />
-            <span className="text-foreground truncate font-medium">{title}</span>
-          </div>
-        </div>
+        <nav aria-label="Breadcrumb" className="container py-2 sm:py-3">
+          <ol className="flex items-center gap-1 sm:gap-1.5 text-xs text-muted-foreground overflow-x-auto scrollbar-none list-none p-0 m-0">
+            <li><Link to="/" className="hover:text-foreground transition-colors shrink-0">{t("property.breadcrumbHome")}</Link></li>
+            <li aria-hidden="true"><ChevronRight className="w-3 h-3 shrink-0" /></li>
+            <li>
+              {isAuction ?
+              <Link to="/auctions" className="hover:text-foreground transition-colors shrink-0">{t("property.breadcrumbAuctions")}</Link> :
+              <Link to="/listings" className="hover:text-foreground transition-colors shrink-0">{t("property.breadcrumbListings")}</Link>
+              }
+            </li>
+            <li aria-hidden="true"><ChevronRight className="w-3 h-3 shrink-0" /></li>
+            <li><span className="text-foreground truncate font-medium" aria-current="page">{title}</span></li>
+          </ol>
+        </nav>
 
         <div className="container pb-10">
           <div className="grid lg:grid-cols-[1fr_340px] gap-6 lg:gap-8">
@@ -515,282 +402,31 @@ export default function PropertyDetail() {
             <div className="space-y-5">
 
               {/* ── Gallery ── */}
-              <div className="relative rounded-2xl overflow-hidden aspect-[16/9] bg-secondary group shadow-elevated">
-                {images.length > 0 ?
-                <img
-                  src={images[currentImage] || images[0]}
-                  alt={title}
-                  className="w-full h-full object-cover transition-opacity duration-300" /> :
-
-
-                <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-secondary">
-                    <Gavel className="w-12 h-12 text-muted-foreground/30" />
-                    <p className="text-xs text-muted-foreground">No photos available for this auction</p>
-                  </div>
-                }
-
-                {/* Badges */}
-                <div className="absolute top-4 left-4 flex gap-2">
-                  {listingType === "auction" && <span className="badge-auction text-xs font-bold px-3 py-1.5 rounded-full shadow">AUCTION</span>}
-                  {listingType === "firesale" && <span className="badge-firesale text-xs font-bold px-3 py-1.5 rounded-full shadow">FIRESALE</span>}
-                  {listingType === "rent" && <span className="bg-primary text-primary-foreground text-xs font-bold px-3 py-1.5 rounded-full shadow">FOR RENT</span>}
-                </div>
-
-                {/* Nav arrows */}
-                {images.length > 1 &&
-                <>
-                    <button
-                    className="absolute left-3 top-1/2 -translate-y-1/2 min-h-[44px] min-w-[44px] flex items-center justify-center p-2.5 rounded-full bg-background/70 backdrop-blur-md hover:bg-background/90 transition-all shadow-lg opacity-100 lg:opacity-0 lg:group-hover:opacity-100"
-                    onClick={() => setCurrentImage((currentImage - 1 + images.length) % images.length)}>
-                      <ChevronLeft className="w-4 h-4" />
-                    </button>
-                    <button
-                    className="absolute right-3 top-1/2 -translate-y-1/2 min-h-[44px] min-w-[44px] flex items-center justify-center p-2.5 rounded-full bg-background/70 backdrop-blur-md hover:bg-background/90 transition-all shadow-lg opacity-100 lg:opacity-0 lg:group-hover:opacity-100"
-                    onClick={() => setCurrentImage((currentImage + 1) % images.length)}>
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                  </>
-                }
-
-                {/* Top right actions — 44px touch targets for mobile */}
-                <div className="absolute top-4 right-4 flex gap-2">
-                  <button
-                    className={`min-h-[44px] min-w-[44px] flex items-center justify-center rounded-full backdrop-blur-md shadow transition-all ${isFavorited ? "bg-destructive text-white" : "bg-background/70 hover:bg-background/90"}`}
-                    onClick={handleFavorite}
-                    aria-label={isFavorited ? "Remove from saved" : "Save property"}>
-                    <Heart className={`w-4 h-4 ${isFavorited ? "fill-white" : ""}`} />
-                  </button>
-                  <button onClick={handleShare} className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-full bg-background/70 backdrop-blur-md hover:bg-background/90 shadow transition-all" aria-label="Share property">
-                    <Share2 className="w-4 h-4" />
-                  </button>
-                </div>
-
-                {/* Counter + views — only when photos exist */}
-                {images.length > 0 &&
-                <>
-                    <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-background/60 to-transparent pointer-events-none" />
-                    <div className="absolute bottom-3 right-4 bg-background/70 backdrop-blur-md px-2.5 py-1 rounded-full text-xs font-medium">
-                      {currentImage + 1} / {images.length}
-                    </div>
-                    <div className="absolute bottom-3 left-4 flex items-center gap-1.5 bg-background/70 backdrop-blur-md px-2.5 py-1 rounded-full text-xs">
-                      <Eye className="w-3 h-3 text-muted-foreground" />
-                      <span>{db.views_count || 0} views</span>
-                    </div>
-                  </>
-                }
-              </div>
-
-              {/* Thumbnails */}
-              {images.length > 1 &&
-              <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-0.5">
-                  {images.map((img, i) =>
-                <button key={i} onClick={() => setCurrentImage(i)}
-                className={`shrink-0 min-h-[44px] min-w-[44px] w-16 h-11 rounded-lg overflow-hidden transition-all duration-200 ${
-                currentImage === i ?
-                "ring-2 ring-primary ring-offset-2 ring-offset-background opacity-100" :
-                "opacity-50 hover:opacity-80"}`
-                }>
-                      <img src={img} alt="" className="w-full h-full object-cover" />
-                    </button>
-                )}
-                </div>
-              }
+              <PropertyGallery
+                images={images}
+                listingType={listingType}
+                isFavorited={isFavorited}
+                onFavorite={handleFavorite}
+                onShare={handleShare}
+                viewsCount={db.views_count || 0}
+                title={title}
+              />
 
               {/* ── Title + Price hero ── */}
-              <div className="space-y-4">
-                <div className="flex items-start justify-between gap-6 flex-wrap">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-2">
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground bg-muted px-2 py-0.5 rounded-full border border-border capitalize">
-                        {propertyType}
-                      </span>
-                      {subtype &&
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-accent bg-accent/10 px-2 py-0.5 rounded-full border border-accent/30 capitalize flex items-center gap-1">
-                          <LayoutGrid className="w-2.5 h-2.5" />
-                          {getSubtypeLabel(propertyType, subtype)}
-                        </span>
-                      }
-                      {listingType &&
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20 capitalize">
-                          For {listingType}
-                        </span>
-                      }
-                      {energyClass && energyClass !== "Exempt" &&
-                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${ENERGY_COLORS[energyClass] || "bg-secondary"}`}>
-                          <Zap className="w-2.5 h-2.5 inline mr-0.5" />{energyClass}
-                        </span>
-                      }
-                    </div>
-                    <h1 className="font-display text-2xl md:text-3xl font-bold leading-tight line-clamp-3 sm:line-clamp-none pr-2">
-                      {title}
-                    </h1>
-                    <div className="flex items-center gap-1.5 mt-2 text-sm text-muted-foreground">
-                      <MapPin className="w-3.5 h-3.5 shrink-0" />
-                      <span>
-                        {/* Show full address from DB, fallback to city */}
-                        {address && address !== city ? `${address}, ${city}` : city}
-                        {db.region ? ` · ${db.region}` : ""}
-                      </span>
-                      {isAuction && pricePerSqm &&
-                      <span className="ml-2 text-xs font-semibold text-muted-foreground border-l border-border pl-2">
-                        €{Number(pricePerSqm).toLocaleString()}/m²
-                      </span>
-                      }
-                    </div>
-                  </div>
-
-                  {!isAuction &&
-                  <div className="text-right shrink-0">
-                    <div className="font-display text-3xl font-black text-foreground">
-                      €{price.toLocaleString()}
-                      {listingType === "rent" && <span className="text-base font-normal text-muted-foreground">/mo</span>}
-                    </div>
-                    {pricePerSqm &&
-                    <div className="text-xs text-muted-foreground mt-0.5">
-                        €{Number(pricePerSqm).toLocaleString()} per m²
-                      </div>
-                    }
-                  </div>
-                  }
-                </div>
-
-                {/* Key stats bar */}
-                <div className="flex items-center gap-2 flex-wrap">
-                  {bedrooms != null &&
-                  <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
-                      <Bed className="w-3.5 h-3.5 text-primary" />{bedrooms} bed
-                    </div>
-                  }
-                  {bathrooms != null &&
-                  <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
-                      <Bath className="w-3.5 h-3.5 text-primary" />{bathrooms} bath
-                    </div>
-                  }
-                  {(db as any)?.wc_count != null &&
-                  <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
-                      <Home className="w-3.5 h-3.5 text-primary" />{(db as any).wc_count} WC
-                    </div>
-                  }
-                  <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
-                    <Square className="w-3.5 h-3.5 text-primary" />{sqm} m²
-                  </div>
-                  {db.floor != null &&
-                  <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
-                      <Layers className="w-3.5 h-3.5 text-primary" />
-                      {db.floor === -1 ? "Basement" : db.floor === 0 ? "Ground floor" : `${db.floor}${["st", "nd", "rd"][db.floor - 1] || "th"} floor`}
-                      {db.total_floors ? ` / ${db.total_floors}` : ""}
-                    </div>
-                  }
-                  {db.year_built != null &&
-                  <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
-                      <Calendar className="w-3.5 h-3.5 text-primary" />Construction year {db.year_built}
-                    </div>
-                  }
-                  {(db as any)?.heating_system &&
-                  <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
-                      <Thermometer className="w-3.5 h-3.5 text-primary" />{HEATING_TYPES.find((h) => h.value === (db as any).heating_system)?.label ?? (db as any).heating_system.replace(/_/g, " ")}
-                    </div>
-                  }
-                  {(db as any)?.construction_status &&
-                  <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
-                      <Building2 className="w-3.5 h-3.5 text-primary" />{CONDITION_OPTIONS.find((c) => c.value === (db as any).construction_status)?.label ?? (db as any).construction_status.replace(/_/g, " ")}
-                    </div>
-                  }
-                  {/* Ownership pills — shown for all listing types when present in tags */}
-                  {ownershipDisplay &&
-                  <div className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border ${ownershipDisplay.cls}`}>
-                      <Building2 className="w-3.5 h-3.5 shrink-0" />
-                      {ownershipDisplay.label}
-                    </div>
-                  }
-                  {ownershipPct != null && ownershipStatus !== "full" &&
-                  <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
-                      <Tag className="w-3.5 h-3.5 text-primary" />{ownershipPct}%
-                    </div>
-                  }
-                </div>
-
-                {/* Rent extras */}
-                {listingType === "rent" &&
-                <div className="flex flex-wrap gap-2">
-                    {(db as any)?.deposit_months &&
-                  <span className="px-2.5 py-1 rounded-full bg-secondary border border-border text-xs font-medium">
-                        🔐 {(db as any).deposit_months}mo deposit
-                      </span>
-                  }
-                    {(db as any)?.monthly_expenses &&
-                  <span className="px-2.5 py-1 rounded-full bg-secondary border border-border text-xs font-medium">
-                        💡 €{(db as any).monthly_expenses}/mo expenses
-                      </span>
-                  }
-                    {(db as any)?.pets_allowed &&
-                  <span className="px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs font-medium text-primary">🐾 Pets OK</span>
-                  }
-                    {(db as any)?.agent_fee_included &&
-                  <span className="px-2.5 py-1 rounded-full bg-brand-emerald/10 border border-brand-emerald/20 text-xs font-medium text-brand-emerald">✓ No Agent Fee</span>
-                  }
-                    {(db as any)?.short_term_rental &&
-                  <span className="px-2.5 py-1 rounded-full bg-brand-gold/10 border border-brand-gold/20 text-xs font-medium text-brand-gold">📅 Short-term OK</span>
-                  }
-                  </div>
-                }
-              </div>
+              <PropertyTitleSection
+                db={db}
+                isAuction={isAuction}
+                ownershipDisplay={ownershipDisplay}
+                ownershipPct={ownershipPct}
+                ownershipStatus={ownershipStatus}
+              />
 
               {/* ── AI Market Insights — dynamic from property-valuation ── */}
-              <Section>
-                <SectionHeader icon={Zap} title="AI Market Insights" badge={
-                <span className="text-[10px] text-muted-foreground">Powered by mAI Prop OS</span>
-                } />
-                <div className="p-5 space-y-4">
-                  {!user && <SignInForAI feature="AI Market Insights" />}
-                  {user && aiInsightsLoading &&
-                  <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span className="text-xs">Analysing market data…</span>
-                    </div>
-                  }
-                  {user && !aiInsightsLoading && aiInsightsData && (() => {
-                    const cmpCfg: Record<string, {label: string;color: string;bg: string;}> = {
-                      below_market: { label: "Below Market", color: "text-emerald-400", bg: "bg-emerald-400/10 border-emerald-400/20" },
-                      at_market: { label: "At Market", color: "text-yellow-400", bg: "bg-yellow-400/10 border-yellow-400/20" },
-                      above_market: { label: "Above Market", color: "text-destructive", bg: "bg-destructive/10 border-destructive/20" }
-                    };
-                    const cmp = cmpCfg[aiInsightsData.marketComparison] ?? cmpCfg.at_market;
-                    return (
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div className={`rounded-xl border p-4 flex flex-col gap-1 ${cmp.bg}`}>
-                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest">vs Market</p>
-                          <div className="flex items-baseline gap-1">
-                            <span className={`font-display font-black text-3xl ${cmp.color}`}>
-                              {aiInsightsData.vsMarket > 0 ? "+" : ""}{aiInsightsData.vsMarket}%
-                            </span>
-                          </div>
-                          <p className={`text-[10px] font-semibold ${cmp.color}`}>{cmp.label}</p>
-                        </div>
-                        <div className="rounded-xl border border-border bg-secondary/50 p-4 flex flex-col gap-1">
-                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Rental Yield</p>
-                          <div className="flex items-baseline gap-1">
-                            <span className="font-display font-black text-3xl text-primary">{aiInsightsData.rentalYield}%</span>
-                          </div>
-                          <p className="text-[10px] text-muted-foreground">Est. gross annual yield</p>
-                        </div>
-                        <div className="rounded-xl border border-border bg-secondary/50 p-4 flex flex-col gap-1">
-                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest">AI Estimate</p>
-                          <div className="flex items-baseline gap-1">
-                            <span className="font-display font-black text-3xl text-foreground">
-                              €{(aiInsightsData.estimatedValue / 1000).toFixed(0)}k
-                            </span>
-                          </div>
-                          <p className="text-[10px] text-muted-foreground">Confidence: {aiInsightsData.confidenceLabel}</p>
-                        </div>
-                      </div>);
-
-                  })()}
-                  {user && !aiInsightsLoading && !aiInsightsData &&
-                  <p className="text-xs text-muted-foreground text-center py-4">Market analysis unavailable</p>
-                  }
-                </div>
-              </Section>
+              <PropertyAIInsightsSection
+                user={user}
+                loading={aiInsightsLoading}
+                data={aiInsightsData}
+              />
 
               {/* ── Description (hidden for auctions) ── */}
               {!isAuction && description &&
@@ -811,72 +447,17 @@ export default function PropertyDetail() {
               }
 
               {/* ── Auction Details (shown first for auction listings) ── */}
-              {isAuction &&
-              <Section>
-                  <SectionHeader icon={Gavel} title="Auction Details" badge={
-                <span className="text-[10px] bg-brand-gold/20 text-brand-gold px-2 py-0.5 rounded-full font-bold">LIVE</span>
-                } />
-                  <div className="p-6 space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="glass-card rounded-xl p-4 border border-border text-center">
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Auction Date</p>
-                        <p className="font-display font-bold text-sm">
-                          {db.auction_date ?
-                        new Date(db.auction_date).toLocaleDateString("en-GB") :
-                        "TBC"}
-                        </p>
-                      </div>
-                      <div className="glass-card rounded-xl p-4 border border-brand-gold/20 text-center">
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Starting Bid</p>
-                        <p className="font-display font-bold text-sm text-brand-gold">
-                          €{(Number(db.auction_starting_bid) || 0).toLocaleString()}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Ownership status row */}
-                    {ownershipDisplay &&
-                  <div className="flex items-center justify-between rounded-xl bg-secondary border border-border px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <Building2 className="w-4 h-4 text-muted-foreground" />
-                          <span className="text-xs text-muted-foreground font-medium">Ownership Status</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${ownershipDisplay.cls}`}>
-                            {ownershipDisplay.label}
-                          </span>
-                          {ownershipPct != null && ownershipStatus !== "full" &&
-                      <span className="text-xs font-bold text-muted-foreground bg-muted px-2 py-1 rounded-full border border-border">
-                              {ownershipPct}%
-                            </span>
-                      }
-                        </div>
-                      </div>
-                  }
-
-                    {db.auction_court &&
-                  <div>
-                        <p className="text-xs text-muted-foreground mb-1">Court / Platform</p>
-                        <p className="text-sm font-semibold">{db.auction_court}</p>
-                      </div>
-                  }
-                    <div className="rounded-xl bg-brand-gold/8 border border-brand-gold/20 p-3 text-xs text-muted-foreground leading-relaxed">
-                      ⚡ Judicial auction — buyer conducts own due diligence. maiProp provides AI-powered pre-auction analysis.
-                    </div>
-
-
-                    {/* Past Deals table — premium only */}
-                    {isPro && (
-                      <div className="pt-4 border-t border-border mt-4">
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-2">
-                          <History className="w-3.5 h-3.5" /> Past Deals (OS)
-                        </p>
-                        <PastDealsTable listingId={id!} />
-                      </div>
-                    )}
-                  </div>
-                </Section>
-              }
+              {isAuction && (
+                <PropertyAuctionSection
+                  listingId={id!}
+                  auctionDate={db.auction_date}
+                  auctionStartingBid={Number(db.auction_starting_bid) || 0}
+                  auctionCourt={db.auction_court}
+                  ownershipDisplay={ownershipDisplay}
+                  ownershipPct={ownershipPct}
+                  ownershipStatus={ownershipStatus}
+                />
+              )}
 
               {/* ── Property Details ── */}
               <Section>
@@ -889,7 +470,7 @@ export default function PropertyDetail() {
                   </div>
 
                   {/* Energy certificate */}
-                  {energyClass && energyClass !== "Exempt" && ENERGY_COLORS[energyClass] && (() => {
+                  {energyClass && energyClass !== "Exempt" && (energyClass as import("@/types").EnergyClass) in ENERGY_COLORS && (() => {
                     const energyData = ENERGY_SCALE.find((e) => e.cls === energyClass);
                     return (
                       <div className="mt-6 pt-6 border-t border-border">
@@ -919,7 +500,7 @@ export default function PropertyDetail() {
                         </div>
                         {energyData &&
                         <div className="flex items-center gap-2 mt-3">
-                            <div className={`px-2 py-0.5 rounded text-xs font-black ${ENERGY_COLORS[energyClass]}`}>
+                            <div className={`px-2 py-0.5 rounded text-xs font-black ${ENERGY_COLORS[energyClass as import("@/types").EnergyClass]}`}>
                               {energyClass}
                             </div>
                             <span className="text-xs text-muted-foreground">{energyData.desc}</span>
@@ -932,25 +513,12 @@ export default function PropertyDetail() {
               </Section>
 
               {/* ── Features & Amenities ── */}
-              {hasAnyFeatures &&
-              <Section>
-                  <SectionHeader
-                  icon={Check}
-                  title="Features & Amenities"
-                  badge={
-                  <span className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full border border-border">
-                        {internalFeatures.length + externalFeatures.length + constructionFeatures.length + suitabilityFeatures.length} features
-                      </span>
-                  } />
-                
-                  <div className="p-6 space-y-6">
-                    <FeatureSection title="Internal" features={internalFeatures} accent="bg-primary" />
-                    <FeatureSection title="External" features={externalFeatures} accent="bg-brand-emerald" />
-                    <FeatureSection title="Construction" features={constructionFeatures} accent="bg-accent" />
-                    <FeatureSection title="Suitable For" features={suitabilityFeatures} accent="bg-brand-gold" />
-                  </div>
-                </Section>
-              }
+              <PropertyFeatureList
+                internalFeatures={internalFeatures}
+                externalFeatures={externalFeatures}
+                constructionFeatures={constructionFeatures}
+                suitabilityFeatures={suitabilityFeatures}
+              />
 
               {/* ── Website Link (distinctive section) ── */}
               {websiteUrl &&
@@ -1008,149 +576,39 @@ export default function PropertyDetail() {
             {/* ──── RIGHT SIDEBAR ──── */}
             <div className="space-y-4 lg:sticky lg:top-24 self-start">
 
-              {/* ① Contact / Buy card — Starting Bid FIRST */}
-              <div className="glass-card rounded-2xl overflow-hidden border border-primary/10 shadow-elevated">
-                {/* Price header — hidden for auctions (price shown in Auction Details section) */}
-                {!isAuction &&
-                <div className="bg-gradient-to-br from-primary/10 to-accent/5 border-b border-border px-5 py-4">
-                  <div className="flex items-end justify-between">
-                    <div>
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">
-                        {listingType === "rent" ? "Monthly Rent" : "Asking Price"}
-                      </p>
-                      <p className="font-display text-2xl font-black text-foreground">
-                        €{price.toLocaleString()}
-                        {listingType === "rent" && <span className="text-sm font-normal text-muted-foreground">/mo</span>}
-                      </p>
-                      {pricePerSqm && <p className="text-xs text-muted-foreground mt-0.5">€{Number(pricePerSqm).toLocaleString()}/m²</p>}
-                    </div>
-                    <div className="text-right">
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Eye className="w-3 h-3" />{db.views_count || 0}
-                      </div>
-                      <p className="text-[10px] text-muted-foreground">views</p>
-                    </div>
-                  </div>
-                </div>
-                }
-
-                {/* Agent info — hidden for auctions */}
-                {!isAuction &&
-                <div className="px-5 py-4 border-b border-border">
-                    {ownerProfile ?
-                  <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-gradient-primary flex items-center justify-center text-sm font-bold text-primary-foreground overflow-hidden shrink-0">
-                          {ownerProfile.avatar_url ?
-                      <img src={ownerProfile.avatar_url} alt="" className="w-full h-full object-cover" /> :
-                      ownerProfile.display_name?.[0] || "O"}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="font-semibold text-sm truncate">{ownerProfile.display_name || "Owner"}</p>
-                            {ownerParticipantType === "agent" &&
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-brand-purple/10 text-brand-purple border border-brand-purple/30">Agent</span>
-                        }
-                            {ownerParticipantType === "seller" &&
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-600 dark:text-violet-400 border border-violet-500/30">Private Seller</span>
-                        }
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            {ownerParticipantType === "agent" ? "Licensed real estate agent" : ownerParticipantType === "seller" ? "Private seller / landlord" : "Listing owner"}
-                          </p>
-                        </div>
-                        {ownerProfile.verified &&
-                    <div className="flex items-center gap-1 text-xs text-primary shrink-0">
-                            <CheckCircle className="w-3.5 h-3.5" />
-                            <span>Verified</span>
-                          </div>
-                    }
-                      </div> :
-
-                  <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-gradient-primary flex items-center justify-center text-sm font-bold text-primary-foreground shrink-0">A</div>
-                        <div>
-                          <p className="font-semibold text-sm">Licensed Agent</p>
-                          <div className="flex items-center gap-1 text-xs text-brand-gold mt-0.5">
-                            <Star className="w-3 h-3 fill-current" /><span>Verified</span>
-                          </div>
-                        </div>
-                      </div>
+              {/* ① Contact / Buy card */}
+              <PropertyOwnerCard
+                ownerProfile={ownerProfile}
+                ownerParticipantType={ownerParticipantType}
+                isAuction={isAuction}
+                ownerIsPro={ownerIsPro}
+                price={price}
+                listingType={listingType}
+                pricePerSqm={pricePerSqm ? Number(pricePerSqm) : null}
+                viewsCount={db.views_count || 0}
+                onContact={handleContact}
+                isContactPending={startConversation.isPending}
+                onRequestViewing={() => {
+                  if (!user) { toast.error(t("property.signInToView")); navigate("/login"); return; }
+                  modal.open("viewing");
+                }}
+                onRequestVideoViewing={() => {
+                  if (!user) { toast.error(t("property.signInToView")); navigate("/login"); return; }
+                  if (canVideoView) { modal.open("viewing"); } else {
+                    toast.info(t("property.videoViewingProOnly"));
+                    navigate("/pricing");
                   }
-                  </div>
-                }
+                }}
+                canVideoView={canVideoView}
+              />
 
-                {/* Actions — hidden for auctions */}
-                {!isAuction && <div className="p-5 space-y-2.5">
-                  {ownerIsPro ?
-                  <>
-                      <Button className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2 h-10"
-                    onClick={handleContact} disabled={startConversation.isPending}>
-                        {startConversation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
-                        Send Message
-                      </Button>
-                      <div className="grid grid-cols-2 gap-2">
-                        <Button variant="outline" className="border-border gap-1.5 h-9 text-xs">
-                          <Phone className="w-3.5 h-3.5" />Call
-                        </Button>
-                        <Button variant="outline" className="border-border gap-1.5 h-9 text-xs" onClick={() => user ? setViewingOpen(true) : (toast.error("Sign in to request a viewing"), navigate("/login"))}>
-                          <Calendar className="w-3.5 h-3.5" />Viewing
-                        </Button>
-                      </div>
-                      <Button
-                      variant="outline"
-                      className="w-full border-border gap-2 h-9 text-xs"
-                      onClick={() => {
-                        if (!user) {toast.error("Sign in to request a viewing");navigate("/login");return;}
-                        if (canVideoView) { setViewingOpen(true); } else {
-                          toast.info("Video viewing is available for Pro users, or free for retailers.");
-                          navigate("/pricing");
-                        }
-                      }}>
-                      
-                        <Video className="w-3.5 h-3.5" />Video Viewing{!canVideoView && <Lock className="w-3 h-3 ml-0.5 opacity-60" />}
-                      </Button>
-                    </> :
-
-                  <p className="text-xs text-muted-foreground">Messaging and calendar sync available for Pro property owners.</p>
-
-                  }
-                </div>}
-
-                {/* Response time — only non-auction */}
-                {!isAuction &&
-                <div className="px-5 pb-4 text-center">
-                    <p className="text-[10px] text-muted-foreground flex items-center justify-center gap-1">
-                      <Clock className="w-3 h-3" />Usually responds within 2 hours
-                    </p>
-                  </div>
-                }
-              </div>
-
-              {/* ② Walk Score — derived from actual POIs loaded in PropertyMiniMap */}
-              {walkScore !== null && (() => {
-                const colour = walkScoreColour(walkScore);
-                const label = walkScoreLabel(walkScore);
-                const r = 20,c = 2 * Math.PI * r;
-                return (
-                  <div className="glass-card rounded-2xl p-4 border border-border flex items-center gap-4">
-                    <svg width="52" height="52" viewBox="0 0 56 56" className="shrink-0">
-                      <circle cx="28" cy="28" r={r} fill="none" stroke="hsl(var(--border))" strokeWidth="4" />
-                      <circle cx="28" cy="28" r={r} fill="none"
-                      stroke={colour} strokeWidth="4"
-                      strokeDasharray={`${c * walkScore / 100} ${c * (1 - walkScore / 100)}`}
-                      strokeLinecap="round"
-                      transform="rotate(-90 28 28)" />
-                      
-                      <text x="28" y="33" textAnchor="middle" fontSize="13" fontWeight="900" fill={colour}>{walkScore}</text>
-                    </svg>
-                    <div>
-                      <p className="text-sm font-bold" style={{ color: colour }}>{label}</p>
-                      <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Walk Score</p>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">Based on actual nearby amenities</p>
-                    </div>
-                  </div>);
-
-              })()}
+              {/* ② Walk Score + Safety + Noise scores */}
+              <PropertyScoresSection
+                walkScore={walkScore}
+                walkabilityScore={db?.walkability_score != null ? Number(db.walkability_score) : null}
+                safetyScore={db?.safety_score != null ? Number(db.safety_score) : null}
+                noiseScore={db?.noise_score != null ? Number(db.noise_score) : null}
+              />
 
               {/* ③ Property Valuation — unlocked for Pro users */}
               {isPro ?
@@ -1167,7 +625,7 @@ export default function PropertyDetail() {
                 floor={db?.floor}
                 totalFloors={db?.total_floors}
                 yearBuilt={db?.year_built}
-                heatingSystem={(db as any)?.heating_system ?? undefined}
+                heatingSystem={db?.heating_system ?? undefined}
                 energyClass={energyClass}
                 pricePerSqm={pricePerSqm ? Number(pricePerSqm) : undefined}
                 hasParking={db?.has_parking}
@@ -1185,7 +643,7 @@ export default function PropertyDetail() {
                 ownershipPercentage={ownershipPct ?? undefined}
                 auctionCourt={db?.auction_court}
                 plotSurface={db?.plot_surface}
-                condition={(db as any)?.construction_status ?? undefined}
+                condition={db?.construction_status ?? undefined}
                 isNeoclassical={db?.is_neoclassical}
                 isPreserved={db?.is_preserved}
                 distanceFromSea={db?.distance_from_sea}
@@ -1224,81 +682,7 @@ export default function PropertyDetail() {
               }
 
               {/* ④ Property Report — Pro only, 3 free/month, €9 each extra */}
-              <div className={`glass-card rounded-2xl overflow-hidden border ${reportLoaded ? "border-primary/30" : "border-primary/20"}`}>
-                {/* Header — matches Property Valuation header exactly */}
-                <div className="flex items-center gap-2 px-5 py-3.5 bg-primary/5 border-b border-primary/20">
-                  <ClipboardList className="w-4 h-4 text-primary" />
-                  <h4 className="font-display font-semibold text-sm flex-1">Property Report</h4>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/15 text-primary font-semibold">
-                    mAI Prop · 2026 Model
-                  </span>
-                </div>
-
-                <div className="p-5">
-                  {!isPro ? (
-                    <div className="text-center space-y-3">
-                      <p className="text-xs text-muted-foreground leading-relaxed">
-                        Deep-dive: Area trends, comparable sales, property specifics analysis, and charts.
-                      </p>
-                      <Button className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2" asChild>
-                        <Link to="/pricing">
-                          <Zap className="w-4 h-4" /> Upgrade to Pro
-                        </Link>
-                      </Button>
-                      <p className="text-[10px] text-muted-foreground">Pro Feature · Unlock full reports</p>
-                    </div>
-                  ) : reportLoaded ? (
-                    <div className="text-center space-y-3">
-                      <p className="text-xs text-muted-foreground leading-relaxed">
-                        Report loaded. Download your full PDF below.
-                      </p>
-                      <Button className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2">
-                        <Download className="w-4 h-4" /> Download PDF
-                      </Button>
-                      <p className="text-[10px] text-muted-foreground">Full · Instant · PDF export</p>
-                    </div>
-                  ) : reportCount >= REPORT_INCLUDED ? (
-                    <div className="text-center space-y-3">
-                      <p className="text-xs text-muted-foreground leading-relaxed">
-                        Included reports used this month. Extra reports cost €{REPORT_EXTRA_COST} each.
-                      </p>
-                      <Button className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2" asChild>
-                        <Link to="/pricing"><Zap className="w-4 h-4" /> Get Extra Report</Link>
-                      </Button>
-                      <p className="text-[10px] text-muted-foreground">€{REPORT_EXTRA_COST} per extra report</p>
-                    </div>
-                  ) : (
-                    <div className="text-center space-y-3">
-                      {isPro && (
-                        <p className="text-[10px] text-muted-foreground">
-                          {Math.max(0, REPORT_INCLUDED - reportCount)} of {REPORT_INCLUDED} reports remaining this month
-                        </p>
-                      )}
-                      <p className="text-xs text-muted-foreground leading-relaxed">
-                        Deep-dive: Area trends, comparable sales, property specifics analysis, and charts.
-                      </p>
-                      <Button
-                        className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2"
-                        onClick={async () => {
-                          if (!user || !id) return;
-                          setReportLoading(true);
-                          try {
-                            await recordReport.mutateAsync(id);
-                            setReportLoaded(true);
-                          } finally {
-                            setReportLoading(false);
-                          }
-                        }}
-                        disabled={reportLoading}
-                      >
-                        {reportLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ClipboardList className="w-4 h-4" />}
-                        {reportLoading ? "Loading…" : "Load Report"}
-                      </Button>
-                      <p className="text-[10px] text-muted-foreground">Full · Instant · Not a formal report</p>
-                    </div>
-                  )}
-                </div>
-              </div>
+              <PropertyReportCard listingId={id!} />
 
               {/* Professional add-ons — valuation & legal */}
               <div className="glass-card rounded-2xl border border-border overflow-hidden">
@@ -1346,19 +730,19 @@ export default function PropertyDetail() {
                 <button
                   type="button"
                   onClick={async () => {
-                    if (!user) { toast.error("Sign in to report"); navigate("/login"); return; }
+                    if (!user) { toast.error(t("property.signInToReport")); navigate("/login"); return; }
                     if (!id) return;
                     const { error } = await supabaseClient.from("listing_reports").insert({
                       entity_type: "listing",
                       entity_id: id,
                       reporter_id: user.id,
                     });
-                    if (error) toast.error("Could not submit report");
-                    else toast.success("Report submitted. Our team will review it.");
+                    if (error) toast.error(t("property.errorReport"));
+                    else toast.success(t("property.reportSubmitted"));
                   }}
                   className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 mx-auto transition-colors"
                 >
-                  <Info className="w-3 h-3" />Found an error? Report this listing
+                  <Info className="w-3 h-3" />{t("property.reportListingCta")}
                 </button>
               </div>
             </div>
@@ -1371,31 +755,31 @@ export default function PropertyDetail() {
         <div className="container pb-16">
             <h2 className="font-display text-xl font-bold mb-4 flex items-center gap-2">
               <LayoutGrid className="w-5 h-5 text-primary" />
-              {isAuction ? "Similar Deals" : "Similar Listings"}
+              {isAuction ? t("property.similarDeals") : t("property.similarListings", { defaultValue: "Similar Listings" })}
             </h2>
             <p className="text-sm text-muted-foreground mb-5">
               {isAuction ? "More auctions from the OS database" : "Related properties you might like"}
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {similarListings.map((l: any) =>
+              {similarListings.map((l) =>
             <PropertyCard key={l.id} property={dbListingToCard(l, { includeOwnership: true, includeRaw: true, maxImages: 3 })} />
             )}
             </div>
           </div>
         }
-      </div>
+      </main>
 
       <Footer />
 
       <ViewingDialog
-        open={viewingOpen}
-        onClose={() => setViewingOpen(false)}
+        open={modal.isOpen("viewing")}
+        onClose={() => modal.close()}
         canVideoView={canVideoView}
-        ownerId={(db as any).owner_id ?? (db as any).profiles?.user_id ?? ""}
+        ownerId={db.owner_id ?? db.profiles?.user_id ?? ""}
         property={{
           id: db.id, title: db.title, city: db.city,
           price: Number(db.price), sqm: Number(db.sqm),
-          type: db.property_type as any, listingType: db.listing_type as any,
+          type: db.property_type, listingType: db.listing_type,
           images: images, address: db.address || db.city,
           tags: []
         }} />
@@ -1404,44 +788,44 @@ export default function PropertyDetail() {
       <Suspense fallback={null}>
         <AIAssistantWidget
           propertyContext={{
-            title: db.title,
-            city: db.city,
-            address: db.address,
-            price: Number(db.price),
+            title: db.title ?? undefined,
+            city: db.city ?? undefined,
+            address: db.address ?? undefined,
+            price: db.price ? Number(db.price) : undefined,
             pricePerSqm: db.price_per_sqm ? Number(db.price_per_sqm) : undefined,
-            sqm: Number(db.sqm),
-            bedrooms: db.bedrooms,
-            bathrooms: db.bathrooms,
-            propertyType: db.property_type,
-            listingType: db.listing_type,
-            floor: db.floor,
-            yearBuilt: db.year_built,
-            energyClass: db.energy_class,
-            heatingSystem: (db as any).heating_system,
-            hasParking: db.has_parking,
-            hasPool: db.has_pool,
-            hasElevator: db.has_elevator,
-            hasGarden: db.has_garden,
-            hasBalcony: (db as any).has_balcony,
-            hasAC: (db as any).has_ac,
-            hasFireplace: (db as any).has_fireplace,
-            hasFurnished: (db as any).has_furnished,
-            hasStorage: db.has_storage,
-            hasSmartHome: db.has_smart_home,
-            petsAllowed: (db as any).pets_allowed,
-            hasView: (db as any).has_view,
-            latitude: db.latitude,
-            longitude: db.longitude,
-            region: db.region
+            sqm: db.sqm ? Number(db.sqm) : undefined,
+            bedrooms: db.bedrooms ?? undefined,
+            bathrooms: db.bathrooms ?? undefined,
+            propertyType: db.property_type ?? undefined,
+            listingType: db.listing_type ?? undefined,
+            floor: db.floor ?? undefined,
+            yearBuilt: db.year_built ?? undefined,
+            energyClass: db.energy_class ?? undefined,
+            heatingSystem: db.heating_system ?? undefined,
+            hasParking: db.has_parking ?? undefined,
+            hasPool: db.has_pool ?? undefined,
+            hasElevator: db.has_elevator ?? undefined,
+            hasGarden: db.has_garden ?? undefined,
+            hasBalcony: db.has_balcony ?? undefined,
+            hasAC: db.has_ac ?? undefined,
+            hasFireplace: db.has_fireplace ?? undefined,
+            hasFurnished: db.has_furnished ?? undefined,
+            hasStorage: db.has_storage ?? undefined,
+            hasSmartHome: db.has_smart_home ?? undefined,
+            petsAllowed: db.pets_allowed ?? undefined,
+            hasView: db.has_view ?? undefined,
+            latitude: db.latitude ?? undefined,
+            longitude: db.longitude ?? undefined,
+            region: db.region ?? undefined
           }} />
       </Suspense>
       
 
       {/* Auction Alert Modal */}
       <AuctionAlertModal
-        open={auctionAlertOpen}
-        onClose={() => setAuctionAlertOpen(false)} />
-      
+        open={modal.isOpen("auctionAlert")}
+        onClose={() => modal.close()} />
+
     </div>);
 
 }

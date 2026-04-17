@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import type { Enums } from "@/integrations/supabase/types";
 
 /**
  * Fetches similar listings/deals from the database (includes OS-synced auctions).
@@ -23,28 +24,28 @@ export function useSimilarListings(params: {
       let query = supabase
         .from("listings")
         .select(`*, listing_images(url, sort_order)`)
-        .eq("status", "active" as any)
+        .eq("status", "active" as Enums<"listing_status">)
         .limit(200);
 
       if (excludeId) query = query.neq("id", excludeId);
       if (city) query = query.ilike("city", `%${city}%`);
-      if (propertyType) query = query.eq("property_type", propertyType as any);
-      if (listingType) query = query.eq("listing_type", listingType as any);
+      if (propertyType) query = query.eq("property_type", propertyType as Enums<"property_type">);
+      if (listingType) query = query.eq("listing_type", listingType as Enums<"listing_type">);
 
       const { data, error } = await query;
       if (error) throw error;
       if (!data?.length) return [];
 
       // Fetch owner profiles for cards (use profiles_public per RLS; profiles restricted to own row)
-      const ownerIds = [...new Set(data.map((r: any) => r.owner_id).filter(Boolean))];
+      const ownerIds = [...new Set(data.map(r => r.owner_id).filter((id): id is string => !!id))];
       const { data: profiles = [] } = ownerIds.length
         ? await supabase.from("profiles_public").select("user_id, display_name, avatar_url, role").in("user_id", ownerIds)
         : { data: [] };
-      const profileMap = new Map((profiles as any[]).map((p: any) => [p.user_id, p]));
+      const profileMap = new Map((profiles ?? []).map(p => [p.user_id, p]));
 
-      const withProfiles = data.map((r: any) => ({
+      const withProfiles = data.map(r => ({
         ...r,
-        profiles: profileMap.get(r.owner_id) ?? null,
+        profiles: r.owner_id ? profileMap.get(r.owner_id) ?? null : null,
       }));
 
       // Sort by price proximity when price is provided

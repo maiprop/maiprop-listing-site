@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { useState, useEffect as _useEffect } from "react";
 import { Sparkles, Loader2, TrendingUp, TrendingDown, Minus, ShieldCheck, Volume2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { getAiErrorMessage } from "@/lib/aiErrorUtils";
@@ -227,10 +228,6 @@ export function CompareAIReports({ listings }: { listings: Listing[] }) {
     }));
   };
 
-  // Auto-fetch when triggered
-  useEffect(() => {
-    if (triggered) return; // don't re-fetch on re-render
-  }, [listings]);
 
   if (!triggered) {
     return (

@@ -1,4 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from "react";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Loader2, Bell, BellOff, MapPin, Euro, Edit2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -14,6 +16,7 @@ export default function AuctionsTab() {
   const { isPro } = useSubscription();
   const bioType = getParticipantTypeFromProfile(profile);
   const role = profile?.role as string | undefined;
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   const { data: auctionAlerts = [], isLoading: alertsLoading } = useAuctionAlerts();
   const deleteAuctionAlert = useDeleteAuctionAlert();
@@ -141,9 +144,7 @@ export default function AuctionsTab() {
                   <Edit2 className="w-4 h-4" />
                 </button>
                 <button
-                  onClick={() => {
-                    if (confirm("Delete this alert?")) deleteAuctionAlert.mutate(a.id);
-                  }}
+                  onClick={() => setDeleteTarget(a.id)}
                   className="p-2 rounded-lg hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -189,6 +190,14 @@ export default function AuctionsTab() {
           setEditingAlert(null);
         }}
         editAlert={editingAlert}
+      />
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete alert?"
+        description="You will no longer receive notifications for this auction filter."
+        confirmLabel="Delete"
+        onConfirm={() => { if (deleteTarget) deleteAuctionAlert.mutate(deleteTarget); setDeleteTarget(null); }}
+        onCancel={() => setDeleteTarget(null)}
       />
     </div>
   );

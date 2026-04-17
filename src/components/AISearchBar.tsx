@@ -56,8 +56,8 @@ export function AISearchBar({ onFiltersApplied }: AISearchBarProps) {
       setLastSummary(filters.summary || null);
       onFiltersApplied(filters);
       setOpen(false);
-    } catch (e: any) {
-      toast.error(e.message || "AI search failed");
+    } catch (e: unknown) {
+      toast.error((e instanceof Error ? e.message : null) || "AI search failed");
     } finally {
       setLoading(false);
     }

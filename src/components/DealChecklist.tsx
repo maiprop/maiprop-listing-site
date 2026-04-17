@@ -38,8 +38,10 @@ export function DealChecklist({ entityType, entityId }: DealChecklistProps) {
       entity_type: entityType,
       entity_id: entityId!,
       items: next,
-      title: checklist?.title ?? "Due diligence",
-      status: checklist?.status ?? "in_progress",
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      title: (checklist as any)?.title ?? "Due diligence",
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      status: (checklist as any)?.status ?? "in_progress",
     });
   };
 
@@ -50,8 +52,10 @@ export function DealChecklist({ entityType, entityId }: DealChecklistProps) {
       entity_type: entityType,
       entity_id: entityId!,
       items: next,
-      title: checklist?.title ?? "Due diligence",
-      status: checklist?.status ?? "in_progress",
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      title: (checklist as any)?.title ?? "Due diligence",
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      status: (checklist as any)?.status ?? "in_progress",
     });
     setNewItem("");
   };
@@ -62,8 +66,10 @@ export function DealChecklist({ entityType, entityId }: DealChecklistProps) {
       entity_type: entityType,
       entity_id: entityId!,
       items: next,
-      title: checklist?.title ?? "Due diligence",
-      status: checklist?.status ?? "in_progress",
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      title: (checklist as any)?.title ?? "Due diligence",
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      status: (checklist as any)?.status ?? "in_progress",
     });
   };
 

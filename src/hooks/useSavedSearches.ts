@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+﻿import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -8,21 +8,24 @@ export type SavedSearch = {
   id: string;
   user_id: string;
   name: string;
-  filters: Record<string, any>;
+  filters: Record<string, unknown>;
   email_alerts: boolean;
   created_at: string;
   updated_at: string;
 };
 
+/** Returns the current user's saved searches. Used by Dashboard and SavedSearchesTab. */
 export function useSavedSearches() {
   const { user } = useAuth();
   return useQuery({
     queryKey: ["saved_searches", user?.id],
     enabled: !!user,
     queryFn: async () => {
+      if (!user) return [];
       const { data, error } = await supabase
         .from("saved_searches")
-        .select("*")
+        .select("id, user_id, name, filters, email_alerts, last_alert_sent_at, last_alert_listing_ids, created_at, updated_at")
+        .eq("user_id", user.id)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data || []) as SavedSearch[];
@@ -39,15 +42,16 @@ export function useCreateSavedSearch() {
       emailAlerts,
     }: {
       name: string;
-      filters: Record<string, any>;
+      filters: Record<string, unknown>;
       emailAlerts: boolean;
     }) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error } = await supabase.from("saved_searches").insert({
         user_id: user.id,
         name,
-        filters,
+        filters: filters as unknown as import("@/integrations/supabase/types").Database["public"]["Tables"]["saved_searches"]["Insert"]["filters"],
         email_alerts: emailAlerts,
       });
       if (error) throw error;
@@ -56,7 +60,7 @@ export function useCreateSavedSearch() {
       qc.invalidateQueries({ queryKey: ["saved_searches"] });
       toast.success("Search saved!");
     },
-    onError: (e: any) => {
+    onError: (e: Error) => {
       const msg = getPlanLimitErrorMessage(e);
       toast.error(msg ?? e.message);
     },
@@ -65,16 +69,18 @@ export function useCreateSavedSearch() {
 
 export function useDeleteSavedSearch() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("saved_searches").delete().eq("id", id);
+      if (!user) throw new Error("Not authenticated");
+      const { error } = await supabase.from("saved_searches").delete().eq("id", id).eq("user_id", user.id);
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["saved_searches"] });
       toast.success("Saved search removed.");
     },
-    onError: (e: any) => {
+    onError: (e: Error) => {
       const msg = getPlanLimitErrorMessage(e);
       toast.error(msg ?? e.message);
     },
@@ -83,18 +89,21 @@ export function useDeleteSavedSearch() {
 
 export function useToggleSavedSearchAlert() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async ({ id, emailAlerts }: { id: string; emailAlerts: boolean }) => {
+      if (!user) throw new Error("Not authenticated");
       const { error } = await supabase
         .from("saved_searches")
         .update({ email_alerts: emailAlerts })
-        .eq("id", id);
+        .eq("id", id)
+        .eq("user_id", user.id);
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["saved_searches"] });
     },
-    onError: (e: any) => {
+    onError: (e: Error) => {
       const msg = getPlanLimitErrorMessage(e);
       toast.error(msg ?? e.message);
     },

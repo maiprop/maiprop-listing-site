@@ -1,14 +1,11 @@
-/**
- * AdminReports — Platform analytics dashboard for admins.
+﻿/**
+ * AdminReports â€” Platform analytics dashboard for admins.
  *
- * Tab 1: Platform Overview — KPI cards, monthly listing chart, CSV export.
- * Tab 2: Content Reports  — listing_reports table with status filter & resolve action.
+ * Tab 1: Platform Overview â€” KPI cards, monthly listing chart, CSV export.
+ * Tab 2: Content Reports  â€” listing_reports table with status filter & resolve action.
  */
 
-import { useState, useEffect } from "react";
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-} from "recharts";
+import { useState } from "react";
 import {
   Building2, Users, Flame, DoorOpen, Flag, ExternalLink,
   Download, Loader2, CheckCircle, TrendingUp,
@@ -16,9 +13,13 @@ import {
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+} from "recharts";
 
-// ── Types ─────────────────────────────────────────────────────────────────────────
+// â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 type ReportStatus = "pending" | "resolved";
 
 type ReportRow = {
@@ -30,6 +31,8 @@ type ReportRow = {
   status: ReportStatus;
 };
 
+type MonthlyBar = { label: string; count: number };
+
 type PlatformStats = {
   totalListings: number;
   activeListings: number;
@@ -37,31 +40,14 @@ type PlatformStats = {
   newUsersMonth: number;
   firesaleRequests: number;
   openHouses: number;
+  monthlyListings: MonthlyBar[];
 };
 
 type Tab = "overview" | "reports";
 type ReportFilter = "all" | "pending" | "resolved";
 
-// ── Mock / fallback values ────────────────────────────────────────────────────────
-const MOCK_STATS: PlatformStats = {
-  totalListings: 847,
-  activeListings: 234,
-  totalUsers: 1203,
-  newUsersMonth: 47,
-  firesaleRequests: 89,
-  openHouses: 34,
-};
 
-const MOCK_MONTHLY_LISTINGS = [
-  { month: "Oct", count: 45 },
-  { month: "Nov", count: 67 },
-  { month: "Dec", count: 89 },
-  { month: "Jan", count: 102 },
-  { month: "Feb", count: 78 },
-  { month: "Mar", count: 94 },
-];
-
-// ── Helpers ───────────────────────────────────────────────────────────────────────
+// â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function firstOfMonth(): string {
   const now = new Date();
   return new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
@@ -88,25 +74,38 @@ function downloadCsv(stats: PlatformStats): void {
   URL.revokeObjectURL(url);
 }
 
-function formatDate(s: string): string {
-  return new Date(s).toLocaleDateString(undefined, {
-    year: "numeric", month: "short", day: "numeric",
-    hour: "2-digit", minute: "2-digit",
-  });
-}
+import { formatDateTime as formatDate } from "@/lib/format";
 
 function getLinkForEntity(entityType: string, entityId: string): string {
   if (entityType === "firesale_request") return `/admin?tab=pipeline`;
   return `/property/${entityId}`;
 }
 
-// ── Main component ────────────────────────────────────────────────────────────────
+// â”€â”€ Monthly bar helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function buildMonthlyBars(createdAts: string[]): MonthlyBar[] {
+  const byMonth: Record<string, number> = {};
+  for (const iso of createdAts) {
+    const key = iso.slice(0, 7); // "YYYY-MM"
+    byMonth[key] = (byMonth[key] ?? 0) + 1;
+  }
+  const bars: MonthlyBar[] = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date();
+    d.setMonth(d.getMonth() - i);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const label = d.toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
+    bars.push({ label, count: byMonth[key] ?? 0 });
+  }
+  return bars;
+}
+
+// â”€â”€ Main component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export default function AdminReports() {
   const [activeTab, setActiveTab] = useState<Tab>("overview");
 
   return (
     <div className="space-y-6">
-      {/* ── Header ────────────────────────────────────────────────────── */}
+      {/* â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div>
         <h2 className="font-display text-lg font-semibold flex items-center gap-2">
           <TrendingUp className="w-5 h-5 text-brand-gold" />
@@ -117,7 +116,7 @@ export default function AdminReports() {
         </p>
       </div>
 
-      {/* ── Tab bar ───────────────────────────────────────────────────── */}
+      {/* â”€â”€ Tab bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="flex gap-1 border-b border-border">
         {(
           [
@@ -139,63 +138,55 @@ export default function AdminReports() {
         ))}
       </div>
 
-      {/* ── Tab content ───────────────────────────────────────────────── */}
+      {/* â”€â”€ Tab content â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {activeTab === "overview" ? <PlatformOverviewTab /> : <ContentReportsTab />}
     </div>
   );
 }
 
-// ── Tab 1: Platform Overview ──────────────────────────────────────────────────────
+// â”€â”€ Tab 1: Platform Overview â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function PlatformOverviewTab() {
-  const [stats, setStats] = useState<PlatformStats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [isMock, setIsMock] = useState(false);
+  const { data: stats, isLoading: loading } = useQuery<PlatformStats>({
+    queryKey: ["admin-platform-stats"],
+    queryFn: async () => {
+      const som = firstOfMonth();
+      const sixMonthsAgo = new Date();
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
+      sixMonthsAgo.setDate(1);
+      sixMonthsAgo.setHours(0, 0, 0, 0);
 
-  useEffect(() => {
-    let mounted = true;
-    async function load() {
-      setLoading(true);
-      try {
-        const som = firstOfMonth();
+      const [r1, r2, r3, r4, r5, r6, r7] = await Promise.all([
+        supabase.from("listings").select("id", { count: "exact", head: true }),
+        supabase.from("listings").select("id", { count: "exact", head: true }).eq("status", "active"),
+        supabase.from("profiles").select("id", { count: "exact", head: true }),
+        supabase.from("profiles").select("id", { count: "exact", head: true }).gte("created_at", som),
+        supabase.from("firesale_requests").select("id", { count: "exact", head: true }),
+        supabase.from("open_house_settings").select("id", { count: "exact", head: true }),
+        supabase.from("listings").select("created_at").gte("created_at", sixMonthsAgo.toISOString()),
+      ]);
 
-        const [r1, r2, r3, r4, r5, r6] = await Promise.all([
-          supabase.from("listings" ).select("id", { count: "exact", head: true }),
-          supabase.from("listings" ).select("id", { count: "exact", head: true }).eq("status", "active"),
-          supabase.from("profiles" ).select("id", { count: "exact", head: true }),
-          supabase.from("profiles" ).select("id", { count: "exact", head: true }).gte("created_at", som),
-          supabase.from("firesale_requests" ).select("id", { count: "exact", head: true }),
-          supabase.from("open_house_settings" ).select("id", { count: "exact", head: true }),
-        ]);
+      if (r1.error) throw r1.error;
+      if (r2.error) throw r2.error;
+      if (r3.error) throw r3.error;
+      if (r4.error) throw r4.error;
+      if (r5.error) throw r5.error;
+      if (r6.error) throw r6.error;
 
-        // Throw on first error so the catch block shows mock data
-        if (r1.error) throw r1.error;
-        if (r2.error) throw r2.error;
-        if (r3.error) throw r3.error;
-        if (r4.error) throw r4.error;
-        if (r5.error) throw r5.error;
-        if (r6.error) throw r6.error;
+      const monthlyListings = buildMonthlyBars(
+        (r7.data ?? []).map((row) => (row as { created_at: string }).created_at),
+      );
 
-        if (!mounted) return;
-        setStats({
-          totalListings:   Number(r1.count ?? 0),
-          activeListings:  Number(r2.count ?? 0),
-          totalUsers:      Number(r3.count ?? 0),
-          newUsersMonth:   Number(r4.count ?? 0),
-          firesaleRequests: Number(r5.count ?? 0),
-          openHouses:      Number(r6.count ?? 0),
-        });
-        setIsMock(false);
-      } catch {
-        if (!mounted) return;
-        setStats(MOCK_STATS);
-        setIsMock(true);
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    }
-    load();
-    return () => { mounted = false; };
-  }, []);
+      return {
+        totalListings:    Number(r1.count ?? 0),
+        activeListings:   Number(r2.count ?? 0),
+        totalUsers:       Number(r3.count ?? 0),
+        newUsersMonth:    Number(r4.count ?? 0),
+        firesaleRequests: Number(r5.count ?? 0),
+        openHouses:       Number(r6.count ?? 0),
+        monthlyListings,
+      };
+    },
+  });
 
   if (loading) {
     return (
@@ -210,18 +201,12 @@ function PlatformOverviewTab() {
     );
   }
 
-  const s = stats ?? MOCK_STATS;
+  if (!stats) return <p className="text-sm text-muted-foreground">Failed to load stats.</p>;
+
+  const s = stats;
 
   return (
     <div className="space-y-6">
-      {isMock && (
-        <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-muted/60 border border-border text-sm text-muted-foreground">
-          <span className="shrink-0 inline-flex items-center rounded-full border border-transparent bg-secondary text-secondary-foreground px-2.5 py-0.5 text-xs font-semibold">
-            Sample data
-          </span>
-          Live DB queries failed — showing mock figures.
-        </div>
-      )}
 
       {/* KPI grid */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -233,7 +218,7 @@ function PlatformOverviewTab() {
         <StatCard icon={<DoorOpen className="w-4 h-4 text-amber-500" />}    label="Open Houses"           value={s.openHouses}       color="amber" />
       </div>
 
-      {/* Monthly listing chart */}
+      {/* Monthly listing chart â€” hidden until real data endpoint is wired */}
       <div className="rounded-xl border border-border bg-card p-5">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-display font-semibold">Monthly Listings Created (last 6 months)</h3>
@@ -250,39 +235,42 @@ function PlatformOverviewTab() {
             Export CSV
           </Button>
         </div>
-        <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={MOCK_MONTHLY_LISTINGS} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-            <XAxis
-              dataKey="month"
-              tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
-              axisLine={false}
-              tickLine={false}
-            />
-            <YAxis
-              allowDecimals={false}
-              tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
-              axisLine={false}
-              tickLine={false}
-            />
-            <Tooltip
-              contentStyle={{
-                background: "hsl(var(--card))",
-                border: "1px solid hsl(var(--border))",
-                borderRadius: 8,
-                fontSize: 12,
-              }}
-              labelStyle={{ color: "hsl(var(--foreground))" }}
-              cursor={{ fill: "hsl(var(--muted))" }}
-            />
-            <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+        {s.monthlyListings.some((m) => m.count > 0) ? (
+          <ResponsiveContainer width="100%" height={180}>
+            <BarChart data={s.monthlyListings} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+              <XAxis
+                dataKey="label"
+                tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis
+                allowDecimals={false}
+                tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <Tooltip
+                contentStyle={{
+                  background: "hsl(var(--card))",
+                  border: "1px solid hsl(var(--border))",
+                  borderRadius: 8,
+                  fontSize: 12,
+                }}
+                labelStyle={{ color: "hsl(var(--foreground))" }}
+              />
+              <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} opacity={0.85} />
+            </BarChart>
+          </ResponsiveContainer>
+        ) : (
+          <p className="text-sm text-muted-foreground text-center py-6">No listings created in the last 6 months.</p>
+        )}
       </div>
     </div>
   );
 }
 
-// ── Stat card ─────────────────────────────────────────────────────────────────────
+// â”€â”€ Stat card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 type StatColor = "default" | "emerald" | "blue" | "violet" | "rose" | "amber";
 
 function StatCard({
@@ -315,60 +303,46 @@ function StatCard({
   );
 }
 
-// ── Tab 2: Content Reports ────────────────────────────────────────────────────────
+// â”€â”€ Tab 2: Content Reports â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function ContentReportsTab() {
-  const [reports, setReports] = useState<ReportRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const qc = useQueryClient();
   const [filter, setFilter] = useState<ReportFilter>("all");
 
-  useEffect(() => {
-    let mounted = true;
-    async function load() {
-      setLoading(true);
+  const { data: reports = [], isLoading: loading } = useQuery<ReportRow[]>({
+    queryKey: ["admin-content-reports"],
+    queryFn: async () => {
       const { data, error } = await supabase
-        .from("listing_reports" )
+        .from("listing_reports")
         .select("id, entity_type, entity_id, reporter_id, created_at, status")
         .order("created_at", { ascending: false });
-      if (!mounted) return;
-      if (error) {
-        setReports([]);
-      } else {
-        // Normalise rows — status may not exist in all schemas; default to pending
-        const rows = ((data as unknown as Partial<ReportRow>[]) || []).map((r) => ({
-          id: r.id ?? "",
-          entity_type: r.entity_type ?? "",
-          entity_id: r.entity_id ?? "",
-          reporter_id: r.reporter_id ?? null,
-          created_at: r.created_at ?? "",
-          status: (r.status as ReportStatus | undefined) ?? "pending",
-        }));
-        setReports(rows);
-      }
-      setLoading(false);
-    }
-    load();
-    return () => { mounted = false; };
-  }, []);
+      if (error) throw error;
+      return ((data as unknown as Partial<ReportRow>[]) || []).map((r) => ({
+        id: r.id ?? "",
+        entity_type: r.entity_type ?? "",
+        entity_id: r.entity_id ?? "",
+        reporter_id: r.reporter_id ?? null,
+        created_at: r.created_at ?? "",
+        status: (r.status as ReportStatus | undefined) ?? "pending",
+      }));
+    },
+  });
 
-  async function handleResolve(id: string) {
-    // Optimistic update
-    setReports((prev) =>
-      prev.map((r) => r.id === id ? { ...r, status: "resolved" } : r)
-    );
-    const { error } = await supabase
-      .from("listing_reports" )
-      .update({ status: "resolved" } )
-      .eq("id", id);
-    if (error) {
-      // Revert on error
-      setReports((prev) =>
-        prev.map((r) => r.id === id ? { ...r, status: "pending" } : r)
-      );
-      toast.error("Failed to resolve report");
-    } else {
+  const resolveMutation = useMutation({
+    mutationFn: async (id: string) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await supabase.from("listing_reports")
+        .update({ status: "resolved" })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-content-reports"] });
       toast.success("Report marked as resolved");
-    }
-  }
+    },
+    onError: () => toast.error("Failed to resolve report"),
+  });
+
+  const handleResolve = (id: string) => resolveMutation.mutate(id);
 
   const filtered = reports.filter((r) => filter === "all" || r.status === filter);
 
@@ -430,7 +404,7 @@ function ContentReportsTab() {
                     <td className="px-4 py-3 font-mono text-xs">{r.entity_id}</td>
                     <td className="px-4 py-3 capitalize">{r.entity_type.replace("_", " ")}</td>
                     <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
-                      {r.reporter_id ?? "—"}
+                      {r.reporter_id ?? "â€”"}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
                       {formatDate(r.created_at)}
@@ -471,7 +445,7 @@ function ContentReportsTab() {
   );
 }
 
-// ── Report status badge ───────────────────────────────────────────────────────────
+// â”€â”€ Report status badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function ReportStatusBadge({ status }: { status: ReportStatus }) {
   return status === "resolved" ? (
     <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">

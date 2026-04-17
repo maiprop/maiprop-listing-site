@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Simplified Admin — maiProp OS sync (both directions).
  * One view: status, Pull from OS, Push to OS, sync log. Advanced options collapsed.
@@ -80,14 +81,14 @@ export default function AdminPanel() {
     try {
       const { error } = await supabase.from("sync_log").select("id").limit(1);
       setDbOk(!error);
-    } catch {
+    } catch (_err: unknown) {
       setDbOk(false);
     }
     try {
       const { data, error } = await supabase.functions.invoke("os-diagnose", { body: {} });
       const ok = !error && (data?.osReachable === true || data?.status === "ok");
       setOsOk(ok);
-    } catch {
+    } catch (_err: unknown) {
       setOsOk(false);
     }
   };
@@ -261,8 +262,8 @@ export default function AdminPanel() {
         ...p,
         [name]: { ok, msg: ok ? JSON.stringify(data).slice(0, 80) : (error?.message ?? "error") },
       }));
-    } catch (e: any) {
-      setFnTest((p) => ({ ...p, [name]: { ok: false, msg: e?.message ?? "error" } }));
+    } catch (e: unknown) {
+      setFnTest((p) => ({ ...p, [name]: { ok: false, msg: (e instanceof Error ? e.message : null) ?? "error" } }));
     }
   };
 

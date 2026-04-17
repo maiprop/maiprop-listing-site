@@ -1,8 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
+/** Returns the current user's saved/favorited listings with full listing data joined. */
 export function useFavorites() {
   const { user } = useAuth();
   return useQuery({
@@ -21,9 +23,12 @@ export function useFavorites() {
   });
 }
 
+type FavoriteRow = { listing_id: string; user_id: string; price_alert: boolean; price_when_saved: number | null; created_at?: string };
+
 export function useToggleFavorite() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { t } = useTranslation();
 
   return useMutation({
     mutationFn: async ({
@@ -55,23 +60,48 @@ export function useToggleFavorite() {
         if (error) throw error;
       }
     },
+    onMutate: async ({ listing_id, isFavorited, priceAlert, price }) => {
+      if (!user) return;
+      const qk = ["favorites", user.id];
+      // Cancel in-flight refetches to avoid overwriting the optimistic update
+      await queryClient.cancelQueries({ queryKey: qk });
+      const previous = queryClient.getQueryData<FavoriteRow[]>(qk);
+      queryClient.setQueryData<FavoriteRow[]>(qk, (old = []) => {
+        if (isFavorited) {
+          return old.filter(f => f.listing_id !== listing_id);
+        }
+        return [
+          { listing_id, user_id: user.id, price_alert: priceAlert ?? false, price_when_saved: price ?? null },
+          ...old,
+        ];
+      });
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      // Roll back optimistic update
+      if (user && context?.previous !== undefined) {
+        queryClient.setQueryData(["favorites", user.id], context.previous);
+      }
+      toast.error(t("toasts.favorites.errorToggle"));
+    },
     onSuccess: (_, { isFavorited, priceAlert }) => {
-      queryClient.invalidateQueries({ queryKey: ["favorites"] });
+      // Scope invalidation to this user only
+      queryClient.invalidateQueries({ queryKey: ["favorites", user?.id] });
       toast.success(
         isFavorited
-          ? "Removed from saved"
+          ? t("toasts.favorites.removed")
           : priceAlert
-            ? "Saved! We'll notify you if the price drops."
-            : "Saved to favorites!"
+            ? t("toasts.favorites.savedWithAlert")
+            : t("toasts.favorites.saved")
       );
     },
-    onError: (err: Error) => toast.error(err.message),
   });
 }
 
 export function useTogglePriceAlert() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { t } = useTranslation();
 
   return useMutation({
     mutationFn: async ({
@@ -96,27 +126,17 @@ export function useTogglePriceAlert() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["favorites"] });
-      queryClient.invalidateQueries({ queryKey: ["favorite"] });
-      toast.success("Price alert updated");
+      toast.success(t("toasts.favorites.priceAlertUpdated"));
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: () => toast.error(t("toasts.favorites.priceAlertError")),
   });
 }
 
+/** Derives favorited state from the useFavorites() cache — no extra DB query per card. */
 export function useIsFavorited(listing_id: string) {
-  const { user } = useAuth();
-  return useQuery({
-    queryKey: ["favorite", user?.id, listing_id],
-    queryFn: async () => {
-      if (!user) return false;
-      const { data } = await supabase
-        .from("favorites")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("listing_id", listing_id)
-        .single();
-      return !!data;
-    },
-    enabled: !!user && !!listing_id,
-  });
+  const favorites = useFavorites();
+  const isFavorited = (favorites.data ?? []).some(
+    (f: { listing_id: string }) => f.listing_id === listing_id
+  );
+  return { data: isFavorited, isLoading: favorites.isLoading };
 }

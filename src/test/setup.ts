@@ -1,5 +1,7 @@
 import "@testing-library/jest-dom";
 
+// ── Browser API stubs required by jsdom ─────────────────────────────────────
+
 Object.defineProperty(window, "matchMedia", {
   writable: true,
   value: (query: string) => ({
@@ -10,6 +12,25 @@ Object.defineProperty(window, "matchMedia", {
     removeListener: () => {},
     addEventListener: () => {},
     removeEventListener: () => {},
-    dispatchEvent: () => {},
+    dispatchEvent: () => false,
   }),
 });
+
+// ResizeObserver — used by Radix UI and charting libraries
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+Object.defineProperty(window, "ResizeObserver", { writable: true, value: ResizeObserverStub });
+
+// IntersectionObserver — used by lazy-load / infinite-scroll
+class IntersectionObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+Object.defineProperty(window, "IntersectionObserver", { writable: true, value: IntersectionObserverStub });
+
+// scrollIntoView — not implemented in jsdom
+Element.prototype.scrollIntoView = () => {};

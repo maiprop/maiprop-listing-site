@@ -1,4 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { verifyHmacSignature, HmacVerifyError } from "../_shared/webhookHmac.ts";
+import { errorResponse, unavailableResponse } from "../_shared/response.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -16,34 +19,31 @@ Deno.serve(async (req) => {
   const WEBHOOK_SECRET = Deno.env.get("MAIPROP_OS_WEBHOOK_SECRET");
   if (!WEBHOOK_SECRET) {
     console.error("MAIPROP_OS_WEBHOOK_SECRET is not set — rejecting webhook for security");
-    return new Response(JSON.stringify({ error: "Webhook not configured" }), {
-      status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return unavailableResponse("not_configured", corsHeaders);
   }
 
   try {
-    const signature = req.headers.get("x-os-signature");
-    const timingSafeEqual = (a: string, b: string): boolean => {
-      const aBytes = new TextEncoder().encode(a);
-      const bBytes = new TextEncoder().encode(b);
-      if (aBytes.length !== bBytes.length) return false;
-      let diff = 0;
-      for (let i = 0; i < aBytes.length; i++) diff |= aBytes[i] ^ bBytes[i];
-      return diff === 0;
-    };
-    if (!signature || !timingSafeEqual(signature, WEBHOOK_SECRET)) {
-      return new Response(JSON.stringify({ error: "Unauthorized: invalid signature" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    const rawBody = await req.text();
+
+    try {
+      await verifyHmacSignature(rawBody, req.headers.get("x-os-signature"), WEBHOOK_SECRET);
+    } catch (err) {
+      if (err instanceof HmacVerifyError) {
+        return errorResponse(`Unauthorized: ${err.message}`, 401, corsHeaders);
+      }
+      throw err;
     }
 
-    const body = await req.json();
+    let body: any;
+    try {
+      body = JSON.parse(rawBody);
+    } catch {
+      return errorResponse("Invalid JSON body", 400, corsHeaders);
+    }
     const { event, entity_type, data } = body;
 
     if (!event || !entity_type || !data) {
-      return new Response(JSON.stringify({ error: "Missing event, entity_type, or data" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return errorResponse("Missing event, entity_type, or data", 400, corsHeaders);
     }
 
     let result: { processed: boolean; id?: string; error?: string } = { processed: false };
@@ -56,13 +56,14 @@ Deno.serve(async (req) => {
     } else if (entity_type === "profile") {
       result = await handleProfile(supabase, event, data);
     } else {
-      // Unknown entity type – log and acknowledge
+      // Unknown entity type – log and acknowledge (not an error, just unsupported)
       await logSync(supabase, "os_to_hub", entity_type,
         data.id || data.externalId || "unknown", "skipped",
         `Unknown entity_type: ${entity_type}`, data);
-      return new Response(JSON.stringify({ ok: true, status: "skipped", reason: "unknown entity_type" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ ok: true, status: "skipped", reason: "unknown entity_type" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     await logSync(
@@ -74,14 +75,13 @@ Deno.serve(async (req) => {
       result.processed ? 1 : 0,
     );
 
-    return new Response(JSON.stringify({ ok: result.processed, result }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ ok: result.processed, result }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
 
   } catch (err: any) {
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return errorResponse(err.message, 500, corsHeaders);
   }
 });
 
@@ -117,10 +117,12 @@ async function handleListing(supabase: any, event: string, data: any) {
     has_ac: data.hasAc ?? false,
     cover_image_url: data.coverImage ?? (data.images?.[0] ?? null),
     tags: data.tags ?? null,
-    // For OS-sourced listings, use a system owner_id placeholder
-    // In production, map this to the actual Hub user
-    owner_id: data.ownerId ?? "00000000-0000-0000-0000-000000000000",
+    owner_id: data.ownerId,
   };
+
+  if (!mapped.owner_id) {
+    return { processed: false, error: "ownerId is required — cannot create listing without a mapped Hub user" };
+  }
 
   if (event === "created" || event === "upsert") {
     // Check if listing with this externalId already exists (via tags)
@@ -167,10 +169,13 @@ async function handleListing(supabase: any, event: string, data: any) {
 
 async function handleLead(supabase: any, event: string, data: any) {
   if (event === "created" || event === "upsert") {
+    if (!data.professionalId) {
+      return { processed: false, error: "professionalId is required for lead sync" };
+    }
     const { data: inserted, error } = await supabase
       .from("consultation_requests")
       .insert({
-        professional_id: data.professionalId ?? "00000000-0000-0000-0000-000000000000",
+        professional_id: data.professionalId,
         requester_name: data.name ?? data.contactName ?? "Unknown",
         requester_email: data.email ?? data.contactEmail ?? "unknown@example.com",
         requester_phone: data.phone ?? data.contactPhone ?? null,

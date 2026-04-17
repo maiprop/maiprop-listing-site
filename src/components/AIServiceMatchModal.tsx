@@ -4,12 +4,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { CATEGORY_LABELS } from "@/lib/professionalServiceCatalog";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/config";
-
-const urgencyStyle: Record<string, string> = {
-  high: "bg-destructive/15 text-destructive border-destructive/30",
-  medium: "bg-brand-gold/15 text-brand-gold border-brand-gold/30",
-  low: "bg-brand-emerald/15 text-brand-emerald border-brand-emerald/30",
-};
+import { SERVICE_URGENCY_COLORS } from "@/lib/statusColors";
 
 const CATEGORY_EMOJI: Record<string, string> = {
   real_estate_agent: "🏠", architect: "🏛️", civil_engineer: "⚙️", lawyer: "⚖️", notary: "📜",
@@ -63,8 +58,8 @@ export function AIServiceMatchModal({ onClose, onNavigate }: AIServiceMatchModal
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || "Matching failed");
       setResult(data as MatchResult);
-    } catch (e: any) {
-      toast.error(e.message || "Matching failed");
+    } catch (e: unknown) {
+      toast.error((e instanceof Error ? e.message : null) || "Matching failed");
     } finally {
       setLoading(false);
     }
@@ -138,7 +133,7 @@ export function AIServiceMatchModal({ onClose, onNavigate }: AIServiceMatchModal
                     <div className="text-[11px] text-muted-foreground">Best match for your need</div>
                   </div>
                 </div>
-                <span className={`text-[10px] px-2 py-1 rounded-full border font-semibold uppercase tracking-wide ${urgencyStyle[result.urgency]}`}>
+                <span className={`text-[10px] px-2 py-1 rounded-full border font-semibold uppercase tracking-wide ${SERVICE_URGENCY_COLORS[result.urgency]}`}>
                   {result.urgency} urgency
                 </span>
               </div>

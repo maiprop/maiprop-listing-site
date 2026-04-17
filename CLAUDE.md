@@ -59,6 +59,45 @@ Functions with `verify_jwt = false` (public): AI search, property valuation, nei
 - **`any` types:** Avoid — they trigger an ESLint warning; use proper types or generics
 - **Explicit return types:** Required on exported async functions (ESLint warns otherwise)
 - **Path alias:** `@/` maps to `src/` — use for all internal imports
+- **catch blocks:** Always type catch parameters as `unknown`, not `any`. Access `.message` with `err instanceof Error ? err.message : null`.
+- **File upload paths:** Use `crypto.randomUUID()` — not `Date.now() + Math.random()`.
+- **Feature column filters:** Only columns in `ALLOWED_FEATURE_COLUMNS` (defined in `useListings.ts`) are passed to Supabase as filter column names. Never add arbitrary strings from user input.
+- **Ownership guards:** Mutation hooks for user-owned data must include `.eq("user_id", user.id)` or equivalent ownership column alongside `.eq("id", id)`.
+- **Admin check:** Use `isPlatformAdmin(profile)` from `src/lib/authUtils.ts`. Never check admin status by email address.
+- **Relative time formatting:** Use `formatTimeAgo(iso)` from `src/lib/format.ts`. Do not define local `timeAgo`/`formatTimeAgo` functions.
+- **MIME type validation:** Use the explicit allowlist in `compressImage.ts` — not `.startsWith("image/")`.
+- **Confirm dialogs:** Use `<ConfirmDialog>` from `@/components/ui/ConfirmDialog` instead of `window.confirm()`. Pattern: add `const [deleteTarget, setDeleteTarget] = useState<string | null>(null)`, call `setDeleteTarget(id)` on click, render `<ConfirmDialog open={!!deleteTarget} onConfirm={() => { mutate(deleteTarget!); setDeleteTarget(null); }} onCancel={() => setDeleteTarget(null)} />`.
+- **Listing type cast:** Use `const db = dbListing as ListingWithJoins` (exported from `useListings.ts`) as a single top-level cast instead of scattering `(db as any).field` throughout a component.
+- **Unregistered Supabase tables:** Use `(supabase.from as any)("table_name")` with an `// eslint-disable-next-line` comment rather than `supabase.from("table_name" as any)` — keeps the cast narrow and the lint suppression explicit.
+
+### Security Rules
+
+- **CSP headers** are set in `netlify.toml` — update that file if new external domains are added.
+- **IDOR defense:** All `update`/`delete` mutations must filter by the current user's ownership column in addition to the record `id`.
+- **No email-based auth:** Use `profile.role === "admin"` (via `isPlatformAdmin`) — never `user.email.endsWith(...)`.
+
+### Formatting Utilities (`src/lib/format.ts`)
+
+Canonical helpers — import from here, never define locally:
+- `formatPrice(n)` — formats number as `€150,000`
+- `formatDate(iso)` — short date, e.g. `12 Apr 2026`
+- `formatDateTime(iso)` — date + time
+- `fmtDate(iso)` — weekday + date for scheduling views
+- `fmtTime(iso)` — `HH:MM`
+- `formatTimeAgo(iso)` — relative time, e.g. `5m ago`, `3h ago`
+
+### Test Utilities (`src/test/utils.tsx`)
+
+- `renderWithProviders(ui, opts)` — wraps component with MemoryRouter + QueryClientProvider
+- `createTestQueryClient()` — no-retry QueryClient for tests
+- `makeMockSupabase()` — vi.fn()-based mock of the Supabase client
+
+### Listings Architecture (`src/hooks/useListings.ts`)
+
+- `buildListingsQuery(filters, from, pageSize)` — single query builder; all filtering + ORDER BY happens server-side
+- `useListingsPaginated(filters)` — infinite scroll; uses `PAGE_SIZE = 24`
+- `useListings(filters)` — full fetch for map view (up to 500); no client-side sort
+- `ALLOWED_FEATURE_COLUMNS` — Set of valid listing boolean column names; guards against column injection
 
 ### Environment Variables
 

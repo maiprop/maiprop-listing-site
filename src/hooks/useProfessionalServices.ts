@@ -33,13 +33,13 @@ export function useProfessionalServices(professionalId: string) {
     queryKey: ["professional_services", professionalId],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("professional_services" as any)
-        .select("*")
+        .from("professional_services")
+        .select("id, professional_id, service_key, service_name, description, category, pricing_model, rate_amount, currency, estimated_hours, video_enabled, is_premium, is_active, created_at, updated_at")
         .eq("professional_id", professionalId)
         .eq("is_active", true)
         .order("service_name");
       if (error) throw error;
-      return (data || []) as unknown as ProfessionalService[];
+      return (data || []) as ProfessionalService[];
     },
     enabled: !!professionalId,
   });
@@ -50,13 +50,13 @@ export function useProfessionalAvailability(professionalId: string) {
     queryKey: ["professional_availability", professionalId],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("professional_availability" as any)
-        .select("*")
+        .from("professional_availability")
+        .select("id, professional_id, day_of_week, start_time, end_time, is_active")
         .eq("professional_id", professionalId)
         .eq("is_active", true)
         .order("day_of_week");
       if (error) throw error;
-      return (data || []) as unknown as ProfessionalAvailability[];
+      return (data || []) as ProfessionalAvailability[];
     },
     enabled: !!professionalId,
   });
@@ -69,7 +69,7 @@ export function useMyProfessional() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("professionals")
-        .select("*")
+        .select("id, user_id, title, display_name, category, city, bio, avatar_url, rating, reviews_count, verified, hourly_rate, experience_years, specialties, languages, license_number, website_url, video_link, projects_count, average_deal_size, average_portfolio_asset_size, subscription_tier, calendar_notes, created_at, updated_at")
         .eq("user_id", user!.id)
         .maybeSingle();
       if (error) throw error;
@@ -81,38 +81,74 @@ export function useMyProfessional() {
 
 export function useUpsertProfessionalServices() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async ({ professionalId, services }: { professionalId: string; services: Omit<ProfessionalService, "id">[] }) => {
-      // Delete existing and re-insert
-      await supabase.from("professional_services" as any).delete().eq("professional_id", professionalId);
+      if (!user) throw new Error("Must be logged in");
+      const { data: prof } = await supabase.from("professionals").select("user_id").eq("id", professionalId).eq("user_id", user.id).maybeSingle();
+      if (!prof) throw new Error("Unauthorized");
       if (services.length > 0) {
-        const { error } = await supabase.from("professional_services" as any).insert(services);
-        if (error) throw error;
+        // Upsert on (professional_id, service_key) — insert or update without gap
+        const { error: upsertError } = await supabase
+          .from("professional_services")
+          .upsert(services, { onConflict: "professional_id,service_key" });
+        if (upsertError) throw upsertError;
       }
+      // Remove rows not in the new set.
+      // PostgREST "in" tuple: plain comma-separated values, no quoting for text.
+      const keepKeys = services.map(s => s.service_key);
+      const pruneQuery = supabase
+        .from("professional_services")
+        .delete()
+        .eq("professional_id", professionalId);
+      const { error: deleteError } = await (
+        keepKeys.length > 0
+          ? pruneQuery.not("service_key", "in", `(${keepKeys.join(",")})`)
+          : pruneQuery
+      );
+      if (deleteError) throw deleteError;
     },
     onSuccess: (_, { professionalId }) => {
       queryClient.invalidateQueries({ queryKey: ["professional_services", professionalId] });
       toast.success("Services updated!");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: () => toast.error("Something went wrong. Please try again."),
   });
 }
 
 export function useUpsertProfessionalAvailability() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async ({ professionalId, availability }: { professionalId: string; availability: Omit<ProfessionalAvailability, "id">[] }) => {
-      await supabase.from("professional_availability" as any).delete().eq("professional_id", professionalId);
+      if (!user) throw new Error("Must be logged in");
+      const { data: prof } = await supabase.from("professionals").select("user_id").eq("id", professionalId).eq("user_id", user.id).maybeSingle();
+      if (!prof) throw new Error("Unauthorized");
       if (availability.length > 0) {
-        const { error } = await supabase.from("professional_availability" as any).insert(availability);
-        if (error) throw error;
+        // Upsert on (professional_id, day_of_week) — insert or update without gap
+        const { error: upsertError } = await supabase
+          .from("professional_availability")
+          .upsert(availability, { onConflict: "professional_id,day_of_week" });
+        if (upsertError) throw upsertError;
       }
+      // Remove days not in the new set (integers, no quoting needed)
+      const keepDays = availability.map(a => a.day_of_week);
+      const pruneQuery = supabase
+        .from("professional_availability")
+        .delete()
+        .eq("professional_id", professionalId);
+      const { error: deleteError } = await (
+        keepDays.length > 0
+          ? pruneQuery.not("day_of_week", "in", `(${keepDays.join(",")})`)
+          : pruneQuery
+      );
+      if (deleteError) throw deleteError;
     },
     onSuccess: (_, { professionalId }) => {
       queryClient.invalidateQueries({ queryKey: ["professional_availability", professionalId] });
       toast.success("Availability updated!");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: () => toast.error("Something went wrong. Please try again."),
   });
 }
 
@@ -120,8 +156,9 @@ export function useUpdateProfessional() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   return useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: Record<string, any> }) => {
-      const { error } = await supabase.from("professionals").update(updates).eq("id", id);
+    mutationFn: async ({ id, updates }: { id: string; updates: Record<string, unknown> }) => {
+      if (!user) throw new Error("Must be logged in");
+      const { error } = await supabase.from("professionals").update(updates).eq("id", id).eq("user_id", user.id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -129,6 +166,6 @@ export function useUpdateProfessional() {
       queryClient.invalidateQueries({ queryKey: ["professionals"] });
       toast.success("Profile updated!");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: () => toast.error("Something went wrong. Please try again."),
   });
 }

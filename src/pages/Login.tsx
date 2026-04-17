@@ -7,9 +7,8 @@ import { Navbar } from "@/components/Navbar";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { useTheme } from "next-themes";
-import logoImg from "@/assets/logo.webp";
-import logoDarkImg from "@/assets/logo-dark.webp";
+import { APP_ORIGIN } from "@/lib/config";
+import logoImg from "@/assets/logo.png";
 
 const GoogleIcon = () => (
   <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -24,7 +23,6 @@ export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
   const { signIn, user, loading: authLoading } = useAuth();
-  const { theme } = useTheme();
   const { t } = useTranslation();
 
   const [view, setView] = useState<"login" | "forgot" | "forgot-sent">("login");
@@ -36,7 +34,7 @@ export default function Login() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [didSignIn, setDidSignIn] = useState(false);
 
-  const from = (location.state as any)?.from?.pathname || "/dashboard";
+  const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname || "/dashboard";
 
   // After sign-in, always redirect to the intended destination (never force onboarding)
   useEffect(() => {
@@ -50,7 +48,7 @@ export default function Login() {
     setGoogleLoading(true);
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}${from}` },
+      options: { redirectTo: `${APP_ORIGIN}${from}` },
     });
     if (error) {
       toast.error("Google sign-in failed. Please try again.");
@@ -75,7 +73,7 @@ export default function Login() {
     e.preventDefault();
     setLoading(true);
     const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: `${APP_ORIGIN}/reset-password`,
     });
     setLoading(false);
     if (error) {
@@ -97,7 +95,7 @@ export default function Login() {
               <>
                 <div className="text-center mb-6">
                   <img
-                    src={theme === "dark" ? logoDarkImg : logoImg}
+                    src={logoImg}
                     alt="maiProp"
                     className="h-10 w-auto object-contain mx-auto mb-2"
                   />
@@ -119,21 +117,21 @@ export default function Login() {
 
                 <form onSubmit={handleSignIn} className="space-y-4">
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">{t("loginPage.email")}</label>
-                    <input type="email" placeholder={t("loginPage.emailPlaceholder")} value={email} onChange={e => setEmail(e.target.value)} required
+                    <label htmlFor="login-email" className="text-xs font-medium text-muted-foreground block mb-1.5">{t("loginPage.email")}</label>
+                    <input id="login-email" type="email" placeholder={t("loginPage.emailPlaceholder")} value={email} onChange={e => setEmail(e.target.value)} required
                       className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors" />
                   </div>
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-xs font-medium text-muted-foreground">{t("loginPage.password")}</label>
-                      <button type="button" onClick={() => setView("forgot")} className="text-xs text-primary hover:underline">
+                      <label htmlFor="login-password" className="text-xs font-medium text-muted-foreground">{t("loginPage.password")}</label>
+                      <button type="button" onClick={() => setView("forgot")} className="text-xs text-primary hover:underline" aria-label={t("loginPage.forgotPassword")}>
                         {t("loginPage.forgotPassword")}
                       </button>
                     </div>
                     <div className="relative">
-                      <input type={showPass ? "text" : "password"} placeholder={t("loginPage.passwordPlaceholder")} value={password} onChange={e => setPassword(e.target.value)} required
+                      <input id="login-password" type={showPass ? "text" : "password"} placeholder={t("loginPage.passwordPlaceholder")} value={password} onChange={e => setPassword(e.target.value)} required
                         className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 pr-10 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors" />
-                      <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" onClick={() => setShowPass(v => !v)}>
+                      <button type="button" aria-label={showPass ? "Hide password" : "Show password"} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" onClick={() => setShowPass(v => !v)}>
                         {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
                     </div>

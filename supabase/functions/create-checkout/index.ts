@@ -1,11 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+import { verifyBearerToken, AuthError } from "../_shared/auth.ts";
+import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 
 const logStep = (step: string, details?: any) => {
   const detailsStr = details ? ` - ${JSON.stringify(details)}` : "";
@@ -28,9 +25,9 @@ async function getPriceForPlan(supabase: ReturnType<typeof createClient>, planKe
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  const corsPreflightResponse = handleCors(req);
+  if (corsPreflightResponse) return corsPreflightResponse;
+  const corsHeaders = getCorsHeaders(req);
 
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!serviceRoleKey) {
@@ -43,41 +40,46 @@ Deno.serve(async (req) => {
   const supabaseClient = createClient(Deno.env.get("SUPABASE_URL") ?? "", serviceRoleKey);
 
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) throw new Error("No authorization header");
-
-    const token = authHeader.replace("Bearer ", "");
-    const { data: userData, error: userError } = await supabaseClient.auth.getUser(token);
-    if (userError || !userData.user?.email) throw new Error("Unauthenticated");
-
-    const user = userData.user;
+    const user = await verifyBearerToken(req, supabaseClient);
     logStep("User authenticated", { userId: user.id, email: user.email });
 
     const body = req.method === "POST" && req.body ? await req.json().catch(() => ({})) : {};
     const plan = (body.plan ?? "pro") as string;
-    const successUrl = body.success_url;
-    const cancelUrl = body.cancel_url;
+    // Redirect URLs are derived from the request origin only — caller-provided URLs are ignored
+    // to prevent open-redirect attacks.
 
     const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", { apiVersion: "2025-08-27.basil" });
 
     const priceId = await getPriceForPlan(supabaseClient, plan);
     logStep("Resolved price", { plan, priceId });
 
+    // Always resolve or create a Stripe customer with user_id in metadata
+    // so the webhook can correlate by user_id instead of email.
     const customers = await stripe.customers.list({ email: user.email, limit: 1 });
-    let customerId: string | undefined;
+    let customerId: string;
     if (customers.data.length > 0) {
       customerId = customers.data[0].id;
       logStep("Existing Stripe customer found", { customerId });
+      // Backfill user_id in metadata for customers created before this change
+      if (!customers.data[0].metadata?.user_id) {
+        await stripe.customers.update(customerId, { metadata: { user_id: user.id } });
+        logStep("Backfilled user_id on customer metadata", { customerId });
+      }
+    } else {
+      const newCustomer = await stripe.customers.create({
+        email: user.email,
+        metadata: { user_id: user.id },
+      });
+      customerId = newCustomer.id;
+      logStep("Created Stripe customer with user_id metadata", { customerId });
     }
 
     const origin = req.headers.get("origin") || Deno.env.get("SITE_URL") || "https://portal.maiprop.co/";
-    const success =
-      successUrl ?? `${origin}/pricing?checkout=success`;
-    const cancel = cancelUrl ?? `${origin}/pricing?checkout=cancelled`;
+    const success = `${origin}/pricing?checkout=success`;
+    const cancel = `${origin}/pricing?checkout=cancelled`;
 
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
-      customer_email: customerId ? undefined : user.email,
       line_items: [{ price: priceId, quantity: 1 }],
       mode: "subscription",
       success_url: success,
@@ -91,11 +93,13 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
     });
-  } catch (error: any) {
-    logStep("ERROR", { message: error.message });
-    return new Response(JSON.stringify({ error: error.message }), {
+  } catch (error: unknown) {
+    const status = error instanceof AuthError ? error.status : 500;
+    const message = error instanceof Error ? error.message : String(error);
+    logStep("ERROR", { message });
+    return new Response(JSON.stringify({ error: message }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 500,
+      status,
     });
   }
 });

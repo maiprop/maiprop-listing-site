@@ -50,6 +50,7 @@ const OpenHouseDetail = lazy(() => import("./pages/OpenHouseDetail"));
 const ApiDocs = lazy(() => import("./pages/ApiDocs"));
 const DocumentTemplates = lazy(() => import("./pages/DocumentTemplates"));
 const Contact = lazy(() => import("./pages/Contact"));
+const CookieConsentBanner = lazy(() => import("@/components/CookieConsentBanner").then(m => ({ default: m.CookieConsentBanner })));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -85,51 +86,54 @@ const App = () => (
                 <Toaster />
                 <Sonner />
                 <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+                  <ErrorBoundary>
                   <Suspense fallback={<div className="min-h-screen bg-background" />}>
                     <Routes>
-                      <Route path="/" element={<Index />} />
-                      <Route path="/listings/new" element={<SellerRoute><CreateListing /></SellerRoute>} />
-                      <Route path="/listings/new-building" element={<SellerRoute><CreateNewBuildingListing /></SellerRoute>} />
-                      <Route path="/listings" element={<Listings />} />
+                      <Route path="/" element={<ErrorBoundary><Index /></ErrorBoundary>} />
+                      <Route path="/listings/new" element={<SellerRoute><ErrorBoundary><CreateListing /></ErrorBoundary></SellerRoute>} />
+                      <Route path="/listings/new-building" element={<SellerRoute><ErrorBoundary><CreateNewBuildingListing /></ErrorBoundary></SellerRoute>} />
+                      <Route path="/listings" element={<ErrorBoundary><Listings /></ErrorBoundary>} />
                       <Route path="/property/:id" element={<ErrorBoundary><PropertyDetail /></ErrorBoundary>} />
                       <Route path="/auction/:id" element={<ErrorBoundary><PropertyDetail /></ErrorBoundary>} />
-                      <Route path="/auctions" element={<Auctions />} />
-                      <Route path="/firesale" element={<Firesale />} />
-                      <Route path="/investor-dashboard" element={<InvestorRoute><InvestorDashboard /></InvestorRoute>} />
-                      <Route path="/professionals" element={<Professionals />} />
-                      <Route path="/professionals/me" element={<ProtectedRoute><ProfessionalProfileMe /></ProtectedRoute>} />
-                      <Route path="/professionals/:id" element={<ProfessionalProfile />} />
-                      <Route path="/video-room/:professionalId" element={<ProtectedRoute><BrandedVideoRoom /></ProtectedRoute>} />
+                      <Route path="/auctions" element={<ErrorBoundary><Auctions /></ErrorBoundary>} />
+                      <Route path="/firesale" element={<ProtectedRoute><ErrorBoundary><Firesale /></ErrorBoundary></ProtectedRoute>} />
+                      <Route path="/investor-dashboard" element={<InvestorRoute><ErrorBoundary><InvestorDashboard /></ErrorBoundary></InvestorRoute>} />
+                      <Route path="/professionals" element={<ErrorBoundary><Professionals /></ErrorBoundary>} />
+                      <Route path="/professionals/me" element={<ProtectedRoute><ErrorBoundary><ProfessionalProfileMe /></ErrorBoundary></ProtectedRoute>} />
+                      <Route path="/professionals/:id" element={<ErrorBoundary><ProfessionalProfile /></ErrorBoundary>} />
+                      <Route path="/video-room/:professionalId" element={<ProtectedRoute><ErrorBoundary><BrandedVideoRoom /></ErrorBoundary></ProtectedRoute>} />
                       <Route path="/new-build/:id" element={<ErrorBoundary><NewBuildDetail /></ErrorBoundary>} />
-                      <Route path="/open-houses" element={<OpenHouses />} />
+                      <Route path="/open-houses" element={<ErrorBoundary><OpenHouses /></ErrorBoundary>} />
                       <Route path="/open-house/:id" element={<ErrorBoundary><OpenHouseDetail /></ErrorBoundary>} />
-                      <Route path="/signup" element={<Signup />} />
-                      <Route path="/login" element={<Login />} />
-                      <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
-                      <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-                      <Route path="/dashboard/:section" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-                      <Route path="/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
-                      <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-                      <Route path="/terms-of-service" element={<TermsOfService />} />
-                      <Route path="/cookie-policy" element={<CookiePolicy />} />
-                      <Route path="/reset-password" element={<ResetPassword />} />
-                      <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
-                      <Route path="/projects/:id" element={<ProtectedRoute><ProjectDetail /></ProtectedRoute>} />
-                      <Route path="/portfolios" element={<ProtectedRoute><Portfolios /></ProtectedRoute>} />
-                      <Route path="/ai-assistant" element={<AIAssistantPage />} />
-                      <Route path="/pricing" element={<Pricing />} />
-                      <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
-                      <Route path="/platform-map" element={<AdminRoute><PlatformMap /></AdminRoute>} />
+                      <Route path="/signup" element={<ErrorBoundary><Signup /></ErrorBoundary>} />
+                      <Route path="/login" element={<ErrorBoundary><Login /></ErrorBoundary>} />
+                      <Route path="/onboarding" element={<ErrorBoundary><Onboarding /></ErrorBoundary>} />
+                      <Route path="/dashboard" element={<ProtectedRoute><ErrorBoundary><Dashboard /></ErrorBoundary></ProtectedRoute>} />
+                      <Route path="/dashboard/:section" element={<ProtectedRoute><ErrorBoundary><Dashboard /></ErrorBoundary></ProtectedRoute>} />
+                      <Route path="/messages" element={<ProtectedRoute><ErrorBoundary><Messages /></ErrorBoundary></ProtectedRoute>} />
+                      <Route path="/privacy-policy" element={<ErrorBoundary><PrivacyPolicy /></ErrorBoundary>} />
+                      <Route path="/terms-of-service" element={<ErrorBoundary><TermsOfService /></ErrorBoundary>} />
+                      <Route path="/cookie-policy" element={<ErrorBoundary><CookiePolicy /></ErrorBoundary>} />
+                      <Route path="/reset-password" element={<ErrorBoundary><ResetPassword /></ErrorBoundary>} />
+                      <Route path="/projects" element={<ProtectedRoute><ErrorBoundary><Projects /></ErrorBoundary></ProtectedRoute>} />
+                      <Route path="/projects/:id" element={<ProtectedRoute><ErrorBoundary><ProjectDetail /></ErrorBoundary></ProtectedRoute>} />
+                      <Route path="/portfolios" element={<ProtectedRoute><ErrorBoundary><Portfolios /></ErrorBoundary></ProtectedRoute>} />
+                      <Route path="/ai-assistant" element={<ErrorBoundary><AIAssistantPage /></ErrorBoundary>} />
+                      <Route path="/pricing" element={<ErrorBoundary><Pricing /></ErrorBoundary>} />
+                      <Route path="/admin" element={<AdminRoute><ErrorBoundary><AdminDashboard /></ErrorBoundary></AdminRoute>} />
+                      <Route path="/platform-map" element={<AdminRoute><ErrorBoundary><PlatformMap /></ErrorBoundary></AdminRoute>} />
                       <Route path="/admin/pricing" element={<AdminRoute><Navigate to="/admin?tab=pricing" replace /></AdminRoute>} />
-                      <Route path="/api-docs" element={<ApiDocs />} />
-                      <Route path="/document-templates" element={<DocumentTemplates />} />
-                      <Route path="/contact" element={<Contact />} />
+                      <Route path="/api-docs" element={<ErrorBoundary><ApiDocs /></ErrorBoundary>} />
+                      <Route path="/document-templates" element={<ErrorBoundary><DocumentTemplates /></ErrorBoundary>} />
+                      <Route path="/contact" element={<ErrorBoundary><Contact /></ErrorBoundary>} />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
                   </Suspense>
+                  </ErrorBoundary>
                   <I18nLoader />
                   <GlobalAIWidget />
                   <BottomNav />
+                  <Suspense fallback={null}><CookieConsentBanner /></Suspense>
                 </BrowserRouter>
               </TooltipProvider>
         </AuthProvider>

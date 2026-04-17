@@ -1,4 +1,6 @@
+﻿/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useCallback, useEffect } from "react";
+import { useModal } from "@/hooks/useModal";
 import { Link, useParams } from "react-router-dom";
 import {
   Building2, ChevronLeft, Loader2, Save, MapPin, Calendar, Image, LayoutGrid,
@@ -19,6 +21,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 const INPUT_CLS = "w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors";
 const LABEL_CLS = "text-xs text-muted-foreground block mb-1.5 font-medium";
@@ -75,34 +78,33 @@ export default function ProjectDetail() {
 
   const [form, setForm] = useState<Record<string, string | number | boolean | undefined>>({});
   const [saving, setSaving] = useState(false);
-  const [showUnitForm, setShowUnitForm] = useState(false);
+  const modal = useModal<"unitForm" | "leadForm" | "bulkPrice">();
   const [editingUnitId, setEditingUnitId] = useState<string | null>(null);
-  const [showLeadForm, setShowLeadForm] = useState(false);
   const [_editingLeadId, _setEditingLeadId] = useState<string | null>(null);
   const [leadForm, setLeadForm] = useState<Partial<ProjectLeadInsert>>({});
-  const [showBulkPrice, setShowBulkPrice] = useState(false);
   const [bulkPricePct, setBulkPricePct] = useState("");
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
 
   useEffect(() => {
     if (project) {
       setForm({
-        name: project.name,
-        description: project.description,
-        building_permit_number: project.building_permit_number,
-        developer_company: project.developer_company,
-        architect_group: project.architect_group,
-        construction_company: project.construction_company,
-        address: project.address,
-        city: project.city,
-        municipality: project.municipality,
-        latitude: project.latitude,
-        longitude: project.longitude,
-        area_description: project.area_description,
-        permit_approval_date: project.permit_approval_date,
-        construction_start_date: project.construction_start_date,
-        structural_completion_date: project.structural_completion_date,
-        delivery_date: project.delivery_date,
-        status: project.status,
+        name: project.name ?? undefined,
+        description: project.description ?? undefined,
+        building_permit_number: project.building_permit_number ?? undefined,
+        developer_company: project.developer_company ?? undefined,
+        architect_group: project.architect_group ?? undefined,
+        construction_company: project.construction_company ?? undefined,
+        address: project.address ?? undefined,
+        city: project.city ?? undefined,
+        municipality: project.municipality ?? undefined,
+        latitude: project.latitude ?? undefined,
+        longitude: project.longitude ?? undefined,
+        area_description: project.area_description ?? undefined,
+        permit_approval_date: project.permit_approval_date ?? undefined,
+        construction_start_date: project.construction_start_date ?? undefined,
+        structural_completion_date: project.structural_completion_date ?? undefined,
+        delivery_date: project.delivery_date ?? undefined,
+        status: project.status ?? undefined,
       });
     }
   }, [project]);
@@ -125,7 +127,7 @@ export default function ProjectDetail() {
   const uploadProjectMedia = useCallback(async (file: File, mediaType: ProjectMediaType): Promise<string> => {
     if (!user || !id) throw new Error("Not authenticated");
     const ext = file.name.split(".").pop() || "jpg";
-    const path = `${user.id}/${id}/${mediaType}-${Date.now()}.${ext}`;
+    const path = `${user.id}/${id}/${mediaType}-${crypto.randomUUID()}.${ext}`;
     const { error } = await supabase.storage.from("project-media").upload(path, file, { upsert: true });
     if (error) throw error;
     const { data } = supabase.storage.from("project-media").getPublicUrl(path);
@@ -138,8 +140,8 @@ export default function ProjectDetail() {
     try {
       const url = await uploadProjectMedia(file, mediaType);
       addMedia.mutate({ project_id: id, url, media_type: mediaType });
-    } catch (err: any) {
-      toast.error(err?.message || "Upload failed");
+    } catch (err: unknown) {
+      toast.error((err instanceof Error ? err.message : null) || "Upload failed");
     }
     e.target.value = "";
   };
@@ -149,7 +151,7 @@ export default function ProjectDetail() {
     const payload = { ...u, project_id: id } as ProjectUnitInsert;
     if (payload.internal_sqm && payload.price) payload.price_per_sqm = Number(payload.price) / Number(payload.internal_sqm);
     createUnit.mutate(payload, {
-      onSuccess: () => setShowUnitForm(false),
+      onSuccess: () => modal.close(),
     });
   };
 
@@ -174,7 +176,7 @@ export default function ProjectDetail() {
   const handleAddLead = () => {
     if (!id || !leadForm.name?.trim()) return;
     createLead.mutate({ ...leadForm, project_id: id, name: leadForm.name.trim() } as ProjectLeadInsert, {
-      onSuccess: () => { setLeadForm({}); setShowLeadForm(false); },
+      onSuccess: () => { setLeadForm({}); modal.close(); },
     });
   };
 
@@ -183,29 +185,37 @@ export default function ProjectDetail() {
     updateLead.mutate({ id: leadId, projectId: id, updates });
   };
 
-  const handleBulkPriceUpdate = async () => {
+  const handleBulkPriceUpdate = () => {
     if (!id || !bulkPricePct) return;
     const pct = parseFloat(bulkPricePct);
     if (isNaN(pct) || pct === 0) return;
+     
+    const available = units.filter((u: any) => u.availability_status === "available" && u.price);
+    if (available.length === 0) { toast.error("No available units with price to update"); return; }
+    setBulkConfirmOpen(true);
+  };
+
+  const executeBulkPriceUpdate = async () => {
+    setBulkConfirmOpen(false);
+    if (!id) return;
+    const pct = parseFloat(bulkPricePct);
+     
     const availableUnits = units.filter((u: any) => u.availability_status === "available" && u.price);
-    if (availableUnits.length === 0) {
-      toast.error("No available units with price to update");
-      return;
-    }
     try {
       for (const u of availableUnits) {
         const newPrice = Math.round(Number(u.price) * (1 + pct / 100));
         const newPricePerSqm = u.internal_sqm ? newPrice / Number(u.internal_sqm) : undefined;
-        const { error } = await (supabase as any).from("project_units").update({ price: newPrice, price_per_sqm: newPricePerSqm }).eq("id", u.id);
+         
+        const { error } = await supabase.from("project_units").update({ price: newPrice, price_per_sqm: newPricePerSqm }).eq("id", u.id);
         if (error) throw error;
       }
       qc.invalidateQueries({ queryKey: ["project_units", id] });
       qc.invalidateQueries({ queryKey: ["projects"] });
-      setShowBulkPrice(false);
+      modal.close();
       setBulkPricePct("");
       toast.success(`Updated ${availableUnits.length} unit(s)`);
-    } catch (e: any) {
-      toast.error(e?.message || "Update failed");
+    } catch (e: unknown) {
+      toast.error((e instanceof Error ? e.message : null) || "Update failed");
     }
   };
 
@@ -246,7 +256,7 @@ export default function ProjectDetail() {
     structural_completion_date: project.structural_completion_date, delivery_date: project.delivery_date, status: project.status,
   };
 
-  const listings = Array.isArray(project.listings) ? project.listings : [];
+  const listings = Array.isArray((project as any).listings) ? (project as any).listings : [];
   const linkedListingIds = new Set(listings.map((l: any) => l.id));
   const availableCount = units.filter((u: any) => u.availability_status === "available").length;
   const reservedCount = units.filter((u: any) => u.availability_status === "reserved").length;
@@ -298,34 +308,34 @@ export default function ProjectDetail() {
           {/* 1. Basic project info */}
           <Section title="Basic project info" icon={FileText}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="sm:col-span-2"><label className={LABEL_CLS}>Project name *</label><input value={currentForm.name || ""} onChange={e => updateField("name", e.target.value)} placeholder="e.g. Marina Heights" className={INPUT_CLS} /></div>
-              <div><label className={LABEL_CLS}>Αριθμός Οικοδομικής Άδειας (Building permit number) *</label><input value={currentForm.building_permit_number || ""} onChange={e => updateField("building_permit_number", e.target.value)} placeholder="e.g. 12345/2024" className={INPUT_CLS} /></div>
-              <div><label className={LABEL_CLS}>Developer company</label><input value={currentForm.developer_company || ""} onChange={e => updateField("developer_company", e.target.value)} placeholder="Company name" className={INPUT_CLS} /></div>
-              <div><label className={LABEL_CLS}>Architect / developer group</label><input value={currentForm.architect_group || ""} onChange={e => updateField("architect_group", e.target.value)} placeholder="Architect or group" className={INPUT_CLS} /></div>
-              <div><label className={LABEL_CLS}>Construction company</label><input value={currentForm.construction_company || ""} onChange={e => updateField("construction_company", e.target.value)} placeholder="Constructor" className={INPUT_CLS} /></div>
-              <div className="sm:col-span-2"><label className={LABEL_CLS}>Project description</label><textarea value={currentForm.description || ""} onChange={e => updateField("description", e.target.value)} rows={4} placeholder="Brief description of the project..." className={INPUT_CLS + " resize-none"} /></div>
+              <div className="sm:col-span-2"><label className={LABEL_CLS}>Project name *</label><input value={(currentForm.name as string) || ""} onChange={e => updateField("name", e.target.value)} placeholder="e.g. Marina Heights" className={INPUT_CLS} /></div>
+              <div><label className={LABEL_CLS}>Î‘ÏÎ¹Î¸Î¼ÏŒÏ‚ ÎŸÎ¹ÎºÎ¿Î´Î¿Î¼Î¹ÎºÎ®Ï‚ Î†Î´ÎµÎ¹Î±Ï‚ (Building permit number) *</label><input value={(currentForm.building_permit_number as string) || ""} onChange={e => updateField("building_permit_number", e.target.value)} placeholder="e.g. 12345/2024" className={INPUT_CLS} /></div>
+              <div><label className={LABEL_CLS}>Developer company</label><input value={(currentForm.developer_company as string) || ""} onChange={e => updateField("developer_company", e.target.value)} placeholder="Company name" className={INPUT_CLS} /></div>
+              <div><label className={LABEL_CLS}>Architect / developer group</label><input value={(currentForm.architect_group as string) || ""} onChange={e => updateField("architect_group", e.target.value)} placeholder="Architect or group" className={INPUT_CLS} /></div>
+              <div><label className={LABEL_CLS}>Construction company</label><input value={(currentForm.construction_company as string) || ""} onChange={e => updateField("construction_company", e.target.value)} placeholder="Constructor" className={INPUT_CLS} /></div>
+              <div className="sm:col-span-2"><label className={LABEL_CLS}>Project description</label><textarea value={(currentForm.description as string) || ""} onChange={e => updateField("description", e.target.value)} rows={4} placeholder="Brief description of the project..." className={INPUT_CLS + " resize-none"} /></div>
             </div>
           </Section>
 
           {/* 2. Location */}
           <Section title="Location" icon={MapPin}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="sm:col-span-2"><label className={LABEL_CLS}>Address</label><input value={currentForm.address || ""} onChange={e => updateField("address", e.target.value)} placeholder="Street, number" className={INPUT_CLS} /></div>
-              <div><label className={LABEL_CLS}>City</label><input value={currentForm.city || ""} onChange={e => updateField("city", e.target.value)} placeholder="e.g. Athens" className={INPUT_CLS} /></div>
-              <div><label className={LABEL_CLS}>Municipality</label><input value={currentForm.municipality || ""} onChange={e => updateField("municipality", e.target.value)} placeholder="Δήμος" className={INPUT_CLS} /></div>
-              <div><label className={LABEL_CLS}>Latitude</label><input type="number" step="any" value={currentForm.latitude ?? ""} onChange={e => updateField("latitude", e.target.value ? parseFloat(e.target.value) : undefined)} placeholder="e.g. 37.9838" className={INPUT_CLS} /></div>
-              <div><label className={LABEL_CLS}>Longitude</label><input type="number" step="any" value={currentForm.longitude ?? ""} onChange={e => updateField("longitude", e.target.value ? parseFloat(e.target.value) : undefined)} placeholder="e.g. 23.7275" className={INPUT_CLS} /></div>
-              <div className="sm:col-span-2"><label className={LABEL_CLS}>Area description</label><textarea value={currentForm.area_description || ""} onChange={e => updateField("area_description", e.target.value)} rows={2} placeholder="Neighbourhood, amenities, surroundings..." className={INPUT_CLS + " resize-none"} /></div>
+              <div className="sm:col-span-2"><label className={LABEL_CLS}>Address</label><input value={(currentForm.address as string) || ""} onChange={e => updateField("address", e.target.value)} placeholder="Street, number" className={INPUT_CLS} /></div>
+              <div><label className={LABEL_CLS}>City</label><input value={(currentForm.city as string) || ""} onChange={e => updateField("city", e.target.value)} placeholder="e.g. Athens" className={INPUT_CLS} /></div>
+              <div><label className={LABEL_CLS}>Municipality</label><input value={(currentForm.municipality as string) || ""} onChange={e => updateField("municipality", e.target.value)} placeholder="Î”Î®Î¼Î¿Ï‚" className={INPUT_CLS} /></div>
+              <div><label className={LABEL_CLS}>Latitude</label><input type="number" step="any" value={(currentForm.latitude as number) ?? ""} onChange={e => updateField("latitude", e.target.value ? parseFloat(e.target.value) : undefined)} placeholder="e.g. 37.9838" className={INPUT_CLS} /></div>
+              <div><label className={LABEL_CLS}>Longitude</label><input type="number" step="any" value={(currentForm.longitude as number) ?? ""} onChange={e => updateField("longitude", e.target.value ? parseFloat(e.target.value) : undefined)} placeholder="e.g. 23.7275" className={INPUT_CLS} /></div>
+              <div className="sm:col-span-2"><label className={LABEL_CLS}>Area description</label><textarea value={(currentForm.area_description as string) || ""} onChange={e => updateField("area_description", e.target.value)} rows={2} placeholder="Neighbourhood, amenities, surroundings..." className={INPUT_CLS + " resize-none"} /></div>
             </div>
           </Section>
 
           {/* 3. Project timeline */}
           <Section title="Project timeline" icon={Calendar}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div><label className={LABEL_CLS}>Permit approval date</label><input type="date" value={currentForm.permit_approval_date || ""} onChange={e => updateField("permit_approval_date", e.target.value)} className={INPUT_CLS} /></div>
-              <div><label className={LABEL_CLS}>Construction start</label><input type="date" value={currentForm.construction_start_date || ""} onChange={e => updateField("construction_start_date", e.target.value)} className={INPUT_CLS} /></div>
-              <div><label className={LABEL_CLS}>Structural completion</label><input type="date" value={currentForm.structural_completion_date || ""} onChange={e => updateField("structural_completion_date", e.target.value)} className={INPUT_CLS} /></div>
-              <div><label className={LABEL_CLS}>Delivery date</label><input type="date" value={currentForm.delivery_date || ""} onChange={e => updateField("delivery_date", e.target.value)} className={INPUT_CLS} /></div>
+              <div><label className={LABEL_CLS}>Permit approval date</label><input type="date" value={(currentForm.permit_approval_date as string) || ""} onChange={e => updateField("permit_approval_date", e.target.value)} className={INPUT_CLS} /></div>
+              <div><label className={LABEL_CLS}>Construction start</label><input type="date" value={(currentForm.construction_start_date as string) || ""} onChange={e => updateField("construction_start_date", e.target.value)} className={INPUT_CLS} /></div>
+              <div><label className={LABEL_CLS}>Structural completion</label><input type="date" value={(currentForm.structural_completion_date as string) || ""} onChange={e => updateField("structural_completion_date", e.target.value)} className={INPUT_CLS} /></div>
+              <div><label className={LABEL_CLS}>Delivery date</label><input type="date" value={(currentForm.delivery_date as string) || ""} onChange={e => updateField("delivery_date", e.target.value)} className={INPUT_CLS} /></div>
             </div>
           </Section>
 
@@ -358,10 +368,10 @@ export default function ProjectDetail() {
           {/* 5. Units + bulk price update */}
           <Section title="Units (inventory & pricing)" icon={LayoutGrid}>
             <div className="flex flex-wrap gap-2 mb-4">
-              <Button variant="outline" size="sm" className="border-border gap-1.5" onClick={() => setShowBulkPrice(!showBulkPrice)}>
+              <Button variant="outline" size="sm" className="border-border gap-1.5" onClick={() => modal.toggle("bulkPrice")}>
                 <DollarSign className="w-3.5 h-3.5" /> Bulk price update
               </Button>
-              {showBulkPrice && (
+              {modal.isOpen("bulkPrice") && (
                 <div className="flex items-center gap-2 flex-wrap">
                   <input type="number" step="0.1" placeholder="e.g. 5 for +5%" value={bulkPricePct} onChange={e => setBulkPricePct(e.target.value)} className="w-24 bg-secondary border border-border rounded-lg px-2 py-1.5 text-sm" />
                   <span className="text-xs text-muted-foreground">% increase</span>
@@ -379,23 +389,23 @@ export default function ProjectDetail() {
                       <div>
                         <span className="font-semibold">{u.unit_id || u.unit_number || `Unit ${u.floor || "?"}-${u.unit_number || "?"}`}</span>
                         <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${u.availability_status === "sold" ? "bg-brand-emerald/20 text-brand-emerald" : u.availability_status === "reserved" ? "bg-brand-gold/20 text-brand-gold" : "bg-primary/10 text-primary"}`}>{u.availability_status}</span>
-                        {u.price && <span className="ml-2 text-sm text-muted-foreground">€{Number(u.price).toLocaleString()}</span>}
-                        {u.internal_sqm && <span className="ml-2 text-xs text-muted-foreground">{u.internal_sqm}m²</span>}
+                        {!!u.price && <span className="ml-2 text-sm text-muted-foreground">â‚¬{Number(u.price).toLocaleString()}</span>}
+                        {!!u.internal_sqm && <span className="ml-2 text-xs text-muted-foreground">{u.internal_sqm}mÂ²</span>}
                       </div>
                       <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => setEditingUnitId(u.id)}><Edit2 className="w-4 h-4" /></Button>
-                        <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDeleteUnit(u.id)}><Trash2 className="w-4 h-4" /></Button>
+                        <Button variant="ghost" size="icon" aria-label="Edit unit" onClick={() => setEditingUnitId(u.id)}><Edit2 className="w-4 h-4" /></Button>
+                        <Button variant="ghost" size="icon" aria-label="Delete unit" className="text-destructive" onClick={() => handleDeleteUnit(u.id)}><Trash2 className="w-4 h-4" /></Button>
                       </div>
                     </div>
                   )}
                 </div>
               ))}
-              {showUnitForm ? (
+              {modal.isOpen("unitForm") ? (
                 <div className="glass-card rounded-xl p-4 border border-primary/20">
-                  <UnitEditForm unit={{}} onSave={handleAddUnit} onCancel={() => setShowUnitForm(false)} isCreate />
+                  <UnitEditForm unit={{}} onSave={handleAddUnit} onCancel={() => modal.close()} isCreate />
                 </div>
               ) : (
-                <Button variant="outline" className="border-border w-full gap-2" onClick={() => setShowUnitForm(true)}><Plus className="w-4 h-4" /> Add unit</Button>
+                <Button variant="outline" className="border-border w-full gap-2" onClick={() => modal.open("unitForm")}><Plus className="w-4 h-4" /> Add unit</Button>
               )}
             </div>
           </Section>
@@ -403,7 +413,7 @@ export default function ProjectDetail() {
           {/* 6. Lead management */}
           <Section title="Lead management" icon={Users}>
             <p className="text-sm text-muted-foreground mb-3">Track and manage leads interested in this project.</p>
-            {showLeadForm ? (
+            {modal.isOpen("leadForm") ? (
               <div className="glass-card rounded-xl p-4 border border-primary/20 space-y-3 mb-4">
                 <input placeholder="Name *" value={leadForm.name || ""} onChange={e => setLeadForm(f => ({ ...f, name: e.target.value }))} className={INPUT_CLS} />
                 <input placeholder="Email" value={leadForm.email || ""} onChange={e => setLeadForm(f => ({ ...f, email: e.target.value }))} className={INPUT_CLS} />
@@ -413,11 +423,11 @@ export default function ProjectDetail() {
                 <textarea placeholder="Notes" value={leadForm.notes || ""} onChange={e => setLeadForm(f => ({ ...f, notes: e.target.value }))} rows={2} className={INPUT_CLS + " resize-none"} />
                 <div className="flex gap-2">
                   <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground" onClick={handleAddLead}>Add lead</Button>
-                  <Button size="sm" variant="outline" className="border-border" onClick={() => { setShowLeadForm(false); setLeadForm({}); }}>Cancel</Button>
+                  <Button size="sm" variant="outline" className="border-border" onClick={() => { modal.close(); setLeadForm({}); }}>Cancel</Button>
                 </div>
               </div>
             ) : (
-              <Button variant="outline" size="sm" className="border-border gap-1.5 mb-4" onClick={() => setShowLeadForm(true)}><Plus className="w-3.5 h-3.5" /> Add lead</Button>
+              <Button variant="outline" size="sm" className="border-border gap-1.5 mb-4" onClick={() => modal.open("leadForm")}><Plus className="w-3.5 h-3.5" /> Add lead</Button>
             )}
             <div className="space-y-2">
               {leads.map((l: any) => (
@@ -429,7 +439,7 @@ export default function ProjectDetail() {
                     {l.unit_id && <p className="text-xs text-muted-foreground">Unit: {l.unit_id}</p>}
                   </div>
                   <div className="flex gap-1">
-                    <select value={l.status} onChange={e => handleUpdateLead(l.id, { status: e.target.value as any })} className="text-xs bg-secondary border border-border rounded-lg px-2 py-1">
+                    <select value={l.status} onChange={e => handleUpdateLead(l.id, { status: e.target.value as ProjectLeadInsert["status"] })} className="text-xs bg-secondary border border-border rounded-lg px-2 py-1">
                       <option value="new">New</option>
                       <option value="contacted">Contacted</option>
                       <option value="qualified">Qualified</option>
@@ -440,7 +450,7 @@ export default function ProjectDetail() {
                   </div>
                 </div>
               ))}
-              {leads.length === 0 && !showLeadForm && <p className="text-sm text-muted-foreground">No leads yet.</p>}
+              {leads.length === 0 && !modal.isOpen("leadForm") && <p className="text-sm text-muted-foreground">No leads yet.</p>}
             </div>
           </Section>
 
@@ -452,7 +462,7 @@ export default function ProjectDetail() {
                 {listings.map((l: any) => (
                   <div key={l.id} className="flex items-center gap-3 bg-secondary rounded-xl p-3">
                     {l.cover_image_url && <img src={l.cover_image_url} alt="" className="w-12 h-12 rounded-lg object-cover" />}
-                    <div className="flex-1 min-w-0"><Link to={`/property/${l.id}`} className="font-medium hover:underline truncate block">{l.title}</Link><span className="text-xs text-muted-foreground">€{Number(l.price).toLocaleString()} · {l.sqm}m²</span></div>
+                    <div className="flex-1 min-w-0"><Link to={`/property/${l.id}`} className="font-medium hover:underline truncate block">{l.title}</Link><span className="text-xs text-muted-foreground">â‚¬{Number(l.price).toLocaleString()} Â· {l.sqm}mÂ²</span></div>
                     <Button variant="ghost" size="sm" onClick={() => handleUnlinkListing(l.id)}>Unlink</Button>
                   </div>
                 ))}
@@ -460,12 +470,12 @@ export default function ProjectDetail() {
             )}
             <div className="flex flex-wrap gap-2">
               {myListings.filter((l: any) => !linkedListingIds.has(l.id)).map((l: any) => (
-                <Button key={l.id} variant="outline" size="sm" className="border-border" onClick={() => handleLinkListing(l.id)}>+ {l.title?.slice(0, 25)}{l.title?.length > 25 ? "…" : ""}</Button>
+                <Button key={l.id} variant="outline" size="sm" className="border-border" onClick={() => handleLinkListing(l.id)}>+ {l.title?.slice(0, 25)}{l.title?.length > 25 ? "â€¦" : ""}</Button>
               ))}
               {myListings.filter((l: any) => !linkedListingIds.has(l.id)).length === 0 && (
                 <p className="text-sm text-muted-foreground">
                   No unlinked listings. <Link to="/listings/new" className="text-primary underline">Create one</Link>
-                  {isDeveloper && <>{" · "}<Link to="/listings/new-building" className="text-primary underline">New building</Link></>}
+                  {isDeveloper && <>{" Â· "}<Link to="/listings/new-building" className="text-primary underline">New building</Link></>}
                 </p>
               )}
             </div>
@@ -473,6 +483,14 @@ export default function ProjectDetail() {
         </div>
       </main>
       <Footer />
+      <ConfirmDialog
+        open={bulkConfirmOpen}
+        title="Apply bulk price change"
+        description={`Apply ${bulkPricePct}% price change to all available units? This cannot be undone.`}
+        confirmLabel="Apply"
+        onConfirm={executeBulkPriceUpdate}
+        onCancel={() => setBulkConfirmOpen(false)}
+      />
     </div>
   );
 }
@@ -508,7 +526,7 @@ function UnitEditForm({ unit, onSave, onCancel, isCreate }: { unit: any; onSave:
       unit_id: f.unit_id || undefined,
       floor: f.floor ? parseInt(String(f.floor)) : undefined,
       unit_number: f.unit_number || undefined,
-      availability_status: f.availability_status as any,
+      availability_status: f.availability_status as ProjectUnitInsert["availability_status"],
       internal_sqm: f.internal_sqm ? parseFloat(String(f.internal_sqm)) : undefined,
       balcony_sqm: f.balcony_sqm ? parseFloat(String(f.balcony_sqm)) : undefined,
       storage_sqm: f.storage_sqm ? parseFloat(String(f.storage_sqm)) : undefined,
@@ -539,11 +557,11 @@ function UnitEditForm({ unit, onSave, onCancel, isCreate }: { unit: any; onSave:
       <div><label className={LABEL_CLS}>Status</label><select value={f.availability_status} onChange={e => setF(x => ({ ...x, availability_status: e.target.value }))} className={INPUT_CLS}><option value="available">Available</option><option value="reserved">Reserved</option><option value="sold">Sold</option></select></div>
       <div><label className={LABEL_CLS}>Internal sqm</label><input type="number" step="0.01" value={f.internal_sqm} onChange={e => setF(x => ({ ...x, internal_sqm: e.target.value }))} placeholder="85" className={INPUT_CLS} /></div>
       <div><label className={LABEL_CLS}>Balcony sqm</label><input type="number" step="0.01" value={f.balcony_sqm} onChange={e => setF(x => ({ ...x, balcony_sqm: e.target.value }))} placeholder="12" className={INPUT_CLS} /></div>
-      <div><label className={LABEL_CLS}>Price (€)</label><input type="number" value={f.price} onChange={e => setF(x => ({ ...x, price: e.target.value }))} placeholder="250000" className={INPUT_CLS} /></div>
+      <div><label className={LABEL_CLS}>Price (â‚¬)</label><input type="number" value={f.price} onChange={e => setF(x => ({ ...x, price: e.target.value }))} placeholder="250000" className={INPUT_CLS} /></div>
       <div><label className={LABEL_CLS}>Bedrooms</label><input type="number" value={f.bedrooms} onChange={e => setF(x => ({ ...x, bedrooms: e.target.value }))} placeholder="2" className={INPUT_CLS} /></div>
       <div><label className={LABEL_CLS}>Bathrooms</label><input type="number" value={f.bathrooms} onChange={e => setF(x => ({ ...x, bathrooms: e.target.value }))} placeholder="2" className={INPUT_CLS} /></div>
-      <div><label className={LABEL_CLS}>Kitchen type</label><select value={f.kitchen_type} onChange={e => setF(x => ({ ...x, kitchen_type: e.target.value }))} className={INPUT_CLS}><option value="">—</option>{KITCHEN_TYPES.map(k => <option key={k} value={k}>{k}</option>)}</select></div>
-      <div><label className={LABEL_CLS}>Energy class</label><select value={f.energy_class} onChange={e => setF(x => ({ ...x, energy_class: e.target.value }))} className={INPUT_CLS}><option value="">—</option>{ENERGY_CLASSES.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+      <div><label className={LABEL_CLS}>Kitchen type</label><select value={f.kitchen_type} onChange={e => setF(x => ({ ...x, kitchen_type: e.target.value }))} className={INPUT_CLS}><option value="">â€”</option>{KITCHEN_TYPES.map(k => <option key={k} value={k}>{k}</option>)}</select></div>
+      <div><label className={LABEL_CLS}>Energy class</label><select value={f.energy_class} onChange={e => setF(x => ({ ...x, energy_class: e.target.value }))} className={INPUT_CLS}><option value="">â€”</option>{ENERGY_CLASSES.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
       <div className="sm:col-span-2 flex items-center gap-2 pt-2">
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.sea_view} onChange={e => setF(x => ({ ...x, sea_view: e.target.checked }))} /> Sea view</label>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.city_view} onChange={e => setF(x => ({ ...x, city_view: e.target.checked }))} /> City view</label>

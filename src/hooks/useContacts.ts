@@ -5,14 +5,17 @@ import { toast } from "sonner";
 
 const DEAL_STAGES = ["new", "contacted", "qualified", "proposal", "negotiation", "won", "lost"] as const;
 
+/** Returns the current user's CRM contacts with linked listing data. */
 export function useContacts() {
   const { user } = useAuth();
   return useQuery({
     queryKey: ["contacts", user?.id],
     queryFn: async () => {
+      if (!user) return [];
       const { data, error } = await supabase
         .from("contacts")
-        .select("*, listings(id, title, city, cover_image_url)")
+        .select("id, user_id, name, email, phone, source, deal_stage, notes, follow_up_at, listing_id, created_at, updated_at, listings(id, title, city, cover_image_url)")
+        .eq("user_id", user.id)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data || [];
@@ -59,18 +62,21 @@ export function useCreateContact() {
       qc.invalidateQueries({ queryKey: ["contacts"] });
       toast.success("Contact added");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: () => toast.error("Could not add contact. Please try again."),
   });
 }
 
 export function useUpdateContact() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Record<string, unknown> }) => {
+      if (!user) throw new Error("Not authenticated");
       const { data, error } = await supabase
         .from("contacts")
         .update(updates)
         .eq("id", id)
+        .eq("user_id", user.id)
         .select()
         .single();
       if (error) throw error;
@@ -80,22 +86,24 @@ export function useUpdateContact() {
       qc.invalidateQueries({ queryKey: ["contacts"] });
       toast.success("Contact updated");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: () => toast.error("Could not update contact. Please try again."),
   });
 }
 
 export function useDeleteContact() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("contacts").delete().eq("id", id);
+      if (!user) throw new Error("Not authenticated");
+      const { error } = await supabase.from("contacts").delete().eq("id", id).eq("user_id", user.id);
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["contacts"] });
       toast.success("Contact deleted");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: () => toast.error("Could not delete contact. Please try again."),
   });
 }
 
@@ -152,12 +160,13 @@ export function useCreateContactTask() {
       qc.invalidateQueries({ queryKey: ["contact_tasks", v.contactId] });
       toast.success("Task added");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: () => toast.error("Something went wrong. Please try again."),
   });
 }
 
 export function useUpdateContactTask() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async ({
       id,
@@ -166,10 +175,12 @@ export function useUpdateContactTask() {
       id: string;
       updates: { title?: string; due_at?: string | null; completed_at?: string | null; notes?: string };
     }) => {
+      if (!user) throw new Error("Must be logged in");
       const { data, error } = await supabase
         .from("contact_tasks")
         .update(updates)
         .eq("id", id)
+        .eq("user_id", user.id)
         .select()
         .single();
       if (error) throw error;
@@ -178,6 +189,6 @@ export function useUpdateContactTask() {
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["contact_tasks", data.contact_id] });
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: () => toast.error("Something went wrong. Please try again."),
   });
 }

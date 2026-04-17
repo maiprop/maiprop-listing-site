@@ -1,83 +1,116 @@
-# Welcome to your Lovable project
+# maiProp — Greek Real Estate Platform
 
-## Project info
+A full-stack property listing and investment platform for the Greek market. Built with Vite + React 18 + TypeScript, Supabase (Postgres + Auth + Edge Functions), and Tailwind CSS.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Quick Start
 
-## How can I edit this code?
-
-There are several ways of editing your application.
-
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Copy .env.example to .env and add your Supabase credentials (required for the app to load).
-cp .env.example .env
-# Edit .env and set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY from your Supabase project.
-
-# Step 5: Start the development server with auto-reloading and an instant preview.
-npm run dev
+```bash
+cp .env.example .env          # fill in required vars (see below)
+npm install
+npm run dev                   # http://localhost:8080
 ```
 
-## App not loading?
+## Required Environment Variables
 
-- **White screen or "Configuration Error"**: Create a `.env` file (copy from `.env.example`) and set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` from your [Supabase project dashboard](https://supabase.com/dashboard).
-- **`npm` / `npx` not found**: Ensure Node.js is installed and in your PATH. Restart the terminal after installing.
-- **Stuck on "Loading..."**: Check your internet connection; the app needs to reach Supabase. If offline, it may take up to 8 seconds before the UI appears.
+| Variable | Description |
+|---|---|
+| `VITE_SUPABASE_URL` | Supabase project URL |
+| `VITE_SUPABASE_PROJECT_ID` | Supabase project reference ID |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Supabase anon/publishable key |
+| `VITE_TURNSTILE_SITE_KEY` | Cloudflare Turnstile site key (optional — has fallback) |
+| `VITE_STRIPE_PRO_PRODUCT_ID` | Stripe product ID for the Pro plan (optional) |
 
-**Edit a file directly in GitHub**
+See `.env.example` for the full list.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### App not loading?
 
-**Use GitHub Codespaces**
+- **White screen or "Configuration Error"**: Copy `.env.example` → `.env` and fill in the Supabase vars from your [Supabase project dashboard](https://supabase.com/dashboard).
+- **Stuck on "Loading..."**: Check your internet connection. The app must reach Supabase.
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Commands
 
-## What technologies are used for this project?
+```bash
+npm run dev          # dev server on :8080
+npm run build        # production build (dist/)
+npm run preview      # preview prod build on :4173
+npm run lint         # ESLint
+npm run test         # Vitest test suite (once)
+npm run test:watch   # Vitest in watch mode
+npm run db:push      # push Supabase migrations (requires supabase CLI)
+npm run seed:users   # seed mock users (requires tsx)
+```
 
-This project is built with:
+## Architecture
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+```
+src/
+  App.tsx              — Router, lazy-loaded pages, per-route ErrorBoundary tree
+  contexts/
+    AuthContext.tsx     — Single auth + subscription state store
+  pages/               — Route-level page components (lazy-loaded via React.lazy)
+  components/          — Feature components (Navbar, PropertyCard, …)
+    ui/                — shadcn-ui primitives (Radix UI — do not edit directly)
+  hooks/               — All Supabase queries/mutations via React Query
+  lib/
+    format.ts          — Canonical formatPrice / formatDate / fmtDate / fmtTime
+    authUtils.ts       — Role helpers (isPlatformAdmin, isSellSideRole)
+    participantConfig.ts — Participant types, labels, pricing audience mapping
+    listingUtils.ts    — Listing shape normalisation helpers
+  integrations/
+    supabase/
+      client.ts        — Supabase client (validates env on init)
+      types.ts         — Auto-generated DB types (do not edit manually)
+  test/                — Vitest unit tests
+supabase/
+  functions/           — Deno edge functions
+  migrations/          — SQL migrations (apply with npm run db:push)
+```
 
-## How can I deploy this project?
+### Auth & Role Model
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+Auth state lives exclusively in `AuthContext`. Route guards are wrapper components:
 
-## Can I connect a custom domain to my Lovable project?
+| Guard | Requirement |
+|---|---|
+| `ProtectedRoute` | Any authenticated user |
+| `AdminRoute` | `profiles.role = 'admin'` |
+| `InvestorRoute` | Active investor subscription |
+| `SellerRoute` | Sell-side role (seller / agent / developer) |
 
-Yes, you can!
+Roles are stored in `profiles.role` and map to the `ParticipantId` type:
+`buyer | seller | agent | developer | professional | investor | institutional`
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+Use `getParticipantTypeFromProfile()` from `src/lib/participantConfig.ts` to resolve a profile to its canonical participant type — it handles the legacy `bio __type:` prefix automatically.
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+**Never check roles by email** — `role = 'admin'` in the DB is the authoritative check.
+
+### Data Layer
+
+All server state goes through **React Query** hooks in `src/hooks/`:
+- Use explicit `.select("col1, col2, …")` — never `select("*")`
+- Apply `enabled: !!user` guards to skip unauthenticated fetches
+- Invalidate related query keys on mutation success
+
+Regenerate Supabase types after schema changes:
+```bash
+supabase gen types typescript --linked > src/integrations/supabase/types.ts
+```
+
+### Performance
+
+- Listings grid uses `pageSize = 24` (infinite scroll); map view fetches up to 500
+- `PropertyCard` images use `loading="lazy"` for native browser lazy-loading
+- Dashboard analytics queries (`useListingViewTrends`, `useLeadFunnel`) are only fired inside the lazy-loaded `AnalyticsTab` — not on Dashboard mount
+- Mapbox is dynamically imported inside `MapView` to keep it out of the initial JS bundle
+
+### Edge Functions
+
+**Protected** (JWT required): `property-chat`, `pro-ai-tools`, `listing-ai-assist`, `create-checkout`, `check-subscription`, `customer-portal`, `create-stripe-price`, `process-email-queue`
+
+**Public**: AI search, property valuation, neighbourhood reports, POIs, auction syncing, saved-search alerts
+
+## Further Reading
+
+- [`CLAUDE.md`](./CLAUDE.md) — project conventions for AI-assisted development
+- `src/lib/participantConfig.ts` — canonical role/participant type definitions
+- `src/integrations/supabase/types.ts` — full DB schema types (auto-generated)

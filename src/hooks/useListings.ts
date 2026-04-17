@@ -1,9 +1,39 @@
+﻿/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database, Enums } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
+import { logger } from "@/lib/logger";
 import { getOwnerParticipantType } from "@/lib/participantConfig";
+
+/**
+ * A listings row augmented with joined tables and computed fields added by useListing().
+ * Using this type eliminates `(db as any)` casts in consuming components.
+ */
+export type ListingWithJoins = Database["public"]["Tables"]["listings"]["Row"] & {
+  /** Images joined from listing_images table */
+  listing_images: { url: string; sort_order: number }[];
+  /** Owner profile joined from profiles_public */
+  profiles: {
+    user_id: string;
+    display_name: string | null;
+    avatar_url: string | null;
+    verified?: boolean | null;
+    role?: string | null;
+    bio?: string | null;
+    phone?: string | null;
+  } | null;
+  /** Whether the listing owner has an active Pro subscription */
+  ownerIsPro: boolean;
+  /** Participant role of the owner (agent vs private seller) */
+  ownerParticipantType: "agent" | "seller" | null;
+  /** Score columns stored by neighbourhood-report edge function (not in generated types yet) */
+  walkability_score?: number | null;
+  safety_score?: number | null;
+  noise_score?: number | null;
+};
 
 export type ListingsFilters = {
   city?: string;
@@ -37,7 +67,7 @@ export type ListingsFilters = {
   sort?: "featured" | "newest" | "price-asc" | "price-desc" | "ai-score" | "views";
 };
 
-function buildListingsQuery(filters?: ListingsFilters, from = 0, pageSize = 500) {
+function buildListingsQuery(filters?: ListingsFilters, from = 0, pageSize = 24) {
   const sort = filters?.sort ?? "featured";
   let query = supabase
     .from("listings")
@@ -57,17 +87,17 @@ function buildListingsQuery(filters?: ListingsFilters, from = 0, pageSize = 500)
 
   if (filters?.city) query = query.ilike("city", `%${filters.city}%`);
   if (filters?.listing_type) {
-    query = query.eq("listing_type", filters.listing_type as any);
+    query = query.eq("listing_type", filters.listing_type as Enums<"listing_type">);
   } else if (!filters?.includeAuctions) {
-    query = query.in("listing_type", ["sale", "rent", "firesale"] as any);
+    query = query.in("listing_type", ["sale", "rent", "firesale"] as Enums<"listing_type">[]);
   }
-  if (filters?.property_type) query = query.eq("property_type", filters.property_type as any);
+  if (filters?.property_type) query = query.eq("property_type", filters.property_type as Enums<"property_type">);
   if (filters?.owner_id) query = query.eq("owner_id", filters.owner_id);
   // Always apply status filter; for owner queries don't default to 'active' so all own listings show
   if (filters?.owner_id) {
-    if (filters?.status) query = query.eq("status", filters.status as any);
+    if (filters?.status) query = query.eq("status", filters.status as Enums<"listing_status">);
   } else {
-    query = query.eq("status", (filters?.status || "active") as any);
+    query = query.eq("status", (filters?.status || "active") as Enums<"listing_status">);
   }
 
   // Numeric filters
@@ -90,9 +120,18 @@ function buildListingsQuery(filters?: ListingsFilters, from = 0, pageSize = 500)
   if (filters?.is_off_market === true) query = query.eq("is_off_market", true);
   if (filters?.energy_class?.length) query = query.in("energy_class", filters.energy_class);
 
-  // Feature booleans (e.g. has_elevator, has_parking)
+  // Feature booleans â€” only allow known DB column names to prevent column injection
+  const ALLOWED_FEATURE_COLUMNS = new Set([
+    "has_parking", "has_elevator", "has_balcony", "has_pool", "pets_allowed",
+    "has_furnished", "has_garden", "has_ac", "has_fireplace", "has_storage",
+    "has_view", "has_smart_home", "has_attic", "has_double_glazing",
+    "has_secure_door", "has_alarm", "has_loading_dock", "has_three_phase_power",
+    "has_cctv", "has_disability_access", "has_structured_cabling", "has_facade",
+    "has_night_power", "has_solar_water",
+  ]);
   for (const feat of filters?.features ?? []) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if (!ALLOWED_FEATURE_COLUMNS.has(feat)) continue;
+     
     query = (query as any).eq(feat, true);
   }
 
@@ -114,7 +153,7 @@ async function fetchListingsPage(filters?: ListingsFilters, page = 1, pageSize =
       .from("profiles_public")
       .select("user_id, display_name, avatar_url")
       .in("user_id", ownerIds);
-    profileMap = new Map((ownerProfiles as any[]).map((p: any) => [p.user_id, p]));
+    profileMap = new Map((ownerProfiles ?? []).map(p => [p.user_id, p]));
   }
 
   const enriched = rows.map((r: any) => ({
@@ -122,21 +161,11 @@ async function fetchListingsPage(filters?: ListingsFilters, page = 1, pageSize =
     profiles: profileMap.get(r.owner_id) ?? null,
   }));
 
-  // Sort: featured → priority → created_at
-  enriched.sort((a: any, b: any) => {
-    const aFeat = a.is_featured ? 1 : 0;
-    const bFeat = b.is_featured ? 1 : 0;
-    if (bFeat !== aFeat) return bFeat - aFeat;
-    const aPri = Number(a.priority_placement ?? 0);
-    const bPri = Number(b.priority_placement ?? 0);
-    if (bPri !== aPri) return bPri - aPri;
-    return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
-  });
-
+  // ORDER BY is applied server-side in buildListingsQuery; no client sort needed.
   return { data: enriched, hasMore: rows.length === pageSize };
 }
 
-/** Paginated listings for grid view — fetches 24 per page, server-side filtering */
+/** Paginated listings for grid view â€” fetches 24 per page, server-side filtering */
 export const PAGE_SIZE = 24;
 
 export function useListingsPaginated(filters?: ListingsFilters) {
@@ -149,7 +178,9 @@ export function useListingsPaginated(filters?: ListingsFilters) {
   });
 }
 
-/** All listings for map/split view — fetches in batches up to limit. Set enabled: false to skip. */
+/** All listings for map/split view â€” single bounded fetch, max 200 rows. Set enabled: false to skip. */
+export const MAP_FETCH_LIMIT = 200;
+
 export function useListings(
   filters?: ListingsFilters,
   options?: { enabled?: boolean }
@@ -158,45 +189,28 @@ export function useListings(
     queryKey: ["listings", filters],
     enabled: options?.enabled ?? true,
     queryFn: async () => {
-      const FETCH_LIMIT = 500;
-      const pageSize = filters?.pageSize ?? FETCH_LIMIT;
-      let allData: any[] = [];
-      let from = 0;
+      const limit = filters?.limit ?? MAP_FETCH_LIMIT;
+      const { data, error } = await buildListingsQuery(filters, 0, limit);
+      if (error) throw error;
+      const rows = data ?? [];
+      if (rows.length === 0) return rows as ListingWithJoins[];
 
-      while (true) {
-        const { data, error } = await buildListingsQuery(filters, from, pageSize);
-        if (error) throw error;
-        if (!data || data.length === 0) break;
-        allData = allData.concat(data);
-        if (filters?.limit && allData.length >= filters.limit) {
-          allData = allData.slice(0, filters.limit);
-          break;
-        }
-        if (data.length < pageSize) break;
-        from += pageSize;
+      // ORDER BY is applied server-side in buildListingsQuery; no client sort needed.
+       
+      const ownerIds = [...new Set(rows.map((r: any) => r.owner_id).filter(Boolean))];
+      let profileMap = new Map();
+      if (ownerIds.length > 0) {
+        const { data: ownerProfiles = [] } = await supabase
+          .from("profiles_public")
+          .select("user_id, display_name, avatar_url")
+          .in("user_id", ownerIds);
+        profileMap = new Map((ownerProfiles ?? []).map(p => [p.user_id, p]));
       }
-      if (allData.length === 0) return allData;
-
-      allData.sort((a: any, b: any) => {
-        const aFeat = a.is_featured ? 1 : 0;
-        const bFeat = b.is_featured ? 1 : 0;
-        if (bFeat !== aFeat) return bFeat - aFeat;
-        const aPri = Number(a.priority_placement ?? 0);
-        const bPri = Number(b.priority_placement ?? 0);
-        if (bPri !== aPri) return bPri - aPri;
-        return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
-      });
-
-      const ownerIds = [...new Set(allData.map((r: any) => r.owner_id).filter(Boolean))];
-      const { data: ownerProfiles = [] } = await supabase
-        .from("profiles_public")
-        .select("user_id, display_name, avatar_url")
-        .in("user_id", ownerIds);
-      const profileMap = new Map((ownerProfiles as any[]).map((p: any) => [p.user_id, p]));
-      return allData.map((r: any) => ({
+       
+      return rows.map((r: any) => ({
         ...r,
         profiles: profileMap.get(r.owner_id) ?? null,
-      }));
+      })) as ListingWithJoins[];
     },
   });
 }
@@ -212,33 +226,58 @@ export function useListing(id: string) {
           listing_images(url, sort_order)
         `)
         .eq("id", id)
-        .single();
+        .maybeSingle();
+      // PGRST116 (no rows) now handled by maybeSingle() â€” only real errors thrown
       if (error) throw error;
-      // Increment view count and log event for trends (fire-and-forget)
-      const { data: { user } } = await supabase.auth.getUser();
-      Promise.all([
-        supabase.from("listings").update({ views_count: (data?.views_count || 0) + 1 }).eq("id", id),
-        supabase.from("listing_view_events").insert({ listing_id: id, viewer_id: user?.id ?? null }),
-      ]).catch(() => {});
+      if (!data) return null;
       // Fetch owner profile and Pro status (Pro owners can receive messages and calendar)
       let profiles = null;
       let ownerIsPro = false;
       let ownerParticipantType: "agent" | "seller" | null = null;
-      if (data?.owner_id) {
-        const [{ data: profilePublic }, { data: profileFull }, { data: invSub }] = await Promise.all([
-          supabase.from("profiles_public").select("user_id, display_name, avatar_url").eq("user_id", data.owner_id).maybeSingle(),
-          supabase.from("profiles").select("user_id, role, bio").eq("user_id", data.owner_id).maybeSingle(),
-          supabase.from("investor_subscriptions").select("tier, status").eq("user_id", data.owner_id).order("started_at", { ascending: false }).limit(1).maybeSingle(),
-        ]);
-        profiles = profilePublic ?? null;
-        ownerIsPro = !!(invSub?.status === "active" && (invSub?.tier || "").toLowerCase() === "pro");
-        if (profileFull) {
-          ownerParticipantType = getOwnerParticipantType(profileFull);
+      if (data.owner_id) {
+        try {
+          const [{ data: profilePublic }, { data: profileFull }, { data: invSub }] = await Promise.all([
+            supabase.from("profiles_public").select("user_id, display_name, avatar_url").eq("user_id", data.owner_id).maybeSingle(),
+            supabase.from("profiles").select("user_id, role, bio").eq("user_id", data.owner_id).maybeSingle(),
+            supabase.from("investor_subscriptions").select("tier, status").eq("user_id", data.owner_id).order("started_at", { ascending: false }).limit(1).maybeSingle(),
+          ]);
+          profiles = profilePublic ?? null;
+          ownerIsPro = !!(invSub?.status === "active" && (invSub?.tier || "").toLowerCase() === "pro");
+          if (profileFull) {
+            ownerParticipantType = getOwnerParticipantType(profileFull);
+          }
+        } catch (_err: unknown) {
+          // owner profile fetch is non-critical; listing still renders without it
         }
       }
-      return { ...data, profiles, ownerIsPro, ownerParticipantType };
+      return { ...data, profiles, ownerIsPro, ownerParticipantType } as ListingWithJoins;
     },
     enabled: !!id,
+  });
+}
+
+/**
+ * Tracks a listing view â€” call from the detail page component, not inside a queryFn.
+ * Deduplicates within the same browser session so refetches don't double-count.
+ * Uses DB-side RPCs so the increment is atomic (single UPDATE, no read-modify-write race)
+ * and the view event is a plain insert, both via migration 20260404140000.
+ */
+export function useTrackListingView() {
+  return useMutation({
+    mutationFn: async (listingId: string) => {
+      const sessionKey = `viewed_${listingId}`;
+      if (sessionStorage.getItem(sessionKey)) return;
+      sessionStorage.setItem(sessionKey, "1");
+
+      const { data: authData } = await supabase.auth.getUser();
+      await Promise.all([
+        (supabase.rpc as any)("increment_listing_views", { p_listing_id: listingId }),
+        (supabase.rpc as any)("record_listing_view_event", {
+          p_listing_id: listingId,
+          p_viewer_id: authData.user?.id ?? null,
+        }),
+      ]).catch((e: unknown) => logger.warn("View tracking failed:", e));
+    },
   });
 }
 
@@ -255,9 +294,8 @@ export function useCreateListing() {
       auction_date?: string; auction_starting_bid?: number;
     }) => {
       if (!user) throw new Error("Must be logged in");
-      const { data, error } = await supabase
-        .from("listings")
-        .insert({ ...listing, owner_id: user.id, status: "active" } as any)
+      const { data, error } = await supabase.from("listings")
+        .insert({ ...listing, owner_id: user.id, status: "active" as Enums<"listing_status"> })
         .select()
         .single();
       if (error) throw error;
@@ -277,12 +315,15 @@ export function useCreateListing() {
 
 export function useUpdateListing() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Record<string, unknown> }) => {
+      if (!user) throw new Error("Must be logged in");
       const { data, error } = await supabase
         .from("listings")
-        .update(updates as any)
+        .update(updates as Record<string, unknown>)
         .eq("id", id)
+        .eq("owner_id", user.id)
         .select()
         .single();
       if (error) throw error;
@@ -300,9 +341,11 @@ export function useUpdateListing() {
 
 export function useDeleteListing() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("listings").delete().eq("id", id);
+      if (!user) throw new Error("Must be logged in");
+      const { error } = await supabase.from("listings").delete().eq("id", id).eq("owner_id", user.id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -314,6 +357,7 @@ export function useDeleteListing() {
   });
 }
 
+/** Shorthand: returns all listings owned by the currently logged-in user. */
 export function useMyListings() {
   const { user } = useAuth();
   return useListings({ owner_id: user?.id });

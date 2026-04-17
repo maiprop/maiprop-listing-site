@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from "react";
 import { toast } from "sonner";
 import {
@@ -17,6 +18,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 const STAGE_LABELS: Record<string, string> = {
   new: "New",
@@ -43,6 +45,7 @@ export default function ContactsCRM() {
   const [editing, setEditing] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"pipeline" | "list">("pipeline");
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -296,7 +299,7 @@ export default function ContactsCRM() {
                         follow_up_at: c.follow_up_at ? c.follow_up_at.slice(0, 16) : "",
                       });
                     }}
-                    onDelete={() => { if (confirm("Delete?")) deleteContact.mutate(c.id); }}
+                    onDelete={() => setDeleteTarget(c.id)}
                     onStageChange={(s) => handleStageChange(c.id, s)}
                     expanded={expandedId === c.id}
                     onToggleExpand={() => setExpandedId(expandedId === c.id ? null : c.id)}
@@ -350,7 +353,7 @@ export default function ContactsCRM() {
                     to={`/property/${c.listing_id}`}
                     className="text-xs text-primary/80 hover:text-primary flex items-center gap-0.5 mt-1"
                   >
-                    <ExternalLink className="w-3 h-3" /> {(c.listings as any).title}
+                    <ExternalLink className="w-3 h-3" /> {(c.listings as { title?: string } | null)?.title}
                   </Link>
                 )}
               </div>
@@ -380,7 +383,7 @@ export default function ContactsCRM() {
                   <CheckSquare className="w-4 h-4" />
                 </button>
                 <button
-                  onClick={() => { if (confirm("Delete this contact?")) deleteContact.mutate(c.id); }}
+                  onClick={() => setDeleteTarget(c.id)}
                   className="p-2 rounded-xl hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -432,6 +435,15 @@ export default function ContactsCRM() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete contact?"
+        description="This will permanently remove the contact and all their tasks."
+        confirmLabel="Delete"
+        onConfirm={() => { if (deleteTarget) deleteContact.mutate(deleteTarget); setDeleteTarget(null); }}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

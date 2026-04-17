@@ -1,5 +1,5 @@
-/**
- * ProfessionalVerificationPanel — Admin review of professional credential submissions.
+﻿/**
+ * ProfessionalVerificationPanel â€” Admin review of professional credential submissions.
  * Approve / reject with inline notes. Falls back to mock data when Supabase returns nothing.
  */
 
@@ -22,8 +22,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { PROFESSIONAL_DISPLAY_CATEGORY_COLORS } from "@/lib/statusColors";
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type VerifStatus = "pending" | "approved" | "rejected";
 
@@ -39,42 +40,20 @@ interface Professional {
   approved_date?: string;
 }
 
-// ── Mock data ────────────────────────────────────────────────────────────────
 
-const MOCK_PROFESSIONALS: Professional[] = [
-  { id: "p1", name: "Nikos Papadopoulos", category: "Real Estate Agent", license: "ΡΑ-2024-04821", submitted: "2026-03-20", document_url: "#", status: "pending" },
-  { id: "p2", name: "Maria Stavridou", category: "Notary", license: "ΝΟΤ-Athens-0344", submitted: "2026-03-19", document_url: "#", status: "pending" },
-  { id: "p3", name: "Alexandros Kiriakidis", category: "Civil Engineer", license: "ΤΕΕ-2019-8821", submitted: "2026-03-18", document_url: "#", status: "approved", approved_date: "2026-03-19" },
-  { id: "p4", name: "Sofia Andreou", category: "Lawyer", license: "DSA-Athens-5512", submitted: "2026-03-17", document_url: "#", status: "pending" },
-  { id: "p5", name: "Dimitris Oikonomou", category: "Architect", license: "ΤΕΕ-Arch-3301", submitted: "2026-03-15", document_url: "#", status: "rejected", rejection_reason: "License number not found in ΤΕΕ registry." },
-  { id: "p6", name: "Eleni Vassilakis", category: "Financial Advisor", license: "HCMC-FA-9921", submitted: "2026-03-14", document_url: "#", status: "approved", approved_date: "2026-03-15" },
-  { id: "p7", name: "Kostas Manolis", category: "Real Estate Agent", license: "ΡΑ-2025-01123", submitted: "2026-03-13", document_url: "#", status: "pending" },
-  { id: "p8", name: "Ioanna Petridou", category: "Property Valuer", license: "RICS-GR-0048", submitted: "2026-03-12", document_url: "#", status: "pending" },
-];
+// â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-const CATEGORY_COLORS: Record<string, string> = {
-  "Real Estate Agent": "bg-primary/10 text-primary border-primary/20",
-  "Notary": "bg-brand-gold/10 text-brand-gold border-brand-gold/20",
-  "Civil Engineer": "bg-accent/10 text-accent border-accent/20",
-  "Lawyer": "bg-purple-500/10 text-purple-500 border-purple-500/20",
-  "Architect": "bg-orange-500/10 text-orange-500 border-orange-500/20",
-  "Financial Advisor": "bg-brand-emerald/10 text-brand-emerald border-brand-emerald/20",
-  "Property Valuer": "bg-cyan-500/10 text-cyan-500 border-cyan-500/20",
-};
+const CATEGORY_COLORS = PROFESSIONAL_DISPLAY_CATEGORY_COLORS;
 
 function initials(name: string) {
   return name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
 }
 
-function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-}
+import { formatDate as fmtDate } from "@/lib/format";
 
 type TabFilter = "all" | VerifStatus;
 
-// ── Status badge ─────────────────────────────────────────────────────────────
+// â”€â”€ Status badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function StatusBadge({ status }: { status: VerifStatus }) {
   if (status === "approved") return (
@@ -94,7 +73,7 @@ function StatusBadge({ status }: { status: VerifStatus }) {
   );
 }
 
-// ── Professional row ──────────────────────────────────────────────────────────
+// â”€â”€ Professional row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function ProfRow({ pro, onApprove, onReject }: {
   pro: Professional;
@@ -198,38 +177,37 @@ function ProfRow({ pro, onApprove, onReject }: {
   );
 }
 
-// ── Main component ───────────────────────────────────────────────────────────
+// â”€â”€ Main component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export function ProfessionalVerificationPanel() {
-  const [professionals, setProfessionals] = useState<Professional[]>(MOCK_PROFESSIONALS);
+  const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [tab, setTab] = useState<TabFilter>("all");
   const [loading, setLoading] = useState(false);
 
   async function load() {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from("profiles")
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await supabase.from("profiles")
         .select("id, full_name, verification_status, created_at")
         .eq("verification_status", "pending")
         .limit(50);
       if (error) throw error;
       if (data && data.length > 0) {
-        // Map Supabase profiles to our shape; fill defaults for missing fields
-        const mapped: Professional[] = data.map((p: { id: string; full_name: string | null; verification_status: string | null; created_at: string | null }) => ({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const mapped: Professional[] = (data as any[]).map((p: { id: string; full_name: string | null; verification_status: string | null; created_at: string | null }) => ({
           id: p.id,
           name: p.full_name ?? "Unknown",
           category: "Real Estate Agent",
-          license: "—",
+          license: "â€”",
           submitted: p.created_at?.split("T")[0] ?? "2026-01-01",
           document_url: "#",
           status: "pending" as VerifStatus,
         }));
         setProfessionals(mapped);
       }
-      // else keep mock
-    } catch {
-      // silently fall back to mock
+    } catch (_err: unknown) {
+      // leave list empty on error
     } finally {
       setLoading(false);
     }

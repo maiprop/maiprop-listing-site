@@ -39,7 +39,7 @@ export function AuctionAlertModal({ open, onClose, editAlert }: Props) {
     const payload = {
       city: city || null,
       court_name: courtName || null,
-      property_type: (propertyType || null) as any,
+      property_type: (propertyType || null) as never,
       min_price: minPrice ? Number(minPrice) : null,
       max_price: maxPrice ? Number(maxPrice) : null,
       email_notify: emailNotify,

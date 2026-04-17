@@ -4,7 +4,8 @@
  * Sends email notification via edge function on approve/reject.
  */
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import {
   MailPlus, Loader2, Check, ChevronDown, ChevronUp,
   Building2, Globe, TrendingUp, DollarSign,
@@ -12,10 +13,13 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { isPlatformAdmin } from "@/lib/authUtils";
 import { useAuth } from "@/contexts/AuthContext";
+import { REQUEST_STATUS_COLORS as STATUS_COLORS } from "@/lib/statusColors";
+import { logger } from "@/lib/logger";
 
 type InvitationRequest = {
   id: string;
@@ -45,12 +49,6 @@ const TIER_OPTIONS = [
   { value: "developer", label: "Developer" },
 ];
 
-const STATUS_COLORS: Record<string, string> = {
-  pending: "bg-amber-500/15 text-amber-600 border-amber-500/20",
-  approved: "bg-emerald-500/15 text-emerald-600 border-emerald-500/20",
-  rejected: "bg-muted/60 text-muted-foreground border-border",
-};
-
 function ExpandedDetail({ label, value }: { label: string; value: string | null }) {
   if (!value) return null;
   return (
@@ -77,40 +75,35 @@ async function sendNotificationEmail(params: {
   });
 
   if (error) {
-    console.warn("Email notification failed (non-fatal):", error.message);
+    logger.warn("Email notification failed (non-fatal):", error.message);
   }
 }
 
 export default function AdminInvitationRequests() {
   const { profile } = useAuth();
-  const [requests, setRequests] = useState<InvitationRequest[]>([]);
-  const [loading, setLoading] = useState(true);
+  const qc = useQueryClient();
   const [updating, setUpdating] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<"all" | "pending" | "approved" | "rejected">("all");
-  // Per-request tier selection for approval
   const [tierMap, setTierMap] = useState<Record<string, string>>({});
-  // Per-request rejection reason
   const [rejectionReasonMap, setRejectionReasonMap] = useState<Record<string, string>>({});
-  // Track which cards have the rejection input open
   const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [approveTarget, setApproveTarget] = useState<InvitationRequest | null>(null);
 
   const isAdmin = isPlatformAdmin(profile);
 
-  const load = async (): Promise<void> => {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from("invitation_requests")
-      .select("*")
-      .order("created_at", { ascending: false });
-    if (!error) setRequests((data as any) || []);
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    if (!isAdmin) return;
-    void load();
-  }, [isAdmin]);
+  const { data: requests = [], isLoading: loading, refetch } = useQuery<InvitationRequest[]>({
+    queryKey: ["admin-invitation-requests"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("invitation_requests")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data as InvitationRequest[]) || [];
+    },
+    enabled: isAdmin,
+  });
 
   const getTier = (id: string) => tierMap[id] ?? "private";
   const getRejectionReason = (id: string) => rejectionReasonMap[id] ?? "";
@@ -146,7 +139,19 @@ export default function AdminInvitationRequests() {
         );
       if (subErr) throw subErr;
 
-      // 3. Eligibility = investor_subscriptions only (no role change; access via subscription)
+      // 3. Grant the matching role (admin bypasses RLS guard)
+      const roleForTier: Record<string, string> = {
+        private: "investor",
+        institutional: "institutional",
+        developer: "developer",
+      };
+      const grantedRole = roleForTier[tier] ?? "investor";
+      const { error: roleErr } = await supabase
+        .from("profiles")
+        .update({ role: grantedRole, participant_type: grantedRole } as never)
+        .eq("user_id", req.user_id);
+      if (roleErr) logger.warn("Role update failed (non-fatal):", roleErr.message);
+
       // 4. Send email notification (fire-and-forget)
       sendNotificationEmail({
         type: "approved",
@@ -155,10 +160,10 @@ export default function AdminInvitationRequests() {
         tier,
       });
 
-      setRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: "approved" } : r));
-      toast.success(`✅ Approved & investor access granted (${tier}, 1 year) — email sent`);
-    } catch (e) {
-      toast.error((e as Error)?.message ?? "Could not approve");
+      qc.invalidateQueries({ queryKey: ["admin-invitation-requests"] });
+      toast.success(`✅ Approved — role: ${grantedRole}, subscription: ${tier} (1 year) — email sent`);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Could not approve");
     } finally {
       setUpdating(null);
     }
@@ -187,11 +192,11 @@ export default function AdminInvitationRequests() {
         rejection_reason: reason || undefined,
       });
 
-      setRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: "rejected" } : r));
+      qc.invalidateQueries({ queryKey: ["admin-invitation-requests"] });
       setRejectingId(null);
       toast.success("Request rejected" + (reason ? " — email sent with reason" : " — email sent"));
-    } catch (e) {
-      toast.error((e as Error)?.message ?? "Could not reject");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Could not reject");
     } finally {
       setUpdating(null);
     }
@@ -230,7 +235,7 @@ export default function AdminInvitationRequests() {
             Approve to automatically activate a 1-year investor subscription. Email notifications are sent automatically.
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={load} className="gap-2 h-8 text-xs">
+        <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-2 h-8 text-xs">
           <RefreshCw className="w-3.5 h-3.5" /> Refresh
         </Button>
       </div>
@@ -363,7 +368,7 @@ export default function AdminInvitationRequests() {
                           <Button
                             size="sm"
                             className="h-8 text-xs gap-1.5 bg-brand-emerald hover:bg-brand-emerald/90 text-primary-foreground border-0"
-                            onClick={() => { if (window.confirm(`Approve investor access for ${req.display_name || req.email}?`)) approve(req); }}
+                            onClick={() => setApproveTarget(req)}
                             disabled={isUpdating}
                           >
                             {isUpdating && !isRejectOpen ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
@@ -480,6 +485,15 @@ export default function AdminInvitationRequests() {
           })}
         </div>
       )}
+      <ConfirmDialog
+        open={!!approveTarget}
+        title="Approve investor access?"
+        description={`Grant full investor dashboard access to ${approveTarget?.full_name || approveTarget?.email || "this applicant"}?`}
+        confirmLabel="Approve"
+        destructive={false}
+        onConfirm={() => { if (approveTarget) approve(approveTarget); setApproveTarget(null); }}
+        onCancel={() => setApproveTarget(null)}
+      />
     </div>
   );
 }

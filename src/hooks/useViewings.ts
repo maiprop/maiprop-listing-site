@@ -4,6 +4,10 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
 
+/**
+ * Returns viewings for the current user.
+ * @param role "requester" — viewings the user booked; "owner" — viewings on their listings.
+ */
 export function useViewings(role: "requester" | "owner" = "requester") {
   const { user } = useAuth();
   return useQuery({
@@ -56,12 +60,15 @@ export function useBookViewing() {
 
 export function useUpdateViewingStatus() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async ({ id, status }: { id: string; status: "confirmed" | "cancelled" | "completed" }) => {
+      if (!user) throw new Error("Must be logged in");
       const { error } = await supabase
         .from("viewings")
         .update({ status })
-        .eq("id", id);
+        .eq("id", id)
+        .or(`owner_id.eq.${user.id},requester_id.eq.${user.id}`);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -73,12 +80,15 @@ export function useUpdateViewingStatus() {
 
 export function useUpdateViewing() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: { status?: string; video_link?: string | null } }) => {
+      if (!user) throw new Error("Must be logged in");
       const { error } = await supabase
         .from("viewings")
-        .update(updates as any)
-        .eq("id", id);
+        .update(updates as Record<string, unknown>)
+        .eq("id", id)
+        .or(`owner_id.eq.${user.id},requester_id.eq.${user.id}`);
       if (error) throw error;
     },
     onSuccess: () => {

@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+﻿import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -14,9 +14,11 @@ export function useLeads() {
   return useQuery({
     queryKey: ["leads", user?.id],
     queryFn: async () => {
+      if (!user) return [];
       const { data, error } = await supabase
         .from("leads")
         .select("*, listings(id, title, city, cover_image_url)")
+        .eq("owner_id", user.id)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data || [];
@@ -43,8 +45,8 @@ export function useCreateLead() {
       project_id?: string | null;
     }) => {
       if (!user) throw new Error("Not authenticated");
-      const { data, error } = await supabase
-        .from("leads")
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await supabase.from("leads")
         .insert({
           owner_id: user.id,
           name: lead.name,
@@ -68,18 +70,21 @@ export function useCreateLead() {
       qc.invalidateQueries({ queryKey: ["leads"] });
       toast.success("Lead added");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: () => toast.error("Could not add lead. Please try again."),
   });
 }
 
 export function useUpdateLead() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Record<string, unknown> }) => {
+      if (!user) throw new Error("Not authenticated");
       const { data, error } = await supabase
         .from("leads")
         .update(updates)
         .eq("id", id)
+        .eq("owner_id", user.id)
         .select()
         .single();
       if (error) throw error;
@@ -89,21 +94,23 @@ export function useUpdateLead() {
       qc.invalidateQueries({ queryKey: ["leads"] });
       toast.success("Lead updated");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: () => toast.error("Could not update lead. Please try again."),
   });
 }
 
 export function useDeleteLead() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("leads").delete().eq("id", id);
+      if (!user) throw new Error("Not authenticated");
+      const { error } = await supabase.from("leads").delete().eq("id", id).eq("owner_id", user.id);
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["leads"] });
       toast.success("Lead deleted");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: () => toast.error("Could not delete lead. Please try again."),
   });
 }

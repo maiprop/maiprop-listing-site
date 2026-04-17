@@ -19,12 +19,14 @@ CREATE TABLE IF NOT EXISTS public.firesale_interest (
 ALTER TABLE public.firesale_interest ENABLE ROW LEVEL SECURITY;
 
 -- Investors manage their own entries
+DROP POLICY IF EXISTS "Investors manage own firesale interest" ON public.firesale_interest;
 CREATE POLICY "Investors manage own firesale interest"
   ON public.firesale_interest FOR ALL
   USING  (auth.uid() = investor_id)
   WITH CHECK (auth.uid() = investor_id);
 
 -- Platform admins can read and update all (for queue management)
+DROP POLICY IF EXISTS "Admins manage all firesale interest" ON public.firesale_interest;
 CREATE POLICY "Admins manage all firesale interest"
   ON public.firesale_interest FOR ALL
   USING  (public.has_platform_admin(auth.uid()));
@@ -33,6 +35,7 @@ CREATE INDEX IF NOT EXISTS idx_firesale_interest_deal_id     ON public.firesale_
 CREATE INDEX IF NOT EXISTS idx_firesale_interest_investor_id ON public.firesale_interest(investor_id);
 CREATE INDEX IF NOT EXISTS idx_firesale_interest_status      ON public.firesale_interest(status);
 
+DROP TRIGGER IF EXISTS update_firesale_interest_updated_at ON public.firesale_interest;
 CREATE TRIGGER update_firesale_interest_updated_at
   BEFORE UPDATE ON public.firesale_interest
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();

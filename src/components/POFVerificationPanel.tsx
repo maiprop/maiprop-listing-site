@@ -41,37 +41,6 @@ interface PofEntry {
   rejection_reason?: string;
 }
 
-// ── Mock data ─────────────────────────────────────────────────────────────────
-
-const MOCK_ENTRIES: PofEntry[] = [
-  {
-    id: "pof-mock-1",
-    investor_name: "Alexandros Demetriou",
-    proof_amount: 250000,
-    proof_of_funds_url: "#",
-    uploaded_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    listing_id: "listing-1",
-    status: "unreviewed",
-  },
-  {
-    id: "pof-mock-2",
-    investor_name: "Elena Konstantinou",
-    proof_amount: 500000,
-    proof_of_funds_url: "#",
-    uploaded_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-    listing_id: "listing-1",
-    status: "verified",
-  },
-  {
-    id: "pof-mock-3",
-    investor_name: "Spyros Nikolaidis",
-    proof_amount: 125000,
-    proof_of_funds_url: "#",
-    uploaded_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-    listing_id: "listing-2",
-    status: "unreviewed",
-  },
-];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -83,13 +52,7 @@ function fmtEur(n: number): string {
   }).format(n);
 }
 
-function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
+import { formatDate as fmtDate } from "@/lib/format";
 
 function initials(name: string): string {
   return name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
@@ -254,7 +217,6 @@ export function POFVerificationPanel({ dealId }: POFVerificationPanelProps) {
   const [tab, setTab] = useState<TabKey>("unreviewed");
   const [loading, setLoading] = useState(false);
   const [rejectTarget, setRejectTarget] = useState<string | null>(null);
-  const [usingMock, setUsingMock] = useState(false);
 
   async function load(): Promise<void> {
     setLoading(true);
@@ -295,26 +257,22 @@ export function POFVerificationPanel({ dealId }: POFVerificationPanelProps) {
           };
         });
         setEntries(mapped);
-        setUsingMock(false);
-      } else {
-        setEntries(MOCK_ENTRIES);
-        setUsingMock(true);
       }
-    } catch {
-      setEntries(MOCK_ENTRIES);
-      setUsingMock(true);
+    } catch (_err: unknown) {
+      // leave list empty on error
     } finally {
       setLoading(false);
     }
   }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { void load(); }, [dealId]);
 
   async function handleVerify(id: string): Promise<void> {
     const entry = entries.find((e) => e.id === id);
     if (!entry) return;
 
-    if (!usingMock) {
+    {
       const { error } = await supabase
         .from("open_house_registrations")
         .update({ note: "pof_verified" })
@@ -336,7 +294,7 @@ export function POFVerificationPanel({ dealId }: POFVerificationPanelProps) {
     const entry = entries.find((e) => e.id === rejectTarget);
     if (!entry) return;
 
-    if (!usingMock) {
+    {
       const { error } = await supabase
         .from("open_house_registrations")
         .update({
@@ -441,9 +399,6 @@ export function POFVerificationPanel({ dealId }: POFVerificationPanelProps) {
             ))}
           </div>
           <div className="flex items-center gap-2">
-            {usingMock && (
-              <span className="text-xs text-muted-foreground italic">Demo data</span>
-            )}
             {dealId && (
               <span className="text-xs text-muted-foreground bg-muted/40 px-2 py-0.5 rounded font-mono">
                 Deal: {dealId.slice(0, 8)}…

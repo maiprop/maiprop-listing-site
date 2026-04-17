@@ -88,7 +88,7 @@ function generateMockSales(lat: number, lng: number, count: number): SaleRecord[
   }));
 }
 
-function generateMockSalesDefault(): SaleRecord[] {
+function _generateMockSalesDefault(): SaleRecord[] {
   return generateMockSales(37.9838, 23.7275, 15);
 }
 
@@ -146,13 +146,10 @@ serve(async (req) => {
     }
 
     if (!response.ok) {
-      console.warn(
-        `os-sales-coordinates: OS API returned ${response.status} — falling back to mock data`,
-      );
-      const mockData = generateMockSales(lat, lng, limit);
+      console.warn(`os-sales-coordinates: OS API returned ${response.status}`);
       return new Response(
-        JSON.stringify({ data: mockData, source: "mock" }),
-        { headers: { ...hdrs, "Content-Type": "application/json" } },
+        JSON.stringify({ available: false, reason: "upstream_unavailable" }),
+        { status: 503, headers: { ...hdrs, "Content-Type": "application/json" } },
       );
     }
 
@@ -162,17 +159,12 @@ serve(async (req) => {
       { headers: { ...hdrs, "Content-Type": "application/json" } },
     );
   } catch (error) {
-    // Network error, timeout, or any other failure — always return mock so the UI stays functional
     const message = error instanceof Error ? error.message : "Unknown error";
-    console.warn("os-sales-coordinates: fetch failed, returning mock data. Error:", message);
+    console.warn("os-sales-coordinates: fetch failed. Error:", message);
 
     return new Response(
-      JSON.stringify({
-        data: generateMockSalesDefault(),
-        source: "mock",
-        error: message,
-      }),
-      { headers: { ...hdrs, "Content-Type": "application/json" } },
+      JSON.stringify({ available: false, reason: "upstream_unavailable" }),
+      { status: 503, headers: { ...hdrs, "Content-Type": "application/json" } },
     );
   }
 });

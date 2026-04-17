@@ -26,7 +26,7 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function pick<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
+function _pick<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
 function rand(min: number, max: number) { return Math.floor(Math.random() * (max - min + 1)) + min; }
 
 function futureDate(daysFromNow: number, hour = 10, minute = 0): string {

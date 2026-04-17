@@ -78,7 +78,7 @@ export default function RequestCallbackModal({ open, onClose, professional }: Re
         message: note || undefined,
       });
       setDone(true);
-    } catch {
+    } catch (_err: unknown) {
       toast.error("Could not submit request. Please try again.");
     }
   };

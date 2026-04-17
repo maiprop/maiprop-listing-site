@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { logger } from "@/lib/logger";
 import { useTranslation } from "react-i18next";
 import type { Property } from "@/components/PropertyCard";
 
@@ -13,7 +14,7 @@ interface ViewingDialogProps {
   onClose: () => void;
   property: Property;
   ownerId: string;
-  /** If false, video viewing is disabled (Pro or retailers only). */
+  /** If false, video viewing is disabled (Pro or buyers only). */
   canVideoView?: boolean;
 }
 
@@ -49,7 +50,7 @@ export default function ViewingDialog({ open, onClose, property, ownerId, canVid
   const [confirmed, setConfirmed] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const translatedDayNames = [
+  const translatedDayNames = useMemo(() => [
     t("viewingDialog.days.sun"),
     t("viewingDialog.days.mon"),
     t("viewingDialog.days.tue"),
@@ -57,8 +58,10 @@ export default function ViewingDialog({ open, onClose, property, ownerId, canVid
     t("viewingDialog.days.thu"),
     t("viewingDialog.days.fri"),
     t("viewingDialog.days.sat"),
-  ];
-  const days = useMemo(() => buildDynamicDays(translatedDayNames), [open]);
+  ], [t]);
+  // `open` intentionally included to recompute fresh dates each time dialog opens
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const days = useMemo(() => buildDynamicDays(translatedDayNames), [open, translatedDayNames]);
 
   const handleDaySelect = (day: { label: string; date: string; iso: string }) => {
     setSelectedDay(day.date);
@@ -83,15 +86,15 @@ export default function ViewingDialog({ open, onClose, property, ownerId, canVid
       status: "pending",
       scheduled_at: scheduledAt.toISOString(),
       note: note.trim() || null,
-    } as any);
+    } as never);
     setLoading(false);
     if (viewErr) {
       toast.error("Could not submit viewing request. Please try again.");
       return;
     }
-    // Create lead for listing owner
-    const requesterName = profile?.display_name || profile?.first_name || user.email?.split("@")[0] || "Viewing request";
-    await supabase.from("leads").insert({
+    // Create lead for listing owner (best-effort — failure does not block confirmation)
+    const requesterName = profile?.display_name || profile?.first_name || "Viewing request";
+    const { error: leadErr } = await supabase.from("leads").insert({
       owner_id: ownerId,
       source: "viewing",
       listing_id: property.id,
@@ -101,7 +104,8 @@ export default function ViewingDialog({ open, onClose, property, ownerId, canVid
       message: `Viewing request: ${viewType} on ${selectedDay} at ${selectedTime}${note.trim() ? ` — ${note.trim()}` : ""}`,
       status: "new",
       follow_up_at: scheduledAt.toISOString(),
-    } as any).then(({ error: leadErr }) => { if (leadErr) console.warn("Lead create:", leadErr); });
+    } as never);
+    if (leadErr) logger.warn("[ViewingDialog] Lead create failed (non-blocking):", leadErr.message);
     setConfirmed(true);
     toast.success("Viewing request submitted! The property owner will be notified.");
   };
@@ -140,7 +144,7 @@ export default function ViewingDialog({ open, onClose, property, ownerId, canVid
           <div className="space-y-5">
             {/* Property mini card */}
             <div className="flex gap-3 p-3 bg-secondary rounded-xl">
-              <img src={property.images[0]} className="w-14 h-14 rounded-lg object-cover" alt="" />
+              {property.images?.[0] && <img src={property.images[0]} className="w-14 h-14 rounded-lg object-cover" alt="" />}
               <div className="min-w-0">
                 <p className="font-medium text-sm truncate">{property.title}</p>
                 <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
@@ -175,7 +179,7 @@ export default function ViewingDialog({ open, onClose, property, ownerId, canVid
                   }`}
                 >
                   <Video className="w-4 h-4" />
-                  {t("viewingDialog.video")}{!canVideoView && " (Pro or retailers)"}
+                  {t("viewingDialog.video")}{!canVideoView && " (Pro or buyers)"}
                 </button>
               </div>
             </div>

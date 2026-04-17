@@ -1,8 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-const db = supabase as any;
 
 export type ProjectUnitInsert = {
   project_id: string;
@@ -38,9 +38,9 @@ export function useProjectUnits(projectId: string | undefined) {
     queryKey: ["project_units", projectId],
     queryFn: async () => {
       if (!projectId) return [];
-      const { data, error } = await db
+      const { data, error } = await supabase
         .from("project_units")
-        .select("*")
+        .select("id, project_id, listing_id, unit_id, unit_number, floor, availability_status, internal_sqm, balcony_sqm, storage_sqm, parking_sqm, bedrooms, bathrooms, kitchen_type, living_rooms, price, price_per_sqm, vat_included, parking_price, storage_price, sea_view, city_view, mountain_view, energy_class, heating_system, cooling_system, created_at, updated_at")
         .eq("project_id", projectId)
         .order("floor", { ascending: true, nullsFirst: false })
         .order("unit_number", { ascending: true, nullsFirst: false });
@@ -55,7 +55,7 @@ export function useCreateProjectUnit() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (unit: ProjectUnitInsert) => {
-      const { data, error } = await db
+      const { data, error } = await supabase
         .from("project_units")
         .insert(unit)
         .select()
@@ -68,18 +68,19 @@ export function useCreateProjectUnit() {
       qc.invalidateQueries({ queryKey: ["projects"] });
       toast.success("Unit added");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: () => toast.error("Something went wrong. Please try again."),
   });
 }
 
 export function useUpdateProjectUnit() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, projectId: _projectId, updates }: { id: string; projectId: string; updates: ProjectUnitUpdate }) => {
-      const { data, error } = await db
+    mutationFn: async ({ id, projectId, updates }: { id: string; projectId: string; updates: ProjectUnitUpdate }) => {
+      const { data, error } = await supabase
         .from("project_units")
         .update(updates)
         .eq("id", id)
+        .eq("project_id", projectId)
         .select()
         .single();
       if (error) throw error;
@@ -90,15 +91,19 @@ export function useUpdateProjectUnit() {
       qc.invalidateQueries({ queryKey: ["projects"] });
       toast.success("Unit updated");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: () => toast.error("Something went wrong. Please try again."),
   });
 }
 
 export function useDeleteProjectUnit() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, projectId: _projectId }: { id: string; projectId: string }) => {
-      const { error } = await db.from("project_units").delete().eq("id", id);
+    mutationFn: async ({ id, projectId }: { id: string; projectId: string }) => {
+      const { error } = await supabase
+        .from("project_units")
+        .delete()
+        .eq("id", id)
+        .eq("project_id", projectId);
       if (error) throw error;
     },
     onSuccess: (_: any, { projectId }: { id: string; projectId: string }) => {
@@ -106,6 +111,6 @@ export function useDeleteProjectUnit() {
       qc.invalidateQueries({ queryKey: ["projects"] });
       toast.success("Unit removed");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: () => toast.error("Something went wrong. Please try again."),
   });
 }

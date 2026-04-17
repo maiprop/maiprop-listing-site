@@ -130,7 +130,7 @@ export default function OpenHouseRegistrationDialog({
         else if (hasAssetControl) setStep("id");
         else setStep("done");
       }
-    } catch {
+    } catch (_err: unknown) {
       // handled by mutation
     } finally {
       setLoading(false);
@@ -143,7 +143,9 @@ export default function OpenHouseRegistrationDialog({
       return;
     }
     setScreeningDocFile(file);
-    if (file.type.startsWith("image/")) {
+    const IMAGE_EXTS = new Set(["jpg", "jpeg", "png", "webp", "gif", "bmp"]);
+    const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+    if (IMAGE_EXTS.has(ext)) {
       const reader = new FileReader();
       reader.onload = (e) => setScreeningDocPreview(e.target?.result as string);
       reader.readAsDataURL(file);
@@ -167,11 +169,11 @@ export default function OpenHouseRegistrationDialog({
       // Upload screening doc to storage (optional)
       if (screeningDocFile && user?.id) {
         const ext = screeningDocFile.name.split(".").pop() ?? "pdf";
-        const path = `${user.id}/${listingId}/screening_${Date.now()}.${ext}`;
+        const path = `${user.id}/${listingId}/screening_${crypto.randomUUID()}.${ext}`;
         try {
           const storedPath = await uploadOpenHouseDoc(screeningDocFile, path);
           updates.screening_doc_url = storedPath;
-        } catch {
+        } catch (_err: unknown) {
           // Non-fatal — proceed without doc
           toast.warning("ID document upload failed — submission will continue without it.");
         }
@@ -179,7 +181,7 @@ export default function OpenHouseRegistrationDialog({
       await updateReg.mutateAsync({ id: regId, updates });
       if (hasAssetControl) setStep("id");
       else setStep("done");
-    } catch {
+    } catch (_err: unknown) {
       // handled by mutation
     } finally {
       setLoading(false);
@@ -196,7 +198,7 @@ export default function OpenHouseRegistrationDialog({
     setLoading(true);
     try {
       const ext = idDocFile.name.split(".").pop() ?? "jpg";
-      const path = `${user.id}/${listingId}/id_${Date.now()}.${ext}`;
+      const path = `${user.id}/${listingId}/id_${crypto.randomUUID()}.${ext}`;
       const storedPath = await uploadOpenHouseDoc(idDocFile, path);
       await updateReg.mutateAsync({
         id: regId,
@@ -218,12 +220,13 @@ export default function OpenHouseRegistrationDialog({
         id: regId,
         updates: {
           waiver_signed_at: new Date().toISOString(),
-          waiver_url: `signed_${Date.now()}`,
+          // waiver_url stores a signed-copy reference; placeholder until PDF signing is implemented
+          waiver_url: `waiver_accepted_${crypto.randomUUID()}`,
         },
       });
       if (requirePOF || requireInvestor) setStep("qualified");
       else setStep("done");
-    } catch {
+    } catch (_err: unknown) {
       // handled
     } finally {
       setLoading(false);
@@ -238,7 +241,7 @@ export default function OpenHouseRegistrationDialog({
     }
     if (requirePOF && proofFile && user?.id) {
       const ext = proofFile.name.split(".").pop() ?? "pdf";
-      const path = `${user.id}/${listingId}/proof_${Date.now()}.${ext}`;
+      const path = `${user.id}/${listingId}/proof_${crypto.randomUUID()}.${ext}`;
       updates.proof_of_funds_url = await uploadOpenHouseDoc(proofFile, path);
       if (proofAmount) updates.proof_amount = parseFloat(proofAmount);
     }

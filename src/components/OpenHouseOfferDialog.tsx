@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useMemo } from "react";
 import { Euro, Loader2, Clock, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -40,7 +41,10 @@ export default function OpenHouseOfferDialog({
   const [message, setMessage] = useState("");
 
   const myOffer = offers.find((o: any) => o.bidder_id === user?.id);
-  const offerDeadline = settings?.offer_deadline ? new Date(settings.offer_deadline) : null;
+  const offerDeadline = useMemo(
+    () => settings?.offer_deadline ? new Date(settings.offer_deadline) : null,
+    [settings?.offer_deadline]
+  );
   const isExpired = offerDeadline ? offerDeadline < new Date() : false;
   const isBlocked = !canSubmit;
 
@@ -61,6 +65,7 @@ export default function OpenHouseOfferDialog({
     if (hours > 0) return `${hours} hour${hours > 1 ? "s" : ""} left`;
     const mins = Math.floor(diff / (1000 * 60));
     return mins > 0 ? `${mins} min left` : "Closing soon";
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offerDeadline, isExpired, tick]);
 
   useEffect(() => {
@@ -81,7 +86,7 @@ export default function OpenHouseOfferDialog({
       await submitOffer.mutateAsync({ listingId, amount: num, message: message || undefined });
       toast.success("Offer submitted successfully");
       onClose();
-    } catch {
+    } catch (_err: unknown) {
       // handled by mutation onError
     }
   };

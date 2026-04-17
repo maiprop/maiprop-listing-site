@@ -1,25 +1,24 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Investor subscribers management. Admin-only.
  */
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Users, UserCheck, Clock, Ban, RefreshCw, Save, ArrowUpCircle, ArrowLeftRight, Loader2, ShieldCheck } from "lucide-react";
 import { usePricingConfigs, formatPrice, INVESTOR_TIER_TO_KEY } from "@/hooks/usePricingConfigs";
 import { Button } from "@/components/ui/button";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { SUBSCRIPTION_STATUS_COLORS } from "@/lib/statusColors";
 
 function TransferAdminForm({ onSuccess }: { onSuccess: () => Promise<void> }) {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
-  const handleTransfer = async () => {
-    const trimmed = email.trim().toLowerCase();
-    if (!trimmed) {
-      toast.error("Enter the new admin's email");
-      return;
-    }
-    if (!window.confirm(`Transfer admin rights to ${trimmed}? You will lose admin access immediately.`)) return;
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const doTransfer = async (trimmed: string) => {
     setLoading(true);
     try {
       const { error } = await supabase.rpc("grant_platform_admin_by_email", { target_email: trimmed });
@@ -33,6 +32,7 @@ function TransferAdminForm({ onSuccess }: { onSuccess: () => Promise<void> }) {
       setLoading(false);
     }
   };
+  const trimmed = email.trim().toLowerCase();
   return (
     <div className="flex gap-2 flex-wrap">
       <input
@@ -42,10 +42,21 @@ function TransferAdminForm({ onSuccess }: { onSuccess: () => Promise<void> }) {
         onChange={e => setEmail(e.target.value)}
         className="flex-1 min-w-[200px] h-9 px-3 rounded-lg border border-border bg-background text-sm outline-none focus:border-primary"
       />
-      <Button size="sm" className="h-9 gap-1.5" onClick={handleTransfer} disabled={loading}>
+      <Button size="sm" className="h-9 gap-1.5"
+        onClick={() => { if (trimmed) setConfirmOpen(true); else toast.error("Enter the new admin's email"); }}
+        disabled={loading}
+      >
         {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowLeftRight className="w-3.5 h-3.5" />}
         Transfer admin
       </Button>
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Transfer admin rights?"
+        description={`You will permanently lose admin access and transfer it to ${trimmed}. This cannot be undone.`}
+        confirmLabel="Yes, transfer"
+        onConfirm={() => { setConfirmOpen(false); doTransfer(trimmed); }}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </div>
   );
 }
@@ -67,43 +78,64 @@ function daysUntilExpiry(expiresAt: string | null): number | null {
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
 }
 
+function useAdminSubscriptions() {
+  return useQuery<AdminSubscription[]>({
+    queryKey: ["admin-subscriptions"],
+    queryFn: async () => {
+      const { data: subs, error } = await supabase
+        .from("investor_subscriptions")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      const userIds = (subs || []).map((s: any) => s.user_id);
+      const profileMap: Record<string, string> = {};
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from("profiles_public")
+          .select("user_id, display_name")
+          .in("user_id", userIds);
+        (profiles || []).forEach((p: any) => {
+          profileMap[p.user_id] = p.display_name || p.user_id.slice(0, 8);
+        });
+      }
+      return (subs || []).map((s: any) => ({
+        ...s,
+        display_name: profileMap[s.user_id] || s.user_id.slice(0, 8),
+      }));
+    },
+  });
+}
+
+function useUpdateSubscription() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ subId, updates }: { subId: string; updates: Partial<Subscription> }) => {
+      const { error } = await supabase
+        .from("investor_subscriptions")
+        .update(updates as never)
+        .eq("id", subId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-subscriptions"] });
+      toast.success("Subscription updated");
+    },
+    onError: () => toast.error("Update failed"),
+  });
+}
+
 export default function AdminSubscribers() {
   const { refreshProfile } = useAuth();
   const { data: pricingConfigs = {} } = usePricingConfigs();
-  const [allSubs, setAllSubs] = useState<AdminSubscription[]>([]);
-  const [subsLoading, setSubsLoading] = useState(false);
+  const { data: allSubs = [], isLoading: subsLoading, refetch } = useAdminSubscriptions();
+  const updateSub = useUpdateSubscription();
   const [subsFilter, setSubsFilter] = useState<"all" | "active" | "trial" | "cancelled" | "expired">("all");
   const [editingSubId, setEditingSubId] = useState<string | null>(null);
   const [editTier, setEditTier] = useState<string>("");
   const [editExpiry, setEditExpiry] = useState<string>("");
 
-  const loadAllSubs = async (): Promise<void> => {
-    setSubsLoading(true);
-    try {
-      const { data: subs, error } = await supabase.from("investor_subscriptions").select("*").order("created_at", { ascending: false });
-      if (error) throw error;
-      const userIds = (subs || []).map((s: any) => s.user_id);
-      const profileMap: Record<string, string> = {};
-      if (userIds.length > 0) {
-        const { data: profiles } = await supabase.from("profiles_public").select("user_id, display_name").in("user_id", userIds);
-        (profiles || []).forEach((p: any) => { profileMap[p.user_id] = p.display_name || p.user_id.slice(0, 8); });
-      }
-      setAllSubs((subs || []).map((s: any) => ({ ...s, display_name: profileMap[s.user_id] || s.user_id.slice(0, 8) })));
-    } catch {
-      toast.error("Could not load subscribers.");
-    } finally {
-      setSubsLoading(false);
-    }
-  };
-
-  useEffect(() => { void loadAllSubs(); }, []);
-
-  const handleSubUpdate = async (subId: string, updates: Partial<Subscription>) => {
-    const { error } = await supabase.from("investor_subscriptions").update(updates as any).eq("id", subId);
-    if (error) { toast.error("Update failed"); return; }
-    setAllSubs(prev => prev.map(s => s.id === subId ? { ...s, ...updates } : s));
-    setEditingSubId(null);
-    toast.success("Subscription updated");
+  const handleSubUpdate = (subId: string, updates: Partial<Subscription>) => {
+    updateSub.mutate({ subId, updates }, { onSuccess: () => setEditingSubId(null) });
   };
 
   const filtered = allSubs.filter(s => subsFilter === "all" || s.status === subsFilter);
@@ -118,12 +150,7 @@ export default function AdminSubscribers() {
     },
     developer: { color: "text-brand-gold border-brand-gold/20 bg-brand-gold/10", price: "Custom" },
   };
-  const statusColor: Record<string, string> = {
-    active: "text-brand-emerald border-brand-emerald/20 bg-brand-emerald/10",
-    trial: "text-brand-gold border-brand-gold/20 bg-brand-gold/10",
-    cancelled: "text-destructive border-destructive/20 bg-destructive/10",
-    expired: "text-muted-foreground border-border bg-muted",
-  };
+  const statusColor = SUBSCRIPTION_STATUS_COLORS;
 
   return (
     <div className="space-y-6">
@@ -158,7 +185,7 @@ export default function AdminSubscribers() {
             €{(allSubs.filter(s => s.status === "active" && s.tier === "private").length * (pricingConfigs[INVESTOR_TIER_TO_KEY.private]?.amount ?? 490) + allSubs.filter(s => s.status === "active" && s.tier === "institutional").length * (pricingConfigs[INVESTOR_TIER_TO_KEY.institutional]?.amount ?? 1490)).toLocaleString()}
           </p>
         </div>
-        <Button size="sm" variant="outline" className="border-border text-xs h-8 gap-1.5" onClick={loadAllSubs}><RefreshCw className={`w-3 h-3 ${subsLoading ? "animate-spin" : ""}`} /> Refresh</Button>
+        <Button size="sm" variant="outline" className="border-border text-xs h-8 gap-1.5" onClick={() => refetch()}><RefreshCw className={`w-3 h-3 ${subsLoading ? "animate-spin" : ""}`} /> Refresh</Button>
       </div>
       <div className="flex items-center gap-2 flex-wrap">
         {(["all", "active", "trial", "cancelled", "expired"] as const).map(s => (

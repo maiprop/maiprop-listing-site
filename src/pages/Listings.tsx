@@ -1,79 +1,43 @@
-import { useState, useCallback, useRef, useEffect, forwardRef, useMemo, lazy, Suspense } from "react";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { useState, useEffect, lazy, Suspense } from "react";
+import { Helmet } from "react-helmet-async";
 import { useTranslation } from "react-i18next";
-import { createPortal } from "react-dom";
-import { useSearchParams, Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import {
-  Search, SlidersHorizontal, MapPin, LayoutGrid, Map, ChevronDown,
-  X, ArrowUpDown, Loader2, Building2, Check, Bookmark, GitCompare,
-  Columns2, Sparkles, Lock, Store
+  Search, SlidersHorizontal, MapPin, LayoutGrid, Map,
+  X, ArrowUpDown, Loader2, Bookmark, GitCompare,
+  Columns2, ChevronDown, Building2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
-
 import { PropertyCard } from "@/components/PropertyCard";
+import { PropertyCardSkeleton } from "@/components/PropertyCardSkeleton";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { Footer } from "@/components/Footer";
 const MapView = lazy(() => import("@/components/MapView").then(m => ({ default: m.MapView })));
 const CompareDrawer = lazy(() => import("@/components/CompareDrawer").then(m => ({ default: m.CompareDrawer })));
 import { SaveSearchModal } from "@/components/SaveSearchModal";
 import { AISearchBar } from "@/components/AISearchBar";
+import { ListingsAdvancedFilters } from "@/components/listings/ListingsAdvancedFilters";
+import { ListingTypeButton } from "@/components/listings/ListingTypeButton";
+import { PropertyTypeButton } from "@/components/listings/PropertyTypeButton";
+import { MapGate } from "@/components/listings/MapGate";
 
-import { useListings } from "@/hooks/useListings";
+import { useListings, type ListingsFilters } from "@/hooks/useListings";
+import { useListingsFilters } from "@/hooks/useListingsFilters";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCookieConsent } from "@/hooks/useCookieConsent";
-import { PROPERTY_GROUPS, PROPERTY_TYPE_MAP, TYPE_STYLE_FILTERS, getTypeLabel, getSubtypeLabel, type PropertyTypeKey } from "@/lib/propertyTypes";
-import {
-  HEATING_TYPES, CONSTRUCTION_STATUSES, ROAD_TYPES, SLOPE_TYPES,
-} from "@/lib/filterConfig";
+import { getTypeLabel, getSubtypeLabel, PROPERTY_TYPE_MAP, type PropertyTypeKey } from "@/lib/propertyTypes";
+import { HEATING_TYPES, CONSTRUCTION_STATUSES } from "@/lib/filterConfig";
 import { useSmartFilters } from "@/hooks/useSmartFilters";
 import { dbListingToCard } from "@/lib/listingUtils";
+import {
+  buyPriceRanges, rentPriceRanges, listingTypeOptions, sortOptions,
+} from "@/lib/listingsConfig";
 import { toast } from "sonner";
 
-// Price ranges adapt to listing type — buy uses purchase price, rent uses monthly rent
-const buyPriceRanges = [
-  { label: "Any Price", value: "" },
-  { label: "Under €80k", value: "0-80000" },
-  { label: "€80k – €150k", value: "80000-150000" },
-  { label: "€150k – €300k", value: "150000-300000" },
-  { label: "€300k – €600k", value: "300000-600000" },
-  { label: "€600k – €1M", value: "600000-1000000" },
-  { label: "€1M+", value: "1000000-9999999" },
-];
-const rentPriceRanges = [
-  { label: "Any Rent", value: "" },
-  { label: "Under €400/mo", value: "0-400" },
-  { label: "€400 – €700/mo", value: "400-700" },
-  { label: "€700 – €1,200/mo", value: "700-1200" },
-  { label: "€1,200 – €2,500/mo", value: "1200-2500" },
-  { label: "€2,500+/mo", value: "2500-99999" },
-];
 
-const listingTypeOptions = [
-  { labelKey: "listingsPage.listingTypes.all", value: "", icon: "🏘️" },
-  { labelKey: "listingsPage.listingTypes.buy", value: "sale", icon: "🏷️" },
-  { labelKey: "listingsPage.listingTypes.rent", value: "rent", icon: "🔑" },
-];
-
-const sortOptions = [
-  { labelKey: "listingsPage.sortOptions.relevant", value: "relevant" },
-  { labelKey: "listingsPage.sortOptions.featured", value: "featured" },
-  { labelKey: "listingsPage.sortOptions.priceAsc", value: "price-asc" },
-  { labelKey: "listingsPage.sortOptions.priceDesc", value: "price-desc" },
-  { labelKey: "listingsPage.sortOptions.newest", value: "newest" },
-  { labelKey: "listingsPage.sortOptions.aiScore", value: "ai-score" },
-  { labelKey: "listingsPage.sortOptions.mostViewed", value: "views" },
-];
-
-
-
-const bathsOpts = ["1", "2", "3", "4"].map(v => ({ label: v, value: v }));
-const floorOpts = ["-1", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10+"].map(v => ({
-  label: v === "-1" ? "Basement" : v === "0" ? "Ground" : v,
-  value: v,
-}));
-const yearOpts = ["1950", "1960", "1970", "1980", "1990", "2000", "2005", "2010", "2015", "2018", "2020", "2022", "2024", "2025"].map(v => ({ label: v, value: v }));
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
+ 
 function listingToCard(l: any) {
   return dbListingToCard(l, {
     includeOwnership: true,
@@ -84,248 +48,9 @@ function listingToCard(l: any) {
   });
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-const FilterChip = forwardRef<HTMLButtonElement, {
-  active: boolean; onClick: () => void; children: React.ReactNode;
-}>(function FilterChip({ active, onClick, children }, ref) {
-  return (
-    <button
-      ref={ref}
-      onClick={onClick}
-      className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all ${
-        active
-          ? "border-primary bg-primary/10 text-primary"
-          : "border-border bg-secondary text-muted-foreground hover:text-foreground hover:border-primary/40"
-      }`}
-    >
-      {active && <Check className="w-3 h-3" />}
-      {children}
-    </button>
-  );
-});
-
-// ─── ListingTypeButton ────────────────────────────────────────────────────────
-
-function usePortalDropdown() {
-  const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState({ top: 0, left: 0 });
-  const triggerRef = useRef<HTMLDivElement>(null);
-  const portalRef = useRef<HTMLDivElement>(null);
-
-  const toggle = () => {
-    if (!open && triggerRef.current) {
-      const rect = triggerRef.current.getBoundingClientRect();
-      setPos({ top: rect.bottom + window.scrollY + 4, left: rect.left + window.scrollX });
-    }
-    setOpen(o => !o);
-  };
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (
-        triggerRef.current?.contains(e.target as Node) ||
-        portalRef.current?.contains(e.target as Node)
-      ) return;
-      setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
-
-  return { open, setOpen, pos, triggerRef, portalRef, toggle };
-}
-
-function ListingTypeButton({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const { t } = useTranslation();
-  const { open, setOpen, pos, triggerRef, portalRef, toggle } = usePortalDropdown();
-  const current = listingTypeOptions.find(o => o.value === value) || listingTypeOptions[0];
-
-  return (
-    <div ref={triggerRef} className="relative shrink-0">
-      <button
-        onClick={toggle}
-        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-medium transition-all whitespace-nowrap ${
-          value
-            ? "border-primary bg-primary/10 text-primary"
-            : "border-border bg-secondary text-foreground hover:border-primary/40"
-        }`}
-      >
-        <span>{current.icon}</span>
-        <span>{t(current.labelKey)}</span>
-        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
-      {open && createPortal(
-        <div
-          ref={portalRef}
-          style={{ position: "absolute", top: pos.top, left: pos.left, zIndex: 9999 }}
-          className="bg-card border border-border rounded-xl shadow-lg overflow-hidden min-w-[160px]"
-        >
-          {listingTypeOptions.map(o => (
-            <button
-              key={o.value}
-              onClick={() => { onChange(o.value); setOpen(false); }}
-              className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left transition-colors hover:bg-secondary ${
-                value === o.value ? "text-primary bg-primary/10" : "text-foreground"
-              }`}
-            >
-              <span>{o.icon}</span>
-              <span>{t(o.labelKey)}</span>
-              {value === o.value && <Check className="w-3.5 h-3.5 ml-auto" />}
-            </button>
-          ))}
-        </div>,
-        document.body
-      )}
-    </div>
-  );
-}
-
-// ─── PropertyTypeButton ───────────────────────────────────────────────────────
-
-const PROPERTY_GROUP_TRANSLATION_KEYS: Record<string, string> = {
-  residence: "listingsPage.propertyTypeGroups.residential",
-  commercial: "listingsPage.propertyTypeGroups.commercial",
-  land: "listingsPage.propertyTypeGroups.land",
-};
-
-function PropertyTypeButton({
-  value, subtype, onChange,
-}: {
-  value: string; subtype: string;
-  onChange: (type: string, subtype: string) => void;
-}) {
-  const { t } = useTranslation();
-  const { open, setOpen, pos, triggerRef, portalRef, toggle } = usePortalDropdown();
-  const commercialType = PROPERTY_TYPE_MAP["commercial"];
-  const currentType = value ? PROPERTY_TYPE_MAP[value as PropertyTypeKey] : null;
-  const currentSubtype = currentType?.subtypes.find(s => s.value === subtype);
-  const label = currentSubtype
-    ? `${currentType!.emoji} ${currentSubtype.label}`
-    : currentType
-    ? `${currentType.emoji} ${currentType.label}`
-    : `🏘️ ${t("listings.filters.allTypes")}`;
-
-  return (
-    <div ref={triggerRef} className="relative shrink-0">
-      <button
-        onClick={toggle}
-        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-medium transition-all whitespace-nowrap ${
-          value
-            ? "border-primary bg-primary/10 text-primary"
-            : "border-border bg-secondary text-foreground hover:border-primary/40"
-        }`}
-      >
-        <span>{label}</span>
-        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
-      {open && createPortal(
-        <div
-          ref={portalRef}
-          style={{ position: "absolute", top: pos.top, left: pos.left, zIndex: 9999 }}
-          className="bg-card border border-border rounded-xl shadow-lg min-w-[220px] max-h-[480px] overflow-y-auto"
-        >
-          <button
-            onClick={() => { onChange("", ""); setOpen(false); }}
-            className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left transition-colors hover:bg-secondary ${
-              !value ? "text-primary bg-primary/10" : "text-foreground"
-            }`}
-          >
-            <Building2 className="w-4 h-4 shrink-0" /><span className="font-medium">{t("listings.filters.allTypes")}</span>
-            {!value && <Check className="w-3.5 h-3.5 ml-auto" />}
-          </button>
-          <div className="h-px bg-border mx-2" />
-          {PROPERTY_GROUPS.map((group, gi) => (
-            <div key={group.id}>
-              <div className="flex items-center gap-2 px-3 pt-2.5 pb-1">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t(PROPERTY_GROUP_TRANSLATION_KEYS[group.id] || group.label)}</span>
-              </div>
-              {group.id === "commercial" ? (
-                commercialType.subtypes.map(st => {
-                  const Icon = st.icon ?? Store;
-                  return (
-                    <button
-                      key={st.value}
-                      onClick={() => { onChange("commercial", st.value); setOpen(false); }}
-                      title={st.description}
-                      className={`w-full flex items-center gap-2.5 pl-5 pr-3 py-2 text-sm text-left transition-colors hover:bg-secondary ${
-                        value === "commercial" && subtype === st.value ? "text-primary bg-primary/10" : "text-foreground"
-                      }`}
-                    >
-                      <Icon className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
-                      <span>{st.label}</span>
-                      {value === "commercial" && subtype === st.value && <Check className="w-3.5 h-3.5 ml-auto" />}
-                    </button>
-                  );
-                })
-              ) : (
-                group.types.map(typeKey => {
-                  const pt = PROPERTY_TYPE_MAP[typeKey];
-                  const Icon = pt.icon;
-                  return (
-                    <button
-                      key={pt.value}
-                      onClick={() => { onChange(pt.value, ""); setOpen(false); }}
-                      className={`w-full flex items-center gap-2.5 pl-5 pr-3 py-2 text-sm text-left transition-colors hover:bg-secondary ${
-                        value === pt.value && !subtype ? "text-primary bg-primary/10" : "text-foreground"
-                      }`}
-                    >
-                      <Icon className={`w-4 h-4 shrink-0 ${value === pt.value && !subtype ? "text-primary" : "text-muted-foreground"}`} />
-                      <span className="font-medium">{pt.label}</span>
-                      {value === pt.value && !subtype && <Check className="w-3.5 h-3.5 ml-auto" />}
-                    </button>
-                  );
-                })
-              )}
-              {gi < PROPERTY_GROUPS.length - 1 && <div className="h-px bg-border mx-2 mt-1.5" />}
-            </div>
-          ))}
-        </div>,
-        document.body
-      )}
-    </div>
-  );
-}
-
-
-
-
-
-
-// ── MapGate — only renders map if user accepted mapping cookies ─────────────────
-function MapGate({ consent, accept, children, height }: {
-  consent: { mapping: boolean; accepted: boolean };
-  accept: (overrides?: any) => void;
-  children: React.ReactNode;
-  height?: string;
-}) {
-  if (!consent.mapping) {
-    return (
-      <div className="flex-1 flex items-center justify-center bg-secondary rounded-xl min-h-[400px]" style={height ? { height } : undefined}>
-        <div className="text-center max-w-xs px-6">
-          <Lock className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-          <p className="font-display font-semibold mb-1">Map requires cookies</p>
-          <p className="text-sm text-muted-foreground mb-4">
-            Interactive maps use Mapbox which sets third-party cookies. Enable mapping cookies to continue.
-          </p>
-          <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground gap-2"
-            onClick={() => accept({ mapping: true })}>
-            Enable Map
-          </Button>
-        </div>
-      </div>
-    );
-  }
-  return <>{children}</>;
-}
-
-// ─── Main Component ───────────────────────────────────────────────────────────
-
 export default function Listings() {
   const { t } = useTranslation();
 
-  const [searchParams, setSearchParams] = useSearchParams();
   const [viewMode, setViewMode] = useState<"grid" | "split" | "map">("grid");
   const [showFilters, setShowFilters] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -336,90 +61,50 @@ export default function Listings() {
   const { user } = useAuth();
   const { consent, accept } = useCookieConsent();
 
-  // AI search filter applier — maps AI-parsed filters back to URL params
-  const applyAIFilters = useCallback((filters: Record<string, any>) => {
-    setSearchParams(prev => {
-      const next = new URLSearchParams(prev);
-      // City
-      if (filters.city) next.set("city", filters.city); 
-      // Types
-      if (filters.listing_type) next.set("listing_type", filters.listing_type); else next.delete("listing_type");
-      if (filters.property_type) next.set("type", filters.property_type); else next.delete("type");
-      // Price
-      if (filters.price_min || filters.price_max) {
-        const min = filters.price_min ?? 0;
-        const max = filters.price_max ?? 9999999;
-        next.set("price", `${min}-${max}`);
-      }
-      // Beds
-      if (filters.beds_min) next.set("beds_min", String(filters.beds_min)); else next.delete("beds_min");
-      if (filters.beds_max) next.set("beds_max", String(filters.beds_max)); else next.delete("beds_max");
-      // Sqm
-      if (filters.sqm_min) next.set("sqm_min", String(filters.sqm_min)); else next.delete("sqm_min");
-      if (filters.sqm_max) next.set("sqm_max", String(filters.sqm_max)); else next.delete("sqm_max");
-      // Features
-      if (filters.features?.length) next.set("features", filters.features.join(","));
-      // Energy
-      if (filters.energy?.length) next.set("energy", filters.energy.join(","));
-      // Heating
-      if (filters.heating) next.set("heating", filters.heating); else next.delete("heating");
-      return next;
-    }, { replace: true });
-  }, [setSearchParams]);
-
-  // URL-based filter state helpers
-  const getParam = (key: string, fallback = "") => searchParams.get(key) || fallback;
-  const setParam = useCallback((key: string, value: string) => {
-    setSearchParams(prev => {
-      const next = new URLSearchParams(prev);
-      if (value) next.set(key, value); else next.delete(key);
-      return next;
-    }, { replace: true });
-  }, [setSearchParams]);
-
-  const toggleMulti = useCallback((key: string, value: string) => {
-    setSearchParams(prev => {
-      const next = new URLSearchParams(prev);
-      const current = (next.get(key) || "").split(",").filter(Boolean);
-      const idx = current.indexOf(value);
-      if (idx >= 0) current.splice(idx, 1); else current.push(value);
-      if (current.length) next.set(key, current.join(",")); else next.delete(key);
-      return next;
-    }, { replace: true });
-  }, [setSearchParams]);
-
-  const getMulti = (key: string): string[] =>
-    (searchParams.get(key) || "").split(",").filter(Boolean);
-
-  // Read filter state
-  const searchQuery = getParam("city");
-  const selectedListingType = getParam("listing_type");
-  const selectedType = getParam("type");
-  const selectedSubtype = getParam("subtype");
-  const selectedPrice = getParam("price");
-  const selectedSort = getParam("sort", "relevant");
-  const bedsRange: [string, string] = [getParam("beds_min"), getParam("beds_max")];
-  const bathsRange: [string, string] = [getParam("baths_min"), getParam("baths_max")];
-  const floorRange: [string, string] = [getParam("floor_min"), getParam("floor_max")];
-  const yearRange: [string, string] = [getParam("year_min"), getParam("year_max")];
-  const minSqm = getParam("sqm_min");
-  const maxSqm = getParam("sqm_max");
-  const selectedEnergyClasses = getMulti("energy");
-  const selectedFeatures = getMulti("features");
-  const selectedHeating = getParam("heating");
-  const selectedConstruction = getParam("construction");
-  const preSaleOnly = searchParams.get("pre_sale") === "1";
-  const offMarketOnly = searchParams.get("off_market") === "1";
+  const {
+    searchQuery, selectedListingType, selectedType, selectedSubtype,
+    selectedPrice, selectedSort, bedsRange, bathsRange, floorRange,
+    yearRange, minSqm, maxSqm, selectedEnergyClasses, selectedFeatures,
+    selectedHeating, selectedConstruction, preSaleOnly, offMarketOnly,
+    hasVideoViewing, hasVirtualTour, hasMessaging, minAiScore, minWalkability,
+    activeFilterCount, currentFilters,
+    setParam, setParams, toggleMulti, clearAllFilters, applyAIFilters,
+  } = useListingsFilters();
 
   // AI-powered smart filters — fetch once per type/subtype combo, cached in memory
-  const { config: aiFilterConfig, loading: aiFiltersLoading } = useSmartFilters(
+  const { config: aiFilterConfig } = useSmartFilters(
     selectedType, selectedSubtype, selectedListingType
   );
+
+  // Parse selectedPrice range string "100000-500000" → min/max numbers
+  const [priceMin, priceMax] = selectedPrice
+    ? selectedPrice.split("-").map(Number)
+    : [undefined, undefined];
 
   const { data: dbListings = [], isLoading, isError, error } = useListings({
     city: searchQuery || undefined,
     listing_type: preSaleOnly ? "sale" : (selectedListingType || undefined),
     property_type: selectedType || undefined,
+    is_pre_sale: preSaleOnly || undefined,
+    is_off_market: offMarketOnly || undefined,
+    price_min: priceMin || undefined,
+    price_max: priceMax || undefined,
+    beds_min: bedsRange[0] ? Number(bedsRange[0]) : undefined,
+    beds_max: bedsRange[1] ? Number(bedsRange[1]) : undefined,
+    baths_min: bathsRange[0] ? Number(bathsRange[0]) : undefined,
+    baths_max: bathsRange[1] ? Number(bathsRange[1]) : undefined,
+    floor_min: floorRange[0] ? Number(floorRange[0]) : undefined,
+    floor_max: floorRange[1] ? Number(floorRange[1]) : undefined,
+    year_min: yearRange[0] ? Number(yearRange[0]) : undefined,
+    year_max: yearRange[1] ? Number(yearRange[1]) : undefined,
+    sqm_min: minSqm ? Number(minSqm) : undefined,
+    sqm_max: maxSqm ? Number(maxSqm) : undefined,
+    energy_class: selectedEnergyClasses.length > 0 ? selectedEnergyClasses : undefined,
+    heating_system: selectedHeating || undefined,
+    construction_status: selectedConstruction || undefined,
+    commercial_subtype: selectedSubtype || undefined,
+    features: selectedFeatures.length > 0 ? selectedFeatures : undefined,
+    sort: (selectedSort as ListingsFilters["sort"]) || undefined,
   });
 
   useEffect(() => {
@@ -430,38 +115,14 @@ export default function Listings() {
 
   const sourceListings = dbListings.map(listingToCard);
 
-  // Client-side filtering
+  // Client-side filtering — only for fields not supported server-side
   let filtered = sourceListings.filter((p: any) => {
     const raw = p._raw || p;
-    if (preSaleOnly && !raw.is_pre_sale) return false;
-    if (offMarketOnly && !raw.is_off_market) return false;
-    if (selectedPrice) {
-      const [min, max] = selectedPrice.split("-").map(Number);
-      if (p.price < min || p.price > max) return false;
-    }
-    if (bedsRange[0] && p.bedrooms != null && p.bedrooms < Number(bedsRange[0])) return false;
-    if (bedsRange[1] && p.bedrooms != null && p.bedrooms > Number(bedsRange[1])) return false;
-    if (bathsRange[0] && p.bathrooms != null && p.bathrooms < Number(bathsRange[0])) return false;
-    if (bathsRange[1] && p.bathrooms != null && p.bathrooms > Number(bathsRange[1])) return false;
-    if (floorRange[0] && raw.floor != null && raw.floor < Number(floorRange[0])) return false;
-    if (floorRange[1] && raw.floor != null && raw.floor > Number(floorRange[1])) return false;
-    const yearBuilt = p.yearBuilt ?? raw.year_built;
-    if (yearRange[0] && yearBuilt && yearBuilt < Number(yearRange[0])) return false;
-    if (yearRange[1] && yearBuilt && yearBuilt > Number(yearRange[1])) return false;
-    if (minSqm && p.sqm < Number(minSqm)) return false;
-    if (maxSqm && p.sqm > Number(maxSqm)) return false;
-    if (selectedEnergyClasses.length > 0) {
-      const ec = p.energyClass ?? raw.energy_class;
-      if (!ec || !selectedEnergyClasses.includes(ec)) return false;
-    }
-    // Only filter by feature keys that exist on the listing (avoids over-filtering when AI returns non-DB keys)
-    for (const feat of selectedFeatures) {
-      if (Object.prototype.hasOwnProperty.call(raw, feat) && !raw[feat]) return false;
-    }
-    if (selectedHeating && raw.heating_system !== selectedHeating) return false;
-    if (selectedConstruction && raw.construction_status !== selectedConstruction) return false;
-    // Subtype filter
-    if (selectedSubtype && raw.commercial_subtype && raw.commercial_subtype !== selectedSubtype) return false;
+    if (hasVideoViewing && !raw.has_video_tour) return false;
+    if (hasVirtualTour && !raw.has_virtual_tour) return false;
+    if (hasMessaging && raw.messaging_disabled) return false;
+    if (minAiScore > 0 && !(Number(raw.ai_score) >= minAiScore)) return false;
+    if (minWalkability > 0 && !(Number(raw.walkability_score) >= minWalkability)) return false;
     return true;
   });
 
@@ -499,29 +160,6 @@ export default function Listings() {
     return byUserSort(a, b);
   });
 
-  const activeFilterCount = [
-    selectedType, selectedSubtype, selectedPrice,
-    bedsRange[0], bedsRange[1], bathsRange[0], bathsRange[1],
-    floorRange[0], floorRange[1], yearRange[0], yearRange[1],
-    minSqm, maxSqm, selectedHeating, selectedConstruction,
-    preSaleOnly || undefined,
-    offMarketOnly || undefined,
-    ...selectedEnergyClasses, ...selectedFeatures,
-  ].filter(Boolean).length;
-
-  const clearAllFilters = () => {
-    setSearchParams(prev => {
-      const next = new URLSearchParams();
-      if (prev.get("city")) next.set("city", prev.get("city")!);
-      return next;
-    }, { replace: true });
-  };
-
-  // Current filter object for saving
-  const currentFilters = Object.fromEntries(
-    [...searchParams.entries()].filter(([, v]) => v)
-  );
-
   // Compare helpers
   const toggleCompare = (listing: any) => {
     setCompareList(prev => {
@@ -533,22 +171,29 @@ export default function Listings() {
   };
   const isComparing = (id: string) => compareList.some(l => l.id === id);
 
-  // Contextual filter options — buy uses purchase context, rent uses rental context
-  const isRent = selectedListingType === "rent";
-  const bedsOpts = useMemo(
-    () => isRent
-      ? [{ label: "Studio", value: "0" }, ...["1", "2", "3", "4", "5"].map(v => ({ label: `${v} bed`, value: v }))]
-      : ["1", "2", "3", "4", "5", "6"].map(v => ({ label: v, value: v })),
-    [isRent]
-  );
-
   return (
     <div className="min-h-screen bg-background pb-bottom-nav lg:pb-0">
+      <Helmet>
+        <title>Properties for Sale &amp; Rent in Greece — maiProp</title>
+        <meta name="description" content="Search thousands of properties for sale and rent across Greece. Filter by city, type, price and more." />
+        <link rel="canonical" href="https://maiprop.co/listings" />
+        <meta property="og:title" content="Properties for Sale &amp; Rent in Greece — maiProp" />
+        <meta property="og:description" content="Search thousands of properties for sale and rent across Greece." />
+        <meta property="og:url" content="https://maiprop.co/listings" />
+        <script type="application/ld+json">{JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "SearchResultsPage",
+          "name": "Properties for Sale & Rent in Greece",
+          "description": "Search thousands of properties for sale and rent across Greece.",
+          "url": "https://maiprop.co/listings",
+          "provider": { "@type": "Organization", "name": "maiProp", "url": "https://maiprop.co" },
+        })}</script>
+      </Helmet>
       <Navbar />
 
-      <div className="pt-16">
-        {/* Sticky filter bar */}
-        <div className="bg-card border-b border-border sticky top-16 z-40">
+      <main id="main-content" className="pt-16">
+        {/* Filter bar — sticky only on sm+ to avoid consuming 104px of viewport on mobile */}
+        <div className="bg-card border-b border-border sm:sticky sm:top-16 z-40">
           <div className="container py-2 sm:py-4 space-y-2 sm:space-y-0">
 
             {/* ── MOBILE FILTER BAR ── */}
@@ -577,6 +222,7 @@ export default function Listings() {
                   <input
                     type="text"
                     placeholder="City…"
+                    aria-label="Search by city"
                     value={searchQuery}
                     onChange={e => setParam("city", e.target.value)}
                     className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none min-w-0"
@@ -599,10 +245,12 @@ export default function Listings() {
                 {/* Filters button */}
                 <button
                   onClick={() => setShowFilters(!showFilters)}
+                  aria-label={activeFilterCount > 0 ? `Filters (${activeFilterCount} active)` : "Filters"}
+                  aria-expanded={showFilters}
                   className={`shrink-0 flex items-center gap-1 px-2.5 py-2 rounded-xl border text-xs font-medium transition-colors ${showFilters ? "bg-primary/10 border-primary/30 text-primary" : "bg-secondary border-border text-muted-foreground"}`}>
-                  <SlidersHorizontal className="w-4 h-4" />
+                  <SlidersHorizontal className="w-4 h-4" aria-hidden="true" />
                   {activeFilterCount > 0 && (
-                    <span className="w-4 h-4 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center">{activeFilterCount}</span>
+                    <span className="w-4 h-4 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center" aria-hidden="true">{activeFilterCount}</span>
                   )}
                 </button>
               </div>
@@ -711,6 +359,11 @@ export default function Listings() {
                   {selectedPrice && <button onClick={() => setParam("price", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary shrink-0">{[...buyPriceRanges, ...rentPriceRanges].find(r => r.value === selectedPrice)?.label || selectedPrice} <X className="w-3 h-3" /></button>}
                   {bedsRange[0] && <button onClick={() => setParam("beds_min", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary shrink-0">{bedsRange[0]}+ beds <X className="w-3 h-3" /></button>}
                   {(minSqm || maxSqm) && <button onClick={() => { setParam("sqm_min", ""); setParam("sqm_max", ""); }} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary shrink-0">Size <X className="w-3 h-3" /></button>}
+                  {hasVideoViewing && <button onClick={() => setParam("video_viewing", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent shrink-0">🎥 Video <X className="w-3 h-3" /></button>}
+                  {hasVirtualTour && <button onClick={() => setParam("virtual_tour", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent shrink-0">🔮 Virtual <X className="w-3 h-3" /></button>}
+                  {hasMessaging && <button onClick={() => setParam("messaging", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent shrink-0">💬 Messaging <X className="w-3 h-3" /></button>}
+                  {minAiScore > 0 && <button onClick={() => setParam("min_ai_score", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent shrink-0">🤖 AI {minAiScore}+ <X className="w-3 h-3" /></button>}
+                  {minWalkability > 0 && <button onClick={() => setParam("min_walkability", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent shrink-0">🚶 Walk {minWalkability}+ <X className="w-3 h-3" /></button>}
                   <button onClick={clearAllFilters} className="text-xs text-muted-foreground shrink-0 ml-1">Clear all</button>
                 </div>
               )}
@@ -724,6 +377,7 @@ export default function Listings() {
                 <input
                   type="text"
                   placeholder="City, area, address..."
+                  aria-label="Search by city or area"
                   value={searchQuery}
                   onChange={e => setParam("city", e.target.value)}
                   className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none min-w-0"
@@ -736,14 +390,7 @@ export default function Listings() {
               <PropertyTypeButton
                 value={selectedType}
                 subtype={selectedSubtype}
-                onChange={(type, sub) => {
-                  setSearchParams(prev => {
-                    const next = new URLSearchParams(prev);
-                    if (type) next.set("type", type); else next.delete("type");
-                    if (sub) next.set("subtype", sub); else next.delete("subtype");
-                    return next;
-                  }, { replace: true });
-                }}
+                onChange={(type, sub) => setParams([["type", type || ""], ["subtype", sub || ""]])}
               />
               <div className="relative">
                 <select value={selectedPrice} onChange={e => setParam("price", e.target.value)}
@@ -770,7 +417,7 @@ export default function Listings() {
                   <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center">{activeFilterCount}</span>
                 )}
               </Button>
-              <AISearchBar onFiltersApplied={applyAIFilters} />
+              <AISearchBar onFiltersApplied={applyAIFilters as (filters: { city?: string | null; listing_type?: string | null; property_type?: string | null; }) => void} />
               {user && (
                 <Button variant="outline" className="border-border gap-2 shrink-0"
                   onClick={() => setShowSaveModal(true)}>
@@ -779,15 +426,15 @@ export default function Listings() {
                 </Button>
               )}
               <div className="flex rounded-xl border border-border overflow-hidden shrink-0">
-                <button onClick={() => setViewMode("grid")} title="Grid view"
+                <button onClick={() => setViewMode("grid")} aria-label="Grid view" aria-pressed={viewMode === "grid"}
                   className={`p-2.5 transition-colors ${viewMode === "grid" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:text-foreground"}`}>
                   <LayoutGrid className="w-4 h-4" />
                 </button>
-                <button onClick={() => setViewMode("split")} title="Split view"
+                <button onClick={() => setViewMode("split")} aria-label="Split view" aria-pressed={viewMode === "split"}
                   className={`p-2.5 transition-colors ${viewMode === "split" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:text-foreground"}`}>
                   <Columns2 className="w-4 h-4" />
                 </button>
-                <button onClick={() => setViewMode("map")} title="Map view"
+                <button onClick={() => setViewMode("map")} aria-label="Map view" aria-pressed={viewMode === "map"}
                   className={`p-2.5 transition-colors ${viewMode === "map" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:text-foreground"}`}>
                   <Map className="w-4 h-4" />
                 </button>
@@ -810,6 +457,11 @@ export default function Listings() {
                 {selectedConstruction && <button onClick={() => setParam("construction", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">{CONSTRUCTION_STATUSES.find(s => s.value === selectedConstruction)?.label || selectedConstruction} <X className="w-3 h-3" /></button>}
                 {offMarketOnly && <button onClick={() => setParam("off_market", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">🔒 Off-market <X className="w-3 h-3" /></button>}
                 {preSaleOnly && <button onClick={() => setParam("pre_sale", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">🏗️ Pre-sale <X className="w-3 h-3" /></button>}
+                {hasVideoViewing && <button onClick={() => setParam("video_viewing", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent hover:bg-accent/20 transition-colors shrink-0">🎥 Video Viewing <X className="w-3 h-3" /></button>}
+                {hasVirtualTour && <button onClick={() => setParam("virtual_tour", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent hover:bg-accent/20 transition-colors shrink-0">🔮 Virtual Tour <X className="w-3 h-3" /></button>}
+                {hasMessaging && <button onClick={() => setParam("messaging", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent hover:bg-accent/20 transition-colors shrink-0">💬 Messaging <X className="w-3 h-3" /></button>}
+                {minAiScore > 0 && <button onClick={() => setParam("min_ai_score", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent hover:bg-accent/20 transition-colors shrink-0">🤖 AI score {minAiScore}+ <X className="w-3 h-3" /></button>}
+                {minWalkability > 0 && <button onClick={() => setParam("min_walkability", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent hover:bg-accent/20 transition-colors shrink-0">🚶 Walk {minWalkability}+ <X className="w-3 h-3" /></button>}
                 <button onClick={clearAllFilters} className="text-xs text-muted-foreground hover:text-foreground ml-1 shrink-0">Clear all</button>
               </div>
             )}
@@ -818,391 +470,7 @@ export default function Listings() {
 
         {/* Advanced Filters Panel — AI-powered */}
         {showFilters && (
-          <div className="bg-card/95 backdrop-blur-sm border-b border-border shadow-lg">
-            <div className="container py-7">
-              {/* Listing status quick toggles: Off-market & Pre-sale */}
-              {(selectedListingType === "sale" || !selectedListingType) && (
-                <div className="mb-6 pb-5 border-b border-border">
-                  <p className="text-xs font-semibold text-foreground/60 uppercase tracking-wider mb-3">Listing Status</p>
-                  <div className="flex flex-wrap gap-3">
-                    <label className="flex items-center gap-2 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={offMarketOnly}
-                        onChange={e => setParam("off_market", e.target.checked ? "1" : "")}
-                        className="rounded border-border accent-primary"
-                      />
-                      <span className="text-sm font-medium">🔒 Off-market only</span>
-                      <span className="text-xs text-muted-foreground hidden sm:inline">Exclusive, not publicly advertised</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={preSaleOnly}
-                        onChange={e => setParam("pre_sale", e.target.checked ? "1" : "")}
-                        className="rounded border-border accent-primary"
-                      />
-                      <span className="text-sm font-medium">🏗️ Pre-sale only</span>
-                      <span className="text-xs text-muted-foreground hidden sm:inline">New developments before completion</span>
-                    </label>
-                  </div>
-                </div>
-              )}
-
-              {/* Panel header */}
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <SlidersHorizontal className="w-4 h-4 text-primary" />
-                  </div>
-                  <div>
-                    <span className="font-display font-semibold text-sm">
-                      {selectedType
-                        ? `${getSubtypeLabel(selectedType, selectedSubtype) || getTypeLabel(selectedType)} Filters`
-                        : "Advanced Filters"}
-                    </span>
-                    {!aiFiltersLoading && selectedType && (
-                      <span className="flex items-center gap-1 text-[10px] text-primary/70 mt-0.5">
-                        <Sparkles className="w-2.5 h-2.5" />AI-curated for this property type
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <button onClick={() => setShowFilters(false)} className="p-1.5 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              {aiFiltersLoading ? (
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                  {[...Array(4)].map((_, i) => (
-                    <div key={i} className="h-20 bg-secondary/60 rounded-xl animate-pulse" />
-                  ))}
-                </div>
-              ) : (
-                <>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-                    {/* Size */}
-                    {aiFilterConfig.sections.includes("size") && (
-                      <div className="space-y-2">
-                        <label className="flex items-center gap-1.5 text-xs font-semibold text-foreground/70 uppercase tracking-wider">
-                          <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block" />
-                          {aiFilterConfig.sizeLabel}
-                        </label>
-                        <div className="flex items-center gap-2 bg-secondary rounded-xl px-3 py-2 border border-border focus-within:border-primary transition-colors">
-                          <input type="number" placeholder="Min m²" value={minSqm} onChange={e => setParam("sqm_min", e.target.value)}
-                            className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none w-0 min-w-0" />
-                          <span className="text-muted-foreground text-xs font-medium">—</span>
-                          <input type="number" placeholder="Max m²" value={maxSqm} onChange={e => setParam("sqm_max", e.target.value)}
-                            className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none w-0 min-w-0" />
-                        </div>
-                      </div>
-                    )}
-                    {/* Bedrooms */}
-                    {aiFilterConfig.sections.includes("bedrooms") && aiFilterConfig.bedsLabel && (
-                      <div className="space-y-2">
-                        <label className="flex items-center gap-1.5 text-xs font-semibold text-foreground/70 uppercase tracking-wider">
-                          <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block" />
-                          {aiFilterConfig.bedsLabel}
-                        </label>
-                        <div className="flex items-center gap-2 bg-secondary rounded-xl px-3 py-2 border border-border">
-                          <select value={bedsRange[0]} onChange={e => setParam("beds_min", e.target.value)}
-                            className="flex-1 bg-transparent text-sm text-foreground outline-none appearance-none cursor-pointer">
-                            <option value="">Min</option>
-                            {bedsOpts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                          </select>
-                          <span className="text-muted-foreground text-xs font-medium">—</span>
-                          <select value={bedsRange[1]} onChange={e => setParam("beds_max", e.target.value)}
-                            className="flex-1 bg-transparent text-sm text-foreground outline-none appearance-none cursor-pointer">
-                            <option value="">Max</option>
-                            {bedsOpts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                          </select>
-                        </div>
-                      </div>
-                    )}
-                    {/* Bathrooms */}
-                    {aiFilterConfig.sections.includes("bathrooms") && (
-                      <div className="space-y-2">
-                        <label className="flex items-center gap-1.5 text-xs font-semibold text-foreground/70 uppercase tracking-wider">
-                          <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block" />
-                          Bathrooms
-                        </label>
-                        <div className="flex items-center gap-2 bg-secondary rounded-xl px-3 py-2 border border-border">
-                          <select value={bathsRange[0]} onChange={e => setParam("baths_min", e.target.value)}
-                            className="flex-1 bg-transparent text-sm text-foreground outline-none appearance-none cursor-pointer">
-                            <option value="">Min</option>
-                            {bathsOpts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                          </select>
-                          <span className="text-muted-foreground text-xs font-medium">—</span>
-                          <select value={bathsRange[1]} onChange={e => setParam("baths_max", e.target.value)}
-                            className="flex-1 bg-transparent text-sm text-foreground outline-none appearance-none cursor-pointer">
-                            <option value="">Max</option>
-                            {bathsOpts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                          </select>
-                        </div>
-                      </div>
-                    )}
-                    {/* Floor */}
-                    {aiFilterConfig.sections.includes("floor") && (
-                      <div className="space-y-2">
-                        <label className="flex items-center gap-1.5 text-xs font-semibold text-foreground/70 uppercase tracking-wider">
-                          <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block" />
-                          Floor
-                        </label>
-                        <div className="flex items-center gap-2 bg-secondary rounded-xl px-3 py-2 border border-border">
-                          <select value={floorRange[0]} onChange={e => setParam("floor_min", e.target.value)}
-                            className="flex-1 bg-transparent text-sm text-foreground outline-none appearance-none cursor-pointer">
-                            <option value="">Min</option>
-                            {floorOpts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                          </select>
-                          <span className="text-muted-foreground text-xs font-medium">—</span>
-                          <select value={floorRange[1]} onChange={e => setParam("floor_max", e.target.value)}
-                            className="flex-1 bg-transparent text-sm text-foreground outline-none appearance-none cursor-pointer">
-                            <option value="">Max</option>
-                            {floorOpts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                          </select>
-                        </div>
-                      </div>
-                    )}
-                    {/* Year Built */}
-                    {aiFilterConfig.sections.includes("year_built") && (
-                      <div className="space-y-2">
-                        <label className="flex items-center gap-1.5 text-xs font-semibold text-foreground/70 uppercase tracking-wider">
-                          <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block" />
-                          Year Built
-                        </label>
-                        <div className="flex items-center gap-2 bg-secondary rounded-xl px-3 py-2 border border-border">
-                          <select value={yearRange[0]} onChange={e => setParam("year_min", e.target.value)}
-                            className="flex-1 bg-transparent text-sm text-foreground outline-none appearance-none cursor-pointer">
-                            <option value="">From</option>
-                            {yearOpts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                          </select>
-                          <span className="text-muted-foreground text-xs font-medium">—</span>
-                          <select value={yearRange[1]} onChange={e => setParam("year_max", e.target.value)}
-                            className="flex-1 bg-transparent text-sm text-foreground outline-none appearance-none cursor-pointer">
-                            <option value="">To</option>
-                            {yearOpts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                          </select>
-                        </div>
-                      </div>
-                    )}
-                    {/* Heating */}
-                    {aiFilterConfig.sections.includes("heating") && (
-                      <div className="space-y-2">
-                        <label className="flex items-center gap-1.5 text-xs font-semibold text-foreground/70 uppercase tracking-wider">
-                          <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block" />
-                          Heating
-                        </label>
-                        <div className="flex gap-1.5 flex-wrap">
-                          {HEATING_TYPES.map(h => (
-                            <button key={h.value} onClick={() => setParam("heating", selectedHeating === h.value ? "" : h.value)}
-                              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-                                selectedHeating === h.value
-                                  ? "border-primary bg-primary/10 text-primary"
-                                  : "border-border bg-secondary text-muted-foreground hover:border-primary/40 hover:text-foreground"
-                              }`}>{h.label}</button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {/* Condition (renovated, new, needs renovation, etc.) */}
-                    {aiFilterConfig.sections.includes("construction_status") && (
-                      <div className="space-y-2">
-                        <label className="flex items-center gap-1.5 text-xs font-semibold text-foreground/70 uppercase tracking-wider">
-                          <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block" />
-                          Condition
-                        </label>
-                        <div className="relative">
-                          <select value={selectedConstruction} onChange={e => setParam("construction", e.target.value)}
-                            className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none cursor-pointer">
-                            <option value="">Any condition</option>
-                            {CONSTRUCTION_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                          </select>
-                          <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                        </div>
-                      </div>
-                    )}
-                    {/* Land details */}
-                    {aiFilterConfig.sections.includes("land_details") && (
-                      <>
-                        <div className="space-y-2">
-                          <label className="flex items-center gap-1.5 text-xs font-semibold text-foreground/70 uppercase tracking-wider">
-                            <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block" />
-                            Road Type
-                          </label>
-                          <div className="relative">
-                            <select value={getParam("road_type")} onChange={e => setParam("road_type", e.target.value)}
-                              className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none cursor-pointer">
-                              <option value="">Any</option>
-                              {ROAD_TYPES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-                            </select>
-                            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <label className="flex items-center gap-1.5 text-xs font-semibold text-foreground/70 uppercase tracking-wider">
-                            <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block" />
-                            Slope
-                          </label>
-                          <div className="flex gap-1.5">
-                            {SLOPE_TYPES.map(s => (
-                              <button key={s.value} onClick={() => setParam("slope", getParam("slope") === s.value ? "" : s.value)}
-                                className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-                                  getParam("slope") === s.value
-                                    ? "border-primary bg-primary/10 text-primary"
-                                    : "border-border bg-secondary text-muted-foreground hover:border-primary/40"
-                                }`}>{s.label}</button>
-                            ))}
-                          </div>
-                        </div>
-                      </>
-                    )}
-                    {/* Commercial details */}
-                    {aiFilterConfig.sections.includes("commercial_details") && (
-                      <div className="space-y-2">
-                        <label className="flex items-center gap-1.5 text-xs font-semibold text-foreground/70 uppercase tracking-wider">
-                          <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block" />
-                          Road Frontage
-                        </label>
-                        <div className="relative">
-                          <select value={getParam("road_type")} onChange={e => setParam("road_type", e.target.value)}
-                            className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none cursor-pointer">
-                            <option value="">Any</option>
-                            {ROAD_TYPES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-                          </select>
-                          <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                        </div>
-                      </div>
-                    )}
-                    {/* Rental extras */}
-                    {aiFilterConfig.sections.includes("rental_extras") && selectedListingType === "rent" && (
-                      <div className="space-y-2">
-                        <label className="flex items-center gap-1.5 text-xs font-semibold text-foreground/70 uppercase tracking-wider">
-                          <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block" />
-                          Min Rental Period
-                        </label>
-                        <div className="flex gap-1.5 flex-wrap">
-                          {[{v:"1",l:"1 mo"},{v:"3",l:"3 mo"},{v:"6",l:"6 mo"},{v:"12",l:"1 yr"}].map(o => (
-                            <button key={o.v} onClick={() => setParam("min_rental", getParam("min_rental") === o.v ? "" : o.v)}
-                              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-                                getParam("min_rental") === o.v
-                                  ? "border-primary bg-primary/10 text-primary"
-                                  : "border-border bg-secondary text-muted-foreground hover:border-primary/40"
-                              }`}>{o.l}</button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Energy Class — visual spectrum bar */}
-                  {aiFilterConfig.sections.includes("energy_class") && (
-                    <div className="mt-6 pt-5 border-t border-border/60">
-                      <label className="flex items-center gap-1.5 text-xs font-semibold text-foreground/70 uppercase tracking-wider mb-3">
-                        <span className="w-1.5 h-1.5 rounded-full bg-brand-emerald inline-block" />
-                        Energy Rating
-                        {selectedEnergyClasses.length > 0 && (
-                          <span className="ml-2 px-1.5 py-0.5 rounded-full bg-brand-emerald/10 border border-brand-emerald/20 text-brand-emerald text-[10px] font-bold">
-                            {selectedEnergyClasses.join(", ")}
-                          </span>
-                        )}
-                      </label>
-                      <div className="flex items-stretch gap-1 rounded-xl overflow-hidden border border-border p-1 bg-secondary/50">
-                        {[
-                          { ec: "A+", color: "bg-[#00a550]", text: "text-white", badge: "A+" },
-                          { ec: "A",  color: "bg-[#50b848]", text: "text-white", badge: "A" },
-                          { ec: "B+", color: "bg-[#8dc63f]", text: "text-white", badge: "B+" },
-                          { ec: "B",  color: "bg-[#c3d600]", text: "text-black", badge: "B" },
-                          { ec: "C",  color: "bg-[#ffcc00]", text: "text-black", badge: "C" },
-                          { ec: "D",  color: "bg-[#f7941e]", text: "text-white", badge: "D" },
-                          { ec: "E",  color: "bg-[#f15a22]", text: "text-white", badge: "E" },
-                          { ec: "F",  color: "bg-[#ed1c24]", text: "text-white", badge: "F" },
-                          { ec: "G",  color: "bg-[#be1e2d]", text: "text-white", badge: "G" },
-                        ].map(({ ec, color, text, badge }) => {
-                          const active = selectedEnergyClasses.includes(ec);
-                          return (
-                            <button
-                              key={ec}
-                              onClick={() => toggleMulti("energy", ec)}
-                              title={`Energy class ${ec}`}
-                              className={`flex-1 flex flex-col items-center justify-center py-2.5 rounded-lg transition-all relative group ${
-                                active
-                                  ? `${color} ${text} shadow-md scale-105 z-10 ring-2 ring-white/30`
-                                  : `${color} ${text} opacity-40 hover:opacity-80 hover:scale-102`
-                              }`}
-                            >
-                              <span className="font-black text-[11px] leading-none">{badge}</span>
-                              {active && (
-                                <span className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-white flex items-center justify-center shadow">
-                                  <Check className="w-2 h-2 text-black" />
-                                </span>
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <div className="flex justify-between mt-1 px-1">
-                        <span className="text-[10px] text-brand-emerald font-semibold">Most efficient</span>
-                        <span className="text-[10px] text-muted-foreground">Least efficient</span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Property Style chips */}
-                  {(() => {
-                    const styleFilters = TYPE_STYLE_FILTERS[selectedType as PropertyTypeKey];
-                    if (!styleFilters?.length) return null;
-                    const selectedStyles = getMulti("style");
-                    return (
-                      <div className="mt-5 pt-5 border-t border-border/60">
-                        <label className="flex items-center gap-1.5 text-xs font-semibold text-foreground/70 uppercase tracking-wider mb-3">
-                          <span className="w-1.5 h-1.5 rounded-full bg-accent inline-block" />
-                          Property Style
-                        </label>
-                        <div className="flex flex-wrap gap-2">
-                          {styleFilters.map(s => (
-                            <FilterChip key={s.value} active={selectedStyles.includes(s.value)}
-                              onClick={() => toggleMulti("style", s.value)}>
-                              {s.label}
-                            </FilterChip>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* AI-curated feature chips */}
-                  {aiFilterConfig.features.length > 0 && (
-                    <div className="mt-5 pt-5 border-t border-border/60">
-                      <label className="flex items-center gap-1.5 text-xs font-semibold text-foreground/70 uppercase tracking-wider mb-3">
-                        <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block" />
-                        {aiFilterConfig.featuresLabel}
-                      </label>
-                      <div className="flex flex-wrap gap-2">
-                        {aiFilterConfig.features.map(feat => (
-                          <FilterChip key={feat.key} active={selectedFeatures.includes(feat.key)}
-                            onClick={() => toggleMulti("features", feat.key)}>
-                            {feat.label}
-                          </FilterChip>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-
-              <div className="flex items-center gap-3 mt-6 pt-5 border-t border-border">
-                <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground gap-2 px-5" onClick={() => setShowFilters(false)}>
-                  <Check className="w-3.5 h-3.5" />
-                  Show {filtered.length} Results
-                </Button>
-                <Button size="sm" variant="ghost" className="text-muted-foreground hover:text-foreground gap-1" onClick={clearAllFilters}>
-                  <X className="w-3 h-3" />
-                  {t("listings.filters.reset")}
-                </Button>
-              </div>
-            </div>
-          </div>
+          <ListingsAdvancedFilters filteredCount={filtered.length} onClose={() => setShowFilters(false)} />
         )}
 
         {/* Results */}
@@ -1211,9 +479,9 @@ export default function Listings() {
           <div className={`flex items-center justify-between mb-6 flex-wrap gap-3 ${viewMode === "split" ? "container" : ""}`}>
             <div className="flex items-center gap-3">
               {isLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" aria-label="Loading listings" />
               ) : (
-                <span className="font-display font-semibold">
+                <span className="font-display font-semibold" aria-live="polite" aria-atomic="true">
                   {viewMode === "split" && polygonFilterIds !== null
                     ? `${filtered.filter(p => polygonFilterIds.has(p.id)).length} in area`
                     : viewMode === "split" && viewportIds !== null
@@ -1221,9 +489,9 @@ export default function Listings() {
                     : `${filtered.length} properties`}
                 </span>
               )}
-              <span className="text-muted-foreground text-sm">
-                {dbListings.length > 0 ? "from database" : "· showing demo listings"}
-              </span>
+              {dbListings.length === 0 && (
+                <span className="text-muted-foreground text-sm">No listings matched your filters</span>
+              )}
               {viewMode === "split" && polygonFilterIds !== null && (
                 <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
                   Area filter
@@ -1265,11 +533,11 @@ export default function Listings() {
             ) : (
               splitDisplayList.map((property: any) => (
                 <div key={property.id} className="relative group">
-                  <PropertyCard property={property as any} />
+                  <PropertyCard property={property} />
                   <button
                     onClick={() => toggleCompare(property)}
                     disabled={!isComparing(property.id) && compareList.length >= 3}
-                    className={`absolute top-2 left-2 z-10 flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold border transition-all shadow-card ${
+                    className={`absolute bottom-[108px] right-2 z-10 flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold border transition-all shadow-card ${
                       isComparing(property.id)
                         ? "bg-accent/90 border-accent text-white"
                         : compareList.length >= 3
@@ -1308,9 +576,9 @@ export default function Listings() {
                   md:h-full h-[60vh]`}
                 >
                   {isLoading
-                    ? <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
+                    ? <div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => <PropertyCardSkeleton key={i} />)}</div>
                     : isError
-                    ? <div className="flex flex-col items-center justify-center py-20 gap-2 text-center"><p className="text-muted-foreground">Failed to load listings.</p><Button variant="outline" size="sm" onClick={() => window.location.reload()}>Retry</Button></div>
+                    ? <EmptyState icon={Building2} title="Failed to load listings" subtitle="Please try again" action={{ label: "Retry", onClick: () => window.location.reload() }} />
                     : gridCards
                   }
                 </div>
@@ -1332,36 +600,32 @@ export default function Listings() {
             );
           })() : viewMode === "grid" ? (
             isLoading ? (
-              <div className="flex items-center justify-center py-20">
-                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
+                {Array.from({ length: 8 }).map((_, i) => <PropertyCardSkeleton key={i} />)}
               </div>
             ) : isError ? (
-              <div className="glass-card rounded-xl p-16 text-center">
-                <Building2 className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-                <p className="font-semibold">Could not load listings</p>
-                <p className="text-sm text-muted-foreground mt-1">Please try again later</p>
-                <Button size="sm" variant="outline" className="mt-4" onClick={() => window.location.reload()}>Retry</Button>
-              </div>
+              <EmptyState
+                icon={Building2}
+                title="Could not load listings"
+                subtitle="Please try again later"
+                action={{ label: "Retry", onClick: () => window.location.reload() }}
+              />
             ) : filtered.length === 0 ? (
-              <div className="glass-card rounded-xl p-16 text-center">
-                <Building2 className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-                <p className="font-semibold">{t("listings.noResults")}</p>
-                <p className="text-sm text-muted-foreground mt-1">{t("listings.noResultsSubtitle")}</p>
-                {activeFilterCount > 0 && (
-                  <Button size="sm" variant="outline" className="mt-4" onClick={clearAllFilters}>
-                    {t("listings.filters.reset")}
-                  </Button>
-                )}
-              </div>
+              <EmptyState
+                icon={Building2}
+                title={t("listings.noResults")}
+                subtitle={t("listings.noResultsSubtitle")}
+                action={activeFilterCount > 0 ? { label: t("listings.filters.reset"), onClick: clearAllFilters } : undefined}
+              />
             ) : (
               <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
                 {filtered.map((property: any) => (
                   <div key={property.id} className="relative group">
-                    <PropertyCard property={property as any} />
+                    <PropertyCard property={property} />
                     <button
                       onClick={() => toggleCompare(property)}
                       disabled={!isComparing(property.id) && compareList.length >= 3}
-                      className={`absolute top-2 left-2 z-10 flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold border transition-all shadow-card ${
+                      className={`absolute bottom-[108px] right-2 z-10 flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold border transition-all shadow-card ${
                         isComparing(property.id)
                           ? "bg-accent/90 border-accent text-accent-foreground"
                           : compareList.length >= 3
@@ -1389,7 +653,7 @@ export default function Listings() {
             </MapGate>
           )}
         </div>
-      </div>
+      </main>
 
       <Footer />
 

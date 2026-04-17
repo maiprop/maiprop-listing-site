@@ -67,20 +67,10 @@ const STATUS_BADGE: Record<
   paused:  { label: "Paused",  variant: "outline" },
   sold:    { label: "Sold",    variant: "destructive" },
   rented:  { label: "Rented",  variant: "destructive" },
+  expired: { label: "Expired", variant: "outline" },
 };
 
-function formatPrice(price: number): string {
-  return `€${price.toLocaleString("en-US")}`;
-}
-
-function formatDate(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
+import { formatPrice, formatDate } from "@/lib/format";
 
 /** Returns a colored dot className based on views_count thresholds */
 function performanceDotClass(views: number): string {
@@ -108,14 +98,14 @@ async function fetchFeaturedListings(): Promise<FeaturedListing[]> {
   if (listingsError) throw listingsError;
   if (!listings || listings.length === 0) return [];
 
-  const rows = listings as RawListingRow[];
+  const rows = (listings as unknown) as RawListingRow[];
 
   // Collect unique owner_ids to fetch profile names
   const ownerIds = [
     ...new Set(rows.map((l) => l.owner_id).filter((id): id is string => id !== null)),
   ];
 
-  let profileMap: Record<string, string | null> = {};
+  const profileMap: Record<string, string | null> = {};
   if (ownerIds.length > 0) {
     const { data: profiles } = await supabase
       .from("profiles_public")
@@ -240,7 +230,7 @@ export default function AdminFeaturedListings() {
       try {
         const { error: updateError } = await supabase
           .from("listings")
-          .update({ featured_until: newVal } as any)
+          .update({ featured_until: newVal } as never)
           .eq("id", listing.id);
         if (updateError) throw updateError;
         await queryClient.invalidateQueries({ queryKey: ["admin-featured-listings"] });

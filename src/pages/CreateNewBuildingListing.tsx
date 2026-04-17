@@ -1,4 +1,6 @@
+﻿/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useCallback, useEffect } from "react";
+import { useFormWizard } from "@/hooks/useFormWizard";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Building2, ChevronLeft, Loader2, Check, Image, LayoutGrid,
@@ -32,12 +34,15 @@ const MEDIA_TYPES: { value: ProjectMediaType; label: string }[] = [
 
 type UploadedImage = { id: string; url: string; file?: File; uploading?: boolean; error?: string };
 
+const WIZARD_STEPS = ["building", "unit", "media", "listing", "photos"] as const;
+type WizardStep = typeof WIZARD_STEPS[number];
+
 const STEPS = [
-  { id: 1, label: "Building", icon: Building2 },
-  { id: 2, label: "Unit", icon: Home },
-  { id: 3, label: "Media", icon: LayoutGrid },
-  { id: 4, label: "Listing", icon: FileText },
-  { id: 5, label: "Photos", icon: Image },
+  { id: "building" as WizardStep, label: "Building", icon: Building2 },
+  { id: "unit" as WizardStep, label: "Unit", icon: Home },
+  { id: "media" as WizardStep, label: "Media", icon: LayoutGrid },
+  { id: "listing" as WizardStep, label: "Listing", icon: FileText },
+  { id: "photos" as WizardStep, label: "Photos", icon: Image },
 ];
 
 export default function CreateNewBuildingListing() {
@@ -46,9 +51,9 @@ export default function CreateNewBuildingListing() {
   const addMedia = useAddProjectMedia();
 
   const participantType = getParticipantTypeFromProfile(profile);
-  const canCreateListing = participantType === "developer";
+  const canCreateListing = participantType === "developer" || participantType === "agent";
 
-  const [step, setStep] = useState(1);
+  const { step, stepIndex, isFirst, isLast, goNext, goPrev, goTo } = useFormWizard({ steps: WIZARD_STEPS });
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -115,7 +120,7 @@ export default function CreateNewBuildingListing() {
 
   useEffect(() => {
     if (!user || !profile || canCreateListing) return;
-    toast.error("New building listings are for developers only. Switch your participant type in Settings.");
+    toast.error("New building listings are for developers and agents only. Switch your participant type in Settings.");
     navigate("/dashboard/settings", { replace: true });
   }, [user, profile, canCreateListing, navigate]);
 
@@ -127,7 +132,7 @@ export default function CreateNewBuildingListing() {
   const uploadListingImage = useCallback(async (file: File): Promise<UploadedImage> => {
     if (!user) throw new Error("Must be logged in");
     const ext = file.name.split(".").pop();
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const id = crypto.randomUUID();
     const path = `${user.id}/${id}.${ext}`;
     const { error } = await supabase.storage.from("listing-images").upload(path, file, { upsert: true });
     if (error) throw error;
@@ -138,7 +143,7 @@ export default function CreateNewBuildingListing() {
   const uploadProjectMedia = useCallback(async (file: File, projectId: string): Promise<string> => {
     if (!user) throw new Error("Not authenticated");
     const ext = file.name.split(".").pop() || "jpg";
-    const path = `${user.id}/${projectId}/media-${Date.now()}.${ext}`;
+    const path = `${user.id}/${projectId}/media-${crypto.randomUUID()}.${ext}`;
     const { error } = await supabase.storage.from("project-media").upload(path, file, { upsert: true });
     if (error) throw error;
     const { data } = supabase.storage.from("project-media").getPublicUrl(path);
@@ -151,7 +156,7 @@ export default function CreateNewBuildingListing() {
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <span className="text-sm text-muted-foreground">Redirecting…</span>
+          <span className="text-sm text-muted-foreground">Redirectingâ€¦</span>
         </div>
       </div>
     );
@@ -162,7 +167,7 @@ export default function CreateNewBuildingListing() {
     const newFiles = Array.from(files).slice(0, 20 - images.length);
     if (newFiles.length === 0) return;
     const placeholders: UploadedImage[] = newFiles.map(file => ({
-      id: `placeholder-${Date.now()}-${Math.random()}`,
+      id: `placeholder-${crypto.randomUUID()}`,
       url: URL.createObjectURL(file),
       file,
       uploading: true,
@@ -176,32 +181,32 @@ export default function CreateNewBuildingListing() {
           img.id === placeholder.id ? { ...uploaded, uploading: false } : img
         ));
         if (i === 0) setCoverImageId(prev => prev ?? uploaded.id);
-      } catch (err: any) {
+      } catch (err: unknown) {
         setImages(prev => prev.map(img =>
-          img.id === placeholder.id ? { ...img, uploading: false, error: err.message } : img
+          img.id === placeholder.id ? { ...img, uploading: false, error: err instanceof Error ? err.message : "Upload failed" } : img
         ));
         toast.error(`Failed to upload ${newFiles[i].name}`);
       }
     }
   };
 
-  const validateStep = (s: number): boolean => {
+  const validateStep = (s: WizardStep): boolean => {
     const newErrors: Record<string, string> = {};
-    if (s === 1) {
+    if (s === "building") {
       if (!project.name.trim()) newErrors.project_name = "Project name is required";
       if (!project.building_permit_number.trim()) newErrors.building_permit = "Building permit number is required";
       if (!project.city.trim()) newErrors.project_city = "City is required";
     }
-    if (s === 2) {
+    if (s === "unit") {
       if (!unit.internal_sqm) newErrors.internal_sqm = "Internal sqm is required";
       if (!unit.price) newErrors.price = "Price is required";
       if (!unit.bedrooms) newErrors.bedrooms = "Bedrooms is required";
       if (!unit.bathrooms) newErrors.bathrooms = "Bathrooms is required";
     }
-    if (s === 4) {
+    if (s === "listing") {
       if (!listing.title.trim()) newErrors.title = "Listing title is required";
     }
-    if (s === 5) {
+    if (s === "photos") {
       const validImages = images.filter(img => !img.uploading && !img.error);
       if (validImages.length === 0) newErrors.photos = "At least one photo is required";
       if (!coverImageId || !validImages.some(img => img.id === coverImageId)) newErrors.cover = "Set a cover photo";
@@ -216,10 +221,10 @@ export default function CreateNewBuildingListing() {
   };
 
   const handleNext = () => {
-    if (validateStep(step)) setStep(s => Math.min(s + 1, STEPS.length));
+    if (validateStep(step)) goNext();
   };
 
-  const handleBack = () => setStep(s => Math.max(s - 1, 1));
+  const handleBack = () => goPrev();
 
   const handleSubmit = async () => {
     if (!user) return;
@@ -249,6 +254,7 @@ export default function CreateNewBuildingListing() {
     }
 
     setSubmitting(true);
+    let createdProjectId: string | null = null;
     try {
       const projectPayload = {
         name: project.name.trim(),
@@ -275,6 +281,7 @@ export default function CreateNewBuildingListing() {
         .select()
         .single();
       if (projErr) throw projErr;
+      createdProjectId = createdProject.id;
 
       const internalSqm = parseFloat(String(unit.internal_sqm));
       const price = parseFloat(String(unit.price));
@@ -293,7 +300,7 @@ export default function CreateNewBuildingListing() {
         kitchen_type: unit.kitchen_type || undefined,
         living_rooms: unit.living_rooms ? parseInt(String(unit.living_rooms)) : undefined,
         price,
-        price_per_sqm: price / internalSqm,
+        price_per_sqm: internalSqm > 0 ? price / internalSqm : undefined,
         vat_included: unit.vat_included,
         parking_price: unit.parking_price ? parseFloat(String(unit.parking_price)) : undefined,
         storage_price: unit.storage_price ? parseFloat(String(unit.storage_price)) : undefined,
@@ -305,8 +312,8 @@ export default function CreateNewBuildingListing() {
         cooling_system: unit.cooling_system || undefined,
       };
 
-      const { data: _createdUnit, error: unitErr } = await (supabase as any)
-        .from("project_units")
+       
+      const { data: _createdUnit, error: unitErr } = await supabase.from("project_units")
         .insert(unitPayload)
         .select()
         .single();
@@ -335,7 +342,7 @@ export default function CreateNewBuildingListing() {
         energy_class: unit.energy_class || undefined,
         heating_system: unit.heating_system || undefined,
         cover_image_url: coverImageUrl,
-        price_per_sqm: Math.round(price / internalSqm),
+        price_per_sqm: internalSqm > 0 ? Math.round(price / internalSqm) : undefined,
         owner_id: user.id,
         status: "active",
         project_id: createdProject.id,
@@ -361,9 +368,13 @@ export default function CreateNewBuildingListing() {
       }
 
       toast.success("New building listing created!");
-      navigate(`/property/${createdListing.id}`);
-    } catch (err: any) {
-      toast.error(err.message || "Something went wrong");
+      navigate(`/new-build/${createdListing.id}`);
+    } catch (_err: unknown) {
+      // Clean up orphaned project record if unit or listing creation failed
+      if (createdProjectId) {
+        await supabase.from("projects").delete().eq("id", createdProjectId);
+      }
+      toast.error("Something went wrong â€” please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -391,7 +402,7 @@ export default function CreateNewBuildingListing() {
               <span className="text-sm font-semibold tabular-nums text-primary">{completionPct}%</span>
             </div>
             <p className="text-muted-foreground text-xs mb-3">
-              Step {step} of {STEPS.length} — {STEPS[step - 1].label}
+              Step {stepIndex + 1} of {STEPS.length} â€” {STEPS[stepIndex].label}
             </p>
             <div className="w-full h-1.5 bg-secondary rounded-full overflow-hidden">
               <div className="h-full bg-primary rounded-full transition-all duration-500" style={{ width: `${completionPct}%` }} />
@@ -404,24 +415,24 @@ export default function CreateNewBuildingListing() {
             {STEPS.map((s, i) => (
               <div key={s.id} className="flex items-center gap-1 shrink-0">
                 <button
-                  onClick={() => step > s.id && setStep(s.id)}
+                  onClick={() => stepIndex > i && goTo(s.id)}
                   className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
                     step === s.id ? "bg-primary text-primary-foreground"
-                      : step > s.id ? "bg-primary/20 text-primary cursor-pointer hover:bg-primary/30"
+                      : stepIndex > i ? "bg-primary/20 text-primary cursor-pointer hover:bg-primary/30"
                       : "bg-secondary text-muted-foreground"
                   }`}
                 >
-                  {step > s.id ? <Check className="w-3 h-3" /> : <s.icon className="w-3 h-3" />}
+                  {stepIndex > i ? <Check className="w-3 h-3" /> : <s.icon className="w-3 h-3" />}
                   {s.label}
                 </button>
-                {i < STEPS.length - 1 && <div className={`w-4 h-0.5 ${step > s.id ? "bg-primary" : "bg-border"}`} />}
+                {i < STEPS.length - 1 && <div className={`w-4 h-0.5 ${stepIndex > i ? "bg-primary" : "bg-border"}`} />}
               </div>
             ))}
           </div>
 
           <div className="glass-card rounded-2xl p-6 md:p-8">
             {/* Step 1: Building */}
-            {step === 1 && (
+            {step === "building" && (
               <div className="space-y-6">
                 <h2 className="font-display text-xl font-semibold">Building & Project Details</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -443,7 +454,7 @@ export default function CreateNewBuildingListing() {
                   <div><label className={LABEL_CLS}>Developer company</label><input value={project.developer_company} onChange={e => setProjectField("developer_company", e.target.value)} placeholder="Company name" className={INPUT_CLS} /></div>
                   <div><label className={LABEL_CLS}>Architect / group</label><input value={project.architect_group} onChange={e => setProjectField("architect_group", e.target.value)} placeholder="Architect or group" className={INPUT_CLS} /></div>
                   <div><label className={LABEL_CLS}>Construction company</label><input value={project.construction_company} onChange={e => setProjectField("construction_company", e.target.value)} placeholder="Constructor" className={INPUT_CLS} /></div>
-                  <div><label className={LABEL_CLS}>Municipality</label><input value={project.municipality} onChange={e => setProjectField("municipality", e.target.value)} placeholder="Δήμος" className={INPUT_CLS} /></div>
+                  <div><label className={LABEL_CLS}>Municipality</label><input value={project.municipality} onChange={e => setProjectField("municipality", e.target.value)} placeholder="Î”Î®Î¼Î¿Ï‚" className={INPUT_CLS} /></div>
                   <div className="sm:col-span-2"><label className={LABEL_CLS}>Address</label><input value={project.address} onChange={e => setProjectField("address", e.target.value)} placeholder="Street, number" className={INPUT_CLS} /></div>
                   <div><label className={LABEL_CLS}>Latitude</label><input type="number" step="any" value={project.latitude} onChange={e => setProjectField("latitude", e.target.value)} placeholder="37.9838" className={INPUT_CLS} /></div>
                   <div><label className={LABEL_CLS}>Longitude</label><input type="number" step="any" value={project.longitude} onChange={e => setProjectField("longitude", e.target.value)} placeholder="23.7275" className={INPUT_CLS} /></div>
@@ -458,7 +469,7 @@ export default function CreateNewBuildingListing() {
             )}
 
             {/* Step 2: Unit */}
-            {step === 2 && (
+            {step === "unit" && (
               <div className="space-y-6">
                 <h2 className="font-display text-xl font-semibold">Unit Details</h2>
                 <p className="text-sm text-muted-foreground">Details for the specific unit you are listing.</p>
@@ -468,18 +479,18 @@ export default function CreateNewBuildingListing() {
                   <div><label className={LABEL_CLS}>Unit number</label><input value={unit.unit_number} onChange={e => setUnitField("unit_number", e.target.value)} placeholder="101" className={INPUT_CLS} /></div>
                   <div><label className={LABEL_CLS}>Internal sqm *</label><input type="number" step="0.01" value={unit.internal_sqm} onChange={e => setUnitField("internal_sqm", e.target.value)} placeholder="85" className={INPUT_CLS} />{errors.internal_sqm && <p className="text-xs text-destructive">{errors.internal_sqm}</p>}</div>
                   <div><label className={LABEL_CLS}>Balcony sqm</label><input type="number" step="0.01" value={unit.balcony_sqm} onChange={e => setUnitField("balcony_sqm", e.target.value)} placeholder="12" className={INPUT_CLS} /></div>
-                  <div><label className={LABEL_CLS}>Price (€) *</label><input type="number" value={unit.price} onChange={e => setUnitField("price", e.target.value)} placeholder="250000" className={INPUT_CLS} />{errors.price && <p className="text-xs text-destructive">{errors.price}</p>}</div>
+                  <div><label className={LABEL_CLS}>Price (â‚¬) *</label><input type="number" value={unit.price} onChange={e => setUnitField("price", e.target.value)} placeholder="250000" className={INPUT_CLS} />{errors.price && <p className="text-xs text-destructive">{errors.price}</p>}</div>
                   <div><label className={LABEL_CLS}>Bedrooms *</label><input type="number" value={unit.bedrooms} onChange={e => setUnitField("bedrooms", e.target.value)} placeholder="2" className={INPUT_CLS} />{errors.bedrooms && <p className="text-xs text-destructive">{errors.bedrooms}</p>}</div>
                   <div><label className={LABEL_CLS}>Bathrooms *</label><input type="number" value={unit.bathrooms} onChange={e => setUnitField("bathrooms", e.target.value)} placeholder="2" className={INPUT_CLS} />{errors.bathrooms && <p className="text-xs text-destructive">{errors.bathrooms}</p>}</div>
                   <div><label className={LABEL_CLS}>Living rooms</label><input type="number" value={unit.living_rooms} onChange={e => setUnitField("living_rooms", e.target.value)} placeholder="1" className={INPUT_CLS} /></div>
                   <div><label className={LABEL_CLS}>Storage sqm</label><input type="number" step="0.01" value={unit.storage_sqm} onChange={e => setUnitField("storage_sqm", e.target.value)} placeholder="0" className={INPUT_CLS} /></div>
                   <div><label className={LABEL_CLS}>Parking sqm</label><input type="number" step="0.01" value={unit.parking_sqm} onChange={e => setUnitField("parking_sqm", e.target.value)} placeholder="0" className={INPUT_CLS} /></div>
-                  <div><label className={LABEL_CLS}>Kitchen type</label><select value={unit.kitchen_type} onChange={e => setUnitField("kitchen_type", e.target.value)} className={INPUT_CLS}><option value="">—</option>{KITCHEN_TYPES.map(k => <option key={k} value={k}>{k}</option>)}</select></div>
-                  <div><label className={LABEL_CLS}>Energy class</label><select value={unit.energy_class} onChange={e => setUnitField("energy_class", e.target.value)} className={INPUT_CLS}><option value="">—</option>{ENERGY_CLASSES.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                  <div><label className={LABEL_CLS}>Kitchen type</label><select value={unit.kitchen_type} onChange={e => setUnitField("kitchen_type", e.target.value)} className={INPUT_CLS}><option value="">â€”</option>{KITCHEN_TYPES.map(k => <option key={k} value={k}>{k}</option>)}</select></div>
+                  <div><label className={LABEL_CLS}>Energy class</label><select value={unit.energy_class} onChange={e => setUnitField("energy_class", e.target.value)} className={INPUT_CLS}><option value="">â€”</option>{ENERGY_CLASSES.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
                   <div><label className={LABEL_CLS}>Heating</label><input value={unit.heating_system} onChange={e => setUnitField("heating_system", e.target.value)} placeholder="e.g. heat pump" className={INPUT_CLS} /></div>
                   <div><label className={LABEL_CLS}>Cooling</label><input value={unit.cooling_system} onChange={e => setUnitField("cooling_system", e.target.value)} placeholder="e.g. AC" className={INPUT_CLS} /></div>
-                  <div><label className={LABEL_CLS}>Parking price (€)</label><input type="number" value={unit.parking_price} onChange={e => setUnitField("parking_price", e.target.value)} placeholder="0" className={INPUT_CLS} /></div>
-                  <div><label className={LABEL_CLS}>Storage price (€)</label><input type="number" value={unit.storage_price} onChange={e => setUnitField("storage_price", e.target.value)} placeholder="0" className={INPUT_CLS} /></div>
+                  <div><label className={LABEL_CLS}>Parking price (â‚¬)</label><input type="number" value={unit.parking_price} onChange={e => setUnitField("parking_price", e.target.value)} placeholder="0" className={INPUT_CLS} /></div>
+                  <div><label className={LABEL_CLS}>Storage price (â‚¬)</label><input type="number" value={unit.storage_price} onChange={e => setUnitField("storage_price", e.target.value)} placeholder="0" className={INPUT_CLS} /></div>
                   <div className="sm:col-span-2 lg:col-span-3 flex items-center gap-4 pt-2">
                     <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={unit.sea_view} onChange={e => setUnitField("sea_view", e.target.checked)} /> Sea view</label>
                     <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={unit.city_view} onChange={e => setUnitField("city_view", e.target.checked)} /> City view</label>
@@ -491,7 +502,7 @@ export default function CreateNewBuildingListing() {
             )}
 
             {/* Step 3: Project Media (optional) */}
-            {step === 3 && (
+            {step === "media" && (
               <div className="space-y-6">
                 <h2 className="font-display text-xl font-semibold">Project Media (Optional)</h2>
                 <p className="text-sm text-muted-foreground">Upload renderings, floor plans, brochures, etc. You can add more later from the project page.</p>
@@ -520,7 +531,7 @@ export default function CreateNewBuildingListing() {
             )}
 
             {/* Step 4: Listing */}
-            {step === 4 && (
+            {step === "listing" && (
               <div className="space-y-6">
                 <h2 className="font-display text-xl font-semibold">Listing Info</h2>
                 <p className="text-sm text-muted-foreground">Title and description for the listing. A default title was suggested from your project and unit.</p>
@@ -550,7 +561,7 @@ export default function CreateNewBuildingListing() {
             )}
 
             {/* Step 5: Photos */}
-            {step === 5 && (
+            {step === "photos" && (
               <div className="space-y-6">
                 <h2 className="font-display text-xl font-semibold">Listing Photos</h2>
                 <p className="text-sm text-muted-foreground">Upload photos for your listing. Drag to reorder. Click "Set as cover" on the main photo.</p>
@@ -570,7 +581,7 @@ export default function CreateNewBuildingListing() {
                   />
                   <Upload className="w-10 h-10 mx-auto text-muted-foreground mb-2" />
                   <p className="text-sm font-medium">Drop photos or click to upload</p>
-                  <p className="text-xs text-muted-foreground mt-1">JPG, PNG, WEBP — max 20</p>
+                  <p className="text-xs text-muted-foreground mt-1">JPG, PNG, WEBP â€” max 20</p>
                 </div>
                 {images.length > 0 && (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
@@ -598,17 +609,17 @@ export default function CreateNewBuildingListing() {
             )}
 
             <div className="flex items-center justify-between gap-4 mt-8 pt-6 border-t border-border">
-              <Button variant="outline" onClick={handleBack} disabled={step === 1} className="gap-2">
+              <Button variant="outline" onClick={handleBack} disabled={isFirst} className="gap-2">
                 <ChevronLeft className="w-4 h-4" /> Back
               </Button>
-              {step < STEPS.length ? (
+              {!isLast ? (
                 <Button onClick={handleNext} className="gap-2 bg-gradient-primary border-0">
                   Next <ChevronRight className="w-4 h-4" />
                 </Button>
               ) : (
                 <Button onClick={handleSubmit} disabled={submitting} className="gap-2 bg-gradient-primary border-0">
                   {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                  {submitting ? "Creating…" : "Create Listing"}
+                  {submitting ? "Creatingâ€¦" : "Create Listing"}
                 </Button>
               )}
             </div>
@@ -616,7 +627,7 @@ export default function CreateNewBuildingListing() {
 
           <p className="text-center text-sm text-muted-foreground mt-4">
             <Link to="/listings/new" className="text-primary hover:underline">Create a regular listing</Link>
-            {" · "}
+            {" Â· "}
             <Link to="/projects" className="text-primary hover:underline">My projects</Link>
           </p>
         </div>

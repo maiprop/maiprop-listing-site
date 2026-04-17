@@ -186,7 +186,59 @@
       "withdrawn": "Withdrawn",
       "auction": "Auction",
       "firesale": "Quick Sale"
-    }
+    },
+    "ownership": {
+      "full": "Full ownership (100%)",
+      "partial": "Partial ownership",
+      "common": "Undivided share",
+      "none": "No ownership"
+    },
+    "signInToSave": "Sign in to save properties",
+    "signInToContact": "Sign in to contact the owner",
+    "contactUnavailable": "Contact details not available",
+    "errorStartConversation": "Could not start conversation",
+    "errorLoad": "Could not load this listing. Please try again.",
+    "notAvailable": "This listing is no longer available.",
+    "backToListings": "Back to Listings",
+    "linkCopied": "Link copied to clipboard",
+    "signInToView": "Sign in to request a viewing",
+    "videoViewingProOnly": "Video viewing is available for Pro users or free for buyers.",
+    "signInToReport": "Sign in to report",
+    "errorReport": "Could not submit report",
+    "reportSubmitted": "Report submitted. Our team will review it.",
+    "reportListingCta": "Found an error? Report this listing",
+    "similarDeals": "Similar Deals",
+    "similarListings": "Similar Listings",
+    "breadcrumbHome": "Home",
+    "breadcrumbAuctions": "Auctions",
+    "breadcrumbListings": "Listings"
+  },
+  "cookie": {
+    "title": "We use cookies to improve your experience",
+    "description": "We use essential cookies to make our site work, plus optional cookies for analytics and mapping features.",
+    "policyLinkText": "Read our Cookie Policy for details.",
+    "essential": {
+      "title": "Essential Cookies",
+      "description": "Required for authentication, security, and core site functionality. Cannot be disabled.",
+      "alwaysOn": "Always on"
+    },
+    "functional": {
+      "title": "Functional Cookies",
+      "description": "Remember your preferences, saved searches, and personalization settings."
+    },
+    "analytics": {
+      "title": "Analytics Cookies",
+      "description": "Help us understand how visitors use the site so we can improve it. Data is aggregated and anonymised."
+    },
+    "mapping": {
+      "title": "Mapping Cookies",
+      "description": "Required for interactive maps (Mapbox). May set third-party cookies for tile delivery and usage tracking."
+    },
+    "managePreferences": "Manage preferences",
+    "hidePreferences": "Hide preferences",
+    "rejectOptional": "Reject optional",
+    "savePreferences": "Save preferences",
+    "acceptAll": "Accept all"
   },
   "auctions": {
     "title": "Court Auctions",
@@ -872,6 +924,138 @@
       "agricultural": "Agricultural plot",
       "plotWithBuilding": "Plot with building",
       "commercial": "All Commercial & Offices"
+    }
+  },
+  "toasts": {
+    "favorites": {
+      "saved": "Saved to favourites",
+      "savedWithAlert": "Saved! We'll notify you if the price drops.",
+      "removed": "Removed from saved",
+      "errorToggle": "Could not update saved properties. Please try again.",
+      "priceAlertUpdated": "Price alert updated",
+      "priceAlertError": "Could not update price alert. Please try again."
+    },
+    "contacts": {
+      "added": "Contact added",
+      "updated": "Contact updated",
+      "deleted": "Contact deleted",
+      "errorAdd": "Could not add contact. Please try again.",
+      "errorUpdate": "Could not update contact. Please try again.",
+      "errorDelete": "Could not delete contact. Please try again."
+    },
+    "leads": {
+      "added": "Lead added",
+      "updated": "Lead updated",
+      "deleted": "Lead deleted",
+      "errorAdd": "Could not add lead. Please try again.",
+      "errorUpdate": "Could not update lead. Please try again.",
+      "errorDelete": "Could not delete lead. Please try again."
+    },
+    "reviews": {
+      "submitted": "Review submitted!",
+      "errorSubmit": "Could not submit review. Please try again."
+    },
+    "consultations": {
+      "sent": "Request sent! The professional will contact you soon.",
+      "updated": "Request updated",
+      "errorSend": "Could not send consultation request. Please try again.",
+      "errorUpdate": "Could not update consultation. Please try again."
+    },
+    "generic": {
+      "error": "Something went wrong. Please try again."
+    }
+  },
+  "timeAgo": {
+    "justNow": "just now",
+    "minutesAgo": "{{n}}m ago",
+    "hoursAgo": "{{n}}h ago",
+    "daysAgo": "{{n}}d ago"
+  },
+  "bottomNav": {
+    "home": "Home",
+    "browse": "Browse",
+    "market": "Market",
+    "listings": "Listings",
+    "leads": "Leads",
+    "projects": "Projects",
+    "services": "Services",
+    "directory": "Directory",
+    "messages": "Messages",
+    "auctions": "Auctions",
+    "deals": "Deals",
+    "openHouses": "Open Houses",
+    "account": "Account"
+  },
+  "dashNav": {
+    "overview": "Overview",
+    "investorDashboard": "Investor Dashboard",
+    "myListings": "My Listings",
+    "analytics": "Analytics",
+    "saved": "Saved",
+    "savedSearches": "Saved Searches",
+    "messages": "Messages",
+    "viewings": "Viewings",
+    "auctionAlerts": "Auction Alerts",
+    "openHouses": "Open Houses",
+    "myServices": "My Services",
+    "booking": "Booking",
+    "leads": "Leads",
+    "contacts": "Contacts",
+    "projects": "Projects",
+    "portfolios": "Portfolios",
+    "billing": "Billing",
+    "profile": "Profile",
+    "settings": "Settings"
+  },
+  "investor": {
+    "hero": {
+      "badge": "Investor Deal Flow — Exclusive Access",
+      "title": "Private Quick Sale™",
+      "titleHighlight": "Deal Pipeline",
+      "subtitle": "Off-market distressed assets, pre-foreclosures, and motivated seller properties — curated for institutional buyers and family offices.",
+      "liveDeals": "{{count}} live deals",
+      "requestInvitation": "Request invitation",
+      "planActive": "{{tier}} Plan Active",
+      "tabDealFeed": "Deal Feed"
+    },
+    "kpi": {
+      "liveDeals": "Live Deals",
+      "liveDealsThisWeek": "+8 this week",
+      "totalDealValue": "Total Deal Value",
+      "totalDealValueDelta": "In pipeline",
+      "avgDiscount": "Avg. Discount",
+      "avgDiscountDelta": "vs market",
+      "avgRoi": "Avg. Est. ROI",
+      "avgRoiDelta": "p.a."
+    },
+    "expiry": {
+      "title": "Your {{tier}} access expires in {{count}} day",
+      "title_other": "Your {{tier}} access expires in {{count}} days",
+      "titleToday": "Your {{tier}} access expires in less than 1 day",
+      "subtitle": "Submit a renewal request to maintain uninterrupted access to the deal pipeline.",
+      "requestRenewal": "Request renewal"
+    },
+    "access": {
+      "pendingBadge": "Application under review",
+      "pendingTitle": "Your Application is",
+      "pendingTitleHighlight": "Pending",
+      "pendingDesc": "We've received your request and our team is reviewing your investor profile. You'll be notified by email once a decision is made — typically within 48 hours.",
+      "pendingNote": "Application pending — we'll contact you by email",
+      "rejectedBadge": "Application not approved",
+      "rejectedTitle": "Access",
+      "rejectedTitleHighlight": "Not Granted",
+      "rejectedDesc": "Your previous application was not approved at this time. If your circumstances have changed, you are welcome to submit a new request.",
+      "noneBadge": "Invitation-only access",
+      "noneTitle": "Request Access to the",
+      "noneTitleHighlight": "Deal Flow",
+      "noneDesc": "Quick Sale™ deal flow is exclusively available to verified investors and institutional buyers. Submit your profile and our team will review your application — no subscription fee, access is purely by invitation.",
+      "cta": "Request an Invitation",
+      "reApply": "Re-apply",
+      "alreadyApplied": "Already applied?",
+      "alreadyAppliedNote": "We'll contact you by email.",
+      "pendingCTA": "Application pending",
+      "pendingCTANote": "No action needed — we'll reach out once your application is reviewed.",
+      "reApplyNote": "Submit a new application for consideration."
     }
   }
 }

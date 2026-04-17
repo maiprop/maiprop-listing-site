@@ -30,7 +30,7 @@ export function useMyFiresaleInterest(dealId: string | undefined) {
       if (!uid || !dealId) return null;
       const { data } = await supabase
         .from("firesale_interest")
-        .select("*")
+        .select("id, deal_id, investor_id, proof_of_funds_url, proof_amount, message, status, created_at, updated_at")
         .eq("deal_id", dealId)
         .eq("investor_id", uid)
         .maybeSingle();
@@ -103,7 +103,7 @@ export function useExpressInterest() {
 
       if (proofFile) {
         const ext = proofFile.name.split(".").pop() ?? "pdf";
-        const path = `firesale/${uid}/${dealId}/proof_${Date.now()}.${ext}`;
+        const path = `firesale/${uid}/${dealId}/proof_${crypto.randomUUID()}.${ext}`;
         const { data: uploaded, error: upErr } = await supabase.storage
           .from("open-house-docs")
           .upload(path, proofFile, { upsert: true });
@@ -135,7 +135,7 @@ export function useExpressInterest() {
       qc.invalidateQueries({ queryKey: ["firesale_interest_queue", v.dealId] });
       toast.success("Interest registered — admin will be in touch");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: () => toast.error("Something went wrong. Please try again."),
   });
 }
 
@@ -143,7 +143,7 @@ export function useExpressInterest() {
 export function useUpdateInterestStatus() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, dealId, status }: { id: string; dealId: string; status: InterestStatus }) => {
+    mutationFn: async ({ id, dealId: _dealId, status }: { id: string; dealId: string; status: InterestStatus }) => {
       const { error } = await supabase
         .from("firesale_interest")
         .update({ status })
@@ -154,6 +154,6 @@ export function useUpdateInterestStatus() {
       qc.invalidateQueries({ queryKey: ["firesale_interest_queue", v.dealId] });
       toast.success("Status updated");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: () => toast.error("Something went wrong. Please try again."),
   });
 }
