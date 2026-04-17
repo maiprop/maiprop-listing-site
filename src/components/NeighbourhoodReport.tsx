@@ -34,6 +34,7 @@ interface DevProject {
 
 interface NeighbourhoodData {
   areaName: string;
+  walkabilityScore?: number;
   pricePerSqmTrend: PriceTrend;
   noiseLevel: NoiseLevel;
   safetyScore: SafetyScore;
@@ -204,7 +205,7 @@ export default function NeighbourhoodReport({ city, address, region, propertyTyp
         }
       }
       const { data: result, error: fnErr } = await supabase.functions.invoke("neighbourhood-report", {
-        body: { city, address, region, propertyType, lat, lng },
+        body: { city, address, region, propertyType, lat, lng, listingId },
       });
       if (fnErr) throw fnErr;
       if (result?.error) throw new Error(result.error);
@@ -330,6 +331,27 @@ export default function NeighbourhoodReport({ city, address, region, propertyTyp
                   {data.safetyScore.trend} · {data.safetyScore.notes}
                 </p>
               </div>
+
+              {/* Walkability */}
+              {data.walkabilityScore != null && (
+                <div className="bg-secondary rounded-xl p-3.5">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <span className="text-sm">🚶</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Walkability</span>
+                  </div>
+                  <p className="text-sm font-bold" style={{
+                    color: data.walkabilityScore >= 70 ? "#22c55e" : data.walkabilityScore >= 50 ? "#eab308" : "#ef4444"
+                  }}>
+                    {data.walkabilityScore >= 90 ? "Walker's Paradise" :
+                     data.walkabilityScore >= 70 ? "Very Walkable" :
+                     data.walkabilityScore >= 50 ? "Somewhat Walkable" : "Car-Dependent"}
+                  </p>
+                  <ScoreBar score={data.walkabilityScore} colour={
+                    data.walkabilityScore >= 70 ? "#22c55e" : data.walkabilityScore >= 50 ? "#eab308" : "#ef4444"
+                  } />
+                  <p className="text-[10px] text-muted-foreground mt-2">{data.walkabilityScore}/100</p>
+                </div>
+              )}
             </div>
 
             {/* Development projects */}

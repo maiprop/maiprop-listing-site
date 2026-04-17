@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useRef, useEffect } from "react";
 import { Search, Send, Phone, Video, MoreVertical, Paperclip, Loader2, MessageSquare, ArrowLeft, Check, CheckCheck, Link2 } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
@@ -46,7 +47,7 @@ export default function Messages() {
 
   // Open conversation passed from property/detail (e.g. after "Contact")
   useEffect(() => {
-    const openId = (location.state as any)?.openConversationId;
+    const openId = (location.state as { openConversationId?: string } | null)?.openConversationId;
     if (openId && typeof openId === "string") {
       setActiveConvId(openId);
       setMobileView("chat");
@@ -145,7 +146,7 @@ export default function Messages() {
       for (let i = 0; i < files.length; i++) {
         const f = files[i];
         const ext = (f.name.split(".").pop() || "bin").toLowerCase();
-        const path = `${activeConvId}/${user.id}/${Date.now()}-${i}.${ext}`;
+        const path = `${activeConvId}/${user.id}/${crypto.randomUUID()}.${ext}`;
         const { error } = await supabase.storage.from("message-attachments").upload(path, f, {
           contentType: f.type || "application/octet-stream",
         });
@@ -153,8 +154,8 @@ export default function Messages() {
         uploaded.push({ path, filename: f.name, mime_type: f.type || "" });
       }
       setPendingFiles((prev) => [...prev, ...uploaded]);
-    } catch (err: any) {
-      toast.error(err?.message || "Upload failed");
+    } catch (err: unknown) {
+      toast.error((err instanceof Error ? err.message : null) || "Upload failed");
     } finally {
       setUploading(false);
       e.target.value = "";
@@ -236,8 +237,8 @@ export default function Messages() {
                           </span>
                         )}
                       </div>
-                      {conv.listings && (
-                        <div className="text-xs text-primary/70 truncate">{conv.listings.title} · {conv.listings.city}</div>
+                      {(conv as any).listings && (
+                        <div className="text-xs text-primary/70 truncate">{(conv as any).listings.title} · {(conv as any).listings.city}</div>
                       )}
                       {lastMsg && (
                         <div className="text-xs text-muted-foreground truncate mt-0.5">
@@ -289,17 +290,17 @@ export default function Messages() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold text-sm">{otherProfile?.display_name || "User"}</div>
-                  {activeConv?.listings && (
-                    <Link to={`/property/${activeConv.listing_id}`} className="text-xs text-primary/70 hover:text-primary truncate block">
-                      {activeConv.listings.title} · {activeConv.listings.city}
+                  {(activeConv as any)?.listings && (
+                    <Link to={`/property/${(activeConv as any).listing_id}`} className="text-xs text-primary/70 hover:text-primary truncate block">
+                      {(activeConv as any).listings.title} · {(activeConv as any).listings.city}
                     </Link>
                   )}
                 </div>
                 <div className="flex items-center gap-1">
-                  <button className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors" title="Voice call">
+                  <button disabled className="p-2 rounded-lg text-muted-foreground opacity-50 cursor-not-allowed" title="Coming soon">
                     <Phone className="w-4 h-4" />
                   </button>
-                  <button className="hidden sm:block p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors" title="Video call">
+                  <button disabled className="hidden sm:block p-2 rounded-lg text-muted-foreground opacity-50 cursor-not-allowed" title="Coming soon">
                     <Video className="w-4 h-4" />
                   </button>
                   <button className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
@@ -412,10 +413,10 @@ export default function Messages() {
                   >
                     {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
                   </button>
-                  {activeConv?.listing_id && (
+                  {(activeConv as any)?.listing_id && (
                     <button
                       type="button"
-                      onClick={() => setInput((prev) => (prev ? `${prev} /property/${activeConv.listing_id}` : `/property/${activeConv.listing_id}`))}
+                      onClick={() => setInput((prev) => (prev ? `${prev} /property/${(activeConv as any).listing_id}` : `/property/${(activeConv as any).listing_id}`))}
                       className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
                       title="Share property link"
                       aria-label="Share property link"

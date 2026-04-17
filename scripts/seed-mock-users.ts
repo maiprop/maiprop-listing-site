@@ -27,7 +27,7 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
 
 type RoleKey = "individual" | "seller_landlord" | "investor" | "agent" | "institutional" | "developer" | "professional";
 
-const ROLES: RoleKey[] = ["individual", "seller_landlord", "investor", "agent", "institutional", "developer", "professional"];
+const _ROLES: RoleKey[] = ["individual", "seller_landlord", "investor", "agent", "institutional", "developer", "professional"];
 
 type ParticipantType = "buyer" | "seller" | "investor" | "agent" | "developer" | "professional";
 

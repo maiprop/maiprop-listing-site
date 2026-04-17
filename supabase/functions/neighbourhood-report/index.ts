@@ -1,10 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+const neighbourhoodLimiter = makeRateLimiter({ maxRequests: 15, windowMs: 60_000 });
 
 async function requireAuth(req: Request): Promise<Response | null> {
   const authHeader = req.headers.get("Authorization");
@@ -24,13 +22,18 @@ async function requireAuth(req: Request): Promise<Response | null> {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const corsPreflightResponse = handleCors(req);
+  if (corsPreflightResponse) return corsPreflightResponse;
+  const corsHeaders = getCorsHeaders(req);
+  const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
+  if (neighbourhoodLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
+
 
   const authErr = await requireAuth(req);
   if (authErr) return authErr;
 
   try {
-    const { city, address, region, propertyType: _propertyType, lat, lng } = await req.json();
+    const { city, address, region, propertyType: _propertyType, lat, lng, listingId } = await req.json();
 
     if (!city) {
       return new Response(
@@ -57,6 +60,7 @@ Deno.serve(async (req) => {
 Return ONLY valid JSON, no markdown, no explanation:
 {
   "areaName": "string (specific neighbourhood name, e.g. 'Kolonaki' or 'Nea Smyrni')",
+  "walkabilityScore": number (0-100; 90+ = walker's paradise, 70-89 = very walkable, 50-69 = somewhat walkable, below 50 = car-dependent),
   "pricePerSqmTrend": {
     "current": number (EUR/m² today),
     "oneYearAgo": number,
@@ -95,11 +99,12 @@ Return ONLY valid JSON, no markdown, no explanation:
     "rating": "Excellent" | "Good" | "Fair" | "Poor",
     "summary": "string (2 sentences)"
   },
-  "areaHighlights": ["string"] 
+  "areaHighlights": ["string"]
 }
 
 Rules:
 - Base all data on real knowledge of ${city}, Greece neighbourhoods
+- walkabilityScore: reflect proximity to shops, public transport, restaurants, parks
 - developmentProjects: include 2-4 realistic projects for the area
 - areaHighlights: 3-4 short bullet points (e.g. 'Metro line 200m away')
 - All numbers must be realistic for the Greek market
@@ -151,6 +156,20 @@ Rules:
       } catch {
         throw new Error("AI returned invalid JSON");
       }
+    }
+
+    // Persist neighbourhood scores back to the listing row so they can be filtered on.
+    if (listingId && parsed.walkabilityScore != null) {
+      const adminClient = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      );
+      await adminClient.from("listings").update({
+        walkability_score: Math.round(parsed.walkabilityScore),
+        safety_score:      parsed.safetyScore?.score  != null ? Math.round(parsed.safetyScore.score)  : undefined,
+        noise_score:       parsed.noiseLevel?.score   != null ? Math.round(parsed.noiseLevel.score)   : undefined,
+      }).eq("id", listingId);
+      // fire-and-forget — don't block the response on DB write
     }
 
     return new Response(JSON.stringify(parsed), {

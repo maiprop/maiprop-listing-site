@@ -1,8 +1,11 @@
 // Public configuration constants
 // These are publishable/public keys safe to store in client code.
 // No hardcoded fallbacks — use .env (copy from .env.example) for all environments.
+//
+// ENV VALIDATION — canonical check point. All env var format checks live here.
+// The localStorage key for locale persistence is "maiprop_lang" (see src/i18n.ts).
 
-const env = (import.meta as any).env ?? {};
+const env = import.meta.env;
 
 const _url = env.VITE_SUPABASE_URL ?? env.VITE_SUPABASE_PROJECT_URL;
 const _anonKey = env.VITE_SUPABASE_PUBLISHABLE_KEY ?? env.VITE_SUPABASE_ANON_KEY;
@@ -15,6 +18,20 @@ if (!_url || !_anonKey) {
   );
 }
 
+// Format-level validation — catches placeholder stubs before they reach the app
+const URL_RE = /^https?:\/\/[a-zA-Z0-9_-]+\.(supabase\.co|supabase\.in)(\/.*)?$/;
+const JWT_RE = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
+if (!URL_RE.test(_url)) {
+  const msg = `VITE_SUPABASE_URL looks malformed: "${_url}". Expected https://<ref>.supabase.co`;
+  if (import.meta.env.DEV) console.warn("[maiProp]", msg);
+  else throw new Error(msg);
+}
+if (!JWT_RE.test(_anonKey)) {
+  const msg = "VITE_SUPABASE_PUBLISHABLE_KEY does not look like a JWT. Check your .env file.";
+  if (import.meta.env.DEV) console.warn("[maiProp]", msg);
+  else throw new Error(msg);
+}
+
 export const SUPABASE_URL = _url;
 export const SUPABASE_ANON_KEY = _anonKey;
 
@@ -24,8 +41,14 @@ export const MAPBOX_TOKEN = _mapbox ?? "";
 // Google Maps API key — use only for Maps JavaScript (e.g. Places autocomplete).
 // Restrict to HTTP referrers in Google Cloud Console. Do NOT use for Street View
 // in client URLs; use getStreetViewProxyUrl() so the key stays server-side.
-export const GOOGLE_MAPS_API_KEY =
-  (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY ?? "";
+export const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY ?? "";
+
+/**
+ * Safe app origin for OAuth redirects — never derived from window.location
+ * so it cannot be influenced by iframe/postMessage tricks.
+ * Set VITE_APP_URL in .env for local dev (e.g. http://localhost:8080).
+ */
+export const APP_ORIGIN = import.meta.env.VITE_APP_URL ?? "https://maiprop.co";
 
 /** Street View image via edge function proxy so the API key is never in client URLs. */
 export function getStreetViewProxyUrl(

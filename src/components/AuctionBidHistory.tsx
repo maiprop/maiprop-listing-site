@@ -9,15 +9,7 @@
  */
 
 import { useState } from "react";
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
+import { formatDate as fmtDate } from "@/lib/format";
 import {
   TrendingUp,
   Clock,
@@ -40,15 +32,6 @@ import { cn } from "@/lib/utils";
 const RADIUS_OPTIONS = [0.5, 1, 1.5, 2, 5] as const;
 type RadiusKm = (typeof RADIUS_OPTIONS)[number];
 
-// Static trend used for the area chart (illustrative — no live trend endpoint yet)
-const MOCK_TREND = [
-  { month: "Sep 25", pricePerSqm: 1598 },
-  { month: "Oct 25", pricePerSqm: 1621 },
-  { month: "Nov 25", pricePerSqm: 1800 },
-  { month: "Dec 25", pricePerSqm: 1790 },
-  { month: "Jan 26", pricePerSqm: 1845 },
-  { month: "Feb 26", pricePerSqm: 1872 },
-];
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -72,13 +55,6 @@ function fmtEur(n: number): string {
   }).format(n);
 }
 
-function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
 
 function ppm(sale: SaleRecord): number {
   return sale.sqm > 0 ? Math.round(sale.sale_price / sale.sqm) : 0;
@@ -265,6 +241,7 @@ export function AuctionBidHistory({ lat, lng, lon, listingId: _listingId, title,
           <Button
             size="icon"
             variant="ghost"
+            aria-label="Refresh bid history"
             className="h-7 w-7"
             onClick={() => void refetch()}
             disabled={isLoading || isFetching}
@@ -339,57 +316,6 @@ export function AuctionBidHistory({ lat, lng, lon, listingId: _listingId, title,
         </div>
       )}
 
-      {/* Trend chart */}
-      <div className="rounded-xl border border-border bg-card p-4">
-        <p className="text-sm font-medium text-foreground mb-4">
-          Area price/m² trend
-          <span className="ml-2 text-xs font-normal text-muted-foreground">(illustrative)</span>
-        </p>
-        {isLoading ? (
-          <div className="h-40 animate-pulse bg-muted rounded-lg" />
-        ) : (
-          <ResponsiveContainer width="100%" height={180}>
-            <AreaChart data={MOCK_TREND} margin={{ top: 4, right: 4, left: -10, bottom: 0 }}>
-              <defs>
-                <linearGradient id="ppmGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.25} />
-                  <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis
-                dataKey="month"
-                tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis
-                tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-                axisLine={false}
-                tickLine={false}
-                tickFormatter={(v: number) => `€${v}`}
-              />
-              <Tooltip
-                formatter={(v: number) => [`€${v}/m²`, "Avg price"]}
-                contentStyle={{
-                  background: "hsl(var(--card))",
-                  border: "1px solid hsl(var(--border))",
-                  borderRadius: 8,
-                  fontSize: 12,
-                }}
-              />
-              <Area
-                type="monotone"
-                dataKey="pricePerSqm"
-                stroke="hsl(var(--primary))"
-                strokeWidth={2}
-                fill="url(#ppmGrad)"
-                dot={{ r: 3, fill: "hsl(var(--primary))" }}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        )}
-      </div>
 
       {/* Sales table */}
       <div className="rounded-xl border border-border overflow-hidden">

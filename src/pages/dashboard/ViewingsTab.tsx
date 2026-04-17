@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Loader2, Calendar, ExternalLink, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useViewings, useUpdateViewing } from "@/hooks/useViewings";
@@ -31,7 +32,7 @@ function ViewingCard({ v, isOwner, profile, updateViewing }: { v: any; isOwner: 
             <input
               type="url"
               placeholder="Paste video call link (Zoom, Whereby...)"
-              defaultValue={(profile as any)?.video_link || ""}
+              defaultValue={profile?.video_link || ""}
               className="flex-1 min-w-[200px] bg-secondary border border-border rounded-lg px-3 py-1.5 text-xs"
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
@@ -71,7 +72,7 @@ export default function ViewingsTab() {
   const { data: ownViewings = [] } = useViewings("owner");
   const updateViewing = useUpdateViewing();
 
-  const all = [...viewings, ...ownViewings] as any[];
+  const all = [...viewings, ...ownViewings];
   const byDate = all.reduce((acc: Record<string, any[]>, v) => {
     const d = new Date(v.scheduled_at).toLocaleDateString("en-GB");
     if (!acc[d]) acc[d] = [];

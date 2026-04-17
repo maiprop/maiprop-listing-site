@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+﻿import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -13,12 +13,14 @@ export function useAuctionAlerts() {
     queryKey: ["auction_alerts", user?.id],
     enabled: !!user,
     queryFn: async () => {
+      if (!user) return [];
       const { data, error } = await supabase
         .from("auction_alerts")
-        .select("*")
+        .select("id, user_id, city, court_name, property_type, min_price, max_price, email_notify, active, created_at, updated_at")
+        .eq("user_id", user.id)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data ?? []) as AuctionAlert[];
+      return (data ?? []) as unknown as AuctionAlert[];
     },
   });
 }
@@ -38,6 +40,7 @@ export function useCreateAuctionAlert() {
     mutationFn: async (payload: AlertPayload) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error } = await supabase.from("auction_alerts").insert({ user_id: user.id, ...payload });
       if (error) throw error;
     },
@@ -45,7 +48,7 @@ export function useCreateAuctionAlert() {
       qc.invalidateQueries({ queryKey: ["auction_alerts"] });
       toast.success("Auction alert created!");
     },
-    onError: (e: any) => {
+    onError: (e: Error) => {
       const msg = getPlanLimitErrorMessage(e);
       toast.error(msg ?? e.message);
     },
@@ -56,14 +59,16 @@ export function useUpdateAuctionAlert() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Partial<AlertPayload & { active: boolean }> }) => {
-      const { error } = await supabase.from("auction_alerts").update(updates).eq("id", id);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+      const { error } = await supabase.from("auction_alerts").update(updates).eq("id", id).eq("user_id", user.id);
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["auction_alerts"] });
       toast.success("Alert updated.");
     },
-    onError: (e: any) => {
+    onError: (e: Error) => {
       const msg = getPlanLimitErrorMessage(e);
       toast.error(msg ?? e.message);
     },
@@ -74,13 +79,15 @@ export function useDeleteAuctionAlert() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("auction_alerts").delete().eq("id", id);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+      const { error } = await supabase.from("auction_alerts").delete().eq("id", id).eq("user_id", user.id);
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["auction_alerts"] });
       toast.success("Alert deleted.");
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: () => toast.error("Something went wrong. Please try again."),
   });
 }

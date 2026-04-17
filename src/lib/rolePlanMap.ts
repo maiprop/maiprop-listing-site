@@ -1,0 +1,130 @@
+/**
+ * rolePlanMap — single source of truth for participant type → billing plan mapping.
+ *
+ * This is the canonical reference used by:
+ *   - RoleSwitchModal (upgrade/downgrade warnings)
+ *   - Pricing page checkout
+ *   - Onboarding done screen
+ *   - BillingTab plan display
+ *
+ * Price IDs are read from env vars so they can differ between dev/staging/prod.
+ * Fallback values match the Stripe test prices used in development.
+ */
+
+import type { ParticipantId, PricingAudienceId } from "@/lib/participantConfig";
+
+export interface RolePlan {
+  /** Stripe plan key sent to create-checkout edge function */
+  planKey: string;
+  /** Human-readable plan name */
+  planName: string;
+  /** Pricing audience tab on /pricing */
+  audienceId: PricingAudienceId;
+  /** Monthly price in EUR (0 = free tier available) */
+  monthlyPrice: number;
+  /** Annual price in EUR */
+  annualPrice: number;
+  /** When true the role has no free tier — paid plan is mandatory */
+  proOnly: boolean;
+  /** Stripe Price ID for monthly billing (from env) */
+  stripePriceMonthly: string | null;
+  /** Stripe Price ID for annual billing (from env) */
+  stripePriceAnnual: string | null;
+}
+
+// ── Env-backed Stripe price IDs ───────────────────────────────────────────────
+// Set these in .env / Supabase secrets. Fallback strings are placeholders —
+// checkout will fail gracefully if they are not real Stripe Price IDs.
+
+const E = import.meta.env;
+
+const PRICE_IDS = {
+  participant_monthly:  E.VITE_STRIPE_PRICE_PARTICIPANT_MONTHLY  ?? null,
+  participant_annual:   E.VITE_STRIPE_PRICE_PARTICIPANT_ANNUAL   ?? null,
+  agent_monthly:        E.VITE_STRIPE_PRICE_AGENT_MONTHLY        ?? null,
+  agent_annual:         E.VITE_STRIPE_PRICE_AGENT_ANNUAL         ?? null,
+  developer_monthly:    E.VITE_STRIPE_PRICE_DEVELOPER_MONTHLY    ?? null,
+  developer_annual:     E.VITE_STRIPE_PRICE_DEVELOPER_ANNUAL     ?? null,
+  professional_monthly: E.VITE_STRIPE_PRICE_PROFESSIONAL_MONTHLY ?? null,
+  professional_annual:  E.VITE_STRIPE_PRICE_PROFESSIONAL_ANNUAL  ?? null,
+} as const;
+
+// ── Plan definitions ──────────────────────────────────────────────────────────
+
+export const ROLE_PLAN_MAP: Record<PricingAudienceId, RolePlan> = {
+  participant: {
+    planKey: "pro",
+    planName: "Pro Plan",
+    audienceId: "participant",
+    monthlyPrice: 29,
+    annualPrice: 290,
+    proOnly: false,
+    stripePriceMonthly: PRICE_IDS.participant_monthly,
+    stripePriceAnnual:  PRICE_IDS.participant_annual,
+  },
+  agent: {
+    planKey: "agent_basic",
+    planName: "Agent Pro",
+    audienceId: "agent",
+    monthlyPrice: 149,
+    annualPrice: 1490,
+    proOnly: false,
+    stripePriceMonthly: PRICE_IDS.agent_monthly,
+    stripePriceAnnual:  PRICE_IDS.agent_annual,
+  },
+  developer: {
+    planKey: "developer_pro",
+    planName: "Developer Pro",
+    audienceId: "developer",
+    monthlyPrice: 129,
+    annualPrice: 1290,
+    proOnly: true,
+    stripePriceMonthly: PRICE_IDS.developer_monthly,
+    stripePriceAnnual:  PRICE_IDS.developer_annual,
+  },
+  professional: {
+    planKey: "professional_basic",
+    planName: "Professional Pro",
+    audienceId: "professional",
+    monthlyPrice: 69,
+    annualPrice: 690,
+    proOnly: false,
+    stripePriceMonthly: PRICE_IDS.professional_monthly,
+    stripePriceAnnual:  PRICE_IDS.professional_annual,
+  },
+};
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Map any participant type to its pricing audience (buyer+seller → participant) */
+export function participantToPricingAudience(pt: ParticipantId): PricingAudienceId {
+  if (pt === "buyer" || pt === "seller") return "participant";
+  if (pt === "agent")        return "agent";
+  if (pt === "developer")    return "developer";
+  if (pt === "professional") return "professional";
+  return "participant"; // investor/institutional fall back to participant pricing
+}
+
+/** Get the plan definition for a given participant type */
+export function getPlanForParticipant(pt: ParticipantId): RolePlan {
+  return ROLE_PLAN_MAP[participantToPricingAudience(pt)];
+}
+
+export type SwitchKind = "same-tier" | "upgrade" | "downgrade" | "proonly";
+
+/**
+ * Classify a role switch from → to.
+ *
+ * same-tier  — same monthly price (e.g. buyer ↔ seller, both €29)
+ * upgrade    — new role costs more per month
+ * downgrade  — new role costs less per month
+ * proonly    — new role has no free tier (developer)
+ */
+export function classifySwitch(from: ParticipantId, to: ParticipantId): SwitchKind {
+  const fromPlan = getPlanForParticipant(from);
+  const toPlan   = getPlanForParticipant(to);
+  if (toPlan.proOnly) return "proonly";
+  if (fromPlan.audienceId === toPlan.audienceId) return "same-tier";
+  if (toPlan.monthlyPrice > fromPlan.monthlyPrice) return "upgrade";
+  return "downgrade";
+}

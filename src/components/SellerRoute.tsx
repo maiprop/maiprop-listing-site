@@ -4,7 +4,7 @@ import { isSellSideRole, isPlatformAdmin } from "@/lib/authUtils";
 import { ProtectedRoute } from "./ProtectedRoute";
 import { Button } from "@/components/ui/button";
 
-/** Protects listing-creation routes. Sell-side roles (agent, seller_landlord, developer, institutional) or platform admin can access. */
+/** Protects listing-creation routes. Sell-side roles (agent, seller, developer, institutional) or platform admin can access. */
 export function SellerRoute({ children }: { children: React.ReactNode }) {
   return (
     <ProtectedRoute>
@@ -32,14 +32,14 @@ function SellerGate({ children }: { children: React.ReactNode }) {
             <span className="text-2xl">🏠</span>
           </div>
           <div>
-            <h1 className="font-display text-2xl font-bold mb-2">Seller or Agent Account Required</h1>
+            <h1 className="font-display text-2xl font-bold mb-2">Listing Access Required</h1>
             <p className="text-muted-foreground text-sm">
-              Creating listings requires an Agent, Seller, Developer, or Institutional account. Your current account type does not have listing creation access.
+              Creating listings requires an Agent, Seller, Developer, or Institutional account. To list a property, switch your account type in Settings or start a new onboarding.
             </p>
           </div>
           <div className="flex gap-3 justify-center">
             <Button asChild>
-              <Link to="/onboarding">Upgrade Account Type</Link>
+              <Link to="/dashboard/settings">Switch Account Type</Link>
             </Button>
             <Button asChild variant="outline">
               <Link to="/dashboard">Back to Dashboard</Link>

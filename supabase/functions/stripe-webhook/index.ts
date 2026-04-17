@@ -40,8 +40,8 @@ Deno.serve(async (req) => {
   let event: Stripe.Event;
   try {
     event = await stripe.webhooks.constructEventAsync(body, signature, webhookSecret);
-  } catch (err: any) {
-    console.error("[stripe-webhook] Signature verification failed:", err.message);
+  } catch (err: unknown) {
+    console.error("[stripe-webhook] Signature verification failed:", err instanceof Error ? err.message : err);
     return errorResponse(`Webhook signature invalid: ${err.message}`, 400);
   }
 
@@ -74,13 +74,44 @@ Deno.serve(async (req) => {
         break;
       }
 
+      case "checkout.session.completed": {
+        // Canonical confirmation event for initial subscription checkout.
+        // customer.subscription.created fires around the same time, but this
+        // event is the definitive signal that the user has paid. Handle
+        // idempotently — syncSubscription is a no-op if already applied.
+        const session = event.data.object as Stripe.Checkout.Session;
+        if (session.subscription && session.customer) {
+          const sub = await stripe.subscriptions.retrieve(session.subscription as string);
+          await syncSubscription(supabase, stripe, sub);
+          console.log(`[stripe-webhook] checkout.session.completed synced subscription`, {
+            sessionId: session.id,
+            customerId: session.customer,
+          });
+        }
+        break;
+      }
+
+      case "invoice.payment_succeeded": {
+        // Fires on every successful recurring charge. Re-sync to handle plan upgrades
+        // where the subscription object may already be updated before this fires.
+        const invoice = event.data.object as Stripe.Invoice;
+        if (invoice.subscription && invoice.customer) {
+          const sub = await stripe.subscriptions.retrieve(invoice.subscription as string);
+          await syncSubscription(supabase, stripe, sub);
+        }
+        break;
+      }
+
       default:
         console.log(`[stripe-webhook] Unhandled event type: ${event.type}`);
     }
-  } catch (err: any) {
-    console.error(`[stripe-webhook] Handler error for ${event.type}:`, err.message);
-    // Return 200 to prevent Stripe from retrying permanently-broken events
-    return new Response(JSON.stringify({ received: true, warning: err.message }), {
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[stripe-webhook] Handler error for ${event.type}:`, msg);
+    // Return 500 so Stripe retries transient failures (DB unavailable, network error, etc.)
+    // Only return 200 for truly non-retryable outcomes (unknown event type falls through to the 200 below)
+    return new Response(JSON.stringify({ error: msg }), {
+      status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
@@ -90,6 +121,16 @@ Deno.serve(async (req) => {
   });
 });
 
+/** Resolve which column/value to use when matching the Supabase profile.
+ *  Prefers user_id from customer metadata (set at checkout).
+ *  Falls back to email for legacy customers created before the metadata change. */
+function resolveProfileFilter(customer: Stripe.Customer): { column: string; value: string } | null {
+  const userId = customer.metadata?.user_id;
+  if (userId) return { column: "user_id", value: userId };
+  if (customer.email) return { column: "email", value: customer.email };
+  return null;
+}
+
 async function syncSubscription(
   supabase: ReturnType<typeof createClient>,
   stripe: Stripe,
@@ -97,30 +138,24 @@ async function syncSubscription(
 ) {
   const customerId = sub.customer as string;
   const customer = await stripe.customers.retrieve(customerId) as Stripe.Customer;
-  if (!customer.email) {
-    console.warn("[stripe-webhook] Customer has no email:", customerId);
+  const filter = resolveProfileFilter(customer);
+  if (!filter) {
+    console.warn("[stripe-webhook] Customer has no user_id metadata or email:", customerId);
     return;
   }
 
   const isActive = sub.status === "active" || sub.status === "trialing";
   const productId = isActive ? (sub.items.data[0]?.price.product as string) : null;
-  const subscriptionEnd = isActive
-    ? new Date(sub.current_period_end * 1000).toISOString()
-    : null;
 
   const { error } = await supabase
     .from("profiles")
     .update({ subscription_product_id: productId })
-    .eq("email", customer.email);
+    .eq(filter.column, filter.value);
 
   if (error) {
-    console.error("[stripe-webhook] Failed to update profile for", customer.email, error);
+    console.error("[stripe-webhook] Failed to update profile", { filter, error });
   } else {
-    console.log(`[stripe-webhook] Updated profile for ${customer.email}:`, {
-      productId,
-      subscriptionEnd,
-      status: sub.status,
-    });
+    console.log("[stripe-webhook] Updated profile subscription", { filter, productId, status: sub.status });
   }
 }
 
@@ -130,20 +165,21 @@ async function clearSubscription(
   customerId: string,
 ) {
   const customer = await stripe.customers.retrieve(customerId) as Stripe.Customer;
-  if (!customer.email) {
-    console.warn("[stripe-webhook] Customer has no email:", customerId);
+  const filter = resolveProfileFilter(customer);
+  if (!filter) {
+    console.warn("[stripe-webhook] Customer has no user_id metadata or email:", customerId);
     return;
   }
 
   const { error } = await supabase
     .from("profiles")
     .update({ subscription_product_id: null })
-    .eq("email", customer.email);
+    .eq(filter.column, filter.value);
 
   if (error) {
-    console.error("[stripe-webhook] Failed to clear subscription for", customer.email, error);
+    console.error("[stripe-webhook] Failed to clear subscription", { filter, error });
   } else {
-    console.log(`[stripe-webhook] Cleared subscription for ${customer.email}`);
+    console.log("[stripe-webhook] Cleared subscription", { filter });
   }
 }
 

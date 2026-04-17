@@ -1,4 +1,6 @@
+/* eslint-disable react-refresh/only-export-components */
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Cookie, ChevronDown, ChevronUp, X, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -17,7 +19,7 @@ export function getCookieConsent(): CookieConsent | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     return raw ? JSON.parse(raw) : null;
-  } catch {
+  } catch (_err: unknown) {
     return null;
   }
 }
@@ -41,6 +43,8 @@ export function CookieConsentBanner() {
       return () => clearTimeout(t);
     }
   }, []);
+
+  const { t } = useTranslation();
 
   if (!visible) return null;
 
@@ -68,16 +72,14 @@ export function CookieConsentBanner() {
             <Cookie className="w-5 h-5 text-primary" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-display font-semibold text-sm mb-1">We use cookies to improve your experience</p>
+            <p className="font-display font-semibold text-sm mb-1">{t("cookie.title")}</p>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              We use essential cookies to make our site work, plus optional cookies for analytics and mapping features.
-              Read our{" "}
-              <a href="/cookie-policy" className="text-primary underline underline-offset-2 hover:text-primary/80">Cookie Policy</a>
-              {" "}for details.
+              {t("cookie.description")}{" "}
+              <a href="/cookie-policy" className="text-primary underline underline-offset-2 hover:text-primary/80">{t("cookie.policyLinkText")}</a>
             </p>
           </div>
-          <button onClick={() => setVisible(false)} className="p-1.5 rounded-lg hover:bg-secondary transition-colors shrink-0 text-muted-foreground hover:text-foreground">
-            <X className="w-4 h-4" />
+          <button onClick={() => setVisible(false)} aria-label={t("cookie.hidePreferences")} className="p-1.5 rounded-lg hover:bg-secondary transition-colors shrink-0 text-muted-foreground hover:text-foreground">
+            <X className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
 
@@ -87,11 +89,11 @@ export function CookieConsentBanner() {
             {/* Essential — always on */}
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-sm font-semibold text-foreground">Essential Cookies</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Required for authentication, security, and core site functionality. Cannot be disabled.</p>
+                <p className="text-sm font-semibold text-foreground">{t("cookie.essential.title")}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{t("cookie.essential.description")}</p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <span className="text-xs text-brand-emerald font-semibold">Always on</span>
+                <span className="text-xs text-brand-emerald font-semibold">{t("cookie.essential.alwaysOn")}</span>
                 <Switch checked={true} disabled className="data-[state=checked]:bg-brand-emerald" />
               </div>
             </div>
@@ -99,8 +101,8 @@ export function CookieConsentBanner() {
             {/* Functional */}
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-sm font-semibold text-foreground">Functional Cookies</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Remember your preferences, saved searches, and personalization settings.</p>
+                <p className="text-sm font-semibold text-foreground">{t("cookie.functional.title")}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{t("cookie.functional.description")}</p>
               </div>
               <Switch
                 checked={functional}
@@ -112,8 +114,8 @@ export function CookieConsentBanner() {
             {/* Analytics */}
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-sm font-semibold text-foreground">Analytics Cookies</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Help us understand how visitors use the site so we can improve it. Data is aggregated and anonymised.</p>
+                <p className="text-sm font-semibold text-foreground">{t("cookie.analytics.title")}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{t("cookie.analytics.description")}</p>
               </div>
               <Switch
                 checked={analytics}
@@ -125,8 +127,8 @@ export function CookieConsentBanner() {
             {/* Mapping */}
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-sm font-semibold text-foreground">Mapping Cookies</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Required for interactive maps (Mapbox). May set third-party cookies for tile delivery and usage tracking.</p>
+                <p className="text-sm font-semibold text-foreground">{t("cookie.mapping.title")}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{t("cookie.mapping.description")}</p>
               </div>
               <Switch
                 checked={mapping}
@@ -143,21 +145,21 @@ export function CookieConsentBanner() {
             onClick={() => setExpanded(e => !e)}
             className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
-            {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-            {expanded ? "Hide preferences" : "Manage preferences"}
+            {expanded ? <ChevronUp className="w-3.5 h-3.5" aria-hidden="true" /> : <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />}
+            {expanded ? t("cookie.hidePreferences") : t("cookie.managePreferences")}
           </button>
 
           <div className="flex items-center gap-2 flex-wrap">
             <Button size="sm" variant="outline" className="text-xs h-8 border-border" onClick={handleRejectAll}>
-              Reject optional
+              {t("cookie.rejectOptional")}
             </Button>
             {expanded && (
               <Button size="sm" variant="outline" className="text-xs h-8 border-primary/40 text-primary hover:bg-primary/10" onClick={handleSavePreferences}>
-                <Check className="w-3 h-3 mr-1" /> Save preferences
+                <Check className="w-3 h-3 mr-1" aria-hidden="true" /> {t("cookie.savePreferences")}
               </Button>
             )}
             <Button size="sm" className="text-xs h-8 bg-gradient-primary border-0 text-primary-foreground font-semibold" onClick={handleAcceptAll}>
-              Accept all
+              {t("cookie.acceptAll")}
             </Button>
           </div>
         </div>

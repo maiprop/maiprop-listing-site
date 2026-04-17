@@ -44,7 +44,7 @@ export default function SendMessageModal({ open, onClose, professional }: SendMe
         await sendMessage.mutateAsync({ conversation_id: convId, content: message });
         toast.success(`Message sent to ${firstName}!`);
         setDone(true);
-      } catch {
+      } catch (_err: unknown) {
         toast.error("Could not send message. Please try again.");
       }
     } else {
@@ -59,7 +59,7 @@ export default function SendMessageModal({ open, onClose, professional }: SendMe
           message,
         });
         setDone(true);
-      } catch {
+      } catch (_err: unknown) {
         toast.error("Could not send message. Please try again.");
       }
     }
@@ -156,7 +156,7 @@ export default function SendMessageModal({ open, onClose, professional }: SendMe
 
             {!user && (
               <p className="text-xs text-muted-foreground bg-secondary rounded-lg px-3 py-2">
-                💡 <a onClick={() => navigate("/login")} className="text-primary cursor-pointer hover:underline">Sign in</a> to send messages directly and track your conversations.
+                💡 <a onClick={() => navigate("/login")} className="text-primary cursor-pointer hover:underline">Sign in</a> to follow up and track your inquiries in your dashboard.
               </p>
             )}
 

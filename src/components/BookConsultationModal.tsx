@@ -119,7 +119,7 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
         ].filter(Boolean).join("\n"),
       });
       setDone(true);
-    } catch {
+    } catch (_err: unknown) {
       toast.error("Could not book consultation. Please try again.");
     }
   };
@@ -239,12 +239,12 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
                               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground capitalize">
                                 {svc.pricing_model}
                               </span>
-                              {svc.video_enabled && (
+                              {!!svc.video_enabled && (
                                 <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary flex items-center gap-1">
                                   <Video className="w-2.5 h-2.5" /> Remote available
                                 </span>
                               )}
-                              {svc.is_premium && (
+                              {!!svc.is_premium && (
                                 <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-gold/15 text-brand-gold">Pro</span>
                               )}
                             </div>
@@ -341,7 +341,7 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
                   </>
                 )}
 
-                {selectedService?.rate_amount && (
+                {!!selectedService?.rate_amount && (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground bg-secondary rounded-lg p-3">
                     <Euro className="w-4 h-4 text-brand-gold shrink-0" />
                     <span>{selectedService.service_name}: </span>

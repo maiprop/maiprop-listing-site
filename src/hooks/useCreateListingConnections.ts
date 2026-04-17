@@ -37,7 +37,7 @@ export function useCreateListingConnections(): CreateListingConnections {
       try {
         const { error: listError } = await supabase.from("listings").select("id").limit(1);
         supabaseOk = !listError;
-      } catch {
+      } catch (_err: unknown) {
         supabaseOk = false;
       }
 
@@ -45,7 +45,7 @@ export function useCreateListingConnections(): CreateListingConnections {
         try {
           const { error: storageError } = await supabase.storage.from("listing-images").list("", { limit: 1 });
           storageOk = !storageError;
-        } catch {
+        } catch (_err: unknown) {
           storageOk = false;
         }
       }

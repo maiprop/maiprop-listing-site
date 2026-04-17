@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useRef, useCallback, useEffect } from "react";
 import { computeWalkScore, walkScoreLabel, walkScoreColour } from "@/lib/walkScore";
 import Map, { Marker, NavigationControl, MapRef } from "react-map-gl";
@@ -129,7 +130,7 @@ export default function PropertyMiniMap({
     } finally {
       setLoadingPOIs(false);
     }
-  }, [address, city, lat, lng, user]);
+  }, [address, city, lat, lng, user, onWalkScoreChange]);
 
   useEffect(() => {
     if (lat && lng && user) loadPOIs();

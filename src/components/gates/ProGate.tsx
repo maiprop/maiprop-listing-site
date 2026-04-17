@@ -19,17 +19,12 @@ export function ProGate({ children, fallback }: ProGateProps) {
   if (fallback) return <>{fallback}</>;
 
   return (
-    <div className="relative">
-      <div className="pointer-events-none select-none opacity-40 blur-sm">
-        {children}
-      </div>
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-background/60 backdrop-blur-sm rounded-lg">
-        <Lock className="h-5 w-5 text-muted-foreground" />
-        <p className="text-sm font-medium text-center">Pro feature</p>
-        <Button size="sm" onClick={() => navigate("/pricing")}>
-          Upgrade to Pro
-        </Button>
-      </div>
+    <div className="flex flex-col items-center justify-center gap-3 py-16 rounded-lg border border-dashed border-border bg-secondary/30">
+      <Lock className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+      <p className="text-sm font-medium text-center">Pro feature</p>
+      <Button size="sm" onClick={() => navigate("/pricing")}>
+        Upgrade to Pro
+      </Button>
     </div>
   );
 }

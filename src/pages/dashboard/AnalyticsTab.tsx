@@ -9,7 +9,6 @@ import {
   BarChart, Bar, Cell,
 } from "recharts";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { ProGate } from "@/components/gates/ProGate";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMyListings } from "@/hooks/useListings";
@@ -44,34 +43,6 @@ const FUNNEL_COLORS: Record<string, string> = {
   cancelled: "hsl(var(--muted-foreground))",
 };
 
-// ── Mock data generator ───────────────────────────────────────────────────────────
-/** Generates a realistic ramp-up sequence with slight noise for N days */
-function generateMockTrend(days: number): { date: string; label: string; count: number }[] {
-  const base = [2, 3, 5, 4, 7, 8, 6, 9, 11, 10, 8, 12, 15, 13];
-  const result: { date: string; label: string; count: number }[] = [];
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    const iso = d.toISOString().slice(0, 10);
-    const label = d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
-    const baseVal = base[i % base.length];
-    const noise = Math.floor(Math.random() * 3) - 1;
-    result.push({ date: iso, label, count: Math.max(1, baseVal + noise) });
-  }
-  return result;
-}
-
-function generateMockEnquiries(days: number): { label: string; enquiries: number }[] {
-  const result: { label: string; enquiries: number }[] = [];
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    const label = d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
-    const noise = Math.floor(Math.random() * 2);
-    result.push({ label, enquiries: Math.max(0, (i % 5 === 0 ? 3 : 1) + noise) });
-  }
-  return result;
-}
 
 // ── Main component ────────────────────────────────────────────────────────────────
 export default function AnalyticsTab() {
@@ -160,13 +131,11 @@ function SellerAgentAnalytics({ participantType }: { participantType: string }) 
   })();
 
   // Chart data — fill gaps so every day in the window appears
-  const rawChartData = buildChartData(viewTrends as { date: string; count: number }[], selectedDays);
-  const allZeros = rawChartData.every((d) => d.count === 0);
-  const chartData = allZeros ? generateMockTrend(selectedDays) : rawChartData;
-  const isSampleData = allZeros && listingIds.length > 0;
+  const chartData = buildChartData(viewTrends as { date: string; count: number }[], selectedDays);
+  const hasViewData = chartData.some((d) => d.count > 0);
 
-  // Enquiries chart — 30d of data (mock if no viewings yet)
-  const enquiriesData = generateMockEnquiries(Math.min(selectedDays, 30));
+  // Enquiries chart — built from real viewings data only
+  const hasEnquiryData = viewingRequests > 0;
 
   // Listings sorted by views desc for the performance table
   const sortedListings = [...myListings].sort(
@@ -268,18 +237,11 @@ function SellerAgentAnalytics({ participantType }: { participantType: string }) 
       </div>
 
       {/* ── Area chart: property views ──────────────────────────────────── */}
-      {chartData.length > 0 && (
-        <div className="bg-card border border-border rounded-xl p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-display font-semibold">
-              Property views – last {selectedDays} days
-            </h2>
-            {isSampleData && (
-              <Badge variant="secondary" className="text-xs">
-                Sample data
-              </Badge>
-            )}
-          </div>
+      <div className="bg-card border border-border rounded-xl p-5">
+        <h2 className="font-display font-semibold mb-4">
+          Property views – last {selectedDays} days
+        </h2>
+        {hasViewData ? (
           <ResponsiveContainer width="100%" height={180}>
             <AreaChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
               <defs>
@@ -320,48 +282,65 @@ function SellerAgentAnalytics({ participantType }: { participantType: string }) 
               />
             </AreaChart>
           </ResponsiveContainer>
-        </div>
-      )}
+        ) : (
+          <div className="flex flex-col items-center justify-center h-32 text-center">
+            <Eye className="w-8 h-8 text-muted-foreground mb-2" />
+            <p className="text-sm font-medium text-muted-foreground">
+              No view data yet — views will appear once your listings receive traffic.
+            </p>
+          </div>
+        )}
+      </div>
 
       {/* ── Bar chart: enquiries over time ──────────────────────────────── */}
       <div className="bg-card border border-border rounded-xl p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-display font-semibold">
-            Enquiries over time – last {Math.min(selectedDays, 30)} days
-          </h2>
-          {viewingRequests === 0 && (
-            <Badge variant="secondary" className="text-xs">
-              Sample data
-            </Badge>
-          )}
-        </div>
-        <ResponsiveContainer width="100%" height={160}>
-          <BarChart data={enquiriesData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-            <XAxis
-              dataKey="label"
-              tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-              axisLine={false}
-              tickLine={false}
-              interval={Math.floor(enquiriesData.length / 6)}
-            />
-            <YAxis
-              allowDecimals={false}
-              tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-              axisLine={false}
-              tickLine={false}
-            />
-            <Tooltip
-              contentStyle={{
-                background: "hsl(var(--card))",
-                border: "1px solid hsl(var(--border))",
-                borderRadius: 8,
-                fontSize: 12,
-              }}
-              labelStyle={{ color: "hsl(var(--foreground))" }}
-            />
-            <Bar dataKey="enquiries" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} opacity={0.85} />
-          </BarChart>
-        </ResponsiveContainer>
+        <h2 className="font-display font-semibold mb-4">
+          Viewing requests over time
+        </h2>
+        {hasEnquiryData ? (
+          (() => {
+            const enquiriesData = buildEnquiriesData(
+              viewings as Array<{ created_at?: string }>,
+              Math.min(selectedDays, 30),
+            );
+            return (
+              <ResponsiveContainer width="100%" height={160}>
+                <BarChart data={enquiriesData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                    axisLine={false}
+                    tickLine={false}
+                    interval={Math.floor(enquiriesData.length / 6)}
+                  />
+                  <YAxis
+                    allowDecimals={false}
+                    tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: "hsl(var(--card))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: 8,
+                      fontSize: 12,
+                    }}
+                    labelStyle={{ color: "hsl(var(--foreground))" }}
+                  />
+                  <Bar dataKey="enquiries" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} opacity={0.85} />
+                </BarChart>
+              </ResponsiveContainer>
+            );
+          })()
+        ) : (
+          <div className="flex flex-col items-center justify-center h-32 text-center">
+            <Calendar className="w-8 h-8 text-muted-foreground mb-2" />
+            <p className="text-sm font-medium text-muted-foreground">
+              No viewing requests yet — requests will appear here once buyers enquire.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* ── Listings performance table ──────────────────────────────────── */}
@@ -387,22 +366,25 @@ function SellerAgentAnalytics({ participantType }: { participantType: string }) 
                   city?: string;
                   views_count?: number;
                   status?: string;
-                }, idx: number) => {
-                  // Mock per-listing enquiries: distribute viewing requests proportionally
+                }, _idx: number) => {
                   const views = l.views_count ?? 0;
-                  const mockEnquiries = Math.round(
+                  const listingEnquiries =
                     viewingRequests > 0 && totalViews > 0
-                      ? (views / totalViews) * viewingRequests
-                      : idx === 0 ? 3 : idx === 1 ? 2 : 1
-                  );
-                  const ctr = views > 0 ? ((mockEnquiries / views) * 100).toFixed(1) : "0.0";
+                      ? Math.round((views / totalViews) * viewingRequests)
+                      : null;
+                  const ctr =
+                    views > 0 && listingEnquiries !== null
+                      ? ((listingEnquiries / views) * 100).toFixed(1)
+                      : "—";
                   return (
                     <tr key={l.id} className="border-b border-border/50 last:border-0 hover:bg-muted/30 transition-colors">
                       <td className="py-3 pr-4 font-medium truncate max-w-[180px]">{l.title ?? "—"}</td>
                       <td className="py-3 pr-4 text-muted-foreground">{l.city ?? "—"}</td>
                       <td className="py-3 pr-4 text-right font-display font-bold text-primary">{views}</td>
-                      <td className="py-3 pr-4 text-right">{mockEnquiries}</td>
-                      <td className="py-3 pr-4 text-right text-muted-foreground">{ctr}%</td>
+                      <td className="py-3 pr-4 text-right">{listingEnquiries ?? "—"}</td>
+                      <td className="py-3 pr-4 text-right text-muted-foreground">
+                        {ctr === "—" ? "—" : `${ctr}%`}
+                      </td>
                       <td className="py-3">
                         <StatusBadge status={l.status ?? "unknown"} />
                       </td>
@@ -541,6 +523,28 @@ function buildChartData(
     const iso = d.toISOString().slice(0, 10);
     const label = d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
     result.push({ date: iso, label, count: byDate[iso] ?? 0 });
+  }
+  return result;
+}
+
+/** Builds a per-day enquiries histogram from real viewings data */
+function buildEnquiriesData(
+  viewings: Array<{ created_at?: string }>,
+  days: number,
+): { label: string; enquiries: number }[] {
+  const byDate: Record<string, number> = {};
+  for (const v of viewings) {
+    if (!v.created_at) continue;
+    const iso = v.created_at.slice(0, 10);
+    byDate[iso] = (byDate[iso] ?? 0) + 1;
+  }
+  const result: { label: string; enquiries: number }[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const iso = d.toISOString().slice(0, 10);
+    const label = d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+    result.push({ label, enquiries: byDate[iso] ?? 0 });
   }
   return result;
 }

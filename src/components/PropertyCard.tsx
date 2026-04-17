@@ -12,6 +12,7 @@ import { useToggleFavorite, useIsFavorited } from "@/hooks/useFavorites";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { APP_ORIGIN } from "@/lib/config";
 
 export interface Property {
   id: string;
@@ -56,6 +57,10 @@ export interface Property {
   /** True when listing is a pre-sale / off-plan new build */
   isPreSale?: boolean;
   constructionStatus?: string;
+  /** Neighbourhood quality scores populated by the neighbourhood-report edge function */
+  walkabilityScore?: number;
+  safetyScore?: number;
+  noiseScore?: number;
 }
 
 interface PropertyCardProps {
@@ -99,7 +104,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
   const handleShare = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const url = `${window.location.origin}${detailPath}`;
+    const url = `${APP_ORIGIN}${detailPath}`;
     try {
       if (navigator.share) {
         await navigator.share({ title: property.title, url });
@@ -107,11 +112,11 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
         await navigator.clipboard.writeText(url);
         toast.success(t("propertyCard.linkCopied"));
       }
-    } catch {
+    } catch (_err: unknown) {
       try {
         await navigator.clipboard.writeText(url);
         toast.success(t("propertyCard.linkCopied"));
-      } catch {
+      } catch (_clipErr: unknown) {
         toast.error(t("propertyCard.copyFailed"));
       }
     }
@@ -167,7 +172,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
       <Link to={detailPath} className="glass-card rounded-xl overflow-hidden flex gap-3 p-3 property-card group">
         <div className="relative w-24 h-20 rounded-lg overflow-hidden shrink-0 bg-muted">
           {thumb ? (
-            <img src={thumb} alt={property.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+            <img src={thumb} alt={property.title} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
           ) : (
             <div className="w-full h-full flex items-center justify-center"><Home className="w-6 h-6 text-muted-foreground/30" /></div>
           )}
@@ -209,6 +214,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
           <img
             src={mainImage}
             alt={property.title}
+            loading="lazy"
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
             onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
           />
@@ -283,7 +289,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
                   {formatPrice(property.price, property.listingType)}
                 </span>
               </div>
-              {property.pricePerSqm && (
+              {!!property.pricePerSqm && (
                 <div className="text-xs text-white/70 mt-1 ml-1">€{property.pricePerSqm}/m²</div>
               )}
             </div>
@@ -340,16 +346,16 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
         <div className="flex items-center gap-1.5 text-xs flex-wrap">
           {property.bedrooms != null && property.bedrooms > 0 && (
             <span className="flex items-center gap-1 bg-primary/10 text-primary border border-primary/20 px-2.5 py-1 rounded-lg font-medium">
-              <Bed className="w-3.5 h-3.5" /> {property.bedrooms} bed
+              <Bed className="w-3.5 h-3.5" aria-hidden="true" /> {property.bedrooms} {t("common.bed")}
             </span>
           )}
           {property.bathrooms != null && property.bathrooms > 0 && (
             <span className="flex items-center gap-1 bg-accent/10 text-accent border border-accent/20 px-2.5 py-1 rounded-lg font-medium">
-              <Bath className="w-3.5 h-3.5" /> {property.bathrooms} bath
+              <Bath className="w-3.5 h-3.5" aria-hidden="true" /> {property.bathrooms} {t("common.bath")}
             </span>
           )}
           <span className="flex items-center gap-1 bg-brand-purple/10 text-brand-purple border border-brand-purple/20 px-2.5 py-1 rounded-lg font-medium">
-            <Square className="w-3.5 h-3.5" /> {property.sqm} m²
+            <Square className="w-3.5 h-3.5" aria-hidden="true" /> {property.sqm} {t("common.sqm")}
           </span>
           {property.floor != null && (
             <span className="flex items-center gap-1 bg-secondary text-muted-foreground border border-border px-2.5 py-1 rounded-lg font-medium">
@@ -366,6 +372,29 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
           {property.energyClass && (
             <span className={`px-2 py-1 rounded-lg text-[10px] font-bold text-primary-foreground ${energyColors[property.energyClass] || "bg-muted"}`}>
               {property.energyClass}
+            </span>
+          )}
+          {/* Neighbourhood quality scores */}
+          {property.walkabilityScore != null && (
+            <span className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium text-[10px] border ${
+              property.walkabilityScore >= 70
+                ? "bg-brand-emerald/10 text-brand-emerald border-brand-emerald/25"
+                : property.walkabilityScore >= 40
+                ? "bg-brand-gold/10 text-brand-gold border-brand-gold/25"
+                : "bg-secondary text-muted-foreground border-border"
+            }`}>
+              🚶 {property.walkabilityScore}
+            </span>
+          )}
+          {property.safetyScore != null && (
+            <span className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium text-[10px] border ${
+              property.safetyScore >= 70
+                ? "bg-brand-emerald/10 text-brand-emerald border-brand-emerald/25"
+                : property.safetyScore >= 40
+                ? "bg-brand-gold/10 text-brand-gold border-brand-gold/25"
+                : "bg-secondary text-muted-foreground border-border"
+            }`}>
+              🛡 {property.safetyScore}
             </span>
           )}
           {/* Ownership status pill */}
@@ -391,7 +420,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
           <div className="flex items-center gap-2 bg-brand-cyan/10 rounded-xl p-2.5 border border-brand-cyan/25">
             <Calendar className="w-4 h-4 text-primary shrink-0" />
             <div>
-              <div className="text-xs font-bold text-brand-purple">Open House</div>
+              <div className="text-xs font-bold text-brand-purple">{t("propertyCard.openHouseDate")}</div>
               <div className="text-[11px] text-muted-foreground truncate">{property.auctionDate}</div>
             </div>
           </div>
@@ -400,7 +429,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
           <div className="flex items-center gap-2 bg-brand-auction/10 rounded-xl p-2.5 border border-brand-auction/25">
             <Gavel className="w-4 h-4 text-brand-auction shrink-0" />
             <div className="flex-1 min-w-0">
-              <div className="text-xs font-semibold text-brand-auction">Auction Date</div>
+              <div className="text-xs font-semibold text-brand-auction">{t("propertyCard.auctionDate")}</div>
               <div className="text-[11px] text-muted-foreground truncate">{property.auctionDate}</div>
             </div>
             {property.auctionStartingBid && (
@@ -452,7 +481,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
               <span className="text-xs text-muted-foreground truncate flex-1">{property.agent.name}</span>
               {property.agent.verified && (
               <span className="flex items-center gap-0.5 text-[10px] text-primary font-semibold">
-                  <CheckCircle className="w-3 h-3" /> Verified
+                  <CheckCircle className="w-3 h-3" aria-hidden="true" /> {t("propertyCard.badges.verified")}
                 </span>
               )}
             </div>
@@ -505,5 +534,4 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
 }));
 
 PropertyCard.displayName = "PropertyCard";
-export default PropertyCard;
 

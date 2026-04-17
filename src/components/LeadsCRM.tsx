@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from "react";
 import {
   useLeads,
@@ -6,6 +7,8 @@ import {
   useDeleteLead,
   LEAD_STATUSES,
   LEAD_SOURCES,
+  type LeadSource,
+  type LeadStatus,
 } from "@/hooks/useLeads";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +17,8 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { LEAD_STAGE_COLORS as STATUS_COLORS } from "@/lib/statusColors";
 
 const STATUS_LABELS: Record<string, string> = {
   new: "New",
@@ -23,16 +28,6 @@ const STATUS_LABELS: Record<string, string> = {
   negotiation: "Negotiation",
   won: "Won",
   lost: "Lost",
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  new: "bg-brand-gold/15 text-brand-gold border-brand-gold/20",
-  contacted: "bg-blue-500/15 text-blue-400 border-blue-500/20",
-  qualified: "bg-primary/15 text-primary border-primary/20",
-  proposal: "bg-accent/15 text-accent border-accent/20",
-  negotiation: "bg-amber-500/15 text-amber-400 border-amber-500/20",
-  won: "bg-brand-emerald/15 text-brand-emerald border-brand-emerald/20",
-  lost: "bg-muted text-muted-foreground border-border",
 };
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -49,14 +44,24 @@ export default function LeadsCRM() {
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"pipeline" | "list">("pipeline");
-  const [form, setForm] = useState({
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [form, setForm] = useState<{
+    name: string;
+    email: string;
+    phone: string;
+    message: string;
+    notes: string;
+    source: LeadSource;
+    status: LeadStatus;
+    follow_up_at: string;
+  }>({
     name: "",
     email: "",
     phone: "",
     message: "",
     notes: "",
-    source: "manual" as const,
-    status: "new" as const,
+    source: "manual",
+    status: "new",
     follow_up_at: "",
   });
 
@@ -84,13 +89,13 @@ export default function LeadsCRM() {
     if (!form.name.trim()) return;
     const updates = {
       name: form.name,
-      email: form.email || null,
-      phone: form.phone || null,
-      message: form.message || null,
+      email: form.email || undefined,
+      phone: form.phone || undefined,
+      message: form.message || undefined,
       source: form.source,
       status: form.status,
-      notes: form.notes || null,
-      follow_up_at: form.follow_up_at || null,
+      notes: form.notes || undefined,
+      follow_up_at: form.follow_up_at || undefined,
     };
     if (editing) {
       await updateLead.mutateAsync({ id: editing, updates });
@@ -185,7 +190,7 @@ export default function LeadsCRM() {
             />
             <select
               value={form.source}
-              onChange={(e) => setForm((f) => ({ ...f, source: e.target.value as any }))}
+              onChange={(e) => setForm((f) => ({ ...f, source: e.target.value as LeadSource }))}
               className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary"
             >
               {LEAD_SOURCES.map((s) => (
@@ -196,7 +201,7 @@ export default function LeadsCRM() {
               <label className="text-xs text-muted-foreground block mb-1">Status</label>
               <select
                 value={form.status}
-                onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as any }))}
+                onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as LeadStatus }))}
                 className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary"
               >
                 {LEAD_STATUSES.map((s) => (
@@ -292,7 +297,7 @@ export default function LeadsCRM() {
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
                         <button
-                          onClick={() => { if (confirm("Delete this lead?")) deleteLead.mutate(l.id); }}
+                          onClick={() => setDeleteTarget(l.id)}
                           className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -315,7 +320,7 @@ export default function LeadsCRM() {
                         to={`/property/${l.listing_id}`}
                         className="text-[10px] text-primary/80 hover:text-primary flex items-center gap-0.5 mt-2"
                       >
-                        <ExternalLink className="w-3 h-3" /> {(l.listings as any).title}
+                        <ExternalLink className="w-3 h-3" /> {(l.listings as { title?: string } | null)?.title}
                       </Link>
                     )}
                   </div>
@@ -326,11 +331,11 @@ export default function LeadsCRM() {
         </div>
       ) : (
         <div className="space-y-3">
-          {leads.map((l: any) => (
+          {leads.map(l => (
             <div key={l.id} className="glass-card rounded-xl p-4 flex items-center gap-4">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <p className="font-semibold text-sm">{l.name}</p>
+                  <p className="font-semibold text-sm">{l.full_name}</p>
                   <span className={cn("text-[10px] px-2 py-0.5 rounded-full border", STATUS_COLORS[l.status || "new"])}>
                     {STATUS_LABELS[l.status || "new"]}
                   </span>
@@ -348,18 +353,18 @@ export default function LeadsCRM() {
                 {(l.message || l.notes) && <p className="text-xs text-muted-foreground mt-2 line-clamp-1">{l.message || l.notes}</p>}
                 {l.listing_id && l.listings && (
                   <Link to={`/property/${l.listing_id}`} className="text-xs text-primary/80 hover:text-primary flex items-center gap-0.5 mt-1">
-                    <ExternalLink className="w-3 h-3" /> {(l.listings as any).title}
+                    <ExternalLink className="w-3 h-3" /> {(l.listings as { title?: string } | null)?.title}
                   </Link>
                 )}
               </div>
               <div className="flex gap-2 shrink-0">
                 <button
-                  onClick={() => { setEditing(l.id); setForm({ name: l.name, email: l.email || "", phone: l.phone || "", message: l.message || "", source: l.source || "manual", status: l.status || "new", notes: l.notes || "", follow_up_at: l.follow_up_at ? l.follow_up_at.slice(0, 16) : "" }); }}
+                  onClick={() => { setEditing(l.id); setForm({ name: l.full_name || "", email: l.email || "", phone: l.phone || "", message: l.message || "", source: (l.source as LeadSource) || "manual", status: (l.status as LeadStatus) || "new", notes: l.notes || "", follow_up_at: l.follow_up_at ? l.follow_up_at.slice(0, 16) : "" }); }}
                   className="p-2 rounded-xl hover:bg-secondary text-muted-foreground hover:text-foreground"
                 >
                   <Edit2 className="w-4 h-4" />
                 </button>
-                <button onClick={() => { if (confirm("Delete?")) deleteLead.mutate(l.id); }} className="p-2 rounded-xl hover:bg-destructive/10 text-muted-foreground hover:text-destructive">
+                <button onClick={() => setDeleteTarget(l.id)} className="p-2 rounded-xl hover:bg-destructive/10 text-muted-foreground hover:text-destructive">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
@@ -367,6 +372,15 @@ export default function LeadsCRM() {
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete lead?"
+        description="This will permanently remove the lead record."
+        confirmLabel="Delete"
+        onConfirm={() => { if (deleteTarget) deleteLead.mutate(deleteTarget); setDeleteTarget(null); }}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

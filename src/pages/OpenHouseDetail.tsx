@@ -1,10 +1,14 @@
-import { useState, useEffect, useMemo } from "react";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { useState, useEffect } from "react";
+import { useModal } from "@/hooks/useModal";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import {
   MapPin, Bed, Bath, Square, Calendar, ChevronLeft, ChevronRight, Eye, Zap,
   Pencil, Pause, Play, Trash2, Loader2, MessageCircle, Euro, Users, LayoutDashboard,
   Home, Wrench, Lock, ExternalLink, Heart, Share2, Layers, Thermometer, Building2, FileText,
+  Check, ChevronDown, ChevronUp, Shield, Flame, Wifi, Car, TreePine,
 } from "lucide-react";
+import { walkScoreLabel, walkScoreColour } from "@/lib/walkScore";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
@@ -14,56 +18,32 @@ import OpenHouseOfferDialog from "@/components/OpenHouseOfferDialog";
 import PropertyMiniMap from "@/components/PropertyMiniMap";
 import PropertyValuation from "@/components/PropertyValuation";
 import NeighbourhoodReport from "@/components/NeighbourhoodReport";
-import { useListing } from "@/hooks/useListings";
+import { useListing, useTrackListingView, useUpdateListing, useDeleteListing, type ListingWithJoins } from "@/hooks/useListings";
 import { useAuth } from "@/contexts/AuthContext";
 import { useFavorites, useToggleFavorite } from "@/hooks/useFavorites";
-import { useUpdateListing, useDeleteListing } from "@/hooks/useListings";
 import { useOpenHouseSettings, useOpenHouseRegistrations, useOpenHouseOffers } from "@/hooks/useOpenHouseAssetControl";
 import { useStartConversation } from "@/hooks/useMessages";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { HEATING_TYPES, CONDITION_OPTIONS } from "@/lib/filterConfig";
 import { getStreetViewProxyUrl } from "@/lib/config";
+import { ENERGY_COLORS, ENERGY_SCALE } from "@/types";
+import { DetailRow, Section, SectionHeader, FeatureSection } from "@/components/property/DetailPrimitives";
 
-function DetailRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-start justify-between py-2.5 border-b border-border/50 last:border-0 gap-4">
-      <span className="text-xs text-muted-foreground shrink-0">{label}</span>
-      <span className="text-xs font-semibold text-right capitalize">{value}</span>
-    </div>
-  );
-}
-
-function Section({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <div className={`glass-card rounded-2xl border border-border overflow-hidden ${className}`}>{children}</div>;
-}
-
-function SectionHeader({ icon: Icon, title }: { icon?: any; title: string }) {
-  return (
-    <div className="flex items-center gap-2.5 px-5 py-4 border-b border-border">
-      {Icon && <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center"><Icon className="w-3.5 h-3.5 text-primary" /></div>}
-      <h4 className="font-display font-semibold text-sm">{title}</h4>
-    </div>
-  );
-}
-
-/**
- * Open House detail page — clean, fast UI for NPL managers (ad owners).
- * Streamlined view for managing open house listings.
- */
 export default function OpenHouseDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const isMock = !!id && ["mock-open-1", "mock-open-2", "mock-open-3"].includes(id);
-  const { data: listing, isLoading } = useListing(isMock ? "" : (id || ""));
+  const { data: listing, isLoading } = useListing(id || "");
+  const trackView = useTrackListingView();
   const updateListing = useUpdateListing();
   const deleteListing = useDeleteListing();
-  const [regOpen, setRegOpen] = useState(false);
-  const [offerOpen, setOfferOpen] = useState(false);
+  const modal = useModal<"reg" | "offer">();
   const [editingDate, setEditingDate] = useState(false);
   const [dateInput, setDateInput] = useState("");
   const [currentImage, setCurrentImage] = useState(0);
+  const [descExpanded, setDescExpanded] = useState(false);
+  const [walkScore, setWalkScore] = useState<number | null>(null);
 
   const { data: assetSettings } = useOpenHouseSettings(id || undefined);
   const { data: registrations = [] } = useOpenHouseRegistrations(id || undefined, false);
@@ -74,85 +54,25 @@ export default function OpenHouseDetail() {
   const [aiInsightsData, setAiInsightsData] = useState<{ vsMarket: number; rentalYield: number; estimatedValue: number; marketComparison: string; confidenceLabel: string } | null>(null);
   const [aiInsightsLoading, setAiInsightsLoading] = useState(false);
 
-  const mockListing = useMemo(() => {
-    if (!isMock || !id) return null;
-    const base = {
-      listing_type: "open_house",
-      status: "active",
-      views_count: 132,
-      bedrooms: 2,
-      bathrooms: 2,
-      sqm: 135,
-      year_built: 2015,
-      description: "Bright modern apartment with large balcony, close to Kifisia center and metro. Ideal for couples or small families looking for quiet living with quick access to the city.",
-    };
-    if (id === "mock-open-1") {
-      return {
-        id,
-        title: "Modern 2BR in Kifisia",
-        address: "Kifisia Center",
-        city: "Athens",
-        price: 420000,
-        cover_image_url: "https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=800&q=60",
-        open_house_date: new Date().toISOString(),
-        ...base,
-      };
-    }
-    if (id === "mock-open-2") {
-      return {
-        id,
-        title: "Sea-view Villa in Vouliagmeni",
-        address: "Panorama Vouliagmeni",
-        city: "Athens Riviera",
-        price: 1450000,
-        cover_image_url: "https://images.unsplash.com/photo-1507089947368-19c1da9775ae?w=800&q=60",
-        open_house_date: new Date().toISOString(),
-        bedrooms: 4,
-        bathrooms: 4,
-        sqm: 280,
-        year_built: 2020,
-        views_count: 89,
-        description: "Luxury villa with unobstructed sea views, infinity pool, and generous outdoor spaces — perfect for entertaining and weekend escapes.",
-        listing_type: "open_house",
-        status: "active",
-      };
-    }
-    if (id === "mock-open-3") {
-      return {
-        id,
-        title: "Loft Near Aristotelous Square",
-        address: "City Center",
-        city: "Thessaloniki",
-        price: 310000,
-        cover_image_url: "https://images.unsplash.com/photo-1502672023488-70e25813eb80?w=800&q=60",
-        open_house_date: new Date().toISOString(),
-        bedrooms: 1,
-        bathrooms: 1,
-        sqm: 107,
-        year_built: 2010,
-        views_count: 54,
-        description: "Industrial-style loft a short walk from Aristotelous Square — ideal pied-à-terre or investment in Thessaloniki's city center.",
-        listing_type: "open_house",
-        status: "active",
-      };
-    }
-    return null;
-  }, [id, isMock]);
+  useEffect(() => {
+    if (id && listing) trackView.mutate(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, !!listing]);
 
-  const db = (isMock ? mockListing : listing) as any;
-  const myReg = registrations.find((r: any) => r.requester_id === user?.id);
-  const myOffer = offers.find((o: any) => o.bidder_id === user?.id);
-  const isOwner = !isMock && user?.id && db?.owner_id === user.id;
+  const db = listing as ListingWithJoins;
+  const myReg = registrations.find(r => r.requester_id === user?.id);
+  const myOffer = offers.find(o => o.bidder_id === user?.id);
+  const isOwner = !!(user?.id && db?.owner_id === user.id);
   const { data: favorites = [] } = useFavorites();
   const toggleFav = useToggleFavorite();
-  const isFavorited = !!id && favorites.some((f: any) => f.listing_id === id);
+  const isFavorited = !!id && favorites.some(f => f.listing_id === id);
   const handleFavorite = () => {
     if (!user) { toast.error("Sign in to save properties"); return; }
     if (id) toggleFav.mutate({ listing_id: id, isFavorited });
   };
   const handleShare = async () => {
     const url = window.location.href;
-    if (navigator.share) { try { await navigator.share({ title: db?.title, url }); } catch { /* share cancelled or not supported */ } }
+    if (navigator.share) { try { await navigator.share({ title: db?.title, url }); } catch (_err: unknown) { /* share cancelled or not supported */ } }
     else { await navigator.clipboard.writeText(url); toast.success("Link copied"); }
   };
 
@@ -168,13 +88,13 @@ export default function OpenHouseDetail() {
     try {
       const convId = await startConversation.mutateAsync({ other_user_id: ownerId, listing_id: id });
       navigate("/messages", { state: { openConversationId: convId } });
-    } catch {
+    } catch (_err: unknown) {
       toast.error("Could not start conversation");
     }
   };
 
   useEffect(() => {
-    if (!db || isMock || !user) return;
+    if (!db || !user) return;
     setAiInsightsLoading(true);
     supabase.functions.invoke("property-valuation", {
       body: {
@@ -203,15 +123,15 @@ export default function OpenHouseDetail() {
         });
       }
     }).finally(() => setAiInsightsLoading(false));
-  }, [db?.id, isMock, user]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [db?.id, user]);
 
   useEffect(() => {
-    if (isMock) return;
-    if (db?.listing_type === "open_house") return;
-    if (db?.listing_type && db.listing_type !== "open_house") {
+    // Redirect if not an open house listing
+    if (db?.listing_type && (db.listing_type as any) !== "open_house") {
       navigate(`/property/${id}`, { replace: true });
     }
-  }, [db?.listing_type, id, navigate, isMock]);
+  }, [db?.listing_type, id, navigate]);
 
   useEffect(() => {
     if (db?.open_house_date) {
@@ -229,7 +149,7 @@ export default function OpenHouseDetail() {
       });
       setEditingDate(false);
       toast.success("Open house date updated");
-    } catch {
+    } catch (_err: unknown) {
       toast.error("Could not update date");
     }
   };
@@ -248,10 +168,32 @@ export default function OpenHouseDetail() {
     navigate("/open-houses");
   };
 
-  if (isLoading || !db) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!db) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <Navbar />
+        <div className="flex-1 flex items-center justify-center px-4 pt-20 pb-12">
+          <div className="text-center max-w-md">
+            <h2 className="font-display font-bold text-xl mb-3">Listing not found</h2>
+            <p className="text-muted-foreground text-sm mb-6">
+              This open house listing does not exist or has been removed.
+            </p>
+            <Button variant="outline" asChild>
+              <Link to="/open-houses">
+                <ChevronLeft className="w-4 h-4 mr-1" />
+                Back to Open Houses
+              </Link>
+            </Button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -264,7 +206,7 @@ export default function OpenHouseDetail() {
     const sorted = [...db.listing_images].sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0));
     sorted.forEach((img: any) => imgs.push(img.url));
   }
-  const streetViewFallback = !isMock && (db.latitude != null && db.longitude != null)
+  const streetViewFallback = (db.latitude != null && db.longitude != null)
     ? getStreetViewProxyUrl({ lat: Number(db.latitude), lng: Number(db.longitude) })
     : (db.address || db.city) ? getStreetViewProxyUrl({ location: `${db.address ?? ""} ${db.city ?? ""}`.trim() }) : null;
   if (!imgs.length && streetViewFallback) imgs = [streetViewFallback];
@@ -398,7 +340,7 @@ export default function OpenHouseDetail() {
                   </div>
                   <div className="text-right shrink-0">
                     <div className="font-display text-3xl font-black text-foreground">€{price.toLocaleString()}</div>
-                    {pricePerSqm && <div className="text-xs text-muted-foreground mt-0.5">€{pricePerSqm.toLocaleString()} per m²</div>}
+                    {!!pricePerSqm && <div className="text-xs text-muted-foreground mt-0.5">€{pricePerSqm.toLocaleString()} per m²</div>}
                   </div>
                 </div>
                 {/* Key stats bar — same as PropertyDetail */}
@@ -434,11 +376,65 @@ export default function OpenHouseDetail() {
                 </Section>
               )}
 
+              {/* AI Market Insights */}
+              <Section>
+                <SectionHeader icon={Zap} title="AI Market Insights" badge={
+                  <span className="text-[10px] text-muted-foreground">Powered by mAI Prop OS</span>
+                } />
+                <div className="p-5">
+                  {aiInsightsLoading && <div className="flex justify-center py-6"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>}
+                  {!aiInsightsLoading && aiInsightsData && (() => {
+                    const cmpCfg: Record<string, { label: string; color: string; bg: string }> = {
+                      below_market: { label: "Below Market", color: "text-emerald-400", bg: "bg-emerald-400/10 border-emerald-400/20" },
+                      at_market:    { label: "At Market",    color: "text-yellow-400",  bg: "bg-yellow-400/10 border-yellow-400/20" },
+                      above_market: { label: "Above Market", color: "text-destructive",  bg: "bg-destructive/10 border-destructive/20" },
+                    };
+                    const cmp = cmpCfg[aiInsightsData.marketComparison] ?? cmpCfg.at_market;
+                    return (
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className={`rounded-xl border p-4 flex flex-col gap-1 ${cmp.bg}`}>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest">vs Market</p>
+                          <span className={`font-display font-black text-3xl ${cmp.color}`}>
+                            {aiInsightsData.vsMarket > 0 ? "+" : ""}{aiInsightsData.vsMarket}%
+                          </span>
+                          <p className={`text-[10px] font-semibold ${cmp.color}`}>{cmp.label}</p>
+                        </div>
+                        <div className="rounded-xl border border-border bg-secondary/50 p-4 flex flex-col gap-1">
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Rental Yield</p>
+                          <span className="font-display font-black text-3xl text-primary">{aiInsightsData.rentalYield}%</span>
+                          <p className="text-[10px] text-muted-foreground">Est. gross annual yield</p>
+                        </div>
+                        <div className="rounded-xl border border-border bg-secondary/50 p-4 flex flex-col gap-1">
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest">AI Estimate</p>
+                          <span className="font-display font-black text-3xl text-foreground">
+                            €{(aiInsightsData.estimatedValue / 1000).toFixed(0)}k
+                          </span>
+                          <p className="text-[10px] text-muted-foreground">Confidence: {aiInsightsData.confidenceLabel}</p>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  {user && !aiInsightsLoading && !aiInsightsData && <p className="text-xs text-muted-foreground text-center py-4">Market analysis unavailable</p>}
+                </div>
+              </Section>
+
               {/* Description */}
               {db.description && (
                 <Section>
                   <SectionHeader icon={FileText} title="Description" />
-                  <div className="p-6"><p className="text-sm text-muted-foreground leading-relaxed">{db.description}</p></div>
+                  <div className="p-6">
+                    <div className={`text-sm text-muted-foreground leading-relaxed ${!descExpanded ? "line-clamp-4" : ""}`}>
+                      {db.description}
+                    </div>
+                    {db.description.length > 200 && (
+                      <button
+                        onClick={() => setDescExpanded(!descExpanded)}
+                        className="flex items-center gap-1 text-xs text-primary mt-3 hover:underline font-medium"
+                      >
+                        {descExpanded ? <><ChevronUp className="w-3 h-3" />Show less</> : <><ChevronDown className="w-3 h-3" />Read more</>}
+                      </button>
+                    )}
+                  </div>
                 </Section>
               )}
 
@@ -446,65 +442,135 @@ export default function OpenHouseDetail() {
               {detailRows.length > 0 && (
                 <Section>
                   <SectionHeader icon={Home} title="Property Details" />
-                  <div className="p-6"><div className="grid grid-cols-1 md:grid-cols-2 gap-x-10">{detailRows.map((r) => <DetailRow key={r.label} label={r.label} value={r.value} />)}</div></div>
-                </Section>
-              )}
+                  <div className="p-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10">
+                      {detailRows.map((r) => <DetailRow key={r.label} label={r.label} value={r.value} />)}
+                    </div>
 
-              {/* AI Market Insights */}
-              {!isMock && (
-                <Section>
-                  <SectionHeader icon={Zap} title="AI Market Insights" />
-                  <div className="p-5">
-                    {aiInsightsLoading && <div className="flex justify-center py-6"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>}
-                    {!aiInsightsLoading && aiInsightsData && (
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div className={`rounded-xl border p-4 ${aiInsightsData.vsMarket > 0 ? "bg-emerald-400/10 border-emerald-400/20" : aiInsightsData.vsMarket < 0 ? "bg-destructive/10 border-destructive/20" : "bg-yellow-400/10 border-yellow-400/20"}`}>
-                          <p className="text-[10px] text-muted-foreground uppercase">vs Market</p>
-                          <p className={`font-display font-black text-2xl ${aiInsightsData.vsMarket > 0 ? "text-emerald-600" : aiInsightsData.vsMarket < 0 ? "text-destructive" : "text-amber-600"}`}>
-                            {aiInsightsData.vsMarket > 0 ? "+" : ""}{aiInsightsData.vsMarket}%
-                          </p>
+                    {/* Energy Performance Certificate */}
+                    {db.energy_class && db.energy_class !== "Exempt" && (db.energy_class as import("@/types").EnergyClass) in ENERGY_COLORS && (() => {
+                      const energyData = ENERGY_SCALE.find((e) => e.cls === db.energy_class);
+                      return (
+                        <div className="mt-6 pt-6 border-t border-border">
+                          <div className="flex items-center gap-2 mb-4">
+                            <Zap className="w-3.5 h-3.5 text-muted-foreground" />
+                            <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Energy Performance Certificate</p>
+                          </div>
+                          <div className="flex gap-1 items-end mb-2">
+                            {ENERGY_SCALE.map((e, i) => {
+                              const isActive = e.cls === db.energy_class;
+                              const barH = 16 + i * 4;
+                              return (
+                                <div key={e.cls} className="flex-1 flex flex-col items-center gap-0.5">
+                                  {isActive && <div className="text-[8px] font-black text-foreground">▼</div>}
+                                  <div
+                                    style={{ backgroundColor: e.hex, height: `${barH}px`, opacity: isActive ? 1 : 0.4 }}
+                                    className={`w-full rounded-sm flex items-end justify-center pb-0.5 transition-all ${isActive ? "ring-2 ring-white/30 ring-offset-1 ring-offset-card" : ""}`}
+                                  >
+                                    <span className="text-[8px] font-black leading-none"
+                                      style={{ color: ["B", "C", "D"].includes(e.cls) ? "#000" : "#fff" }}>
+                                      {e.cls}
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          {energyData && (
+                            <div className="flex items-center gap-2 mt-3">
+                              <div className={`px-2 py-0.5 rounded text-xs font-black ${ENERGY_COLORS[db.energy_class as import("@/types").EnergyClass]}`}>
+                                {db.energy_class}
+                              </div>
+                              <span className="text-xs text-muted-foreground">{energyData.desc}</span>
+                            </div>
+                          )}
                         </div>
-                        <div className="rounded-xl border border-border bg-secondary/50 p-4">
-                          <p className="text-[10px] text-muted-foreground uppercase">Rental Yield</p>
-                          <p className="font-display font-black text-2xl text-primary">{aiInsightsData.rentalYield}%</p>
-                        </div>
-                        <div className="rounded-xl border border-border bg-secondary/50 p-4">
-                          <p className="text-[10px] text-muted-foreground uppercase">AI Estimate</p>
-                          <p className="font-display font-black text-2xl">€{(aiInsightsData.estimatedValue / 1000).toFixed(0)}k</p>
-                        </div>
-                      </div>
-                    )}
-                    {user && !aiInsightsLoading && !aiInsightsData && <p className="text-xs text-muted-foreground text-center py-4">Market analysis unavailable</p>}
+                      );
+                    })()}
                   </div>
                 </Section>
               )}
 
-              {/* Neighbourhood & Map */}
+              {/* Features & Amenities */}
+              {(() => {
+                const internalFeatures: { icon?: any; label: string }[] = [];
+                const externalFeatures: { icon?: any; label: string }[] = [];
+                const constructionFeatures: { icon?: any; label: string }[] = [];
+                const suitabilityFeatures: { icon?: any; label: string }[] = [];
+
+                if (db.has_elevator) internalFeatures.push({ icon: Building2, label: "Elevator" });
+                if (db.has_ac) internalFeatures.push({ icon: Thermometer, label: "Air Conditioning" });
+                if (db.has_solar_water) internalFeatures.push({ icon: Zap, label: "Solar Water Heating" });
+                if (db.has_storage) internalFeatures.push({ icon: Home, label: "Storage Space" });
+                if (db.has_secure_door) internalFeatures.push({ icon: Shield, label: "Secure Door" });
+                if (db.has_alarm) internalFeatures.push({ icon: Shield, label: "Alarm" });
+                if (db.has_cctv) internalFeatures.push({ icon: Eye, label: "CCTV" });
+                if (db.has_security) internalFeatures.push({ icon: Shield, label: "Security System" });
+                if (db.has_fireplace) internalFeatures.push({ icon: Flame, label: "Fireplace" });
+                if (db.has_underfloor_heating) internalFeatures.push({ icon: Thermometer, label: "Underfloor Heating" });
+                if (db.has_furnished) internalFeatures.push({ icon: Home, label: "Furnished" });
+                if (db.has_double_glazing) internalFeatures.push({ label: "Double Glazed Windows" });
+                if (db.has_smart_home) internalFeatures.push({ icon: Wifi, label: "Smart Home" });
+
+                if (db.has_parking) externalFeatures.push({ icon: Car, label: "Parking Space" });
+                if (db.has_balcony) externalFeatures.push({ label: "Balcony" });
+                if (db.has_garden) externalFeatures.push({ icon: TreePine, label: "Garden" });
+                if (db.has_pool) externalFeatures.push({ label: "Swimming Pool" });
+                if (db.has_view) externalFeatures.push({ icon: Eye, label: "View" });
+                if (db.has_disability_access) externalFeatures.push({ label: "Disability Access" });
+
+                if (db.is_penthouse) constructionFeatures.push({ label: "Penthouse" });
+                if (db.has_virtual_tour) constructionFeatures.push({ label: "Virtual Tour" });
+                if (db.has_video_tour) constructionFeatures.push({ label: "Video Tour" });
+
+                if (db.suitable_student) suitabilityFeatures.push({ label: "Students" });
+                if (db.suitable_holiday) suitabilityFeatures.push({ label: "Holiday Home" });
+                if (db.suitable_investment) suitabilityFeatures.push({ label: "Investment" });
+
+                const total = internalFeatures.length + externalFeatures.length + constructionFeatures.length + suitabilityFeatures.length;
+                if (total === 0) return null;
+                return (
+                  <Section>
+                    <SectionHeader icon={Check} title="Features & Amenities" badge={
+                      <span className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full border border-border">{total} features</span>
+                    } />
+                    <div className="p-6 space-y-6">
+                      <FeatureSection title="Internal" features={internalFeatures} accent="bg-primary" />
+                      <FeatureSection title="External" features={externalFeatures} accent="bg-brand-emerald" />
+                      <FeatureSection title="Construction" features={constructionFeatures} accent="bg-accent" />
+                      <FeatureSection title="Suitable For" features={suitabilityFeatures} accent="bg-brand-gold" />
+                    </div>
+                  </Section>
+                );
+              })()}
+
+              {/* Mini map */}
+              <div className="rounded-2xl overflow-hidden">
+                <PropertyMiniMap
+                  address={db.address ?? city}
+                  city={city}
+                  title={db.title}
+                  latitude={db.latitude}
+                  longitude={db.longitude}
+                  onWalkScoreChange={setWalkScore}
+                />
+              </div>
+
+              {/* Neighbourhood Report */}
               {db.address && (
-                <>
-                  <NeighbourhoodReport
-                    city={city}
-                    address={db.address}
-                    region={db.region}
-                    lat={db.latitude != null ? Number(db.latitude) : undefined}
-                    lng={db.longitude != null ? Number(db.longitude) : undefined}
-                    listingId={id ?? undefined}
-                  />
-                  <div className="rounded-2xl overflow-hidden">
-                    <PropertyMiniMap
-                      address={db.address}
-                      city={city}
-                      title={db.title}
-                      latitude={db.latitude}
-                      longitude={db.longitude}
-                    />
-                  </div>
-                </>
+                <NeighbourhoodReport
+                  city={city}
+                  address={db.address}
+                  region={db.region}
+                  lat={db.latitude != null ? Number(db.latitude) : undefined}
+                  lng={db.longitude != null ? Number(db.longitude) : undefined}
+                  listingId={id ?? undefined}
+                />
               )}
 
               {/* AI Valuation */}
-              {!isMock && id && (
-                <PropertyValuation listingId={id} title={db.title} city={city} address={db.address} price={price} sqm={sqm} bedrooms={db.bedrooms} bathrooms={db.bathrooms} propertyType={db.property_type} yearBuilt={db.year_built} energyClass={db.energy_class} floor={db.floor} totalFloors={db.total_floors} heatingSystem={db.heating_system} />
+              {id && (
+                <PropertyValuation listingId={id} title={db.title} city={city} address={db.address ?? undefined} price={price} sqm={sqm} bedrooms={db.bedrooms} bathrooms={db.bathrooms} propertyType={db.property_type} yearBuilt={db.year_built} energyClass={db.energy_class} floor={db.floor} totalFloors={db.total_floors} heatingSystem={db.heating_system} />
               )}
 
               {/* Professionals */}
@@ -527,46 +593,50 @@ export default function OpenHouseDetail() {
                 </div>
                 {sqm > 0 && <p className="text-xs text-muted-foreground">€{Math.round(price / sqm).toLocaleString()}/m²</p>}
 
-                {/* Real listing: full registration / offer flow — gate by approval & attendance */}
-                {!isMock && !isOwner && user && (
+                {/* Registration / offer flow — gate by approval & attendance */}
+                {!isOwner && user && (
                   <div className="mt-4 space-y-2">
-                    {myReg && (
-                      <div className={`rounded-lg px-3 py-2 text-xs font-medium ${
-                        myReg.status === "attended" ? "bg-emerald-500/15 text-emerald-700" :
-                        myReg.status === "approved" ? "bg-emerald-500/10 text-emerald-600" :
-                        myReg.status === "pending" ? "bg-amber-500/15 text-amber-700" :
-                        "bg-muted text-muted-foreground"
-                      }`}>
-                        {myReg.status === "attended" ? "✓ Attended — you can submit an offer" :
-                          myReg.status === "approved" ? "✓ Approved — attend the open house to unlock offers" :
-                          myReg.status === "pending" ? "⏳ Awaiting approval" : `Status: ${myReg.status}`}
-                      </div>
-                    )}
                     {!canSubmitOffer && myReg?.status === "attended" && !ohDatePassed && openHouseDate && (
                       <p className="text-[11px] text-muted-foreground">
                         Offer submission opens after {openHouseDate.toLocaleDateString("en-GB")} {openHouseDate.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
                       </p>
                     )}
-                    <Button className="w-full gap-2" onClick={() => setRegOpen(true)} variant={myReg ? "outline" : "default"}>
-                      <Users className="w-4 h-4" /> {myReg ? "View registration" : "Pre-register for Open House"}
-                    </Button>
+                    {/* Pre-register — hidden once an offer is submitted */}
+                    {!myOffer && (
+                      myReg ? (
+                        <button
+                          type="button"
+                          onClick={() => modal.open("reg")}
+                          className="w-full rounded-lg px-3 py-2 text-left text-xs bg-secondary/50 hover:bg-secondary border border-border transition-colors flex items-center gap-2"
+                        >
+                          <Users className="w-3.5 h-3.5 shrink-0" />
+                          Registration {myReg.status === "approved" ? "approved ✓" : myReg.status === "attended" ? "attended ✓" : "pending ⏳"} · View details
+                        </button>
+                      ) : (
+                        <Button className="w-full gap-2" onClick={() => modal.open("reg")}>
+                          <Users className="w-4 h-4" /> Pre-register for Open House
+                        </Button>
+                      )
+                    )}
+                    {/* Offer — show current offer or submit button */}
                     {myOffer ? (
                       <button
                         type="button"
-                        onClick={() => setOfferOpen(true)}
-                        className="w-full rounded-lg px-3 py-2 text-left text-xs bg-secondary/50 hover:bg-secondary border border-border transition-colors"
+                        onClick={() => modal.open("offer")}
+                        className="w-full rounded-lg px-3 py-2 text-left text-xs bg-emerald-500/10 hover:bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 transition-colors flex items-center gap-2"
                       >
-                        Your offer: {myOffer.status === "submitted" ? "Sealed" : `€${Number(myOffer.amount).toLocaleString()}`} · View
+                        <Euro className="w-3.5 h-3.5 shrink-0" />
+                        Offer submitted ({myOffer.status === "submitted" ? "sealed" : `€${Number(myOffer.amount).toLocaleString()}`}) · View
                       </button>
                     ) : (
                       <Button
                         variant="outline"
                         className="w-full gap-2"
-                        onClick={() => setOfferOpen(true)}
+                        onClick={() => modal.open("offer")}
                         disabled={!canSubmitOffer}
                       >
                         <Euro className="w-4 h-4" /> Submit Offer
-                        {!canSubmitOffer && (myReg?.status !== "attended" || !ohDatePassed) && <Lock className="w-3 h-3 opacity-50" />}
+                        {!canSubmitOffer && <Lock className="w-3 h-3 opacity-50" />}
                       </Button>
                     )}
                     {canContact ? (
@@ -582,7 +652,7 @@ export default function OpenHouseDetail() {
                     )}
                   </div>
                 )}
-                {!isMock && !isOwner && !user && (
+                {!isOwner && !user && (
                   <Button className="w-full mt-4 gap-2" asChild>
                     <Link to="/login">Sign in to contact</Link>
                   </Button>
@@ -602,40 +672,91 @@ export default function OpenHouseDetail() {
                   </div>
                 )}
 
-                {/* Mock listing: explain the flow without hitting backend */}
-                {isMock && (
-                  <div className="mt-4 space-y-2 text-xs text-muted-foreground">
-                    <p className="font-semibold text-foreground">Demo only</p>
-                    <p>
-                      This is a sample open house property page. In a real listing you would see:
-                    </p>
-                    <ul className="list-disc list-inside space-y-1">
-                      <li>Buttons to pre-register for a timeslot</li>
-                      <li>The status of your registration and offer</li>
-                      <li>Actions to submit a sealed offer after the visit</li>
-                      <li>A direct messaging link with the listing agent or owner</li>
-                    </ul>
-                    <p className="mt-1">
-                      Use the Open Houses dashboard section to test the full asset control, registrations, and offers flow on real data.
-                    </p>
-                  </div>
-                )}
               </div>
+
+              {/* Walk Score */}
+              {(walkScore !== null || db?.walkability_score != null) && (() => {
+                const score = walkScore ?? Number(db?.walkability_score);
+                const colour = walkScoreColour(score);
+                const label = walkScoreLabel(score);
+                const r = 20, c = 2 * Math.PI * r;
+                return (
+                  <div className="glass-card rounded-2xl p-4 border border-border flex items-center gap-4">
+                    <svg width="52" height="52" viewBox="0 0 56 56" className="shrink-0">
+                      <circle cx="28" cy="28" r={r} fill="none" stroke="hsl(var(--border))" strokeWidth="4" />
+                      <circle cx="28" cy="28" r={r} fill="none"
+                        stroke={colour} strokeWidth="4"
+                        strokeDasharray={`${c * score / 100} ${c * (1 - score / 100)}`}
+                        strokeLinecap="round"
+                        transform="rotate(-90 28 28)" />
+                      <text x="28" y="33" textAnchor="middle" fontSize="13" fontWeight="900" fill={colour}>{score}</text>
+                    </svg>
+                    <div>
+                      <p className="text-sm font-bold" style={{ color: colour }}>{label}</p>
+                      <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Walk Score</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">Based on nearby amenities</p>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Safety & Noise */}
+              {(db?.safety_score != null || db?.noise_score != null) && (
+                <div className="glass-card rounded-2xl p-4 border border-border flex items-center gap-6">
+                  {db?.safety_score != null && (() => {
+                    const s = Number(db.safety_score);
+                    const colour = s >= 70 ? "#22c55e" : s >= 40 ? "#f59e0b" : "#ef4444";
+                    const safetyLabel = s >= 70 ? "Safe area" : s >= 40 ? "Moderate" : "Caution";
+                    const r = 20, c = 2 * Math.PI * r;
+                    return (
+                      <div className="flex items-center gap-3">
+                        <svg width="52" height="52" viewBox="0 0 56 56" className="shrink-0">
+                          <circle cx="28" cy="28" r={r} fill="none" stroke="hsl(var(--border))" strokeWidth="4" />
+                          <circle cx="28" cy="28" r={r} fill="none" stroke={colour} strokeWidth="4"
+                            strokeDasharray={`${c * s / 100} ${c * (1 - s / 100)}`}
+                            strokeLinecap="round" transform="rotate(-90 28 28)" />
+                          <text x="28" y="33" textAnchor="middle" fontSize="13" fontWeight="900" fill={colour}>{s}</text>
+                        </svg>
+                        <div>
+                          <p className="text-sm font-bold" style={{ color: colour }}>{safetyLabel}</p>
+                          <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Safety Score</p>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  {db?.noise_score != null && (() => {
+                    const n = Number(db.noise_score);
+                    const colour = n <= 3 ? "#22c55e" : n <= 6 ? "#f59e0b" : "#ef4444";
+                    const noiseLabel = n <= 3 ? "Quiet" : n <= 6 ? "Moderate" : "Noisy";
+                    return (
+                      <div className="flex items-center gap-3">
+                        <div className="w-[52px] h-[52px] rounded-full border-4 flex items-center justify-center shrink-0" style={{ borderColor: colour }}>
+                          <span className="text-sm font-black" style={{ color: colour }}>{n}</span>
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold" style={{ color: colour }}>{noiseLabel}</p>
+                          <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Noise Level</p>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
             </div>
           </div>
         </div>
       </div>
 
       <OpenHouseRegistrationDialog
-        open={regOpen}
-        onClose={() => setRegOpen(false)}
+        open={modal.isOpen("reg")}
+        onClose={() => modal.close()}
         listingId={id!}
         listingTitle={db.title}
         hasAssetControl={hasAssetControl}
       />
       <OpenHouseOfferDialog
-        open={offerOpen}
-        onClose={() => setOfferOpen(false)}
+        open={modal.isOpen("offer")}
+        onClose={() => modal.close()}
         listingId={id!}
         listingTitle={db.title}
         listingPrice={price}

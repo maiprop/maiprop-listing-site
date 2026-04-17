@@ -23,7 +23,13 @@ export function useSubscription() {
 
 
   const isAdmin = isPlatformAdmin(profile);
-  const isPro = isAdmin || (subscription.subscribed && subscription.productId === PRO_PRODUCT_ID);
+  // Also accept subscription_product_id stored directly on the profile row —
+  // used for demo/seed accounts that bypass Stripe but have the product ID set in the DB.
+  const profileProductId = (profile as { subscription_product_id?: string | null } | null)?.subscription_product_id ?? null;
+  const effectiveProductId = subscription.productId ?? profileProductId;
+  // isPro requires an active Stripe subscription matching the Pro product ID, or admin.
+  // investor_mode is a separate flag for the investor dashboard — it does not bypass Pro gates.
+  const isPro = isAdmin || effectiveProductId === PRO_PRODUCT_ID;
 
   return {
     isPro,

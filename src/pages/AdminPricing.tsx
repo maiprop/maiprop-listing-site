@@ -1,4 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from "react";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Navbar } from "@/components/Navbar";
@@ -126,9 +128,9 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
       const payload = items.map(({ id, created_at: _created_at, updated_at: _updated_at, ...rest }) => ({
         id,
         ...rest,
-        metadata: (rest.metadata ?? {}) as any,
+        metadata: (rest.metadata ?? {}) as never,
       }));
-      const { error } = await supabase.from("pricing_configs").upsert(payload as any, { onConflict: "id" });
+      const { error } = await supabase.from("pricing_configs").upsert(payload as never, { onConflict: "id" });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -162,7 +164,7 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
         created_at: now,
         updated_at: now,
       }));
-      const { error } = await supabase.from("pricing_configs").upsert(rows as any, { onConflict: "id" });
+      const { error } = await supabase.from("pricing_configs").upsert(rows as never, { onConflict: "id" });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -186,6 +188,7 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
   const otherKeys = Object.keys(grouped).filter(k => !sectionOrder.includes(k));
   const orderedGroupKeys = [...sectionOrder, ...otherKeys];
 
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [addModule, setAddModule] = useState<string>(PRICING_SECTIONS[0].module);
   const [addAudience, setAddAudience] = useState<string>(PRICING_SECTIONS[0].audience);
@@ -269,8 +272,8 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
       qc.invalidateQueries({ queryKey: ["admin-pricing-configs"] });
       if (errors.length === 0) toast.success(`Stripe sync complete — ${data.summary?.created ?? 0} created, ${data.summary?.price_updated ?? 0} updated`);
       else toast.error(`Sync finished with ${errors.length} error(s)`);
-    } catch (e: any) {
-      toast.error(e?.message ?? "Stripe sync failed");
+    } catch (e: unknown) {
+      toast.error((e instanceof Error ? e.message : null) ?? "Stripe sync failed");
     } finally {
       setStripeSyncing(false);
     }
@@ -310,8 +313,8 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
         qc.invalidateQueries({ queryKey: ["admin-pricing-configs"] });
         qc.invalidateQueries({ queryKey: ["pricing-configs-public"] });
       }
-    } catch (e: any) {
-      toast.error(e?.message ?? "Failed to create Stripe price");
+    } catch (e: unknown) {
+      toast.error((e instanceof Error ? e.message : null) ?? "Failed to create Stripe price");
     } finally {
       setStripeCreatingId(null);
     }
@@ -510,6 +513,7 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
                                   size="icon"
                                   variant="ghost"
                                   className="h-7 w-7"
+                                  aria-label="Create Stripe price"
                                   title="Create Stripe price from this config (amount must be > 0)"
                                   onClick={() => handleCreateStripePrice(row)}
                                   disabled={row.amount <= 0 || stripeCreatingId === row.id}
@@ -525,12 +529,9 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
                                 <Button
                                   size="icon"
                                   variant="outline"
+                                  aria-label="Delete pricing row"
                                   className="h-7 w-7"
-                                  onClick={() => {
-                                    if (window.confirm(`Delete "${row.label}"? This cannot be undone.`)) {
-                                      deleteMutation.mutate(row.id);
-                                    }
-                                  }}
+                                  onClick={() => setDeleteTarget(row.id)}
                                 >
                                   {deleteMutation.isPending ? (
                                     <Loader2 className="w-3 h-3 animate-spin" />
@@ -613,6 +614,14 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
         </div>
       </div>
       <Footer />
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete pricing row"
+        description="This cannot be undone."
+        confirmLabel="Delete"
+        onConfirm={() => { if (deleteTarget) deleteMutation.mutate(deleteTarget); setDeleteTarget(null); }}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

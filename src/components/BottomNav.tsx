@@ -13,12 +13,13 @@ import {
   Layers,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "@/contexts/AuthContext";
 import { getParticipantTypeFromProfile, isInvestorMode } from "@/lib/participantConfig";
 import { cn } from "@/lib/utils";
 
 type BottomTab = {
-  label: string;
+  labelKey: string;
   icon: LucideIcon;
   href: string;
   matchPaths?: string[];
@@ -30,59 +31,55 @@ function getBottomTabs(
   isLoggedIn: boolean
 ): BottomTab[] {
   const account: BottomTab = {
-    label: "Account",
+    labelKey: "bottomNav.account",
     icon: User,
     href: isLoggedIn ? "/dashboard" : "/login",
   };
 
   switch (type) {
+    case "institutional":
     case "seller":
       return [
-        { label: "Home", icon: Home, href: "/" },
-        {
-          label: "Listings",
-          icon: Building2,
-          href: "/dashboard/listings",
-          matchPaths: ["/listings/new", "/dashboard"],
-        },
-        { label: "Market", icon: Search, href: "/listings" },
-        { label: "Messages", icon: MessageSquare, href: "/messages" },
+        { labelKey: "bottomNav.home", icon: Home, href: "/" },
+        { labelKey: "bottomNav.listings", icon: Building2, href: "/dashboard/listings", matchPaths: ["/listings/new", "/dashboard"] },
+        { labelKey: "bottomNav.market", icon: Search, href: "/listings" },
+        { labelKey: "bottomNav.messages", icon: MessageSquare, href: "/messages" },
         account,
       ];
     case "agent":
       return [
-        { label: "Home", icon: Home, href: "/" },
-        { label: "Listings", icon: Building2, href: "/dashboard/listings" },
-        { label: "Leads", icon: Briefcase, href: "/dashboard/leads" },
-        { label: "Messages", icon: MessageSquare, href: "/messages" },
+        { labelKey: "bottomNav.home", icon: Home, href: "/" },
+        { labelKey: "bottomNav.listings", icon: Building2, href: "/dashboard/listings" },
+        { labelKey: "bottomNav.leads", icon: Briefcase, href: "/dashboard/leads" },
+        { labelKey: "bottomNav.messages", icon: MessageSquare, href: "/messages" },
         account,
       ];
     case "developer":
       return [
-        { label: "Home", icon: Home, href: "/" },
-        { label: "Projects", icon: Layers, href: "/dashboard/projects" },
-        { label: "Listings", icon: Building2, href: "/dashboard/listings" },
-        { label: "Messages", icon: MessageSquare, href: "/messages" },
+        { labelKey: "bottomNav.home", icon: Home, href: "/" },
+        { labelKey: "bottomNav.projects", icon: Layers, href: "/projects", matchPaths: ["/dashboard/projects"] },
+        { labelKey: "bottomNav.listings", icon: Building2, href: "/dashboard/listings" },
+        { labelKey: "bottomNav.messages", icon: MessageSquare, href: "/messages" },
         account,
       ];
     case "professional":
       return [
-        { label: "Home", icon: Home, href: "/" },
-        { label: "Services", icon: Briefcase, href: "/professionals/me" },
-        { label: "Directory", icon: Users, href: "/professionals" },
-        { label: "Messages", icon: MessageSquare, href: "/messages" },
+        { labelKey: "bottomNav.home", icon: Home, href: "/" },
+        { labelKey: "bottomNav.services", icon: Briefcase, href: "/professionals/me" },
+        { labelKey: "bottomNav.directory", icon: Users, href: "/professionals" },
+        { labelKey: "bottomNav.messages", icon: MessageSquare, href: "/messages" },
         account,
       ];
     default: // buyer
       return [
-        { label: "Home", icon: Home, href: "/" },
-        { label: "Browse", icon: Search, href: "/listings" },
+        { labelKey: "bottomNav.home", icon: Home, href: "/" },
+        { labelKey: "bottomNav.browse", icon: Search, href: "/listings" },
         {
-          label: investorMode ? "Deals" : "Auctions",
+          labelKey: investorMode ? "bottomNav.deals" : "bottomNav.auctions",
           icon: investorMode ? Flame : Gavel,
           href: investorMode ? "/firesale" : "/auctions",
         },
-        { label: "Open Houses", icon: Calendar, href: "/open-houses" },
+        { labelKey: "bottomNav.openHouses", icon: Calendar, href: "/open-houses" },
         account,
       ];
   }
@@ -91,6 +88,7 @@ function getBottomTabs(
 export function BottomNav() {
   const location = useLocation();
   const { user, profile } = useAuth();
+  const { t } = useTranslation();
 
   // Hide on pages that have their own bottom navigation
   const hiddenRoutes = ["/messages", "/dashboard", "/onboarding", "/login", "/signup", "/ai-assistant"];
@@ -128,7 +126,7 @@ export function BottomNav() {
           const active = isActive(tab);
           return (
             <Link
-              key={tab.label}
+              key={tab.labelKey}
               to={tab.href}
               className={cn(
                 "flex-1 flex flex-col items-center justify-center gap-0.5 min-h-[44px] transition-colors",
@@ -140,6 +138,7 @@ export function BottomNav() {
               <tab.icon
                 className={cn("w-5 h-5 shrink-0", active && "text-primary")}
                 strokeWidth={active ? 2.5 : 1.75}
+                aria-hidden="true"
               />
               <span
                 className={cn(
@@ -147,7 +146,7 @@ export function BottomNav() {
                   active ? "text-primary" : "text-muted-foreground"
                 )}
               >
-                {tab.label}
+                {t(tab.labelKey)}
               </span>
             </Link>
           );

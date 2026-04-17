@@ -6,419 +6,24 @@ import Map, {
   NavigationControl,
   MapRef,
 } from "react-map-gl";
-import type { LayerProps } from "react-map-gl";
 import {
   MapPin, Maximize2, PenLine,
-  X, Flame, CheckCircle2, Building2, Calendar, Layers, Square,
+  X, Flame, CheckCircle2,
 } from "lucide-react";
-import { Link } from "react-router-dom";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { MAPBOX_TOKEN, getStreetViewProxyUrl } from "@/lib/config";
+import { MAPBOX_TOKEN } from "@/lib/config";
+import {
+  type MapListing,
+  pointInPolygon,
+  EMPTY_GJ,
+  buildGeoJSON,
+  clusterCircle, clusterCount, unclusteredHit, priceLabelLayer,
+  heatmapLayer,
+  drawLineLyr, drawFillLyr, drawOutlineLyr, drawDotLyr,
+} from "@/components/map/mapConfig";
+import { PropertyPopup } from "@/components/map/PropertyPopup";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-export type MapListing = {
-  id: string;
-  title: string;
-  price: number;
-  sqm: number;
-  bedrooms?: number;
-  bathrooms?: number;
-  latitude?: number | null;
-  longitude?: number | null;
-  images?: string[];
-  listingType?: string;
-  city: string;
-  _raw?: any;
-};
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-const TYPE_HEX: Record<string, string> = {
-  sale: "#00d4c8",
-  rent: "#9b6bfc",
-  auction: "#f5c518",
-  firesale: "#e84040",
-};
-
-function typeColour(t?: string) { return TYPE_HEX[t || "sale"]; }
-
-function priceLabel(p: number) {
-  if (p >= 1_000_000) return `€${(p / 1_000_000).toFixed(1)}M`;
-  if (p >= 1000) return `€${Math.round(p / 1000)}k`;
-  return `€${p}`;
-}
-
-const PROPERTY_TYPE_LABELS: Record<string, string> = {
-  apartment: "Apartment", house: "House", villa: "Villa", land: "Land",
-  commercial: "Commercial", office: "Office",
-};
-
-function getPropertyTypeLabel(raw: any): string {
-  let base = raw?.property_type || "";
-  const tags: string[] = raw?.tags ?? [];
-  if (!base && tags.length) {
-    if (tags.some((t) => t.startsWith("land_type:"))) base = "land";
-    else if (tags.some((t) => t.startsWith("commercial_type:"))) base = "commercial";
-  }
-  if (!base) return "";
-  if (base === "land" && tags.length) {
-    const landTag = tags.find((t) => t.startsWith("land_type:"));
-    if (landTag) {
-      const subtype = landTag.replace("land_type:", "");
-      const map: Record<string, string> = { plot_with_building: "Plot w/ Building", land_with_building: "Land w/ Building", land: "Land", plot: "Plot" };
-      if (map[subtype]) return map[subtype];
-    }
-  }
-  if (base === "commercial" && tags.length) {
-    const commTag = tags.find((t) => t.startsWith("commercial_type:"));
-    if (commTag) {
-      const subtype = commTag.replace("commercial_type:", "");
-      const map: Record<string, string> = { store: "Store", warehouse: "Warehouse", industrial: "Industrial", storeroom: "Storeroom", parking: "Parking", hotel: "Hotel" };
-      if (map[subtype]) return map[subtype];
-    }
-  }
-  return PROPERTY_TYPE_LABELS[base] ?? base.split("_").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ") ?? base;
-}
-
-/** Extract ownership status tag */
-function getOwnershipStatus(tags?: string[] | null): string | null {
-  if (!tags) return null;
-  const tag = tags.find((t: string) => t.startsWith("ownership:") && !t.startsWith("ownership_pct:"));
-  return tag ? tag.replace("ownership:", "") : null;
-}
-
-function getOwnershipPct(tags?: string[] | null): number | null {
-  if (!tags) return null;
-  const tag = tags.find((t: string) => t.startsWith("ownership_pct:"));
-  return tag ? Number(tag.replace("ownership_pct:", "")) : null;
-}
-
-/** Ray-casting point-in-polygon (lng/lat coords) */
-function pointInPolygon(point: [number, number], ring: [number, number][]) {
-  const [x, y] = point;
-  let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const [xi, yi] = ring[i];
-    const [xj, yj] = ring[j];
-    if (((yi > y) !== (yj > y)) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi)
-      inside = !inside;
-  }
-  return inside;
-}
-
-const EMPTY_GJ = { type: "FeatureCollection" as const, features: [] };
-
-// ── GeoJSON builder ───────────────────────────────────────────────────────────
-
-function buildGeoJSON(listings: MapListing[]) {
-  return {
-    type: "FeatureCollection" as const,
-    features: listings.filter(l => l.latitude != null && l.longitude != null).map(l => ({
-      type: "Feature" as const,
-      properties: {
-        id: l.id,
-        price: l.price,
-        price_per_sqm: l._raw?.price_per_sqm
-          ? Number(l._raw.price_per_sqm)
-          : Math.round(l.price / Math.max(l.sqm, 1)),
-        listingType: l.listingType || "sale",
-        colour: typeColour(l.listingType),
-        label: priceLabel(l.price),
-        title: l.title,
-        sqm: l.sqm,
-        bedrooms: l.bedrooms ?? null,
-        bathrooms: l.bathrooms ?? null,
-        images: JSON.stringify(l.images ?? []),
-        city: l.city,
-      },
-      geometry: {
-        type: "Point" as const,
-        coordinates: [Number(l.longitude), Number(l.latitude)],
-      },
-    })),
-  };
-}
-
-// ── Layer defs ────────────────────────────────────────────────────────────────
-
-const clusterCircle: LayerProps = {
-  id: "clusters",
-  type: "circle",
-  source: "listings",
-  filter: ["has", "point_count"],
-  paint: {
-    "circle-color": ["step", ["get", "point_count"], "#00d4c8", 5, "#9b6bfc", 15, "#e84040"],
-    "circle-radius": ["step", ["get", "point_count"], 22, 5, 28, 15, 36],
-    "circle-opacity": 0.88,
-    "circle-stroke-width": 2,
-    "circle-stroke-color": "rgba(255,255,255,0.45)",
-  },
-};
-
-const clusterCount: LayerProps = {
-  id: "cluster-count",
-  type: "symbol",
-  source: "listings",
-  filter: ["has", "point_count"],
-  layout: {
-    "text-field": "{point_count_abbreviated}",
-    "text-font": ["DIN Offc Pro Medium", "Arial Unicode MS Bold"],
-    "text-size": 13,
-  },
-  paint: { "text-color": "#0a0f1a" },
-};
-
-const unclusteredHit: LayerProps = {
-  id: "unclustered-point",
-  type: "circle",
-  source: "listings",
-  filter: ["!", ["has", "point_count"]],
-  paint: { "circle-radius": 0, "circle-opacity": 0 },
-};
-
-// GPU-rendered price label pins
-const priceLabelLayer: LayerProps = {
-  id: "price-labels",
-  type: "symbol",
-  source: "listings",
-  filter: ["!", ["has", "point_count"]],
-  layout: {
-    "text-field": ["get", "label"],
-    "text-font": ["DIN Offc Pro Bold", "Arial Unicode MS Bold"],
-    "text-size": 11,
-    "text-anchor": "center",
-    "icon-allow-overlap": true,
-    "text-allow-overlap": true,
-  },
-  paint: {
-    "text-color": "#0a0f1a",
-    "text-halo-color": ["get", "colour"],
-    "text-halo-width": 8,
-    "text-halo-blur": 1,
-  },
-};
-
-const heatmapLayer: LayerProps = {
-  id: "price-heatmap",
-  type: "heatmap",
-  source: "heatmap-data",
-  paint: {
-    "heatmap-weight": [
-      "interpolate", ["linear"], ["get", "price_per_sqm"],
-      500, 0, 8000, 1,
-    ],
-    "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 1, 15, 3],
-    "heatmap-color": [
-      "interpolate", ["linear"], ["heatmap-density"],
-      0, "rgba(0,0,0,0)",
-      0.15, "rgba(0,128,255,0.6)",
-      0.35, "rgba(0,220,150,0.75)",
-      0.55, "rgba(255,220,0,0.85)",
-      0.75, "rgba(255,100,0,0.9)",
-      1.0, "rgba(255,30,30,1)",
-    ],
-    "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 5, 25, 12, 55],
-    "heatmap-opacity": 0.72,
-  },
-};
-
-// Draw layers
-const drawLineLyr: LayerProps = {
-  id: "draw-line",
-  type: "line",
-  source: "draw-line",
-  paint: {
-    "line-color": "#00d4c8",
-    "line-width": 2,
-    "line-dasharray": [3, 2],
-  },
-};
-
-const drawFillLyr: LayerProps = {
-  id: "draw-fill",
-  type: "fill",
-  source: "draw-poly",
-  paint: { "fill-color": "#00d4c8", "fill-opacity": 0.12 },
-};
-
-const drawOutlineLyr: LayerProps = {
-  id: "draw-outline",
-  type: "line",
-  source: "draw-poly",
-  paint: { "line-color": "#00d4c8", "line-width": 2 },
-};
-
-const drawDotLyr: LayerProps = {
-  id: "draw-dots",
-  type: "circle",
-  source: "draw-dots",
-  paint: {
-    "circle-radius": ["case", ["get", "isFirst"], 8, 5],
-    "circle-color": ["case", ["get", "isFirst"], "#fff", "#00d4c8"],
-    "circle-stroke-width": 2,
-    "circle-stroke-color": "#00d4c8",
-  },
-};
-
-// ── Ownership badge config ────────────────────────────────────────────────────
-
-const OWNERSHIP_BADGE: Record<string, { label: string; bg: string; color: string }> = {
-  full:     { label: "Πλήρης",         bg: "rgba(16,185,129,0.15)",  color: "#10b981" },
-  partial:  { label: "Μερική",         bg: "rgba(245,158,11,0.15)",  color: "#f59e0b" },
-  common:   { label: "Εξ αδιαιρέτου", bg: "rgba(14,165,233,0.15)",  color: "#0ea5e9" },
-  none:     { label: "Χωρίς κυριότητα", bg: "rgba(239,68,68,0.15)", color: "#ef4444" },
-};
-
-// ── PropertyPopup ─────────────────────────────────────────────────────────────
-
-function getAuctionImage(listing: MapListing): string {
-  const raw = listing._raw ?? listing;
-  if (listing.images?.[0]) return listing.images[0];
-  if (raw.cover_image_url) return raw.cover_image_url;
-  if (listing.latitude != null && listing.longitude != null) {
-    const proxyUrl = getStreetViewProxyUrl({ lat: listing.latitude, lng: listing.longitude }, "400x200");
-    if (proxyUrl) return proxyUrl;
-  }
-  return "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400&q=60";
-}
-
-function PropertyPopup({ listing, onClose: _onClose }: { listing: MapListing; onClose: () => void }) {
-  const raw = listing._raw ?? listing;
-  const image = getAuctionImage(listing);
-  const isAuction = listing.listingType === "auction";
-
-  const auctionDate = raw.auction_date ? new Date(raw.auction_date) : null;
-  const daysLeft = auctionDate
-    ? Math.ceil((auctionDate.getTime() - Date.now()) / 86_400_000)
-    : null;
-
-  // Ownership from tags
-  const tags: string[] = raw.tags ?? [];
-  const ownershipStatus = getOwnershipStatus(tags);
-  const ownershipPct = getOwnershipPct(tags);
-  const ownershipBadge = ownershipStatus ? OWNERSHIP_BADGE[ownershipStatus] : null;
-
-  // Floor label
-  const floor = raw.floor != null ? Number(raw.floor) : null;
-  const floorLabel = floor === null ? null
-    : floor === -1 ? "Basement"
-    : floor === 0 ? "Ground"
-    : `${floor}${["st", "nd", "rd"][floor - 1] || "th"} fl.`;
-
-  const detailLink = isAuction ? `/auction/${listing.id}` : `/property/${listing.id}`;
-
-  // Pills to show
-  const pills: { icon: React.ReactNode; text: string; color?: string; bg?: string }[] = [];
-
-  if (listing.sqm && listing.sqm > 1) {
-    pills.push({ icon: <Square style={{ width: 10, height: 10 }} />, text: `${listing.sqm} m²` });
-  }
-  if (floorLabel) {
-    pills.push({ icon: <Layers style={{ width: 10, height: 10 }} />, text: floorLabel });
-  }
-  if (raw.year_built) {
-    pills.push({ icon: <Calendar style={{ width: 10, height: 10 }} />, text: String(raw.year_built) });
-  }
-
-  return (
-    <div className="bg-card border border-border rounded-xl overflow-hidden shadow-elevated" style={{ width: 220 }}>
-      {/* Image */}
-      <div className="relative w-full h-28 overflow-hidden">
-        <img
-          src={image}
-          alt={listing.title}
-          className="w-full h-full object-cover"
-          onError={e => { (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400&q=60"; }}
-        />
-        {/* Countdown badge */}
-        {daysLeft !== null && (
-          <div
-            className="absolute top-2 right-2 rounded-full px-2 py-0.5 text-[10px] font-bold"
-            style={{ background: daysLeft <= 3 ? "rgba(239,68,68,0.9)" : "rgba(245,197,24,0.9)", color: "#0a0f1a" }}
-          >
-            {daysLeft === 0 ? "Today!" : daysLeft === 1 ? "Tomorrow" : `${daysLeft}d left`}
-          </div>
-        )}
-      </div>
-
-      <div className="p-3 space-y-2">
-        {/* Title */}
-        <p className="font-semibold text-[11px] leading-tight line-clamp-2 text-foreground">
-          {listing.title}
-        </p>
-
-        {/* Property type pill */}
-        {getPropertyTypeLabel(raw) && (
-          <span
-            className="inline-flex w-fit px-1.5 py-0.5 rounded-md text-[10px] font-semibold"
-            style={{ background: "rgba(245,197,24,0.15)", color: "#e5a800", border: "1px solid rgba(245,197,24,0.4)" }}
-          >
-            {getPropertyTypeLabel(raw)}
-          </span>
-        )}
-
-        {/* Price */}
-        <p style={{ color: typeColour(listing.listingType) }} className="font-bold text-sm">
-          €{Number(isAuction && raw.auction_starting_bid ? raw.auction_starting_bid : listing.price).toLocaleString()}
-          {isAuction && raw.auction_starting_bid && raw.price && (
-            <span className="text-[10px] font-normal text-muted-foreground ml-1">
-              (val. €{Number(raw.price / 1000).toFixed(0)}k)
-            </span>
-          )}
-        </p>
-
-        {/* Detail pills: sqm, floor, year built */}
-        {pills.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {pills.map((p, i) => (
-              <span
-                key={i}
-                className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-medium text-muted-foreground"
-                style={{ background: "hsl(var(--secondary))", border: "1px solid hsl(var(--border))" }}
-              >
-                {p.icon}
-                {p.text}
-              </span>
-            ))}
-          </div>
-        )}
-
-        {/* Ownership status pill */}
-        {ownershipBadge && (
-          <div className="flex items-center gap-1 w-fit">
-            <span
-              className="flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold"
-              style={{ background: ownershipBadge.bg, color: ownershipBadge.color, border: `1px solid ${ownershipBadge.color}44` }}
-            >
-              <Building2 style={{ width: 10, height: 10 }} />
-              {ownershipBadge.label}
-              {ownershipPct != null && ownershipStatus !== "full" && ` ${ownershipPct}%`}
-            </span>
-          </div>
-        )}
-
-        {/* City */}
-        <p className="flex items-center gap-1 text-[10px] text-muted-foreground">
-          <MapPin style={{ width: 10, height: 10 }} />
-          {listing.city}
-        </p>
-
-        {/* CTA */}
-        <Link
-          to={detailLink}
-          className="block text-center px-3 py-1.5 rounded-lg text-[11px] font-bold mt-1 transition-opacity hover:opacity-90"
-          style={{ background: typeColour(listing.listingType), color: "#0a0f1a" }}
-        >
-          {isAuction ? "View Auction →" : "View Property →"}
-        </Link>
-      </div>
-    </div>
-  );
-}
-
-
-// ── MapView ───────────────────────────────────────────────────────────────────
+export type { MapListing };
 
 export interface MapViewProps {
   listings: MapListing[];
@@ -546,13 +151,13 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
   }, [onPolygonFilter]);
 
   // ── Click handler ────────────────────────────────────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const onClick = useCallback((event: any) => {
     const { drawMode, polygonClosed, drawnPoints } = stateRef.current;
 
     if (drawMode && !polygonClosed) {
       const clickPoint: [number, number] = [event.lngLat.lng, event.lngLat.lat];
 
-      // Click near first vertex → close polygon
       if (drawnPoints.length >= 3) {
         const map = mapRef.current?.getMap();
         if (map) {
@@ -572,14 +177,15 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
     const clusters = map.queryRenderedFeatures(event.point, { layers: ["clusters"] });
     if (clusters.length) {
       const clusterId = clusters[0].properties?.cluster_id;
-      (map.getSource("listings") as any).getClusterExpansionZoom(clusterId, (err: any, zoom: number) => {
-        if (err) return;
-        map.easeTo({ center: (clusters[0].geometry as any).coordinates, zoom: zoom + 0.5, duration: 450 });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (map.getSource("listings") as any).getClusterExpansionZoom(clusterId, (_err: unknown, zoom: number) => {
+        if (_err) return;
+        map.easeTo({ center: (clusters[0].geometry as unknown as { coordinates: [number, number] }).coordinates, zoom: zoom + 0.5, duration: 450 });
       });
       return;
     }
 
-    // Price label click → open popup (GPU layer)
+    // Price label click → open popup
     const pins = map.queryRenderedFeatures(event.point, { layers: ["price-labels"] });
     if (pins.length) {
       const props = pins[0].properties!;
@@ -597,16 +203,11 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
     setPopupInfo(null);
   }, [closePolygon, mapped]);
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const onMouseMove = useCallback((e: any) => {
     const { drawMode, polygonClosed } = stateRef.current;
     if (drawMode && !polygonClosed)
       setHoverPoint([e.lngLat.lng, e.lngLat.lat]);
-  }, []);
-
-  const _getCursor = useCallback(({ isDragging }: { isDragging: boolean; isHovering: boolean }) => {
-    const { drawMode, polygonClosed } = stateRef.current;
-    if (drawMode && !polygonClosed) return "crosshair";
-    return isDragging ? "grabbing" : "grab";
   }, []);
 
   if (!MAPBOX_TOKEN) {
@@ -647,14 +248,14 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
       >
         <NavigationControl position="bottom-right" />
 
-        {/* ── Heatmap source — separate non-clustered source so heatmap sees raw points ── */}
+        {/* Heatmap source */}
         {showHeatmap && (
           <Source id="heatmap-data" type="geojson" data={geoJSON}>
             <Layer {...heatmapLayer} id="price-heatmap" source="heatmap-data" />
           </Source>
         )}
 
-        {/* ── Main listings source — GPU rendered, no DOM markers ── */}
+        {/* Main listings source */}
         <Source id="listings" type="geojson" data={geoJSON} cluster clusterMaxZoom={13} clusterRadius={55}>
           <Layer {...clusterCircle} />
           <Layer {...clusterCount} />
@@ -662,7 +263,7 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
           <Layer {...priceLabelLayer} />
         </Source>
 
-        {/* ── Draw sources ── */}
+        {/* Draw sources */}
         <Source id="draw-poly" type="geojson" data={drawPolyGJ}>
           <Layer {...drawFillLyr} />
           <Layer {...drawOutlineLyr} />
@@ -674,7 +275,7 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
           <Layer {...drawDotLyr} />
         </Source>
 
-        {/* ── Popup ── */}
+        {/* Popup */}
         {popupInfo && (
           <Popup
             longitude={popupInfo.lng}
@@ -691,10 +292,10 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
 
       {/* ── Toolbar (top right) ── */}
       <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5 flex-wrap justify-end">
-        {/* Heatmap toggle */}
         <button
           onClick={() => setShowHeatmap(v => !v)}
           title="Toggle price heatmap"
+          aria-label="Toggle price heatmap"
           className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl backdrop-blur-sm text-xs font-medium transition-all shadow-sm border ${
             showHeatmap
               ? "bg-orange-500/20 border-orange-500/50 text-orange-400"
@@ -704,13 +305,13 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
           <Flame className="w-3.5 h-3.5" /> Heatmap
         </button>
 
-        {/* Draw area */}
         {!polygonClosed && (
           <button
             onClick={() => drawMode
               ? (setDrawMode(false), setDrawnPoints([]), setHoverPoint(null))
               : setDrawMode(true)
             }
+            aria-label={drawMode ? "Cancel drawing" : "Draw area filter"}
             className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl backdrop-blur-sm text-xs font-medium transition-all shadow-sm border ${
               drawMode
                 ? "bg-primary/20 border-primary text-primary"
@@ -722,37 +323,37 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
           </button>
         )}
 
-        {/* Finish polygon */}
         {drawMode && !polygonClosed && drawnPoints.length >= 3 && (
           <button
             onClick={() => closePolygon(drawnPoints)}
+            aria-label="Finish polygon"
             className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-medium shadow-sm"
           >
             <CheckCircle2 className="w-3.5 h-3.5" /> Finish
           </button>
         )}
 
-        {/* Clear polygon */}
         {polygonClosed && (
           <button
             onClick={clearPolygon}
+            aria-label="Clear area filter"
             className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-destructive/20 border border-destructive/40 text-destructive text-xs font-medium backdrop-blur-sm shadow-sm"
           >
             <X className="w-3.5 h-3.5" /> Clear area
           </button>
         )}
 
-        {/* Fit all */}
         <button
           onClick={fitBounds}
           title="Fit all pins"
+          aria-label="Fit all pins"
           className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-card/90 border border-border backdrop-blur-sm text-xs font-medium text-foreground hover:border-primary/50 transition-all shadow-sm"
         >
           <Maximize2 className="w-3.5 h-3.5" /> Fit all
         </button>
       </div>
 
-      {/* ── Draw hint ── */}
+      {/* Draw hint */}
       {drawMode && !polygonClosed && (
         <div className="absolute top-14 left-1/2 -translate-x-1/2 z-10 pointer-events-none whitespace-nowrap">
           <p className="text-xs bg-card/90 backdrop-blur-sm rounded-xl px-3 py-2 border border-primary/30 text-primary font-medium shadow-sm">
@@ -765,7 +366,7 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
         </div>
       )}
 
-      {/* ── Polygon match count ── */}
+      {/* Polygon match count */}
       {polygonClosed && (
         <div className="absolute top-14 left-1/2 -translate-x-1/2 z-10 pointer-events-none whitespace-nowrap">
           <p className="text-xs bg-primary/15 backdrop-blur-sm rounded-xl px-3 py-2 border border-primary/35 text-primary font-semibold shadow-sm">
@@ -774,7 +375,7 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
         </div>
       )}
 
-      {/* ── Heatmap legend ── */}
+      {/* Heatmap legend */}
       {showHeatmap && (
         <div className="absolute bottom-14 left-3 z-10 pointer-events-none">
           <div className="bg-card/90 backdrop-blur-sm rounded-xl p-2.5 border border-border shadow-sm">
@@ -790,8 +391,7 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
         </div>
       )}
 
-
-      {/* ── Cluster hint ── */}
+      {/* Cluster hint */}
       <div className="absolute bottom-12 left-3 pointer-events-none">
         <p className="text-xs text-muted-foreground bg-card/80 backdrop-blur-sm rounded-lg px-2.5 py-1.5 border border-border">
           Zoom in to expand clusters

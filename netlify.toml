@@ -5,6 +5,24 @@
 [build.environment]
   NODE_VERSION = "20"
 
+# ── Staging branch deploy ──────────────────────────────────────────────────────
+# Branch deploys for `staging` use the same build but point at the staging
+# Supabase project. Set VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY, and
+# VITE_SUPABASE_PROJECT_ID in Netlify → Site settings → Environment variables
+# scoped to the `staging` branch.  See .env.staging.example for the full list.
+[context.staging]
+  command = "npm run build"
+  publish = "dist"
+
+# Dynamic sitemap — proxy to Supabase edge function
+[[redirects]]
+  from   = "/sitemap-dynamic.xml"
+  to     = "https://:SUPABASE_PROJECT_ID.supabase.co/functions/v1/sitemap"
+  status = 200
+  force  = true
+  [redirects.headers]
+    X-Forwarded-Host = "maiprop.co"
+
 # React Router — serve index.html for all routes
 [[redirects]]
   from   = "/*"
@@ -15,10 +33,17 @@
 [[headers]]
   for = "/*"
   [headers.values]
-    X-Frame-Options        = "DENY"
-    X-Content-Type-Options = "nosniff"
-    Referrer-Policy        = "strict-origin-when-cross-origin"
-    Permissions-Policy     = "camera=(), microphone=(), geolocation=(self)"
+    X-Frame-Options                     = "DENY"
+    X-Content-Type-Options              = "nosniff"
+    Referrer-Policy                     = "strict-origin-when-cross-origin"
+    Permissions-Policy                  = "camera=(), microphone=(), geolocation=(self)"
+    Strict-Transport-Security           = "max-age=63072000; includeSubDomains; preload"
+    Cross-Origin-Opener-Policy          = "same-origin"
+    Cross-Origin-Resource-Policy        = "same-origin"
+    X-Permitted-Cross-Domain-Policies   = "none"
+    # img-src: supabase storage, mapbox tiles, google street view, unsplash fallbacks
+    # connect-src: nominatim for address autocomplete (Firesale + CreateListing)
+    Content-Security-Policy = "default-src 'self'; script-src 'self' https://challenges.cloudflare.com https://js.stripe.com https://maps.googleapis.com blob:; style-src 'self' 'unsafe-inline'; style-src-attr 'none'; img-src 'self' data: blob: https://*.supabase.co https://*.mapbox.com https://api.mapbox.com https://storage.googleapis.com https://maps.googleapis.com https://maps.gstatic.com https://streetviewpixels-pa.googleapis.com https://images.unsplash.com; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.mapbox.com https://events.mapbox.com https://api.stripe.com https://challenges.cloudflare.com https://nominatim.openstreetmap.org https://maps.googleapis.com; frame-src https://challenges.cloudflare.com https://js.stripe.com; worker-src blob:; object-src 'none'; base-uri 'self'; form-action 'self';"
 
 # Cache static assets aggressively
 [[headers]]

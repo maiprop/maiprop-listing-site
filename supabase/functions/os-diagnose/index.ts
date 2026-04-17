@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * os-diagnose — probes the OS API to understand data shape, filters, and
  * how many PENDING (future) auctions are available.

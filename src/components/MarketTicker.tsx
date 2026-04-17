@@ -208,13 +208,17 @@ export function MarketTicker() {
                   style={{ color: isFlickering ? "hsl(0 0% 100%)" : "hsl(0 0% 96%)" }}
                 >
                   €{row.price.toLocaleString()}
+                  {!row.isLive && <span className="text-[8px] font-normal ml-0.5 opacity-50">est.</span>}
                 </span>
 
                 <span
                   className="w-14 text-right text-[10px] font-black tabular-nums px-1 py-0.5 rounded"
                   style={{
                     color: "hsl(0 0% 100%)",
-                    background: row.up ? "hsl(var(--brand-cyan) / 0.92)" : "hsl(0 72% 55%)",
+                    background: !row.isLive
+                      ? "hsl(220 15% 40% / 0.7)"
+                      : row.up ? "hsl(var(--brand-cyan) / 0.92)" : "hsl(0 72% 55%)",
+                    opacity: !row.isLive ? 0.6 : 1,
                   }}
                 >
                   {row.up ? "▲" : "▼"} {Math.abs(row.change).toFixed(1)}%

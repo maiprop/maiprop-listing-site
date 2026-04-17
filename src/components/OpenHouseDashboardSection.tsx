@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -13,16 +14,9 @@ import {
 } from "@/hooks/useOpenHouseAssetControl";
 import OpenHouseAssetControlPanel from "./OpenHouseAssetControlPanel";
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+import { fmtDate, fmtTime } from "@/lib/format";
 
-function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-GB", {
-    weekday: "short", day: "numeric", month: "short",
-  });
-}
-function fmtTime(iso: string) {
-  return new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-}
+// ── Helpers ───────────────────────────────────────────────────────────────────
 function getCountdown(iso: string): { label: string; urgent: boolean } | null {
   const diff = new Date(iso).getTime() - Date.now();
   if (diff <= 0) return null;

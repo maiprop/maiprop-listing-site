@@ -120,6 +120,42 @@ const LIMITS: Record<ParticipantId, Record<PlanTier, PlanLimits>> = {
       professionalsPerCategory: null,
     },
   },
+  investor: {
+    free: {
+      savedSearches: null, searchAlerts: null, contactsPerMonth: null,
+      auctionListingsVisible: null, auctionAlerts: null,
+      openHouseRsvp: null, viewingsPerMonth: null,
+      listings: 0, priorityAds: 0,
+      valuationsPerMonth: 5, reportsPerMonth: 5,
+      professionalsPerCategory: null,
+    },
+    pro: {
+      savedSearches: null, searchAlerts: null, contactsPerMonth: null,
+      auctionListingsVisible: null, auctionAlerts: null,
+      openHouseRsvp: null, viewingsPerMonth: null,
+      listings: null, priorityAds: null,
+      valuationsPerMonth: null, reportsPerMonth: null,
+      professionalsPerCategory: null,
+    },
+  },
+  institutional: {
+    free: {
+      savedSearches: null, searchAlerts: null, contactsPerMonth: null,
+      auctionListingsVisible: null, auctionAlerts: null,
+      openHouseRsvp: null, viewingsPerMonth: null,
+      listings: 0, priorityAds: 0,
+      valuationsPerMonth: 10, reportsPerMonth: 10,
+      professionalsPerCategory: null,
+    },
+    pro: {
+      savedSearches: null, searchAlerts: null, contactsPerMonth: null,
+      auctionListingsVisible: null, auctionAlerts: null,
+      openHouseRsvp: null, viewingsPerMonth: null,
+      listings: null, priorityAds: null,
+      valuationsPerMonth: null, reportsPerMonth: null,
+      professionalsPerCategory: null,
+    },
+  },
 };
 
 export function getPlanLimits(audience: ParticipantId, tier: PlanTier): PlanLimits {

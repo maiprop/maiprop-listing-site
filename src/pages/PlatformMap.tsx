@@ -71,8 +71,8 @@ const MODULE_FEATURES: Record<string, ModuleFeature[]> = {
 };
 
 const USER_TYPES = [
-  { id: "buyer",        label: "Buyer / Renter",  color: "text-blue-400",   bg: "bg-blue-500/10",   border: "border-blue-500/30",   role: "individual" },
-  { id: "seller",       label: "Seller",           color: "text-emerald-400",bg: "bg-emerald-500/10",border: "border-emerald-500/30", role: "seller_landlord" },
+  { id: "buyer",        label: "Buyer / Renter",  color: "text-blue-400",   bg: "bg-blue-500/10",   border: "border-blue-500/30",   role: "buyer" },
+  { id: "seller",       label: "Seller",           color: "text-emerald-400",bg: "bg-emerald-500/10",border: "border-emerald-500/30", role: "seller" },
   { id: "agent",        label: "Agent",            color: "text-amber-400",  bg: "bg-amber-500/10",  border: "border-amber-500/30",  role: "agent" },
   { id: "developer",    label: "Developer",        color: "text-orange-400", bg: "bg-orange-500/10", border: "border-orange-500/30", role: "developer" },
   { id: "professional", label: "Professional",     color: "text-purple-400", bg: "bg-purple-500/10", border: "border-purple-500/30", role: "professional" },

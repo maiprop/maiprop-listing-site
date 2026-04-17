@@ -2,10 +2,13 @@ import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading, needsOnboarding } = useAuth();
+  const { user, loading, profileLoading, needsOnboarding } = useAuth();
   const location = useLocation();
 
-  if (loading) {
+  // Wait for auth AND the initial profile fetch before making routing decisions.
+  // Without this, needsOnboarding is briefly false (profile=null) then flips true,
+  // causing a mid-page redirect to /onboarding for users who haven't completed it.
+  if (loading || profileLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">

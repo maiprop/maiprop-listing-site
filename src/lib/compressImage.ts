@@ -24,7 +24,7 @@ function supportsWebP(): boolean {
     canvas.width = 1;
     canvas.height = 1;
     return canvas.toDataURL("image/webp").startsWith("data:image/webp");
-  } catch {
+  } catch (_err: unknown) {
     return false;
   }
 }
@@ -45,12 +45,11 @@ export async function compressImage(
     mimeType = _webpSupported ? "image/webp" : "image/jpeg",
   } = opts;
 
-  // Skip non-image files and already-small files (<150KB — not worth re-encoding)
-  if (!file.type.startsWith("image/") || file.size < 150_000) return file;
-  // Skip GIF (canvas strips animation)
-  if (file.type === "image/gif") return file;
+  // Only process images from the explicit allowlist; reject everything else
+  const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif", "image/avif"]);
+  if (!ALLOWED_MIME_TYPES.has(file.type) || file.size < 150_000) return file;
 
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve, _reject) => {
     const img = new Image();
     const objectUrl = URL.createObjectURL(file);
 

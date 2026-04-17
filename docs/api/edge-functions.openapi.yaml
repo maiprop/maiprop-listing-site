@@ -1,0 +1,648 @@
+openapi: 3.1.0
+info:
+  title: MaiProp Supabase Edge Functions
+  description: |
+    HTTP endpoints exposed by Supabase Edge Functions for the MaiProp platform.
+    All functions run on Deno runtime and are hosted at
+    `https://<project>.supabase.co/functions/v1/<name>`.
+
+    Auth model:
+    - `verify_jwt = true`: requires Supabase session JWT in `Authorization: Bearer <token>`.
+    - `verify_jwt = false`: public or custom-auth (HMAC, webhook signatures, etc.).
+  version: 1.0.0
+  contact:
+    name: MaiProp Engineering
+
+servers:
+  - url: https://qvvicunqcrwpioqnvzxf.supabase.co/functions/v1
+    description: Production
+
+components:
+  securitySchemes:
+    SupabaseJWT:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Supabase user session JWT
+    HMACSignature:
+      type: apiKey
+      in: header
+      name: X-Maiprop-Signature
+      description: HMAC-SHA256 signature (format `t=<ts>,v1=<hex>`) over raw request body
+    StripeSignature:
+      type: apiKey
+      in: header
+      name: Stripe-Signature
+      description: Stripe webhook signature
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+
+    AISearchRequest:
+      type: object
+      required: [query]
+      properties:
+        query: { type: string, description: Natural-language search input }
+
+    AISearchResponse:
+      type: object
+      properties:
+        city: { type: string, nullable: true }
+        listing_type: { type: string, enum: [sale, rent, auction, firesale], nullable: true }
+        property_type: { type: string, nullable: true }
+        price_min: { type: number, nullable: true }
+        price_max: { type: number, nullable: true }
+        beds_min: { type: integer, nullable: true }
+        sqm_min: { type: integer, nullable: true }
+        summary: { type: string, nullable: true }
+
+    PropertyValuationRequest:
+      type: object
+      required: [title, city, price, sqm]
+      properties:
+        title: { type: string }
+        city: { type: string }
+        address: { type: string, nullable: true }
+        price: { type: number }
+        sqm: { type: number }
+        bedrooms: { type: integer, nullable: true }
+        bathrooms: { type: integer, nullable: true }
+        propertyType: { type: string, nullable: true }
+        listingType: { type: string, nullable: true }
+        yearBuilt: { type: integer, nullable: true }
+        energyClass: { type: string, nullable: true }
+        floor: { type: integer, nullable: true }
+        pricePerSqm: { type: number, nullable: true }
+
+    PropertyValuationResponse:
+      type: object
+      properties:
+        estimatedValue: { type: number }
+        marketComparisonPct: { type: number }
+        marketComparison: { type: string, enum: [below_market, at_market, above_market] }
+        rentalYieldEstimate: { type: number }
+        confidenceLabel: { type: string, enum: [Low, Medium, High] }
+        notes: { type: string, nullable: true }
+
+    OSWebhookEntity:
+      type: object
+      required: [entity_type, entity_id]
+      properties:
+        entity_type:
+          type: string
+          enum: [listing, lead, consultation, profile, auction]
+        entity_id: { type: string }
+        payload: { type: object, additionalProperties: true }
+
+    StripeEvent:
+      type: object
+      description: Stripe webhook event (full schema per Stripe API)
+      properties:
+        id: { type: string }
+        type: { type: string }
+        data: { type: object }
+
+paths:
+  /ai-search:
+    post:
+      operationId: aiSearch
+      summary: Natural-language listing search — converts query into filter object
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AISearchRequest' }
+      responses:
+        '200':
+          description: Parsed filters
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AISearchResponse' }
+        '400':
+          description: Bad request
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /property-valuation:
+    post:
+      operationId: propertyValuation
+      summary: AI-powered property valuation and market comparison
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PropertyValuationRequest' }
+      responses:
+        '200':
+          description: Valuation result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PropertyValuationResponse' }
+
+  /neighbourhood-report:
+    post:
+      operationId: neighbourhoodReport
+      summary: Generates an AI-written neighbourhood report for a city/address
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [city]
+              properties:
+                city: { type: string }
+                address: { type: string, nullable: true }
+      responses:
+        '200':
+          description: Report
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary: { type: string }
+                  highlights: { type: array, items: { type: string } }
+                  walkScore: { type: integer, nullable: true }
+
+  /property-pois:
+    post:
+      operationId: propertyPois
+      summary: List points of interest around given coordinates
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lat, lng]
+              properties:
+                lat: { type: number }
+                lng: { type: number }
+                radius_m: { type: integer, default: 1000 }
+      responses:
+        '200':
+          description: POIs grouped by category
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name: { type: string }
+                      distance_m: { type: number }
+                      lat: { type: number }
+                      lng: { type: number }
+
+  /smart-filters:
+    get:
+      operationId: smartFilters
+      summary: Returns suggested smart filters for a type/subtype combo
+      security: []
+      parameters:
+        - in: query
+          name: type
+          required: true
+          schema: { type: string }
+        - in: query
+          name: subtype
+          schema: { type: string }
+      responses:
+        '200':
+          description: Filter suggestions
+          content: { application/json: { schema: { type: object, additionalProperties: true } } }
+
+  /property-chat:
+    post:
+      operationId: propertyChat
+      summary: Chat with the AI about a specific listing (authenticated)
+      security: [{ SupabaseJWT: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [listing_id, message]
+              properties:
+                listing_id: { type: string }
+                message: { type: string }
+                history: { type: array, items: { type: object } }
+      responses:
+        '200':
+          description: Assistant reply
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reply: { type: string }
+
+  /pro-ai-tools:
+    post:
+      operationId: proAiTools
+      summary: Pro-tier AI tools (listing improvement, translations, market briefs)
+      security: [{ SupabaseJWT: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tool]
+              properties:
+                tool: { type: string }
+                params: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: Tool output
+          content: { application/json: { schema: { type: object, additionalProperties: true } } }
+
+  /ai-service-match:
+    post:
+      operationId: aiServiceMatch
+      summary: Match a user query to a suitable professional
+      security: [{ SupabaseJWT: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [query]
+              properties:
+                query: { type: string }
+      responses:
+        '200':
+          description: Ranked professional matches
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  matches:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        professional_id: { type: string }
+                        score: { type: number }
+                        reason: { type: string }
+
+  /ai-translate:
+    post:
+      operationId: aiTranslate
+      summary: Translate arbitrary text between supported locales
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text, target]
+              properties:
+                text: { type: string }
+                target: { type: string, enum: [en, el, de, fr, it] }
+      responses:
+        '200':
+          description: Translated text
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  translated: { type: string }
+
+  /listing-ai-assist:
+    post:
+      operationId: listingAiAssist
+      summary: Assist form: title, description, features, price suggestion
+      security: [{ SupabaseJWT: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, additionalProperties: true } } }
+      responses:
+        '200': { description: Suggestions, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+
+  /create-checkout:
+    post:
+      operationId: createCheckout
+      summary: Create a Stripe Checkout session for subscription upgrade
+      security: [{ SupabaseJWT: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [price_id]
+              properties:
+                price_id: { type: string }
+                success_url: { type: string }
+                cancel_url: { type: string }
+      responses:
+        '200':
+          description: Checkout URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url: { type: string, format: uri }
+
+  /check-subscription:
+    get:
+      operationId: checkSubscription
+      summary: Returns the user's current subscription tier and status
+      security: [{ SupabaseJWT: [] }]
+      responses:
+        '200':
+          description: Subscription state
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tier: { type: string }
+                  status: { type: string }
+                  current_period_end: { type: string, format: date-time, nullable: true }
+
+  /customer-portal:
+    post:
+      operationId: customerPortal
+      summary: Create a Stripe Customer Portal session for billing management
+      security: [{ SupabaseJWT: [] }]
+      responses:
+        '200':
+          description: Portal URL
+          content:
+            application/json:
+              schema: { type: object, properties: { url: { type: string, format: uri } } }
+
+  /get-invoices:
+    get:
+      operationId: getInvoices
+      summary: Paginated list of Stripe invoices for the current user
+      security: [{ SupabaseJWT: [] }]
+      responses:
+        '200':
+          description: Invoices
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  invoices: { type: array, items: { type: object } }
+
+  /create-stripe-price:
+    post:
+      operationId: createStripePrice
+      summary: (Admin) create a new Stripe Price object
+      security: [{ SupabaseJWT: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, additionalProperties: true } } }
+      responses:
+        '200': { description: Created, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+
+  /sync-stripe-pricing:
+    post:
+      operationId: syncStripePricing
+      summary: (Admin) synchronise Stripe products/prices into Supabase
+      security: [{ SupabaseJWT: [] }]
+      responses:
+        '200': { description: Sync result, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+
+  /stripe-webhook:
+    post:
+      operationId: stripeWebhook
+      summary: Inbound Stripe webhook (verified via Stripe signature)
+      security: [{ StripeSignature: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StripeEvent' }
+      responses:
+        '200':
+          description: Acknowledged
+          content: { application/json: { schema: { type: object, properties: { received: { type: boolean } } } } }
+        '400':
+          description: Invalid signature
+
+  /receive-from-os:
+    post:
+      operationId: receiveFromOs
+      summary: Inbound webhook from MaiProp-OS (HMAC verified, replay-protected)
+      security: [{ HMACSignature: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OSWebhookEntity' }
+      responses:
+        '200': { description: OK }
+        '401': { description: Invalid signature }
+        '409': { description: Replay detected }
+
+  /sync-to-os:
+    post:
+      operationId: syncToOs
+      summary: Outbound sync — pushes local entity to MaiProp-OS
+      security: [{ HMACSignature: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OSWebhookEntity' }
+      responses:
+        '200': { description: Sync accepted }
+
+  /sync-firesale-to-os:
+    post:
+      operationId: syncFiresaleToOs
+      summary: Sync fire-sale deals to MaiProp-OS
+      security: [{ HMACSignature: [] }]
+      responses:
+        '200': { description: OK }
+
+  /full-sync-from-os:
+    post:
+      operationId: fullSyncFromOs
+      summary: Trigger a full re-sync of entities from MaiProp-OS
+      security: [{ HMACSignature: [] }]
+      responses:
+        '200': { description: Sync started }
+
+  /poll-os-auctions:
+    get:
+      operationId: pollOsAuctions
+      summary: Scheduled function — polls MaiProp-OS for new auctions
+      security: []
+      responses:
+        '200': { description: Polling result }
+
+  /fetch-past-deals-from-os:
+    get:
+      operationId: fetchPastDealsFromOs
+      summary: Fetch historical closed deals from MaiProp-OS
+      security: []
+      responses:
+        '200': { description: Deals }
+
+  /fetch-report-from-os:
+    get:
+      operationId: fetchReportFromOs
+      summary: Fetch report data from MaiProp-OS for a given entity
+      security: [{ HMACSignature: [] }]
+      parameters:
+        - in: query
+          name: entity_id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Report }
+
+  /os-diagnose:
+    get:
+      operationId: osDiagnose
+      summary: Diagnostics endpoint for MaiProp-OS integration health
+      security: []
+      responses:
+        '200':
+          description: Diagnostic report
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  healthy: { type: boolean }
+                  checks: { type: array, items: { type: object } }
+
+  /os-sales-coordinates:
+    get:
+      operationId: osSalesCoordinates
+      summary: Return clustered sale coordinates from MaiProp-OS
+      security: []
+      parameters:
+        - in: query, name: bbox, schema: { type: string }, description: "minLng,minLat,maxLng,maxLat"
+      responses:
+        '200': { description: GeoJSON FeatureCollection }
+
+  /send-saved-search-alerts:
+    post:
+      operationId: sendSavedSearchAlerts
+      summary: Scheduled — emails users about new matches for saved searches
+      security: []
+      responses:
+        '200': { description: OK }
+
+  /process-email-queue:
+    post:
+      operationId: processEmailQueue
+      summary: Drain queued outbound emails (invoked by cron)
+      security: [{ SupabaseJWT: [] }]
+      responses:
+        '200': { description: OK }
+
+  /invitation-notify:
+    post:
+      operationId: invitationNotify
+      summary: Send invitation notification emails
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+                role: { type: string }
+      responses:
+        '200': { description: OK }
+
+  /oh-registration-notify:
+    post:
+      operationId: ohRegistrationNotify
+      summary: Notify owner of a new open-house registration
+      security: []
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, additionalProperties: true } } }
+      responses:
+        '200': { description: OK }
+
+  /delete-account:
+    post:
+      operationId: deleteAccount
+      summary: Delete the authenticated user's account (GDPR right to erasure)
+      security: [{ SupabaseJWT: [] }]
+      responses:
+        '200': { description: Deleted }
+        '401': { description: Not authenticated }
+
+  /log-role-switch:
+    post:
+      operationId: logRoleSwitch
+      summary: Audit-log a participant/role switch event
+      security: [{ SupabaseJWT: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, additionalProperties: true } } }
+      responses:
+        '200': { description: Logged }
+
+  /streetview-proxy:
+    get:
+      operationId: streetViewProxy
+      summary: Proxy for Google Street View images (hides API key)
+      security: []
+      parameters:
+        - in: query, name: lat,      schema: { type: number }
+        - in: query, name: lng,      schema: { type: number }
+        - in: query, name: location, schema: { type: string }
+        - in: query, name: size,     schema: { type: string, default: 600x400 }
+      responses:
+        '200':
+          description: JPEG image
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+
+  /sitemap:
+    get:
+      operationId: sitemap
+      summary: Dynamic XML sitemap for SEO
+      security: []
+      responses:
+        '200':
+          description: XML sitemap
+          content:
+            application/xml:
+              schema: { type: string }
+
+  /auth-email-hook:
+    post:
+      operationId: authEmailHook
+      summary: Supabase auth email hook (signup, reset, magic-link)
+      security: [{ HMACSignature: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, additionalProperties: true } } }
+      responses:
+        '200': { description: OK }

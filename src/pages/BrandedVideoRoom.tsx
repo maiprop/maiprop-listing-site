@@ -44,8 +44,6 @@ export default function BrandedVideoRoom() {
   // Post-call state
   const [callEnded, setCallEnded] = useState(false);
   const [callNotes, setCallNotes] = useState("");
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [callDuration] = useState(() => Math.floor(15 + Math.random() * 45));
   const [callStartTime] = useState(() => new Date());
 
   // Floating live timer (seconds elapsed since joining)
@@ -121,7 +119,7 @@ export default function BrandedVideoRoom() {
       stream.getTracks().forEach((t) => t.stop());
       setCameraChecked(true);
       toast.success("Camera and microphone are working.");
-    } catch {
+    } catch (_err: unknown) {
       toast.error("Could not access camera/microphone. Please check your browser permissions.");
     } finally {
       setCameraCheckPending(false);
@@ -166,7 +164,7 @@ export default function BrandedVideoRoom() {
       `Title: ${pro.title ?? pro.category}`,
       `Date: ${callStartTime.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`,
       `Time: ${callStartTime.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`,
-      `Duration: ~${callDuration} minutes`,
+      `Duration: ${Math.floor(elapsedSeconds / 60)}m ${elapsedSeconds % 60}s`,
       "",
       "Notes:",
       callNotes || "(no notes)",
@@ -175,7 +173,7 @@ export default function BrandedVideoRoom() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `consultation-summary-${pro.display_name.replace(/\s+/g, "-").toLowerCase()}-${callStartTime.toISOString().slice(0, 10)}.txt`;
+    a.download = `consultation-summary-${(pro.display_name || "unknown").replace(/\s+/g, "-").toLowerCase()}-${callStartTime.toISOString().slice(0, 10)}.txt`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -437,12 +435,12 @@ export default function BrandedVideoRoom() {
                 <div className="grid grid-cols-3 gap-3">
                   <div className="rounded-lg border border-border bg-muted/30 px-3 py-3 text-center">
                     <Clock className="w-4 h-4 text-muted-foreground mx-auto mb-1" />
-                    <p className="text-sm font-bold text-foreground">~{callDuration} min</p>
+                    <p className="text-sm font-bold text-foreground">{formatTimer(elapsedSeconds)}</p>
                     <p className="text-xs text-muted-foreground">Duration</p>
                   </div>
                   <div className="rounded-lg border border-border bg-muted/30 px-3 py-3 text-center">
                     <Video className="w-4 h-4 text-muted-foreground mx-auto mb-1" />
-                    <p className="text-sm font-bold text-foreground truncate">{pro.display_name.split(" ")[0]}</p>
+                    <p className="text-sm font-bold text-foreground truncate">{(pro.display_name || "").split(" ")[0]}</p>
                     <p className="text-xs text-muted-foreground">Participant</p>
                   </div>
                   <div className="rounded-lg border border-border bg-muted/30 px-3 py-3 text-center">

@@ -1,4 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from "react";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Globe2, Plus, ExternalLink, MapPin, Edit2, Trash2, FolderOpen, Loader2,
@@ -23,6 +25,7 @@ export default function ProjectsTab() {
 
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [newDesc, setNewDesc] = useState("");
   const [newCity, setNewCity] = useState("");
   const [newPermit, setNewPermit] = useState("");
@@ -215,10 +218,9 @@ export default function ProjectsTab() {
                   <Button
                     variant="ghost"
                     size="icon"
+                    aria-label="Delete project"
                     className="text-destructive hover:text-destructive"
-                    onClick={() => {
-                      if (confirm("Delete this project?")) deleteProject.mutate(p.id);
-                    }}
+                    onClick={() => setDeleteTarget(p.id)}
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>
@@ -246,6 +248,14 @@ export default function ProjectsTab() {
           ))}
         </div>
       )}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete project?"
+        description="This will permanently remove the project and all its units and media."
+        confirmLabel="Delete"
+        onConfirm={() => { if (deleteTarget) deleteProject.mutate(deleteTarget); setDeleteTarget(null); }}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

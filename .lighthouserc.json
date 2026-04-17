@@ -1,0 +1,40 @@
+{
+  "ci": {
+    "collect": {
+      "startServerCommand": "npm run preview -- --port 4173",
+      "url": [
+        "http://localhost:4173/",
+        "http://localhost:4173/listings",
+        "http://localhost:4173/auctions",
+        "http://localhost:4173/open-houses",
+        "http://localhost:4173/professionals",
+        "http://localhost:4173/pricing",
+        "http://localhost:4173/login"
+      ],
+      "numberOfRuns": 2,
+      "settings": {
+        "preset": "desktop",
+        "onlyCategories": ["performance", "accessibility", "best-practices", "seo"],
+        "skipAudits": ["uses-http2"]
+      }
+    },
+    "assert": {
+      "assertions": {
+        "categories:performance":     ["warn", { "minScore": 0.70 }],
+        "categories:accessibility":   ["error", { "minScore": 0.90 }],
+        "categories:best-practices":  ["warn", { "minScore": 0.85 }],
+        "categories:seo":             ["warn", { "minScore": 0.90 }],
+        "first-contentful-paint":     ["warn", { "maxNumericValue": 2500 }],
+        "largest-contentful-paint":   ["warn", { "maxNumericValue": 4000 }],
+        "cumulative-layout-shift":    ["warn", { "maxNumericValue": 0.15 }],
+        "total-blocking-time":        ["warn", { "maxNumericValue": 400 }],
+        "interactive":                ["warn", { "maxNumericValue": 5000 }],
+        "unused-javascript":          "off",
+        "unused-css-rules":           "off"
+      }
+    },
+    "upload": {
+      "target": "temporary-public-storage"
+    }
+  }
+}

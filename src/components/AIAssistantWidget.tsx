@@ -146,7 +146,7 @@ const AIAssistantWidget = forwardRef<HTMLDivElement, AIAssistantWidgetProps>(fun
                 prev.map(m => m.id === assistantId ? { ...m, content: accum } : m)
               );
             }
-          } catch {
+          } catch (_err: unknown) {
             buffer = line + "\n" + buffer;
             break;
           }
@@ -168,16 +168,16 @@ const AIAssistantWidget = forwardRef<HTMLDivElement, AIAssistantWidgetProps>(fun
               prev.map(m => m.id === assistantId ? { ...m, content: accum } : m)
             );
           }
-        } catch { /* ignore */ }
+        } catch (_err: unknown) { /* ignore */ }
       }
 
       setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, streaming: false } : m));
-    } catch (e: any) {
-      if (e.name === "AbortError") return;
+    } catch (e: unknown) {
+      if (e instanceof Error && e.name === "AbortError") return;
       setMessages(prev =>
         prev.map(m =>
           m.id === assistantId
-            ? { ...m, content: `⚠️ ${e.message || "Something went wrong."}`, streaming: false }
+            ? { ...m, content: `⚠️ ${e instanceof Error ? e.message : "Something went wrong."}`, streaming: false }
             : m
         )
       );
@@ -221,11 +221,15 @@ const AIAssistantWidget = forwardRef<HTMLDivElement, AIAssistantWidgetProps>(fun
   const isEmbedded = variant === "embedded";
   return (
     <div
+      role="dialog"
+      aria-modal={!isEmbedded}
+      aria-label="AI Property Assistant"
       className={
         isEmbedded
           ? `flex flex-col overflow-hidden transition-all duration-200 rounded-2xl border border-border bg-card shadow-elevated ${minimized ? "h-[52px]" : "min-h-[420px] flex-1"}`
           : `fixed bottom-6 right-6 z-50 w-[360px] bg-card border border-border rounded-2xl shadow-elevated flex flex-col overflow-hidden transition-all duration-200 ${minimized ? "h-[52px]" : "h-[520px]"}`
       }
+      onKeyDown={(e) => { if (e.key === "Escape" && !isEmbedded) { setOpen(false); setMinimized(false); } }}
     >
       {/* Header */}
       <div className="flex items-center gap-2.5 px-4 py-3 bg-gradient-primary shrink-0">

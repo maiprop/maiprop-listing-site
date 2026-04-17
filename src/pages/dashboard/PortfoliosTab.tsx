@@ -1,4 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from "react";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Link } from "react-router-dom";
 import {
   TrendingUp, Plus, ExternalLink, Edit2, Trash2, LayoutGrid, Loader2,
@@ -24,6 +26,7 @@ export default function PortfoliosTab() {
 
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [addFromSavedPortfolioId, setAddFromSavedPortfolioId] = useState<string | null>(null);
@@ -193,10 +196,9 @@ export default function PortfoliosTab() {
                       <Button
                         variant="ghost"
                         size="icon"
+                        aria-label="Delete portfolio"
                         className="text-destructive hover:text-destructive"
-                        onClick={() => {
-                          if (confirm("Delete this portfolio?")) deletePortfolio.mutate(p.id);
-                        }}
+                        onClick={() => setDeleteTarget(p.id)}
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
@@ -283,6 +285,14 @@ export default function PortfoliosTab() {
           })}
         </div>
       )}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete portfolio?"
+        description="This will permanently remove the portfolio and all its saved listings."
+        confirmLabel="Delete"
+        onConfirm={() => { if (deleteTarget) deletePortfolio.mutate(deleteTarget); setDeleteTarget(null); }}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

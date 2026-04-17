@@ -1,8 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Shared utilities for converting DB listing rows to PropertyCard-compatible objects.
  */
 
 import { getOwnerParticipantType } from "./participantConfig";
+import type { ListingCard } from "@/types";
 
 const SYSTEM_TAG_PREFIXES = [
   "ownership:",
@@ -37,40 +39,7 @@ export interface DbListingToCardOptions {
 export function dbListingToCard(
   l: any,
   options: DbListingToCardOptions = {}
-): {
-  id: string;
-  title: string;
-  address: string;
-  city: string;
-  price: number;
-  pricePerSqm?: number;
-  bedrooms?: number;
-  bathrooms?: number;
-  sqm: number;
-  images: string[];
-  type: any;
-  listingType: any;
-  ownerParticipantType?: "agent" | "seller" | null;
-  agent?: { name: string; verified: boolean; avatar?: string };
-  auctionDate?: string;
-  auctionStartingBid?: number;
-  aiScore?: number;
-  views?: number;
-  tags?: string[];
-  hasVideo?: boolean;
-  hasVirtualTour?: boolean;
-  floor?: number;
-  totalFloors?: number;
-  yearBuilt?: number;
-  energyClass?: string;
-  ownershipStatus?: string;
-  ownershipPercentage?: number;
-  isFeatured?: boolean;
-  priorityPlacement?: number;
-  isPreSale?: boolean;
-  constructionStatus?: string;
-  _raw?: any;
-} {
+): ListingCard {
   const {
     includeOwnership = false,
     includeCoordinates = false,
@@ -144,10 +113,13 @@ export function dbListingToCard(
     tags: filterDisplayTags ? displayTags : (tags.filter(Boolean) as string[]),
     hasVideo: l.has_video_tour,
     hasVirtualTour: l.has_virtual_tour,
-    isFeatured: !!(l as any).is_featured,
-    priorityPlacement: Number((l as any).priority_placement) || 0,
+    isFeatured: !!l.is_featured,
+    priorityPlacement: Number(l.priority_placement) || 0,
     isPreSale: l.is_pre_sale ?? false,
     constructionStatus: l.construction_status ?? undefined,
+    walkabilityScore: l.walkability_score != null ? Number(l.walkability_score) : undefined,
+    safetyScore: l.safety_score != null ? Number(l.safety_score) : undefined,
+    noiseScore: l.noise_score != null ? Number(l.noise_score) : undefined,
   };
 
   if (includeOwnership) {

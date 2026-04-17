@@ -34,3 +34,15 @@ mai-pro-os/
 
 # Supabase local temp (generated)
 supabase/.temp/
+
+# Test artifacts
+coverage/
+playwright-report/
+test-results/
+.lighthouseci/
+
+# Temporary audit / schema snapshots
+schema-openapi.json
+type-errors.txt
+*.bak
+src/integrations/supabase/types.ts.bak

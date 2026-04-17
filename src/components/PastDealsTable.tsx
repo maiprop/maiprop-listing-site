@@ -26,23 +26,7 @@ interface PastDealsTableProps {
   listingId: string;
 }
 
-function formatPrice(n: number | null | undefined): string {
-  if (n == null || !Number.isFinite(n)) return "—";
-  return `€${Number(n).toLocaleString("el-GR")}`;
-}
-
-function formatDate(s: string | null | undefined): string {
-  if (!s) return "—";
-  try {
-    return new Date(s).toLocaleDateString("en-GB", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    });
-  } catch {
-    return String(s);
-  }
-}
+import { formatPrice, formatDate } from "@/lib/format";
 
 export function PastDealsTable({ listingId }: PastDealsTableProps) {
   const { user } = useAuth();

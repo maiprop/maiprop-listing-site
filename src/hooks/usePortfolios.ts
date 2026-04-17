@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -67,12 +68,13 @@ export function useCreatePortfolio() {
       qc.invalidateQueries({ queryKey: ["portfolios"] });
       toast.success("Portfolio created");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: () => toast.error("Something went wrong. Please try again."),
   });
 }
 
 export function useUpdatePortfolio() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async ({
       id,
@@ -81,10 +83,12 @@ export function useUpdatePortfolio() {
       id: string;
       updates: { name?: string; listing_ids?: string[] };
     }) => {
+      if (!user) throw new Error("Must be logged in");
       const { data, error } = await supabase
         .from("portfolios")
         .update(updates)
         .eq("id", id)
+        .eq("user_id", user.id)
         .select()
         .single();
       if (error) throw error;
@@ -95,21 +99,23 @@ export function useUpdatePortfolio() {
       qc.invalidateQueries({ queryKey: ["portfolio", id] });
       toast.success("Portfolio updated");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: () => toast.error("Something went wrong. Please try again."),
   });
 }
 
 export function useDeletePortfolio() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("portfolios").delete().eq("id", id);
+      if (!user) throw new Error("Must be logged in");
+      const { error } = await supabase.from("portfolios").delete().eq("id", id).eq("user_id", user.id);
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["portfolios"] });
       toast.success("Portfolio deleted");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: () => toast.error("Something went wrong. Please try again."),
   });
 }

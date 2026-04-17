@@ -1,4 +1,4 @@
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -155,6 +155,45 @@ export type Database = {
         }
         Relationships: []
       }
+      contact_submissions: {
+        Row: {
+          company: string | null
+          created_at: string
+          document_type: string | null
+          email: string
+          id: string
+          listing_title: string | null
+          message: string | null
+          name: string | null
+          share_to_email: string | null
+          type: string
+        }
+        Insert: {
+          company?: string | null
+          created_at?: string
+          document_type?: string | null
+          email: string
+          id?: string
+          listing_title?: string | null
+          message?: string | null
+          name?: string | null
+          share_to_email?: string | null
+          type?: string
+        }
+        Update: {
+          company?: string | null
+          created_at?: string
+          document_type?: string | null
+          email?: string
+          id?: string
+          listing_title?: string | null
+          message?: string | null
+          name?: string | null
+          share_to_email?: string | null
+          type?: string
+        }
+        Relationships: []
+      }
       contact_tasks: {
         Row: {
           completed_at: string | null
@@ -257,6 +296,7 @@ export type Database = {
           created_at: string
           id: string
           last_message_at: string | null
+          listing_id: string | null
           participant_1: string
           participant_2: string
           participant_a: string | null
@@ -266,6 +306,7 @@ export type Database = {
           created_at?: string
           id?: string
           last_message_at?: string | null
+          listing_id?: string | null
           participant_1: string
           participant_2: string
           participant_a?: string | null
@@ -275,12 +316,21 @@ export type Database = {
           created_at?: string
           id?: string
           last_message_at?: string | null
+          listing_id?: string | null
           participant_1?: string
           participant_2?: string
           participant_a?: string | null
           participant_b?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "conversations_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       deal_checklists: {
         Row: {
@@ -833,6 +883,7 @@ export type Database = {
           entity_type: string
           id: string
           reporter_id: string | null
+          status: Database["public"]["Enums"]["listing_report_status"]
         }
         Insert: {
           created_at?: string
@@ -840,6 +891,7 @@ export type Database = {
           entity_type: string
           id?: string
           reporter_id?: string | null
+          status?: Database["public"]["Enums"]["listing_report_status"]
         }
         Update: {
           created_at?: string
@@ -847,6 +899,7 @@ export type Database = {
           entity_type?: string
           id?: string
           reporter_id?: string | null
+          status?: Database["public"]["Enums"]["listing_report_status"]
         }
         Relationships: []
       }
@@ -905,6 +958,7 @@ export type Database = {
           energy_class: string | null
           enfia_zone: string | null
           facade_length: number | null
+          featured_until: string | null
           floor: number | null
           floor_height: number | null
           has_ac: boolean | null
@@ -962,6 +1016,7 @@ export type Database = {
           longitude: number | null
           min_rental_months: number | null
           monthly_expenses: number | null
+          noise_score: number | null
           open_house_date: string | null
           owner_id: string | null
           pets_allowed: boolean | null
@@ -975,6 +1030,7 @@ export type Database = {
           property_type: Database["public"]["Enums"]["property_type"]
           region: string | null
           road_type: string | null
+          safety_score: number | null
           short_term_rental: boolean | null
           slope: string | null
           sqm: number
@@ -988,6 +1044,7 @@ export type Database = {
           total_floors: number | null
           updated_at: string
           views_count: number
+          walkability_score: number | null
           wc_count: number | null
           website_url: string | null
           within_city_plan: boolean | null
@@ -1020,6 +1077,7 @@ export type Database = {
           energy_class?: string | null
           enfia_zone?: string | null
           facade_length?: number | null
+          featured_until?: string | null
           floor?: number | null
           floor_height?: number | null
           has_ac?: boolean | null
@@ -1077,6 +1135,7 @@ export type Database = {
           longitude?: number | null
           min_rental_months?: number | null
           monthly_expenses?: number | null
+          noise_score?: number | null
           open_house_date?: string | null
           owner_id?: string | null
           pets_allowed?: boolean | null
@@ -1090,6 +1149,7 @@ export type Database = {
           property_type: Database["public"]["Enums"]["property_type"]
           region?: string | null
           road_type?: string | null
+          safety_score?: number | null
           short_term_rental?: boolean | null
           slope?: string | null
           sqm: number
@@ -1103,6 +1163,7 @@ export type Database = {
           total_floors?: number | null
           updated_at?: string
           views_count?: number
+          walkability_score?: number | null
           wc_count?: number | null
           website_url?: string | null
           within_city_plan?: boolean | null
@@ -1135,6 +1196,7 @@ export type Database = {
           energy_class?: string | null
           enfia_zone?: string | null
           facade_length?: number | null
+          featured_until?: string | null
           floor?: number | null
           floor_height?: number | null
           has_ac?: boolean | null
@@ -1192,6 +1254,7 @@ export type Database = {
           longitude?: number | null
           min_rental_months?: number | null
           monthly_expenses?: number | null
+          noise_score?: number | null
           open_house_date?: string | null
           owner_id?: string | null
           pets_allowed?: boolean | null
@@ -1205,6 +1268,7 @@ export type Database = {
           property_type?: Database["public"]["Enums"]["property_type"]
           region?: string | null
           road_type?: string | null
+          safety_score?: number | null
           short_term_rental?: boolean | null
           slope?: string | null
           sqm?: number
@@ -1218,6 +1282,7 @@ export type Database = {
           total_floors?: number | null
           updated_at?: string
           views_count?: number
+          walkability_score?: number | null
           wc_count?: number | null
           website_url?: string | null
           within_city_plan?: boolean | null
@@ -1280,7 +1345,7 @@ export type Database = {
           created_at: string
           id: string
           read_at: string | null
-          receiver_id: string
+          receiver_id: string | null
           sender_id: string
           status: Database["public"]["Enums"]["message_status"]
         }
@@ -1290,7 +1355,7 @@ export type Database = {
           created_at?: string
           id?: string
           read_at?: string | null
-          receiver_id: string
+          receiver_id?: string | null
           sender_id: string
           status?: Database["public"]["Enums"]["message_status"]
         }
@@ -1300,7 +1365,7 @@ export type Database = {
           created_at?: string
           id?: string
           read_at?: string | null
-          receiver_id?: string
+          receiver_id?: string | null
           sender_id?: string
           status?: Database["public"]["Enums"]["message_status"]
         }
@@ -1310,6 +1375,56 @@ export type Database = {
             columns: ["conversation_id"]
             isOneToOne: false
             referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      new_building_leads: {
+        Row: {
+          created_at: string
+          email: string
+          full_name: string
+          id: string
+          investment_budget: number
+          new_building_id: string
+          notes: string
+          phone: string | null
+          updated_at: string
+          user_id: string
+          utm_source: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          full_name?: string
+          id?: string
+          investment_budget?: number
+          new_building_id: string
+          notes?: string
+          phone?: string | null
+          updated_at?: string
+          user_id: string
+          utm_source?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          full_name?: string
+          id?: string
+          investment_budget?: number
+          new_building_id?: string
+          notes?: string
+          phone?: string | null
+          updated_at?: string
+          user_id?: string
+          utm_source?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "new_building_leads_new_building_id_fkey"
+            columns: ["new_building_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
             referencedColumns: ["id"]
           },
         ]
@@ -1697,6 +1812,59 @@ export type Database = {
         }
         Relationships: []
       }
+      professional_reviews: {
+        Row: {
+          body: string | null
+          created_at: string
+          id: string
+          professional_id: string
+          property_city: string | null
+          rating: number
+          recommended: boolean
+          reviewer_id: string
+          service_type: string | null
+          title: string | null
+          transaction_year: number | null
+          updated_at: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          professional_id: string
+          property_city?: string | null
+          rating: number
+          recommended?: boolean
+          reviewer_id: string
+          service_type?: string | null
+          title?: string | null
+          transaction_year?: number | null
+          updated_at?: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          professional_id?: string
+          property_city?: string | null
+          rating?: number
+          recommended?: boolean
+          reviewer_id?: string
+          service_type?: string | null
+          title?: string | null
+          transaction_year?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "professional_reviews_professional_id_fkey"
+            columns: ["professional_id"]
+            isOneToOne: false
+            referencedRelation: "professionals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       professional_services: {
         Row: {
           category: string
@@ -1767,6 +1935,7 @@ export type Database = {
           id: string
           languages: string[] | null
           license_number: string | null
+          notes: string | null
           projects_count: number | null
           rating: number | null
           reviews_count: number | null
@@ -1794,6 +1963,7 @@ export type Database = {
           id?: string
           languages?: string[] | null
           license_number?: string | null
+          notes?: string | null
           projects_count?: number | null
           rating?: number | null
           reviews_count?: number | null
@@ -1821,6 +1991,7 @@ export type Database = {
           id?: string
           languages?: string[] | null
           license_number?: string | null
+          notes?: string | null
           projects_count?: number | null
           rating?: number | null
           reviews_count?: number | null
@@ -2315,6 +2486,45 @@ export type Database = {
         }
         Relationships: []
       }
+      role_switch_history: {
+        Row: {
+          from_plan_key: string | null
+          from_type: string
+          had_active_sub: boolean
+          id: string
+          sub_cancelled: boolean
+          switch_kind: string | null
+          switched_at: string
+          to_plan_key: string | null
+          to_type: string | null
+          user_id: string
+        }
+        Insert: {
+          from_plan_key?: string | null
+          from_type: string
+          had_active_sub?: boolean
+          id?: string
+          sub_cancelled?: boolean
+          switch_kind?: string | null
+          switched_at?: string
+          to_plan_key?: string | null
+          to_type?: string | null
+          user_id: string
+        }
+        Update: {
+          from_plan_key?: string | null
+          from_type?: string
+          had_active_sub?: boolean
+          id?: string
+          sub_cancelled?: boolean
+          switch_kind?: string | null
+          switched_at?: string
+          to_plan_key?: string | null
+          to_type?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       saved_searches: {
         Row: {
           created_at: string
@@ -2571,6 +2781,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      check_listing_quota: { Args: never; Returns: boolean }
       delete_email: {
         Args: { message_id: number; queue_name: string }
         Returns: boolean
@@ -2579,8 +2790,11 @@ export type Database = {
         Args: { payload: Json; queue_name: string }
         Returns: number
       }
+      expire_featured_listings: { Args: never; Returns: undefined }
       get_auction_alert_limit: { Args: { p_user_id: string }; Returns: number }
-      get_listing_limit: { Args: { p_user_id: string }; Returns: number }
+      get_listing_limit:
+        | { Args: { p_is_pro: boolean; p_role: string }; Returns: number }
+        | { Args: { p_user_id: string }; Returns: number }
       get_my_role: {
         Args: never
         Returns: Database["public"]["Enums"]["user_role"]
@@ -2602,6 +2816,7 @@ export type Database = {
           id: string
           languages: string[] | null
           license_number: string | null
+          notes: string | null
           projects_count: number | null
           rating: number | null
           reviews_count: number | null
@@ -2653,6 +2868,10 @@ export type Database = {
             Returns: boolean
           }
       has_sell_side_role: { Args: { _user_id: string }; Returns: boolean }
+      increment_listing_views: {
+        Args: { p_listing_id: string }
+        Returns: undefined
+      }
       move_to_dlq: {
         Args: {
           dlq_name: string
@@ -2670,6 +2889,10 @@ export type Database = {
           read_ct: number
         }[]
       }
+      record_listing_view_event: {
+        Args: { p_listing_id: string; p_viewer_id?: string }
+        Returns: undefined
+      }
       seed_grant_agent_role: {
         Args: { user_ids: string[] }
         Returns: undefined
@@ -2681,6 +2904,7 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"
+      listing_report_status: "pending" | "resolved" | "dismissed"
       listing_status:
         | "draft"
         | "active"
@@ -2751,10 +2975,10 @@ export type Database = {
         | "commercial"
         | "office"
       user_role:
-        | "individual"
+        | "buyer"
         | "agent"
         | "professional"
-        | "seller_landlord"
+        | "seller"
         | "admin"
         | "investor"
         | "institutional"
@@ -2889,6 +3113,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "moderator", "user"],
+      listing_report_status: ["pending", "resolved", "dismissed"],
       listing_status: [
         "draft",
         "active",
@@ -2964,10 +3189,10 @@ export const Constants = {
         "office",
       ],
       user_role: [
-        "individual",
+        "buyer",
         "agent",
         "professional",
-        "seller_landlord",
+        "seller",
         "admin",
         "investor",
         "institutional",

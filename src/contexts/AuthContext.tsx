@@ -1,7 +1,10 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, ReactNode } from "react";
+/* eslint-disable react-refresh/only-export-components */
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, ReactNode } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
+import { logger } from "@/lib/logger";
+import { APP_ORIGIN } from "@/lib/config";
 
 type Profile = Tables<"profiles">;
 
@@ -17,10 +20,12 @@ interface AuthContextType {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
+  /** True while the profile row is being fetched after auth — distinct from auth loading */
+  profileLoading: boolean;
   subscription: SubscriptionState;
   /** True when a newly-signed-up user hasn't completed onboarding yet */
   needsOnboarding: boolean;
-  signUp: (email: string, password: string, meta: { full_name: string; role: string; business_name?: string; tax_id?: string; phone?: string; license_number?: string }) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, meta: { full_name: string; role: string; business_name?: string; tax_id?: string; phone?: string; license_number?: string }) => Promise<{ error: Error | null; needsEmailConfirm: boolean }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: Error | null }>;
@@ -32,7 +37,13 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 function profileNeedsOnboarding(p: Profile | null): boolean {
   if (!p) return false;
-  return !p.bio || !p.bio.startsWith("__type:");
+  // participant_type is the canonical onboarding signal since migration 20260522100000.
+  // New users always have it set by Onboarding.tsx — bio is never written as a type signal anymore.
+  if (p.participant_type) return false;
+  // Legacy read-only fallback: rows created before participant_type existed and were never backfilled.
+  // Safe to remove once DB shows 0 profiles with NULL participant_type and non-null __type: bio.
+  if (p.bio && p.bio.startsWith("__type:")) return false;
+  return true;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -40,6 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [profileLoading, setProfileLoading] = useState(false);
   const [subscription, setSubscription] = useState<SubscriptionState>({
     subscribed: false,
     productId: null,
@@ -47,21 +59,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loading: false,
   });
 
-  const fetchProfile = async (userId: string) => {
+  // Guard: discard profile fetch results that belong to a previous user session
+  const expectedUserIdRef = useRef<string | null>(null);
+  // Guard: prevent concurrent subscription checks
+  const subCheckInProgressRef = useRef(false);
+
+  const fetchProfile = useCallback(async (userId: string) => {
+    expectedUserIdRef.current = userId;
+    setProfileLoading(true);
     const { data } = await supabase
       .from("profiles")
-      .select("user_id, display_name, avatar_url, role, bio, first_name, last_name, city, country, phone, website_url, is_platform_admin, verified, created_at, updated_at, id, participant_type, investor_mode")
+      .select("user_id, display_name, avatar_url, role, bio, first_name, last_name, city, country, phone, website_url, is_platform_admin, verified, created_at, updated_at, id, participant_type, investor_mode, subscription_product_id")
       .eq("user_id", userId)
       .single();
-    if (data) setProfile(data);
+    // Discard stale result if the auth user changed before this resolved
+    if (expectedUserIdRef.current !== userId) return null;
+    if (data) setProfile(data as Profile);
+    setProfileLoading(false);
     return data;
-  };
+  }, []);
 
-  const checkSubscription = async (currentSession: Session | null) => {
+  const checkSubscription = useCallback(async (currentSession: Session | null) => {
     if (!currentSession) {
       setSubscription({ subscribed: false, productId: null, subscriptionEnd: null, loading: false });
       return;
     }
+    if (subCheckInProgressRef.current) return;
+    subCheckInProgressRef.current = true;
     setSubscription(prev => ({ ...prev, loading: true }));
     try {
       const { data, error } = await supabase.functions.invoke("check-subscription", {});
@@ -75,10 +99,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setSubscription(prev => ({ ...prev, loading: false }));
       }
-    } catch {
+    } catch (err: unknown) {
+      logger.warn("[AuthContext] checkSubscription failed:", err instanceof Error ? err.message : err);
       setSubscription(prev => ({ ...prev, loading: false }));
+    } finally {
+      subCheckInProgressRef.current = false;
     }
-  };
+  }, []);
 
   useEffect(() => {
     // Safety: never block the app for more than 8s if Supabase/auth hangs
@@ -89,20 +116,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // CRITICAL: set loading=false immediately so the UI unblocks, then
     // fetch profile + subscription in the background without blocking navigation.
     const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange(
-      (event, sess) => {
+      (_event, sess) => {
         setSession(sess);
         setUser(sess?.user ?? null);
 
         if (sess?.user) {
           // Unblock UI immediately — profile arrives shortly after
           setLoading(false);
-          // Fire-and-forget: don't await, never block the auth flow
+          // Non-blocking: profile and subscription load in background
           fetchProfile(sess.user.id).catch((err) => {
-            console.warn("Profile fetch failed:", err);
+            logger.warn("Profile fetch failed:", err);
+            setProfileLoading(false);
           });
+          // setTimeout(0) avoids a Supabase deadlock when invoking functions
+          // inside onAuthStateChange; the dedup ref prevents concurrent calls.
           setTimeout(() => checkSubscription(sess), 0);
         } else {
+          // Clear all user-scoped state on sign-out
+          expectedUserIdRef.current = null;
           setProfile(null);
+          setProfileLoading(false);
           setSubscription({ subscribed: false, productId: null, subscriptionEnd: null, loading: false });
           setLoading(false);
         }
@@ -120,9 +153,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Refresh subscription every 5 minutes
     const interval = setInterval(() => {
-      supabase.auth.getSession().then(({ data: { session: sess } }) => {
-        if (sess) checkSubscription(sess);
-      });
+      supabase.auth.getSession()
+        .then(({ data: { session: sess } }) => { if (sess) checkSubscription(sess); })
+        .catch((err: unknown) => logger.warn("[AuthContext] session refresh failed:", err instanceof Error ? err.message : err));
     }, 5 * 60 * 1000);
 
     return () => {
@@ -130,7 +163,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       authSub.unsubscribe();
       clearInterval(interval);
     };
-  }, []);
+  }, [fetchProfile, checkSubscription]);
 
   const signUp = useCallback(async (
     email: string,
@@ -142,7 +175,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password,
       options: {
         data: { full_name: meta.full_name },
-        emailRedirectTo: `${window.location.origin}/onboarding`,
+        emailRedirectTo: `${APP_ORIGIN}/onboarding`,
       },
     });
     if (data.user && !error) {
@@ -151,7 +184,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .update({ ...(meta.phone && { phone: meta.phone }) })
         .eq("user_id", data.user.id);
     }
-    return { error: error as Error | null };
+    // needsEmailConfirm = signup succeeded but no session yet (email confirmation required)
+    const needsEmailConfirm = !error && !!data.user && !data.session;
+    return { error: error as Error | null, needsEmailConfirm };
   }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {
@@ -170,23 +205,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { error } = await supabase.from("profiles").update(updates).eq("user_id", user.id);
     if (!error) await fetchProfile(user.id);
     return { error: error as Error | null };
-  }, [user]);
+  }, [user, fetchProfile]);
 
   const refreshProfile = useCallback(async () => {
     if (user) await fetchProfile(user.id);
-  }, [user]);
+  }, [user, fetchProfile]);
 
   const refreshSubscription = useCallback(async () => {
     const { data: { session: sess } } = await supabase.auth.getSession();
     await checkSubscription(sess);
-  }, []);
+  }, [checkSubscription]);
 
   const needsOnboarding = profileNeedsOnboarding(profile);
 
   const contextValue = useMemo(() => ({
-    session, user, profile, loading, subscription, needsOnboarding,
+    session, user, profile, loading, profileLoading, subscription, needsOnboarding,
     signUp, signIn, signOut, updateProfile, refreshProfile, refreshSubscription,
-  }), [session, user, profile, loading, subscription, needsOnboarding,
+  }), [session, user, profile, loading, profileLoading, subscription, needsOnboarding,
        signUp, signIn, signOut, updateProfile, refreshProfile, refreshSubscription]);
 
   return (

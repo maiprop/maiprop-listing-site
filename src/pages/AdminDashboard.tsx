@@ -24,19 +24,20 @@ import { Button } from "@/components/ui/button";
 
 type AdminTab = "pipeline" | "investor-screening" | "subscribers" | "pricing" | "os-sync" | "open-houses" | "reports" | "invitations" | "featured" | "pro-verification" | "pof-review";
 
+const VALID_TABS = ["pipeline", "investor-screening", "subscribers", "pricing", "os-sync", "open-houses", "reports", "invitations", "featured", "pro-verification", "pof-review"];
+
 export default function AdminDashboard() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { data: myListings = [] } = useMyListings();
-  const validTabs = ["pipeline", "investor-screening", "subscribers", "pricing", "os-sync", "open-houses", "reports", "invitations", "featured", "pro-verification", "pof-review"];
   const tabParam = searchParams.get("tab") as AdminTab | null;
   const [activeTab, setActiveTab] = useState<AdminTab>(
-    tabParam && validTabs.includes(tabParam) ? tabParam : "pipeline"
+    tabParam && VALID_TABS.includes(tabParam) ? tabParam : "pipeline"
   );
 
   useEffect(() => {
     const t = searchParams.get("tab") as AdminTab | null;
-    if (t && validTabs.includes(t)) {
+    if (t && VALID_TABS.includes(t)) {
       setActiveTab(t);
     }
   }, [searchParams]);
