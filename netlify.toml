@@ -1,6 +1,9 @@
 [build]
   command   = "npm run build"
   publish   = "dist"
+  # Deployments are driven by GitHub Actions CI (deploy job), not Netlify's git integration.
+  # This prevents a failed CI build from racing against a Netlify auto-deploy.
+  ignore    = "exit 0"
 
 [build.environment]
   NODE_VERSION = "20"
