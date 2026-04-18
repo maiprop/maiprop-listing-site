@@ -3,7 +3,7 @@ import { Brain, Loader2, Sparkles, X, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { CATEGORY_LABELS } from "@/lib/professionalServiceCatalog";
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/config";
+import { supabase } from "@/integrations/supabase/client";
 import { SERVICE_URGENCY_COLORS } from "@/lib/statusColors";
 
 const CATEGORY_EMOJI: Record<string, string> = {
@@ -44,19 +44,10 @@ export function AIServiceMatchModal({ onClose, onNavigate }: AIServiceMatchModal
     setLoading(true);
     setResult(null);
     try {
-      const resp = await fetch(
-        `${SUPABASE_URL}/functions/v1/ai-service-match`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-          },
-          body: JSON.stringify({ need }),
-        }
-      );
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.error || "Matching failed");
+      const { data, error } = await supabase.functions.invoke("ai-service-match", {
+        body: { need },
+      });
+      if (error) throw new Error(error.message || "Matching failed");
       setResult(data as MatchResult);
     } catch (e: unknown) {
       toast.error((e instanceof Error ? e.message : null) || "Matching failed");

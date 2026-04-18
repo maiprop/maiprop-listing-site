@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useCallback, forwardRef } from "react";
 import { Sparkles, X, Send, Loader2, Bot, User, ChevronDown, RotateCcw } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/config";
+import { SUPABASE_URL } from "@/lib/config";
+import { supabase } from "@/integrations/supabase/client";
 
 export interface PropertyContext {
   title?: string;
@@ -101,12 +102,23 @@ const AIAssistantWidget = forwardRef<HTMLDivElement, AIAssistantWidgetProps>(fun
     const history = [...messages, userMsg].map(m => ({ role: m.role, content: m.content }));
 
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        setMessages(prev => prev.map(m =>
+          m.id === assistantId
+            ? { ...m, content: "Please sign in to use the AI assistant.", streaming: false }
+            : m
+        ));
+        setIsStreaming(false);
+        return;
+      }
+
       abortRef.current = new AbortController();
       const resp = await fetch(`${SUPABASE_URL}/functions/v1/property-chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({ messages: history, propertyContext }),
         signal: abortRef.current.signal,

@@ -26,6 +26,10 @@ COMMIT_HISTORY*.txt*
 *.sln
 *.sw?
 
+# Bun lockfiles — project uses npm
+bun.lock
+bun.lockb
+
 # Local / separate project (not part of this repo)
 mai-pro-os/
 

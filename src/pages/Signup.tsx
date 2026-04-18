@@ -53,8 +53,8 @@ export default function Signup() {
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.email || !form.password || form.password.length < 6) {
-      toast.error("Please fill in all fields (min 6 chars password)");
+    if (!form.email || !form.password || form.password.length < 8) {
+      toast.error("Please fill in all fields (min 8 chars password)");
       return;
     }
     setLoading(true);
