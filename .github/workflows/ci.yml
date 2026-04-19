@@ -50,7 +50,8 @@ jobs:
           deno-version: 2.7.12
 
       - name: Run Deno tests
-        run: deno test --allow-env supabase/functions/_shared/
+        working-directory: supabase/functions
+        run: deno test --allow-env _shared/
 
       - name: Upload dist artifact
         if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
