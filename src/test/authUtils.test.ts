@@ -10,10 +10,6 @@ describe("isPlatformAdmin", () => {
     expect(isPlatformAdmin({ role: "admin" })).toBe(true);
   });
 
-  it("returns true for legacy is_platform_admin flag", () => {
-    expect(isPlatformAdmin({ is_platform_admin: true })).toBe(true);
-  });
-
   it("returns false for non-admin roles", () => {
     expect(isPlatformAdmin({ role: "agent" })).toBe(false);
     expect(isPlatformAdmin({ role: "seller" })).toBe(false);

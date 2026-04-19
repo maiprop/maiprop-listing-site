@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useMemo } from "react";
 import { Scale, Wrench, HardHat, TrendingUp, Building2, Paintbrush2, Send, Loader2, Sparkles, RotateCcw, Bot, User } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { SUPABASE_URL } from "@/lib/config";
@@ -29,7 +29,7 @@ export default function ProAIToolsWidget() {
   const [isStreaming, setIsStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
-  const messages = messagesByGroup[groupId] ?? [];
+  const messages = useMemo(() => messagesByGroup[groupId] ?? [], [messagesByGroup, groupId]);
 
   const setMessages = useCallback((groupId: GroupId, updater: (prev: Message[]) => Message[]) => {
     setMessagesByGroup((prev) => ({
