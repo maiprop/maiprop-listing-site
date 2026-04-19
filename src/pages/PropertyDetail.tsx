@@ -57,7 +57,7 @@ export default function PropertyDetail() {
   const { isPro } = useSubscription();
 
   const { data: dbListing, isLoading, isError } = useListing(id || "");
-  const trackView = useTrackListingView();
+  const { mutate: trackViewMutate } = useTrackListingView();
   const ownerIsPro = !!(dbListing as ListingWithJoins | null)?.ownerIsPro;
   // Video viewing: free for buyers, Pro required for all other roles
   const isBuyer = getParticipantTypeFromProfile(profile) === "buyer";
@@ -71,11 +71,10 @@ export default function PropertyDetail() {
     limit: 8
   });
 
-  // Track view once per session when the listing data is available
+  // Track view once per session; sessionStorage in useTrackListingView prevents double-counting on refetch
   useEffect(() => {
-    if (id && dbListing) trackView.mutate(id);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, !!dbListing]);
+    if (id && dbListing) trackViewMutate(id);
+  }, [id, dbListing, trackViewMutate]);
 
   // Redirect: if auction opened via /property/:id, send to /auction/:id
   // Redirect: if new build listing, send to /new-build/:id

@@ -1,8 +1,10 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useRef, useEffect } from "react";
 import { Search, Send, Phone, Video, MoreVertical, Paperclip, Loader2, MessageSquare, ArrowLeft, Check, CheckCheck, Link2 } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { useConversations, useMessages, useSendMessage, useMarkMessagesRead } from "@/hooks/useMessages";
+
+type ConvItem = NonNullable<ReturnType<typeof useConversations>["data"]>[number];
+type MsgItem = NonNullable<ReturnType<typeof useMessages>["data"]>[number];
 import { useAuth } from "@/contexts/AuthContext";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -10,7 +12,7 @@ import { MessageContent } from "@/lib/messageContent";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-function getOtherProfile(conv: any, userId: string) {
+function getOtherProfile(conv: ConvItem | undefined, userId: string) {
   if (!conv) return null;
   return conv.profile_a?.user_id === userId ? conv.profile_b : conv.profile_a;
 }
@@ -42,7 +44,7 @@ export default function Messages() {
   const sendMessage = useSendMessage();
   const markAsRead = useMarkMessagesRead(activeConvId);
 
-  const activeConv = conversations.find((c: any) => c.id === activeConvId);
+  const activeConv = conversations.find((c) => c.id === activeConvId);
   const otherProfile = getOtherProfile(activeConv, user?.id || "");
 
   // Open conversation passed from property/detail (e.g. after "Contact")
@@ -67,7 +69,7 @@ export default function Messages() {
   }, [messages]);
 
   // Mark messages as read when viewing; only if there are unread from other person
-  const hasUnreadFromOther = messages.some((m: any) => m.sender_id !== user?.id && m.status === "sent");
+  const hasUnreadFromOther = messages.some((m) => m.sender_id !== user?.id && m.status === "sent");
   useEffect(() => {
     if (activeConvId && hasUnreadFromOther && !markAsRead.isPending) {
       markAsRead.mutate();
@@ -167,7 +169,7 @@ export default function Messages() {
     setMobileView("chat");
   };
 
-  const filteredConvs = conversations.filter((c: any) => {
+  const filteredConvs = conversations.filter((c) => {
     const other = getOtherProfile(c, user?.id || "");
     const name = other?.display_name || "";
     return name.toLowerCase().includes(search.toLowerCase());
@@ -211,7 +213,7 @@ export default function Messages() {
                 </Button>
               </div>
             ) : (
-              filteredConvs.map((conv: any) => {
+              filteredConvs.map((conv) => {
                 const other = getOtherProfile(conv, user?.id || "");
                 const lastMsg = conv.messages?.[conv.messages.length - 1];
                 const isActive = activeConvId === conv.id;
@@ -320,7 +322,7 @@ export default function Messages() {
                     <p className="text-muted-foreground text-sm">No messages yet. Say hello! 👋</p>
                   </div>
                 ) : (
-                  messages.map((msg: any) => {
+                  messages.map((msg: MsgItem) => {
                     const isMe = msg.sender_id === user?.id;
                     const isRead = msg.status === "read";
                           const attachments = msg.message_attachments || [];
@@ -339,7 +341,7 @@ export default function Messages() {
                           {msg.content ? <MessageContent content={msg.content} /> : null}
                           {attachments.length > 0 && (
                             <div className="mt-2 space-y-1">
-                              {attachments.map((a: any) => {
+                              {attachments.map((a) => {
                                 const url = supabase.storage.from("message-attachments").getPublicUrl(a.storage_path).data.publicUrl;
                                 const isImage = /^image\//.test(a.mime_type || "");
                                 return isImage ? (

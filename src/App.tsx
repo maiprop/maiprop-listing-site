@@ -69,11 +69,15 @@ function I18nLoader() {
   return null;
 }
 
+// Routes that render their own embedded AI widget or have no need for the floating one
+const HIDE_WIDGET_PREFIXES = [
+  "/login", "/signup", "/onboarding", "/dashboard", "/messages", "/ai-assistant",
+  "/property/", "/auction/", "/new-build/",
+];
+
 function GlobalAIWidget() {
   const loc = useLocation();
-  const hide = ["/login", "/signup", "/onboarding", "/dashboard", "/messages", "/ai-assistant"].some(p => loc.pathname.startsWith(p));
-  const isPropertyPage = loc.pathname.startsWith("/property/");
-  if (hide || isPropertyPage) return null;
+  if (HIDE_WIDGET_PREFIXES.some(p => loc.pathname.startsWith(p))) return null;
   return <AIAssistantWidget variant="floating" />;
 }
 

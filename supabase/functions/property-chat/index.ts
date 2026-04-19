@@ -48,25 +48,31 @@ Deno.serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
+    // Strip newlines and limit length to prevent prompt injection via property fields
+    const sanitize = (v: unknown, maxLen = 200): string => {
+      if (v === null || v === undefined) return "Unknown";
+      return String(v).replace(/[\r\n]+/g, " ").slice(0, maxLen);
+    };
+
     // Build a rich system prompt from the property context
     const propertyDetails = propertyContext
       ? `
 You are an expert Greek real estate AI assistant helping users understand a specific property.
 
 PROPERTY CONTEXT:
-- Title: ${propertyContext.title ?? "Unknown"}
-- City: ${propertyContext.city ?? "Unknown"}
-- Address: ${propertyContext.address ?? "Not specified"}
+- Title: <title>${sanitize(propertyContext.title)}</title>
+- City: <city>${sanitize(propertyContext.city)}</city>
+- Address: <address>${sanitize(propertyContext.address)}</address>
 - Price: €${propertyContext.price ? Number(propertyContext.price).toLocaleString() : "Unknown"}
 - Price per m²: ${propertyContext.pricePerSqm ? `€${Number(propertyContext.pricePerSqm).toLocaleString()}/m²` : "Unknown"}
-- Type: ${propertyContext.propertyType ?? "Unknown"} (${propertyContext.listingType ?? "Unknown"})
+- Type: ${sanitize(propertyContext.propertyType)} (${sanitize(propertyContext.listingType)})
 - Size: ${propertyContext.sqm ?? "Unknown"} m²
 - Bedrooms: ${propertyContext.bedrooms ?? "Unknown"}
 - Bathrooms: ${propertyContext.bathrooms ?? "Unknown"}
 - Floor: ${propertyContext.floor ?? "Unknown"}
 - Year Built: ${propertyContext.yearBuilt ?? "Unknown"}
-- Energy Class: ${propertyContext.energyClass ?? "Unknown"}
-- Heating: ${propertyContext.heatingSystem ?? "Unknown"}
+- Energy Class: ${sanitize(propertyContext.energyClass)}
+- Heating: ${sanitize(propertyContext.heatingSystem)}
 - Features: ${[
     propertyContext.hasParking && "Parking",
     propertyContext.hasPool && "Pool",
@@ -82,7 +88,7 @@ PROPERTY CONTEXT:
     propertyContext.hasView && "View",
   ].filter(Boolean).join(", ") || "None listed"}
 - Coordinates: ${propertyContext.latitude ? `${propertyContext.latitude}, ${propertyContext.longitude}` : "Not available"}
-- Neighbourhood: ${propertyContext.region ?? propertyContext.city}
+- Neighbourhood: ${sanitize(propertyContext.region ?? propertyContext.city)}
 
 RESPONSE RULES — follow strictly:
 - Be extremely concise. No filler phrases ("Great question!", "Certainly!").

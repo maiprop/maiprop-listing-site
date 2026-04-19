@@ -146,3 +146,8 @@ jobs:
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
           NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+
+      - name: Post-deploy health check
+        run: |
+          sleep 15
+          curl --fail --silent --max-time 30 https://maiprop.co || (echo "Health check failed — production may be down" && exit 1)
