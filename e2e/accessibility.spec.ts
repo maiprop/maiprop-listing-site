@@ -8,6 +8,10 @@ test.describe("Accessibility", () => {
   test("skip-to-content link is focusable and targets #main-content", async ({ page }) => {
     await page.goto("/");
 
+    // Wait for React to mount the Navbar before tabbing — goto waits for
+    // "load" but not for React hydration, so the skip link may not exist yet.
+    await page.waitForSelector('a[href="#main-content"]');
+
     // Tab to the first focusable element (should be the skip link)
     await page.keyboard.press("Tab");
 

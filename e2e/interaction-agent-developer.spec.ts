@@ -22,14 +22,14 @@ import { test, expect, type Page, type Browser, type BrowserContext } from "@pla
 // Credentials
 // ---------------------------------------------------------------------------
 
-const AGENT_EMAIL    = process.env.E2E_AGENT_EMAIL    ?? "agent.pro@maiprop.demo";
-const AGENT_PASSWORD = process.env.E2E_AGENT_PASSWORD ?? "Demo2025!";
+const AGENT_EMAIL    = process.env.E2E_AGENT_EMAIL    ?? "";
+const AGENT_PASSWORD = process.env.E2E_AGENT_PASSWORD ?? "";
 
-const DEV_EMAIL    = process.env.E2E_DEVELOPER_EMAIL    ?? "developer.pro@maiprop.demo";
-const DEV_PASSWORD = process.env.E2E_DEVELOPER_PASSWORD ?? "Demo2025!";
+const DEV_EMAIL    = process.env.E2E_DEVELOPER_EMAIL    ?? "";
+const DEV_PASSWORD = process.env.E2E_DEVELOPER_PASSWORD ?? "";
 
-const BUYER_EMAIL    = process.env.E2E_BUYER_EMAIL    ?? "buyer.pro@maiprop.demo";
-const BUYER_PASSWORD = process.env.E2E_BUYER_PASSWORD ?? "Demo2025!";
+const BUYER_EMAIL    = process.env.E2E_BUYER_EMAIL    ?? "";
+const BUYER_PASSWORD = process.env.E2E_BUYER_PASSWORD ?? "";
 
 const hasAgentCreds    = AGENT_EMAIL !== "" && AGENT_PASSWORD !== "";
 const hasDevCreds      = DEV_EMAIL   !== "" && DEV_PASSWORD   !== "";
