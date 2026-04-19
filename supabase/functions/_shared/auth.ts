@@ -8,7 +8,14 @@
  *   const user = await verifyBearerToken(req, supabaseClient);
  */
 
-import type { SupabaseClient } from "npm:@supabase/supabase-js@2.57.2";
+type SupabaseAuth = {
+  auth: {
+    getUser(token: string): Promise<{
+      data: { user: { id: string; email: string | null } | null };
+      error: { message: string } | null;
+    }>;
+  };
+};
 
 export class AuthError extends Error {
   readonly status: number;
@@ -21,7 +28,7 @@ export class AuthError extends Error {
 
 export async function verifyBearerToken(
   req: Request,
-  supabase: SupabaseClient,
+  supabase: SupabaseAuth,
 ): Promise<{ id: string; email: string }> {
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) throw new AuthError("No authorization header");

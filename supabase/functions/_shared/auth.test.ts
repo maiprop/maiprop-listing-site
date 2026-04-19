@@ -10,10 +10,9 @@
  */
 import { assertEquals, assertStrictEquals, assertRejects } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { AuthError, verifyBearerToken } from "./auth.ts";
-import type { SupabaseClient } from "npm:@supabase/supabase-js@2.57.2";
 
 // Minimal stub — getUser should never be reached in these tests
-const stubSupabase = {} as unknown as SupabaseClient;
+const stubSupabase = {} as Parameters<typeof verifyBearerToken>[1];
 
 // ── AuthError ─────────────────────────────────────────────────────────────────
 

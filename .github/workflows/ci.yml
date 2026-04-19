@@ -51,9 +51,7 @@ jobs:
 
       - name: Run Deno tests
         working-directory: supabase/functions
-        run: |
-          deno cache _shared/auth.test.ts
-          deno test --allow-env _shared/
+        run: deno test --allow-env _shared/
 
       - name: Upload dist artifact
         if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
