@@ -26,7 +26,7 @@ export async function verifyBearerToken(
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) throw new AuthError("No authorization header");
 
-  const token = authHeader.replace("Bearer ", "").trim();
+  const token = authHeader.replace(/^Bearer\s*/i, "").trim();
   if (!token) throw new AuthError("Empty bearer token");
 
   const { data, error } = await supabase.auth.getUser(token);
