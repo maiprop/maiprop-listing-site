@@ -186,6 +186,7 @@ vi.mock("@/hooks/useConsultations", () => ({
 vi.mock("@/hooks/useEligibleForQuickSale", () => ({ useEligibleForQuickSale: vi.fn().mockReturnValue({ eligible: false }) }));
 vi.mock("@/hooks/usePlanLimits", () => ({
   startOfCurrentMonth: vi.fn().mockReturnValue(new Date()),
+  getPlanLimits: vi.fn().mockReturnValue({ listings: Infinity, images: Infinity, aiCredits: Infinity }),
   usePlanLimits: vi.fn().mockReturnValue({ limits: {}, usage: {}, isLoading: false }),
 }));
 vi.mock("@/hooks/useProfessionalReviews", () => ({
