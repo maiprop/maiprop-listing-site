@@ -8,8 +8,6 @@
  * verify_jwt = false — callable without auth (used on public property pages).
  */
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-
 const ALLOWED_ORIGINS = [
   "https://maiprop.co", "https://www.maiprop.co", "https://app.maiprop.co",
   "http://localhost:8080", "http://localhost:8081", "http://localhost:8082",
@@ -92,7 +90,7 @@ function _generateMockSalesDefault(): SaleRecord[] {
   return generateMockSales(37.9838, 23.7275, 15);
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   const hdrs = corsHeaders(req);
 
   if (req.method === "OPTIONS") return new Response("ok", { headers: hdrs });

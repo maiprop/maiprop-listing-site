@@ -16,10 +16,8 @@ describe("isPlatformAdmin", () => {
     expect(isPlatformAdmin({ role: "buyer" })).toBe(false);
   });
 
-  it("admin role takes precedence over missing is_platform_admin", () => {
-    expect(isPlatformAdmin({ role: "admin", is_platform_admin: false })).toBe(true);
-  });
 });
+
 
 describe("isSellSideRole", () => {
   it("returns false for null", () => {

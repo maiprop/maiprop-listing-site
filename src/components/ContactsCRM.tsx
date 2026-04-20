@@ -19,6 +19,7 @@ import {
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { LEAD_STAGE_COLORS } from "@/lib/statusColors";
 
 const STAGE_LABELS: Record<string, string> = {
   new: "New",
@@ -28,16 +29,6 @@ const STAGE_LABELS: Record<string, string> = {
   negotiation: "Negotiation",
   won: "Won",
   lost: "Lost",
-};
-
-const STAGE_COLORS: Record<string, string> = {
-  new: "bg-brand-gold/15 text-brand-gold border-brand-gold/20",
-  contacted: "bg-blue-500/15 text-blue-400 border-blue-500/20",
-  qualified: "bg-primary/15 text-primary border-primary/20",
-  proposal: "bg-accent/15 text-accent border-accent/20",
-  negotiation: "bg-amber-500/15 text-amber-400 border-amber-500/20",
-  won: "bg-brand-emerald/15 text-brand-emerald border-brand-emerald/20",
-  lost: "bg-muted text-muted-foreground border-border",
 };
 
 export default function ContactsCRM() {
@@ -277,7 +268,7 @@ export default function ContactsCRM() {
               className="w-64 shrink-0 glass-card rounded-xl p-3 border border-border"
             >
               <div className="flex items-center justify-between mb-3">
-                <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full border", STAGE_COLORS[stage])}>
+                <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full border", LEAD_STAGE_COLORS[stage])}>
                   {STAGE_LABELS[stage]}
                 </span>
                 <span className="text-xs text-muted-foreground">{(contactsByStage[stage] || []).length}</span>
@@ -324,7 +315,7 @@ export default function ContactsCRM() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="font-semibold text-sm">{c.name}</p>
-                  <span className={cn("text-[10px] px-2 py-0.5 rounded-full border", STAGE_COLORS[c.deal_stage || "new"])}>
+                  <span className={cn("text-[10px] px-2 py-0.5 rounded-full border", LEAD_STAGE_COLORS[c.deal_stage || "new"])}>
                     {STAGE_LABELS[c.deal_stage || "new"]}
                   </span>
                   {c.follow_up_at && (

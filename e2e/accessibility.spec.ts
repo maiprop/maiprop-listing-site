@@ -1,8 +1,9 @@
 /**
- * Accessibility checks — keyboard navigation, skip link, focus management.
- * Uses built-in Playwright assertions; no axe dependency required.
+ * Accessibility checks — keyboard navigation, skip link, focus management,
+ * plus automated axe-core scans on key public pages.
  */
 import { test, expect } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
 
 test.describe("Accessibility", () => {
   test("skip-to-content link is focusable and targets #main-content", async ({ page }) => {
@@ -57,5 +58,42 @@ test.describe("Accessibility", () => {
     }
     // Allow up to 2 violations (e.g., dynamically loaded lazy images)
     expect(violations.length).toBeLessThanOrEqual(2);
+  });
+});
+
+test.describe("Accessibility — automated axe-core scans", () => {
+  // WCAG 2 AA is the practical target. We treat "serious" + "critical" as blocking;
+  // "minor" / "moderate" are reported but do not fail CI to allow incremental progress.
+  const BLOCKING_IMPACTS = ["serious", "critical"] as const;
+
+  async function scan(page: import("@playwright/test").Page, url: string) {
+    await page.goto(url);
+    await page.waitForLoadState("networkidle");
+    const results = await new AxeBuilder({ page })
+      .withTags(["wcag2a", "wcag2aa"])
+      .analyze();
+
+    const blocking = results.violations.filter(
+      (v) => v.impact && (BLOCKING_IMPACTS as readonly string[]).includes(v.impact),
+    );
+    if (blocking.length > 0) {
+      console.error(
+        `axe violations on ${url}:`,
+        blocking.map((v) => `${v.id} (${v.impact}) — ${v.nodes.length} node(s)`),
+      );
+    }
+    expect(blocking, `axe blocking violations on ${url}`).toEqual([]);
+  }
+
+  test("home page has no serious a11y violations", async ({ page }) => {
+    await scan(page, "/");
+  });
+
+  test("listings page has no serious a11y violations", async ({ page }) => {
+    await scan(page, "/listings");
+  });
+
+  test("login page has no serious a11y violations", async ({ page }) => {
+    await scan(page, "/login");
   });
 });

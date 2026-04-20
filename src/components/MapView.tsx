@@ -189,7 +189,6 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
     const clusters = map.queryRenderedFeatures(event.point, { layers: ["clusters"] });
     if (clusters.length) {
       const clusterId = clusters[0].properties?.cluster_id;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (map.getSource("listings") as { getClusterExpansionZoom: (id: number, callback: (err: unknown, zoom: number) => void) => void }).getClusterExpansionZoom(clusterId, (_err: unknown, zoom: number) => {
         if (_err) return;
         map.easeTo({ center: (clusters[0].geometry as unknown as { coordinates: [number, number] }).coordinates, zoom: zoom + 0.5, duration: 450 });

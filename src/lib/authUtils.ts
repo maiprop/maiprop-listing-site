@@ -1,3 +1,10 @@
+/**
+ * Auth/role helpers.
+ *
+ * Source of truth: `role` column in the `profiles` DB table.
+ * Do NOT use email-based admin checks — role is authoritative and server-enforced.
+ */
+
 export function isPlatformAdmin(
   profile: { role?: string } | null
 ): boolean {

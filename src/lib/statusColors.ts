@@ -72,6 +72,12 @@ export const PROFESSIONAL_DISPLAY_CATEGORY_COLORS: Record<string, string> = {
   "Property Valuer": "bg-cyan-500/10 text-cyan-500 border-cyan-500/20",
 };
 
+/** Energy performance certificate class — hex colour per EU scale */
+export const ENERGY_CLASS_COLORS: Record<string, string> = {
+  "A+": "#1a9e3f", A: "#4db848", "B+": "#8dc63f", B: "#c5d92d",
+  C: "#f7ec0f", D: "#f6a817", E: "#f26522", F: "#ec1c24", G: "#b31b1b",
+};
+
 /** Professional category badge — slug keyed (ProVerificationComponents) */
 export const PROFESSIONAL_CATEGORY_COLORS: Record<string, string> = {
   architect: "bg-orange-500/10 text-orange-500 border-orange-500/20",

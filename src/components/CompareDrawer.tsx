@@ -4,12 +4,7 @@ import { X, ArrowRight, Check, Minus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { CompareAIReports } from "@/components/CompareAIReports";
-
-// Energy class colour map
-const energyColour: Record<string, string> = {
-  "A+": "#1a9e3f", A: "#4db848", "B+": "#8dc63f", B: "#c5d92d",
-  C: "#f7ec0f", D: "#f6a817", E: "#f26522", F: "#ec1c24", G: "#b31b1b",
-};
+import { ENERGY_CLASS_COLORS } from "@/lib/statusColors";
 
 type Listing = Record<string, any>;
 
@@ -48,7 +43,7 @@ function CellValue({ row, listing }: { row: typeof ROWS[0]; listing: Listing }) 
     return (
       <span
         className="inline-block px-2 py-0.5 rounded text-xs font-bold text-white"
-        style={{ background: energyColour[val] || "#888" }}
+        style={{ background: ENERGY_CLASS_COLORS[val] || "#888" }}
       >
         {val}
       </span>

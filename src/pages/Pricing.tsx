@@ -30,6 +30,8 @@ const AUDIENCE_TABS: { id: AudienceId; label: string; mobileLabel: string; icon:
   { id: "agent",         label: "Agent",                mobileLabel: "Agent",  icon: UserCheck },
   { id: "developer",     label: "Developer",            mobileLabel: "Dev",    icon: Layers },
   { id: "professional",  label: "Professional",         mobileLabel: "Pro",    icon: Briefcase },
+  { id: "investor",      label: "Investor",             mobileLabel: "Invest", icon: Wallet },
+  { id: "institutional", label: "Institutional",        mobileLabel: "Instit", icon: Building2 },
 ];
 
 // ── Plan feature type ──────────────────────────────────────────────────────────
@@ -113,6 +115,29 @@ const PROFESSIONAL_PRO: PlanFeature[] = [
   { label: "CRM & client management",         icon: Users,   free: false,       paid: true },
 ];
 
+const INVESTOR_FEATURES: PlanFeature[] = [
+  { label: "Full deal-flow listings (off-market & distressed)", icon: Layers, free: false, paid: true },
+  { label: "AI property matching & criteria alerts",            icon: Sparkles, free: false, paid: true },
+  { label: "Market analytics & pricing intelligence",          icon: BarChart2, free: false, paid: true },
+  { label: "Portfolio tracking dashboard",                     icon: FolderKanban, free: false, paid: true },
+  { label: "Full auction database (600+ listings)",            icon: Gavel, free: "60 max", paid: "Unlimited" },
+  { label: "AI Valuation & Neighbourhood Reports",             icon: FileText, free: false, paid: "5/month included" },
+  { label: "Direct vendor & agent contact",                    icon: MessageSquare, free: false, paid: true },
+  { label: "Due diligence pack download",                      icon: Shield, free: false, paid: true },
+  { label: "Firesale & distressed asset access",               icon: Bell, free: false, paid: true },
+];
+
+const INSTITUTIONAL_FEATURES: PlanFeature[] = [
+  { label: "Everything in Investor Plan",                      icon: Check, free: false, paid: true },
+  { label: "Bulk deal pipeline & pipeline management",         icon: Database, free: false, paid: true },
+  { label: "White-label API access (AVM + listings)",         icon: Globe, free: false, paid: true },
+  { label: "Dedicated account manager",                        icon: UserCheck, free: false, paid: true },
+  { label: "Custom data exports (CSV, JSON)",                  icon: FileText, free: false, paid: true },
+  { label: "Multi-user / team seats",                          icon: Users, free: false, paid: true },
+  { label: "Priority deal sourcing & exclusives",              icon: Star, free: false, paid: true },
+  { label: "Bespoke market intelligence reports",              icon: BarChart2, free: false, paid: true },
+];
+
 // ── Pricing plan definitions ───────────────────────────────────────────────────
 type PlanDef = {
   freeLabel: string; freePrice: string; freeDesc: string; freeCTA: string; freeHref: string;
@@ -123,6 +148,7 @@ type PlanDef = {
   freeList: string[];
   accent: string; accentBg: string; accentBorder: string;
   proOnly?: boolean;
+  inviteOnly?: boolean;
 };
 
 const PLANS: Record<AudienceId, PlanDef> = {
@@ -155,6 +181,24 @@ const PLANS: Record<AudienceId, PlanDef> = {
     freeList: PROFESSIONAL_FREE_LIST, features: PROFESSIONAL_PRO,
     accent: "text-rose-400", accentBg: "bg-rose-500/10", accentBorder: "border-rose-500/40",
   },
+  investor: {
+    freeLabel: "—", freePrice: "—", freeDesc: "Invitation-only", freeCTA: "—", freeHref: "#",
+    paidLabel: "Investor Plan", monthlyPrice: 490, annualPrice: 4900,
+    paidDesc: "Deal-flow access, AI matching, market analytics & direct vendor contact",
+    paidCTA: "Apply for Access", paidHref: "/investor-dashboard",
+    freeList: [], features: INVESTOR_FEATURES,
+    accent: "text-emerald-400", accentBg: "bg-emerald-500/10", accentBorder: "border-emerald-500/40",
+    proOnly: true, inviteOnly: true,
+  },
+  institutional: {
+    freeLabel: "—", freePrice: "—", freeDesc: "Invitation-only", freeCTA: "—", freeHref: "#",
+    paidLabel: "Institutional Plan", monthlyPrice: 1490, annualPrice: 14900,
+    paidDesc: "Full platform access, bulk pipeline, API, dedicated manager & multi-user seats",
+    paidCTA: "Talk to Sales", paidHref: "/contact",
+    freeList: [], features: INSTITUTIONAL_FEATURES,
+    accent: "text-sky-400", accentBg: "bg-sky-500/10", accentBorder: "border-sky-500/40",
+    proOnly: true, inviteOnly: true,
+  },
 };
 
 // ── Main component ─────────────────────────────────────────────────────────────
@@ -179,14 +223,20 @@ export default function Pricing() {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
 
   const PLAN_KEYS: Record<AudienceId, string> = {
-    participant:  ROLE_PLAN_MAP.participant.planKey,
-    agent:        ROLE_PLAN_MAP.agent.planKey,
-    developer:    ROLE_PLAN_MAP.developer.planKey,
-    professional: ROLE_PLAN_MAP.professional.planKey,
+    participant:   ROLE_PLAN_MAP.participant.planKey,
+    agent:         ROLE_PLAN_MAP.agent.planKey,
+    developer:     ROLE_PLAN_MAP.developer.planKey,
+    professional:  ROLE_PLAN_MAP.professional.planKey,
+    investor:      ROLE_PLAN_MAP.investor.planKey,
+    institutional: ROLE_PLAN_MAP.institutional.planKey,
   };
 
   const handleCheckout = async () => {
     if (!user) { navigate("/signup"); return; }
+    if (PLANS[activeTab].inviteOnly) {
+      navigate(activeTab === "institutional" ? "/contact" : "/investor-dashboard");
+      return;
+    }
     setCheckoutLoading(true);
     try {
       const planKey = PLAN_KEYS[activeTab];
@@ -401,16 +451,28 @@ export default function Pricing() {
               <div className={cn("px-6 sm:px-8 py-6 border-b border-border", plan.accentBg)}>
                 <p className={cn("text-xs font-bold uppercase tracking-widest mb-2", plan.accent)}>{plan.paidLabel}</p>
                 <div className="flex items-baseline gap-1 mb-1">
-                  <span className="font-display text-4xl font-black text-foreground">€{displayMonthly}</span>
-                  <span className="text-muted-foreground text-sm">/ month</span>
+                  {plan.inviteOnly ? (
+                    <>
+                      <span className="font-display text-3xl font-black text-foreground">from €{basePlan.monthlyPrice}</span>
+                      <span className="text-muted-foreground text-sm">/ month</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="font-display text-4xl font-black text-foreground">€{displayMonthly}</span>
+                      <span className="text-muted-foreground text-sm">/ month</span>
+                    </>
+                  )}
                 </div>
-                {billingCycle === "annual" ? (
+                {!plan.inviteOnly && (billingCycle === "annual" ? (
                   <p className="text-xs text-emerald-600 font-semibold">€{displayTotal}/year · saves €{annualSaving} vs monthly</p>
                 ) : (
                   <p className="text-xs text-muted-foreground">
                     or <button onClick={() => setBillingCycle("annual")} className="underline hover:text-foreground">€{Math.round(basePlan.annualPrice / 12)}/mo billed annually</button>
                     {" "}(save €{annualSaving}/yr)
                   </p>
+                ))}
+                {plan.inviteOnly && (
+                  <p className="text-xs text-muted-foreground">Pricing by arrangement · invitation-based access</p>
                 )}
                 <p className="text-xs text-muted-foreground mt-1">{plan.paidDesc}</p>
               </div>
@@ -446,7 +508,15 @@ export default function Pricing() {
               </div>
 
               <div className="px-6 sm:px-8 pb-6 sm:pb-8 space-y-2">
-                {hasAudiencePro ? (
+                {hasAudiencePro && plan.inviteOnly ? (
+                  <Button
+                    variant="outline"
+                    className="w-full h-11 border-emerald-500/40 text-emerald-400 gap-2"
+                    onClick={() => navigate("/investor-dashboard")}
+                  >
+                    <ArrowRight className="w-4 h-4" /> Go to Investor Dashboard
+                  </Button>
+                ) : hasAudiencePro ? (
                   <Button
                     variant="outline"
                     className="w-full h-11 border-emerald-500/40 text-emerald-400"
@@ -467,9 +537,15 @@ export default function Pricing() {
                     {!checkoutLoading && <ArrowRight className="w-4 h-4" />}
                   </Button>
                 )}
-                <p className="text-[11px] text-muted-foreground text-center">
-                  Cancel anytime · No setup fees
-                </p>
+                {plan.inviteOnly ? (
+                  <p className="text-[11px] text-muted-foreground text-center">
+                    Invitation-based access · Pricing by arrangement
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground text-center">
+                    Cancel anytime · No setup fees
+                  </p>
+                )}
               </div>
             </div>
           </div>

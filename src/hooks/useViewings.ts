@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
+import type { TablesUpdate } from "@/integrations/supabase/types";
 
 /**
  * Returns viewings for the current user.
@@ -82,11 +83,11 @@ export function useUpdateViewing() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   return useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: { status?: string; video_link?: string | null } }) => {
+    mutationFn: async ({ id, updates }: { id: string; updates: TablesUpdate<"viewings"> }) => {
       if (!user) throw new Error("Must be logged in");
       const { error } = await supabase
         .from("viewings")
-        .update(updates as Record<string, unknown>)
+        .update(updates)
         .eq("id", id)
         .or(`owner_id.eq.${user.id},requester_id.eq.${user.id}`);
       if (error) throw error;

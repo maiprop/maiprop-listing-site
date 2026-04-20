@@ -45,6 +45,10 @@ playwright-report/
 test-results/
 .lighthouseci/
 
+# Generated at build time by `npm run api-docs:copy` (prebuild hook)
+# Source of truth is docs/api/edge-functions.openapi.yaml
+public/docs/
+
 # Temporary audit / schema snapshots
 schema-openapi.json
 type-errors.txt

@@ -188,17 +188,24 @@ export function ProfessionalVerificationPanel() {
     setLoading(true);
     try {
        
-      const { data, error } = await supabase.from("profiles")
-        .select("id, full_name, verification_status, created_at")
-        .eq("verification_status", "pending")
+      const { data, error } = await supabase
+        .from("professionals")
+        .select("id, user_id, category, license_number, verified, created_at")
+        .eq("verified", false)
         .limit(50);
       if (error) throw error;
       if (data && data.length > 0) {
-        const mapped: Professional[] = data.map((p: { id: string; full_name: string | null; verification_status: string | null; created_at: string | null }) => ({
+        const userIds = data.map((p) => p.user_id).filter(Boolean);
+        const { data: pubProfiles } = await supabase
+          .from("profiles_public")
+          .select("user_id, display_name")
+          .in("user_id", userIds);
+        const nameMap = new Map((pubProfiles ?? []).map((p) => [p.user_id, p.display_name]));
+        const mapped: Professional[] = data.map((p) => ({
           id: p.id,
-          name: p.full_name ?? "Unknown",
-          category: "Real Estate Agent",
-          license: "â€”",
+          name: nameMap.get(p.user_id) ?? "Unknown",
+          category: p.category ?? "Professional",
+          license: p.license_number ?? "—",
           submitted: p.created_at?.split("T")[0] ?? "2026-01-01",
           document_url: "#",
           status: "pending" as VerifStatus,

@@ -10,10 +10,10 @@ Deep dive of **maiprop/maiprop-listing-site** (full platform, cloned as `maiprop
 
 | Role | Description | Access |
 |------|-------------|--------|
-| `individual` | Buyer / consumer | Default; browse, limited features |
+| `buyer` | Buyer / consumer | Default; browse, limited features |
 | `agent` | Real estate agent | Create listings, CRM, analytics |
 | `professional` | Architect, lawyer, valuer, etc. | Service catalog, booking, Pro tools |
-| `seller_landlord` | Private seller/landlord | Create listings, Seller Pro |
+| `seller` | Private seller/landlord | Create listings, Seller Pro |
 | `investor` | Investor | InvestorDashboard, Quick Sale (invitation-only) |
 | `institutional` | Fund / institutional | Same as investor; can also create listings |
 | `developer` | Developer | Projects, listings, Agent-like |
@@ -21,8 +21,8 @@ Deep dive of **maiprop/maiprop-listing-site** (full platform, cloned as `maiprop
 
 ### Auth helpers (`src/lib/authUtils.ts`)
 
-- **`isPlatformAdmin(profile)`** — `role === 'admin'` OR `is_platform_admin === true`
-- **`isSellSideRole(profile)`** — `agent`, `seller_landlord`, `developer`, `institutional` (create listings)
+- **`isPlatformAdmin(profile)`** — `role === 'admin'`
+- **`isSellSideRole(profile)`** — `agent`, `seller`, `developer`, `institutional` (create listings)
 - **`isBuySideRole(profile)`** — `investor`, `institutional` (investor dashboard)
 
 ---
@@ -33,8 +33,8 @@ Defined in `src/lib/participantConfig.ts`. Used for Pricing, Onboarding, Dashboa
 
 | ParticipantId | Label | DB Role(s) |
 |---------------|-------|------------|
-| `buyer` | Buyer / Renter | `individual`, default |
-| `seller` | Seller / Landlord | `seller_landlord` |
+| `buyer` | Buyer / Renter | `buyer`, default |
+| `seller` | Seller / Landlord | `seller` |
 | `investor` | Investor | `investor` |
 | `agent` | Agent | `admin`, `agent` |
 | `institutional` | Institutional / Fund | `institutional` |

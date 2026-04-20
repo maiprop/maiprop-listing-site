@@ -35,6 +35,9 @@ jobs:
       - name: Type-check & build
         run: npm run build
 
+      - name: Check bundle size
+        run: npm run check:bundle-size
+
       - name: Lint
         run: npm run lint
 
@@ -103,6 +106,68 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 7
+
+  migrations-validate:
+    name: Validate Supabase migrations
+    runs-on: ubuntu-latest
+    needs: quality
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: maiprop_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install psql client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Prepare extensions
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d maiprop_test -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE EXTENSION IF NOT EXISTS pgcrypto;
+          CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+          CREATE SCHEMA IF NOT EXISTS auth;
+          -- Stub auth.users referenced by FKs in many migrations
+          CREATE TABLE IF NOT EXISTS auth.users (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            email text UNIQUE
+          );
+          -- Stub auth.uid() used by RLS policies
+          CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT NULL::uuid $$;
+          CREATE OR REPLACE FUNCTION auth.role() RETURNS text LANGUAGE sql STABLE AS $$ SELECT 'anon'::text $$;
+          SQL
+
+      - name: Apply migrations in order
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          failed=0
+          for f in $(ls supabase/migrations/*.sql | sort); do
+            echo "→ applying $f"
+            if ! psql -h localhost -U postgres -d maiprop_test -v ON_ERROR_STOP=1 -f "$f"; then
+              echo "::error file=$f::Migration failed"
+              failed=$((failed + 1))
+            fi
+          done
+          if [ "$failed" -ne 0 ]; then
+            echo "::error::$failed migration(s) failed"
+            exit 1
+          fi
 
   lighthouse:
     name: Lighthouse CI

@@ -15,6 +15,9 @@ import { useAddProjectMedia, type ProjectMediaType } from "@/hooks/useProjectMed
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
+import { useSubscription } from "@/hooks/useSubscription";
+import { getPlanLimits } from "@/hooks/usePlanLimits";
+import { useMyListings } from "@/hooks/useListings";
 
 const INPUT_CLS = "w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors";
 const LABEL_CLS = "text-xs text-muted-foreground block mb-1.5 font-medium";
@@ -52,6 +55,9 @@ export default function CreateNewBuildingListing() {
 
   const participantType = getParticipantTypeFromProfile(profile);
   const canCreateListing = participantType === "developer" || participantType === "agent";
+  const { isPro } = useSubscription();
+  const { data: myListings = [] } = useMyListings();
+  const listingLimit = getPlanLimits(participantType, isPro ? "pro" : "free").listings;
 
   const { step, stepIndex, isFirst, isLast, goNext, goPrev, goTo } = useFormWizard({ steps: WIZARD_STEPS });
   const [submitting, setSubmitting] = useState(false);
@@ -149,6 +155,34 @@ export default function CreateNewBuildingListing() {
     const { data } = supabase.storage.from("project-media").getPublicUrl(path);
     return data.publicUrl;
   }, [user]);
+
+  // Guard: listing count limit reached
+  if (user && profile && canCreateListing && listingLimit !== null && myListings.length >= listingLimit) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center px-4">
+        <div className="max-w-md w-full text-center space-y-5">
+          <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
+            <Building2 className="w-8 h-8 text-primary" />
+          </div>
+          <div>
+            <h1 className="font-display text-2xl font-bold mb-2">Listing Limit Reached</h1>
+            <p className="text-muted-foreground text-sm">
+              You have reached the {listingLimit}-listing limit on your current plan ({isPro ? "Pro" : "Free"}).
+              Upgrade to add more listings.
+            </p>
+          </div>
+          <div className="flex gap-3 justify-center">
+            <Button asChild>
+              <Link to="/pricing">Upgrade Plan</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link to="/dashboard">Back to Dashboard</Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Guard: redirect users who can't create building listings (must be after all hooks)
   if (user && profile && !canCreateListing) {

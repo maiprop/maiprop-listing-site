@@ -1,6 +1,11 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
+import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
+
+const serviceMatchLimiter = makeRateLimiter({ maxRequests: 20, windowMs: 60_000 });
 
 async function requireAuth(req: Request): Promise<{ error: Response | null; userId: string | null }> {
+  const corsHeaders = getCorsHeaders(req);
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
     return {
@@ -54,6 +59,8 @@ Deno.serve(async (req) => {
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
 
+  const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
+  if (serviceMatchLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
 
   const { error: authErr } = await requireAuth(req);
   if (authErr) return authErr;

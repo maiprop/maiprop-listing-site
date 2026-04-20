@@ -21,13 +21,14 @@ if (!_url || !_anonKey) {
 // Format-level validation — catches placeholder stubs before they reach the app
 const URL_RE = /^https?:\/\/[a-zA-Z0-9_-]+\.(supabase\.co|supabase\.in)(\/.*)?$/;
 const JWT_RE = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
+const PUBLISHABLE_RE = /^sb_publishable_[A-Za-z0-9_-]+$/;
 if (!URL_RE.test(_url)) {
   const msg = `VITE_SUPABASE_URL looks malformed: "${_url}". Expected https://<ref>.supabase.co`;
   if (import.meta.env.DEV) console.warn("[maiProp]", msg);
   else throw new Error(msg);
 }
-if (!JWT_RE.test(_anonKey)) {
-  const msg = "VITE_SUPABASE_PUBLISHABLE_KEY does not look like a JWT. Check your .env file.";
+if (!JWT_RE.test(_anonKey) && !PUBLISHABLE_RE.test(_anonKey)) {
+  const msg = "VITE_SUPABASE_PUBLISHABLE_KEY does not look like a JWT or sb_publishable_ key. Check your .env file.";
   if (import.meta.env.DEV) console.warn("[maiProp]", msg);
   else throw new Error(msg);
 }
@@ -37,6 +38,24 @@ export const SUPABASE_ANON_KEY = _anonKey;
 
 // Mapbox optional — app works without it; maps disabled until set
 export const MAPBOX_TOKEN = _mapbox ?? "";
+if (!_mapbox && !import.meta.env.SSR) {
+  // Warn once so developers notice silently broken map features.
+  // Production builds emit this too (once) so ops can spot a misconfigured env.
+  console.warn(
+    "[maiProp] VITE_MAPBOX_TOKEN is not set. Map components (MapView, " +
+      "PropertyMiniMap, auction map overlays) will render a placeholder. " +
+      "Set the token in your .env or Netlify environment to enable maps."
+  );
+}
+
+// Google Street View / Maps optional — auction cards and POI lookups degrade
+// gracefully when missing. Warn once in the console so ops notice.
+if (!import.meta.env.VITE_GOOGLE_MAPS_API_KEY && import.meta.env.PROD) {
+  console.info(
+    "[maiProp] VITE_GOOGLE_MAPS_API_KEY not set — auction cards will use " +
+      "Mapbox/Unsplash fallbacks and Places autocomplete is disabled."
+  );
+}
 
 // Google Maps API key — use only for Maps JavaScript (e.g. Places autocomplete).
 // Restrict to HTTP referrers in Google Cloud Console. Do NOT use for Street View

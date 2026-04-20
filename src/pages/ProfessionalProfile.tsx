@@ -438,13 +438,6 @@ export default function ProfessionalProfile() {
                   )}
                 </div>
 
-                {/* Response time */}
-                {pro.response_time_hours != null && (
-                  <div className="mt-4 pt-4 border-t border-border flex items-center gap-2 text-xs text-muted-foreground">
-                    <Clock className="w-3.5 h-3.5 text-brand-emerald shrink-0" />
-                    Usually responds within {pro.response_time_hours} {pro.response_time_hours === 1 ? "hour" : "hours"}
-                  </div>
-                )}
               </div>
 
               {/* Credentials */}

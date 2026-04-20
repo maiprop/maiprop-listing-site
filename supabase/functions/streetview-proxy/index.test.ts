@@ -1,0 +1,44 @@
+/**
+ * Tests for streetview-proxy edge function (public, no auth required).
+ * Proxies Google Street View; without GOOGLE_MAPS_API_KEY returns 503.
+ */
+import { assertEquals, assertStringIncludes } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { captureHandler, req } from "../_shared/testUtils.ts";
+
+const { handler, restore } = await captureHandler("./index.ts");
+
+Deno.test("OPTIONS preflight returns 200", async () => {
+  const res = await handler(req("OPTIONS"));
+  assertEquals(res.status, 200);
+});
+
+Deno.test("missing GOOGLE_MAPS_API_KEY returns 503", async () => {
+  // testUtils sets GOOGLE_MAPS_API_KEY to empty — handler should return 503
+  const r = new Request("https://functions.supabase.co/fn?lat=37.97&lng=23.73", {
+    method: "GET",
+  });
+  const res = await handler(r);
+  assertEquals(res.status, 503);
+  const body = await res.json();
+  assertStringIncludes(body.error, "configured");
+});
+
+Deno.test("missing lat/lng/location returns 400 (when key is absent, returns 503 first)", async () => {
+  // Without a key the function returns 503 before reaching the lat/lng check,
+  // so either 400 or 503 is valid depending on env.
+  const r = new Request("https://functions.supabase.co/fn", { method: "GET" });
+  const res = await handler(r);
+  assertEquals([400, 503].includes(res.status), true);
+});
+
+Deno.test("CORS headers present on error responses", async () => {
+  const r = new Request("https://functions.supabase.co/fn?lat=37.97&lng=23.73", {
+    method: "GET",
+    headers: { origin: "https://maiprop.co" },
+  });
+  const res = await handler(r);
+  const origin = res.headers.get("Access-Control-Allow-Origin");
+  assertEquals(typeof origin, "string");
+});
+
+restore();

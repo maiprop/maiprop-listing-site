@@ -29,19 +29,17 @@ export default function Firesale() {
   useEffect(() => {
     if (!user || eligible) return;
      
-    supabase.from("invitation_requests")
+    void supabase.from("invitation_requests")
       .select("status")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(1)
-      .then(({ data }: { data: Array<{ status: string }> | null }) => {
-        const latest = data?.[0];
+      .then(({ data, error }) => {
+        if (error) { logger.warn("[Firesale] invitation status fetch failed:", error.message); return; }
+        const latest = (data as Array<{ status: string }> | null)?.[0];
         if (latest?.status === "pending") setInvitationStatus("pending");
         else if (latest?.status === "rejected") setInvitationStatus("rejected");
-      })
-      .catch((err: unknown) =>
-        logger.warn("[Firesale] invitation status fetch failed:", err instanceof Error ? err.message : err),
-      );
+      });
   }, [user, eligible]);
 
   return (

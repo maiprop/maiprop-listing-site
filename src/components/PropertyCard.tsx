@@ -13,6 +13,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { APP_ORIGIN } from "@/lib/config";
+import { formatPrice } from "@/lib/format";
 
 export interface Property {
   id: string;
@@ -136,11 +137,6 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
     else toast.success(t("propertyCard.reportSubmitted"));
   };
 
-  const formatPrice = (price: number, type: string) => {
-    if (type === "rent") return `€${price.toLocaleString()}/mo`;
-    return `€${price.toLocaleString()}`;
-  };
-
   const getBadge = () => {
   if (property.listingType === "auction") return { label: t("propertyCard.badges.auction"), cls: "badge-auction" };
     if (property.listingType === "open_house") return { label: t("propertyCard.badges.openHouse"), cls: "badge-open-house" };
@@ -194,7 +190,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
             {property.bedrooms != null && <span className="flex items-center gap-0.5"><Bed className="w-3 h-3" />{property.bedrooms}</span>}
             <span className="flex items-center gap-0.5"><Square className="w-3 h-3" />{property.sqm}m²</span>
           </div>
-          <div className="font-display font-bold text-sm text-primary mt-1">{formatPrice(property.price, property.listingType)}</div>
+          <div className="font-display font-bold text-sm text-primary mt-1">{property.listingType === "rent" ? `${formatPrice(property.price)}/mo` : formatPrice(property.price)}</div>
         </div>
       </Link>
     );
@@ -286,7 +282,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
               {/* Amber-highlighted price */}
               <div className="inline-flex items-baseline gap-1.5 bg-primary/90 backdrop-blur-sm rounded-xl px-3 py-1.5 sm:px-3 sm:py-1.5 shadow-md">
                 <span className="text-lg sm:text-xl font-display font-bold text-primary-foreground leading-none">
-                  {formatPrice(property.price, property.listingType)}
+                  {property.listingType === "rent" ? `${formatPrice(property.price)}/mo` : formatPrice(property.price)}
                 </span>
               </div>
               {!!property.pricePerSqm && (

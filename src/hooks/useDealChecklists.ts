@@ -10,7 +10,7 @@ export function useDealChecklists() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("deal_checklists")
-        .select("id, user_id, entity_type, entity_id, items, created_at, updated_at")
+        .select("id, user_id, entity_type, entity_id, items, title, status, created_at, updated_at")
         .eq("user_id", user!.id)
         .order("updated_at", { ascending: false });
       if (error) throw error;
@@ -28,7 +28,7 @@ export function useDealChecklist(entityType: string, entityId: string | undefine
       if (!entityId) return null;
       const { data, error } = await supabase
         .from("deal_checklists")
-        .select("id, user_id, entity_type, entity_id, items, created_at, updated_at")
+        .select("id, user_id, entity_type, entity_id, items, title, status, created_at, updated_at")
         .eq("user_id", user!.id)
         .eq("entity_type", entityType)
         .eq("entity_id", entityId)

@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import type { TablesUpdate } from "@/integrations/supabase/types";
 
 export function useProjects(ownerId?: string) {
   const { user } = useAuth();
@@ -82,7 +83,7 @@ export function useUpdateProject() {
   const qc = useQueryClient();
   const { user } = useAuth();
   return useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: Record<string, unknown> }) => {
+    mutationFn: async ({ id, updates }: { id: string; updates: TablesUpdate<"projects"> }) => {
       if (!user) throw new Error("Must be logged in");
       const { data, error } = await supabase
         .from("projects")

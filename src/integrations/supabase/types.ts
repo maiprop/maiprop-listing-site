@@ -324,20 +324,6 @@ export type Database = {
             referencedRelation: "listings"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "conversations_participant_a_fkey"
-            columns: ["participant_a"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "conversations_participant_b_fkey"
-            columns: ["participant_b"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
         ]
       }
       deal_checklists: {
@@ -761,90 +747,72 @@ export type Database = {
       leads: {
         Row: {
           created_at: string
-          email: string
+          email: string | null
           follow_up_at: string | null
-          followup_step: number
-          full_name: string
           id: string
-          investment_budget: number
-          investment_timeline: string
           listing_id: string | null
           message: string | null
-          nationality: string
+          name: string
           notes: string | null
-          owner_id: string | null
-          phone: string
-          preferred_location: string
+          owner_id: string
+          phone: string | null
           professional_id: string | null
           project_id: string | null
-          property_type: string
           source: string
           status: string
           updated_at: string
         }
         Insert: {
           created_at?: string
-          email: string
+          email?: string | null
           follow_up_at?: string | null
-          followup_step?: number
-          full_name: string
           id?: string
-          investment_budget: number
-          investment_timeline?: string
           listing_id?: string | null
           message?: string | null
-          nationality: string
+          name: string
           notes?: string | null
-          owner_id?: string | null
-          phone: string
-          preferred_location?: string
+          owner_id: string
+          phone?: string | null
           professional_id?: string | null
           project_id?: string | null
-          property_type?: string
           source?: string
           status?: string
           updated_at?: string
         }
         Update: {
           created_at?: string
-          email?: string
+          email?: string | null
           follow_up_at?: string | null
-          followup_step?: number
-          full_name?: string
           id?: string
-          investment_budget?: number
-          investment_timeline?: string
           listing_id?: string | null
           message?: string | null
-          nationality?: string
+          name?: string
           notes?: string | null
-          owner_id?: string | null
-          phone?: string
-          preferred_location?: string
+          owner_id?: string
+          phone?: string | null
           professional_id?: string | null
           project_id?: string | null
-          property_type?: string
           source?: string
           status?: string
           updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "leads_listing_id_fkey"
+            foreignKeyName: "leads_listing_id_fkey1"
             columns: ["listing_id"]
             isOneToOne: false
             referencedRelation: "listings"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "leads_professional_id_fkey"
+            foreignKeyName: "leads_professional_id_fkey1"
             columns: ["professional_id"]
             isOneToOne: false
             referencedRelation: "professionals"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "leads_project_id_fkey"
+            foreignKeyName: "leads_project_id_fkey1"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
@@ -1308,6 +1276,100 @@ export type Database = {
           },
         ]
       }
+      marketing_leads: {
+        Row: {
+          created_at: string
+          email: string
+          follow_up_at: string | null
+          followup_step: number
+          full_name: string
+          id: string
+          investment_budget: number
+          investment_timeline: string
+          listing_id: string | null
+          message: string | null
+          nationality: string
+          notes: string | null
+          owner_id: string | null
+          phone: string
+          preferred_location: string
+          professional_id: string | null
+          project_id: string | null
+          property_type: string
+          source: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          follow_up_at?: string | null
+          followup_step?: number
+          full_name: string
+          id?: string
+          investment_budget: number
+          investment_timeline?: string
+          listing_id?: string | null
+          message?: string | null
+          nationality: string
+          notes?: string | null
+          owner_id?: string | null
+          phone: string
+          preferred_location?: string
+          professional_id?: string | null
+          project_id?: string | null
+          property_type?: string
+          source?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          follow_up_at?: string | null
+          followup_step?: number
+          full_name?: string
+          id?: string
+          investment_budget?: number
+          investment_timeline?: string
+          listing_id?: string | null
+          message?: string | null
+          nationality?: string
+          notes?: string | null
+          owner_id?: string | null
+          phone?: string
+          preferred_location?: string
+          professional_id?: string | null
+          project_id?: string | null
+          property_type?: string
+          source?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leads_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_professional_id_fkey"
+            columns: ["professional_id"]
+            isOneToOne: false
+            referencedRelation: "professionals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       message_attachments: {
         Row: {
           created_at: string
@@ -1442,6 +1504,7 @@ export type Database = {
           body: string | null
           created_at: string
           id: string
+          link: string | null
           read: boolean
           title: string
           type: string
@@ -1451,6 +1514,7 @@ export type Database = {
           body?: string | null
           created_at?: string
           id?: string
+          link?: string | null
           read?: boolean
           title: string
           type?: string
@@ -1460,6 +1524,7 @@ export type Database = {
           body?: string | null
           created_at?: string
           id?: string
+          link?: string | null
           read?: boolean
           title?: string
           type?: string
@@ -2920,7 +2985,7 @@ export type Database = {
         | "sold"
         | "rented"
         | "expired"
-      listing_type: "sale" | "rent" | "auction" | "firesale" | "open_house"
+      listing_type: "sale" | "rent" | "auction" | "firesale" | "open_house" | "new_build"
       message_status: "sent" | "read"
       oh_id_doc_type: "id_card" | "passport"
       oh_offer_status:
@@ -3130,7 +3195,7 @@ export const Constants = {
         "rented",
         "expired",
       ],
-      listing_type: ["sale", "rent", "auction", "firesale", "open_house"],
+      listing_type: ["sale", "rent", "auction", "firesale", "open_house", "new_build"],
       message_status: ["sent", "read"],
       oh_id_doc_type: ["id_card", "passport"],
       oh_offer_status: [

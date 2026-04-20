@@ -1,5 +1,4 @@
 import { useState, useEffect, lazy, Suspense, useMemo } from "react";
-import type { ElementType } from "react";
 import { useTranslation } from "react-i18next";
 import { Helmet } from "react-helmet-async";
 import { useModal } from "@/hooks/useModal";
@@ -7,11 +6,10 @@ import { supabase as supabaseClient } from "@/integrations/supabase/client";
 import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import {
   ChevronRight,
-  Shield, FileText, Zap, ExternalLink, Eye,
+  FileText, Zap, ExternalLink,
   Home, Loader2,
-  Thermometer, Wrench, TreePine, Flame, Wifi, Car, Building2,
-  Info, ChevronDown, ChevronUp, LayoutGrid, Globe, Scale } from
-"lucide-react";
+  Info, ChevronDown, ChevronUp, LayoutGrid, Globe, Scale,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 
@@ -31,7 +29,7 @@ import { toast } from "sonner";
 import PropertyMiniMap from "@/components/PropertyMiniMap";
 import PropertyValuation from "@/components/PropertyValuation";
 const NeighbourhoodReport = lazy(() => import("@/components/NeighbourhoodReport"));
-import { HEATING_TYPES, CONDITION_OPTIONS } from "@/lib/filterConfig";
+import { buildPropertyFeatureGroups, buildDetailRows } from "@/lib/propertyFeatures";
 const AIAssistantWidget = lazy(() => import("@/components/AIAssistantWidget"));
 import { AuctionAlertModal } from "@/components/AuctionAlertModal";
 import { getStreetViewProxyUrl } from "@/lib/config";
@@ -234,99 +232,13 @@ export default function PropertyDetail() {
   [];
 
   // ── Feature groups ──────────────────────────────────────────────────────────
-  const internalFeatures: {icon?: ElementType;label: string;}[] = [];
-  const externalFeatures: {icon?: ElementType;label: string;}[] = [];
-  const constructionFeatures: {icon?: ElementType;label: string;}[] = [];
-  const suitabilityFeatures: {icon?: ElementType;label: string;}[] = [];
-
-  if (db.has_elevator) internalFeatures.push({ icon: Building2, label: "Elevator" });
-  if (db.has_ac) internalFeatures.push({ icon: Thermometer, label: "Air Conditioning" });
-  if (db.has_solar_water) internalFeatures.push({ icon: Zap, label: "Solar Water Heating" });
-  if (db.has_storage) internalFeatures.push({ icon: Home, label: "Storage Space" });
-  if (db.has_secure_door) internalFeatures.push({ icon: Shield, label: "Secure Door" });
-  if (db.has_alarm) internalFeatures.push({ icon: Shield, label: "Alarm" });
-  if (db.has_cctv) internalFeatures.push({ icon: Eye, label: "CCTV" });
-  if (db.has_security) internalFeatures.push({ icon: Shield, label: "Security System" });
-  if (db.has_fireplace) internalFeatures.push({ icon: Flame, label: "Fireplace" });
-  if (db.has_underfloor_heating) internalFeatures.push({ icon: Thermometer, label: "Underfloor Heating" });
-  if (db.has_furnished) internalFeatures.push({ icon: Home, label: "Furnished" });
-  if (db.has_internal_staircase) internalFeatures.push({ label: "Internal Staircase" });
-  if (db.has_double_glazing) internalFeatures.push({ label: "Double Glazed Windows" });
-  if (db.has_window_screens) internalFeatures.push({ label: "Window Screens" });
-  if (db.has_night_power) internalFeatures.push({ icon: Zap, label: "Night Power Rate" });
-  if (db.has_attic) internalFeatures.push({ label: "Attic" });
-  if (db.has_satellite) internalFeatures.push({ icon: Wifi, label: "Satellite Receiver" });
-  if (db.has_smart_home) internalFeatures.push({ icon: Wifi, label: "Smart Home" });
-  if (db.has_equipped) internalFeatures.push({ icon: Wrench, label: "Equipped / Fitted-out" });
-  if (db.has_three_phase_power) internalFeatures.push({ icon: Zap, label: "3-Phase Electricity" });
-  if (db.has_structured_cabling) internalFeatures.push({ label: "Structured Cabling" });
-
-  if (db.has_parking) externalFeatures.push({ icon: Car, label: "Parking Space" });
-  if (db.has_balcony) externalFeatures.push({ label: "Balcony" });
-  if (db.has_garden) externalFeatures.push({ icon: TreePine, label: "Garden" });
-  if (db.has_pool) externalFeatures.push({ label: "Swimming Pool" });
-  if (db.has_view) externalFeatures.push({ icon: Eye, label: "View" });
-  if (db.has_facade) externalFeatures.push({ label: "Facade" });
-  if (db.has_awning) externalFeatures.push({ label: "Awning" });
-  if (db.has_disability_access) externalFeatures.push({ label: "Disability Access" });
-  if (db.is_corner) externalFeatures.push({ label: "Corner Property" });
-  if (db.has_loading_dock) externalFeatures.push({ label: "Loading Dock" });
-  if (db.is_buildable) externalFeatures.push({ label: "Buildable" });
-  if (db.within_city_plan) externalFeatures.push({ label: "Within City Plan" });
-  if (db.within_settlement) externalFeatures.push({ label: "Within Settlement" });
-  if (db.has_water_supply) externalFeatures.push({ icon: Wrench, label: "Water Supply" });
-  if (db.has_electricity_supply) externalFeatures.push({ icon: Zap, label: "Electricity Supply" });
-  if (db.has_land_concession) externalFeatures.push({ label: "Land Concession" });
-
-  if (db.is_penthouse) constructionFeatures.push({ label: "Penthouse" });
-  if (db.is_neoclassical) constructionFeatures.push({ label: "Neoclassical" });
-  if (db.is_preserved) constructionFeatures.push({ label: "Preserved Building" });
-  if (db.has_virtual_tour) constructionFeatures.push({ label: "Virtual Tour" });
-  if (db.has_video_tour) constructionFeatures.push({ label: "Video Tour" });
-
-  if (db.suitable_student) suitabilityFeatures.push({ label: "Students" });
-  if (db.suitable_holiday) suitabilityFeatures.push({ label: "Holiday Home" });
-  if (db.suitable_investment) suitabilityFeatures.push({ label: "Investment" });
-  if (db.suitable_commercial_use) suitabilityFeatures.push({ label: "Commercial Use" });
+  const { internalFeatures, externalFeatures, constructionFeatures, suitabilityFeatures } =
+    buildPropertyFeatureGroups(db);
 
   const similarListings = similarFromDb.filter(l => l.id !== id).slice(0, 6);
 
-  // Build property details rows grouped
-  const detailRows: {label: string;value: string;}[] = [
-  { label: "Price", value: `€${price.toLocaleString()}` },
-  { label: "Price / m²", value: pricePerSqm ? `€${Number(pricePerSqm).toLocaleString()}` : "—" },
-  { label: "Surface", value: `${sqm} m²` },
-  ...(db.year_built ? [{ label: "Year Built", value: String(db.year_built) }] : []),
-  ...(db.floor != null ? [{ label: "Floor", value: db.floor === 0 ? "Ground" : `${db.floor}${db.total_floors ? ` of ${db.total_floors}` : ""}` }] : []),
-  ...(db?.levels ? [{ label: "Levels", value: String(db.levels) }] : []),
-  ...(db?.kitchens ? [{ label: "Kitchens", value: String(db.kitchens) }] : []),
-  ...(db?.living_rooms ? [{ label: "Living Rooms", value: String(db.living_rooms) }] : []),
-  ...(db?.wc_count ? [{ label: "WC", value: String(db.wc_count) }] : []),
-  ...(db?.heating_system ? [{ label: "Heating", value: HEATING_TYPES.find((h) => h.value === db.heating_system)?.label ?? db.heating_system.replace(/_/g, " ") }] : []),
-  ...(db.energy_class ? [{ label: "Energy Class", value: db.energy_class }] : []),
-  ...(db?.construction_status ? [{ label: "Condition", value: CONDITION_OPTIONS.find((c) => c.value === db.construction_status)?.label ?? db.construction_status.replace(/_/g, " ") }] : []),
-  ...(db.cadastre_number ? [{ label: "Cadastre No.", value: db.cadastre_number }] : []),
-  ...(db.enfia_zone ? [{ label: "ENFIA Zone", value: db.enfia_zone }] : []),
-  ...(db.postal_code ? [{ label: "Postal Code", value: db.postal_code }] : []),
-  ...(db.region ? [{ label: "Region", value: db.region }] : []),
-  // Land
-  ...(isLandType && db?.coverage_ratio ? [{ label: "Coverage Ratio", value: `${db.coverage_ratio}%` }] : []),
-  ...(isLandType && db?.building_allowance ? [{ label: "Build Allowance", value: `${db.building_allowance} m²` }] : []),
-  ...(isLandType && db?.facade_length ? [{ label: "Facade Length", value: `${db.facade_length} m` }] : []),
-  ...(isLandType && db?.plot_depth ? [{ label: "Plot Depth", value: `${db.plot_depth} m` }] : []),
-  ...(isLandType && db?.slope ? [{ label: "Slope", value: db.slope }] : []),
-  ...(isLandType && db?.zone_type ? [{ label: "Zone", value: db.zone_type }] : []),
-  ...(isLandType && db?.road_type ? [{ label: "Road Type", value: db.road_type }] : []),
-  ...(isLandType && db?.distance_from_sea ? [{ label: "From Sea", value: `${db.distance_from_sea} m` }] : []),
-  ...(isLandType && db?.distance_from_city ? [{ label: "From City", value: `${db.distance_from_city} m` }] : []),
-  // Commercial
-  ...(db?.commercial_subtype ? [{ label: "Subtype", value: db.commercial_subtype }] : []),
-  ...(db?.plot_surface ? [{ label: "Plot Surface", value: `${db.plot_surface} m²` }] : []),
-  ...(db?.floor_height ? [{ label: "Floor Height", value: `${db.floor_height} m` }] : []),
-  // Meta
-  { label: "System Code", value: db.id.slice(0, 8).toUpperCase() },
-  { label: "Published", value: new Date(db.created_at).toLocaleDateString("en-GB") },
-  { label: "Last Updated", value: new Date(db.updated_at).toLocaleDateString("en-GB") }];
+  // Build property details rows
+  const detailRows = buildDetailRows(db, price, sqm, pricePerSqm, isLandType);
 
 
   const ogImage = images[0] ?? "https://maiprop.co/og-default.jpg";

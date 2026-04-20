@@ -335,7 +335,7 @@ export default function LeadsCRM() {
             <div key={l.id} className="glass-card rounded-xl p-4 flex items-center gap-4">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <p className="font-semibold text-sm">{l.full_name}</p>
+                  <p className="font-semibold text-sm">{l.name}</p>
                   <span className={cn("text-[10px] px-2 py-0.5 rounded-full border", STATUS_COLORS[l.status || "new"])}>
                     {STATUS_LABELS[l.status || "new"]}
                   </span>
@@ -359,7 +359,7 @@ export default function LeadsCRM() {
               </div>
               <div className="flex gap-2 shrink-0">
                 <button
-                  onClick={() => { setEditing(l.id); setForm({ name: l.full_name || "", email: l.email || "", phone: l.phone || "", message: l.message || "", source: (l.source as LeadSource) || "manual", status: (l.status as LeadStatus) || "new", notes: l.notes || "", follow_up_at: l.follow_up_at ? l.follow_up_at.slice(0, 16) : "" }); }}
+                  onClick={() => { setEditing(l.id); setForm({ name: l.name || "", email: l.email || "", phone: l.phone || "", message: l.message || "", source: (l.source as LeadSource) || "manual", status: (l.status as LeadStatus) || "new", notes: l.notes || "", follow_up_at: l.follow_up_at ? l.follow_up_at.slice(0, 16) : "" }); }}
                   className="p-2 rounded-xl hover:bg-secondary text-muted-foreground hover:text-foreground"
                 >
                   <Edit2 className="w-4 h-4" />

@@ -195,7 +195,7 @@ export function ProfessionalReviewsTab({ professionalId, proCategory, displayNam
           {reviews
             .filter(r => reviewStarFilter === null || r.rating === reviewStarFilter)
             .map(r => {
-              const name = r.reviewer?.full_name || "Anonymous";
+              const name = r.reviewer?.display_name || "Anonymous";
               const initials = name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
               const date = new Date(r.created_at).toLocaleDateString("en-GB", { month: "short", year: "numeric" });
               return (

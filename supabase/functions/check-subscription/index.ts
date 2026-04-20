@@ -1,8 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
+import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { verifyBearerToken, AuthError } from "../_shared/auth.ts";
+
+// Called on every auth context refresh — 30/min per IP
+const checkSubLimiter = makeRateLimiter({ maxRequests: 30, windowMs: 60_000 });
 
 const logStep = (step: string, details?: any) => {
   const detailsStr = details ? ` - ${JSON.stringify(details)}` : "";
@@ -14,7 +18,9 @@ Deno.serve(async (req) => {
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
 
-  
+  const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
+  if (checkSubLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
+
   const supabaseClient = createClient(
     Deno.env.get("SUPABASE_URL") ?? "",
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",

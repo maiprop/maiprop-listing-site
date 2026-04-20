@@ -8,6 +8,7 @@
  */
 
 import { createClient } from "@supabase/supabase-js";
+import { assertNotProduction } from "./_prod-guard";
 
 const SUPABASE_URL =
   process.env.VITE_SUPABASE_URL ??
@@ -20,6 +21,8 @@ if (!SERVICE_ROLE_KEY) {
   console.error("Missing SUPABASE_SERVICE_ROLE_KEY. Set it in .env or pass as env var.");
   process.exit(1);
 }
+
+assertNotProduction(SUPABASE_URL, "seed-mock-users.ts");
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },

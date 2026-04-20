@@ -10,6 +10,9 @@ import { toast } from "sonner";
 import { useCreateListingConnections } from "@/hooks/useCreateListingConnections";
 import { useSubscription } from "@/hooks/useSubscription";
 import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
+import { getPlanLimits } from "@/hooks/usePlanLimits";
+import { useMyListings } from "@/hooks/useListings";
+import { Link } from "react-router-dom";
 import { StepType } from "@/components/listings/StepType";
 import { StepDetails } from "@/components/listings/StepDetails";
 import { StepFeatures } from "@/components/listings/StepFeatures";
@@ -49,6 +52,8 @@ export default function CreateListing() {
   const { step, stepIndex, isFirst, isLast, goNext, goPrev, goTo } = useFormWizard({ steps: WIZARD_STEPS });
   const connections = useCreateListingConnections();
   const { isPro } = useSubscription();
+  const { data: myListings = [] } = useMyListings();
+  const listingLimit = getPlanLimits(participantType, isPro ? "pro" : "free").listings;
 
   const {
     form, errors, setErrors, submitting,
@@ -86,6 +91,34 @@ export default function CreateListing() {
     setErrors({});
     goNext();
   };
+
+  // Guard: listing count limit reached
+  if (user && profile && canCreateListing && listingLimit !== null && myListings.length >= listingLimit) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center px-4">
+        <div className="max-w-md w-full text-center space-y-5">
+          <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
+            <Building2 className="w-8 h-8 text-primary" />
+          </div>
+          <div>
+            <h1 className="font-display text-2xl font-bold mb-2">Listing Limit Reached</h1>
+            <p className="text-muted-foreground text-sm">
+              You have reached the {listingLimit}-listing limit on your current plan ({isPro ? "Pro" : "Free"}).
+              Upgrade to add more listings.
+            </p>
+          </div>
+          <div className="flex gap-3 justify-center">
+            <Button asChild>
+              <Link to="/pricing">Upgrade Plan</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link to="/dashboard">Back to Dashboard</Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Guard: redirect non-eligible users
   if (user && profile && !canCreateListing) {

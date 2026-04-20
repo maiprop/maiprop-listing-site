@@ -44,12 +44,12 @@ export function useSubmitConsultation() {
           owner_id: pro.user_id,
           source: input.request_type === "callback" ? "callback" : input.request_type === "message" ? "message" : "consultation",
           professional_id: input.professional_id,
-          full_name: input.requester_name,
+          name: input.requester_name,
           email: input.requester_email,
-          phone: input.requester_phone ?? "",
+          phone: input.requester_phone ?? null,
           message: input.message ?? null,
           status: "new",
-        }).then(({ error: leadErr }: { error: Error | null }) => { if (leadErr) logger.warn("Lead create:", leadErr); });
+        }).then(({ error: leadErr }) => { if (leadErr) logger.warn("Lead create:", leadErr); });
       }
     },
     onSuccess: () => {

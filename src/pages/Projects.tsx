@@ -13,6 +13,7 @@ import { useMyListings, useUpdateListing } from "@/hooks/useListings";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
+import { ProGate } from "@/components/gates/ProGate";
 
 function Projects() {
   const navigate = useNavigate();
@@ -95,6 +96,7 @@ function Projects() {
     <div className="min-h-screen flex flex-col bg-background">
       <Navbar />
       <main className="flex-1 container max-w-5xl mx-auto px-4 pt-16 pb-10">
+        <ProGate>
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="font-display text-2xl font-bold">Projects</h1>
@@ -330,6 +332,7 @@ function Projects() {
             </Link>
           </Button>
         </div>
+        </ProGate>
       </main>
       <Footer />
     </div>

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect } from "react";
 import { useModal } from "@/hooks/useModal";
 import { useParams, Link, useNavigate } from "react-router-dom";
@@ -6,7 +5,7 @@ import {
   MapPin, Bed, Bath, Square, Calendar, ChevronLeft, ChevronRight, Eye, Zap,
   Pencil, Pause, Play, Trash2, Loader2, MessageCircle, Euro, Users, LayoutDashboard,
   Home, Wrench, Lock, ExternalLink, Heart, Share2, Layers, Thermometer, Building2, FileText,
-  Check, ChevronDown, ChevronUp, Shield, Flame, Wifi, Car, TreePine,
+  Check, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { walkScoreLabel, walkScoreColour } from "@/lib/walkScore";
 import { Button } from "@/components/ui/button";
@@ -29,6 +28,7 @@ import { HEATING_TYPES, CONDITION_OPTIONS } from "@/lib/filterConfig";
 import { getStreetViewProxyUrl } from "@/lib/config";
 import { ENERGY_COLORS, ENERGY_SCALE } from "@/types";
 import { DetailRow, Section, SectionHeader, FeatureSection } from "@/components/property/DetailPrimitives";
+import { buildPropertyFeatureGroups, buildDetailRows } from "@/lib/propertyFeatures";
 
 export default function OpenHouseDetail() {
   const { id } = useParams();
@@ -203,8 +203,8 @@ export default function OpenHouseDetail() {
   const address = db.address ?? db.city;
   let imgs: string[] = db.cover_image_url ? [db.cover_image_url] : [];
   if (db.listing_images?.length) {
-    const sorted = [...db.listing_images].sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0));
-    sorted.forEach((img: any) => imgs.push(img.url));
+    const sorted = [...db.listing_images].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+    sorted.forEach((img) => imgs.push(img.url));
   }
   const streetViewFallback = (db.latitude != null && db.longitude != null)
     ? getStreetViewProxyUrl({ lat: Number(db.latitude), lng: Number(db.longitude) })
@@ -212,16 +212,9 @@ export default function OpenHouseDetail() {
   if (!imgs.length && streetViewFallback) imgs = [streetViewFallback];
 
   const pricePerSqm = sqm > 0 ? Math.round(price / sqm) : null;
-  const detailRows: { label: string; value: string }[] = [
-    { label: "Price", value: `€${price.toLocaleString()}` },
-    { label: "Price / m²", value: pricePerSqm ? `€${pricePerSqm.toLocaleString()}` : "—" },
-    { label: "Surface", value: `${sqm} m²` },
-    ...(db.year_built ? [{ label: "Year Built", value: String(db.year_built) }] : []),
-    ...(db.floor != null ? [{ label: "Floor", value: db.floor === 0 ? "Ground" : `${db.floor}${db.total_floors ? ` of ${db.total_floors}` : ""}` }] : []),
-    ...(db.heating_system ? [{ label: "Heating", value: HEATING_TYPES.find((h) => h.value === db.heating_system)?.label ?? db.heating_system.replace(/_/g, " ") }] : []),
-    ...(db.energy_class ? [{ label: "Energy Class", value: db.energy_class }] : []),
-    ...(db.construction_status ? [{ label: "Condition", value: CONDITION_OPTIONS.find((c) => c.value === db.construction_status)?.label ?? db.construction_status.replace(/_/g, " ") }] : []),
-  ];
+  const isLandType = ["land", "plot"].includes(db.property_type ?? "");
+  const detailRows = buildDetailRows(db, price, sqm, pricePerSqm, isLandType);
+  const { internalFeatures, externalFeatures, constructionFeatures, suitabilityFeatures } = buildPropertyFeatureGroups(db);
   const city = db.city || "";
 
   return (
@@ -493,40 +486,6 @@ export default function OpenHouseDetail() {
 
               {/* Features & Amenities */}
               {(() => {
-                const internalFeatures: { icon?: any; label: string }[] = [];
-                const externalFeatures: { icon?: any; label: string }[] = [];
-                const constructionFeatures: { icon?: any; label: string }[] = [];
-                const suitabilityFeatures: { icon?: any; label: string }[] = [];
-
-                if (db.has_elevator) internalFeatures.push({ icon: Building2, label: "Elevator" });
-                if (db.has_ac) internalFeatures.push({ icon: Thermometer, label: "Air Conditioning" });
-                if (db.has_solar_water) internalFeatures.push({ icon: Zap, label: "Solar Water Heating" });
-                if (db.has_storage) internalFeatures.push({ icon: Home, label: "Storage Space" });
-                if (db.has_secure_door) internalFeatures.push({ icon: Shield, label: "Secure Door" });
-                if (db.has_alarm) internalFeatures.push({ icon: Shield, label: "Alarm" });
-                if (db.has_cctv) internalFeatures.push({ icon: Eye, label: "CCTV" });
-                if (db.has_security) internalFeatures.push({ icon: Shield, label: "Security System" });
-                if (db.has_fireplace) internalFeatures.push({ icon: Flame, label: "Fireplace" });
-                if (db.has_underfloor_heating) internalFeatures.push({ icon: Thermometer, label: "Underfloor Heating" });
-                if (db.has_furnished) internalFeatures.push({ icon: Home, label: "Furnished" });
-                if (db.has_double_glazing) internalFeatures.push({ label: "Double Glazed Windows" });
-                if (db.has_smart_home) internalFeatures.push({ icon: Wifi, label: "Smart Home" });
-
-                if (db.has_parking) externalFeatures.push({ icon: Car, label: "Parking Space" });
-                if (db.has_balcony) externalFeatures.push({ label: "Balcony" });
-                if (db.has_garden) externalFeatures.push({ icon: TreePine, label: "Garden" });
-                if (db.has_pool) externalFeatures.push({ label: "Swimming Pool" });
-                if (db.has_view) externalFeatures.push({ icon: Eye, label: "View" });
-                if (db.has_disability_access) externalFeatures.push({ label: "Disability Access" });
-
-                if (db.is_penthouse) constructionFeatures.push({ label: "Penthouse" });
-                if (db.has_virtual_tour) constructionFeatures.push({ label: "Virtual Tour" });
-                if (db.has_video_tour) constructionFeatures.push({ label: "Video Tour" });
-
-                if (db.suitable_student) suitabilityFeatures.push({ label: "Students" });
-                if (db.suitable_holiday) suitabilityFeatures.push({ label: "Holiday Home" });
-                if (db.suitable_investment) suitabilityFeatures.push({ label: "Investment" });
-
                 const total = internalFeatures.length + externalFeatures.length + constructionFeatures.length + suitabilityFeatures.length;
                 if (total === 0) return null;
                 return (

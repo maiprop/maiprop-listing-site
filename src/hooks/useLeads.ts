@@ -1,4 +1,5 @@
 ﻿import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import type { TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -46,8 +47,7 @@ export function useCreateLead() {
     }) => {
       if (!user) throw new Error("Not authenticated");
        
-      const { data, error } = await supabase.from("leads")
-        .insert({
+      const payload: TablesInsert<"leads"> = {
           owner_id: user.id,
           name: lead.name,
           email: lead.email || null,
@@ -60,7 +60,8 @@ export function useCreateLead() {
           listing_id: lead.listing_id || null,
           professional_id: lead.professional_id || null,
           project_id: lead.project_id || null,
-        })
+        };
+      const { data, error } = await supabase.from("leads").insert(payload)
         .select()
         .single();
       if (error) throw error;
@@ -78,7 +79,7 @@ export function useUpdateLead() {
   const qc = useQueryClient();
   const { user } = useAuth();
   return useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: Record<string, unknown> }) => {
+    mutationFn: async ({ id, updates }: { id: string; updates: TablesUpdate<"leads"> }) => {
       if (!user) throw new Error("Not authenticated");
       const { data, error } = await supabase
         .from("leads")

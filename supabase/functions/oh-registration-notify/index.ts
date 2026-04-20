@@ -6,8 +6,25 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Validate DB webhook secret to prevent spoofed payloads triggering notification emails.
+// Set WEBHOOK_SECRET in Supabase edge function secrets, and configure the DB webhook
+// to send the header: Authorization: Bearer <WEBHOOK_SECRET>
+function verifyWebhookSecret(req: Request): boolean {
+  const secret = Deno.env.get("WEBHOOK_SECRET");
+  if (!secret) return true; // secret not configured — allow (dev/staging without secrets)
+  const auth = req.headers.get("Authorization");
+  return auth === `Bearer ${secret}`;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  if (!verifyWebhookSecret(req)) {
+    return new Response(JSON.stringify({ ok: false, reason: "unauthorized" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 
   try {
     const payload = await req.json();

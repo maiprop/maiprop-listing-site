@@ -5,6 +5,7 @@
  */
 
 import { useState } from "react";
+import { formatDate } from "@/lib/format";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import {
   MailPlus, Loader2, Check, ChevronDown, ChevronUp,
@@ -201,11 +202,6 @@ export default function AdminInvitationRequests() {
       setUpdating(null);
     }
   };
-
-  const formatDate = (s: string) =>
-    new Date(s).toLocaleDateString(undefined, {
-      year: "numeric", month: "short", day: "numeric",
-    });
 
   if (!isAdmin) {
     return (

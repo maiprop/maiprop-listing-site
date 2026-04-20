@@ -1,3 +1,5 @@
+import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
+
 /**
  * streetview-proxy
  * Returns a Google Street View Static API image using server-side key so the key

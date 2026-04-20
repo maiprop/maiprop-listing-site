@@ -8,6 +8,7 @@ import { Crown, Zap, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getPlanLimits } from "@/hooks/usePlanLimits";
+import { getPlanForParticipant } from "@/lib/rolePlanMap";
 import type { ParticipantId } from "@/lib/participantConfig";
 
 type Usage = {
@@ -51,7 +52,7 @@ export function DashboardPlanCard({ audience, isPro, usage, className }: Props) 
   }
 
   const showUpgrade = !isPro && audience !== "developer" && rows.some(r => r.atLimit);
-  const priceLabel = audience === "agent" ? "€149" : audience === "developer" ? "€89" : "€19";
+  const priceLabel = `€${getPlanForParticipant(audience).monthlyPrice}`;
 
   return (
     <div className={cn("glass-card rounded-xl p-5 border", isPro ? "border-brand-gold/30 bg-brand-gold/5" : "border-border", className)}>

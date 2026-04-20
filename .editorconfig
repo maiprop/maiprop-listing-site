@@ -1,0 +1,21 @@
+# https://editorconfig.org — enforces consistent indentation / line endings
+# across editors. Precedence: this file > per-editor settings.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.md]
+# Trailing whitespace can be significant in Markdown (line break)
+trim_trailing_whitespace = false
+
+[*.{yml,yaml}]
+indent_size = 2
+
+[Makefile]
+indent_style = tab

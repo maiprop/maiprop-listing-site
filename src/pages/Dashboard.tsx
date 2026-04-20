@@ -482,10 +482,8 @@ export default function Dashboard() {
                       </div>
                       <Button size="sm" className="shrink-0 text-xs h-8 bg-amber-500 hover:bg-amber-600 border-0 text-white"
                         onClick={async () => {
-                          if (!user?.id) return;
-                          const { error } = await supabase.from("profiles").update({ investor_mode: true }).eq("user_id", user.id);
+                          const { error } = await updateProfile({ investor_mode: true });
                           if (error) { toast.error("Could not enable investor mode"); return; }
-                          await refreshProfile();
                           toast.success("Investor mode enabled!");
                         }}>
                         Enable

@@ -1,7 +1,7 @@
 ﻿/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import type { Database, Enums } from "@/integrations/supabase/types";
+import type { Database, Enums, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
@@ -236,15 +236,14 @@ export function useListing(id: string) {
       let ownerParticipantType: "agent" | "seller" | null = null;
       if (data.owner_id) {
         try {
-          const [{ data: profilePublic }, { data: profileFull }, { data: invSub }] = await Promise.all([
-            supabase.from("profiles_public").select("user_id, display_name, avatar_url").eq("user_id", data.owner_id).maybeSingle(),
-            supabase.from("profiles").select("user_id, role, bio").eq("user_id", data.owner_id).maybeSingle(),
+          const [{ data: profilePublic }, { data: invSub }] = await Promise.all([
+            supabase.from("profiles_public").select("user_id, display_name, avatar_url, role").eq("user_id", data.owner_id).maybeSingle(),
             supabase.from("investor_subscriptions").select("tier, status").eq("user_id", data.owner_id).order("started_at", { ascending: false }).limit(1).maybeSingle(),
           ]);
           profiles = profilePublic ?? null;
           ownerIsPro = !!(invSub?.status === "active" && (invSub?.tier || "").toLowerCase() === "pro");
-          if (profileFull) {
-            ownerParticipantType = getOwnerParticipantType(profileFull);
+          if (profilePublic) {
+            ownerParticipantType = getOwnerParticipantType(profilePublic as { role?: string; bio?: string | null });
           }
         } catch (_err: unknown) {
           // owner profile fetch is non-critical; listing still renders without it
@@ -274,7 +273,7 @@ export function useTrackListingView() {
         supabase.rpc("increment_listing_views", { p_listing_id: listingId }),
         supabase.rpc("record_listing_view_event", {
           p_listing_id: listingId,
-          p_viewer_id: authData.user?.id ?? null,
+          p_viewer_id: authData.user?.id ?? undefined,
         }),
       ]).catch((e: unknown) => logger.warn("View tracking failed:", e));
     },
@@ -294,8 +293,14 @@ export function useCreateListing() {
       auction_date?: string; auction_starting_bid?: number;
     }) => {
       if (!user) throw new Error("Must be logged in");
-      const { data, error } = await supabase.from("listings")
-        .insert({ ...listing, owner_id: user.id, status: "active" as Enums<"listing_status"> })
+      const payload: TablesInsert<"listings"> = {
+        ...listing,
+        owner_id: user.id,
+        status: "active" as Enums<"listing_status">,
+        listing_type: listing.listing_type as TablesInsert<"listings">["listing_type"],
+        property_type: listing.property_type as TablesInsert<"listings">["property_type"],
+      };
+      const { data, error } = await supabase.from("listings").insert(payload)
         .select()
         .single();
       if (error) throw error;
@@ -317,11 +322,11 @@ export function useUpdateListing() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   return useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: Record<string, unknown> }) => {
+    mutationFn: async ({ id, updates }: { id: string; updates: TablesUpdate<"listings"> }) => {
       if (!user) throw new Error("Must be logged in");
       const { data, error } = await supabase
         .from("listings")
-        .update(updates as Record<string, unknown>)
+        .update(updates)
         .eq("id", id)
         .eq("owner_id", user.id)
         .select()

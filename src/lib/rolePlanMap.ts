@@ -92,6 +92,26 @@ export const ROLE_PLAN_MAP: Record<PricingAudienceId, RolePlan> = {
     stripePriceMonthly: PRICE_IDS.professional_monthly,
     stripePriceAnnual:  PRICE_IDS.professional_annual,
   },
+  investor: {
+    planKey: "investor_private",
+    planName: "Investor Plan",
+    audienceId: "investor",
+    monthlyPrice: 490,
+    annualPrice: 4900,
+    proOnly: true,
+    stripePriceMonthly: null,
+    stripePriceAnnual:  null,
+  },
+  institutional: {
+    planKey: "investor_institutional",
+    planName: "Institutional Plan",
+    audienceId: "institutional",
+    monthlyPrice: 1490,
+    annualPrice: 14900,
+    proOnly: true,
+    stripePriceMonthly: null,
+    stripePriceAnnual:  null,
+  },
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -99,10 +119,12 @@ export const ROLE_PLAN_MAP: Record<PricingAudienceId, RolePlan> = {
 /** Map any participant type to its pricing audience (buyer+seller → participant) */
 export function participantToPricingAudience(pt: ParticipantId): PricingAudienceId {
   if (pt === "buyer" || pt === "seller") return "participant";
-  if (pt === "agent")        return "agent";
-  if (pt === "developer")    return "developer";
-  if (pt === "professional") return "professional";
-  return "participant"; // investor/institutional fall back to participant pricing
+  if (pt === "agent")         return "agent";
+  if (pt === "developer")     return "developer";
+  if (pt === "professional")  return "professional";
+  if (pt === "investor")      return "investor";
+  if (pt === "institutional") return "institutional";
+  return "participant";
 }
 
 /** Get the plan definition for a given participant type */

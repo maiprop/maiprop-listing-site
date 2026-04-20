@@ -15,6 +15,12 @@ ALTER TABLE conversations
   ALTER COLUMN participant_a SET NOT NULL,
   ALTER COLUMN participant_b SET NOT NULL;
 
+-- Drop policies that depend on participant_1/participant_2 before dropping columns
+DROP POLICY IF EXISTS "Participants can view their conversations" ON public.conversations;
+DROP POLICY IF EXISTS "Participants can view their conversations" ON conversations;
+DROP POLICY IF EXISTS "Users can view their conversations" ON public.conversations;
+DROP POLICY IF EXISTS "Users can view their conversations" ON conversations;
+
 -- Drop the duplicate columns
 ALTER TABLE conversations 
   DROP COLUMN IF EXISTS participant_1,

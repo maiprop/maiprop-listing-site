@@ -1,8 +1,18 @@
 {
-  "name": "vite_react_shadcn_ts",
+  "name": "maiprop-listing-site",
+  "description": "MaiProp — Greek real estate listing, auction, and investment platform (Vite + React 18 + Supabase).",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
+  "license": "UNLICENSED",
+  "homepage": "https://maiprop.co",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/maiprop/maiprop-listing-site.git"
+  },
   "type": "module",
+  "overrides": {
+    "tmp": "^0.2.4"
+  },
   "scripts": {
     "dev": "vite",
     "seed:users": "npx tsx scripts/seed-mock-users.ts",
@@ -15,6 +25,8 @@
     "seed:listing-images": "npx tsx scripts/seed-listing-images.ts",
     "seed:demo-accounts": "npx tsx scripts/seed-demo-accounts.ts",
     "db:push": "supabase db push",
+    "api-docs:copy": "node -e \"const fs=require('fs');fs.mkdirSync('public/docs',{recursive:true});fs.copyFileSync('docs/api/edge-functions.openapi.yaml','public/docs/edge-functions.openapi.yaml')\"",
+    "prebuild": "npm run api-docs:copy",
     "build": "vite build",
     "compress:images": "node scripts/compress-images.mjs",
     "build:dev": "vite build --mode development",
@@ -25,7 +37,8 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "test:deno": "deno test supabase/functions/_shared/",
+    "test:deno": "deno test --allow-env --allow-net supabase/functions/",
+    "check:bundle-size": "node scripts/check-bundle-size.mjs",
     "lighthouse": "lhci autorun",
     "lighthouse:collect": "lhci collect",
     "lighthouse:assert": "lhci assert"
@@ -94,6 +107,7 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.10.1",
     "@eslint/js": "^9.32.0",
     "@lhci/cli": "^0.15.1",
     "@playwright/test": "^1.59.1",
@@ -115,11 +129,11 @@
     "postcss": "^8.5.6",
     "rollup-plugin-visualizer": "^7.0.1",
     "sharp": "^0.34.5",
-    "supabase": "^2.92.0",
+    "supabase": "^2.92.1",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.58.2",
-    "vite": "^5.4.19",
+    "vite": "^7.3.2",
     "vitest": "^3.2.4"
   }
 }

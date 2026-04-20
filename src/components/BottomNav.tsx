@@ -70,6 +70,14 @@ function getBottomTabs(
         { labelKey: "bottomNav.messages", icon: MessageSquare, href: "/messages" },
         account,
       ];
+    case "investor":
+      return [
+        { labelKey: "bottomNav.home", icon: Home, href: "/" },
+        { labelKey: "bottomNav.deals", icon: Flame, href: "/firesale" },
+        { labelKey: "bottomNav.auctions", icon: Gavel, href: "/auctions" },
+        { labelKey: "bottomNav.messages", icon: MessageSquare, href: "/messages" },
+        account,
+      ];
     default: // buyer
       return [
         { labelKey: "bottomNav.home", icon: Home, href: "/" },

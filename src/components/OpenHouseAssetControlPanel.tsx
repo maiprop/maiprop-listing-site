@@ -267,7 +267,7 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner }: Props
                         <p className="text-xs font-bold text-emerald-700 uppercase tracking-widest mb-0.5">Winning Bid</p>
                         <p className="font-display font-black text-xl text-emerald-700">€{Number(winner.amount).toLocaleString()}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          {winner.profiles?.display_name || [winner.profiles?.first_name, winner.profiles?.last_name].filter(Boolean).join(" ") || "Bidder"}
+                          {winner.profiles?.display_name || "Bidder"}
                         </p>
                       </div>
                       <Check className="w-8 h-8 text-emerald-500" />
@@ -277,7 +277,7 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner }: Props
 
                 <div className="divide-y divide-border max-h-64 overflow-y-auto">
                   {[...offers].sort((a, b) => Number(b.amount) - Number(a.amount)).map((o) => {
-                    const bidderName = o.profiles?.display_name || [o.profiles?.first_name, o.profiles?.last_name].filter(Boolean).join(" ") || "Bidder";
+                    const bidderName = o.profiles?.display_name || "Bidder";
                     const isWinner = o.status === "accepted";
                     const isRevealed = o.status === "revealed";
                     const isSealed = o.status === "submitted";

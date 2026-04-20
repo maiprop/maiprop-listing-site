@@ -17,7 +17,7 @@ export interface ProfessionalReview {
   recommended: boolean;
   created_at: string;
   reviewer?: {
-    full_name: string | null;
+    display_name: string | null;
     avatar_url: string | null;
   };
 }
@@ -58,7 +58,7 @@ export function useProfessionalReviews(professionalId: string) {
         .select(`
           id, professional_id, reviewer_id, rating, title, body,
           service_type, property_city, transaction_year, recommended, created_at,
-          profiles:reviewer_id ( full_name, avatar_url )
+          profiles:reviewer_id ( display_name, avatar_url )
         `)
         .eq("professional_id", professionalId)
         .order("created_at", { ascending: false });

@@ -20,7 +20,7 @@ export type ParticipantId =
  * Top-level pricing audience — buyer and seller are merged into "participant".
  * Used by Pricing page tab strip.
  */
-export type PricingAudienceId = "participant" | "agent" | "developer" | "professional";
+export type PricingAudienceId = "participant" | "agent" | "developer" | "professional" | "investor" | "institutional";
 
 function isValidParticipantId(v: string): v is ParticipantId {
   return ["buyer", "seller", "agent", "developer", "professional", "investor", "institutional"].includes(v);
@@ -92,7 +92,8 @@ export function getPricingAudienceFromProfile(
 ): PricingAudienceId {
   const pt = getParticipantTypeFromProfile(profile);
   if (pt === "buyer" || pt === "seller") return "participant";
-  if (pt === "investor" || pt === "institutional") return "participant";
+  if (pt === "investor") return "investor";
+  if (pt === "institutional") return "institutional";
   return pt;
 }
 

@@ -19,6 +19,16 @@ function log(msg: string, data?: unknown) {
   console.log(`[send-saved-search-alerts] ${msg}`, data ? JSON.stringify(data) : "");
 }
 
+// Prevent unauthenticated callers from triggering bulk email sends.
+// The pg_cron job must pass Authorization: Bearer <CRON_SECRET>.
+// Set CRON_SECRET in Supabase edge function secrets.
+function verifyCronSecret(req: Request): boolean {
+  const secret = Deno.env.get("CRON_SECRET");
+  if (!secret) return true; // not configured — allow (dev/staging)
+  const auth = req.headers.get("Authorization");
+  return auth === `Bearer ${secret}`;
+}
+
 function buildListingsQuery(supabase: ReturnType<typeof createClient>, filters: Record<string, unknown>) {
   let query = supabase
     .from("listings")
@@ -49,13 +59,13 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const cronSecret = Deno.env.get("CRON_SECRET");
-  if (cronSecret && req.headers.get("x-cron-secret") !== cronSecret) {
-    return new Response(JSON.stringify({ ok: false, error: "Unauthorized" }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+  if (!verifyCronSecret(req)) {
+    return new Response(JSON.stringify({ ok: false, error: "unauthorized" }), {
       status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
+
 
   const supabase = createClient(Deno.env.get("SUPABASE_URL") ?? "", Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", {
     auth: { persistSession: false },

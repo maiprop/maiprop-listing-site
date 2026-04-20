@@ -111,6 +111,23 @@ supabase gen types typescript --linked > src/integrations/supabase/types.ts
 
 ## Further Reading
 
+### Operations
+
+- [`docs/ENV_SETUP.md`](./docs/ENV_SETUP.md) — environment variables for dev / staging / prod / CI
+- [`docs/STAGING_SETUP.md`](./docs/STAGING_SETUP.md) — staging environment setup + smoke test checklist
+- [`docs/PRODUCTION_CHECKLIST.md`](./docs/PRODUCTION_CHECKLIST.md) — pre-launch / pre-release gate
+- [`docs/SECRETS_ROTATION.md`](./docs/SECRETS_ROTATION.md) — rotation cadence + incident procedure
+- [`docs/LIGHTHOUSE_CI_SETUP.md`](./docs/LIGHTHOUSE_CI_SETUP.md) — GitHub App install + token
+- [`docs/WEBHOOK_VERIFICATION.md`](./docs/WEBHOOK_VERIFICATION.md) — Stripe + MaiProp-OS HMAC contracts
+- [`docs/AUDIT_RECONCILIATION.md`](./docs/AUDIT_RECONCILIATION.md) — external audit findings vs. reality
+
+### API reference
+
+- [`docs/api/README.md`](./docs/api/README.md) — edge-function API docs, with hosted Redoc at [`/api-docs.html`](./public/api-docs.html) after deploy
+- [`docs/api/edge-functions.openapi.yaml`](./docs/api/edge-functions.openapi.yaml) — OpenAPI source of truth
+
+### Conventions
+
 - [`CLAUDE.md`](./CLAUDE.md) — project conventions for AI-assisted development
 - `src/lib/participantConfig.ts` — canonical role/participant type definitions
 - `src/integrations/supabase/types.ts` — full DB schema types (auto-generated)

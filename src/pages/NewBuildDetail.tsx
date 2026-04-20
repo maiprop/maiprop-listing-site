@@ -102,7 +102,7 @@ export default function NewBuildDetail() {
     void msg; // message constructed for future use
     await startConv.mutateAsync({ other_user_id: listing.owner_id, listing_id: id });
     const { error: _leadInsertError } = await supabase.from("new_building_leads").insert({
-      new_building_id: id,
+      new_building_id: id!,
       user_id: user.id,
       email: user.email ?? "",
       full_name: profile?.display_name || "",
@@ -116,7 +116,6 @@ export default function NewBuildDetail() {
       type: "new_interest",
       title: "New interest registered",
       body: `${contactName} registered interest in ${listing.title}`,
-      link: `/listings/${listing.id}`,
     });
     toast.success("Interest registered â€” the developer will be in touch");
   };
