@@ -1,5 +1,5 @@
 import { sendLovableEmail } from 'npm:@lovable.dev/email-js'
-import { createClient } from 'npm:@supabase/supabase-js@2'
+import { createClient } from 'npm:@supabase/supabase-js@2.57.2'
 
 const MAX_RETRIES = 5
 const DEFAULT_BATCH_SIZE = 10
@@ -64,9 +64,10 @@ Deno.serve(async (req) => {
     )
   }
 
-  // Defense in depth: verify_jwt=true already requires a valid JWT at the
-  // gateway layer. This adds an explicit role check so only service-role
-  // callers can trigger queue processing.
+  // verify_jwt=true (config.toml) ensures the JWT is cryptographically valid.
+  // This additional role check enforces that only service-role callers
+  // (e.g. a pg_cron HTTP job using the service key) can trigger queue processing.
+  // An authenticated end-user JWT would pass gateway verification but fail here.
   const token = authHeader.slice('Bearer '.length).trim()
   const claims = parseJwtClaims(token)
   if (claims?.role !== 'service_role') {

@@ -50,11 +50,13 @@ export default function PropertyGallery({
         {images.length > 1 && (
           <>
             <button
+              aria-label="Previous photo"
               className="absolute left-3 top-1/2 -translate-y-1/2 min-h-[44px] min-w-[44px] flex items-center justify-center p-2.5 rounded-full bg-background/70 backdrop-blur-md hover:bg-background/90 transition-all shadow-lg opacity-100 lg:opacity-0 lg:group-hover:opacity-100"
               onClick={() => setCurrentImage((currentImage - 1 + images.length) % images.length)}>
               <ChevronLeft className="w-4 h-4" />
             </button>
             <button
+              aria-label="Next photo"
               className="absolute right-3 top-1/2 -translate-y-1/2 min-h-[44px] min-w-[44px] flex items-center justify-center p-2.5 rounded-full bg-background/70 backdrop-blur-md hover:bg-background/90 transition-all shadow-lg opacity-100 lg:opacity-0 lg:group-hover:opacity-100"
               onClick={() => setCurrentImage((currentImage + 1) % images.length)}>
               <ChevronRight className="w-4 h-4" />
@@ -102,6 +104,8 @@ export default function PropertyGallery({
             <button
               key={i}
               onClick={() => setCurrentImage(i)}
+              aria-label={`View photo ${i + 1} of ${images.length}`}
+              aria-current={currentImage === i ? "true" : undefined}
               className={`shrink-0 min-h-[44px] min-w-[44px] w-16 h-11 rounded-lg overflow-hidden transition-all duration-200 ${
                 currentImage === i
                   ? "ring-2 ring-primary ring-offset-2 ring-offset-background opacity-100"

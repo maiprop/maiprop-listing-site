@@ -25,7 +25,7 @@ Deno.serve(async (req) => {
     if (!authHeader) throw new Error("No authorization header");
 
     const supabase = createClient(Deno.env.get("SUPABASE_URL") ?? "", serviceRoleKey);
-    const token = authHeader.replace("Bearer ", "");
+    const token = authHeader.replace(/^Bearer\s+/i, "").trim();
     const { data: userData, error: userError } = await supabase.auth.getUser(token);
     if (userError || !userData.user?.email) throw new Error("Unauthenticated");
 

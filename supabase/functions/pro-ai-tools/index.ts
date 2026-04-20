@@ -1,4 +1,4 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 
@@ -18,7 +18,7 @@ async function requireAuth(req: Request): Promise<{ error: Response | null; user
   }
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    Deno.env.get("SUPABASE_ANON_KEY")!
   );
   const { data: { user }, error } = await supabase.auth.getUser(authHeader.slice(7));
   if (error || !user) {
@@ -88,8 +88,19 @@ Deno.serve(async (req) => {
   if (proAiLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
 
 
-  const { error: authErr } = await requireAuth(req);
+  const { error: authErr, userId } = await requireAuth(req);
   if (authErr) return authErr;
+
+  // Verify active subscription — pro-ai-tools is a Pro-only feature.
+  // Use the service-role client so RLS doesn't block the profiles read.
+  const svcClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  const { data: profile } = await svcClient.from("profiles").select("subscription_product_id").eq("user_id", userId).single();
+  if (!profile?.subscription_product_id) {
+    return new Response(JSON.stringify({ error: "Active subscription required to use Pro AI tools" }), {
+      status: 403,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 
   try {
     const { messages, groupId } = await req.json();

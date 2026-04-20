@@ -63,7 +63,7 @@ export default function PropertyOwnerCard({
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-gradient-primary flex items-center justify-center text-sm font-bold text-primary-foreground overflow-hidden shrink-0">
                 {ownerProfile.avatar_url ? (
-                  <img src={ownerProfile.avatar_url} alt="" className="w-full h-full object-cover" />
+                  <img src={ownerProfile.avatar_url} alt={`${ownerProfile.display_name || "Owner"} profile photo`} className="w-full h-full object-cover" />
                 ) : (
                   ownerProfile.display_name?.[0] || "O"
                 )}

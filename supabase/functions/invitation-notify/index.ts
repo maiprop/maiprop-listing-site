@@ -1,14 +1,10 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { createClient } from "npm:@supabase/supabase-js@2.57.2";
+import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  const corsPreflightResponse = handleCors(req);
+  if (corsPreflightResponse) return corsPreflightResponse;
+  const corsHeaders = getCorsHeaders(req);
 
   try {
     const authHeader = req.headers.get("Authorization");
@@ -21,7 +17,7 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-    const token = authHeader.replace("Bearer ", "");
+    const token = authHeader.slice("Bearer ".length).trim();
     const {
       data: { user },
       error: authErr,
@@ -29,6 +25,19 @@ Deno.serve(async (req) => {
     if (authErr || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Only platform admins may send invitation notifications (EF-3 fix)
+    const { data: adminProfile } = await supabase
+      .from("profiles")
+      .select("role, is_platform_admin")
+      .eq("user_id", user.id)
+      .single();
+    if (!adminProfile?.is_platform_admin && adminProfile?.role !== "admin") {
+      return new Response(JSON.stringify({ error: "Forbidden" }), {
+        status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

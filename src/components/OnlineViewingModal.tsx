@@ -162,7 +162,7 @@ export default function OnlineViewingModal({ open, onClose, listing, professiona
             {/* Entity context */}
             <div className={`flex items-center gap-3 p-3 bg-secondary rounded-xl ${isProperty && listing?.cover_image_url ? "" : ""}`}>
               {isProperty && listing?.cover_image_url ? (
-                <img src={listing.cover_image_url} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />
+                <img src={listing.cover_image_url} alt={entityName} className="w-12 h-12 rounded-lg object-cover shrink-0" />
               ) : (
                 <div className="w-12 h-12 rounded-lg bg-gradient-primary flex items-center justify-center font-bold text-primary-foreground text-sm shrink-0">
                   {isProperty ? "🏠" : (entityName.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase())}

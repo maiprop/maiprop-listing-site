@@ -127,7 +127,7 @@ export function VerificationModal({
               className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-base shrink-0 ${catColor}`}
             >
               {pro.avatar_url ? (
-                <img src={pro.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
+                <img src={pro.avatar_url} alt={`${pro.display_name || "Professional"} profile photo`} className="w-full h-full rounded-full object-cover" />
               ) : (
                 initials(pro.display_name)
               )}

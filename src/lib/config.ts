@@ -38,9 +38,8 @@ export const SUPABASE_ANON_KEY = _anonKey;
 
 // Mapbox optional — app works without it; maps disabled until set
 export const MAPBOX_TOKEN = _mapbox ?? "";
-if (!_mapbox && !import.meta.env.SSR) {
-  // Warn once so developers notice silently broken map features.
-  // Production builds emit this too (once) so ops can spot a misconfigured env.
+if (!_mapbox && !import.meta.env.SSR && import.meta.env.DEV) {
+  // Warn in dev only — ops can verify VITE_MAPBOX_TOKEN via the deployment dashboard.
   console.warn(
     "[maiProp] VITE_MAPBOX_TOKEN is not set. Map components (MapView, " +
       "PropertyMiniMap, auction map overlays) will render a placeholder. " +

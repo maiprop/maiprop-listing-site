@@ -9,11 +9,7 @@
  */
 
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 
 function log(msg: string, data?: unknown) {
   console.log(`[send-saved-search-alerts] ${msg}`, data ? JSON.stringify(data) : "");
@@ -22,9 +18,14 @@ function log(msg: string, data?: unknown) {
 // Prevent unauthenticated callers from triggering bulk email sends.
 // The pg_cron job must pass Authorization: Bearer <CRON_SECRET>.
 // Set CRON_SECRET in Supabase edge function secrets.
+// Fails CLOSED: if the secret is not configured, the function rejects all
+// requests rather than allowing unauthenticated access.
 function verifyCronSecret(req: Request): boolean {
   const secret = Deno.env.get("CRON_SECRET");
-  if (!secret) return true; // not configured — allow (dev/staging)
+  if (!secret) {
+    console.error("[send-saved-search-alerts] CRON_SECRET not configured — rejecting request");
+    return false;
+  }
   const auth = req.headers.get("Authorization");
   return auth === `Bearer ${secret}`;
 }
@@ -55,9 +56,9 @@ function buildListingsQuery(supabase: ReturnType<typeof createClient>, filters: 
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  const corsPreflightResponse = handleCors(req);
+  if (corsPreflightResponse) return corsPreflightResponse;
+  const corsHeaders = getCorsHeaders(req);
 
   if (!verifyCronSecret(req)) {
     return new Response(JSON.stringify({ ok: false, error: "unauthorized" }), {

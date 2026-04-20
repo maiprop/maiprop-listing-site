@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect, useMemo, lazy, Suspense } from "react";
 import { Helmet } from "react-helmet-async";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
@@ -113,52 +113,54 @@ export default function Listings() {
     }
   }, [isError, error]);
 
-  const sourceListings = dbListings.map(listingToCard);
+  const sourceListings = useMemo(() => dbListings.map(listingToCard), [dbListings]);
 
-  // Client-side filtering — only for fields not supported server-side
-  let filtered = sourceListings.filter((p: any) => {
-    const raw = p._raw || p;
-    if (hasVideoViewing && !raw.has_video_tour) return false;
-    if (hasVirtualTour && !raw.has_virtual_tour) return false;
-    if (hasMessaging && raw.messaging_disabled) return false;
-    if (minAiScore > 0 && !(Number(raw.ai_score) >= minAiScore)) return false;
-    if (minWalkability > 0 && !(Number(raw.walkability_score) >= minWalkability)) return false;
-    return true;
-  });
+  const filtered = useMemo(() => {
+    // Client-side filtering — only for fields not supported server-side
+    const afterFilter = sourceListings.filter((p: any) => {
+      const raw = p._raw || p;
+      if (hasVideoViewing && !raw.has_video_tour) return false;
+      if (hasVirtualTour && !raw.has_virtual_tour) return false;
+      if (hasMessaging && raw.messaging_disabled) return false;
+      if (minAiScore > 0 && !(Number(raw.ai_score) >= minAiScore)) return false;
+      if (minWalkability > 0 && !(Number(raw.walkability_score) >= minWalkability)) return false;
+      return true;
+    });
 
-  // User sort must NOT override paid prioritization unless "featured" is explicitly chosen.
-  // "featured" sort: featured → priority → rest. All other sorts: promoted always lead.
-  const isPromoted = (p: any) => !!(p.isFeatured || (p.priorityPlacement ?? 0) > 0);
-  const byUserSort = (a: any, b: any) => {
-    if (selectedSort === "featured") {
-      const aF = a.isFeatured ? 1 : 0;
-      const bF = b.isFeatured ? 1 : 0;
-      if (bF !== aF) return bF - aF;
-      const aPri = Number(a.priorityPlacement ?? 0);
-      const bPri = Number(b.priorityPlacement ?? 0);
-      if (bPri !== aPri) return bPri - aPri;
-      return new Date(b._raw?.created_at || 0).getTime() - new Date(a._raw?.created_at || 0).getTime();
-    }
-    if (selectedSort === "price-asc") return a.price - b.price;
-    if (selectedSort === "price-desc") return b.price - a.price;
-    if (selectedSort === "newest") return new Date(b._raw?.created_at || 0).getTime() - new Date(a._raw?.created_at || 0).getTime();
-    if (selectedSort === "ai-score") return (b.aiScore || 0) - (a.aiScore || 0);
-    if (selectedSort === "views") return (b.views || 0) - (a.views || 0);
-    return 0;
-  };
-  filtered = [...filtered].sort((a, b) => {
-    // "Featured First" sort: explicit featured ordering, skip automatic promo-first
-    if (selectedSort === "featured") return byUserSort(a, b);
-    const aPromo = isPromoted(a);
-    const bPromo = isPromoted(b);
-    if (aPromo && !bPromo) return -1;
-    if (!aPromo && bPromo) return 1;
-    if (aPromo && bPromo) {
-      const pri = (b.priorityPlacement ?? 0) - (a.priorityPlacement ?? 0);
-      if (pri !== 0) return pri;
-    }
-    return byUserSort(a, b);
-  });
+    // User sort must NOT override paid prioritization unless "featured" is explicitly chosen.
+    // "featured" sort: featured → priority → rest. All other sorts: promoted always lead.
+    const isPromoted = (p: any) => !!(p.isFeatured || (p.priorityPlacement ?? 0) > 0);
+    const byUserSort = (a: any, b: any) => {
+      if (selectedSort === "featured") {
+        const aF = a.isFeatured ? 1 : 0;
+        const bF = b.isFeatured ? 1 : 0;
+        if (bF !== aF) return bF - aF;
+        const aPri = Number(a.priorityPlacement ?? 0);
+        const bPri = Number(b.priorityPlacement ?? 0);
+        if (bPri !== aPri) return bPri - aPri;
+        return new Date(b._raw?.created_at || 0).getTime() - new Date(a._raw?.created_at || 0).getTime();
+      }
+      if (selectedSort === "price-asc") return a.price - b.price;
+      if (selectedSort === "price-desc") return b.price - a.price;
+      if (selectedSort === "newest") return new Date(b._raw?.created_at || 0).getTime() - new Date(a._raw?.created_at || 0).getTime();
+      if (selectedSort === "ai-score") return (b.aiScore || 0) - (a.aiScore || 0);
+      if (selectedSort === "views") return (b.views || 0) - (a.views || 0);
+      return 0;
+    };
+    return [...afterFilter].sort((a, b) => {
+      // "Featured First" sort: explicit featured ordering, skip automatic promo-first
+      if (selectedSort === "featured") return byUserSort(a, b);
+      const aPromo = isPromoted(a);
+      const bPromo = isPromoted(b);
+      if (aPromo && !bPromo) return -1;
+      if (!aPromo && bPromo) return 1;
+      if (aPromo && bPromo) {
+        const pri = (b.priorityPlacement ?? 0) - (a.priorityPlacement ?? 0);
+        if (pri !== 0) return pri;
+      }
+      return byUserSort(a, b);
+    });
+  }, [sourceListings, hasVideoViewing, hasVirtualTour, hasMessaging, minAiScore, minWalkability, selectedSort]);
 
   // Compare helpers
   const toggleCompare = (listing: any) => {

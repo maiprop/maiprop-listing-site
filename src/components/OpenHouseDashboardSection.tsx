@@ -77,7 +77,7 @@ function OwnerListingCard({ listing }: { listing: any }) {
         onClick={() => setExpanded(!expanded)}
       >
         {listing.cover_image_url
-          ? <img src={listing.cover_image_url} alt="" className="w-14 h-14 rounded-lg object-cover shrink-0" />
+          ? <img src={listing.cover_image_url} alt={listing.title} className="w-14 h-14 rounded-lg object-cover shrink-0" />
           : <div className="w-14 h-14 rounded-lg bg-secondary shrink-0 flex items-center justify-center"><Building2 className="w-5 h-5 text-muted-foreground" /></div>
         }
         <div className="flex-1 min-w-0">
@@ -154,7 +154,7 @@ function ParticipantRegistrationCard({ reg }: { reg: any }) {
   return (
     <Link to={`/open-house/${reg.listing_id}`} className="glass-card rounded-xl p-4 flex gap-3 hover:border-primary/40 transition-colors">
       {listing?.cover_image_url
-        ? <img src={listing.cover_image_url} alt="" className="w-14 h-14 rounded-lg object-cover shrink-0" />
+        ? <img src={listing.cover_image_url} alt={listing.title} className="w-14 h-14 rounded-lg object-cover shrink-0" />
         : <div className="w-14 h-14 rounded-lg bg-secondary shrink-0 flex items-center justify-center"><DoorOpen className="w-5 h-5 text-muted-foreground" /></div>
       }
       <div className="flex-1 min-w-0 space-y-1">
@@ -207,7 +207,7 @@ function ParticipantOfferCard({ offer }: { offer: any }) {
   return (
     <Link to={`/open-house/${offer.listing_id}`} className="glass-card rounded-xl p-4 flex gap-3 hover:border-primary/40 transition-colors">
       {listing?.cover_image_url
-        ? <img src={listing.cover_image_url} alt="" className="w-14 h-14 rounded-lg object-cover shrink-0" />
+        ? <img src={listing.cover_image_url} alt={listing.title} className="w-14 h-14 rounded-lg object-cover shrink-0" />
         : <div className="w-14 h-14 rounded-lg bg-secondary shrink-0 flex items-center justify-center"><Euro className="w-5 h-5 text-muted-foreground" /></div>
       }
       <div className="flex-1 min-w-0 space-y-1">

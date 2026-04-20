@@ -33,7 +33,7 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) throw new Error("No authorization header provided");
 
-    const token = authHeader.replace("Bearer ", "");
+    const token = authHeader.replace(/^Bearer\s+/i, "").trim();
     const { data: userData, error: userError } = await supabaseClient.auth.getUser(token);
     if (userError || !userData.user?.email) throw new Error("Authentication failed");
 

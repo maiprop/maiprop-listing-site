@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 
@@ -13,7 +13,7 @@ async function requireAuth(req: Request): Promise<Response | null> {
       status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!);
   const { data: { user }, error } = await supabase.auth.getUser(authHeader.slice(7));
   if (error || !user) {
     return new Response(JSON.stringify({ error: "Invalid or expired token" }), {

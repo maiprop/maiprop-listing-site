@@ -61,7 +61,7 @@ export function useAuctionBidHistory(
         dataSource: data.source ?? "mock",
       };
     },
-    staleTime: 10 * 60 * 1000, // 10 minutes
+    staleTime: 60 * 1000, // 1 minute — bid history can change rapidly during live auctions
     retry: 1,
   });
 }

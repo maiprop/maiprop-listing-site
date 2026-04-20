@@ -58,6 +58,14 @@ const ChartContainer = React.forwardRef<
 });
 ChartContainer.displayName = "Chart";
 
+// Allowlist of safe CSS color patterns to prevent CSS injection via dangerouslySetInnerHTML.
+// Accepts: named colors, hex (#rgb, #rrggbb, #rrggbbaa), rgb/rgba, hsl/hsla, and CSS var() references.
+const CSS_COLOR_RE = /^(#[0-9a-fA-F]{3,8}|rgba?\([^)]{1,60}\)|hsla?\([^)]{1,80}\)|[a-zA-Z]{1,30}|var\(--[a-zA-Z0-9-]{1,80}\))$/;
+function safeCssColor(value: string | undefined): string | null {
+  if (!value) return null;
+  return CSS_COLOR_RE.test(value.trim()) ? value.trim() : null;
+}
+
 const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
   const colorConfig = Object.entries(config).filter(([_, config]) => config.theme || config.color);
 
@@ -74,7 +82,8 @@ const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
 ${prefix} [data-chart=${id}] {
 ${colorConfig
   .map(([key, itemConfig]) => {
-    const color = itemConfig.theme?.[theme as keyof typeof itemConfig.theme] || itemConfig.color;
+    const raw = itemConfig.theme?.[theme as keyof typeof itemConfig.theme] || itemConfig.color;
+    const color = safeCssColor(raw);
     return color ? `  --color-${key}: ${color};` : null;
   })
   .join("\n")}

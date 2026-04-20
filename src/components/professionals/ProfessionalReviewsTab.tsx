@@ -205,7 +205,7 @@ export function ProfessionalReviewsTab({ professionalId, proCategory, displayNam
                     <div className="flex items-center gap-2.5">
                       <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-xs font-bold shrink-0 overflow-hidden">
                         {r.reviewer?.avatar_url
-                          ? <img src={r.reviewer.avatar_url} alt="" className="w-full h-full object-cover" />
+                          ? <img src={r.reviewer.avatar_url} alt={`${name} profile photo`} className="w-full h-full object-cover" />
                           : initials}
                       </div>
                       <div>

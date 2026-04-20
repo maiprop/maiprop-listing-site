@@ -34,14 +34,14 @@ export function PropertyGallery({
             <button
               onClick={() => setIdx(i => (i - 1 + images.length) % images.length)}
               className="absolute left-3 top-1/2 -translate-y-1/2 min-h-[44px] min-w-[44px] flex items-center justify-center p-2.5 rounded-full bg-background/70 backdrop-blur-md hover:bg-background/90 transition-all shadow-lg opacity-100 lg:opacity-0 lg:group-hover:opacity-100"
-              aria-label="Previous"
+              aria-label="Previous photo"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
             <button
               onClick={() => setIdx(i => (i + 1) % images.length)}
               className="absolute right-3 top-1/2 -translate-y-1/2 min-h-[44px] min-w-[44px] flex items-center justify-center p-2.5 rounded-full bg-background/70 backdrop-blur-md hover:bg-background/90 transition-all shadow-lg opacity-100 lg:opacity-0 lg:group-hover:opacity-100"
-              aria-label="Next"
+              aria-label="Next photo"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -78,6 +78,8 @@ export function PropertyGallery({
             <button
               key={i}
               onClick={() => setIdx(i)}
+              aria-label={`View photo ${i + 1} of ${images.length}`}
+              aria-current={idx === i ? "true" : undefined}
               className={`shrink-0 min-h-[44px] min-w-[44px] w-16 h-11 rounded-lg overflow-hidden transition-all duration-200 ${
                 idx === i ? "ring-2 ring-primary ring-offset-2 ring-offset-background opacity-100" : "opacity-50 hover:opacity-80"
               }`}

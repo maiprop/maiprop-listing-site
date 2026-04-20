@@ -1,23 +1,25 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { createClient } from "npm:@supabase/supabase-js@2.57.2";
+import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 
 // Validate DB webhook secret to prevent spoofed payloads triggering notification emails.
 // Set WEBHOOK_SECRET in Supabase edge function secrets, and configure the DB webhook
 // to send the header: Authorization: Bearer <WEBHOOK_SECRET>
+// Fails CLOSED: if secret is absent, all requests are rejected.
 function verifyWebhookSecret(req: Request): boolean {
   const secret = Deno.env.get("WEBHOOK_SECRET");
-  if (!secret) return true; // secret not configured — allow (dev/staging without secrets)
+  if (!secret) {
+    console.error("[oh-registration-notify] WEBHOOK_SECRET not configured — rejecting request");
+    return false;
+  }
   const auth = req.headers.get("Authorization");
   return auth === `Bearer ${secret}`;
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const corsPreflightResponse = handleCors(req);
+  if (corsPreflightResponse) return corsPreflightResponse;
+  const corsHeaders = getCorsHeaders(req);
 
   if (!verifyWebhookSecret(req)) {
     return new Response(JSON.stringify({ ok: false, reason: "unauthorized" }), {
