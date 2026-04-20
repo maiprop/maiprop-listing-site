@@ -19,15 +19,16 @@ import { test, expect, type Page, type Browser } from "@playwright/test";
 
 // ─── Credentials ─────────────────────────────────────────────────────────────
 
-const PW = "Demo2025!";
+const PW = process.env.E2E_DEMO_PASSWORD ?? "";
 
-const BUYER_EMAIL = "buyer.pro@maiprop.demo";
-const INVESTOR_PRIVATE_EMAIL = "investor.private@maiprop.demo";
-const INVESTOR_INSTITUTIONAL_EMAIL = "investor.institutional@maiprop.demo";
-const ADMIN_EMAIL = "admin@maiprop.demo";
+const BUYER_EMAIL                 = process.env.E2E_BUYER_EMAIL                  ?? "";
+const INVESTOR_PRIVATE_EMAIL      = process.env.E2E_INVESTOR_PRIVATE_EMAIL       ?? "";
+const INVESTOR_INSTITUTIONAL_EMAIL = process.env.E2E_INVESTOR_INSTITUTIONAL_EMAIL ?? "";
+const ADMIN_EMAIL                 = process.env.E2E_ADMIN_EMAIL                  ?? "";
 
-// Credentialed suites always run — seeded demo accounts are always present.
-const hasCredentials = true;
+const hasCredentials =
+  BUYER_EMAIL !== "" && INVESTOR_PRIVATE_EMAIL !== "" &&
+  INVESTOR_INSTITUTIONAL_EMAIL !== "" && ADMIN_EMAIL !== "" && PW !== "";
 
 // ─── Sign-in helper ───────────────────────────────────────────────────────────
 

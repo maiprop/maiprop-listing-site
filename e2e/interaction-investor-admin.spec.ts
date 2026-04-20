@@ -15,10 +15,14 @@ import { test, expect, type Page } from "@playwright/test";
 
 // ─── Credentials ─────────────────────────────────────────────────────────────
 
-const INVESTOR_PRIVATE_EMAIL = "investor.private@maiprop.demo";
-const INVESTOR_INSTITUTIONAL_EMAIL = "investor.institutional@maiprop.demo";
-const ADMIN_EMAIL = "admin@maiprop.demo";
-const DEMO_PASSWORD = "Demo2025!";
+const INVESTOR_PRIVATE_EMAIL      = process.env.E2E_INVESTOR_PRIVATE_EMAIL       ?? "";
+const INVESTOR_INSTITUTIONAL_EMAIL = process.env.E2E_INVESTOR_INSTITUTIONAL_EMAIL ?? "";
+const ADMIN_EMAIL                 = process.env.E2E_ADMIN_EMAIL                  ?? "";
+const DEMO_PASSWORD               = process.env.E2E_DEMO_PASSWORD                ?? "";
+
+const hasCredentials =
+  INVESTOR_PRIVATE_EMAIL !== "" && INVESTOR_INSTITUTIONAL_EMAIL !== "" &&
+  ADMIN_EMAIL !== "" && DEMO_PASSWORD !== "";
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
@@ -37,6 +41,7 @@ async function signIn(page: Page, email: string, password: string): Promise<void
 // ─── Investor tests ───────────────────────────────────────────────────────────
 
 test.describe("Investor (private) — sign in and basic navigation", () => {
+  test.skip(!hasCredentials, "Set E2E_INVESTOR_PRIVATE_EMAIL / E2E_DEMO_PASSWORD to run");
   test("investor.private can sign in and reach /dashboard", async ({ page }) => {
     await signIn(page, INVESTOR_PRIVATE_EMAIL, DEMO_PASSWORD);
     await page.waitForLoadState("networkidle", { timeout: 15_000 });
@@ -99,6 +104,7 @@ test.describe("Investor (private) — sign in and basic navigation", () => {
 // ─── Investor (institutional) tests ──────────────────────────────────────────
 
 test.describe("Investor (institutional) — investor-dashboard access", () => {
+  test.skip(!hasCredentials, "Set E2E_INVESTOR_INSTITUTIONAL_EMAIL / E2E_DEMO_PASSWORD to run");
   test("investor.institutional accesses /investor-dashboard without being gated", async ({ page }) => {
     await signIn(page, INVESTOR_INSTITUTIONAL_EMAIL, DEMO_PASSWORD);
     await page.goto("/investor-dashboard");
@@ -118,6 +124,7 @@ test.describe("Investor (institutional) — investor-dashboard access", () => {
 // ─── Simultaneous investor sessions ──────────────────────────────────────────
 
 test.describe("Simultaneous investor sessions", () => {
+  test.skip(!hasCredentials, "Set investor + E2E_DEMO_PASSWORD env vars to run");
   test("both investor accounts sign in simultaneously and both reach /investor-dashboard", async ({ browser }) => {
     test.setTimeout(90_000);
     const privateCtx = await browser.newContext();
@@ -171,6 +178,7 @@ test.describe("Simultaneous investor sessions", () => {
 // ─── Admin tests ──────────────────────────────────────────────────────────────
 
 test.describe("Admin — sign in and panel access", () => {
+  test.skip(!hasCredentials, "Set E2E_ADMIN_EMAIL / E2E_DEMO_PASSWORD to run");
   test("admin can sign in and reach /dashboard or /admin", async ({ page }) => {
     await signIn(page, ADMIN_EMAIL, DEMO_PASSWORD);
     await page.waitForLoadState("networkidle", { timeout: 15_000 });
@@ -229,6 +237,7 @@ test.describe("Admin — sign in and panel access", () => {
 // ─── Simultaneous admin + investor sessions ───────────────────────────────────
 
 test.describe("Simultaneous admin and investor sessions", () => {
+  test.skip(!hasCredentials, "Set admin + investor + E2E_DEMO_PASSWORD env vars to run");
   test("admin on /admin and investor on /investor-dashboard — no JS errors and pages render", async ({ browser }) => {
     test.setTimeout(90_000);
     const adminCtx = await browser.newContext();

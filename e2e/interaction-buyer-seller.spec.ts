@@ -11,17 +11,10 @@ import { test, expect, type Page, type Browser } from "@playwright/test";
 
 // ── Credentials ───────────────────────────────────────────────────────────────
 
-const BUYER_EMAIL    = "buyer.pro@maiprop.demo";
-const BUYER_PASSWORD = "Demo2025!";
-
-const SELLER_EMAIL    = "seller.pro@maiprop.demo";
-const SELLER_PASSWORD = "Demo2025!";
-
-// Allow CI overrides; fall back to known demo accounts.
-const buyerEmail    = process.env.E2E_BUYER_EMAIL    ?? BUYER_EMAIL;
-const buyerPassword = process.env.E2E_BUYER_PASSWORD ?? BUYER_PASSWORD;
-const sellerEmail   = process.env.E2E_SELLER_EMAIL   ?? SELLER_EMAIL;
-const sellerPassword = process.env.E2E_SELLER_PASSWORD ?? SELLER_PASSWORD;
+const buyerEmail    = process.env.E2E_BUYER_EMAIL    ?? "";
+const buyerPassword = process.env.E2E_BUYER_PASSWORD ?? "";
+const sellerEmail   = process.env.E2E_SELLER_EMAIL   ?? "";
+const sellerPassword = process.env.E2E_SELLER_PASSWORD ?? "";
 
 const hasCredentials = buyerEmail !== "" && buyerPassword !== "" &&
                        sellerEmail !== "" && sellerPassword !== "";
