@@ -1,7 +1,7 @@
 /**
  * Tests for ai-translate edge function (public, no auth required).
  */
-import { assertEquals, assertStringIncludes } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { captureHandler, req } from "../_shared/testUtils.ts";
 
 const { handler, restore } = await captureHandler("./index.ts");

@@ -30,7 +30,7 @@ export async function captureHandler(
   let captured: ((req: Request) => Promise<Response>) | null = null;
 
   const origServe = Deno.serve;
-  // @ts-ignore test override
+  // @ts-expect-error test override
   Deno.serve = (h: unknown) => { captured = h as typeof captured; return {} as Deno.HttpServer; };
 
   const origEnvGet = Deno.env.get.bind(Deno.env);
@@ -46,16 +46,16 @@ export async function captureHandler(
     CRON_SECRET: "test-cron-secret",
     ...envOverrides,
   };
-  // @ts-ignore test override
+  // @ts-expect-error test override
   Deno.env.get = (k: string) => defaultEnv[k] ?? origEnvGet(k);
 
   await import(moduleSpecifier);
 
-  // @ts-ignore restore
+  // @ts-expect-error test override
   Deno.serve = origServe;
 
   function restore() {
-    // @ts-ignore restore
+    // @ts-expect-error test override
     Deno.env.get = origEnvGet;
   }
 
