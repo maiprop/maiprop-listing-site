@@ -22,7 +22,7 @@
     /* Accent should read well as text + pills; keep cyan as a background highlight instead */
     --accent: 240 70% 48%;
     --accent-foreground: 0 0% 100%;
-    --destructive: 0 70% 52%;
+    --destructive: 0 72% 48%;
     --destructive-foreground: 0 0% 100%;
     --border: 36 15% 87%;
     --input: 36 20% 93%;
@@ -171,7 +171,7 @@
     --muted-foreground: 25 15% 32%;
     --accent: 240 70% 48%;
     --accent-foreground: 0 0% 100%;
-    --destructive: 0 70% 52%;
+    --destructive: 0 72% 48%;
     --destructive-foreground: 0 0% 100%;
     --border: 36 15% 87%;
     --input: 36 20% 93%;
