@@ -127,7 +127,7 @@ jobs:
           --health-retries=10
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Install psql client
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
@@ -148,6 +148,36 @@ jobs:
           -- Stub auth.uid() used by RLS policies
           CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT NULL::uuid $$;
           CREATE OR REPLACE FUNCTION auth.role() RETURNS text LANGUAGE sql STABLE AS $$ SELECT 'anon'::text $$;
+          -- Stub storage schema — migrations reference storage.buckets / storage.objects
+          CREATE SCHEMA IF NOT EXISTS storage;
+          CREATE TABLE IF NOT EXISTS storage.buckets (
+            id text PRIMARY KEY,
+            name text NOT NULL,
+            owner uuid,
+            created_at timestamptz DEFAULT now(),
+            updated_at timestamptz DEFAULT now(),
+            public boolean DEFAULT false,
+            avif_autodetection boolean DEFAULT false,
+            file_size_limit bigint,
+            allowed_mime_types text[]
+          );
+          ALTER TABLE storage.buckets ENABLE ROW LEVEL SECURITY;
+          CREATE TABLE IF NOT EXISTS storage.objects (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            bucket_id text REFERENCES storage.buckets(id),
+            name text,
+            owner uuid,
+            created_at timestamptz DEFAULT now(),
+            updated_at timestamptz DEFAULT now(),
+            last_accessed_at timestamptz DEFAULT now(),
+            metadata jsonb,
+            path_tokens text[]
+          );
+          ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+          -- Supabase storage helper functions used in policies
+          CREATE OR REPLACE FUNCTION storage.foldername(name text) RETURNS text[] LANGUAGE sql AS $$ SELECT string_to_array(name, '/') $$;
+          CREATE OR REPLACE FUNCTION storage.filename(name text) RETURNS text LANGUAGE sql AS $$ SELECT (string_to_array(name, '/'))[array_length(string_to_array(name, '/'), 1)] $$;
+          CREATE OR REPLACE FUNCTION storage.extension(name text) RETURNS text LANGUAGE sql AS $$ SELECT reverse(split_part(reverse(name), '.', 1)) $$;
           SQL
 
       - name: Apply migrations in order

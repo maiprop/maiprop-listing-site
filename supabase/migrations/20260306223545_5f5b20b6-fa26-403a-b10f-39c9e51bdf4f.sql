@@ -78,6 +78,8 @@ CREATE TRIGGER on_auth_user_created
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- ── 4. USER_ROLES ────────────────────────────────────
+-- Drop the earlier app_role-based table if it exists (created by 20260216225334).
+DROP TABLE IF EXISTS public.user_roles CASCADE;
 CREATE TABLE public.user_roles (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,

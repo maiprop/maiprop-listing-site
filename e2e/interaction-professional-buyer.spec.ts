@@ -25,8 +25,7 @@ const ACCOUNTS = {
   engineer:  "engineer.pro@maiprop.demo",
 } as const;
 
-// All tests in this file use demo credentials that are always available.
-const hasCredentials = true;
+const hasCredentials = !!(process.env.E2E_TEST_EMAIL && process.env.E2E_TEST_PASSWORD);
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 

@@ -18,7 +18,7 @@
     --secondary: 36 20% 93%;
     --secondary-foreground: 25 15% 30%;
     --muted: 36 15% 91%;
-    --muted-foreground: 25 12% 50%;
+    --muted-foreground: 25 12% 38%;
     /* Accent should read well as text + pills; keep cyan as a background highlight instead */
     --accent: 240 70% 48%;
     --accent-foreground: 0 0% 100%;
@@ -96,7 +96,7 @@
     --secondary: 30 10% 18%;
     --secondary-foreground: 36 15% 70%;
     --muted: 30 10% 16%;
-    --muted-foreground: 36 10% 48%;
+    --muted-foreground: 36 10% 62%;
     --accent: 240 65% 52%;
     --accent-foreground: 240 100% 10%;
     --destructive: 0 68% 50%;
@@ -168,7 +168,7 @@
     --secondary: 36 20% 93%;
     --secondary-foreground: 25 15% 30%;
     --muted: 36 15% 91%;
-    --muted-foreground: 25 12% 50%;
+    --muted-foreground: 25 12% 38%;
     --accent: 240 70% 48%;
     --accent-foreground: 0 0% 100%;
     --destructive: 0 70% 52%;

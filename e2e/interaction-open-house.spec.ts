@@ -21,6 +21,7 @@ import { test, expect, type Page, type BrowserContext } from "@playwright/test";
 
 const BASE_URL = "http://localhost:8080";
 const PASSWORD = "Demo2025!";
+const hasCredentials = !!(process.env.E2E_TEST_EMAIL && process.env.E2E_TEST_PASSWORD);
 
 const ACCOUNTS = {
   buyerFree: "buyer.free@maiprop.demo",
@@ -134,6 +135,8 @@ test.describe("Public — open house browsing", () => {
 // ---------------------------------------------------------------------------
 
 test.describe("Buyer — authenticated open house browsing", () => {
+  test.skip(!hasCredentials, "Demo credentials required");
+
   test("buyer.free signs in and browses /open-houses", async ({ page }) => {
     // Collect page errors before any navigation
     const errors: string[] = [];
@@ -288,6 +291,8 @@ test.describe("Buyer — authenticated open house browsing", () => {
 // ---------------------------------------------------------------------------
 
 test.describe("Seller / agent — hosting view", () => {
+  test.skip(!hasCredentials, "Demo credentials required");
+
   test("seller.pro dashboard does not crash navigating from /dashboard", async ({ page }) => {
     const errors: string[] = [];
     page.on("pageerror", (err) => errors.push(err.message));
@@ -334,6 +339,8 @@ test.describe("Seller / agent — hosting view", () => {
 // ---------------------------------------------------------------------------
 
 test.describe("Multi-context — four accounts simultaneously", () => {
+  test.skip(!hasCredentials, "Demo credentials required");
+
   test("all four accounts sign in without interfering", async ({ browser }) => {
     // Sign in sequentially to avoid Supabase auth rate-limiting under 4-parallel load.
     // Increase per-test timeout to accommodate 4 full sign-in flows.

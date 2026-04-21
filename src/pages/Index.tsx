@@ -188,20 +188,22 @@ export default function Index() {
         </div>
       )}
 
-      <HeroSection />
-      <BrowseByTypeSection typeCounts={typeCounts} />
-      <FeaturedPropertiesSection listings={featuredListings} isLoading={featuredLoading} isError={featuredError} />
-      <HomepageAuctionsSection listings={auctionListings} isLoading={auctionsLoading} />
-      <HomepageOpenHousesSection listings={openHouseListings} />
-      <QuickSaleCTASection />
-      <PopularLocationsSection />
-      <ProfessionalsCTASection />
-      <OSSection />
+      <main id="main-content">
+        <HeroSection />
+        <BrowseByTypeSection typeCounts={typeCounts} />
+        <FeaturedPropertiesSection listings={featuredListings} isLoading={featuredLoading} isError={featuredError} />
+        <HomepageAuctionsSection listings={auctionListings} isLoading={auctionsLoading} />
+        <HomepageOpenHousesSection listings={openHouseListings} />
+        <QuickSaleCTASection />
+        <PopularLocationsSection />
+        <ProfessionalsCTASection />
+        <OSSection />
 
-      <Suspense fallback={null}>
-        <Footer />
-      </Suspense>
-      <div className="h-20 lg:hidden" />
+        <Suspense fallback={null}>
+          <Footer />
+        </Suspense>
+        <div className="h-20 lg:hidden" />
+      </main>
     </div>
   );
 }

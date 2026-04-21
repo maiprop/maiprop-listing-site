@@ -396,6 +396,7 @@ export default function Listings() {
               />
               <div className="relative">
                 <select value={selectedPrice} onChange={e => setParam("price", e.target.value)}
+                  aria-label="Price range"
                   className="appearance-none bg-secondary border border-border rounded-xl px-3 py-2.5 pr-7 text-sm text-foreground cursor-pointer outline-none focus:border-primary">
                   {(selectedListingType === "rent" ? rentPriceRanges : buyPriceRanges).map(o => (
                     <option key={o.value} value={o.value} className="bg-card">{o.label}</option>
@@ -405,6 +406,7 @@ export default function Listings() {
               </div>
               <div className="relative">
                 <select value={selectedSort} onChange={e => setParam("sort", e.target.value)}
+                  aria-label="Sort by"
                   className="appearance-none bg-secondary border border-border rounded-xl px-3 py-2.5 pr-7 text-sm text-foreground cursor-pointer outline-none focus:border-primary">
                   {sortOptions.map(o => <option key={o.value} value={o.value} className="bg-card">{t(o.labelKey)}</option>)}
                 </select>

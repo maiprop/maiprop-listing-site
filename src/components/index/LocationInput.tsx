@@ -1,9 +1,17 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useCallback, useRef } from "react";
 import ReactDOM from "react-dom";
 import { MapPin, Clock, X } from "lucide-react";
 import { GOOGLE_MAPS_API_KEY } from "@/lib/config";
 import { getRecentSearches, removeRecentSearch } from "@/lib/recentSearches";
+
+interface GMAutocompleteInstance {
+  addListener(eventName: string, handler: () => void): void;
+  getPlace(): { address_components?: Array<{ types: string[]; long_name: string }>; formatted_address?: string };
+}
+
+type GoogleMapsWindow = typeof window & {
+  google?: { maps?: { places?: { Autocomplete: new (el: HTMLInputElement, opts: object) => GMAutocompleteInstance } } };
+};
 
 export function LocationInput({
   value,
@@ -19,7 +27,7 @@ export function LocationInput({
   const wrapRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const googleLoadedRef = useRef(false);
-  const autocompleteRef = useRef<any>(null);
+  const autocompleteRef = useRef<GMAutocompleteInstance | null>(null);
 
   const refresh = useCallback(() => setRecents(getRecentSearches()), []);
 
@@ -46,7 +54,7 @@ export function LocationInput({
     const input = inputRef.current;
     const initGoogle = () => {
        
-      const g = (window as any).google;
+      const g = (window as GoogleMapsWindow).google;
       if (!g?.maps?.places?.Autocomplete) return;
       if (autocompleteRef.current) return;
       const autocomplete = new g.maps.places.Autocomplete(input, {
@@ -59,7 +67,7 @@ export function LocationInput({
         if (!place.address_components) return;
         const ac = place.address_components;
          
-        const get = (t: string) => ac.find((c: any) => c.types.includes(t))?.long_name ?? "";
+        const get = (t: string) => ac.find((c) => c.types.includes(t))?.long_name ?? "";
         const city =
           get("locality") ||
           get("administrative_area_level_2") ||
@@ -71,7 +79,7 @@ export function LocationInput({
       autocompleteRef.current = autocomplete;
     };
      
-    if ((window as any).google?.maps?.places) {
+    if ((window as GoogleMapsWindow).google?.maps?.places) {
       initGoogle();
       return;
     }
@@ -140,6 +148,7 @@ export function LocationInput({
             if (e.key === "Enter") { setFocused(false); onSearch(); }
             if (e.key === "Escape") setFocused(false);
           }}
+          aria-label="Location search"
           className="flex-1 bg-transparent text-sm font-medium text-foreground placeholder:text-muted-foreground outline-none min-w-0"
           autoComplete="off"
         />

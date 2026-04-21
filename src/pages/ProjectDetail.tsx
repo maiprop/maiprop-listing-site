@@ -256,7 +256,7 @@ export default function ProjectDetail() {
     structural_completion_date: project.structural_completion_date, delivery_date: project.delivery_date, status: project.status,
   };
 
-  const listings: Array<{ id: string; views_count?: number }> = Array.isArray((project as any).listings) ? (project as any).listings : [];
+  const listings: Array<{ id: string; views_count?: number }> = Array.isArray((project as Record<string, unknown>).listings) ? (project as { listings: Array<{ id: string; views_count?: number }> }).listings : [];
   const linkedListingIds = new Set(listings.map((l) => l.id));
   const availableCount = units.filter((u) => u.availability_status === "available").length;
   const reservedCount = units.filter((u) => u.availability_status === "reserved").length;
