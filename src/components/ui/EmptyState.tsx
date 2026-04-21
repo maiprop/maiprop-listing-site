@@ -11,11 +11,12 @@ interface EmptyStateProps {
     variant?: "default" | "outline";
   };
   className?: string;
+  testId?: string;
 }
 
-export function EmptyState({ icon: Icon, title, subtitle, action, className }: EmptyStateProps) {
+export function EmptyState({ icon: Icon, title, subtitle, action, className, testId }: EmptyStateProps) {
   return (
-    <div className={`glass-card rounded-xl p-12 text-center ${className ?? ""}`}>
+    <div className={`glass-card rounded-xl p-12 text-center ${className ?? ""}`} data-testid={testId}>
       {Icon && <Icon className="w-12 h-12 text-muted-foreground/50 mx-auto mb-3" aria-hidden="true" />}
       <p className="font-semibold text-foreground">{title}</p>
       {subtitle && <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>}

@@ -620,6 +620,7 @@ export default function Listings() {
                 title={t("listings.noResults")}
                 subtitle={t("listings.noResultsSubtitle")}
                 action={activeFilterCount > 0 ? { label: t("listings.filters.reset"), onClick: clearAllFilters } : undefined}
+                testId="empty-listings"
               />
             ) : (
               <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">

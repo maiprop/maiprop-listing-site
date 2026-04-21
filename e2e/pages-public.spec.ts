@@ -71,10 +71,10 @@ test.describe("Public — Property / Auction detail with unknown ID", () => {
   test("navigating to /property/non-existent-id shows detail shell or not-found", async ({ page }) => {
     await page.goto("/property/non-existent-id-123");
     await page.waitForLoadState("networkidle", { timeout: 15_000 });
-    // Navbar must be visible — proves the React app bootstrapped and didn't white-screen
-    // Prefer header over nav: the mobile bottom-nav (<nav>) appears first in DOM
-    // but is display:none on desktop, so `.first()` would pick a hidden element.
-    await expect(page.locator("header, nav").first()).toBeVisible({ timeout: 10_000 });
+    // Navbar <header> must be visible — proves the React app bootstrapped and
+    // didn't white-screen. Using just `header` avoids matching the hidden
+    // mobile bottom-nav <nav class="lg:hidden"> which appears earlier in DOM.
+    await expect(page.locator("header").first()).toBeVisible({ timeout: 10_000 });
     // The DOM must have more than a trivial number of elements
     const nodeCount = await page.locator("body *").count();
     expect(nodeCount).toBeGreaterThan(5);
@@ -83,7 +83,7 @@ test.describe("Public — Property / Auction detail with unknown ID", () => {
   test("navigating to /auction/non-existent-id shows detail shell or not-found", async ({ page }) => {
     await page.goto("/auction/non-existent-id-123");
     await page.waitForLoadState("networkidle", { timeout: 15_000 });
-    await expect(page.locator("header, nav").first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("header").first()).toBeVisible({ timeout: 10_000 });
     const nodeCount = await page.locator("body *").count();
     expect(nodeCount).toBeGreaterThan(5);
   });
