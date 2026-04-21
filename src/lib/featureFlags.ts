@@ -3,14 +3,14 @@
  *
  * This is intentionally zero-dependency and non-remote: flags live in
  * environment variables so they're immutable per-build, which is appropriate
- * for gradual rollouts via Netlify branch deploys (`main`, `staging`, canary
- * branch). If/when you need runtime toggles, swap this file for a
+ * for gradual rollouts via Cloudflare Pages branch deploys (`main`,
+ * preview branches). If/when you need runtime toggles, swap this file for a
  * LaunchDarkly / OpenFeature / Unleash client and keep the same `useFlag`
  * API so callers don't change.
  *
  * Setting flags:
- *   .env              VITE_FF_NEW_LISTING_CARD=1
- *   Netlify → env     VITE_FF_NEW_LISTING_CARD=1 (scoped to the context)
+ *   .env                 VITE_FF_NEW_LISTING_CARD=1
+ *   Cloudflare Pages     VITE_FF_NEW_LISTING_CARD=1 (Production or Preview env)
  *
  * A flag is ON when the value is one of: 1, true, yes, on (case-insensitive).
  * Anything else — including unset — is OFF.

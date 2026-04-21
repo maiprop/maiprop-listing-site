@@ -43,7 +43,7 @@ if (!_mapbox && !import.meta.env.SSR && import.meta.env.DEV) {
   console.warn(
     "[maiProp] VITE_MAPBOX_TOKEN is not set. Map components (MapView, " +
       "PropertyMiniMap, auction map overlays) will render a placeholder. " +
-      "Set the token in your .env or Netlify environment to enable maps."
+      "Set the token in your .env or hosting provider environment to enable maps."
   );
 }
 
