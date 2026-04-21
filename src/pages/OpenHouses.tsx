@@ -218,10 +218,11 @@ export default function OpenHouses() {
             <div className="flex items-center gap-2">
               {/* City search */}
               <div className="relative flex-1 min-w-0">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" aria-hidden="true" />
                 <input
                   type="text"
                   placeholder="City…"
+                  aria-label="Search open houses by city"
                   value={cityInput}
                   onChange={(e) => setCityInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && setCityFilter(cityInput)}
