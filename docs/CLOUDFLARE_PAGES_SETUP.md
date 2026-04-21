@@ -68,12 +68,19 @@ gh secret set VITE_SUPABASE_PROJECT_ID      --repo maiprop/maiprop-listing-site
 
 ### 3b. Cloudflare Pages env vars (for runtime Pages Functions)
 
-Cloudflare Pages → **project → Settings → Environment variables**
-(Production + Preview both, if the Function should work on previews):
+Pages Functions run on the Workers runtime; they read env vars from the
+**Pages project settings**, NOT from the Vite bundle or GitHub Actions env.
 
 | Variable               | Notes                                                              |
 | ---------------------- | ------------------------------------------------------------------ |
 | `SUPABASE_PROJECT_ID`  | server-side only — used by `functions/sitemap-dynamic.xml.ts` to proxy the dynamic sitemap. Same value as `VITE_SUPABASE_PROJECT_ID`. |
+
+The CI `deploy` job **automatically syncs** `SUPABASE_PROJECT_ID` into the
+Pages production env on every deploy (step: *Sync Cloudflare Pages runtime
+environment variables*), sourced from the `VITE_SUPABASE_PROJECT_ID` GitHub
+secret. You only need to touch Cloudflare Pages → Settings → Environment
+variables if you add **new** server-side bindings (and then extend that CI
+step accordingly).
 
 > See `.env.staging.example` for the canonical list of Vite vars.
 

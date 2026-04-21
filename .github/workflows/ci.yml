@@ -363,6 +363,41 @@ jobs:
           echo "id=${PREV_ID}" >> "$GITHUB_OUTPUT"
           echo "Previous production deployment: ${PREV_ID:-<none>}"
 
+      # Pages Functions run on Cloudflare Workers and read env vars from the
+      # Pages *project* settings (NOT from the GitHub Actions env and NOT from
+      # the built Vite bundle). Sync the runtime bindings from GitHub secrets
+      # so functions/sitemap-dynamic.xml.ts can resolve SUPABASE_PROJECT_ID on
+      # every request instead of falling back to the static sitemap.
+      - name: Sync Cloudflare Pages runtime environment variables
+        env:
+          SUPABASE_PROJECT_ID: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SUPABASE_PROJECT_ID}" ]; then
+            echo "::warning::VITE_SUPABASE_PROJECT_ID secret is empty; sitemap function will use static fallback"
+            exit 0
+          fi
+          PAYLOAD=$(jq -n --arg v "$SUPABASE_PROJECT_ID" '{
+            deployment_configs: {
+              production: {
+                env_vars: {
+                  SUPABASE_PROJECT_ID: { value: $v, type: "plain_text" }
+                }
+              }
+            }
+          }')
+          HTTP_CODE=$(curl -s -o /tmp/cf_env.json -w "%{http_code}" -X PATCH \
+            -H "Authorization: Bearer $CF_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data "$PAYLOAD" \
+            "$CF_API_BASE/accounts/$CF_ACCOUNT_ID/pages/projects/$CF_PROJECT")
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "Failed to sync Pages env vars (HTTP $HTTP_CODE)"
+            cat /tmp/cf_env.json
+            exit 1
+          fi
+          echo "Pages production env vars synced"
+
       - name: Deploy to Cloudflare Pages (production)
         uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3.15.0
         with:
