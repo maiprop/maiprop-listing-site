@@ -67,7 +67,26 @@ test.describe("Accessibility — automated axe-core scans", () => {
   const BLOCKING_IMPACTS = ["serious", "critical"] as const;
 
   async function scan(page: import("@playwright/test").Page, url: string) {
+    // Pre-dismiss the cookie consent banner. Its mount animation
+    // (`animate-slide-up`, 0.4s fade from opacity 0 -> 1) intersects with
+    // `networkidle`, producing false-positive contrast violations from
+    // partially-transparent text. Setting this key also avoids flakiness.
     await page.goto(url);
+    await page.evaluate(() => {
+      try {
+        localStorage.setItem(
+          "maiprop_cookie_consent",
+          JSON.stringify({
+            accepted: true,
+            functional: true,
+            analytics: false,
+            mapping: true,
+            timestamp: Date.now(),
+          }),
+        );
+      } catch { /* storage may be blocked */ }
+    });
+    await page.reload();
     await page.waitForLoadState("networkidle");
     const results = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa"])
