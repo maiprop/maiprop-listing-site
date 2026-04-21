@@ -37,13 +37,13 @@ CREATE POLICY "Users can update their own subscription"
 CREATE POLICY "Admins can view all subscriptions"
   ON public.investor_subscriptions
   FOR SELECT
-  USING (public.has_role(auth.uid(), 'agent'));
+  USING (public.has_role(auth.uid(), 'agent'::public.user_role));
 
 -- Admins can update all subscriptions
 CREATE POLICY "Admins can update all subscriptions"
   ON public.investor_subscriptions
   FOR UPDATE
-  USING (public.has_role(auth.uid(), 'agent'));
+  USING (public.has_role(auth.uid(), 'agent'::public.user_role));
 
 -- Trigger to auto-update updated_at
 CREATE TRIGGER update_investor_subscriptions_updated_at

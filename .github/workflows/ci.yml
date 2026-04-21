@@ -139,11 +139,32 @@ jobs:
           psql -h localhost -U postgres -d maiprop_test -v ON_ERROR_STOP=1 <<'SQL'
           CREATE EXTENSION IF NOT EXISTS pgcrypto;
           CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+          -- Supabase built-in roles used by RLS policies
+          DO $$ BEGIN
+            CREATE ROLE authenticated; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+          DO $$ BEGIN
+            CREATE ROLE anon; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+          DO $$ BEGIN
+            CREATE ROLE service_role; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
           CREATE SCHEMA IF NOT EXISTS auth;
-          -- Stub auth.users referenced by FKs in many migrations
+          -- Stub auth.users with full Supabase column set
           CREATE TABLE IF NOT EXISTS auth.users (
             id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-            email text UNIQUE
+            email text UNIQUE,
+            encrypted_password text,
+            email_confirmed_at timestamptz,
+            created_at timestamptz DEFAULT now(),
+            updated_at timestamptz DEFAULT now(),
+            raw_user_meta_data jsonb DEFAULT '{}'::jsonb,
+            raw_app_meta_data jsonb DEFAULT '{}'::jsonb,
+            role text,
+            aud text,
+            phone text,
+            phone_confirmed_at timestamptz,
+            last_sign_in_at timestamptz,
+            is_super_admin boolean DEFAULT false,
+            banned_until timestamptz,
+            deleted_at timestamptz
           );
           -- Stub auth.uid() used by RLS policies
           CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT NULL::uuid $$;
@@ -179,6 +200,12 @@ jobs:
           CREATE OR REPLACE FUNCTION storage.filename(name text) RETURNS text LANGUAGE sql AS $$ SELECT (string_to_array(name, '/'))[array_length(string_to_array(name, '/'), 1)] $$;
           CREATE OR REPLACE FUNCTION storage.extension(name text) RETURNS text LANGUAGE sql AS $$ SELECT reverse(split_part(reverse(name), '.', 1)) $$;
           SQL
+
+      - name: Strip unavailable extensions from migrations
+        run: |
+          # pg_cron and pg_net are Supabase-managed and not available in bare postgres:15
+          find supabase/migrations -name '*.sql' -exec \
+            sed -i 's/CREATE EXTENSION IF NOT EXISTS pg_cron[^;]*;//g;s/CREATE EXTENSION IF NOT EXISTS pg_net[^;]*;//g' {} +
 
       - name: Apply migrations in order
         env:

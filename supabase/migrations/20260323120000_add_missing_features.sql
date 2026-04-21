@@ -144,19 +144,23 @@ CREATE POLICY "Users can manage own portfolios"
 CREATE INDEX IF NOT EXISTS idx_portfolios_user ON public.portfolios(user_id);
 
 
--- Timestamp triggers
+-- Timestamp triggers (DROP IF EXISTS to guard against earlier migrations creating them)
+DROP TRIGGER IF EXISTS update_projects_updated_at ON public.projects;
 CREATE TRIGGER update_projects_updated_at
   BEFORE UPDATE ON public.projects
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_contacts_updated_at ON public.contacts;
 CREATE TRIGGER update_contacts_updated_at
   BEFORE UPDATE ON public.contacts
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_deal_checklists_updated_at ON public.deal_checklists;
 CREATE TRIGGER update_deal_checklists_updated_at
   BEFORE UPDATE ON public.deal_checklists
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_portfolios_updated_at ON public.portfolios;
 CREATE TRIGGER update_portfolios_updated_at
   BEFORE UPDATE ON public.portfolios
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
