@@ -373,16 +373,26 @@ jobs:
       - name: Post-deploy health check
         id: health_check
         run: |
-          for i in $(seq 1 8); do
-            if curl --fail --silent --max-time 30 https://maiprop.co; then
-              echo "Health check passed on attempt $i"
-              exit 0
+          # Checks the active production custom domain. Add additional URLs
+          # (space-separated) as more domains are attached in Cloudflare Pages.
+          HEALTH_URLS="https://portal.maiprop.co"
+          for url in $HEALTH_URLS; do
+            ok=0
+            for i in $(seq 1 8); do
+              if curl --fail --silent --max-time 30 "$url" > /dev/null; then
+                echo "[$url] health check passed on attempt $i"
+                ok=1
+                break
+              fi
+              echo "[$url] attempt $i failed, retrying in 10s..."
+              sleep 10
+            done
+            if [ "$ok" -eq 0 ]; then
+              echo "[$url] health check failed after all retries"
+              exit 1
             fi
-            echo "Attempt $i failed, retrying in 10s..."
-            sleep 10
           done
-          echo "Health check failed after all retries — production may be down"
-          exit 1
+          echo "All health checks passed"
 
       - name: Rollback on health check failure
         if: failure() && steps.health_check.outcome == 'failure' && steps.prev_deploy.outputs.id != ''
