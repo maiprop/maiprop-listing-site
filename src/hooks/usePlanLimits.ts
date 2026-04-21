@@ -29,7 +29,9 @@ export type PlanLimits = {
   professionalsPerCategory: number | null;
 };
 
-const LIMITS: Record<ParticipantId, Record<PlanTier, PlanLimits>> = {
+type RoleLimits = { free: PlanLimits; pro: PlanLimits } | { pro: PlanLimits };
+
+const LIMITS: Record<ParticipantId, RoleLimits> = {
   buyer: {
     free: {
       savedSearches: 1, searchAlerts: 1, contactsPerMonth: 1,
@@ -85,14 +87,6 @@ const LIMITS: Record<ParticipantId, Record<PlanTier, PlanLimits>> = {
     },
   },
   developer: {
-    free: {
-      savedSearches: null, searchAlerts: null, contactsPerMonth: null,
-      auctionListingsVisible: null, auctionAlerts: null,
-      openHouseRsvp: null, viewingsPerMonth: null,
-      listings: 0, priorityAds: 0,
-      valuationsPerMonth: 0, reportsPerMonth: 0,
-      professionalsPerCategory: null,
-    },
     pro: {
       savedSearches: null, searchAlerts: null, contactsPerMonth: null,
       auctionListingsVisible: null, auctionAlerts: null,
@@ -121,14 +115,6 @@ const LIMITS: Record<ParticipantId, Record<PlanTier, PlanLimits>> = {
     },
   },
   investor: {
-    free: {
-      savedSearches: null, searchAlerts: null, contactsPerMonth: null,
-      auctionListingsVisible: null, auctionAlerts: null,
-      openHouseRsvp: null, viewingsPerMonth: null,
-      listings: 0, priorityAds: 0,
-      valuationsPerMonth: 5, reportsPerMonth: 5,
-      professionalsPerCategory: null,
-    },
     pro: {
       savedSearches: null, searchAlerts: null, contactsPerMonth: null,
       auctionListingsVisible: null, auctionAlerts: null,
@@ -139,14 +125,6 @@ const LIMITS: Record<ParticipantId, Record<PlanTier, PlanLimits>> = {
     },
   },
   institutional: {
-    free: {
-      savedSearches: null, searchAlerts: null, contactsPerMonth: null,
-      auctionListingsVisible: null, auctionAlerts: null,
-      openHouseRsvp: null, viewingsPerMonth: null,
-      listings: 0, priorityAds: 0,
-      valuationsPerMonth: 10, reportsPerMonth: 10,
-      professionalsPerCategory: null,
-    },
     pro: {
       savedSearches: null, searchAlerts: null, contactsPerMonth: null,
       auctionListingsVisible: null, auctionAlerts: null,
@@ -159,7 +137,21 @@ const LIMITS: Record<ParticipantId, Record<PlanTier, PlanLimits>> = {
 };
 
 export function getPlanLimits(audience: ParticipantId, tier: PlanTier): PlanLimits {
-  const def = LIMITS[audience]?.[tier] ?? LIMITS.buyer.free;
+  const limits = LIMITS[audience];
+  if (!limits) {
+    // Fallback to buyer free tier with proper type assertion
+    const buyerLimits = LIMITS.buyer as { free: PlanLimits; pro: PlanLimits };
+    return tier === "free" ? buyerLimits.free : buyerLimits.pro;
+  }
+
+  // Handle pro-only roles (developer, investor, institutional)
+  if (!("free" in limits)) {
+    // Pro-only roles only have pro tier
+    return limits.pro;
+  }
+
+  // Roles with free tier
+  const def = tier === "free" ? limits.free : limits.pro;
   return { ...def };
 }
 

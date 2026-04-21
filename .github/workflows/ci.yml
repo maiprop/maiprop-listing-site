@@ -199,13 +199,67 @@ jobs:
           CREATE OR REPLACE FUNCTION storage.foldername(name text) RETURNS text[] LANGUAGE sql AS $$ SELECT string_to_array(name, '/') $$;
           CREATE OR REPLACE FUNCTION storage.filename(name text) RETURNS text LANGUAGE sql AS $$ SELECT (string_to_array(name, '/'))[array_length(string_to_array(name, '/'), 1)] $$;
           CREATE OR REPLACE FUNCTION storage.extension(name text) RETURNS text LANGUAGE sql AS $$ SELECT reverse(split_part(reverse(name), '.', 1)) $$;
+          -- Stub extensions schema used by pg_net SCHEMA extensions
+          CREATE SCHEMA IF NOT EXISTS extensions;
+          -- Stub cron schema + minimal job table + schedule/unschedule functions (pg_cron is Supabase-managed)
+          CREATE SCHEMA IF NOT EXISTS cron;
+          CREATE TABLE IF NOT EXISTS cron.job (
+            jobid bigserial PRIMARY KEY,
+            schedule text,
+            command text,
+            nodename text DEFAULT 'localhost',
+            nodeport integer DEFAULT 5432,
+            database text DEFAULT 'postgres',
+            username text DEFAULT 'postgres',
+            active boolean DEFAULT true,
+            jobname text UNIQUE
+          );
+          CREATE OR REPLACE FUNCTION cron.schedule(jobname text, schedule text, command text) RETURNS bigint LANGUAGE sql AS $$
+            INSERT INTO cron.job (jobname, schedule, command) VALUES ($1, $2, $3)
+            ON CONFLICT (jobname) DO UPDATE SET schedule = EXCLUDED.schedule, command = EXCLUDED.command
+            RETURNING jobid;
+          $$;
+          CREATE OR REPLACE FUNCTION cron.schedule(schedule text, command text) RETURNS bigint LANGUAGE sql AS $$
+            INSERT INTO cron.job (schedule, command) VALUES ($1, $2) RETURNING jobid;
+          $$;
+          CREATE OR REPLACE FUNCTION cron.unschedule(jobname text) RETURNS boolean LANGUAGE sql AS $$
+            DELETE FROM cron.job WHERE jobname = $1 RETURNING true;
+          $$;
+          CREATE OR REPLACE FUNCTION cron.unschedule(jobid bigint) RETURNS boolean LANGUAGE sql AS $$
+            DELETE FROM cron.job WHERE jobid = $1 RETURNING true;
+          $$;
+          -- Stub pgmq (message queue) used by email infrastructure
+          CREATE SCHEMA IF NOT EXISTS pgmq;
+          CREATE OR REPLACE FUNCTION pgmq.create(queue_name text) RETURNS void LANGUAGE sql AS $$ SELECT NULL::void $$;
+          CREATE OR REPLACE FUNCTION pgmq.send(queue_name text, msg jsonb, delay integer DEFAULT 0) RETURNS bigint LANGUAGE sql AS $$ SELECT 0::bigint $$;
+          CREATE OR REPLACE FUNCTION pgmq.read(queue_name text, vt integer, qty integer) RETURNS TABLE (msg_id bigint, read_ct integer, enqueued_at timestamptz, vt timestamptz, message jsonb) LANGUAGE sql AS $$ SELECT NULL::bigint, NULL::integer, NULL::timestamptz, NULL::timestamptz, NULL::jsonb WHERE false $$;
+          CREATE OR REPLACE FUNCTION pgmq.delete(queue_name text, msg_id bigint) RETURNS boolean LANGUAGE sql AS $$ SELECT true $$;
+          CREATE OR REPLACE FUNCTION pgmq.archive(queue_name text, msg_id bigint) RETURNS boolean LANGUAGE sql AS $$ SELECT true $$;
+          -- Stub supabase_vault (secrets vault) — migrations reference vault.secrets
+          CREATE SCHEMA IF NOT EXISTS vault;
+          CREATE TABLE IF NOT EXISTS vault.secrets (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            name text UNIQUE,
+            description text,
+            secret text,
+            key_id uuid,
+            nonce bytea,
+            created_at timestamptz DEFAULT now(),
+            updated_at timestamptz DEFAULT now()
+          );
           SQL
 
       - name: Strip unavailable extensions from migrations
         run: |
-          # pg_cron and pg_net are Supabase-managed and not available in bare postgres:15
-          find supabase/migrations -name '*.sql' -exec \
-            sed -i 's/CREATE EXTENSION IF NOT EXISTS pg_cron[^;]*;//g;s/CREATE EXTENSION IF NOT EXISTS pg_net[^;]*;//g' {} +
+          # pg_cron, pg_net, pgmq, supabase_vault are Supabase-managed and not available in bare postgres:15.
+          # Remove both the IF-NOT-EXISTS form and plain CREATE EXTENSION form, plus the DO-block form used in email_infra.
+          find supabase/migrations -name '*.sql' -exec sed -i -E \
+            -e 's/CREATE EXTENSION (IF NOT EXISTS )?(pg_cron|pg_net|pgmq|supabase_vault)[^;]*;//g' \
+            {} +
+          # Remove the DO-block that conditionally creates pg_cron in email_infra
+          find supabase/migrations -name '*.sql' -exec perl -i -0pe \
+            's/DO \$\$ BEGIN\s+IF NOT EXISTS \(SELECT 1 FROM pg_extension WHERE extname = '"'"'pg_cron'"'"'\) THEN\s+CREATE EXTENSION pg_cron;\s+END IF;\s+END \$\$;//g' \
+            {} +
 
       - name: Apply migrations in order
         env:

@@ -62,7 +62,7 @@ export function OSSection() {
                   <Globe className="w-3 h-3 text-muted-foreground shrink-0" />
                   <span className="text-xs text-muted-foreground font-mono">os.maiprop.co</span>
                 </div>
-                <a href="https://os.maiprop.co" target="_blank" rel="noreferrer" className="shrink-0 p-1 rounded hover:bg-secondary transition-colors">
+                <a href="https://os.maiprop.co" target="_blank" rel="noreferrer" aria-label="Open os.maiprop.co in new tab" className="shrink-0 p-1 rounded hover:bg-secondary transition-colors">
                   <ExternalLink className="w-3.5 h-3.5 text-muted-foreground" />
                 </a>
               </div>

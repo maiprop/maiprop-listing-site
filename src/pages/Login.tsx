@@ -143,7 +143,7 @@ export default function Login() {
                 </form>
                 <p className="text-xs text-muted-foreground text-center mt-4">
                   {t("loginPage.noAccount")}{" "}
-                  <Link to="/signup" className="text-primary hover:underline">{t("loginPage.signUpFree")}</Link>
+                  <Link to="/signup" className="text-primary underline">{t("loginPage.signUpFree")}</Link>
                 </p>
               </>
             )}

@@ -17,8 +17,20 @@ ALTER TABLE public.notifications
 -- ── 2. Rename old marketing leads → marketing_leads ──────────────────────────
 --    The old table has: full_name, investment_budget, nationality, etc.
 --    The new CRM leads table has: name, source, status, notes, follow_up_at
+--    Idempotent: 20260425120000 may already have performed the rename.
 
-ALTER TABLE public.leads RENAME TO marketing_leads;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'leads'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'leads' AND column_name = 'owner_id'
+  ) THEN
+    EXECUTE 'ALTER TABLE public.leads RENAME TO marketing_leads';
+  END IF;
+END $$;
 
 -- Update any RLS policies that referenced old table name
 -- (policies move with the table rename automatically in Postgres)
@@ -26,7 +38,7 @@ ALTER TABLE public.leads RENAME TO marketing_leads;
 
 -- ── 3. Create proper CRM leads table ─────────────────────────────────────────
 
-CREATE TABLE public.leads (
+CREATE TABLE IF NOT EXISTS public.leads (
   id             UUID        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   owner_id       UUID        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   source         TEXT        NOT NULL DEFAULT 'manual'
@@ -54,23 +66,28 @@ CREATE TABLE public.leads (
 
 ALTER TABLE public.leads ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users select own leads" ON public.leads;
 CREATE POLICY "Users select own leads"
   ON public.leads FOR SELECT
   USING (owner_id = (SELECT auth.uid()));
 
+DROP POLICY IF EXISTS "Users insert own leads" ON public.leads;
 CREATE POLICY "Users insert own leads"
   ON public.leads FOR INSERT
   WITH CHECK (owner_id = (SELECT auth.uid()));
 
+DROP POLICY IF EXISTS "Users update own leads" ON public.leads;
 CREATE POLICY "Users update own leads"
   ON public.leads FOR UPDATE
   USING  (owner_id = (SELECT auth.uid()))
   WITH CHECK (owner_id = (SELECT auth.uid()));
 
+DROP POLICY IF EXISTS "Users delete own leads" ON public.leads;
 CREATE POLICY "Users delete own leads"
   ON public.leads FOR DELETE
   USING (owner_id = (SELECT auth.uid()));
 
+DROP POLICY IF EXISTS "Admin select all leads" ON public.leads;
 CREATE POLICY "Admin select all leads"
   ON public.leads FOR SELECT
   USING (
@@ -95,6 +112,7 @@ CREATE INDEX idx_leads_follow_up  ON public.leads(follow_up_at);
 CREATE INDEX idx_leads_listing    ON public.leads(listing_id);
 CREATE INDEX idx_leads_created    ON public.leads(created_at DESC);
 
+DROP TRIGGER IF EXISTS update_leads_updated_at ON public.leads;
 CREATE TRIGGER update_leads_updated_at
   BEFORE UPDATE ON public.leads
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();

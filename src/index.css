@@ -18,7 +18,7 @@
     --secondary: 36 20% 93%;
     --secondary-foreground: 25 15% 30%;
     --muted: 36 15% 91%;
-    --muted-foreground: 25 12% 38%;
+    --muted-foreground: 25 14% 38%;
     /* Accent should read well as text + pills; keep cyan as a background highlight instead */
     --accent: 240 70% 48%;
     --accent-foreground: 0 0% 100%;
@@ -32,7 +32,7 @@
     /* Brand book: navy + indigo + purple. Cyan/mint is used sparingly as a highlight. */
     --brand-cyan: 178 89% 63%;
     --brand-cyan-glow: 178 89% 75%;
-    --brand-purple: 261 84% 64%;
+    --brand-purple: 261 84% 52%;
     --brand-purple-dark: 261 70% 48%;
     --brand-navy: 240 100% 17%;
     --brand-navy-mid: 232 70% 12%;
@@ -46,7 +46,7 @@
     --brand-auction: 240 35% 55%;
     --brand-auction-soft: 240 35% 90%;
     /* Keep legacy aliases but make them readable (less neon cyan) */
-    --brand-gold: 261 84% 64%;
+    --brand-gold: 261 84% 52%;
     --brand-emerald: 240 70% 48%;
     --brand-sky: 178 89% 75%;
     --brand-surface-1: 36 25% 97%;
@@ -55,7 +55,7 @@
     --brand-surface-4: 36 12% 87%;
     --brand-amber: 240 70% 48%;
     --brand-amber-glow: 261 84% 64%;
-    --brand-coral: 261 84% 64%;
+    --brand-coral: 261 84% 52%;
     --brand-coral-dark: 261 70% 48%;
 
     --gradient-hero: linear-gradient(135deg, hsl(36 28% 95%) 0%, hsl(30 22% 93%) 50%, hsl(36 25% 97%) 100%);
@@ -168,7 +168,7 @@
     --secondary: 36 20% 93%;
     --secondary-foreground: 25 15% 30%;
     --muted: 36 15% 91%;
-    --muted-foreground: 25 12% 38%;
+    --muted-foreground: 25 14% 38%;
     --accent: 240 70% 48%;
     --accent-foreground: 0 0% 100%;
     --destructive: 0 70% 52%;
@@ -178,7 +178,7 @@
     --ring: 261 70% 48%;
     --brand-cyan: 178 89% 63%;
     --brand-cyan-glow: 178 89% 75%;
-    --brand-purple: 261 84% 64%;
+    --brand-purple: 261 84% 52%;
     --brand-purple-dark: 261 70% 48%;
     --brand-navy: 240 100% 17%;
     --brand-navy-mid: 232 70% 12%;
@@ -188,7 +188,7 @@
     --brand-slate: 240 26% 57%;
     --brand-auction: 240 35% 55%;
     --brand-auction-soft: 240 35% 90%;
-    --brand-gold: 261 84% 64%;
+    --brand-gold: 261 84% 52%;
     --brand-emerald: 240 70% 48%;
     --brand-sky: 178 89% 75%;
     --brand-surface-1: 36 25% 97%;
@@ -197,7 +197,7 @@
     --brand-surface-4: 36 12% 87%;
     --brand-amber: 240 70% 48%;
     --brand-amber-glow: 261 84% 64%;
-    --brand-coral: 261 84% 64%;
+    --brand-coral: 261 84% 52%;
     --brand-coral-dark: 261 70% 48%;
     --gradient-hero: linear-gradient(135deg, hsl(36 28% 95%) 0%, hsl(30 22% 93%) 50%, hsl(36 25% 97%) 100%);
     --gradient-card: linear-gradient(145deg, hsl(0 0% 100%) 0%, hsl(36 20% 97%) 100%);

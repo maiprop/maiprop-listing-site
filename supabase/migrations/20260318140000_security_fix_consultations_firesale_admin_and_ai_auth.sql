@@ -96,6 +96,11 @@ CREATE POLICY "Eligible investors view firesale feed"
   );
 
 -- Platform admin can read the feed table too (for debugging)
+-- has_platform_admin() is (re)defined later in this migration. Install a stub
+-- first so CREATE POLICY can resolve the function reference in fresh databases.
+CREATE OR REPLACE FUNCTION public.has_platform_admin(_user_id uuid DEFAULT auth.uid())
+RETURNS boolean LANGUAGE sql STABLE AS $$ SELECT false $$;
+
 DROP POLICY IF EXISTS "Platform admin read firesale feed" ON public.firesale_requests_investor_feed;
 CREATE POLICY "Platform admin read firesale feed"
   ON public.firesale_requests_investor_feed
