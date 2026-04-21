@@ -321,11 +321,35 @@ jobs:
       - name: Checkout (for Pages Functions in functions/)
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - name: Download dist artifact
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          name: dist
-          path: dist/
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Production build uses *real* Supabase + optional service secrets so the
+      # deployed bundle can actually talk to the live backend. The earlier
+      # `quality` job build (which produced the artifact used by E2E tests) used
+      # placeholder values — we intentionally throw that artifact away here and
+      # rebuild with the real values. These Vite vars are baked into the bundle
+      # at build time, so they must be present in the build environment.
+      - name: Build app with production environment
+        run: npm run build
+        env:
+          # Required — app refuses to start without these.
+          VITE_SUPABASE_URL:             ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_SUPABASE_PROJECT_ID:      ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
+          # Optional — features degrade gracefully when empty.
+          VITE_MAPBOX_TOKEN:             ${{ secrets.VITE_MAPBOX_TOKEN }}
+          VITE_SENTRY_DSN:               ${{ secrets.VITE_SENTRY_DSN }}
+          VITE_STRIPE_PRO_PRODUCT_ID:    ${{ secrets.VITE_STRIPE_PRO_PRODUCT_ID }}
+          VITE_TURNSTILE_SITE_KEY:       ${{ secrets.VITE_TURNSTILE_SITE_KEY }}
+          VITE_GOOGLE_MAPS_API_KEY:      ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
+          VITE_PLAUSIBLE_DOMAIN:         ${{ secrets.VITE_PLAUSIBLE_DOMAIN }}
+          VITE_APP_URL:                  ${{ secrets.VITE_APP_URL }}
 
       - name: Capture current production deployment ID (for rollback)
         id: prev_deploy

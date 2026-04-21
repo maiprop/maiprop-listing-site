@@ -27,24 +27,55 @@ Add the following repo-level secrets
 
 > The previous `NETLIFY_AUTH_TOKEN` and `NETLIFY_SITE_ID` secrets can be deleted.
 
-## 3. Pages project environment variables
+## 3. Environment variables — two separate places
 
-Cloudflare Pages → **project** → **Settings → Environment variables** must be
-set for **both Production and Preview** environments:
+`VITE_*` variables are **baked into the bundle at build time**, so they must
+be present when the CI deploy job runs `npm run build`. They live as
+**GitHub Actions secrets**, not Pages env vars.
 
-| Variable                         | Notes                                                              |
-| -------------------------------- | ------------------------------------------------------------------ |
-| `VITE_SUPABASE_URL`              | `https://<ref>.supabase.co`                                        |
-| `VITE_SUPABASE_PUBLISHABLE_KEY`  | anon JWT from Supabase → Settings → API                            |
-| `VITE_SUPABASE_PROJECT_ID`       | the `<ref>` part above                                             |
-| `VITE_TURNSTILE_SITE_KEY`        | if Turnstile is in use                                             |
-| `VITE_MAPBOX_TOKEN`              | optional — maps degrade gracefully without it                      |
-| `VITE_SENTRY_DSN`                | optional                                                           |
-| `VITE_STRIPE_PRO_PRODUCT_ID`     | optional                                                           |
-| `VITE_APP_URL`                   | Production: `https://maiprop.co`; Preview: leave unset to auto-detect. |
-| `SUPABASE_PROJECT_ID`            | **server-side only** — used by `functions/sitemap-dynamic.xml.ts` to proxy the dynamic sitemap. Same value as `VITE_SUPABASE_PROJECT_ID`. |
+Only server-side vars (read by Pages Functions at runtime) live on the Pages
+side.
 
-> See `.env.staging.example` for the canonical list.
+### 3a. GitHub Actions secrets (for build-time `VITE_*`)
+
+**Repo → Settings → Secrets and variables → Actions**:
+
+| Secret                           | Required? | Notes                                                              |
+| -------------------------------- | --------- | ------------------------------------------------------------------ |
+| `VITE_SUPABASE_URL`              | **yes**   | `https://<ref>.supabase.co`                                        |
+| `VITE_SUPABASE_PUBLISHABLE_KEY`  | **yes**   | anon JWT from Supabase → Settings → API                            |
+| `VITE_SUPABASE_PROJECT_ID`       | **yes**   | the `<ref>` part above                                             |
+| `VITE_TURNSTILE_SITE_KEY`        | optional  | if Turnstile is in use                                             |
+| `VITE_MAPBOX_TOKEN`              | optional  | maps degrade gracefully without it                                 |
+| `VITE_SENTRY_DSN`                | optional  | error reporting                                                    |
+| `VITE_STRIPE_PRO_PRODUCT_ID`     | optional  | paid subscription flow                                             |
+| `VITE_GOOGLE_MAPS_API_KEY`       | optional  | enhances auction cards + Places autocomplete                       |
+| `VITE_PLAUSIBLE_DOMAIN`          | optional  | enables Plausible analytics                                        |
+| `VITE_APP_URL`                   | optional  | set to `https://maiprop.co` for production; used for OAuth redirects |
+
+These are read by the **production** `deploy` job which rebuilds with real
+values. The `quality` and `e2e` jobs keep using the placeholder values set in
+the workflow's top-level `env:` block so tests don't hit live Supabase.
+
+Quick-set with `gh` (interactive prompts — values never hit shell history):
+
+```powershell
+gh secret set VITE_SUPABASE_URL             --repo maiprop/maiprop-listing-site
+gh secret set VITE_SUPABASE_PUBLISHABLE_KEY --repo maiprop/maiprop-listing-site
+gh secret set VITE_SUPABASE_PROJECT_ID      --repo maiprop/maiprop-listing-site
+# repeat for any optional ones you need
+```
+
+### 3b. Cloudflare Pages env vars (for runtime Pages Functions)
+
+Cloudflare Pages → **project → Settings → Environment variables**
+(Production + Preview both, if the Function should work on previews):
+
+| Variable               | Notes                                                              |
+| ---------------------- | ------------------------------------------------------------------ |
+| `SUPABASE_PROJECT_ID`  | server-side only — used by `functions/sitemap-dynamic.xml.ts` to proxy the dynamic sitemap. Same value as `VITE_SUPABASE_PROJECT_ID`. |
+
+> See `.env.staging.example` for the canonical list of Vite vars.
 
 ## 4. Custom domain
 
