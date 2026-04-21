@@ -62,6 +62,11 @@ BEGIN
   END IF;
 END $$;
 
+-- Ensure firesale_requests has published_to_investors column (added in a later
+-- migration in some environments; idempotent so prod installs are unaffected).
+ALTER TABLE public.firesale_requests
+  ADD COLUMN IF NOT EXISTS published_to_investors boolean NOT NULL DEFAULT false;
+
 -- Create sanitized investor feed table (idempotent)
 CREATE TABLE IF NOT EXISTS public.firesale_requests_investor_feed (
   id UUID PRIMARY KEY REFERENCES public.firesale_requests(id) ON DELETE CASCADE,

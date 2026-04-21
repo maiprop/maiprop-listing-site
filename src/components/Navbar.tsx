@@ -189,7 +189,7 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
                   : link.accent === "flame"
                     ? forceLight
                       ? "text-orange-300 hover:text-orange-200 hover:bg-white/10"
-                      : "text-destructive/80 hover:text-destructive hover:bg-destructive/10"
+                      : "text-destructive hover:text-destructive hover:bg-destructive/10"
                     : link.accent === "dooropen"
                       ? forceLight
                         ? "text-white/80 hover:text-white hover:bg-white/10"
@@ -465,7 +465,7 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
               to={link.href}
               className={`flex items-center gap-2 min-h-[44px] px-3 py-2.5 rounded-lg text-sm transition-colors ${
                 link.accent === "flame"
-                  ? "text-destructive/80 hover:text-destructive hover:bg-destructive/10"
+                  ? "text-destructive hover:text-destructive hover:bg-destructive/10"
                   : link.accent === "dooropen"
                     ? "text-primary/80 hover:text-primary hover:bg-primary/10"
                     : link.accent === "subtle"

@@ -166,7 +166,7 @@ CREATE POLICY "Anyone can insert project view"
   TO anon, authenticated
   WITH CHECK (
     EXISTS (
-      SELECT 1 FROM public.developer_projects
+      SELECT 1 FROM public.projects
       WHERE id = project_views.project_id
     )
   );
