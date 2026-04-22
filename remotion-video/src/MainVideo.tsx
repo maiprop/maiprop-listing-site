@@ -9,6 +9,7 @@ import { Scene2Search } from "./scenes/Scene2Search";
 import { Scene3OpenHouses } from "./scenes/Scene3OpenHouses";
 import { Scene3Auction } from "./scenes/Scene3Auction";
 import { Scene4Pros } from "./scenes/Scene4Pros";
+import { Scene6AI } from "./scenes/Scene6AI";
 import { Scene5CTA } from "./scenes/Scene5CTA";
 
 export const MainVideo: React.FC = () => {
@@ -46,6 +47,13 @@ export const MainVideo: React.FC = () => {
         />
         <TransitionSeries.Sequence durationInFrames={150}>
           <Scene4Pros />
+        </TransitionSeries.Sequence>
+        <TransitionSeries.Transition
+          presentation={wipe({ direction: "from-right" })}
+          timing={springTiming({ config: { damping: 200 }, durationInFrames: 22 })}
+        />
+        <TransitionSeries.Sequence durationInFrames={180}>
+          <Scene6AI />
         </TransitionSeries.Sequence>
         <TransitionSeries.Transition
           presentation={fade()}
