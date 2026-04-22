@@ -37,7 +37,6 @@ const Card: React.FC<{ x: number; y: number; w: number; h: number; price: string
       background: "linear-gradient(160deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02))",
       border: `1px solid ${C.border}`,
       transform: `translateY(${lift}px)`, opacity: s,
-      backdropFilter: "blur(0px)",
       boxShadow: "0 20px 60px rgba(0,0,0,0.45)",
     }}>
       <div style={{
@@ -74,15 +73,18 @@ export const Scene2Search: React.FC = () => {
         opacity: headerS,
         transform: `translateY(${interpolate(headerS, [0, 1], [20, 0])}px)`,
       }}>
-        <div style={{ color: C.cyan, fontFamily: dm.fontFamily, fontSize: 16, letterSpacing: 4, textTransform: "uppercase", marginBottom: 18 }}>01 — Discover</div>
+        <div style={{ color: C.cyan, fontFamily: dm.fontFamily, fontSize: 16, letterSpacing: 4, textTransform: "uppercase", marginBottom: 18 }}>01 — Properties</div>
         <h2 style={{ margin: 0, color: C.white, fontSize: 96, fontWeight: 800, letterSpacing: -3, lineHeight: 1 }}>
-          Find your next move.
+          Thousands of homes.
         </h2>
+        <div style={{ marginTop: 18, color: C.slate, fontFamily: dm.fontFamily, fontSize: 24, maxWidth: 900 }}>
+          Verified listings across Greece — buy, rent, or invest.
+        </div>
       </div>
 
       {/* search bar */}
       <div style={{
-        marginTop: 50,
+        marginTop: 40,
         display: "flex", alignItems: "center", gap: 16,
         background: "rgba(255,255,255,0.06)",
         border: `1px solid ${C.border}`,
@@ -101,7 +103,7 @@ export const Scene2Search: React.FC = () => {
       </div>
 
       {/* filter pills */}
-      <div style={{ marginTop: 28, display: "flex", gap: 12, flexWrap: "wrap" }}>
+      <div style={{ marginTop: 24, display: "flex", gap: 12, flexWrap: "wrap" }}>
         <Pill label="For Sale" active delay={20} />
         <Pill label="Apartment" delay={24} />
         <Pill label="2+ Beds" delay={28} />
@@ -110,7 +112,7 @@ export const Scene2Search: React.FC = () => {
       </div>
 
       {/* result cards */}
-      <div style={{ position: "absolute", left: 100, right: 100, top: 640, height: 360 }}>
+      <div style={{ position: "absolute", left: 100, right: 100, top: 660, height: 360 }}>
         <Card x={0} y={0} w={360} h={340} price="€365,000" loc="Kolonaki, Athens" tag="Featured" tagColor={C.purple} delay={50} />
         <Card x={400} y={0} w={360} h={340} price="€289,000" loc="Glyfada · 95m²" tag="New" tagColor={C.indigo} delay={56} />
         <Card x={800} y={0} w={360} h={340} price="€420,000" loc="Kifisia · Villa" tag="Hot" tagColor="#ec4899" delay={62} />

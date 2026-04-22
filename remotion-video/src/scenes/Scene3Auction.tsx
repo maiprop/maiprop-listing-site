@@ -33,7 +33,7 @@ export const Scene3Auction: React.FC = () => {
         opacity: headS, transform: `translateY(${interpolate(headS, [0, 1], [20, 0])}px)`,
       }}>
         <div style={{ color: C.purple, fontFamily: dm.fontFamily, fontSize: 16, letterSpacing: 4, textTransform: "uppercase", marginBottom: 18 }}>
-          02 — Auctions
+          03 — Auctions
         </div>
         <h2 style={{ margin: 0, color: C.white, fontSize: 96, fontWeight: 800, letterSpacing: -3, lineHeight: 1 }}>
           Bid live. <span style={{ color: C.cyan }}>Win smart.</span>

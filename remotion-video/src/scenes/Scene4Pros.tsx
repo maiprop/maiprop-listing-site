@@ -51,7 +51,7 @@ export const Scene4Pros: React.FC = () => {
     <AbsoluteFill style={{ padding: 100, fontFamily: jakarta.fontFamily }}>
       <div style={{ opacity: headS, transform: `translateY(${interpolate(headS, [0, 1], [20, 0])}px)` }}>
         <div style={{ color: C.cyan, fontFamily: dm.fontFamily, fontSize: 16, letterSpacing: 4, textTransform: "uppercase", marginBottom: 18 }}>
-          03 — Professionals
+          04 — Professionals
         </div>
         <h2 style={{ margin: 0, color: C.white, fontSize: 96, fontWeight: 800, letterSpacing: -3, lineHeight: 1 }}>
           Every expert. <span style={{ color: C.purple }}>One platform.</span>
