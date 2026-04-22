@@ -1,4 +1,4 @@
-import { AbsoluteFill, useCurrentFrame, interpolate, spring, useVideoConfig, Sequence } from "remotion";
+import { AbsoluteFill, useCurrentFrame, interpolate, spring, useVideoConfig } from "remotion";
 import { loadFont as loadJakarta } from "@remotion/google-fonts/PlusJakartaSans";
 import { loadFont as loadDM } from "@remotion/google-fonts/DMSans";
 import { C } from "../theme";
