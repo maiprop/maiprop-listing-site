@@ -213,7 +213,6 @@ vi.mock("@/hooks/usePlanLimits", () => ({
   startOfCurrentMonth: vi.fn().mockReturnValue(new Date()),
   getPlanLimits: vi.fn().mockReturnValue({ listings: Infinity, images: Infinity, aiCredits: Infinity }),
   usePlanLimits: vi.fn().mockReturnValue({ limits: {}, usage: {}, isLoading: false }),
-  getPlanLimits: vi.fn().mockReturnValue({ listings: null }),
 }));
 
 vi.mock("@/hooks/useListingForm", () => ({

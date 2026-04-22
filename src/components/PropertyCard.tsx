@@ -27,7 +27,7 @@ export interface Property {
   sqm: number;
   images: string[];
   type: "apartment" | "house" | "land" | "commercial" | "villa" | "office";
-  listingType: "sale" | "rent" | "auction" | "firesale" | "open_house";
+  listingType: "sale" | "rent" | "auction" | "firesale" | "open_house" | "new_build";
   subtype?: string;
   auctionDate?: string;
   auctionStartingBid?: number;
