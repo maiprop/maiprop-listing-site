@@ -8,6 +8,7 @@ const ALLOWED_ORIGINS = [
   "https://maiprop.co",
   "https://www.maiprop.co",
   "https://app.maiprop.co",
+  "https://portal.maiprop.co",
   "https://os.maiprop.co",
   // Local dev
   "http://localhost:8080",
