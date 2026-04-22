@@ -6,6 +6,7 @@ import { slide } from "@remotion/transitions/slide";
 import { Background } from "./components/Background";
 import { Scene1Hook } from "./scenes/Scene1Hook";
 import { Scene2Search } from "./scenes/Scene2Search";
+import { Scene3OpenHouses } from "./scenes/Scene3OpenHouses";
 import { Scene3Auction } from "./scenes/Scene3Auction";
 import { Scene4Pros } from "./scenes/Scene4Pros";
 import { Scene5CTA } from "./scenes/Scene5CTA";
@@ -30,13 +31,20 @@ export const MainVideo: React.FC = () => {
           timing={springTiming({ config: { damping: 200 }, durationInFrames: 22 })}
         />
         <TransitionSeries.Sequence durationInFrames={170}>
-          <Scene3Auction />
+          <Scene3OpenHouses />
         </TransitionSeries.Sequence>
         <TransitionSeries.Transition
           presentation={wipe({ direction: "from-bottom" })}
           timing={springTiming({ config: { damping: 200 }, durationInFrames: 22 })}
         />
-        <TransitionSeries.Sequence durationInFrames={140}>
+        <TransitionSeries.Sequence durationInFrames={170}>
+          <Scene3Auction />
+        </TransitionSeries.Sequence>
+        <TransitionSeries.Transition
+          presentation={slide({ direction: "from-right" })}
+          timing={springTiming({ config: { damping: 200 }, durationInFrames: 22 })}
+        />
+        <TransitionSeries.Sequence durationInFrames={150}>
           <Scene4Pros />
         </TransitionSeries.Sequence>
         <TransitionSeries.Transition
