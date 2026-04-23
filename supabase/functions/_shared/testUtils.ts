@@ -33,8 +33,11 @@ export async function captureHandler(
   // @ts-expect-error test override
   Deno.serve = (h: unknown) => { captured = h as typeof captured; return {} as Deno.HttpServer; };
 
-  const origEnvGet = Deno.env.get.bind(Deno.env);
-  const defaultEnv: Record<string, string> = {
+  // Inject test env vars via the official Deno.env.set API (works on all Deno
+  // 2.x builds, including Proxy-backed Deno.env). Intentionally NOT cleaned up
+  // in restore() — Deno.test callbacks run after module init, so vars must stay
+  // set for the lifetime of the test file.
+  const testEnv: Record<string, string> = {
     SUPABASE_URL: "https://test.supabase.co",
     SUPABASE_SERVICE_ROLE_KEY: "test-service-key",
     LOVABLE_API_KEY: "test-lovable-key",
@@ -46,21 +49,20 @@ export async function captureHandler(
     CRON_SECRET: "test-cron-secret",
     ...envOverrides,
   };
-  Deno.env.get = (k: string) => defaultEnv[k] ?? origEnvGet(k);
+  for (const [k, v] of Object.entries(testEnv)) {
+    Deno.env.set(k, v);
+  }
 
   // Deno 2.x import() only accepts string; convert URL to its href first.
   const specifier = typeof moduleSpecifier === "string" ? moduleSpecifier : moduleSpecifier.href;
   await import(specifier);
 
+  // @ts-expect-error test override
   Deno.serve = origServe;
-
-  function restore() {
-    Deno.env.get = origEnvGet;
-  }
 
   if (!captured) throw new Error(`Deno.serve was not called by ${moduleSpecifier}`);
 
-  return { handler: captured, restore };
+  return { handler: captured, restore: () => {} };
 }
 
 /** Build a Request to the edge function URL. */
