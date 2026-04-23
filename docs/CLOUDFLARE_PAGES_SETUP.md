@@ -51,7 +51,7 @@ side.
 | `VITE_STRIPE_PRO_PRODUCT_ID`     | optional  | paid subscription flow                                             |
 | `VITE_GOOGLE_MAPS_API_KEY`       | optional  | enhances auction cards + Places autocomplete                       |
 | `VITE_PLAUSIBLE_DOMAIN`          | optional  | enables Plausible analytics                                        |
-| `VITE_APP_URL`                   | optional  | set to `https://maiprop.co` for production; used for OAuth redirects |
+| `VITE_APP_URL`                   | **yes**   | canonical public origin (`https://maiprop.co`). Used for OAuth redirects, password-reset links, Stripe checkout URLs and `navigator.share` URLs. Without it the build falls back to the hardcoded `maiprop.co`, which means aliases like `portal.maiprop.co` end up returning users to the wrong host after auth. |
 
 These are read by the **production** `deploy` job which rebuilds with real
 values. The `quality` and `e2e` jobs keep using the placeholder values set in
@@ -74,13 +74,14 @@ Pages Functions run on the Workers runtime; they read env vars from the
 | Variable               | Notes                                                              |
 | ---------------------- | ------------------------------------------------------------------ |
 | `SUPABASE_PROJECT_ID`  | server-side only — used by `functions/sitemap-dynamic.xml.ts` to proxy the dynamic sitemap. Same value as `VITE_SUPABASE_PROJECT_ID`. |
+| `SITE_LOCK_PASSWORD`   | **optional** — when set, `functions/_middleware.ts` locks every request behind a passcode splash. Leave unset to keep the site public. Stored as `secret_text` (encrypted at rest on Cloudflare). See section 8 below. |
 
-The CI `deploy` job **automatically syncs** `SUPABASE_PROJECT_ID` into the
-Pages production env on every deploy (step: *Sync Cloudflare Pages runtime
-environment variables*), sourced from the `VITE_SUPABASE_PROJECT_ID` GitHub
-secret. You only need to touch Cloudflare Pages → Settings → Environment
-variables if you add **new** server-side bindings (and then extend that CI
-step accordingly).
+The CI `deploy` job **automatically syncs** both variables into the Pages
+production env on every deploy (step: *Sync Cloudflare Pages runtime
+environment variables*), sourced from the `VITE_SUPABASE_PROJECT_ID` and
+`SITE_LOCK_PASSWORD` GitHub secrets respectively. You only need to touch
+Cloudflare Pages → Settings → Environment variables if you add **new**
+server-side bindings (and then extend that CI step accordingly).
 
 > See `.env.staging.example` for the canonical list of Vite vars.
 
@@ -89,6 +90,30 @@ step accordingly).
 Cloudflare Pages → **project** → **Custom domains** → add `maiprop.co`
 (and `www.maiprop.co` if applicable). Cloudflare will auto-configure the DNS
 records if the zone lives on the same account.
+
+### 4a. Alias hosts (301 → canonical)
+
+Any alias domain added under *Custom domains* (e.g. `portal.maiprop.co`) is
+permanently redirected to `maiprop.co` by `functions/_middleware.ts` —
+it checks the request's `hostname` against a `REDIRECT_HOSTS` allowlist and
+returns a `301` with `Location: https://maiprop.co/<path><search>` before any
+other logic runs. Rationale:
+
+- **One canonical origin for auth/share URLs.** OAuth providers, Stripe and
+  `navigator.share` callbacks all resolve against `VITE_APP_URL`
+  (= `https://maiprop.co`). Serving the app on two hosts would mean half the
+  links deep-link to the "wrong" host.
+- **Single site-lock prompt.** Without the 301, a user with the passcode
+  cookie for `maiprop.co` hitting `portal.maiprop.co` would see the splash
+  again (cookies are host-scoped).
+- **Cache-friendly.** Browsers and Cloudflare's edge cache the 301 for an
+  hour, so the redirect itself is effectively free after the first hit.
+
+To add a new alias: register it under *Custom domains* in the Pages
+dashboard, then add the hostname to the `REDIRECT_HOSTS` set in
+`functions/_middleware.ts` and redeploy. `www.maiprop.co` is intentionally
+NOT in the set — some OAuth providers treat `www` and the apex as distinct
+registered origins, so adding it needs coordinated redirect-URI updates.
 
 ## 5. What gets deployed
 
@@ -125,3 +150,70 @@ Or use the dashboard: **Pages → project → Deployments → ⋯ → Rollback**
 - `docs/*.md` still mentions Netlify in operational runbooks
   (`PRODUCTION_CHECKLIST.md`, `STAGING_SETUP.md`, `SECRETS_ROTATION.md`,
   `ENV_SETUP.md`, `AUDIT_RECONCILIATION.md`). Update when convenient.
+
+## 8. Pre-launch site lock (passcode gate)
+
+`functions/_middleware.ts` implements a site-wide passcode gate. Every
+request — HTML, JS/CSS assets, Pages Functions — is intercepted at the edge.
+Visitors without a valid cookie see a branded splash form; submitting the
+correct passcode sets an `HttpOnly`, `Secure`, `SameSite=Lax` cookie valid
+for 30 days and redirects to the originally requested URL.
+
+The gate is **fully disabled** when `SITE_LOCK_PASSWORD` is unset. The Vite
+bundle is never touched — the password only lives in the Cloudflare Pages
+runtime environment, so nothing leaks into the shipped JS.
+
+### Enable the lock
+
+Choose one:
+
+**Option A — CI-managed (recommended).**
+
+1. Pick a strong passcode.
+2. Add it as a GitHub repo secret:
+   ```powershell
+   gh secret set SITE_LOCK_PASSWORD --repo maiprop/maiprop-listing-site
+   ```
+3. Push any commit to `main` (or re-run the latest `deploy` job). The
+   *Sync Cloudflare Pages runtime environment variables* step will push the
+   value into the Pages project as `secret_text`. On the next request the
+   middleware picks it up.
+
+**Option B — Cloudflare dashboard (one-off).**
+
+Cloudflare dashboard → Workers & Pages → `maiprop-listing-site` → Settings
+→ Environment variables → **Production** → add `SITE_LOCK_PASSWORD`
+(type: *Encrypt*). Trigger a redeploy (or the next CI run) so the Function
+runtime picks up the new binding.
+
+> Note: if you set the value via the dashboard only, the next CI deploy
+> will still preserve it — the sync step does a partial PATCH and only
+> touches keys it explicitly sends.
+
+### Disable the lock
+
+- **CI-managed:** delete the GitHub secret (`gh secret delete SITE_LOCK_PASSWORD`)
+  *and* remove the `SITE_LOCK_PASSWORD` entry from the Pages project
+  (dashboard → Environment variables → Production → delete). Deleting the
+  GitHub secret alone will skip re-syncing but the previously-stored Pages
+  value stays active until you remove it on Cloudflare's side.
+- **Dashboard-only:** delete the variable on Cloudflare Pages and redeploy.
+
+### Rotate the passcode
+
+Update the GitHub secret and redeploy, or change the value in the Pages
+dashboard. All previously-issued cookies are invalidated automatically
+(they store `sha256(password)`, which no longer matches).
+
+### Troubleshooting
+
+- **Health check (`curl https://portal.maiprop.co`) fails after deploy.**
+  The splash page returns HTTP 200, so a naked `curl` still passes. If it
+  doesn't, check the CI deploy logs for the *Sync* step output — the last
+  line reports `site lock: ENABLED` or `disabled`.
+- **Preview deploys are also locked.** The sync step only writes to
+  `deployment_configs.production`, so previews are unaffected unless you
+  manually add the same variable under the *Preview* environment.
+- **I'm seeing the splash on localhost.** You shouldn't — the middleware
+  runs only on Cloudflare Pages. `npm run dev` and `npm run preview` don't
+  go through the Workers runtime.
