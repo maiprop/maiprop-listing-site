@@ -64,9 +64,15 @@ export const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY ?? "
 /**
  * Safe app origin for OAuth redirects — never derived from window.location
  * so it cannot be influenced by iframe/postMessage tricks.
- * Set VITE_APP_URL in .env for local dev (e.g. http://localhost:8080).
+ *
+ * Set VITE_APP_URL in .env for local dev (e.g. http://localhost:8080) and in
+ * CI secrets for production. The hardcoded fallback points at
+ * `portal.maiprop.co` because that is the only domain currently pointing at
+ * the Cloudflare Pages deployment (maiprop.co is parked on Namecheap).
+ * When DNS is re-pointed, update this fallback and the VITE_APP_URL secret
+ * together so OAuth/Stripe redirect-URI allowlists only need rotating once.
  */
-export const APP_ORIGIN = import.meta.env.VITE_APP_URL ?? "https://maiprop.co";
+export const APP_ORIGIN = import.meta.env.VITE_APP_URL ?? "https://portal.maiprop.co";
 
 /** Street View image via edge function proxy so the API key is never in client URLs. */
 export function getStreetViewProxyUrl(

@@ -51,7 +51,7 @@ side.
 | `VITE_STRIPE_PRO_PRODUCT_ID`     | optional  | paid subscription flow                                             |
 | `VITE_GOOGLE_MAPS_API_KEY`       | optional  | enhances auction cards + Places autocomplete                       |
 | `VITE_PLAUSIBLE_DOMAIN`          | optional  | enables Plausible analytics                                        |
-| `VITE_APP_URL`                   | **yes**   | canonical public origin (`https://maiprop.co`). Used for OAuth redirects, password-reset links, Stripe checkout URLs and `navigator.share` URLs. Without it the build falls back to the hardcoded `maiprop.co`, which means aliases like `portal.maiprop.co` end up returning users to the wrong host after auth. |
+| `VITE_APP_URL`                   | **yes**   | canonical public origin (currently `https://portal.maiprop.co` — the only host whose DNS resolves to this Pages deployment). Used for OAuth redirects, password-reset links, Stripe checkout URLs and `navigator.share` URLs. The hardcoded fallback in `src/lib/config.ts` matches, so unsetting the secret does not silently break production, but keep both in sync. |
 
 These are read by the **production** `deploy` job which rebuilds with real
 values. The `quality` and `e2e` jobs keep using the placeholder values set in
@@ -91,29 +91,35 @@ Cloudflare Pages → **project** → **Custom domains** → add `maiprop.co`
 (and `www.maiprop.co` if applicable). Cloudflare will auto-configure the DNS
 records if the zone lives on the same account.
 
-### 4a. Alias hosts (301 → canonical)
+### 4a. Canonical host + alias redirects
 
-Any alias domain added under *Custom domains* (e.g. `portal.maiprop.co`) is
-permanently redirected to `maiprop.co` by `functions/_middleware.ts` —
-it checks the request's `hostname` against a `REDIRECT_HOSTS` allowlist and
-returns a `301` with `Location: https://maiprop.co/<path><search>` before any
-other logic runs. Rationale:
+**Canonical host today: `portal.maiprop.co`.** It is the only domain whose
+DNS currently points at this Pages deployment (`maiprop.co` resolves to
+Namecheap parking, `www.maiprop.co` points at an unrelated AWS host). The
+app's `APP_ORIGIN` (`src/lib/config.ts`) and the `VITE_APP_URL` CI secret
+both resolve to `https://portal.maiprop.co`.
+
+`functions/_middleware.ts` contains a `REDIRECT_HOSTS` `Map<alias, canonical>`
+that returns a `301` (path + query preserved, `Cache-Control: public,
+max-age=3600`) before the site-lock gate runs. The map is **empty** right
+now — re-enable once DNS is aligned (e.g. after `CNAME maiprop.co →
+maiprop-listing-site.pages.dev`). Rationale for the mechanism when active:
 
 - **One canonical origin for auth/share URLs.** OAuth providers, Stripe and
-  `navigator.share` callbacks all resolve against `VITE_APP_URL`
-  (= `https://maiprop.co`). Serving the app on two hosts would mean half the
-  links deep-link to the "wrong" host.
+  `navigator.share` callbacks all resolve against `VITE_APP_URL`. Serving
+  the app on two hosts would split-brain half the callback links.
 - **Single site-lock prompt.** Without the 301, a user with the passcode
-  cookie for `maiprop.co` hitting `portal.maiprop.co` would see the splash
-  again (cookies are host-scoped).
+  cookie for the canonical host hitting an alias would see the splash again
+  (cookies are host-scoped).
 - **Cache-friendly.** Browsers and Cloudflare's edge cache the 301 for an
-  hour, so the redirect itself is effectively free after the first hit.
+  hour, so the redirect is effectively free after the first hit.
 
-To add a new alias: register it under *Custom domains* in the Pages
-dashboard, then add the hostname to the `REDIRECT_HOSTS` set in
-`functions/_middleware.ts` and redeploy. `www.maiprop.co` is intentionally
-NOT in the set — some OAuth providers treat `www` and the apex as distinct
-registered origins, so adding it needs coordinated redirect-URI updates.
+To switch the canonical host in future: update `APP_ORIGIN`, the
+`VITE_APP_URL` secret, **and** any OAuth/Stripe redirect-URI allowlists at
+the provider consoles *before* flipping DNS — otherwise auth flows break
+between config change and provider update. `www.*` is intentionally left
+out of any `REDIRECT_HOSTS` map because many OAuth providers register
+apex and www as distinct origins.
 
 ## 5. What gets deployed
 
