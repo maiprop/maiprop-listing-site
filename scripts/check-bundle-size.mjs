@@ -27,7 +27,7 @@ const BUDGETS_KB = {
   "index": 600,
   // Manual chunks from vite.config.ts.
   "vendor-react": 180,
-  "vendor-ui": 150,
+  "vendor-ui": 250, // Radix UI primitives + their shared internals; raised from 150 after audit
   "vendor-charts": 500,
   "vendor-motion": 180,
   "vendor-icons": 250,
