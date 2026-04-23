@@ -46,16 +46,15 @@ export async function captureHandler(
     CRON_SECRET: "test-cron-secret",
     ...envOverrides,
   };
-  // @ts-expect-error test override
   Deno.env.get = (k: string) => defaultEnv[k] ?? origEnvGet(k);
 
-  await import(moduleSpecifier);
+  // Deno 2.x import() only accepts string; convert URL to its href first.
+  const specifier = typeof moduleSpecifier === "string" ? moduleSpecifier : moduleSpecifier.href;
+  await import(specifier);
 
-  // @ts-expect-error test override
   Deno.serve = origServe;
 
   function restore() {
-    // @ts-expect-error test override
     Deno.env.get = origEnvGet;
   }
 
