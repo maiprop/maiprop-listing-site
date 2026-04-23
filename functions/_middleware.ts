@@ -134,16 +134,15 @@ function loginPage(opts: { error?: string; redirectTo: string; status?: number }
 }
 
 /**
- * Hosts that must be permanently redirected to the canonical apex.
- * Keeping this list as a constant means new aliases are a one-line change.
+ * Canonical-host redirect table. Keys are hostnames that should 301 to the
+ * value. EMPTY at the moment because the apparent canonical domain
+ * `maiprop.co` is NOT pointing at this Cloudflare Pages deployment (DNS
+ * points at Namecheap parking); redirecting real traffic there would black-
+ * hole the site. Re-enable by adding entries once DNS is aligned with the
+ * `VITE_APP_URL` setting in CI secrets. See docs/CLOUDFLARE_PAGES_SETUP.md
+ * §4a for the operational contract.
  */
-const CANONICAL_HOST = "maiprop.co";
-const REDIRECT_HOSTS = new Set<string>([
-  "portal.maiprop.co",
-  // "www.maiprop.co" is deliberately NOT redirected — many auth providers
-  // treat www and apex as distinct registered origins. Add it here only
-  // after coordinating OAuth/Stripe redirect URI updates.
-]);
+const REDIRECT_HOSTS: ReadonlyMap<string, string> = new Map();
 
 export const onRequest: PagesFunction<Env> = async (ctx) => {
   // 1) Canonical-host redirect. Runs BEFORE the site-lock gate so visitors
@@ -151,8 +150,9 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
   //    as 301 so browsers and CDNs cache the hop. Preserves path + search.
   //    Scheme is always https — CF Pages never serves plain http.
   const reqUrl = new URL(ctx.request.url);
-  if (REDIRECT_HOSTS.has(reqUrl.hostname)) {
-    const target = `https://${CANONICAL_HOST}${reqUrl.pathname}${reqUrl.search}`;
+  const redirectTarget = REDIRECT_HOSTS.get(reqUrl.hostname);
+  if (redirectTarget) {
+    const target = `https://${redirectTarget}${reqUrl.pathname}${reqUrl.search}`;
     return new Response(null, {
       status: 301,
       headers: {
