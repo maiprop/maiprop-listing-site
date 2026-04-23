@@ -57,7 +57,6 @@ export async function captureHandler(
   const specifier = typeof moduleSpecifier === "string" ? moduleSpecifier : moduleSpecifier.href;
   await import(specifier);
 
-  // @ts-expect-error test override
   Deno.serve = origServe;
 
   if (!captured) throw new Error(`Deno.serve was not called by ${moduleSpecifier}`);
