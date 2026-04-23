@@ -285,6 +285,12 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: quality
+    env:
+      # Keep Lighthouse builds on the same format-valid Supabase stubs used
+      # elsewhere in CI so route chunks that import the client never crash.
+      VITE_SUPABASE_URL: https://abcdefghijklmnop.supabase.co
+      VITE_SUPABASE_PUBLISHABLE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlhdCI6MTcwMDAwMDAwMCwiZXhwIjo5OTk5OTk5OTk5fQ.ci_placeholder_signature_not_real
+      VITE_SUPABASE_PROJECT_ID: abcdefghijklmnop
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
