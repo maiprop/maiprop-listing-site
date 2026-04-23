@@ -1,11 +1,11 @@
-/**
+﻿/**
  * Tests for streetview-proxy edge function (public, no auth required).
  * Proxies Google Street View; without GOOGLE_MAPS_API_KEY returns 503.
  */
 import { assertEquals, assertStringIncludes } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { captureHandler, req } from "../_shared/testUtils.ts";
 
-const { handler, restore } = await captureHandler("./index.ts");
+const { handler, restore } = await captureHandler(new URL("./index.ts", import.meta.url));
 
 Deno.test("OPTIONS preflight returns 200", async () => {
   const res = await handler(req("OPTIONS"));

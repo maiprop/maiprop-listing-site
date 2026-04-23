@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tests for sitemap edge function (public, no auth required).
  * Returns XML sitemap from live DB data; in tests Supabase client will fail or
  * return empty data — function should handle that gracefully.
@@ -6,7 +6,7 @@
 import { assertEquals, assertStringIncludes } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { captureHandler, req } from "../_shared/testUtils.ts";
 
-const { handler, restore } = await captureHandler("./index.ts");
+const { handler, restore } = await captureHandler(new URL("./index.ts", import.meta.url));
 
 Deno.test("GET returns XML content-type (200 or 500)", async () => {
   const r = new Request("https://functions.supabase.co/fn", { method: "GET" });

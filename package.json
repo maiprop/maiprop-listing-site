@@ -37,7 +37,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "test:deno": "deno test --allow-env --allow-net supabase/functions/",
+    "test:deno": "deno test --allow-env --allow-net --allow-read supabase/functions/",
     "check:bundle-size": "node scripts/check-bundle-size.mjs",
     "lighthouse": "lhci autorun",
     "lighthouse:collect": "lhci collect",

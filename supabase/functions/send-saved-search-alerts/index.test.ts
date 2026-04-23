@@ -1,10 +1,10 @@
-/**
+﻿/**
  * Tests for send-saved-search-alerts edge function (cron).
  */
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { captureHandler, req } from "../_shared/testUtils.ts";
 
-const { handler, restore } = await captureHandler("./index.ts", {
+const { handler, restore } = await captureHandler(new URL("./index.ts", import.meta.url), {
   CRON_SECRET: "correct-cron-secret",
 });
 

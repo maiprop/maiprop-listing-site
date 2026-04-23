@@ -1,10 +1,10 @@
-/**
+﻿/**
  * Tests for oh-registration-notify edge function (DB webhook).
  */
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { captureHandler, req } from "../_shared/testUtils.ts";
 
-const { handler, restore } = await captureHandler("./index.ts", {
+const { handler, restore } = await captureHandler(new URL("./index.ts", import.meta.url), {
   WEBHOOK_SECRET: "correct-secret",
 });
 

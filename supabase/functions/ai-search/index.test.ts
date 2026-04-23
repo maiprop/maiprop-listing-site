@@ -1,11 +1,11 @@
-/**
+﻿/**
  * Tests for ai-search edge function.
- * Run: deno test supabase/functions/ai-search/index.test.ts --allow-env --allow-net
+ * Run: deno test supabase/functions/ai-search/index.test.ts --allow-env --allow-net --allow-read
  */
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { captureHandler, req, authedReq } from "../_shared/testUtils.ts";
 
-const { handler, restore } = await captureHandler("./index.ts");
+const { handler, restore } = await captureHandler(new URL("./index.ts", import.meta.url));
 
 Deno.test("OPTIONS preflight returns 200 with CORS headers", async () => {
   const res = await handler(req("OPTIONS"));

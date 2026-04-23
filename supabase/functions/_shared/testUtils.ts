@@ -7,7 +7,7 @@
  *
  * Usage:
  *   import { captureHandler, restoreServe, req, jsonBody } from "../_shared/testUtils.ts";
- *   const { handler, restore } = await captureHandler("./index.ts", { LOVABLE_API_KEY: "k" });
+ *   const { handler, restore } = await captureHandler(new URL("./index.ts", import.meta.url), { LOVABLE_API_KEY: "k" });
  *   Deno.test("OPTIONS → 200", async () => {
  *     const res = await handler(req("OPTIONS"));
  *     assertEquals(res.status, 200);
@@ -24,7 +24,7 @@ export interface HandlerCapture {
  * the captured handler and a restore function.
  */
 export async function captureHandler(
-  moduleSpecifier: string,
+  moduleSpecifier: URL | string,
   envOverrides: Record<string, string> = {},
 ): Promise<HandlerCapture> {
   let captured: ((req: Request) => Promise<Response>) | null = null;
