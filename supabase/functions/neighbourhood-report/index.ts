@@ -2,6 +2,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
+import { openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
 
 const neighbourhoodLimiter = makeRateLimiter({ maxRequests: 15, windowMs: 60_000 });
 
@@ -44,15 +45,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    const useGemini = !!GEMINI_API_KEY;
-    if (!useGemini && !LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
-    const apiKey = (useGemini ? GEMINI_API_KEY : LOVABLE_API_KEY)!;
-    const aiUrl = useGemini
-      ? `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`
-      : "https://ai.gateway.lovable.dev/v1/chat/completions";
-    const aiModel = "google/gemini-2.5-flash";
+    if (!Deno.env.get("OPENAI_API_KEY")) throw new Error("OPENAI_API_KEY not configured");
 
     const locationStr = [address, city, region, "Greece"].filter(Boolean).join(", ");
     const coordStr = lat && lng ? ` (coords: ${lat}, ${lng})` : "";
@@ -112,17 +105,10 @@ Rules:
 - All numbers must be realistic for the Greek market
 - Only return the JSON object`;
 
-    const response = await fetch(aiUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(useGemini ? {} : { Authorization: `Bearer ${apiKey}` }),
-      },
-      body: JSON.stringify(
-        useGemini
-          ? { contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.5 } }
-          : { model: aiModel, messages: [{ role: "user", content: prompt }], temperature: 0.5 }
-      ),
+    const response = await openAIChatCompletion({
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.5,
+      max_tokens: 1800,
     });
 
     if (!response.ok) {
@@ -134,7 +120,7 @@ Rules:
     }
 
     const aiData = await response.json();
-    const raw = (useGemini ? aiData.candidates?.[0]?.content?.parts?.[0]?.text ?? "" : aiData.choices?.[0]?.message?.content ?? "")
+    const raw = readOpenAITextContent(aiData)
       .replace(/```json\s*/gi, "").replace(/```\s*/gi, "").trim();
 
     // Extract only the outermost JSON object

@@ -7,7 +7,7 @@
  *
  * Usage:
  *   import { captureHandler, restoreServe, req, jsonBody } from "../_shared/testUtils.ts";
- *   const { handler, restore } = await captureHandler("./index.ts", { LOVABLE_API_KEY: "k" });
+ *   const { handler, restore } = await captureHandler("./index.ts", { OPENAI_API_KEY: "k" });
  *   Deno.test("OPTIONS → 200", async () => {
  *     const res = await handler(req("OPTIONS"));
  *     assertEquals(res.status, 200);
@@ -29,15 +29,22 @@ export async function captureHandler(
 ): Promise<HandlerCapture> {
   let captured: ((req: Request) => Promise<Response>) | null = null;
 
+  const denoForTest = Deno as typeof Deno & { serve: typeof Deno.serve };
+  const envForTest = Deno.env as typeof Deno.env & { get: typeof Deno.env.get };
   const origServe = Deno.serve;
-  // @ts-expect-error test override
-  Deno.serve = (h: unknown) => { captured = h as typeof captured; return {} as Deno.HttpServer; };
+  denoForTest.serve = ((h: unknown) => {
+    captured = h as typeof captured;
+    return {} as Deno.HttpServer<Deno.NetAddr>;
+  }) as typeof Deno.serve;
 
   const origEnvGet = Deno.env.get.bind(Deno.env);
   const defaultEnv: Record<string, string> = {
     SUPABASE_URL: "https://test.supabase.co",
     SUPABASE_SERVICE_ROLE_KEY: "test-service-key",
-    LOVABLE_API_KEY: "test-lovable-key",
+    OPENAI_API_KEY: "test-openai-key",
+    BREVO_API_KEY: "test-brevo-key",
+    BREVO_FROM_EMAIL: "noreply@maiprop.test",
+    SEND_EMAIL_HOOK_SECRET: "v1,whsec_test_hook_secret",
     STRIPE_SECRET_KEY: "sk_test_placeholder",
     MAIPROP_OS_URL: "https://os.test",
     MAIPROP_OS_EMAIL: "test@test.com",
@@ -46,17 +53,14 @@ export async function captureHandler(
     CRON_SECRET: "test-cron-secret",
     ...envOverrides,
   };
-  // @ts-expect-error test override
-  Deno.env.get = (k: string) => defaultEnv[k] ?? origEnvGet(k);
+  envForTest.get = (k: string) => defaultEnv[k] ?? origEnvGet(k);
 
   await import(moduleSpecifier);
 
-  // @ts-expect-error test override
-  Deno.serve = origServe;
+  denoForTest.serve = origServe;
 
   function restore() {
-    // @ts-expect-error test override
-    Deno.env.get = origEnvGet;
+    envForTest.get = origEnvGet;
   }
 
   if (!captured) throw new Error(`Deno.serve was not called by ${moduleSpecifier}`);

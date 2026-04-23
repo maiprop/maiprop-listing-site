@@ -1,15 +1,12 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
+import { getBrevoSender, sendBrevoEmail } from "../_shared/brevo.ts";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 
-// Validate DB webhook secret to prevent spoofed payloads triggering notification emails.
-// Set WEBHOOK_SECRET in Supabase edge function secrets, and configure the DB webhook
-// to send the header: Authorization: Bearer <WEBHOOK_SECRET>
-// Fails CLOSED: if secret is absent, all requests are rejected.
 function verifyWebhookSecret(req: Request): boolean {
   const secret = Deno.env.get("WEBHOOK_SECRET");
   if (!secret) {
-    console.error("[oh-registration-notify] WEBHOOK_SECRET not configured — rejecting request");
+    console.error("[oh-registration-notify] WEBHOOK_SECRET not configured - rejecting request");
     return false;
   }
   const auth = req.headers.get("Authorization");
@@ -30,7 +27,6 @@ Deno.serve(async (req) => {
 
   try {
     const payload = await req.json();
-    // Called by DB webhook: { type: "UPDATE", record: {...}, old_record: {...} }
     const { record, old_record } = payload;
 
     if (!record || !old_record) {
@@ -42,7 +38,6 @@ Deno.serve(async (req) => {
     const newStatus: string = record.status;
     const oldStatus: string = old_record.status;
 
-    // Only fire on approved or rejected transitions
     if (newStatus === oldStatus) {
       return new Response(JSON.stringify({ ok: true, reason: "no change" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -54,9 +49,11 @@ Deno.serve(async (req) => {
       });
     }
 
-    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
 
-    // Fetch requester profile email via auth.admin
     const { data: userData, error: userErr } = await supabase.auth.admin.getUserById(record.requester_id);
     if (userErr || !userData?.user?.email) {
       console.error("Could not fetch user email:", userErr);
@@ -66,7 +63,6 @@ Deno.serve(async (req) => {
     }
     const recipientEmail = userData.user.email;
 
-    // Fetch listing details
     const { data: listing } = await supabase
       .from("listings")
       .select("title, city, open_house_date")
@@ -76,11 +72,11 @@ Deno.serve(async (req) => {
     const listingTitle = listing?.title || "Open House";
     const openHouseDate = listing?.open_house_date
       ? new Date(listing.open_house_date).toLocaleDateString("en-GB", {
-          weekday: "long",
-          day: "numeric",
-          month: "long",
-          year: "numeric",
-        })
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      })
       : null;
 
     const isApproved = newStatus === "approved";
@@ -100,15 +96,13 @@ Deno.serve(async (req) => {
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;padding:32px 16px">
     <tr><td align="center">
       <table width="100%" style="max-width:560px;background:#ffffff;border-radius:12px;border:1px solid #e5e7eb;overflow:hidden">
-        <!-- Header -->
         <tr><td style="background:${isApproved ? "#059669" : "#dc2626"};padding:24px 32px">
           <p style="color:rgba(255,255,255,0.8);font-size:12px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;margin:0 0 4px">MaiProp · Open Houses</p>
           <h1 style="color:#ffffff;font-size:22px;font-weight:700;margin:0">
-            ${isApproved ? "Registration Approved 🎉" : "Registration Update"}
+            ${isApproved ? "Registration Approved" : "Registration Update"}
           </h1>
         </td></tr>
 
-        <!-- Body -->
         <tr><td style="padding:28px 32px">
           <p style="color:#111827;font-size:15px;margin:0 0 20px">
             ${
@@ -148,7 +142,6 @@ Deno.serve(async (req) => {
           </a>
         </td></tr>
 
-        <!-- Footer -->
         <tr><td style="border-top:1px solid #e5e7eb;padding:16px 32px;background:#f9fafb">
           <p style="color:#9ca3af;font-size:12px;margin:0">
             You received this email because you registered for an open house on MaiProp.
@@ -161,39 +154,17 @@ Deno.serve(async (req) => {
 </body>
 </html>`;
 
-    // Send via Lovable email API
-    const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
-    if (!lovableApiKey) {
-      console.error("LOVABLE_API_KEY not set");
-      return new Response(JSON.stringify({ ok: false, reason: "email api key missing" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const emailRes = await fetch("https://email.lovable.app/send", {
-      method: "POST",
+    await sendBrevoEmail({
+      to: recipientEmail,
+      subject,
+      html: htmlBody,
+      sender: getBrevoSender("MaiProp Open Houses"),
+      tags: ["oh_registration_status"],
       headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${lovableApiKey}`,
+        "X-MaiProp-Message-Id": `oh-reg-${record.id}-${newStatus}`,
+        "X-MaiProp-Template": "oh_registration_status",
       },
-      body: JSON.stringify({
-        from: "notify@notify.properties.maiprop.co",
-        to: recipientEmail,
-        subject,
-        html: htmlBody,
-        message_id: `oh-reg-${record.id}-${newStatus}`,
-        template_name: "oh_registration_status",
-      }),
     });
-
-    if (!emailRes.ok) {
-      const errText = await emailRes.text();
-      console.error("Email send failed:", errText);
-      return new Response(JSON.stringify({ ok: false, reason: errText }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
 
     console.log(`Sent ${newStatus} email to ${recipientEmail} for registration ${record.id}`);
     return new Response(JSON.stringify({ ok: true, status: newStatus, recipient: recipientEmail }), {

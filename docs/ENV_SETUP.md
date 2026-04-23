@@ -37,7 +37,7 @@ Find these in Supabase → Project Settings → API.
 | Feature | Variable | Where to get it |
 |---|---|---|
 | Maps | `VITE_MAPBOX_TOKEN` | mapbox.com → Account → Access Tokens |
-| AI search / assist | `VITE_OPENAI_API_KEY` **or** `VITE_ANTHROPIC_API_KEY` | respective vendor dashboard |
+| AI search / assist | `OPENAI_API_KEY` | OpenAI dashboard (set in Supabase Edge Function secrets) |
 | Stripe checkout | `VITE_STRIPE_PRO_PRODUCT_ID` + all `VITE_STRIPE_PRICE_*` | Stripe dashboard → Products |
 | Error monitoring | `VITE_SENTRY_DSN` | sentry.io → Project → Client Keys |
 | Analytics | `VITE_PLAUSIBLE_DOMAIN` | plausible.io → Sites |
@@ -100,9 +100,12 @@ Dashboard → Project Settings → Edge Functions → Secrets.
 | `STRIPE_SECRET_KEY` | `stripe-webhook`, `create-checkout`, `customer-portal`, `get-invoices`, `create-stripe-price`, `sync-stripe-pricing` |
 | `STRIPE_WEBHOOK_SECRET` | `stripe-webhook` |
 | `OS_WEBHOOK_SECRET` | `receive-from-os` (HMAC, see `WEBHOOK_VERIFICATION.md`) |
-| `OPENAI_API_KEY` | `ai-search`, `property-chat`, `pro-ai-tools`, `listing-ai-assist`, `ai-translate`, `smart-filters`, `neighbourhood-report`, `ai-service-match`, `property-valuation` |
-| `MAPBOX_TOKEN` | `property-pois`, `location-poi` |
-| `RESEND_API_KEY` | `process-email-queue`, `notify-*` |
+| `OPENAI_API_KEY` | `ai-search`, `property-chat`, `pro-ai-tools`, `listing-ai-assist`, `ai-translate`, `smart-filters`, `neighbourhood-report`, `ai-service-match`, `property-valuation`, `property-pois` |
+| `BREVO_API_KEY` | `send-saved-search-alerts`, `auth-email-hook`, `process-email-queue`, `invitation-notify`, `oh-registration-notify` |
+| `BREVO_FROM_EMAIL` | same Brevo-backed email functions as above |
+| `BREVO_FROM_NAME` | optional default sender-name override for Brevo-backed emails |
+| `SEND_EMAIL_HOOK_SECRET` | `auth-email-hook` (Supabase Auth send-email webhook verification) |
+| `EMAIL_TEMPLATE_PREVIEW_SECRET` | optional preview auth for `auth-email-hook/preview` (falls back to `SEND_EMAIL_HOOK_SECRET`) |
 
 Rotation cadence for each is documented in [`SECRETS_ROTATION.md`](./SECRETS_ROTATION.md).
 

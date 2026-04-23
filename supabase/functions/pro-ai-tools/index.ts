@@ -1,6 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
+import { openAIChatCompletion } from "../_shared/openai.ts";
 
 const proAiLimiter = makeRateLimiter({ maxRequests: 15, windowMs: 60_000 });
 
@@ -105,25 +106,14 @@ Deno.serve(async (req) => {
   try {
     const { messages, groupId } = await req.json();
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
-
     const systemContent = systemPrompts[groupId] || systemPrompts["legal"];
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: systemContent },
-          ...messages,
-        ],
-        stream: true,
-      }),
+    const response = await openAIChatCompletion({
+      messages: [
+        { role: "system", content: systemContent },
+        ...messages,
+      ],
+      stream: true,
     });
 
     if (!response.ok) {

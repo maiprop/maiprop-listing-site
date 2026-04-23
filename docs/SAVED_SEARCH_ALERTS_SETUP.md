@@ -10,9 +10,9 @@ The saved search alerts run via `pg_cron` every 6 hours to email users when new 
    - `vault` (usually enabled by default)
 
 2. **Edge Function environment** (Dashboard > Project Settings > Edge Functions):
-   - `RESEND_API_KEY` – for sending emails via Resend
-   - `MAIPROP_APP_URL` – e.g. `https://maiprop-listing-site.lovable.app`
-   - `RESEND_FROM_EMAIL` – optional, defaults to `alerts@maiprop.co`
+   - `BREVO_API_KEY` - for sending emails via Brevo
+   - `MAIPROP_APP_URL` - for example `https://portal.maiprop.co`
+   - `BREVO_FROM_EMAIL` - optional, defaults to `alerts@maiprop.co`
 
 ## Configure Vault Secrets
 
@@ -34,7 +34,7 @@ The cron job reads these secrets and invokes the `send-saved-search-alerts` Edge
 
 ## Alternative: External Cron
 
-If you prefer not to use pg_cron, you can trigger the function from an external scheduler (e.g. cron-job.org, GitHub Actions):
+If you prefer not to use `pg_cron`, you can trigger the function from an external scheduler, such as `cron-job.org` or GitHub Actions:
 
 ```bash
 curl -X POST "https://jglqlaynezspefoovqyc.supabase.co/functions/v1/send-saved-search-alerts" \
@@ -43,4 +43,4 @@ curl -X POST "https://jglqlaynezspefoovqyc.supabase.co/functions/v1/send-saved-s
   -d "{}"
 ```
 
-Schedule this to run every 6 hours (e.g. `0 */6 * * *`).
+Schedule this to run every 6 hours, for example `0 */6 * * *`.
