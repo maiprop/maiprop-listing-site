@@ -26,10 +26,10 @@ export default defineConfig({
       // Baseline thresholds — keep test runs honest without blocking incremental work.
       // Target: raise these incrementally as tests are added (see docs/testing.md).
       thresholds: {
-        lines: 10,
-        functions: 20,
+        lines: 11,
+        functions: 22,
         branches: 20,
-        statements: 10,
+        statements: 11,
       },
     },
   },

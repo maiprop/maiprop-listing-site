@@ -13,9 +13,9 @@
 
 | Metric | Current | Threshold | Target Q3 | Target Q4 |
 |--------|---------|-----------|-----------|-----------|
-| Lines       | ~11%  | 10% | 30% | 50% |
-| Statements  | ~11%  | 10% | 30% | 50% |
-| Functions   | ~24%  | 20% | 35% | 55% |
+| Lines       | ~11%  | 11% | 30% | 50% |
+| Statements  | ~11%  | 11% | 30% | 50% |
+| Functions   | ~24%  | 22% | 35% | 55% |
 | Branches    | ~21%  | 20% | 30% | 45% |
 
 ## Priority coverage gaps
