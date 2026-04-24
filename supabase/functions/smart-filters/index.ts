@@ -14,8 +14,12 @@ async function requireAuth(req: Request): Promise<Response | null> {
     });
   }
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, { auth: { persistSession: false, autoRefreshToken: false } });
-  const { data: { user }, error } = await supabase.auth.getUser(authHeader.slice(7));
-  if (error || !user) {
+  let user = null;
+  try {
+    const { data, error } = await supabase.auth.getUser(authHeader.slice(7));
+    if (!error && data.user) user = data.user;
+  } catch { /* network error — treat as auth failure */ }
+  if (!user) {
     return new Response(JSON.stringify({ error: "Invalid or expired token" }), {
       status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
