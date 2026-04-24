@@ -38,7 +38,7 @@ export async function captureHandler(
   // in restore() — Deno.test callbacks run after module init, so vars must stay
   // set for the lifetime of the test file.
   const testEnv: Record<string, string> = {
-    SUPABASE_URL: "https://test.supabase.co",
+    SUPABASE_URL: "http://localhost:54321",
     SUPABASE_SERVICE_ROLE_KEY: "test-service-key",
     LOVABLE_API_KEY: "test-lovable-key",
     STRIPE_SECRET_KEY: "sk_test_placeholder",

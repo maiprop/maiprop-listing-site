@@ -14,7 +14,6 @@
  * Rate limited: 10 req/min per IP (translation is expensive).
  */
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const ALLOWED_ORIGINS = [
   "https://maiprop.co", "https://www.maiprop.co", "https://app.maiprop.co",
@@ -55,7 +54,7 @@ function isRateLimited(ip: string): boolean {
   return false;
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   const hdrs = corsHeaders(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: hdrs });
 
@@ -88,8 +87,8 @@ serve(async (req) => {
   }
 
   if (STATIC_LOCALES.has(locale)) {
-    return new Response(JSON.stringify({ error: `${locale} is a static locale — load it from the bundle` }), {
-      status: 400, headers: { ...hdrs, "Content-Type": "application/json" },
+    return new Response(JSON.stringify({ locale, strings }), {
+      status: 200, headers: { ...hdrs, "Content-Type": "application/json" },
     });
   }
 

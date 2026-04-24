@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
 
 
   const supabase = createClient(Deno.env.get("SUPABASE_URL") ?? "", Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", {
-    auth: { persistSession: false },
+    auth: { persistSession: false, autoRefreshToken: false },
   });
 
   const RESEND_KEY = Deno.env.get("RESEND_API_KEY");

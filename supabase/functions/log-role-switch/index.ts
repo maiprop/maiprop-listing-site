@@ -15,6 +15,7 @@
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
+import { AuthError, verifyBearerToken } from "../_shared/auth.ts";
 
 const logStep = (step: string, details?: unknown) => {
   const suffix = details ? ` — ${JSON.stringify(details)}` : "";
@@ -35,17 +36,13 @@ Deno.serve(async (req) => {
     });
   }
 
-  const supabase = createClient(Deno.env.get("SUPABASE_URL") ?? "", serviceRoleKey);
+  const supabase = createClient(Deno.env.get("SUPABASE_URL") ?? "", serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
 
   try {
     // ── Auth ──────────────────────────────────────────────────────────────────
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) throw new Error("Missing Authorization header");
-    const token = authHeader.replace(/^Bearer\s+/i, "").trim();
-    const { data: userData, error: userError } = await supabase.auth.getUser(token);
-    if (userError || !userData.user) throw new Error("Unauthenticated");
-
-    const user = userData.user;
+    const user = await verifyBearerToken(req, supabase);
     logStep("Authenticated", { userId: user.id });
 
     // ── Parse body ────────────────────────────────────────────────────────────
@@ -111,9 +108,10 @@ Deno.serve(async (req) => {
     );
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Unknown error";
+    const status = err instanceof AuthError ? err.status : 500;
     logStep("ERROR", { message: msg });
     return new Response(JSON.stringify({ error: msg }), {
-      status: 500,
+      status,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

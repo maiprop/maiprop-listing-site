@@ -36,7 +36,17 @@ export async function verifyBearerToken(
   const token = authHeader.replace(/^Bearer\s*/i, "").trim();
   if (!token) throw new AuthError("Empty bearer token");
 
-  const { data, error } = await supabase.auth.getUser(token);
+  let result: Awaited<ReturnType<SupabaseAuth["auth"]["getUser"]>>;
+  try {
+    result = await supabase.auth.getUser(token);
+  } catch (err) {
+    // Network/DNS errors — treat as auth failure so functions return 401, not 500.
+    throw new AuthError(
+      err instanceof Error ? err.message : "Authentication failed",
+      401,
+    );
+  }
+  const { data, error } = result;
   if (error || !data.user?.email) {
     throw new AuthError(error?.message ?? "Authentication failed");
   }

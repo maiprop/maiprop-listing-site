@@ -39,6 +39,7 @@ Deno.serve(async (_req: Request) => {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+      { auth: { persistSession: false, autoRefreshToken: false } },
     );
 
     // Fetch all public listings in one query
