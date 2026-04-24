@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-  const supabaseClient = createClient(Deno.env.get("SUPABASE_URL") ?? "", serviceRoleKey);
+  const supabaseClient = createClient(Deno.env.get("SUPABASE_URL") ?? "", serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
 
   try {
     const user = await verifyBearerToken(req, supabaseClient);

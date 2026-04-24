@@ -14,6 +14,7 @@ Deno.serve(async (req) => {
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    { auth: { persistSession: false, autoRefreshToken: false } },
   );
 
   const WEBHOOK_SECRET = Deno.env.get("MAIPROP_OS_WEBHOOK_SECRET");

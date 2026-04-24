@@ -18,7 +18,8 @@ async function requireAuth(req: Request): Promise<{ error: Response | null; user
   }
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_ANON_KEY")!
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    { auth: { persistSession: false, autoRefreshToken: false } }
   );
   const { data: { user }, error } = await supabase.auth.getUser(authHeader.slice(7));
   if (error || !user) {
@@ -93,7 +94,7 @@ Deno.serve(async (req) => {
 
   // Verify active subscription — pro-ai-tools is a Pro-only feature.
   // Use the service-role client so RLS doesn't block the profiles read.
-  const svcClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  const svcClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false, autoRefreshToken: false } });
   const { data: profile } = await svcClient.from("profiles").select("subscription_product_id").eq("user_id", userId).single();
   if (!profile?.subscription_product_id) {
     return new Response(JSON.stringify({ error: "Active subscription required to use Pro AI tools" }), {

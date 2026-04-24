@@ -54,7 +54,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false, autoRefreshToken: false } });
 
     // Fetch requester profile email via auth.admin
     const { data: userData, error: userErr } = await supabase.auth.admin.getUserById(record.requester_id);

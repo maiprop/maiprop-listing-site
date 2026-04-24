@@ -18,7 +18,8 @@ async function requireAuth(req: Request): Promise<{ error: Response | null; user
   }
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_ANON_KEY")!
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    { auth: { persistSession: false, autoRefreshToken: false } }
   );
   const { data: { user }, error } = await supabase.auth.getUser(authHeader.slice(7));
   if (error || !user) {

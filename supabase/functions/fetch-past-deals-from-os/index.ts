@@ -74,6 +74,7 @@ Deno.serve(async (req) => {
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    { auth: { persistSession: false, autoRefreshToken: false } },
   );
   const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.slice(7));
   if (authError || !user) {

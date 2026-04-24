@@ -77,7 +77,7 @@ Deno.serve(async (req) => {
     )
   }
 
-  const supabase = createClient(supabaseUrl, supabaseServiceKey)
+  const supabase = createClient(supabaseUrl, supabaseServiceKey, { auth: { persistSession: false, autoRefreshToken: false } })
 
   // 1. Check rate-limit cooldown and read queue config
   const { data: state } = await supabase
