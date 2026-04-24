@@ -12,17 +12,24 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 
-// Valid base64-encoded secret (base64 of "test-secret-for-ci")
-const TEST_SECRET = "whsec_dGVzdC1zZWNyZXQtZm9yLWNp";
+// Stripe SDK's SubtleCryptoProvider uses TextEncoder.encode(secret) as the HMAC
+// key directly (no base64 decode). Mirror that here so sign() produces a
+// signature that constructEventAsync() will accept.
+const TEST_SECRET = "whsec_test_deterministic_ci_secret";
 
 async function sign(payload: string, secret: string, timestamp: number): Promise<string> {
-  const rawB64 = secret.startsWith("whsec_") ? secret.slice(6) : secret;
-  const rawBytes = Uint8Array.from(atob(rawB64), (c) => c.charCodeAt(0));
   const key = await crypto.subtle.importKey(
-    "raw", rawBytes, { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
   );
-  const signedPayload = `${timestamp}.${payload}`;
-  const sigBuf = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(signedPayload));
+  const sigBuf = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(`${timestamp}.${payload}`),
+  );
   const sigHex = Array.from(new Uint8Array(sigBuf))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
@@ -70,7 +77,7 @@ Deno.test("stripe-webhook: rejects wrong secret", async () => {
 
   let threw = false;
   try {
-    await stripe.webhooks.constructEventAsync(payload, sig, "whsec_ZGlmZmVyZW50LXNlY3JldA==");
+    await stripe.webhooks.constructEventAsync(payload, sig, "whsec_different_secret");
   } catch {
     threw = true;
   }
