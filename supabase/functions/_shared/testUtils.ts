@@ -40,6 +40,7 @@ export async function captureHandler(
   const testEnv: Record<string, string> = {
     SUPABASE_URL: "http://localhost:54321",
     SUPABASE_SERVICE_ROLE_KEY: "test-service-key",
+    SUPABASE_ANON_KEY: "test-anon-key",
     LOVABLE_API_KEY: "test-lovable-key",
     STRIPE_SECRET_KEY: "sk_test_placeholder",
     MAIPROP_OS_URL: "https://os.test",
@@ -47,6 +48,7 @@ export async function captureHandler(
     MAIPROP_OS_PASSWORD: "testpass",
     WEBHOOK_SECRET: "test-webhook-secret",
     CRON_SECRET: "test-cron-secret",
+    MAIPROP_OS_WEBHOOK_SECRET: "test-os-secret",
     ...envOverrides,
   };
   for (const [k, v] of Object.entries(testEnv)) {
