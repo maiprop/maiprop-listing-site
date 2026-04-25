@@ -37,6 +37,7 @@ CREATE POLICY "Admins can insert investor subscriptions"
 
 -- ── 3. Consultation requests: prevent setting requester_id to another user's identity ──
 DROP POLICY IF EXISTS "Anyone can create consultation requests" ON public.consultation_requests;
+DROP POLICY IF EXISTS "Consultation requests with identity check" ON public.consultation_requests;
 
 CREATE POLICY "Consultation requests with identity check"
   ON public.consultation_requests FOR INSERT

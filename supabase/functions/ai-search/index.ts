@@ -1,6 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
+import { openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
 
 const aiSearchLimiter = makeRateLimiter({ maxRequests: 20, windowMs: 60_000 });
 
@@ -37,9 +38,6 @@ Deno.serve(async (req) => {
     const { query } = await req.json();
     if (!query?.trim()) throw new Error("No query provided");
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
-
     const systemPrompt = `You are a real estate search assistant for a Greek property portal. 
     Parse the user's natural language query into structured search filters.
     Return ONLY valid JSON matching the exact schema. Do not include any explanation.
@@ -66,20 +64,12 @@ Deno.serve(async (req) => {
     - "3 bedroom villa with pool for rent in Mykonos" → {"city":"Mykonos","listing_type":"rent","property_type":"villa","beds_min":3,"features":["has_pool"],"summary":"3-bed villa for rent in Mykonos with pool"}
     - "cheap studio under 50k" → {"price_max":50000,"beds_max":1,"summary":"Studio under €50k"}`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: query },
-        ],
-        temperature: 0.1,
-      }),
+    const response = await openAIChatCompletion({
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: query },
+      ],
+      temperature: 0.1,
     });
 
     if (!response.ok) {
@@ -97,7 +87,7 @@ Deno.serve(async (req) => {
     }
 
     const aiData = await response.json();
-    const raw = aiData.choices?.[0]?.message?.content ?? "";
+    const raw = readOpenAITextContent(aiData);
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error("No JSON in AI response");
 

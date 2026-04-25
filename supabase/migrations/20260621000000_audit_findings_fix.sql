@@ -21,6 +21,9 @@ DROP POLICY IF EXISTS "listings_insert" ON public.listings;
 -- USING and places no column-level restriction.  A column-level GRANT
 -- makes the schema self-enforcing regardless of trigger state.
 -- ─────────────────────────────────────────────────────────────
+-- Ensure read_at exists (was added via manual edits in some prod environments)
+ALTER TABLE public.messages
+  ADD COLUMN IF NOT EXISTS read_at TIMESTAMPTZ;
 REVOKE UPDATE ON public.messages FROM authenticated;
 GRANT  UPDATE (status, read_at) ON public.messages TO authenticated;
 
@@ -163,7 +166,7 @@ CREATE POLICY "Anyone can insert project view"
   TO anon, authenticated
   WITH CHECK (
     EXISTS (
-      SELECT 1 FROM public.developer_projects
+      SELECT 1 FROM public.projects
       WHERE id = project_views.project_id
     )
   );

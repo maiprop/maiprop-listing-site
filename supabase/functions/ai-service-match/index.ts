@@ -1,6 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
+import { openAIChatCompletion } from "../_shared/openai.ts";
 
 const serviceMatchLimiter = makeRateLimiter({ maxRequests: 20, windowMs: 60_000 });
 
@@ -79,62 +80,51 @@ Deno.serve(async (req) => {
       });
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
-
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: need },
-        ],
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "match_professional",
-              description: "Return the best professional match for the user's real estate need",
-              parameters: {
-                type: "object",
-                properties: {
-                  category: {
-                    type: "string",
-                    enum: ["lawyer", "notary", "architect", "civil_engineer", "contractor", "interior_designer", "electrician", "plumber", "financial_advisor", "valuer", "property_manager"],
-                    description: "Best matching professional category",
-                  },
-                  services: {
-                    type: "array",
-                    items: { type: "string" },
-                    description: "Specific services recommended (1-3)",
-                  },
-                  explanation: {
-                    type: "string",
-                    description: "Friendly 1-2 sentence explanation of the match",
-                  },
-                  urgency: {
-                    type: "string",
-                    enum: ["low", "medium", "high"],
-                    description: "Urgency level of the need",
-                  },
-                  follow_up_question: {
-                    type: "string",
-                    description: "One clarifying question to better serve the user (optional)",
-                  },
+    const response = await openAIChatCompletion({
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: need },
+      ],
+      tools: [
+        {
+          type: "function",
+          function: {
+            name: "match_professional",
+            description: "Return the best professional match for the user's real estate need",
+            parameters: {
+              type: "object",
+              properties: {
+                category: {
+                  type: "string",
+                  enum: ["lawyer", "notary", "architect", "civil_engineer", "contractor", "interior_designer", "electrician", "plumber", "financial_advisor", "valuer", "property_manager"],
+                  description: "Best matching professional category",
                 },
-                required: ["category", "services", "explanation", "urgency"],
-                additionalProperties: false,
+                services: {
+                  type: "array",
+                  items: { type: "string" },
+                  description: "Specific services recommended (1-3)",
+                },
+                explanation: {
+                  type: "string",
+                  description: "Friendly 1-2 sentence explanation of the match",
+                },
+                urgency: {
+                  type: "string",
+                  enum: ["low", "medium", "high"],
+                  description: "Urgency level of the need",
+                },
+                follow_up_question: {
+                  type: "string",
+                  description: "One clarifying question to better serve the user (optional)",
+                },
               },
+              required: ["category", "services", "explanation", "urgency"],
+              additionalProperties: false,
             },
           },
-        ],
-        tool_choice: { type: "function", function: { name: "match_professional" } },
-      }),
+        },
+      ],
+      tool_choice: { type: "function", function: { name: "match_professional" } },
     });
 
     if (!response.ok) {

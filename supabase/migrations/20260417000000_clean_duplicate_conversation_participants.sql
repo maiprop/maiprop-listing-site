@@ -4,11 +4,23 @@
 -- =============================================================================
 
 -- First, ensure participant_a and participant_b are populated from participant_1/participant_2
-UPDATE conversations 
-SET 
-  participant_a = COALESCE(participant_a, participant_1),
-  participant_b = COALESCE(participant_b, participant_2)
-WHERE participant_a IS NULL OR participant_b IS NULL;
+-- (only if legacy participant_1/participant_2 columns exist — fresh installs skip this)
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'conversations'
+      AND column_name IN ('participant_1', 'participant_2')
+  ) THEN
+    EXECUTE $sql$
+      UPDATE conversations
+      SET
+        participant_a = COALESCE(participant_a, participant_1),
+        participant_b = COALESCE(participant_b, participant_2)
+      WHERE participant_a IS NULL OR participant_b IS NULL
+    $sql$;
+  END IF;
+END $$;
 
 -- Make participant_a and participant_b NOT NULL (they should already be populated)
 ALTER TABLE conversations 

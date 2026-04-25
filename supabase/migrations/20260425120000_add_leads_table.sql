@@ -3,6 +3,22 @@
 -- Replaces legacy marketing leads; used by LeadsCRM for all users who need contacts
 -- =============================================================================
 
+-- If a legacy "leads" table exists without owner_id (marketing schema), rename it
+-- out of the way so the new CRM schema can be created. Safe on fresh installs where
+-- neither table exists yet.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'leads'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'leads' AND column_name = 'owner_id'
+  ) THEN
+    EXECUTE 'ALTER TABLE public.leads RENAME TO marketing_leads';
+  END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS public.leads (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   owner_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,

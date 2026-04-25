@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
+import { getBrevoSender, sendBrevoEmail } from "../_shared/brevo.ts";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 
 Deno.serve(async (req) => {
@@ -29,7 +30,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Only platform admins may send invitation notifications (EF-3 fix)
     const { data: adminProfile } = await supabase
       .from("profiles")
       .select("role, is_platform_admin")
@@ -52,11 +52,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
-    }
-
     const firstName = full_name?.split(" ")[0] || "there";
     const appUrl = "https://portal.maiprop.co/";
 
@@ -73,7 +68,6 @@ Deno.serve(async (req) => {
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;">
     <tr><td align="center" style="padding:40px 20px;">
       <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
-        <!-- Header -->
         <tr>
           <td style="background:#0a0e1a;border-radius:16px 16px 0 0;padding:32px 40px;text-align:center;">
             <p style="margin:0;font-size:28px;font-weight:800;letter-spacing:-0.5px;color:#ffffff;">
@@ -82,7 +76,6 @@ Deno.serve(async (req) => {
             <p style="margin:8px 0 0;font-size:12px;color:#9ca3af;letter-spacing:2px;text-transform:uppercase;">Deal Flow</p>
           </td>
         </tr>
-        <!-- Body -->
         <tr>
           <td style="background:#f8f9fb;border:1px solid #e5e7eb;border-top:0;border-radius:0 0 16px 16px;padding:40px;">
             <p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#0a0e1a;">Congratulations, ${firstName}!</p>
@@ -137,7 +130,6 @@ Deno.serve(async (req) => {
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;">
     <tr><td align="center" style="padding:40px 20px;">
       <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
-        <!-- Header -->
         <tr>
           <td style="background:#0a0e1a;border-radius:16px 16px 0 0;padding:32px 40px;text-align:center;">
             <p style="margin:0;font-size:28px;font-weight:800;letter-spacing:-0.5px;color:#ffffff;">
@@ -146,7 +138,6 @@ Deno.serve(async (req) => {
             <p style="margin:8px 0 0;font-size:12px;color:#9ca3af;letter-spacing:2px;text-transform:uppercase;">Deal Flow</p>
           </td>
         </tr>
-        <!-- Body -->
         <tr>
           <td style="background:#f8f9fb;border:1px solid #e5e7eb;border-top:0;border-radius:0 0 16px 16px;padding:40px;">
             <p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#0a0e1a;">Thank you for applying, ${firstName}</p>
@@ -190,26 +181,16 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Send via Lovable email API
-    const emailRes = await fetch("https://api.lovable.dev/api/v1/email/send", {
-      method: "POST",
+    await sendBrevoEmail({
+      to: email,
+      subject,
+      html,
+      sender: getBrevoSender("MaiProp Deal Flow"),
+      tags: ["deal_flow_invitation_status"],
       headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "X-MaiProp-Template": "deal_flow_invitation_status",
       },
-      body: JSON.stringify({
-        to: email,
-        subject,
-        html,
-        from_name: "MaiProp Deal Flow",
-      }),
     });
-
-    if (!emailRes.ok) {
-      const err = await emailRes.text();
-      console.error("Email API error:", err);
-      throw new Error(`Email send failed: ${emailRes.status}`);
-    }
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

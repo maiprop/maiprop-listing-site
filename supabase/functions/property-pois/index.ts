@@ -2,6 +2,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
+import { openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
 
 const poisLimiter = makeRateLimiter({ maxRequests: 20, windowMs: 60_000 });
 
@@ -51,15 +52,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    const useGemini = !!GEMINI_API_KEY;
-    if (!useGemini && !LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
-    const apiKey = (useGemini ? GEMINI_API_KEY : LOVABLE_API_KEY)!;
-    const aiUrl = useGemini
-      ? `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`
-      : "https://ai.gateway.lovable.dev/v1/chat/completions";
-    const aiModel = "google/gemini-3-flash-preview";
+    if (!Deno.env.get("OPENAI_API_KEY")) throw new Error("OPENAI_API_KEY not configured");
 
     const prompt = `You are a Greek real estate assistant. Given a property at address "${address}" in ${city}, Greece (coordinates: ${lat}, ${lng}), generate a realistic list of 10-14 nearby points of interest that a prospective buyer would care about.
 
@@ -83,17 +76,10 @@ Rules:
 - walkMinutes = Math.round(distanceKm * 12) approximately
 - Return only the JSON object, nothing else`;
 
-    const response = await fetch(aiUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(useGemini ? {} : { Authorization: `Bearer ${apiKey}` }),
-      },
-      body: JSON.stringify(
-        useGemini
-          ? { contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.7 } }
-          : { model: aiModel, messages: [{ role: "user", content: prompt }], temperature: 0.7 }
-      ),
+    const response = await openAIChatCompletion({
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.7,
+      max_tokens: 1200,
     });
 
     if (!response.ok) {
@@ -116,7 +102,7 @@ Rules:
     }
 
     const aiData = await response.json();
-    const content = useGemini ? aiData.candidates?.[0]?.content?.parts?.[0]?.text ?? "" : aiData.choices?.[0]?.message?.content ?? "";
+    const content = readOpenAITextContent(aiData);
 
     // Strip markdown code fences if present
     let jsonStr = content

@@ -2,7 +2,7 @@
  * ai-translate
  * ─────────────────────────────────────────────────────────────────────────────
  * Translates a flat key→value JSON object from English into any target language
- * using Claude claude-haiku-4-5-20251001 (fast, cheap, excellent for UI strings).
+ * using OpenAI (fast, cheap, excellent for UI strings).
  *
  * Request body:
  *   { locale: "fr", strings: { "nav.listings": "Listings", ... } }
@@ -14,9 +14,10 @@
  * Rate limited: 10 req/min per IP (translation is expensive).
  */
 
+import { openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
 
 const ALLOWED_ORIGINS = [
-  "https://maiprop.co", "https://www.maiprop.co", "https://app.maiprop.co",
+  "https://maiprop.co", "https://www.maiprop.co", "https://app.maiprop.co", "https://portal.maiprop.co",
   "http://localhost:8080", "http://localhost:8081", "http://localhost:8082",
   "http://localhost:8083", "http://localhost:5173", "http://localhost:3000",
 ];
@@ -109,8 +110,8 @@ Deno.serve(async (req) => {
   const entries = Object.entries(strings).slice(0, 500);
   const inputJson = JSON.stringify(Object.fromEntries(entries), null, 2);
 
-  const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!ANTHROPIC_API_KEY) {
+  const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+  if (!OPENAI_API_KEY) {
     return new Response(JSON.stringify({ error: "Translation service not configured" }), {
       status: 503, headers: { ...hdrs, "Content-Type": "application/json" },
     });
@@ -134,30 +135,22 @@ ${inputJson}
 Output (JSON only):`;
 
   try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 4096,
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
+    const response = await openAIChatCompletion({
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.2,
+      max_tokens: 4096,
+    }, Deno.env.get("OPENAI_TRANSLATION_MODEL") ?? "gpt-4.1-mini");
 
     if (!response.ok) {
       const err = await response.text();
-      console.error("Anthropic API error:", response.status, err);
+      console.error("OpenAI API error:", response.status, err);
       return new Response(JSON.stringify({ error: "Translation API error", detail: response.status }), {
         status: 502, headers: { ...hdrs, "Content-Type": "application/json" },
       });
     }
 
-    const claude = await response.json();
-    const raw = claude.content?.[0]?.text ?? "";
+    const payload = await response.json();
+    const raw = readOpenAITextContent(payload);
 
     // Parse the JSON — strip any accidental markdown fences
     const cleaned = raw.replace(/^```json?\s*/i, "").replace(/```\s*$/i, "").trim();
@@ -165,7 +158,7 @@ Output (JSON only):`;
     try {
       translated = JSON.parse(cleaned);
     } catch {
-      console.error("Failed to parse Claude output:", cleaned.slice(0, 200));
+      console.error("Failed to parse OpenAI output:", cleaned.slice(0, 200));
       return new Response(JSON.stringify({ error: "Translation parsing failed", raw: cleaned.slice(0, 500) }), {
         status: 502, headers: { ...hdrs, "Content-Type": "application/json" },
       });

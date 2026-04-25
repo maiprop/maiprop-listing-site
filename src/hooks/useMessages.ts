@@ -63,7 +63,11 @@ export function useConversations() {
         if (c.participant_a) userIds.add(c.participant_a);
         if (c.participant_b) userIds.add(c.participant_b);
       });
-      if (userIds.size === 0) return list;
+      // Always return the mapped shape so the return type is a single, not a union —
+      // downstream components rely on profile_a / profile_b being present.
+      if (userIds.size === 0) {
+        return list.map((c) => ({ ...c, profile_a: null, profile_b: null }));
+      }
       const { data: profiles } = await supabase
         .from("profiles_public")
         .select("user_id, display_name, avatar_url")
@@ -131,7 +135,10 @@ export function useMessages(conversation_id: string) {
       if (error) throw error;
       const list = msgs || [];
       const senderIds = [...new Set(list.map((m) => m.sender_id).filter((id): id is string => !!id))];
-      if (senderIds.length === 0) return list;
+      // Always attach the `profiles` field so the query return type is non-union.
+      if (senderIds.length === 0) {
+        return list.map((m) => ({ ...m, profiles: null }));
+      }
       const { data: profiles } = await supabase
         .from("profiles_public")
         .select("user_id, display_name, avatar_url")

@@ -215,8 +215,10 @@ test.describe("Property detail — graceful error handling", () => {
     await page.goto("/property/00000000-0000-0000-0000-000000000000");
     await page.waitForLoadState("networkidle", { timeout: 15_000 });
 
-    // Navbar must render — proves the React app bootstrapped without crashing
-    await expect(page.locator("nav, header").first()).toBeVisible({ timeout: 10_000 });
+    // Navbar must render — proves the React app bootstrapped without crashing.
+    // Use `header` (the top Navbar) directly; the mobile bottom-<nav> is hidden
+    // on desktop (lg:hidden) but precedes <header> in DOM on this page.
+    await expect(page.locator("header").first()).toBeVisible({ timeout: 10_000 });
     // DOM must have more than a trivial number of elements (not a blank white screen)
     const nodeCount = await page.locator("body *").count();
     expect(nodeCount).toBeGreaterThan(5);

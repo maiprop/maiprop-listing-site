@@ -14,10 +14,13 @@ ALTER TABLE public.conversations
 CREATE INDEX IF NOT EXISTS conversations_listing_id_idx
   ON public.conversations(listing_id);
 
--- 2. messages.receiver_id — make nullable. The app sets it from the conversation
+-- 2. messages.receiver_id — ensure column exists (was added via manual edits in prod
+--    on some environments), then make nullable. The app sets it from the conversation
 --    participants on read; storing NULL at insert time is acceptable because the
 --    RLS policies authorise reads based on conversation participants, not
 --    message.receiver_id.
+ALTER TABLE public.messages
+  ADD COLUMN IF NOT EXISTS receiver_id UUID REFERENCES auth.users(id) ON DELETE SET NULL;
 ALTER TABLE public.messages
   ALTER COLUMN receiver_id DROP NOT NULL;
 

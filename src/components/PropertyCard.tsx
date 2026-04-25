@@ -27,7 +27,7 @@ export interface Property {
   sqm: number;
   images: string[];
   type: "apartment" | "house" | "land" | "commercial" | "villa" | "office";
-  listingType: "sale" | "rent" | "auction" | "firesale" | "open_house";
+  listingType: "sale" | "rent" | "auction" | "firesale" | "open_house" | "new_build";
   subtype?: string;
   auctionDate?: string;
   auctionStartingBid?: number;
@@ -165,7 +165,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
   if (compact) {
     const thumb = property.images?.[0];
     return (
-      <Link to={detailPath} className="glass-card rounded-xl overflow-hidden flex gap-3 p-3 property-card group">
+      <Link to={detailPath} className="glass-card rounded-xl overflow-hidden flex gap-3 p-3 property-card group" data-testid="property-card">
         <div className="relative w-24 h-20 rounded-lg overflow-hidden shrink-0 bg-muted">
           {thumb ? (
             <img src={thumb} alt={property.title} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
@@ -199,7 +199,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
   const mainImage = property.images?.[0];
 
   return (
-    <div className={`property-card rounded-2xl overflow-hidden group flex flex-col bg-card transition-shadow duration-300 ${
+    <div data-testid="property-card" className={`property-card rounded-2xl overflow-hidden group flex flex-col bg-card transition-shadow duration-300 ${
       property.isFeatured
         ? "border-2 border-amber-400/70 shadow-[0_0_0_1px_rgba(251,191,36,0.15),0_4px_24px_rgba(251,191,36,0.22)] hover:shadow-[0_0_0_1px_rgba(251,191,36,0.25),0_8px_32px_rgba(251,191,36,0.35)]"
         : "border border-border"

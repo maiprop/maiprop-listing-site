@@ -15,6 +15,14 @@ Deno.test("getCorsHeaders: reflects an allowed origin", () => {
   assertStrictEquals(headers["Access-Control-Allow-Origin"], "https://maiprop.co");
 });
 
+Deno.test("getCorsHeaders: reflects portal.maiprop.co (live production domain)", () => {
+  const req = new Request("https://portal.maiprop.co/api", {
+    headers: { origin: "https://portal.maiprop.co" },
+  });
+  const headers = getCorsHeaders(req);
+  assertStrictEquals(headers["Access-Control-Allow-Origin"], "https://portal.maiprop.co");
+});
+
 Deno.test("getCorsHeaders: reflects a localhost dev origin", () => {
   const req = new Request("http://localhost:8080/api", {
     headers: { origin: "http://localhost:8080" },

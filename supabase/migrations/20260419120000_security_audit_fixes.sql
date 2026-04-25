@@ -68,6 +68,9 @@ DROP POLICY IF EXISTS "Authenticated can delete pricing_configs" ON public.prici
 DROP POLICY IF EXISTS "Agents can insert pricing_configs" ON public.pricing_configs;
 DROP POLICY IF EXISTS "Agents can update pricing_configs" ON public.pricing_configs;
 DROP POLICY IF EXISTS "Agents can delete pricing_configs" ON public.pricing_configs;
+DROP POLICY IF EXISTS "Platform admin can insert pricing_configs" ON public.pricing_configs;
+DROP POLICY IF EXISTS "Platform admin can update pricing_configs" ON public.pricing_configs;
+DROP POLICY IF EXISTS "Platform admin can delete pricing_configs" ON public.pricing_configs;
 
 CREATE POLICY "Platform admin can insert pricing_configs"
   ON public.pricing_configs FOR INSERT

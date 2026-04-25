@@ -62,6 +62,11 @@ BEGIN
   END IF;
 END $$;
 
+-- Ensure firesale_requests has published_to_investors column (added in a later
+-- migration in some environments; idempotent so prod installs are unaffected).
+ALTER TABLE public.firesale_requests
+  ADD COLUMN IF NOT EXISTS published_to_investors boolean NOT NULL DEFAULT false;
+
 -- Create sanitized investor feed table (idempotent)
 CREATE TABLE IF NOT EXISTS public.firesale_requests_investor_feed (
   id UUID PRIMARY KEY REFERENCES public.firesale_requests(id) ON DELETE CASCADE,
@@ -96,6 +101,11 @@ CREATE POLICY "Eligible investors view firesale feed"
   );
 
 -- Platform admin can read the feed table too (for debugging)
+-- has_platform_admin() is (re)defined later in this migration. Install a stub
+-- first so CREATE POLICY can resolve the function reference in fresh databases.
+CREATE OR REPLACE FUNCTION public.has_platform_admin(_user_id uuid DEFAULT auth.uid())
+RETURNS boolean LANGUAGE sql STABLE AS $$ SELECT false $$;
+
 DROP POLICY IF EXISTS "Platform admin read firesale feed" ON public.firesale_requests_investor_feed;
 CREATE POLICY "Platform admin read firesale feed"
   ON public.firesale_requests_investor_feed
@@ -151,6 +161,20 @@ ON CONFLICT (id) DO NOTHING;
 -- ──────────────────────────────────────────────────────────────────────────────
 -- 3) has_platform_admin(): support both role='admin' and legacy is_platform_admin
 -- ──────────────────────────────────────────────────────────────────────────────
+
+-- Ensure 'admin' value exists on the user_role enum. The dedicated migration
+-- 20260413115500_add_admin_enum.sql runs later; on fresh installs this
+-- function body would otherwise fail to parse the 'admin'::public.user_role cast.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON e.enumtypid = t.oid
+    WHERE t.typname = 'user_role' AND e.enumlabel = 'admin'
+  ) THEN
+    ALTER TYPE public.user_role ADD VALUE 'admin';
+  END IF;
+END $$;
 
 CREATE OR REPLACE FUNCTION public.has_platform_admin(_user_id uuid DEFAULT auth.uid())
 RETURNS boolean

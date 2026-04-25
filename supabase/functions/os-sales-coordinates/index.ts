@@ -9,7 +9,7 @@
  */
 
 const ALLOWED_ORIGINS = [
-  "https://maiprop.co", "https://www.maiprop.co", "https://app.maiprop.co",
+  "https://maiprop.co", "https://www.maiprop.co", "https://app.maiprop.co", "https://portal.maiprop.co",
   "http://localhost:8080", "http://localhost:8081", "http://localhost:8082",
   "http://localhost:8083", "http://localhost:5173",
 ];

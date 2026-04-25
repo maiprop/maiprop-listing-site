@@ -19,11 +19,11 @@ export function HomepageOpenHousesSection({ listings }: Props) {
         <div className={`flex items-center justify-between mb-6 sm:mb-8 reveal ${inView ? "in-view" : ""}`}>
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs font-semibold text-emerald-600 uppercase tracking-widest">Open Houses</span>
+              <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-widest">Open Houses</span>
             </div>
             <h2 className="font-display text-xl sm:text-2xl font-bold">Scheduled viewings — no appointment needed</h2>
           </div>
-          <Button variant="outline" size="sm" className="border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10 text-xs" asChild>
+          <Button variant="outline" size="sm" className="border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 text-xs" asChild>
             <Link to="/open-houses">
               All Open Houses <ArrowRight className="w-3 h-3 ml-1" />
             </Link>

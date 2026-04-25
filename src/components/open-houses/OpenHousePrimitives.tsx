@@ -38,6 +38,7 @@ export function RangeInput({
       <div className="flex gap-2">
         <input
           type="number"
+          aria-label={`${label} minimum${prefix ? ` (${prefix})` : ""}`}
           placeholder={`Min${prefix ? " " + prefix : ""}`}
           value={minVal}
           onChange={(e) => onMinChange(e.target.value)}
@@ -45,6 +46,7 @@ export function RangeInput({
         />
         <input
           type="number"
+          aria-label={`${label} maximum${prefix ? ` (${prefix})` : ""}`}
           placeholder={`Max${prefix ? " " + prefix : ""}`}
           value={maxVal}
           onChange={(e) => onMaxChange(e.target.value)}

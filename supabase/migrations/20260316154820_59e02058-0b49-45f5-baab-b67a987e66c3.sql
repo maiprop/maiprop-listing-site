@@ -47,10 +47,20 @@ BEGIN
 END;
 $$;
 
--- Drop existing trigger if any, then create
-DROP TRIGGER IF EXISTS trg_oh_registration_notify ON public.open_house_registrations;
-
-CREATE TRIGGER trg_oh_registration_notify
-  AFTER UPDATE OF status ON public.open_house_registrations
-  FOR EACH ROW
-  EXECUTE FUNCTION public.notify_oh_registration_status_change();
+-- Drop existing trigger if any, then create.
+-- Guard: open_house_registrations is created by a later migration (20260406120000).
+-- On fresh installs applying migrations in order, skip the trigger here — the
+-- equivalent trigger can be created when the table exists.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'open_house_registrations'
+  ) THEN
+    EXECUTE 'DROP TRIGGER IF EXISTS trg_oh_registration_notify ON public.open_house_registrations';
+    EXECUTE 'CREATE TRIGGER trg_oh_registration_notify
+      AFTER UPDATE OF status ON public.open_house_registrations
+      FOR EACH ROW
+      EXECUTE FUNCTION public.notify_oh_registration_status_change()';
+  END IF;
+END $$;

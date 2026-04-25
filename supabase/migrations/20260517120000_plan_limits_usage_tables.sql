@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS public.usage_ai_valuations (
   listing_id UUID REFERENCES public.listings(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS idx_usage_ai_valuations_user_month ON public.usage_ai_valuations(user_id, (date_trunc('month', created_at)));
+CREATE INDEX IF NOT EXISTS idx_usage_ai_valuations_user_month ON public.usage_ai_valuations(user_id, (date_trunc('month', created_at AT TIME ZONE 'UTC')));
 ALTER TABLE public.usage_ai_valuations ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users see own valuation usage" ON public.usage_ai_valuations FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users insert own valuation usage" ON public.usage_ai_valuations FOR INSERT WITH CHECK (auth.uid() = user_id);
@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS public.usage_property_reports (
   listing_id UUID REFERENCES public.listings(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS idx_usage_property_reports_user_month ON public.usage_property_reports(user_id, (date_trunc('month', created_at)));
+CREATE INDEX IF NOT EXISTS idx_usage_property_reports_user_month ON public.usage_property_reports(user_id, (date_trunc('month', created_at AT TIME ZONE 'UTC')));
 ALTER TABLE public.usage_property_reports ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users see own report usage" ON public.usage_property_reports FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users insert own report usage" ON public.usage_property_reports FOR INSERT WITH CHECK (auth.uid() = user_id);
@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS public.usage_priority_ads (
   listing_id UUID REFERENCES public.listings(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS idx_usage_priority_ads_user_month ON public.usage_priority_ads(user_id, (date_trunc('month', created_at)));
+CREATE INDEX IF NOT EXISTS idx_usage_priority_ads_user_month ON public.usage_priority_ads(user_id, (date_trunc('month', created_at AT TIME ZONE 'UTC')));
 ALTER TABLE public.usage_priority_ads ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users see own priority ad usage" ON public.usage_priority_ads FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users insert own priority ad usage" ON public.usage_priority_ads FOR INSERT WITH CHECK (auth.uid() = user_id);

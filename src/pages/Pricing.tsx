@@ -171,7 +171,7 @@ const PLANS: Record<AudienceId, PlanDef> = {
     paidLabel: "Developer Pro", monthlyPrice: 129, annualPrice: 1290,
     paidDesc: "Unlimited projects, new build showcase, pre-sale management & priority placement", paidCTA: "Get Developer Pro", paidHref: "/pricing",
     freeList: [], features: DEVELOPER_PRO,
-    accent: "text-orange-400", accentBg: "bg-orange-500/10", accentBorder: "border-orange-500/40",
+    accent: "text-orange-600 dark:text-orange-400", accentBg: "bg-orange-500/10", accentBorder: "border-orange-500/40",
     proOnly: true,
   },
   professional: {
@@ -179,7 +179,7 @@ const PLANS: Record<AudienceId, PlanDef> = {
     paidLabel: "Professional Pro", monthlyPrice: 69, annualPrice: 690,
     paidDesc: "Priority leads, booking calendar, verified badge & AI tools", paidCTA: "Get Pro Plan", paidHref: "/pricing",
     freeList: PROFESSIONAL_FREE_LIST, features: PROFESSIONAL_PRO,
-    accent: "text-rose-400", accentBg: "bg-rose-500/10", accentBorder: "border-rose-500/40",
+    accent: "text-rose-600 dark:text-rose-400", accentBg: "bg-rose-500/10", accentBorder: "border-rose-500/40",
   },
   investor: {
     freeLabel: "—", freePrice: "—", freeDesc: "Invitation-only", freeCTA: "—", freeHref: "#",
@@ -187,7 +187,7 @@ const PLANS: Record<AudienceId, PlanDef> = {
     paidDesc: "Deal-flow access, AI matching, market analytics & direct vendor contact",
     paidCTA: "Apply for Access", paidHref: "/investor-dashboard",
     freeList: [], features: INVESTOR_FEATURES,
-    accent: "text-emerald-400", accentBg: "bg-emerald-500/10", accentBorder: "border-emerald-500/40",
+    accent: "text-emerald-700 dark:text-emerald-400", accentBg: "bg-emerald-500/10", accentBorder: "border-emerald-500/40",
     proOnly: true, inviteOnly: true,
   },
   institutional: {
@@ -196,7 +196,7 @@ const PLANS: Record<AudienceId, PlanDef> = {
     paidDesc: "Full platform access, bulk pipeline, API, dedicated manager & multi-user seats",
     paidCTA: "Talk to Sales", paidHref: "/contact",
     freeList: [], features: INSTITUTIONAL_FEATURES,
-    accent: "text-sky-400", accentBg: "bg-sky-500/10", accentBorder: "border-sky-500/40",
+    accent: "text-sky-700 dark:text-sky-400", accentBg: "bg-sky-500/10", accentBorder: "border-sky-500/40",
     proOnly: true, inviteOnly: true,
   },
 };
@@ -354,7 +354,7 @@ export default function Pricing() {
               </button>
               <span className={cn("text-sm font-medium flex items-center gap-1.5", billingCycle === "annual" ? "text-foreground" : "text-muted-foreground")}>
                 Annual
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 border border-emerald-500/30">2 months FREE</span>
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">2 months FREE</span>
               </span>
             </div>
 
@@ -464,7 +464,7 @@ export default function Pricing() {
                   )}
                 </div>
                 {!plan.inviteOnly && (billingCycle === "annual" ? (
-                  <p className="text-xs text-emerald-600 font-semibold">€{displayTotal}/year · saves €{annualSaving} vs monthly</p>
+                  <p className="text-xs text-emerald-700 dark:text-emerald-400 font-semibold">€{displayTotal}/year · saves €{annualSaving} vs monthly</p>
                 ) : (
                   <p className="text-xs text-muted-foreground">
                     or <button onClick={() => setBillingCycle("annual")} className="underline hover:text-foreground">€{Math.round(basePlan.annualPrice / 12)}/mo billed annually</button>
@@ -511,7 +511,7 @@ export default function Pricing() {
                 {hasAudiencePro && plan.inviteOnly ? (
                   <Button
                     variant="outline"
-                    className="w-full h-11 border-emerald-500/40 text-emerald-400 gap-2"
+                    className="w-full h-11 border-emerald-500/40 text-emerald-700 dark:text-emerald-400 gap-2"
                     onClick={() => navigate("/investor-dashboard")}
                   >
                     <ArrowRight className="w-4 h-4" /> Go to Investor Dashboard
@@ -519,7 +519,7 @@ export default function Pricing() {
                 ) : hasAudiencePro ? (
                   <Button
                     variant="outline"
-                    className="w-full h-11 border-emerald-500/40 text-emerald-400"
+                    className="w-full h-11 border-emerald-500/40 text-emerald-700 dark:text-emerald-400"
                     onClick={handleManageSubscription}
                     disabled={portalLoading}
                   >

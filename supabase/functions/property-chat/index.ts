@@ -1,6 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
+import { openAIChatCompletion } from "../_shared/openai.ts";
 
 const chatLimiter = makeRateLimiter({ maxRequests: 20, windowMs: 60_000 });
 
@@ -51,9 +52,6 @@ Deno.serve(async (req) => {
 
   try {
     const { messages, propertyContext } = await req.json();
-
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
     // Strip newlines and limit length to prevent prompt injection via property fields
     const sanitize = (v: unknown, maxLen = 200): string => {
@@ -114,21 +112,13 @@ RESPONSE RULES — follow these strictly:
 - Never repeat information already stated.
 - Use markdown (bold, bullets) but keep total response under ~150 words unless the user asks for depth.`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: propertyDetails },
-          ...messages,
-        ],
-        stream: true,
-        temperature: 0.7,
-      }),
+    const response = await openAIChatCompletion({
+      messages: [
+        { role: "system", content: propertyDetails },
+        ...messages,
+      ],
+      stream: true,
+      temperature: 0.7,
     });
 
     if (!response.ok) {

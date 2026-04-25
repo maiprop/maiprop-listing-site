@@ -4,7 +4,7 @@
  * Fetches saved searches with email_alerts=true, runs each against listings,
  * and sends an email when new matches appear. Designed to run via pg_cron (e.g. every 6h).
  *
- * Env: RESEND_API_KEY (optional - if not set, logs only), MAIPROP_APP_URL (for links)
+ * Env: BREVO_API_KEY (optional - if not set, logs only), MAIPROP_APP_URL (for links)
  * Invoke: POST with empty body or cron.
  */
 
@@ -72,9 +72,9 @@ Deno.serve(async (req) => {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  const RESEND_KEY = Deno.env.get("RESEND_API_KEY");
+  const BREVO_KEY = Deno.env.get("BREVO_API_KEY");
   const APP_URL = Deno.env.get("MAIPROP_APP_URL") || "https://portal.maiprop.co/";
-  const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "alerts@maiprop.co";
+  const FROM_EMAIL = Deno.env.get("BREVO_FROM_EMAIL") || "alerts@maiprop.co";
 
   try {
     const { data: searches, error: searchError } = await supabase
@@ -136,28 +136,28 @@ Deno.serve(async (req) => {
         <p><a href="${APP_URL}/listings">View all listings</a></p>
       `;
 
-      if (RESEND_KEY) {
-        const res = await fetch("https://api.resend.com/emails", {
+      if (BREVO_KEY) {
+        const res = await fetch("https://api.brevo.com/v3/smtp/email", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${RESEND_KEY}`,
+            "api-key": BREVO_KEY,
           },
           body: JSON.stringify({
-            from: FROM_EMAIL,
-            to: email,
+            sender: { email: FROM_EMAIL, name: "maiProp Alerts" },
+            to: [{ email }],
             subject,
-            html,
+            htmlContent: html,
           }),
         });
         if (!res.ok) {
           const err = await res.text();
-          log("Resend error", { status: res.status, err });
+          log("Brevo error", { status: res.status, err });
           continue;
         }
         sent++;
       } else {
-        log("RESEND_API_KEY not set, skipping email", { to: email, subject, count: listingsToSend.length });
+        log("BREVO_API_KEY not set, skipping email", { to: email, subject, count: listingsToSend.length });
       }
 
       await supabase

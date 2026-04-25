@@ -32,7 +32,8 @@ if (plausibleDomain) {
   const script = document.createElement("script");
   script.defer = true;
   script.dataset.domain = plausibleDomain;
-  // data-api proxied through Netlify to avoid adblocker interference
+  // data-api is proxied through the site's own origin (Cloudflare Pages Function
+  // at /api/event, once configured) to avoid adblocker interference.
   script.dataset.api = "/api/event";
   script.src = "https://plausible.io/js/script.js";
   // Only inject script after user accepts analytics consent

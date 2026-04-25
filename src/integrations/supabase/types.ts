@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -2985,7 +2985,7 @@ export type Database = {
         | "sold"
         | "rented"
         | "expired"
-      listing_type: "sale" | "rent" | "auction" | "firesale" | "open_house" | "new_build"
+      listing_type: "sale" | "rent" | "auction" | "firesale" | "open_house"
       message_status: "sent" | "read"
       oh_id_doc_type: "id_card" | "passport"
       oh_offer_status:
@@ -3195,7 +3195,7 @@ export const Constants = {
         "rented",
         "expired",
       ],
-      listing_type: ["sale", "rent", "auction", "firesale", "open_house", "new_build"],
+      listing_type: ["sale", "rent", "auction", "firesale", "open_house"],
       message_status: ["sent", "read"],
       oh_id_doc_type: ["id_card", "passport"],
       oh_offer_status: [

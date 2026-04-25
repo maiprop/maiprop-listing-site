@@ -218,10 +218,11 @@ export default function OpenHouses() {
             <div className="flex items-center gap-2">
               {/* City search */}
               <div className="relative flex-1 min-w-0">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" aria-hidden="true" />
                 <input
                   type="text"
                   placeholder="City…"
+                  aria-label="Search open houses by city"
                   value={cityInput}
                   onChange={(e) => setCityInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && setCityFilter(cityInput)}
@@ -230,9 +231,11 @@ export default function OpenHouses() {
               </div>
 
               {/* View mode toggle */}
-              <div className="flex rounded-lg border border-border overflow-hidden shrink-0">
+              <div className="flex rounded-lg border border-border overflow-hidden shrink-0" role="group" aria-label="View mode">
                 <button
                   onClick={() => setViewMode("grid")}
+                  aria-label="Show as list"
+                  aria-pressed={viewMode === "grid"}
                   className={cn(
                     "px-2.5 py-1.5 text-xs flex items-center gap-1.5 transition-colors",
                     viewMode === "grid"
@@ -240,11 +243,13 @@ export default function OpenHouses() {
                       : "bg-secondary text-muted-foreground hover:text-foreground"
                   )}
                 >
-                  <LayoutGrid className="w-3.5 h-3.5" />
+                  <LayoutGrid className="w-3.5 h-3.5" aria-hidden="true" />
                   <span className="hidden sm:inline">List</span>
                 </button>
                 <button
                   onClick={() => setViewMode("map")}
+                  aria-label="Show on map"
+                  aria-pressed={viewMode === "map"}
                   className={cn(
                     "px-2.5 py-1.5 text-xs flex items-center gap-1.5 transition-colors border-l border-border",
                     viewMode === "map"
@@ -252,7 +257,7 @@ export default function OpenHouses() {
                       : "bg-secondary text-muted-foreground hover:text-foreground"
                   )}
                 >
-                  <MapIcon className="w-3.5 h-3.5" />
+                  <MapIcon className="w-3.5 h-3.5" aria-hidden="true" />
                   <span className="hidden sm:inline">Map</span>
                 </button>
               </div>
@@ -260,6 +265,8 @@ export default function OpenHouses() {
               {/* Filters button */}
               <button
                 onClick={() => setShowAdvanced(!showAdvanced)}
+                aria-label="Toggle filters"
+                aria-expanded={showAdvanced}
                 className={cn(
                   "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors shrink-0",
                   showAdvanced
@@ -267,7 +274,7 @@ export default function OpenHouses() {
                     : "bg-secondary text-muted-foreground border-border hover:text-foreground"
                 )}
               >
-                <SlidersHorizontal className="w-3.5 h-3.5" />
+                <SlidersHorizontal className="w-3.5 h-3.5" aria-hidden="true" />
                 <span className="hidden xs:inline">Filters</span>
                 {hasActiveFilters && (
                   <span className="bg-primary text-primary-foreground text-[10px] px-1.5 rounded-full">
@@ -339,8 +346,9 @@ export default function OpenHouses() {
 
                 {/* Construction year */}
                 <div className="space-y-1">
-                  <span className="text-xs text-muted-foreground font-medium">Construction Year</span>
+                  <label htmlFor="oh-year-range" className="text-xs text-muted-foreground font-medium">Construction Year</label>
                   <select
+                    id="oh-year-range"
                     value={filterYearRange}
                     onChange={(e) => setFilterYearRange(e.target.value)}
                     className="w-full px-2 py-1.5 text-xs rounded-lg border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary"

@@ -1,4 +1,4 @@
-# Feature Verification — Backend & UX
+# Feature Verification - Backend & UX
 
 Verification of Analytics, Contacts CRM, Saved Search Alerts, and Messages improvements.
 
@@ -10,9 +10,9 @@ Verification of Analytics, Contacts CRM, Saved Search Alerts, and Messages impro
 
 | Component | Backend | Table/API | Status |
 |-----------|---------|-----------|--------|
-| View trends | Supabase | `listing_view_events` | ✅ Hooks read; `useListing` inserts on property view |
-| Lead funnel | Supabase | `consultation_requests` | ✅ `useLeadFunnel(professionalId)` aggregates by status |
-| Conversion rate | Derived | `confirmed / total` | ✅ Computed in hook |
+| View trends | Supabase | `listing_view_events` | OK: Hooks read; `useListing` inserts on property view |
+| Lead funnel | Supabase | `consultation_requests` | OK: `useLeadFunnel(professionalId)` aggregates by status |
+| Conversion rate | Derived | `confirmed / total` | OK: Computed in hook |
 
 - **listing_view_events**: Inserted from `useListings.ts` when a user views a property.
 - **useListingViewTrends**: Queries `listing_view_events` for given listing IDs, groups by date.
@@ -21,11 +21,11 @@ Verification of Analytics, Contacts CRM, Saved Search Alerts, and Messages impro
 
 | Component | Backend | Table | Status |
 |-----------|---------|-------|--------|
-| Contacts CRUD | Supabase | `contacts` | ✅ useContacts, useCreateContact, useUpdateContact, useDeleteContact |
-| Deal stages | Supabase | `contacts.deal_stage` | ✅ Migration adds column; form + pipeline update |
-| Follow-ups | Supabase | `contacts.follow_up_at` | ✅ Migration adds column; form persists |
-| Tasks | Supabase | `contact_tasks` | ✅ useContactTasks, useCreateContactTask, useUpdateContactTask |
-| Listing link | Supabase | `contacts.listings` join | ✅ Select includes `listings(id, title, city)` via `listing_id` FK |
+| Contacts CRUD | Supabase | `contacts` | OK: `useContacts`, `useCreateContact`, `useUpdateContact`, `useDeleteContact` |
+| Deal stages | Supabase | `contacts.deal_stage` | OK: Migration adds column; form + pipeline update |
+| Follow-ups | Supabase | `contacts.follow_up_at` | OK: Migration adds column; form persists |
+| Tasks | Supabase | `contact_tasks` | OK: `useContactTasks`, `useCreateContactTask`, `useUpdateContactTask` |
+| Listing link | Supabase | `contacts.listings` join | OK: Select includes `listings(id, title, city)` via `listing_id` FK |
 
 - Migration `20260329000000` adds `deal_stage`, `follow_up_at`, `listing_id` to `contacts` and creates `contact_tasks`.
 
@@ -33,21 +33,21 @@ Verification of Analytics, Contacts CRM, Saved Search Alerts, and Messages impro
 
 | Component | Backend | Status |
 |-----------|---------|--------|
-| Edge function | `send-saved-search-alerts` | ✅ Queries `saved_searches` + `listings`, sends via Resend |
-| Tracking | `saved_searches.last_alert_sent_at`, `last_alert_listing_ids` | ✅ Migration adds columns |
+| Edge function | `send-saved-search-alerts` | OK: Queries `saved_searches` + `listings`, sends via Brevo |
+| Tracking | `saved_searches.last_alert_sent_at`, `last_alert_listing_ids` | OK: Migration adds columns |
 
 - Deploy: `supabase functions deploy send-saved-search-alerts`
-- Env: `RESEND_API_KEY`, `MAIPROP_APP_URL`
-- Schedule via pg_cron (see `SAVED_SEARCH_ALERTS_SETUP.md`)
+- Env: `BREVO_API_KEY`, `BREVO_FROM_EMAIL`, `MAIPROP_APP_URL`
+- Schedule via `pg_cron` (see `SAVED_SEARCH_ALERTS_SETUP.md`)
 
 ### Messages
 
 | Component | Backend | Table/Bucket | Status |
 |-----------|---------|--------------|--------|
-| Messages | Supabase | `messages` | ✅ useMessages, useSendMessage |
-| Attachments | Supabase | `message_attachments` | ✅ Insert on send; select in useMessages |
-| Storage | Supabase Storage | `message-attachments` bucket | ✅ Upload before send; display via getPublicUrl |
-| Read receipts | Supabase | `messages.status` | ✅ useMarkMessagesRead updates `sent` → `read` |
+| Messages | Supabase | `messages` | OK: `useMessages`, `useSendMessage` |
+| Attachments | Supabase | `message_attachments` | OK: Insert on send; select in `useMessages` |
+| Storage | Supabase Storage | `message-attachments` bucket | OK: Upload before send; display via `getPublicUrl` |
+| Read receipts | Supabase | `messages.status` | OK: `useMarkMessagesRead` updates `sent` -> `read` |
 
 - Migration adds `message_attachments` table and `message-attachments` bucket with policies.
 
@@ -65,7 +65,7 @@ Verification of Analytics, Contacts CRM, Saved Search Alerts, and Messages impro
 ### Contacts CRM
 
 - Pipeline/List view toggle.
-- “Follow-ups today” banner.
+- "Follow-ups today" banner.
 - Pipeline columns grouped by deal stage.
 - Stage dropdown in pipeline cards.
 - Tasks per contact (inline in pipeline; panel in list view).
@@ -75,7 +75,7 @@ Verification of Analytics, Contacts CRM, Saved Search Alerts, and Messages impro
 ### Messages
 
 - Property links in content (`/property/[id]`) rendered as links.
-- Read receipts (✓ sent, ✓✓ read).
+- Read receipts (`sent`, `read`).
 - Attachments (Paperclip) for images and documents.
 - Pending files shown before send with remove option.
 - Paperclip available on mobile and desktop.
@@ -99,4 +99,4 @@ supabase db push
 supabase functions deploy send-saved-search-alerts
 ```
 
-Ensure `RESEND_API_KEY` is set for saved search emails.
+Ensure `BREVO_API_KEY` is set for saved search emails.

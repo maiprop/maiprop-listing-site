@@ -194,6 +194,7 @@ export default function Listings() {
       <Navbar />
 
       <main id="main-content" className="pt-16">
+        <h1 className="sr-only">{t("listings.pageTitle", "Properties for Sale & Rent")}</h1>
         {/* Filter bar — sticky only on sm+ to avoid consuming 104px of viewport on mobile */}
         <div className="bg-card border-b border-border sm:sticky sm:top-16 z-40">
           <div className="container py-2 sm:py-4 space-y-2 sm:space-y-0">
@@ -613,6 +614,7 @@ export default function Listings() {
                 title="Could not load listings"
                 subtitle="Please try again later"
                 action={{ label: "Retry", onClick: () => window.location.reload() }}
+                testId="empty-listings"
               />
             ) : filtered.length === 0 ? (
               <EmptyState
@@ -620,6 +622,7 @@ export default function Listings() {
                 title={t("listings.noResults")}
                 subtitle={t("listings.noResultsSubtitle")}
                 action={activeFilterCount > 0 ? { label: t("listings.filters.reset"), onClick: clearAllFilters } : undefined}
+                testId="empty-listings"
               />
             ) : (
               <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
