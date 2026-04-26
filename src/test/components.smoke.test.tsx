@@ -538,7 +538,28 @@ describe("Component smoke tests", () => {
 
   it("OpenHouseDashboardSection renders without throwing", async () => {
     const { default: OpenHouseDashboardSection } = await import("@/components/OpenHouseDashboardSection");
-    expect(() => renderWithProviders(<OpenHouseDashboardSection />)).not.toThrow();
+    expect(() => renderWithProviders(<OpenHouseDashboardSection myListings={[]} />)).not.toThrow();
+  });
+
+  it("MyListingsSection renders without throwing", async () => {
+    const { MyListingsSection } = await import("@/pages/dashboard/MyListingsSection");
+    expect(() => renderWithProviders(
+      <MyListingsSection bioType="seller" role="seller" />
+    )).not.toThrow();
+  });
+
+  it("SavedPropertiesSection renders without throwing", async () => {
+    const { SavedPropertiesSection } = await import("@/pages/dashboard/SavedPropertiesSection");
+    expect(() => renderWithProviders(
+      <SavedPropertiesSection favorites={[]} favLoading={false} />
+    )).not.toThrow();
+  });
+
+  it("ContactsAndLeadsSection renders without throwing", async () => {
+    const { ContactsAndLeadsSection } = await import("@/pages/dashboard/ContactsAndLeadsSection");
+    expect(() => renderWithProviders(
+      <ContactsAndLeadsSection initialTab="leads" />
+    )).not.toThrow();
   });
 
   // ── Onboarding components ──────────────────────────────────────────────────
