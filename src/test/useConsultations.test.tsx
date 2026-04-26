@@ -1,0 +1,220 @@
+/**
+ * Tests for the four hooks in `@/hooks/useConsultations`. The hooks call
+ * supabase via various chains (insert, select+single, update+eq+single,
+ * update+in). Each chain is mocked per-test.
+ */
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { renderHook, waitFor, act } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import React from "react";
+
+const { useAuthMock, fromMock, toastMock, loggerMock } = vi.hoisted(() => ({
+  useAuthMock: vi.fn(),
+  fromMock: vi.fn(),
+  toastMock: { success: vi.fn(), error: vi.fn() },
+  loggerMock: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
+}));
+
+vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => useAuthMock() }));
+vi.mock("@/integrations/supabase/client", () => ({
+  supabase: { from: (...a: unknown[]) => fromMock(...a) },
+}));
+vi.mock("sonner", () => ({ toast: toastMock }));
+vi.mock("@/lib/logger", () => ({ logger: loggerMock }));
+
+import {
+  useSubmitConsultation,
+  useMyConsultationRequests,
+  useUpdateConsultationRequest,
+  useBulkUpdateConsultationRequests,
+} from "@/hooks/useConsultations";
+
+const wrapper = () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+};
+
+beforeEach(() => {
+  useAuthMock.mockReset();
+  fromMock.mockReset();
+  toastMock.success.mockReset();
+  toastMock.error.mockReset();
+  loggerMock.warn.mockReset();
+  useAuthMock.mockReturnValue({ user: { id: "u-1" } });
+});
+
+describe("useSubmitConsultation", () => {
+  it("inserts the consultation row and creates a lead for the professional", async () => {
+    const consInsert = vi.fn().mockResolvedValue({ error: null });
+    const proSingle = vi.fn().mockResolvedValue({ data: { user_id: "pro-owner" }, error: null });
+    const leadInsert = vi.fn().mockReturnValue({
+      then: (cb: (r: { error: null }) => unknown) => Promise.resolve(cb({ error: null })),
+    });
+    fromMock.mockImplementation((table: string) => {
+      if (table === "consultation_requests") return { insert: consInsert };
+      if (table === "professionals")
+        return { select: () => ({ eq: () => ({ single: proSingle }) }) };
+      if (table === "leads") return { insert: leadInsert };
+      throw new Error("unexpected table " + table);
+    });
+
+    const { result } = renderHook(() => useSubmitConsultation(), { wrapper: wrapper() });
+    await act(async () => {
+      await result.current.mutateAsync({
+        professional_id: "p-1",
+        requester_name: "Bob",
+        requester_email: "bob@example.com",
+        request_type: "callback",
+        message: "Call me at 5pm",
+      });
+    });
+
+    expect(consInsert).toHaveBeenCalledWith(expect.objectContaining({
+      professional_id: "p-1",
+      requester_id: "u-1",
+      requester_name: "Bob",
+      requester_email: "bob@example.com",
+      request_type: "callback",
+      message: "Call me at 5pm",
+      // optional fields default to null
+      requester_phone: null,
+      service: null,
+    }));
+    expect(leadInsert).toHaveBeenCalledWith(expect.objectContaining({
+      owner_id: "pro-owner",
+      source: "callback",
+      professional_id: "p-1",
+      name: "Bob",
+      email: "bob@example.com",
+      status: "new",
+    }));
+    expect(toastMock.success).toHaveBeenCalled();
+  });
+
+  it("does not insert a lead when the professional row is missing", async () => {
+    const consInsert = vi.fn().mockResolvedValue({ error: null });
+    const proSingle = vi.fn().mockResolvedValue({ data: null, error: null });
+    const leadInsert = vi.fn();
+    fromMock.mockImplementation((table: string) => {
+      if (table === "consultation_requests") return { insert: consInsert };
+      if (table === "professionals")
+        return { select: () => ({ eq: () => ({ single: proSingle }) }) };
+      if (table === "leads") return { insert: leadInsert };
+      throw new Error("unexpected " + table);
+    });
+    const { result } = renderHook(() => useSubmitConsultation(), { wrapper: wrapper() });
+    await act(async () => {
+      await result.current.mutateAsync({
+        professional_id: "p-1",
+        requester_name: "Alice",
+        requester_email: "a@x.com",
+        request_type: "consultation",
+      });
+    });
+    expect(leadInsert).not.toHaveBeenCalled();
+  });
+
+  it("toasts an error when consultation insert fails", async () => {
+    const consInsert = vi.fn().mockResolvedValue({ error: new Error("denied") });
+    fromMock.mockImplementation((_t: string) => ({ insert: consInsert }));
+    const { result } = renderHook(() => useSubmitConsultation(), { wrapper: wrapper() });
+    await act(async () => {
+      await result.current
+        .mutateAsync({
+          professional_id: "p", requester_name: "x", requester_email: "x@x.com", request_type: "message",
+        })
+        .catch(() => {});
+    });
+    expect(toastMock.error).toHaveBeenCalledWith(expect.stringMatching(/Could not send/i));
+  });
+});
+
+describe("useMyConsultationRequests", () => {
+  it("returns empty when the user has no professional row", async () => {
+    const proSingle = vi.fn().mockResolvedValue({ data: null, error: null });
+    fromMock.mockImplementation((table: string) => {
+      if (table === "professionals")
+        return { select: () => ({ eq: () => ({ maybeSingle: proSingle }) }) };
+      throw new Error("should not query " + table);
+    });
+    const { result } = renderHook(() => useMyConsultationRequests(), { wrapper: wrapper() });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual([]);
+  });
+
+  it("returns rows scoped to the matched professional id", async () => {
+    const proSingle = vi.fn().mockResolvedValue({ data: { id: "p-99" }, error: null });
+    const order = vi.fn().mockResolvedValue({ data: [{ id: "c-1", message: "hi" }], error: null });
+    const eq = vi.fn().mockReturnValue({ order });
+    fromMock.mockImplementation((table: string) => {
+      if (table === "professionals")
+        return { select: () => ({ eq: () => ({ maybeSingle: proSingle }) }) };
+      if (table === "consultation_requests")
+        return { select: () => ({ eq }) };
+      throw new Error("unexpected " + table);
+    });
+    const { result } = renderHook(() => useMyConsultationRequests(), { wrapper: wrapper() });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(eq).toHaveBeenCalledWith("professional_id", "p-99");
+    expect(result.current.data).toEqual([{ id: "c-1", message: "hi" }]);
+  });
+});
+
+describe("useUpdateConsultationRequest", () => {
+  it("updates and returns the row, then toasts success", async () => {
+    const single = vi.fn().mockResolvedValue({ data: { id: "c-1", status: "confirmed" }, error: null });
+    const select = vi.fn().mockReturnValue({ single });
+    const eq = vi.fn().mockReturnValue({ select });
+    const update = vi.fn().mockReturnValue({ eq });
+    fromMock.mockReturnValue({ update });
+    const { result } = renderHook(() => useUpdateConsultationRequest(), { wrapper: wrapper() });
+    await act(async () => {
+      await result.current.mutateAsync({ id: "c-1", updates: { status: "confirmed" } });
+    });
+    expect(update).toHaveBeenCalledWith({ status: "confirmed" });
+    expect(eq).toHaveBeenCalledWith("id", "c-1");
+    expect(toastMock.success).toHaveBeenCalledWith(expect.stringMatching(/updated/i));
+  });
+
+  it("toasts error on failure", async () => {
+    const single = vi.fn().mockResolvedValue({ data: null, error: new Error("nope") });
+    fromMock.mockReturnValue({ update: () => ({ eq: () => ({ select: () => ({ single }) }) }) });
+    const { result } = renderHook(() => useUpdateConsultationRequest(), { wrapper: wrapper() });
+    await act(async () => {
+      await result.current
+        .mutateAsync({ id: "c-1", updates: {} })
+        .catch(() => {});
+    });
+    expect(toastMock.error).toHaveBeenCalledWith(expect.stringMatching(/Could not update/i));
+  });
+});
+
+describe("useBulkUpdateConsultationRequests", () => {
+  it("updates many ids via .in() and toasts success", async () => {
+    const inFn = vi.fn().mockResolvedValue({ error: null });
+    const update = vi.fn().mockReturnValue({ in: inFn });
+    fromMock.mockReturnValue({ update });
+    const { result } = renderHook(() => useBulkUpdateConsultationRequests(), { wrapper: wrapper() });
+    await act(async () => {
+      await result.current.mutateAsync({
+        ids: ["a", "b", "c"],
+        updates: { lead_status: "won" },
+      });
+    });
+    expect(update).toHaveBeenCalledWith({ lead_status: "won" });
+    expect(inFn).toHaveBeenCalledWith("id", ["a", "b", "c"]);
+    expect(toastMock.success).toHaveBeenCalledWith(expect.stringMatching(/updated/i));
+  });
+
+  it("toasts error on failure", async () => {
+    const inFn = vi.fn().mockResolvedValue({ error: new Error("rls") });
+    fromMock.mockReturnValue({ update: () => ({ in: inFn }) });
+    const { result } = renderHook(() => useBulkUpdateConsultationRequests(), { wrapper: wrapper() });
+    await act(async () => {
+      await result.current.mutateAsync({ ids: ["a"], updates: {} }).catch(() => {});
+    });
+    expect(toastMock.error).toHaveBeenCalledWith(expect.stringMatching(/Could not update/i));
+  });
+});
