@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.57.2'
 import { parseEmailIdentity, sendBrevoEmail } from '../_shared/brevo.ts'
+import { getCorsHeaders, handleCors } from '../_shared/cors.ts'
 
 const MAX_RETRIES = 5
 const DEFAULT_BATCH_SIZE = 10
@@ -62,6 +63,10 @@ function parseJwtClaims(token: string): Record<string, unknown> | null {
 }
 
 Deno.serve(async (req) => {
+  const corsPreflightResponse = handleCors(req)
+  if (corsPreflightResponse) return corsPreflightResponse
+  const corsHeaders = getCorsHeaders(req)
+
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
   const brevoFromEmail = Deno.env.get('BREVO_FROM_EMAIL')
@@ -70,7 +75,7 @@ Deno.serve(async (req) => {
     console.error('Missing required environment variables')
     return new Response(
       JSON.stringify({ error: 'Server configuration error' }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
 
@@ -78,7 +83,7 @@ Deno.serve(async (req) => {
   if (!authHeader?.startsWith('Bearer ')) {
     return new Response(
       JSON.stringify({ error: 'Unauthorized' }),
-      { status: 401, headers: { 'Content-Type': 'application/json' } }
+      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
 

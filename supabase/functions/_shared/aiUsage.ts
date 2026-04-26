@@ -61,12 +61,11 @@ export async function enforceAiQuota(
   bucket: string,
   corsHeaders: Record<string, string>,
 ): Promise<EnforceResult> {
-  const client = getClient();
-  if (!client) {
-    console.warn("[aiUsage] no SUPABASE_URL/SERVICE_ROLE_KEY — failing open");
-    return { userId: null, errorResponse: null };
-  }
-
+  // Auth header check ALWAYS runs and fails closed. We do this before
+  // probing the Supabase client so that the behaviour is consistent
+  // regardless of whether SUPABASE_URL is set in the current environment
+  // (e.g. unit-test isolates with no Supabase access still see 401 for
+  // missing or malformed Authorization headers, matching production).
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.toLowerCase().startsWith("bearer ")) {
     return {
@@ -76,6 +75,15 @@ export async function enforceAiQuota(
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       ),
     };
+  }
+
+  // Quota and token-verification require Supabase. If the service-role
+  // credentials aren't available (test env, local dev without secrets),
+  // fail OPEN on the QUOTA portion only — auth was already enforced above.
+  const client = getClient();
+  if (!client) {
+    console.warn("[aiUsage] no SUPABASE_URL/SERVICE_ROLE_KEY — skipping quota enforcement");
+    return { userId: null, errorResponse: null };
   }
 
   const token = authHeader.slice(7).trim();

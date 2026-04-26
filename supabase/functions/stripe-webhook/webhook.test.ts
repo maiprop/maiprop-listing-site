@@ -14,11 +14,14 @@ import Stripe from "https://esm.sh/stripe@18.5.0";
 
 const TEST_SECRET = "whsec_test_secret_deterministic_for_tests_only";
 
-function sign(payload: string, secret: string, timestamp: number): string {
+async function sign(payload: string, secret: string, timestamp: number): Promise<string> {
   // Stripe signature format: "t=<ts>,v1=<hmac-sha256>"
   // We use the Stripe SDK's own helper to produce a valid signature so the
-  // test doesn't re-implement their scheme.
-  const header = Stripe.webhooks.generateTestHeaderString({
+  // test doesn't re-implement their scheme. Deno's Stripe SDK uses Web Crypto
+  // (async only), so we must call the *Async variant — the synchronous
+  // generateTestHeaderString throws "SubtleCryptoProvider cannot be used in a
+  // synchronous context".
+  const header = await Stripe.webhooks.generateTestHeaderStringAsync({
     payload,
     secret,
     timestamp,
@@ -34,7 +37,7 @@ Deno.test("stripe-webhook: accepts a validly signed payload", async () => {
     data: { object: { id: "sub_test", customer: "cus_test", status: "active", items: { data: [{ price: { product: "prod_x" } }] } } },
   });
   const ts = Math.floor(Date.now() / 1000);
-  const sig = sign(payload, TEST_SECRET, ts);
+  const sig = await sign(payload, TEST_SECRET, ts);
 
   // constructEventAsync throws on bad signatures; success = no throw.
   const event = await stripe.webhooks.constructEventAsync(payload, sig, TEST_SECRET);
@@ -45,7 +48,7 @@ Deno.test("stripe-webhook: rejects a tampered payload", async () => {
   const stripe = new Stripe("sk_test_dummy", { apiVersion: "2025-08-27.basil" });
   const payload = JSON.stringify({ id: "evt_test_2", type: "customer.subscription.created" });
   const ts = Math.floor(Date.now() / 1000);
-  const sig = sign(payload, TEST_SECRET, ts);
+  const sig = await sign(payload, TEST_SECRET, ts);
 
   // Mutate the payload after signing.
   const tampered = payload.replace("created", "deleted");
@@ -63,7 +66,7 @@ Deno.test("stripe-webhook: rejects wrong secret", async () => {
   const stripe = new Stripe("sk_test_dummy", { apiVersion: "2025-08-27.basil" });
   const payload = JSON.stringify({ id: "evt_test_3", type: "ping" });
   const ts = Math.floor(Date.now() / 1000);
-  const sig = sign(payload, TEST_SECRET, ts);
+  const sig = await sign(payload, TEST_SECRET, ts);
 
   let threw = false;
   try {

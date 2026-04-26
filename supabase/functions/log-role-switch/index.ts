@@ -37,15 +37,27 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(Deno.env.get("SUPABASE_URL") ?? "", serviceRoleKey);
 
-  try {
-    // ── Auth ──────────────────────────────────────────────────────────────────
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) throw new Error("Missing Authorization header");
-    const token = authHeader.replace(/^Bearer\s+/i, "").trim();
-    const { data: userData, error: userError } = await supabase.auth.getUser(token);
-    if (userError || !userData.user) throw new Error("Unauthenticated");
+  // ── Auth ──────────────────────────────────────────────────────────────────
+  // Authentication errors return 401 directly (rather than being caught by
+  // the generic 500 handler below) so callers can reliably distinguish "you
+  // weren't logged in" from "the server crashed". Tests assert this contract.
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader) {
+    return new Response(JSON.stringify({ error: "Missing Authorization header" }), {
+      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+  const { data: userData, error: userError } = await supabase.auth.getUser(token);
+  if (userError || !userData.user) {
+    return new Response(JSON.stringify({ error: "Unauthenticated" }), {
+      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 
-    const user = userData.user;
+  const user = userData.user;
+
+  try {
     logStep("Authenticated", { userId: user.id });
 
     // ── Parse body ────────────────────────────────────────────────────────────

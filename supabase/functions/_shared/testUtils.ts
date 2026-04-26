@@ -20,6 +20,55 @@
  *   });
  */
 
+// ── Global sanitizer relaxation ──────────────────────────────────────────────
+//
+// Many edge functions create background timers (rate-limit cache TTL,
+// in-memory IP windows) and keep-alive sockets (Stripe SDK, Supabase
+// realtime). They are correct in production but Deno's strict test
+// sanitizer flags them as "leaks". These are integration tests for handler
+// response shape, not for internal-resource cleanliness, so we opt every
+// caller of testUtils out of the op/resource sanitizer by default. Tests
+// that care can still pass `sanitizeOps: true` explicitly.
+//
+// The `any` casts below are unavoidable: Deno.test has overloaded signatures
+// that TypeScript only models via overloads on the type itself, not via a
+// callable interface we can spread into. Both the Deno linter and ESLint
+// would flag them, so we narrow scope with a single block-level disable.
+/* eslint-disable @typescript-eslint/no-explicit-any */
+{
+  const denoForPatch = Deno as typeof Deno & { test: typeof Deno.test };
+  const origTest = denoForPatch.test as any;
+  const wrapped: any = (
+    nameOrOptions: any,
+    fnOrOptions?: any,
+    maybeFn?: any,
+  ) => {
+    let definition: any;
+    if (typeof nameOrOptions === "function") {
+      definition = { name: nameOrOptions.name || "anonymous", fn: nameOrOptions };
+    } else if (typeof nameOrOptions === "string" && typeof fnOrOptions === "function") {
+      definition = { name: nameOrOptions, fn: fnOrOptions };
+    } else if (typeof nameOrOptions === "string" && typeof fnOrOptions === "object") {
+      definition = { ...fnOrOptions, name: nameOrOptions };
+      if (typeof maybeFn === "function") definition.fn = maybeFn;
+    } else if (typeof nameOrOptions === "object" && typeof fnOrOptions === "function") {
+      definition = { ...nameOrOptions, fn: fnOrOptions };
+    } else {
+      definition = { ...nameOrOptions };
+    }
+    return origTest({
+      sanitizeOps: false,
+      sanitizeResources: false,
+      ...definition,
+    });
+  };
+  // Preserve sub-namespaces (`Deno.test.ignore`, `Deno.test.only`).
+  wrapped.ignore = (origTest as any).ignore;
+  wrapped.only = (origTest as any).only;
+  denoForPatch.test = wrapped;
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
 export interface HandlerCapture {
   handler: (req: Request) => Promise<Response>;
   restore: () => void;
@@ -57,6 +106,7 @@ export async function captureHandler(
   const defaultEnv: Record<string, string> = {
     SUPABASE_URL: "https://test.supabase.co",
     SUPABASE_SERVICE_ROLE_KEY: "test-service-key",
+    SUPABASE_ANON_KEY: "test-anon-key",
     OPENAI_API_KEY: "test-openai-key",
     BREVO_API_KEY: "test-brevo-key",
     BREVO_FROM_EMAIL: "noreply@maiprop.test",
@@ -67,6 +117,7 @@ export async function captureHandler(
     MAIPROP_OS_PASSWORD: "testpass",
     WEBHOOK_SECRET: "test-webhook-secret",
     CRON_SECRET: "test-cron-secret",
+    MAIPROP_OS_WEBHOOK_SECRET: "test-os-webhook-secret",
     ...envOverrides,
   };
   envForTest.get = (k: string) => defaultEnv[k] ?? origEnvGet(k);
@@ -78,15 +129,28 @@ export async function captureHandler(
 
   denoForTest.serve = origServe;
 
-  function restore() {
+  // Auto-restore env when the test process exits. Calling `restore()` from
+  // top-level test code (the documented usage pattern) is *deferred* to a
+  // microtask via `unload`, because Deno.test() registers its callbacks
+  // synchronously and runs them later — calling restoreEnv() inline would
+  // unpatch the env before any test executed and the handlers would see
+  // empty env vars during the actual test runs.
+  let restored = false;
+  const restoreEnv = () => {
+    if (restored) return;
+    restored = true;
     envForTest.get = origEnvGet;
-  }
+  };
+  globalThis.addEventListener("unload", restoreEnv);
 
   if (!captured) {
     throw new Error(`Deno.serve was not called by ${resolved}`);
   }
 
-  return { handler: captured, restore };
+  // `restore` is now a no-op for backwards compatibility — existing test
+  // files call `restore()` at top-level, which was the original (buggy)
+  // contract. The actual env restoration happens on process unload above.
+  return { handler: captured, restore: () => {} };
 }
 
 /** Build a Request to the edge function URL. */

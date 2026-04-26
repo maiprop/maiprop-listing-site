@@ -14,7 +14,6 @@
  * Rate limited: 10 req/min per IP (translation is expensive).
  */
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
 
 const ALLOWED_ORIGINS = [
@@ -56,7 +55,7 @@ function isRateLimited(ip: string): boolean {
   return false;
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   const hdrs = corsHeaders(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: hdrs });
 
@@ -89,9 +88,15 @@ serve(async (req) => {
   }
 
   if (STATIC_LOCALES.has(locale)) {
-    return new Response(JSON.stringify({ error: `${locale} is a static locale — load it from the bundle` }), {
-      status: 400, headers: { ...hdrs, "Content-Type": "application/json" },
-    });
+    // Passthrough: en/el bundles ship statically, no AI translation needed.
+    // We still return 200 with the original strings so the caller can use a
+    // single code-path for every locale ("ask the API for the translation,
+    // get back what it should render"), instead of having to special-case
+    // static locales on the client.
+    return new Response(
+      JSON.stringify({ locale, strings: strings ?? {} }),
+      { status: 200, headers: { ...hdrs, "Content-Type": "application/json" } },
+    );
   }
 
   const targetLanguage = LOCALE_NAMES[locale];
