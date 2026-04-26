@@ -46,7 +46,11 @@ vi.mock("@/integrations/supabase/client", () => ({
 }));
 
 vi.mock("@/contexts/AuthContext", () => ({
-  useAuth: vi.fn().mockReturnValue({ user: null, profile: null, loading: false }),
+  useAuth: vi.fn().mockReturnValue({
+    user: null, profile: null, loading: false,
+    signIn: vi.fn().mockResolvedValue({ error: null }),
+    signUp: vi.fn().mockResolvedValue({ error: null }),
+  }),
   AuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
@@ -142,6 +146,7 @@ vi.mock("@/hooks/useSavedSearches", () => ({
   useSavedSearches: vi.fn().mockReturnValue({ data: [], isLoading: false }),
   useDeleteSavedSearch: vi.fn().mockReturnValue({ mutate: vi.fn() }),
   useSaveSearch: vi.fn().mockReturnValue({ mutate: vi.fn() }),
+  useToggleSavedSearchAlert: vi.fn().mockReturnValue({ mutate: vi.fn() }),
 }));
 
 vi.mock("@/hooks/useLeads", () => ({
@@ -153,6 +158,7 @@ vi.mock("@/hooks/useLeads", () => ({
 
 vi.mock("@/hooks/useViewings", () => ({
   useViewings: vi.fn().mockReturnValue({ data: [], isLoading: false }),
+  useUpdateViewing: vi.fn().mockReturnValue({ mutate: vi.fn(), mutateAsync: vi.fn() }),
 }));
 
 vi.mock("@/hooks/useContacts", () => ({
@@ -163,10 +169,13 @@ vi.mock("@/hooks/useContacts", () => ({
 
 vi.mock("@/hooks/useProfessionals", () => ({
   useProfessionals: vi.fn().mockReturnValue({ data: [], isLoading: false }),
+  useProfessional: vi.fn().mockReturnValue({ data: null, isLoading: false }),
+  useProfessionalByUserId: vi.fn().mockReturnValue({ data: null, isLoading: false }),
 }));
 
 vi.mock("@/hooks/useProfessionalServices", () => ({
   useProfessionalServices: vi.fn().mockReturnValue({ data: [], isLoading: false }),
+  useProfessionalAvailability: vi.fn().mockReturnValue({ data: [], isLoading: false }),
   useMyProfessional: vi.fn().mockReturnValue({ data: null, isLoading: false }),
   useUpsertProfessionalServices: vi.fn().mockReturnValue({ mutate: vi.fn(), mutateAsync: vi.fn() }),
   useUpsertProfessionalAvailability: vi.fn().mockReturnValue({ mutate: vi.fn(), mutateAsync: vi.fn() }),
@@ -243,6 +252,7 @@ vi.mock("@/lib/config", () => ({
   SUPABASE_ANON_KEY: "test-anon-key",
   MAPBOX_TOKEN: "",
   GOOGLE_MAPS_API_KEY: "",
+  APP_ORIGIN: "https://example.com",
 }));
 
 vi.mock("@/hooks/usePropertyAIInsights", () => ({
@@ -258,6 +268,7 @@ vi.mock("@/hooks/useMessages", () => ({
   useConversations: vi.fn().mockReturnValue({ data: [] }),
   useMessages: vi.fn().mockReturnValue({ data: [] }),
   useSendMessage: vi.fn().mockReturnValue({ mutate: vi.fn() }),
+  useMarkMessagesRead: vi.fn().mockReturnValue({ mutate: vi.fn() }),
 }));
 
 vi.mock("@/components/PropertyMiniMap", () => ({
@@ -296,6 +307,257 @@ vi.mock("@/hooks/useProfessionalReviews", () => ({
   useProfessionalReviews: vi.fn().mockReturnValue({ data: [], isLoading: false }),
   useSubmitReview: vi.fn().mockReturnValue({ mutate: vi.fn(), isPending: false }),
   computeStats: vi.fn().mockReturnValue({ total: 0, avg: 0, distribution: {} }),
+}));
+
+// ── Additional hook mocks ─────────────────────────────────────────────────────
+
+vi.mock("@/hooks/useAuctionListings", () => ({
+  useAuctionListings: vi.fn().mockReturnValue({ data: [], isLoading: false }),
+}));
+
+vi.mock("@/hooks/useFiresaleInterest", () => ({
+  useMyFiresaleInterest: vi.fn().mockReturnValue({ data: null, isLoading: false }),
+  useMyFiresaleInterests: vi.fn().mockReturnValue({ data: [], isLoading: false }),
+  useFiresaleInterestQueue: vi.fn().mockReturnValue({ data: [], isLoading: false }),
+  useExpressInterest: vi.fn().mockReturnValue({ mutate: vi.fn(), isPending: false }),
+  useUpdateInterestStatus: vi.fn().mockReturnValue({ mutate: vi.fn() }),
+}));
+
+vi.mock("@/hooks/usePortfolios", () => ({
+  usePortfolios: vi.fn().mockReturnValue({ data: [], isLoading: false }),
+  usePortfolio: vi.fn().mockReturnValue({ data: null, isLoading: false }),
+  useCreatePortfolio: vi.fn().mockReturnValue({ mutate: vi.fn(), mutateAsync: vi.fn() }),
+  useUpdatePortfolio: vi.fn().mockReturnValue({ mutate: vi.fn(), mutateAsync: vi.fn() }),
+  useDeletePortfolio: vi.fn().mockReturnValue({ mutate: vi.fn(), mutateAsync: vi.fn() }),
+}));
+
+vi.mock("@/hooks/useProjects", () => ({
+  useProjects: vi.fn().mockReturnValue({ data: [], isLoading: false }),
+  useProject: vi.fn().mockReturnValue({ data: null, isLoading: false }),
+  useCreateProject: vi.fn().mockReturnValue({ mutate: vi.fn(), mutateAsync: vi.fn() }),
+  useUpdateProject: vi.fn().mockReturnValue({ mutate: vi.fn(), mutateAsync: vi.fn() }),
+  useDeleteProject: vi.fn().mockReturnValue({ mutate: vi.fn(), mutateAsync: vi.fn() }),
+}));
+
+vi.mock("@/hooks/useOpenHouseAssetControl", () => ({
+  useOpenHouseSettings: vi.fn().mockReturnValue({ data: null, isLoading: false }),
+  useUpsertOpenHouseSettings: vi.fn().mockReturnValue({ mutate: vi.fn() }),
+  useOpenHouseRegistrations: vi.fn().mockReturnValue({ data: [], isLoading: false }),
+  useMyOpenHouseRegistrations: vi.fn().mockReturnValue({ data: [], isLoading: false }),
+  useCreateOpenHouseRegistration: vi.fn().mockReturnValue({ mutate: vi.fn() }),
+  useUpdateOpenHouseRegistration: vi.fn().mockReturnValue({ mutate: vi.fn() }),
+  useOpenHouseOffers: vi.fn().mockReturnValue({ data: [], isLoading: false }),
+  useMyOpenHouseOffers: vi.fn().mockReturnValue({ data: [], isLoading: false }),
+  useSubmitOpenHouseOffer: vi.fn().mockReturnValue({ mutate: vi.fn() }),
+  useUpdateOpenHouseOffer: vi.fn().mockReturnValue({ mutate: vi.fn() }),
+  useAcceptOpenHouseOffer: vi.fn().mockReturnValue({ mutate: vi.fn() }),
+  useRevealAllOffers: vi.fn().mockReturnValue({ mutate: vi.fn() }),
+  uploadOpenHouseDoc: vi.fn().mockResolvedValue(""),
+  getOpenHouseDocSignedUrl: vi.fn().mockResolvedValue(""),
+}));
+
+vi.mock("@/hooks/usePricingConfigs", () => ({
+  PRICING_KEYS: { AGENT_BASIC: "agent_basic", AGENT_PRO: "agent_pro" },
+  INVESTOR_TIER_TO_KEY: {},
+  usePricingConfigs: vi.fn().mockReturnValue({ data: [], isLoading: false }),
+  formatPrice: vi.fn().mockReturnValue("€0"),
+}));
+
+vi.mock("@/hooks/useProjectLeads", () => ({
+  useProjectLeads: vi.fn().mockReturnValue({ data: [], isLoading: false }),
+  useCreateProjectLead: vi.fn().mockReturnValue({ mutate: vi.fn() }),
+  useUpdateProjectLead: vi.fn().mockReturnValue({ mutateAsync: vi.fn() }),
+  useDeleteProjectLead: vi.fn().mockReturnValue({ mutateAsync: vi.fn() }),
+}));
+
+vi.mock("@/hooks/useProjectMedia", () => ({
+  useProjectMedia: vi.fn().mockReturnValue({ data: [], isLoading: false }),
+  useAddProjectMedia: vi.fn().mockReturnValue({ mutate: vi.fn(), mutateAsync: vi.fn() }),
+  useDeleteProjectMedia: vi.fn().mockReturnValue({ mutate: vi.fn() }),
+}));
+
+vi.mock("@/hooks/useProjectUnits", () => ({
+  useProjectUnits: vi.fn().mockReturnValue({ data: [], isLoading: false }),
+  useCreateProjectUnit: vi.fn().mockReturnValue({ mutate: vi.fn() }),
+  useUpdateProjectUnit: vi.fn().mockReturnValue({ mutateAsync: vi.fn() }),
+  useDeleteProjectUnit: vi.fn().mockReturnValue({ mutateAsync: vi.fn() }),
+}));
+
+vi.mock("@/hooks/useProjectViews", () => ({
+  useProjectViews: vi.fn().mockReturnValue({ data: null, isLoading: false }),
+  useRecordProjectView: vi.fn().mockReturnValue(vi.fn()),
+}));
+
+vi.mock("@/hooks/useFormWizard", () => ({
+  useFormWizard: vi.fn().mockReturnValue({
+    step: "type", stepIndex: 0, steps: [], goTo: vi.fn(),
+    goNext: vi.fn(), goPrev: vi.fn(), next: vi.fn(), prev: vi.fn(),
+    isFirst: true, isLast: false, progress: 0,
+  }),
+}));
+
+vi.mock("@/hooks/useAnalytics", () => ({
+  useListingViewTrends: vi.fn().mockReturnValue({ data: [], isLoading: false }),
+  useLeadFunnel: vi.fn().mockReturnValue({ data: null, isLoading: false }),
+}));
+
+vi.mock("@/hooks/usePrivateOwnerAdAlert", () => ({
+  usePrivateOwnerAdAlert: vi.fn().mockReturnValue({ data: null, isLoading: false, refetch: vi.fn() }),
+}));
+
+vi.mock("@/hooks/useModal", () => ({
+  useModal: vi.fn().mockReturnValue({ isOpen: false, open: vi.fn(), close: vi.fn() }),
+}));
+
+// ── Additional component mocks ────────────────────────────────────────────────
+
+vi.mock("@/components/auctions/AuctionCard", () => ({
+  AuctionCard: () => <div data-testid="auction-card" />,
+  PremiumBadge: () => <span />,
+}));
+
+vi.mock("@/components/auctions/AuctionHero", () => ({
+  AuctionHero: () => <div data-testid="auction-hero" />,
+}));
+
+vi.mock("@/components/auctions/AuctionAlertBanner", () => ({
+  AuctionAlertBanner: () => <div data-testid="auction-alert-banner" />,
+}));
+
+vi.mock("@/components/ProAIToolsWidget", () => ({
+  default: () => <div data-testid="pro-ai-tools" />,
+}));
+
+vi.mock("@/components/RoleSwitchModal", () => ({
+  RoleSwitchModal: () => <div data-testid="role-switch-modal" />,
+}));
+
+vi.mock("@/components/InvitationRequestModal", () => ({
+  InvitationRequestModal: () => <div data-testid="invitation-request-modal" />,
+}));
+
+vi.mock("@/components/firesale/FiresaleInvestorPanel", () => ({
+  FiresaleInvestorPanel: () => <div data-testid="firesale-investor-panel" />,
+}));
+
+vi.mock("@/components/firesale/FiresaleQuickSaleForm", () => ({
+  FiresaleQuickSaleForm: () => <div data-testid="firesale-quick-sale-form" />,
+}));
+
+vi.mock("@/components/open-houses/OpenHousePrimitives", () => ({
+  fmtDate: vi.fn().mockReturnValue(""),
+  fmtTime: vi.fn().mockReturnValue(""),
+  Pill: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+  RangeInput: () => <input />,
+  OpenHouseCard: () => <div data-testid="open-house-card" />,
+}));
+
+vi.mock("@/components/onboarding/OnboardingShell", () => ({
+  OnboardingShell: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+
+vi.mock("@/components/onboarding/DoneScreen", () => ({
+  DoneScreen: () => <div data-testid="done-screen" />,
+}));
+
+vi.mock("@/components/onboarding/PickTypeStep", () => ({
+  PickTypeStep: () => <div data-testid="pick-type-step" />,
+}));
+
+vi.mock("@/components/onboarding/ProServicesStep", () => ({
+  ProServicesStep: () => <div data-testid="pro-services-step" />,
+}));
+
+vi.mock("@/components/onboarding/PickParticipantGoalStep", () => ({
+  PickParticipantGoalStep: () => <div data-testid="pick-participant-goal-step" />,
+}));
+
+vi.mock("@/components/onboarding/PickProTypeStep", () => ({
+  PickProTypeStep: () => <div data-testid="pick-pro-type-step" />,
+}));
+
+vi.mock("@/components/onboarding/ProCategoryStep", () => ({
+  ProCategoryStep: () => <div data-testid="pro-category-step" />,
+}));
+
+vi.mock("@/components/onboarding/ProVerifyStep", () => ({
+  ProVerifyStep: () => <div data-testid="pro-verify-step" />,
+}));
+
+vi.mock("@/components/api/ApiDocComponents", () => ({
+  CodeBlock: ({ code }: { code: string }) => <pre>{code}</pre>,
+  EndpointCard: () => <div data-testid="endpoint-card" />,
+}));
+
+vi.mock("@/components/AdminFiresalePipeline", () => ({
+  default: () => <div data-testid="admin-firesale-pipeline" />,
+}));
+
+vi.mock("@/components/AdminInvestorScreening", () => ({
+  default: () => <div data-testid="admin-investor-screening" />,
+}));
+
+vi.mock("@/components/AdminSubscribers", () => ({
+  default: () => <div data-testid="admin-subscribers" />,
+}));
+
+vi.mock("@/components/AdminPanel", () => ({
+  default: () => <div data-testid="admin-panel" />,
+}));
+
+vi.mock("@/components/AdminReports", () => ({
+  default: () => <div data-testid="admin-reports" />,
+}));
+
+vi.mock("@/components/AdminInvitationRequests", () => ({
+  default: () => <div data-testid="admin-invitation-requests" />,
+}));
+
+vi.mock("@/components/AdminFeaturedListings", () => ({
+  default: () => <div data-testid="admin-featured-listings" />,
+}));
+
+vi.mock("@/components/AdminProfessionalVerification", () => ({
+  AdminProfessionalVerification: () => <div data-testid="admin-prof-verification" />,
+}));
+
+vi.mock("@/components/POFVerificationPanel", () => ({
+  POFVerificationPanel: () => <div data-testid="pof-verification-panel" />,
+}));
+
+vi.mock("@/components/investor/InvestorHeroHeader", () => ({
+  InvestorHeroHeader: () => <div data-testid="investor-hero-header" />,
+}));
+
+vi.mock("@/components/investor/InvestorExpiryBanner", () => ({
+  InvestorExpiryBanner: () => null,
+}));
+
+vi.mock("@/components/investor/InvestorAccessGate", () => ({
+  InvestorAccessGate: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+
+vi.mock("@/components/investor/InvestorSidebarAnalytics", () => ({
+  InvestorSidebarAnalytics: () => <div data-testid="investor-sidebar-analytics" />,
+}));
+
+vi.mock("@/components/OpenHouseRegistrationDialog", () => ({
+  default: () => <div data-testid="open-house-registration-dialog" />,
+}));
+
+vi.mock("@/components/OpenHouseAssetControlPanel", () => ({
+  default: () => <div data-testid="open-house-asset-control-panel" />,
+}));
+
+vi.mock("@/components/OpenHouseOfferDialog", () => ({
+  default: () => <div data-testid="open-house-offer-dialog" />,
+}));
+
+vi.mock("@/components/property/DetailPrimitives", () => ({
+  DetailRow: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  Section: ({ children }: { children: React.ReactNode }) => <section>{children}</section>,
+  SectionHeader: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
+  FeatureSection: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -401,5 +663,318 @@ describe("Page smoke tests", () => {
         </Suspense>
       )
     ).not.toThrow();
+  });
+
+  // ── Static / simple pages ───────────────────────────────────────────────────
+
+  it("NotFound page renders without throwing", async () => {
+    const { default: NotFound } = await import("@/pages/NotFound");
+    expect(() => renderWithProviders(<NotFound />)).not.toThrow();
+  });
+
+  it("Contact page renders without throwing", async () => {
+    const { default: Contact } = await import("@/pages/Contact");
+    expect(() => renderWithProviders(<Contact />)).not.toThrow();
+  });
+
+  it("CookiePolicy page renders without throwing", async () => {
+    const { default: CookiePolicy } = await import("@/pages/CookiePolicy");
+    expect(() => renderWithProviders(<CookiePolicy />)).not.toThrow();
+  });
+
+  it("PrivacyPolicy page renders without throwing", async () => {
+    const { default: PrivacyPolicy } = await import("@/pages/PrivacyPolicy");
+    expect(() => renderWithProviders(<PrivacyPolicy />)).not.toThrow();
+  });
+
+  it("TermsOfService page renders without throwing", async () => {
+    const { default: TermsOfService } = await import("@/pages/TermsOfService");
+    expect(() => renderWithProviders(<TermsOfService />)).not.toThrow();
+  });
+
+  it("ApiDocs page renders without throwing", async () => {
+    const { default: ApiDocs } = await import("@/pages/ApiDocs");
+    expect(() => renderWithProviders(<ApiDocs />)).not.toThrow();
+  });
+
+  it("PlatformMap page renders without throwing", async () => {
+    const { default: PlatformMap } = await import("@/pages/PlatformMap");
+    expect(() => renderWithProviders(<PlatformMap />)).not.toThrow();
+  });
+
+  // ── Auth pages ──────────────────────────────────────────────────────────────
+
+  it("Login page renders without throwing", async () => {
+    const { default: Login } = await import("@/pages/Login");
+    expect(() =>
+      renderWithProviders(
+        <Suspense fallback={<div>loading</div>}>
+          <Login />
+        </Suspense>
+      )
+    ).not.toThrow();
+  });
+
+  it("Signup page renders without throwing", async () => {
+    const { default: Signup } = await import("@/pages/Signup");
+    expect(() =>
+      renderWithProviders(
+        <Suspense fallback={<div>loading</div>}>
+          <Signup />
+        </Suspense>
+      )
+    ).not.toThrow();
+  });
+
+  it("ResetPassword page renders without throwing", async () => {
+    const { default: ResetPassword } = await import("@/pages/ResetPassword");
+    expect(() => renderWithProviders(<ResetPassword />)).not.toThrow();
+  });
+
+  // ── Feature pages ───────────────────────────────────────────────────────────
+
+  it("AIAssistantPage renders without throwing", async () => {
+    const { default: AIAssistantPage } = await import("@/pages/AIAssistantPage");
+    expect(() =>
+      renderWithProviders(
+        <Suspense fallback={<div>loading</div>}>
+          <AIAssistantPage />
+        </Suspense>
+      )
+    ).not.toThrow();
+  });
+
+  it("Auctions page renders without throwing", async () => {
+    const { default: Auctions } = await import("@/pages/Auctions");
+    expect(() =>
+      renderWithProviders(
+        <Suspense fallback={<div>loading</div>}>
+          <Auctions />
+        </Suspense>
+      )
+    ).not.toThrow();
+  });
+
+  it("Firesale page renders without throwing", async () => {
+    const { default: Firesale } = await import("@/pages/Firesale");
+    expect(() =>
+      renderWithProviders(
+        <Suspense fallback={<div>loading</div>}>
+          <Firesale />
+        </Suspense>
+      )
+    ).not.toThrow();
+  });
+
+  it("OpenHouses page renders without throwing", async () => {
+    const { default: OpenHouses } = await import("@/pages/OpenHouses");
+    expect(() =>
+      renderWithProviders(
+        <Suspense fallback={<div>loading</div>}>
+          <OpenHouses />
+        </Suspense>
+      )
+    ).not.toThrow();
+  });
+
+  it("OpenHouseDetail page renders without throwing", async () => {
+    const { default: OpenHouseDetail } = await import("@/pages/OpenHouseDetail");
+    expect(() =>
+      renderWithProviders(
+        <Suspense fallback={<div>loading</div>}>
+          <OpenHouseDetail />
+        </Suspense>,
+        { initialPath: "/open-houses/test-id" }
+      )
+    ).not.toThrow();
+  });
+
+  it("Messages page renders without throwing", async () => {
+    const { default: Messages } = await import("@/pages/Messages");
+    expect(() =>
+      renderWithProviders(
+        <Suspense fallback={<div>loading</div>}>
+          <Messages />
+        </Suspense>
+      )
+    ).not.toThrow();
+  });
+
+  it("Portfolios page renders without throwing", async () => {
+    const { default: Portfolios } = await import("@/pages/Portfolios");
+    expect(() =>
+      renderWithProviders(
+        <Suspense fallback={<div>loading</div>}>
+          <Portfolios />
+        </Suspense>
+      )
+    ).not.toThrow();
+  });
+
+  it("Projects page renders without throwing", async () => {
+    const { default: Projects } = await import("@/pages/Projects");
+    expect(() =>
+      renderWithProviders(
+        <Suspense fallback={<div>loading</div>}>
+          <Projects />
+        </Suspense>
+      )
+    ).not.toThrow();
+  });
+
+  it("ProjectDetail page renders without throwing", async () => {
+    const { default: ProjectDetail } = await import("@/pages/ProjectDetail");
+    expect(() =>
+      renderWithProviders(
+        <Suspense fallback={<div>loading</div>}>
+          <ProjectDetail />
+        </Suspense>,
+        { initialPath: "/projects/test-id" }
+      )
+    ).not.toThrow();
+  });
+
+  it("Pricing page renders without throwing", async () => {
+    const { default: Pricing } = await import("@/pages/Pricing");
+    expect(() =>
+      renderWithProviders(
+        <Suspense fallback={<div>loading</div>}>
+          <Pricing />
+        </Suspense>
+      )
+    ).not.toThrow();
+  });
+
+  it("Onboarding page renders without throwing", async () => {
+    const { default: Onboarding } = await import("@/pages/Onboarding");
+    expect(() =>
+      renderWithProviders(
+        <Suspense fallback={<div>loading</div>}>
+          <Onboarding />
+        </Suspense>
+      )
+    ).not.toThrow();
+  });
+
+  it("ProfessionalProfile page renders without throwing", async () => {
+    const { default: ProfessionalProfile } = await import("@/pages/ProfessionalProfile");
+    expect(() =>
+      renderWithProviders(
+        <Suspense fallback={<div>loading</div>}>
+          <ProfessionalProfile />
+        </Suspense>,
+        { initialPath: "/professionals/test-id" }
+      )
+    ).not.toThrow();
+  });
+
+  it("ProfessionalProfileMe page renders without throwing", async () => {
+    const { default: ProfessionalProfileMe } = await import("@/pages/ProfessionalProfileMe");
+    expect(() => renderWithProviders(<ProfessionalProfileMe />)).not.toThrow();
+  });
+
+  it("NewBuildDetail page renders without throwing", async () => {
+    const { default: NewBuildDetail } = await import("@/pages/NewBuildDetail");
+    expect(() =>
+      renderWithProviders(
+        <Suspense fallback={<div>loading</div>}>
+          <NewBuildDetail />
+        </Suspense>,
+        { initialPath: "/new-builds/test-id" }
+      )
+    ).not.toThrow();
+  });
+
+  it("InvestorDashboard page renders without throwing", async () => {
+    const { default: InvestorDashboard } = await import("@/pages/InvestorDashboard");
+    expect(() =>
+      renderWithProviders(
+        <Suspense fallback={<div>loading</div>}>
+          <InvestorDashboard />
+        </Suspense>
+      )
+    ).not.toThrow();
+  });
+
+  it("AdminDashboard page renders without throwing", async () => {
+    const { default: AdminDashboard } = await import("@/pages/AdminDashboard");
+    expect(() =>
+      renderWithProviders(
+        <Suspense fallback={<div>loading</div>}>
+          <AdminDashboard />
+        </Suspense>
+      )
+    ).not.toThrow();
+  });
+
+  it("BrandedVideoRoom page renders without throwing", async () => {
+    const { default: BrandedVideoRoom } = await import("@/pages/BrandedVideoRoom");
+    expect(() =>
+      renderWithProviders(
+        <Suspense fallback={<div>loading</div>}>
+          <BrandedVideoRoom />
+        </Suspense>,
+        { initialPath: "/video/test-id" }
+      )
+    ).not.toThrow();
+  });
+
+  it("CreateNewBuildingListing page renders without throwing", async () => {
+    const { default: CreateNewBuildingListing } = await import("@/pages/CreateNewBuildingListing");
+    expect(() =>
+      renderWithProviders(
+        <Suspense fallback={<div>loading</div>}>
+          <CreateNewBuildingListing />
+        </Suspense>
+      )
+    ).not.toThrow();
+  });
+
+  it("DocumentTemplates page renders without throwing", async () => {
+    const { default: DocumentTemplates } = await import("@/pages/DocumentTemplates");
+    expect(() =>
+      renderWithProviders(
+        <Suspense fallback={<div>loading</div>}>
+          <DocumentTemplates />
+        </Suspense>
+      )
+    ).not.toThrow();
+  });
+
+  // ── Dashboard sub-tabs ──────────────────────────────────────────────────────
+
+  it("AnalyticsTab renders without throwing", async () => {
+    const { default: AnalyticsTab } = await import("@/pages/dashboard/AnalyticsTab");
+    expect(() => renderWithProviders(<AnalyticsTab />)).not.toThrow();
+  });
+
+  it("AuctionsTab renders without throwing", async () => {
+    const { default: AuctionsTab } = await import("@/pages/dashboard/AuctionsTab");
+    expect(() => renderWithProviders(<AuctionsTab />)).not.toThrow();
+  });
+
+  it("BillingTab renders without throwing", async () => {
+    const { default: BillingTab } = await import("@/pages/dashboard/BillingTab");
+    expect(() => renderWithProviders(<BillingTab />)).not.toThrow();
+  });
+
+  it("PortfoliosTab renders without throwing", async () => {
+    const { default: PortfoliosTab } = await import("@/pages/dashboard/PortfoliosTab");
+    expect(() => renderWithProviders(<PortfoliosTab />)).not.toThrow();
+  });
+
+  it("ProjectsTab renders without throwing", async () => {
+    const { default: ProjectsTab } = await import("@/pages/dashboard/ProjectsTab");
+    expect(() => renderWithProviders(<ProjectsTab />)).not.toThrow();
+  });
+
+  it("SavedSearchesTab renders without throwing", async () => {
+    const { default: SavedSearchesTab } = await import("@/pages/dashboard/SavedSearchesTab");
+    expect(() => renderWithProviders(<SavedSearchesTab />)).not.toThrow();
+  });
+
+  it("ViewingsTab renders without throwing", async () => {
+    const { default: ViewingsTab } = await import("@/pages/dashboard/ViewingsTab");
+    expect(() => renderWithProviders(<ViewingsTab />)).not.toThrow();
   });
 });

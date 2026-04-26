@@ -1,0 +1,1181 @@
+// @ts-nocheck — render-smoke harness: passes minimal stub props to ~75 heterogeneous
+// components solely to verify their JSX boundary doesn't throw. Strict prop typing
+// would require building exhaustive fixtures for every component and is out of
+// scope for a smoke pass. Runtime errors still surface via render() rejecting.
+/**
+ * Component smoke tests — renders every non-ui component with real hooks
+ * (hooks are NOT mocked; only infrastructure is mocked so hook code gets coverage too).
+ *
+ * `any` is allowed here because chainable Supabase mocks and dynamic
+ * vi.mock factories produce union types that aren't worth fighting in test code.
+ */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import React, { Suspense } from "react";
+import { renderWithProviders } from "@/test/utils";
+
+// ── requestAnimationFrame stub (not in jsdom) ─────────────────────────────────
+if (!window.requestAnimationFrame) {
+  window.requestAnimationFrame = (cb: FrameRequestCallback) => setTimeout(cb, 0) as unknown as number;
+  window.cancelAnimationFrame = (id: number) => clearTimeout(id);
+}
+if (!window.crypto?.randomUUID) {
+  Object.defineProperty(window, "crypto", {
+    value: { randomUUID: () => "test-uuid-" + Math.random() },
+    writable: true,
+  });
+}
+Object.defineProperty(navigator, "clipboard", {
+  value: { writeText: vi.fn().mockResolvedValue(undefined) },
+  writable: true,
+});
+
+// ── Infrastructure mocks ──────────────────────────────────────────────────────
+
+vi.mock("@/integrations/supabase/client", () => ({
+  supabase: {
+    from: vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnThis(),
+      insert: vi.fn().mockReturnThis(),
+      update: vi.fn().mockReturnThis(),
+      delete: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      neq: vi.fn().mockReturnThis(),
+      in: vi.fn().mockReturnThis(),
+      not: vi.fn().mockReturnThis(),
+      gte: vi.fn().mockReturnThis(),
+      lte: vi.fn().mockReturnThis(),
+      gt: vi.fn().mockReturnThis(),
+      lt: vi.fn().mockReturnThis(),
+      ilike: vi.fn().mockReturnThis(),
+      like: vi.fn().mockReturnThis(),
+      or: vi.fn().mockReturnThis(),
+      order: vi.fn().mockReturnThis(),
+      range: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockReturnThis(),
+      filter: vi.fn().mockReturnThis(),
+      contains: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: null, error: null }),
+      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      then: (r: (v: unknown) => void) => Promise.resolve({ data: [], error: null }).then(r),
+    }),
+    auth: {
+      getUser: vi.fn().mockResolvedValue({ data: { user: null }, error: null }),
+      getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
+      onAuthStateChange: vi.fn().mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } }),
+      signInWithPassword: vi.fn().mockResolvedValue({ error: null }),
+      signUp: vi.fn().mockResolvedValue({ data: { user: null, session: null }, error: null }),
+      signOut: vi.fn().mockResolvedValue({ error: null }),
+      signInWithOAuth: vi.fn().mockResolvedValue({ error: null }),
+    },
+    functions: { invoke: vi.fn().mockResolvedValue({ data: null, error: null }) },
+    storage: {
+      from: vi.fn().mockReturnValue({
+        upload: vi.fn().mockResolvedValue({ error: null }),
+        getPublicUrl: vi.fn().mockReturnValue({ data: { publicUrl: "" } }),
+        createSignedUrl: vi.fn().mockResolvedValue({ data: { signedUrl: "" }, error: null }),
+      }),
+    },
+    rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
+    channel: vi.fn().mockReturnValue({
+      on: vi.fn().mockReturnThis(),
+      subscribe: vi.fn().mockReturnThis(),
+    }),
+    removeChannel: vi.fn(),
+  },
+}));
+
+vi.mock("@/contexts/AuthContext", () => ({
+  useAuth: vi.fn().mockReturnValue({
+    user: null, profile: null, loading: false, profileLoading: false,
+    subscription: { subscribed: false, productId: null, subscriptionEnd: null, loading: false },
+    needsOnboarding: false,
+    signIn: vi.fn().mockResolvedValue({ error: null }),
+    signUp: vi.fn().mockResolvedValue({ error: null }),
+    signOut: vi.fn().mockResolvedValue(undefined),
+    updateProfile: vi.fn().mockResolvedValue({ error: null }),
+    refreshProfile: vi.fn().mockResolvedValue(undefined),
+    refreshSubscription: vi.fn().mockResolvedValue(undefined),
+  }),
+  AuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
+
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({ t: (k: string) => k, i18n: { changeLanguage: vi.fn(), language: "en" } }),
+  initReactI18next: { type: "3rdParty", init: vi.fn() },
+  Trans: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
+
+vi.mock("react-map-gl", () => ({
+  default: ({ children }: { children?: React.ReactNode }) => <div data-testid="map">{children}</div>,
+  Map: ({ children }: { children?: React.ReactNode }) => <div data-testid="map">{children}</div>,
+  Marker: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  NavigationControl: () => null,
+  Popup: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  Source: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  Layer: () => null,
+}));
+
+vi.mock("recharts", () => {
+  const stub = ({ children }: { children?: React.ReactNode }) => <div>{children}</div>;
+  return {
+    ResponsiveContainer: stub,
+    LineChart: stub, BarChart: stub, PieChart: stub, AreaChart: stub,
+    Line: () => null, Bar: () => null, Pie: () => null, Area: () => null,
+    XAxis: () => null, YAxis: () => null, CartesianGrid: () => null,
+    Tooltip: () => null, Legend: () => null, Cell: () => null,
+    ReferenceLine: () => null,
+  };
+});
+
+vi.mock("@/lib/config", () => ({
+  getStreetViewProxyUrl: vi.fn().mockReturnValue(""),
+  SUPABASE_URL: "https://example.supabase.co",
+  SUPABASE_ANON_KEY: "test-anon-key",
+  MAPBOX_TOKEN: "",
+  GOOGLE_MAPS_API_KEY: "",
+  APP_ORIGIN: "https://example.com",
+  PROJECT_ID: "test",
+}));
+
+// ── Shared mock data ──────────────────────────────────────────────────────────
+
+const MOCK_LISTING = {
+  id: "listing-1",
+  title: "Test Apartment",
+  address: "123 Test St",
+  city: "Athens",
+  price: 200000,
+  sqm: 80,
+  images: [],
+  type: "apartment" as const,
+  listingType: "sale" as const,
+  bedrooms: 2,
+  bathrooms: 1,
+  propertyType: "apartment",
+  listing_type: "sale",
+  status: "active",
+  user_id: "user-1",
+  cover_image_url: null,
+  latitude: 37.9755,
+  longitude: 23.7348,
+  tags: [],
+  year_built: 2010,
+};
+
+const MOCK_AUCTION = {
+  id: "auction-1",
+  title: "Test Auction",
+  city: "Athens",
+  address: "123 Test St",
+  price: 150000,
+  auction_starting_bid: 100000,
+  auction_date: "2026-06-01",
+  auction_court: "Athens Court",
+  property_type: "apartment",
+  cover_image_url: null,
+  sqm: 80,
+  bedrooms: 2,
+  bathrooms: 1,
+  latitude: 37.9,
+  longitude: 23.7,
+  tags: [],
+  year_built: 2005,
+  is_featured: false,
+};
+
+const MOCK_PROFESSIONAL = {
+  id: "pro-1",
+  user_id: "user-1",
+  display_name: "Test Pro",
+  title: "Real Estate Agent",
+  bio: "Test bio",
+  city: "Athens",
+  category: "agent",
+  avatar_url: null,
+  is_verified: false,
+  hourly_rate: 50,
+  specialties: [],
+  languages: ["en"],
+  video_link: null,
+};
+
+const noop = () => {};
+const asyncNoop = async () => {};
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+describe("Component smoke tests", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // ── Navigation / Layout ────────────────────────────────────────────────────
+
+  it("Navbar renders without throwing", async () => {
+    const { Navbar } = await import("@/components/Navbar");
+    expect(() => renderWithProviders(<Navbar />)).not.toThrow();
+  });
+
+  it("Footer renders without throwing", async () => {
+    const { Footer } = await import("@/components/Footer");
+    expect(() => renderWithProviders(<Footer />)).not.toThrow();
+  });
+
+  it("BottomNav renders without throwing", async () => {
+    const { BottomNav } = await import("@/components/BottomNav");
+    expect(() => renderWithProviders(<BottomNav />)).not.toThrow();
+  });
+
+  it("NavLink renders without throwing", async () => {
+    const { NavLink } = await import("@/components/NavLink");
+    expect(() => renderWithProviders(<NavLink to="/" label="Home" icon={<span />} />)).not.toThrow();
+  });
+
+  it("PageLayout renders without throwing", async () => {
+    const { PageLayout } = await import("@/components/layouts/PageLayout");
+    expect(() => renderWithProviders(<PageLayout><div /></PageLayout>)).not.toThrow();
+  });
+
+  // ── Route guards ───────────────────────────────────────────────────────────
+
+  it("ProtectedRoute renders without throwing", async () => {
+    const { ProtectedRoute } = await import("@/components/ProtectedRoute");
+    expect(() => renderWithProviders(<ProtectedRoute><div /></ProtectedRoute>)).not.toThrow();
+  });
+
+  it("AdminRoute renders without throwing", async () => {
+    const { AdminRoute } = await import("@/components/AdminRoute");
+    expect(() => renderWithProviders(<AdminRoute><div /></AdminRoute>)).not.toThrow();
+  });
+
+  it("InvestorRoute renders without throwing", async () => {
+    const { InvestorRoute } = await import("@/components/InvestorRoute");
+    expect(() => renderWithProviders(<InvestorRoute><div /></InvestorRoute>)).not.toThrow();
+  });
+
+  it("SellerRoute renders without throwing", async () => {
+    const { SellerRoute } = await import("@/components/SellerRoute");
+    expect(() => renderWithProviders(<SellerRoute><div /></SellerRoute>)).not.toThrow();
+  });
+
+  // ── Simple UI components ───────────────────────────────────────────────────
+
+  it("PropertyCardSkeleton renders without throwing", async () => {
+    const { PropertyCardSkeleton } = await import("@/components/PropertyCardSkeleton");
+    expect(() => renderWithProviders(<PropertyCardSkeleton />)).not.toThrow();
+  });
+
+  it("LanguageSwitcher renders without throwing", async () => {
+    const { LanguageSwitcher } = await import("@/components/LanguageSwitcher");
+    expect(() => renderWithProviders(<LanguageSwitcher />)).not.toThrow();
+  });
+
+  it("SignInForAI renders without throwing", async () => {
+    const { SignInForAI } = await import("@/components/SignInForAI");
+    expect(() => renderWithProviders(<SignInForAI />)).not.toThrow();
+  });
+
+  it("ErrorBoundary renders without throwing", async () => {
+    const { ErrorBoundary } = await import("@/components/ErrorBoundary");
+    expect(() => renderWithProviders(<ErrorBoundary><div>test</div></ErrorBoundary>)).not.toThrow();
+  });
+
+  it("ROICalculator renders without throwing", async () => {
+    const { ROICalculator } = await import("@/components/ROICalculator");
+    expect(() => renderWithProviders(<ROICalculator />)).not.toThrow();
+  });
+
+  it("CookieConsentBanner renders without throwing", async () => {
+    const { CookieConsentBanner } = await import("@/components/CookieConsentBanner");
+    expect(() => renderWithProviders(<CookieConsentBanner />)).not.toThrow();
+  });
+
+  // ── Listings primitives ────────────────────────────────────────────────────
+
+  it("FilterChip renders without throwing", async () => {
+    const { FilterChip } = await import("@/components/listings/FilterChip");
+    expect(() => renderWithProviders(<FilterChip label="Test" onRemove={noop} />)).not.toThrow();
+  });
+
+  it("ListingTypeButton renders without throwing", async () => {
+    const { ListingTypeButton } = await import("@/components/listings/ListingTypeButton");
+    expect(() => renderWithProviders(<ListingTypeButton type="sale" selected={false} onSelect={noop} />)).not.toThrow();
+  });
+
+  it("PropertyTypeButton renders without throwing", async () => {
+    const { PropertyTypeButton } = await import("@/components/listings/PropertyTypeButton");
+    expect(() => renderWithProviders(<PropertyTypeButton type="apartment" selected={false} onSelect={noop} />)).not.toThrow();
+  });
+
+  it("FormPrimitives renders without throwing", async () => {
+    const { FieldLabel, FormInput } = await import("@/components/listings/FormPrimitives");
+    expect(() => renderWithProviders(<FieldLabel>Test</FieldLabel>)).not.toThrow();
+    expect(() => renderWithProviders(<FormInput value="" onChange={noop} placeholder="test" />)).not.toThrow();
+  });
+
+  it("MapGate renders without throwing", async () => {
+    const { MapGate } = await import("@/components/listings/MapGate");
+    expect(() => renderWithProviders(
+      <MapGate consent={{ mapping: true, accepted: true }} accept={noop}><div /></MapGate>
+    )).not.toThrow();
+  });
+
+  it("ImageGallery renders without throwing", async () => {
+    const { ImageGallery } = await import("@/components/listings/ImageGallery");
+    expect(() => renderWithProviders(<ImageGallery images={[]} />)).not.toThrow();
+  });
+
+  it("ListingsAdvancedFilters renders without throwing", async () => {
+    const { ListingsAdvancedFilters } = await import("@/components/listings/ListingsAdvancedFilters");
+    expect(() => renderWithProviders(
+      <ListingsAdvancedFilters open={false} onClose={noop} currentFilters={{}} onApply={noop} />
+    )).not.toThrow();
+  });
+
+  // ── Property sub-components ────────────────────────────────────────────────
+
+  it("DetailPrimitives render without throwing", async () => {
+    const { DetailRow, Section, SectionHeader } = await import("@/components/property/DetailPrimitives");
+    expect(() => renderWithProviders(
+      <Section><SectionHeader>Title</SectionHeader><DetailRow label="Key" value="Val" /></Section>
+    )).not.toThrow();
+  });
+
+  it("PropertyFeatureList renders without throwing", async () => {
+    const { default: PropertyFeatureList } = await import("@/components/property/PropertyFeatureList");
+    expect(() => renderWithProviders(<PropertyFeatureList listing={MOCK_LISTING as any} />)).not.toThrow();
+  });
+
+  it("PropertyReportCard renders without throwing", async () => {
+    const { PropertyReportCard } = await import("@/components/property/PropertyReportCard");
+    expect(() => renderWithProviders(<PropertyReportCard listing={MOCK_LISTING as any} />)).not.toThrow();
+  });
+
+  it("PropertyAuctionSection renders without throwing", async () => {
+    const { PropertyAuctionSection } = await import("@/components/property/PropertyAuctionSection");
+    expect(() => renderWithProviders(<PropertyAuctionSection listing={MOCK_LISTING as any} />)).not.toThrow();
+  });
+
+  it("PropertyAIInsightsSection renders without throwing", async () => {
+    const { PropertyAIInsightsSection } = await import("@/components/property/PropertyAIInsightsSection");
+    expect(() => renderWithProviders(<PropertyAIInsightsSection listingId="test" />)).not.toThrow();
+  });
+
+  it("PropertyScoresSection renders without throwing", async () => {
+    const { PropertyScoresSection } = await import("@/components/property/PropertyScoresSection");
+    expect(() => renderWithProviders(<PropertyScoresSection listing={MOCK_LISTING as any} />)).not.toThrow();
+  });
+
+  it("PropertyGallery renders without throwing", async () => {
+    const { default: PropertyGallery } = await import("@/components/property/PropertyGallery");
+    expect(() => renderWithProviders(<PropertyGallery images={[]} title="Test" />)).not.toThrow();
+  });
+
+  it("PropertyOwnerCard renders without throwing", async () => {
+    const { default: PropertyOwnerCard } = await import("@/components/property/PropertyOwnerCard");
+    expect(() => renderWithProviders(
+      <PropertyOwnerCard
+        ownerProfile={null}
+        ownerParticipantType={null}
+        isAuction={false}
+        ownerIsPro={false}
+        price={200000}
+        listingType="sale"
+        pricePerSqm={null}
+        viewsCount={0}
+        onContact={noop}
+        isContactPending={false}
+        onRequestViewing={noop}
+        onRequestVideoViewing={noop}
+        canVideoView={false}
+      />
+    )).not.toThrow();
+  });
+
+  it("PropertyTitleSection renders without throwing", async () => {
+    const { PropertyTitleSection } = await import("@/components/property/PropertyTitleSection");
+    expect(() => renderWithProviders(
+      <PropertyTitleSection db={MOCK_LISTING as any} isAuction={false} ownershipDisplay={null} ownershipPct={null} ownershipStatus={null} />
+    )).not.toThrow();
+  });
+
+  // ── PropertyCard (main listing card) ──────────────────────────────────────
+
+  it("PropertyCard renders without throwing", async () => {
+    const { PropertyCard } = await import("@/components/PropertyCard");
+    expect(() => renderWithProviders(<PropertyCard property={MOCK_LISTING as any} />)).not.toThrow();
+  });
+
+  // ── Map components ─────────────────────────────────────────────────────────
+
+  it("MapView renders without throwing", async () => {
+    const { MapView } = await import("@/components/MapView");
+    expect(() => renderWithProviders(
+      <Suspense fallback={<div />}><MapView listings={[]} /></Suspense>
+    )).not.toThrow();
+  });
+
+  it("PropertyMiniMap renders without throwing", async () => {
+    const { default: PropertyMiniMap } = await import("@/components/PropertyMiniMap");
+    expect(() => renderWithProviders(
+      <PropertyMiniMap address="123 St" city="Athens" title="Test" latitude={37.9} longitude={23.7} />
+    )).not.toThrow();
+  });
+
+  it("NeighbourhoodReport renders without throwing", async () => {
+    const { default: NeighbourhoodReport } = await import("@/components/NeighbourhoodReport");
+    expect(() => renderWithProviders(
+      <NeighbourhoodReport city="Athens" address="123 St" />
+    )).not.toThrow();
+  });
+
+  it("PropertyPopup renders without throwing", async () => {
+    const { PropertyPopup } = await import("@/components/map/PropertyPopup");
+    expect(() => renderWithProviders(
+      <PropertyPopup listing={{ ...MOCK_AUCTION, listing_type: "sale", cover_image_url: null } as any} onClose={noop} />
+    )).not.toThrow();
+  });
+
+  // ── PropertyValuation ─────────────────────────────────────────────────────
+
+  it("PropertyValuation renders without throwing", async () => {
+    const { default: PropertyValuation } = await import("@/components/PropertyValuation");
+    expect(() => renderWithProviders(
+      <PropertyValuation title="Test" city="Athens" price={200000} sqm={80} />
+    )).not.toThrow();
+  });
+
+  // ── MarketTicker ──────────────────────────────────────────────────────────
+
+  it("MarketTicker renders without throwing", async () => {
+    const { MarketTicker } = await import("@/components/MarketTicker");
+    expect(() => renderWithProviders(<MarketTicker />)).not.toThrow();
+  });
+
+  // ── AI components ─────────────────────────────────────────────────────────
+
+  it("AIAssistantWidget renders without throwing", async () => {
+    const { default: AIAssistantWidget } = await import("@/components/AIAssistantWidget");
+    expect(() => renderWithProviders(<AIAssistantWidget />)).not.toThrow();
+  });
+
+  it("AISearchBar renders without throwing", async () => {
+    const { AISearchBar } = await import("@/components/AISearchBar");
+    expect(() => renderWithProviders(<AISearchBar onResults={noop} />)).not.toThrow();
+  });
+
+  it("ProAIToolsWidget renders without throwing", async () => {
+    const { default: ProAIToolsWidget } = await import("@/components/ProAIToolsWidget");
+    expect(() => renderWithProviders(<ProAIToolsWidget />)).not.toThrow();
+  });
+
+  it("CompareAIReports renders without throwing", async () => {
+    const { CompareAIReports } = await import("@/components/CompareAIReports");
+    expect(() => renderWithProviders(<CompareAIReports listings={[]} />)).not.toThrow();
+  });
+
+  // ── Dashboard components ───────────────────────────────────────────────────
+
+  it("DashboardPlanCard renders without throwing", async () => {
+    const { DashboardPlanCard } = await import("@/components/DashboardPlanCard");
+    expect(() => renderWithProviders(
+      <DashboardPlanCard audience="participant" isPro={false} usage={{ listings: 0, images: 0, aiCredits: 0 } as any} />
+    )).not.toThrow();
+  });
+
+  it("ProfileCompletionCard renders without throwing", async () => {
+    const { ProfileCompletionCard } = await import("@/components/dashboard/ProfileCompletionCard");
+    expect(() => renderWithProviders(
+      <ProfileCompletionCard bioType="buyer" profile={null} />
+    )).not.toThrow();
+  });
+
+  it("ProfessionalProfileCompletion renders without throwing", async () => {
+    const { ProfessionalProfileCompletion } = await import("@/components/dashboard/ProfessionalProfileCompletion");
+    expect(() => renderWithProviders(
+      <ProfessionalProfileCompletion myProfessional={null} onGoToProfile={noop} onGoToServices={noop} />
+    )).not.toThrow();
+  });
+
+  it("ProfessionalProfileEditor renders without throwing", async () => {
+    const { ProfessionalProfileEditor } = await import("@/components/dashboard/ProfessionalProfileEditor");
+    expect(() => renderWithProviders(<ProfessionalProfileEditor />)).not.toThrow();
+  });
+
+  it("ProfileEditor renders without throwing", async () => {
+    const { ProfileEditor } = await import("@/components/dashboard/ProfileEditor");
+    expect(() => renderWithProviders(
+      <ProfileEditor profile={null} onUpdate={asyncNoop as any} onSwitchToSettings={noop} />
+    )).not.toThrow();
+  });
+
+  it("SettingsSection renders without throwing", async () => {
+    const { SettingsSection } = await import("@/components/dashboard/SettingsSection");
+    expect(() => renderWithProviders(
+      <SettingsSection
+        roleLabel="Buyer"
+        onUpdate={async () => ({ error: null })}
+        refreshProfile={asyncNoop}
+        currentType="participant"
+        hasActiveSub={false}
+      />
+    )).not.toThrow();
+  });
+
+  it("BookingCalendarSection renders without throwing", async () => {
+    const { BookingCalendarSection } = await import("@/components/dashboard/BookingCalendarSection");
+    expect(() => renderWithProviders(
+      <BookingCalendarSection viewings={[]} leads={[]} onGoToLeads={noop} onGoToViewings={noop} onGoToServices={noop} />
+    )).not.toThrow();
+  });
+
+  it("BuyerOpenHousesCard renders without throwing", async () => {
+    const { BuyerOpenHousesCard } = await import("@/components/dashboard/BuyerOpenHousesCard");
+    expect(() => renderWithProviders(<BuyerOpenHousesCard />)).not.toThrow();
+  });
+
+  it("OpenHouseDashboardSection renders without throwing", async () => {
+    const { default: OpenHouseDashboardSection } = await import("@/components/OpenHouseDashboardSection");
+    expect(() => renderWithProviders(<OpenHouseDashboardSection />)).not.toThrow();
+  });
+
+  // ── Onboarding components ──────────────────────────────────────────────────
+
+  it("OnboardingShell renders without throwing", async () => {
+    const { OnboardingShell } = await import("@/components/onboarding/OnboardingShell");
+    expect(() => renderWithProviders(
+      <OnboardingShell step="type" stepIndex={0} totalSteps={3} onBack={noop} onSkip={noop}><div /></OnboardingShell>
+    )).not.toThrow();
+  });
+
+  it("DoneScreen renders without throwing", async () => {
+    const { DoneScreen } = await import("@/components/onboarding/DoneScreen");
+    expect(() => renderWithProviders(
+      <DoneScreen
+        selected={"participant" as any}
+        selectedColor={{ bg: "bg-blue-500/10", border: "border-blue-500/20", text: "text-blue-500", iconBg: "bg-blue-500/10" }}
+        SelectedIcon={() => <span />}
+        isPro={false}
+        proCategory=""
+        selectedServicesCount={0}
+        actions={{ primary: { label: "Go to Dashboard", href: "/dashboard" }, subtitle: "" }}
+        navigate={noop}
+      />
+    )).not.toThrow();
+  });
+
+  it("PickTypeStep renders without throwing", async () => {
+    const { PickTypeStep } = await import("@/components/onboarding/PickTypeStep");
+    expect(() => renderWithProviders(
+      <PickTypeStep selected={null} onSelect={noop} />
+    )).not.toThrow();
+  });
+
+  it("PickParticipantGoalStep renders without throwing", async () => {
+    const { PickParticipantGoalStep } = await import("@/components/onboarding/PickParticipantGoalStep");
+    expect(() => renderWithProviders(
+      <PickParticipantGoalStep selected={null} onSelect={noop} />
+    )).not.toThrow();
+  });
+
+  it("PickProTypeStep renders without throwing", async () => {
+    const { PickProTypeStep } = await import("@/components/onboarding/PickProTypeStep");
+    expect(() => renderWithProviders(
+      <PickProTypeStep selected={null} onSelect={noop} />
+    )).not.toThrow();
+  });
+
+  it("ProCategoryStep renders without throwing", async () => {
+    const { ProCategoryStep } = await import("@/components/onboarding/ProCategoryStep");
+    expect(() => renderWithProviders(
+      <ProCategoryStep selected={null} onSelect={noop} proType="agent" />
+    )).not.toThrow();
+  });
+
+  it("ProServicesStep renders without throwing", async () => {
+    const { ProServicesStep } = await import("@/components/onboarding/ProServicesStep");
+    expect(() => renderWithProviders(
+      <ProServicesStep proCategory="agent" selectedServices={{}} onChange={noop} loading={false} onSave={noop} />
+    )).not.toThrow();
+  });
+
+  it("ProVerifyStep renders without throwing", async () => {
+    const { ProVerifyStep } = await import("@/components/onboarding/ProVerifyStep");
+    expect(() => renderWithProviders(
+      <ProVerifyStep
+        proCategory="agent"
+        form={{ businessName: "", taxId: "", phone: "", licenseNumber: "" }}
+        errors={{}}
+        loading={false}
+        authLoading={false}
+        onFieldChange={noop}
+        onSubmit={noop}
+      />
+    )).not.toThrow();
+  });
+
+  it("ProField renders without throwing", async () => {
+    const { ProField } = await import("@/components/onboarding/ProField");
+    expect(() => renderWithProviders(
+      <ProField label="Test" value="" onChange={noop} />
+    )).not.toThrow();
+  });
+
+  it("ProAvailabilityStep renders without throwing", async () => {
+    const { ProAvailabilityStep } = await import("@/components/onboarding/ProAvailabilityStep");
+    expect(() => renderWithProviders(
+      <ProAvailabilityStep availability={[]} loading={false} authLoading={false} onChange={noop} onSave={noop} onSkip={noop} />
+    )).not.toThrow();
+  });
+
+  it("ProVideoStep renders without throwing", async () => {
+    const { ProVideoStep } = await import("@/components/onboarding/ProVideoStep");
+    expect(() => renderWithProviders(
+      <ProVideoStep value="" onChange={noop} />
+    )).not.toThrow();
+  });
+
+  it("DeveloperSetupStep renders without throwing", async () => {
+    const { DeveloperSetupStep } = await import("@/components/onboarding/DeveloperSetupStep");
+    expect(() => renderWithProviders(
+      <DeveloperSetupStep
+        form={{ companyName: "", registrationNumber: "", city: "", devType: "" }}
+        errors={{}}
+        loading={false}
+        authLoading={false}
+        onFieldChange={noop}
+        onSubmit={noop}
+      />
+    )).not.toThrow();
+  });
+
+  // ── New-build components ───────────────────────────────────────────────────
+
+  it("ConstructionSpecs renders without throwing", async () => {
+    const { ConstructionSpecs } = await import("@/components/new-build/ConstructionSpecs");
+    expect(() => renderWithProviders(<ConstructionSpecs listing={MOCK_LISTING as any} />)).not.toThrow();
+  });
+
+  it("ConstructionTimeline renders without throwing", async () => {
+    const { ConstructionTimeline } = await import("@/components/new-build/ConstructionTimeline");
+    expect(() => renderWithProviders(<ConstructionTimeline milestones={[]} />)).not.toThrow();
+  });
+
+  it("FloorPlanSection renders without throwing", async () => {
+    const { FloorPlanSection } = await import("@/components/new-build/FloorPlanSection");
+    expect(() => renderWithProviders(<FloorPlanSection images={[]} onRequestPlans={noop} />)).not.toThrow();
+  });
+
+  it("UnitShowcase renders without throwing", async () => {
+    const { UnitShowcase } = await import("@/components/new-build/UnitShowcase");
+    expect(() => renderWithProviders(<UnitShowcase listing={MOCK_LISTING as any} onContact={noop} />)).not.toThrow();
+  });
+
+  it("RegisterInterestCard renders without throwing", async () => {
+    const { RegisterInterestCard } = await import("@/components/new-build/RegisterInterestCard");
+    expect(() => renderWithProviders(
+      <RegisterInterestCard projectId="x" projectTitle="Test" developerName="Dev" />
+    )).not.toThrow();
+  });
+
+  it("new-build PropertyGallery renders without throwing", async () => {
+    const { PropertyGallery } = await import("@/components/new-build/PropertyGallery");
+    expect(() => renderWithProviders(
+      <PropertyGallery images={[]} isFavorited={false} onFavorite={noop} onShare={noop} />
+    )).not.toThrow();
+  });
+
+  // ── Professional profile components ───────────────────────────────────────
+
+  it("StarRating renders without throwing", async () => {
+    const { StarRating } = await import("@/components/professionals/ProfileComponents");
+    expect(() => renderWithProviders(<StarRating rating={4} />)).not.toThrow();
+  });
+
+  it("ListingGrid renders without throwing", async () => {
+    const { ListingGrid } = await import("@/components/professionals/ProfileComponents");
+    expect(() => renderWithProviders(<ListingGrid listings={[]} />)).not.toThrow();
+  });
+
+  it("ProfessionalOverviewTab renders without throwing", async () => {
+    const { ProfessionalOverviewTab } = await import("@/components/professionals/ProfessionalOverviewTab");
+    expect(() => renderWithProviders(
+      <ProfessionalOverviewTab pro={MOCK_PROFESSIONAL as any} isRealEstateAgent agentListingsCount={0} professionalIsPro={false} />
+    )).not.toThrow();
+  });
+
+  it("ProfessionalReviewsTab renders without throwing", async () => {
+    const { ProfessionalReviewsTab } = await import("@/components/professionals/ProfessionalReviewsTab");
+    expect(() => renderWithProviders(
+      <ProfessionalReviewsTab
+        professionalId="pro-1"
+        proCategory="agent"
+        displayName="Test Pro"
+        user={null}
+        reviewStats={{ avg: 0, total: 0, recommended_pct: 0, by_star: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } }}
+      />
+    )).not.toThrow();
+  });
+
+  it("ProfessionalServicesTab renders without throwing", async () => {
+    const { ProfessionalServicesTab } = await import("@/components/professionals/ProfessionalServicesTab");
+    expect(() => renderWithProviders(
+      <ProfessionalServicesTab dbServices={[]} dbAvailability={[]} professionalIsPro={false} user={null} onOpenModal={noop} />
+    )).not.toThrow();
+  });
+
+  // ── ProfessionalServicesEditor ─────────────────────────────────────────────
+
+  it("ProfessionalServicesEditor renders without throwing", async () => {
+    const { default: ProfessionalServicesEditor } = await import("@/components/ProfessionalServicesEditor");
+    expect(() => renderWithProviders(<ProfessionalServicesEditor />)).not.toThrow();
+  });
+
+  // ── Auction components ─────────────────────────────────────────────────────
+
+  it("AuctionCard renders without throwing", async () => {
+    const { AuctionCard } = await import("@/components/auctions/AuctionCard");
+    expect(() => renderWithProviders(
+      <AuctionCard a={MOCK_AUCTION as any} favoritedIds={new Set()} onToggleFav={noop} />
+    )).not.toThrow();
+  });
+
+  it("AuctionHero renders without throwing", async () => {
+    const { AuctionHero } = await import("@/components/auctions/AuctionHero");
+    expect(() => renderWithProviders(<AuctionHero stats={[]} />)).not.toThrow();
+  });
+
+  it("AuctionAlertBanner renders without throwing", async () => {
+    const { AuctionAlertBanner } = await import("@/components/auctions/AuctionAlertBanner");
+    expect(() => renderWithProviders(
+      <AuctionAlertBanner onCreateAlert={noop} />
+    )).not.toThrow();
+  });
+
+  it("AuctionBidHistory renders without throwing", async () => {
+    const { AuctionBidHistory } = await import("@/components/AuctionBidHistory");
+    expect(() => renderWithProviders(
+      <AuctionBidHistory lat={37.9} lng={23.7} listingId="x" title="Test" sqm={80} />
+    )).not.toThrow();
+  });
+
+  // ── Investor components ────────────────────────────────────────────────────
+
+  it("InvestorAccessGate renders without throwing", async () => {
+    const { InvestorAccessGate } = await import("@/components/investor/InvestorAccessGate");
+    expect(() => renderWithProviders(<InvestorAccessGate><div /></InvestorAccessGate>)).not.toThrow();
+  });
+
+  it("InvestorExpiryBanner renders without throwing", async () => {
+    const { InvestorExpiryBanner } = await import("@/components/investor/InvestorExpiryBanner");
+    expect(() => renderWithProviders(<InvestorExpiryBanner expiresAt={null} />)).not.toThrow();
+  });
+
+  it("InvestorHeroHeader renders without throwing", async () => {
+    const { InvestorHeroHeader } = await import("@/components/investor/InvestorHeroHeader");
+    expect(() => renderWithProviders(
+      <InvestorHeroHeader status="active" expiresAt={null} onRefresh={noop} />
+    )).not.toThrow();
+  });
+
+  it("InvestorSidebarAnalytics renders without throwing", async () => {
+    const { InvestorSidebarAnalytics } = await import("@/components/investor/InvestorSidebarAnalytics");
+    expect(() => renderWithProviders(
+      <InvestorSidebarAnalytics
+        cityBreakdown={[]}
+        typeBreakdown={[]}
+        marketPulse={{ newThisWeek: 0, avgDiscountVsAi: null }}
+        liveDealsCount={0}
+        invitationStatus="none"
+        canAccessDealFlow={false}
+        onInviteClick={noop}
+      />
+    )).not.toThrow();
+  });
+
+  // ── Gates ─────────────────────────────────────────────────────────────────
+
+  it("ProGate renders without throwing", async () => {
+    const { ProGate } = await import("@/components/gates/ProGate");
+    expect(() => renderWithProviders(
+      <ProGate><div>Pro content</div></ProGate>
+    )).not.toThrow();
+  });
+
+  // ── Firesale components ────────────────────────────────────────────────────
+
+  it("FiresaleInvestorPanel renders without throwing", async () => {
+    const { FiresaleInvestorPanel } = await import("@/components/firesale/FiresaleInvestorPanel");
+    expect(() => renderWithProviders(
+      <FiresaleInvestorPanel invitationStatus="none" onRequestInvitation={noop} />
+    )).not.toThrow();
+  });
+
+  it("FiresaleQuickSaleForm renders without throwing", async () => {
+    const { FiresaleQuickSaleForm } = await import("@/components/firesale/FiresaleQuickSaleForm");
+    expect(() => renderWithProviders(<FiresaleQuickSaleForm />)).not.toThrow();
+  });
+
+  // ── Open houses ────────────────────────────────────────────────────────────
+
+  it("OpenHousePrimitives render without throwing", async () => {
+    const { Pill, OpenHouseCard } = await import("@/components/open-houses/OpenHousePrimitives");
+    expect(() => renderWithProviders(<Pill>Status</Pill>)).not.toThrow();
+    expect(() => renderWithProviders(
+      <OpenHouseCard card={{ id: "oh-1", listing_type: "open_house", price: 200000, ...MOCK_LISTING } as any} listing={{} as any} />
+    )).not.toThrow();
+  });
+
+  it("OpenHouseAnalytics renders without throwing", async () => {
+    const { default: OpenHouseAnalytics } = await import("@/components/OpenHouseAnalytics");
+    expect(() => renderWithProviders(<OpenHouseAnalytics listingId="x" />)).not.toThrow();
+  });
+
+  it("OpenHouseAssetControlPanel renders without throwing", async () => {
+    const { default: OpenHouseAssetControlPanel } = await import("@/components/OpenHouseAssetControlPanel");
+    expect(() => renderWithProviders(
+      <OpenHouseAssetControlPanel listingId="x" isOwner={false} />
+    )).not.toThrow();
+  });
+
+  // ── Index sections ─────────────────────────────────────────────────────────
+
+  it("HeroSection renders without throwing", async () => {
+    const { HeroSection } = await import("@/components/index/HeroSection");
+    expect(() => renderWithProviders(
+      <Suspense fallback={<div />}><HeroSection /></Suspense>
+    )).not.toThrow();
+  });
+
+  it("BrowseByTypeSection renders without throwing", async () => {
+    const { BrowseByTypeSection } = await import("@/components/index/BrowseByTypeSection");
+    expect(() => renderWithProviders(<BrowseByTypeSection typeCounts={{}} />)).not.toThrow();
+  });
+
+  it("FeaturedPropertiesSection renders without throwing", async () => {
+    const { FeaturedPropertiesSection } = await import("@/components/index/FeaturedPropertiesSection");
+    expect(() => renderWithProviders(<FeaturedPropertiesSection listings={[]} isLoading={false} isError={false} />)).not.toThrow();
+  });
+
+  it("HomepageAuctionsSection renders without throwing", async () => {
+    const { HomepageAuctionsSection } = await import("@/components/index/HomepageAuctionsSection");
+    expect(() => renderWithProviders(<HomepageAuctionsSection listings={[]} isLoading={false} />)).not.toThrow();
+  });
+
+  it("HomepageOpenHousesSection renders without throwing", async () => {
+    const { HomepageOpenHousesSection } = await import("@/components/index/HomepageOpenHousesSection");
+    expect(() => renderWithProviders(<HomepageOpenHousesSection listings={[]} />)).not.toThrow();
+  });
+
+  it("OSSection renders without throwing", async () => {
+    const { OSSection } = await import("@/components/index/OSSection");
+    expect(() => renderWithProviders(<OSSection />)).not.toThrow();
+  });
+
+  it("PopularLocationsSection renders without throwing", async () => {
+    const { PopularLocationsSection } = await import("@/components/index/PopularLocationsSection");
+    expect(() => renderWithProviders(<PopularLocationsSection />)).not.toThrow();
+  });
+
+  it("ProfessionalsCTASection renders without throwing", async () => {
+    const { ProfessionalsCTASection } = await import("@/components/index/ProfessionalsCTASection");
+    expect(() => renderWithProviders(<ProfessionalsCTASection />)).not.toThrow();
+  });
+
+  it("QuickSaleCTASection renders without throwing", async () => {
+    const { QuickSaleCTASection } = await import("@/components/index/QuickSaleCTASection");
+    expect(() => renderWithProviders(<QuickSaleCTASection />)).not.toThrow();
+  });
+
+  it("AISearchModal renders without throwing", async () => {
+    const { AISearchModal } = await import("@/components/index/AISearchModal");
+    expect(() => renderWithProviders(<AISearchModal open={false} onClose={noop} onResults={noop} />)).not.toThrow();
+  });
+
+  it("OSDashboardMockup renders without throwing", async () => {
+    const { OSDashboardMockup } = await import("@/components/index/OSDashboardMockup");
+    expect(() => renderWithProviders(<OSDashboardMockup />)).not.toThrow();
+  });
+
+  it("PropertyTypeDropdown renders without throwing", async () => {
+    const { PropertyTypeDropdown } = await import("@/components/index/PropertyTypeDropdown");
+    expect(() => renderWithProviders(
+      <PropertyTypeDropdown value="" onChange={noop} />
+    )).not.toThrow();
+  });
+
+  it("ServiceInput renders without throwing", async () => {
+    const { ServiceInput } = await import("@/components/index/ServiceInput");
+    expect(() => renderWithProviders(
+      <ServiceInput value="" onChange={noop} onSelect={noop} />
+    )).not.toThrow();
+  });
+
+  it("LocationInput renders without throwing", async () => {
+    const { LocationInput } = await import("@/components/index/LocationInput");
+    expect(() => renderWithProviders(
+      <LocationInput value="" onChange={noop} onSelect={noop} />
+    )).not.toThrow();
+  });
+
+  // ── API docs ───────────────────────────────────────────────────────────────
+
+  it("ApiDocComponents render without throwing", async () => {
+    const { CodeBlock, EndpointCard } = await import("@/components/api/ApiDocComponents");
+    expect(() => renderWithProviders(<CodeBlock code="const x = 1;" />)).not.toThrow();
+    expect(() => renderWithProviders(
+      <EndpointCard endpoint={{ id: "t", method: "GET", path: "/test", description: "test", auth: false, rateLimit: "100/hr", responseExample: "{}" } as any} />
+    )).not.toThrow();
+  });
+
+  // ── Admin sub-components ───────────────────────────────────────────────────
+
+  it("FiresaleComponents render without throwing", async () => {
+    const mod = await import("@/components/admin/FiresaleComponents");
+    const keys = Object.keys(mod).filter(k => typeof (mod as any)[k] === "function");
+    for (const k of keys.slice(0, 3)) {
+      const Comp = (mod as any)[k];
+      expect(() => renderWithProviders(<Comp />)).not.toThrow();
+    }
+  });
+
+  it("ProVerificationComponents render without throwing", async () => {
+    const mod = await import("@/components/admin/ProVerificationComponents");
+    const keys = Object.keys(mod).filter(k => typeof (mod as any)[k] === "function");
+    for (const k of keys.slice(0, 3)) {
+      const Comp = (mod as any)[k];
+      expect(() => renderWithProviders(<Comp />)).not.toThrow();
+    }
+  });
+
+  // ── Admin full components ──────────────────────────────────────────────────
+
+  it("AdminPanel renders without throwing", async () => {
+    const { default: AdminPanel } = await import("@/components/AdminPanel");
+    expect(() => renderWithProviders(
+      <Suspense fallback={<div />}><AdminPanel /></Suspense>
+    )).not.toThrow();
+  });
+
+  it("AdminReports renders without throwing", async () => {
+    const { default: AdminReports } = await import("@/components/AdminReports");
+    expect(() => renderWithProviders(<AdminReports />)).not.toThrow();
+  });
+
+  it("AdminFiresalePipeline renders without throwing", async () => {
+    const { default: AdminFiresalePipeline } = await import("@/components/AdminFiresalePipeline");
+    expect(() => renderWithProviders(<AdminFiresalePipeline />)).not.toThrow();
+  });
+
+  it("AdminInvestorScreening renders without throwing", async () => {
+    const { default: AdminInvestorScreening } = await import("@/components/AdminInvestorScreening");
+    expect(() => renderWithProviders(<AdminInvestorScreening />)).not.toThrow();
+  });
+
+  it("AdminSubscribers renders without throwing", async () => {
+    const { default: AdminSubscribers } = await import("@/components/AdminSubscribers");
+    expect(() => renderWithProviders(<AdminSubscribers />)).not.toThrow();
+  });
+
+  it("AdminFeaturedListings renders without throwing", async () => {
+    const { default: AdminFeaturedListings } = await import("@/components/AdminFeaturedListings");
+    expect(() => renderWithProviders(<AdminFeaturedListings />)).not.toThrow();
+  });
+
+  it("AdminInvitationRequests renders without throwing", async () => {
+    const { default: AdminInvitationRequests } = await import("@/components/AdminInvitationRequests");
+    expect(() => renderWithProviders(<AdminInvitationRequests />)).not.toThrow();
+  });
+
+  it("AdminProfessionalVerification renders without throwing", async () => {
+    const { AdminProfessionalVerification } = await import("@/components/AdminProfessionalVerification");
+    expect(() => renderWithProviders(<AdminProfessionalVerification />)).not.toThrow();
+  });
+
+  it("POFVerificationPanel renders without throwing", async () => {
+    const { POFVerificationPanel } = await import("@/components/POFVerificationPanel");
+    expect(() => renderWithProviders(<POFVerificationPanel />)).not.toThrow();
+  });
+
+  it("ProfessionalVerificationPanel renders without throwing", async () => {
+    const { ProfessionalVerificationPanel } = await import("@/components/ProfessionalVerificationPanel");
+    expect(() => renderWithProviders(<ProfessionalVerificationPanel />)).not.toThrow();
+  });
+
+  it("ProofOfFundsReviewer renders without throwing", async () => {
+    const { ProofOfFundsReviewer } = await import("@/components/ProofOfFundsReviewer");
+    expect(() => renderWithProviders(<ProofOfFundsReviewer />)).not.toThrow();
+  });
+
+  // ── CRM / data components ──────────────────────────────────────────────────
+
+  it("ContactsCRM renders without throwing", async () => {
+    const { default: ContactsCRM } = await import("@/components/ContactsCRM");
+    expect(() => renderWithProviders(<ContactsCRM />)).not.toThrow();
+  });
+
+  it("LeadsCRM renders without throwing", async () => {
+    const { default: LeadsCRM } = await import("@/components/LeadsCRM");
+    expect(() => renderWithProviders(<LeadsCRM />)).not.toThrow();
+  });
+
+  it("PastDealsTable renders without throwing", async () => {
+    const { PastDealsTable } = await import("@/components/PastDealsTable");
+    expect(() => renderWithProviders(<PastDealsTable listingId="x" />)).not.toThrow();
+  });
+
+  it("DealChecklist renders without throwing", async () => {
+    const { DealChecklist } = await import("@/components/DealChecklist");
+    expect(() => renderWithProviders(
+      <DealChecklist entityType="listing" entityId="x" />
+    )).not.toThrow();
+  });
+
+  // ── Modal / dialog components (open={false} → safe to render) ─────────────
+
+  it("AuctionAlertModal renders without throwing", async () => {
+    const { AuctionAlertModal } = await import("@/components/AuctionAlertModal");
+    expect(() => renderWithProviders(
+      <AuctionAlertModal open={false} onClose={noop} editAlert={null} />
+    )).not.toThrow();
+  });
+
+  it("BookConsultationModal renders without throwing", async () => {
+    const { default: BookConsultationModal } = await import("@/components/BookConsultationModal");
+    expect(() => renderWithProviders(
+      <BookConsultationModal open={false} onClose={noop} professional={MOCK_PROFESSIONAL as any} />
+    )).not.toThrow();
+  });
+
+  it("SendMessageModal renders without throwing", async () => {
+    const { default: SendMessageModal } = await import("@/components/SendMessageModal");
+    expect(() => renderWithProviders(
+      <SendMessageModal open={false} onClose={noop} professional={MOCK_PROFESSIONAL as any} />
+    )).not.toThrow();
+  });
+
+  it("ViewingDialog renders without throwing", async () => {
+    const { default: ViewingDialog } = await import("@/components/ViewingDialog");
+    expect(() => renderWithProviders(
+      <ViewingDialog open={false} onClose={noop} property={MOCK_LISTING as any} ownerId="user-1" />
+    )).not.toThrow();
+  });
+
+  it("OpenHouseRegistrationDialog renders without throwing", async () => {
+    const { default: OpenHouseRegistrationDialog } = await import("@/components/OpenHouseRegistrationDialog");
+    expect(() => renderWithProviders(
+      <OpenHouseRegistrationDialog open={false} onClose={noop} listingId="x" listingTitle="Test" hasAssetControl={false} />
+    )).not.toThrow();
+  });
+
+  it("OpenHouseOfferDialog renders without throwing", async () => {
+    const { default: OpenHouseOfferDialog } = await import("@/components/OpenHouseOfferDialog");
+    expect(() => renderWithProviders(
+      <OpenHouseOfferDialog open={false} onClose={noop} listingId="x" listingTitle="Test" listingPrice={200000} />
+    )).not.toThrow();
+  });
+
+  it("LegalDocumentModal renders without throwing", async () => {
+    const { LegalDocumentModal } = await import("@/components/LegalDocumentModal");
+    expect(() => renderWithProviders(
+      <LegalDocumentModal open={false} onClose={noop} />
+    )).not.toThrow();
+  });
+
+  it("InvitationRequestModal renders without throwing", async () => {
+    const { InvitationRequestModal } = await import("@/components/InvitationRequestModal");
+    expect(() => renderWithProviders(
+      <InvitationRequestModal user={null} onClose={noop} onSuccess={noop} />
+    )).not.toThrow();
+  });
+
+  it("RoleSwitchModal renders without throwing", async () => {
+    const { RoleSwitchModal } = await import("@/components/RoleSwitchModal");
+    expect(() => renderWithProviders(
+      <RoleSwitchModal open={false} onClose={noop} switchContext={null} />
+    )).not.toThrow();
+  });
+
+  it("OnlineViewingModal renders without throwing", async () => {
+    const { default: OnlineViewingModal } = await import("@/components/OnlineViewingModal");
+    expect(() => renderWithProviders(
+      <OnlineViewingModal open={false} onClose={noop} listing={MOCK_LISTING as any} professional={MOCK_PROFESSIONAL as any} />
+    )).not.toThrow();
+  });
+
+  it("AIServiceMatchModal renders without throwing", async () => {
+    const { AIServiceMatchModal } = await import("@/components/AIServiceMatchModal");
+    expect(() => renderWithProviders(
+      <AIServiceMatchModal open={false} onClose={noop} />
+    )).not.toThrow();
+  });
+
+  it("SaveSearchModal renders without throwing", async () => {
+    const { SaveSearchModal } = await import("@/components/SaveSearchModal");
+    expect(() => renderWithProviders(
+      <SaveSearchModal currentFilters={{}} onClose={noop} />
+    )).not.toThrow();
+  });
+
+  it("RequestCallbackModal renders without throwing", async () => {
+    const { default: RequestCallbackModal } = await import("@/components/RequestCallbackModal");
+    expect(() => renderWithProviders(
+      <RequestCallbackModal open={false} onClose={noop} professional={MOCK_PROFESSIONAL as any} />
+    )).not.toThrow();
+  });
+
+  // ── CompareDrawer ──────────────────────────────────────────────────────────
+
+  it("CompareDrawer renders without throwing (empty list → null)", async () => {
+    const { CompareDrawer } = await import("@/components/CompareDrawer");
+    expect(() => renderWithProviders(
+      <CompareDrawer listings={[]} onRemove={noop} onClear={noop} />
+    )).not.toThrow();
+  });
+
+  // ── Listing creation steps ─────────────────────────────────────────────────
+
+  it("StepType renders without throwing", async () => {
+    const { StepType } = await import("@/components/listings/StepType");
+    expect(() => renderWithProviders(
+      <StepType form={{ listing_type: "sale", property_type: "apartment" } as any} set={noop} toggle={noop} />
+    )).not.toThrow();
+  });
+
+  it("StepDetails renders without throwing", async () => {
+    const { StepDetails } = await import("@/components/listings/StepDetails");
+    expect(() => renderWithProviders(
+      <StepDetails form={{} as any} set={noop} errors={{}} setFieldRef={(_k: string) => (_el: unknown) => {}} aiDescLoading={false} handleAiDescription={noop} />
+    )).not.toThrow();
+  });
+
+  it("StepFeatures renders without throwing", async () => {
+    const { StepFeatures } = await import("@/components/listings/StepFeatures");
+    expect(() => renderWithProviders(
+      <StepFeatures form={{} as any} toggle={noop} />
+    )).not.toThrow();
+  });
+
+  it("StepLocation renders without throwing", async () => {
+    const { StepLocation } = await import("@/components/listings/StepLocation");
+    expect(() => renderWithProviders(
+      <StepLocation form={{} as any} set={noop} errors={{}} setFieldRef={(_k: string) => (_el: unknown) => {}} connections={{ supabaseOk: true, storageOk: true, locationSource: "none", locationOk: false, loading: false }} stepActive />
+    )).not.toThrow();
+  });
+
+  it("StepPhotos renders without throwing", async () => {
+    const { StepPhotos } = await import("@/components/listings/StepPhotos");
+    expect(() => renderWithProviders(
+      <StepPhotos images={[]} coverImageId={null} onFilesSelected={noop} onDrop={noop} onReorder={noop} onRemove={noop} onSetCover={noop} />
+    )).not.toThrow();
+  });
+
+  it("StepPricing renders without throwing", async () => {
+    const { StepPricing } = await import("@/components/listings/StepPricing");
+    expect(() => renderWithProviders(
+      <StepPricing form={{ listing_type: "sale", property_type: "apartment" } as any} set={noop} errors={{}} setFieldRef={(_k: string) => (_el: unknown) => {}} aiPriceLoading={false} aiPriceSuggestion={null} handleAiPrice={noop} />
+    )).not.toThrow();
+  });
+});

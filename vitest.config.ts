@@ -8,7 +8,10 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
-    include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    include: [
+      "src/**/*.{test,spec}.{ts,tsx}",
+      "scripts/**/*.{test,spec}.{js,mjs}",
+    ],
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov", "html"],
@@ -26,10 +29,10 @@ export default defineConfig({
       // Baseline thresholds — keep test runs honest without blocking incremental work.
       // Target: raise these incrementally as tests are added (see docs/testing.md).
       thresholds: {
-        lines: 10,
-        functions: 20,
-        branches: 20,
-        statements: 10,
+        lines: 24,
+        functions: 18,
+        branches: 36,
+        statements: 24,
       },
     },
   },

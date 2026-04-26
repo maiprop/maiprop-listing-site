@@ -24,4 +24,13 @@ export default tseslint.config(
       "@typescript-eslint/no-explicit-any": "error",
     },
   },
+  {
+    // Test files: allow @ts-nocheck on render-smoke harnesses where strict
+    // prop typing would require building exhaustive fixtures for every
+    // component. Production code still bans the directive.
+    files: ["src/test/**/*.{ts,tsx}"],
+    rules: {
+      "@typescript-eslint/ban-ts-comment": ["error", { "ts-nocheck": false }],
+    },
+  },
 );
