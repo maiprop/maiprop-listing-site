@@ -34,26 +34,29 @@ export default defineConfig({
       ],
       // Baseline thresholds — these are FLOORS, not targets.
       //
-      // Current measured coverage (2026-04-26 — after curated lib/hook/
-      // context/route-guard test sweep added 163 tests across 16 files):
-      //   lines      ~53.98%   threshold 50  (margin 3.98)
-      //   statements ~53.98%   threshold 50  (margin 3.98)
-      //   functions  ~30.44%   threshold 28  (margin 2.44)
-      //   branches   ~48.10%   threshold 45  (margin 3.10)
+      // Current measured coverage (2026-04-26 — after Phase 3/4/5 sweep
+      // added curated form, hook and component tests across 17 files):
+      //   lines      ~63.84%   threshold 60  (margin 3.84)
+      //   statements ~63.84%   threshold 60  (margin 3.84)
+      //   functions  ~41.23%   threshold 38  (margin 3.23)
+      //   branches   ~58.98%   threshold 55  (margin 3.98)
       //
-      // Previous baseline (2026-04-26 audit, before sweep):
+      // Previous baseline (2026-04-26 — after lib/hook/context/route-guard
+      // sweep): lines/statements 53.98, functions 30.44, branches 48.10.
+      //
+      // Original audit baseline (2026-04-26):
       //   lines 11.88, statements 11.88, functions 23.95, branches 45.03.
       //
-      // The roadmap to lines 50 → 70 lives in docs/testing.md. Whenever a
+      // The roadmap to lines 60 → 75 lives in docs/testing.md. Whenever a
       // PR adds meaningful coverage to a P0 page (Pricing, Dashboard,
       // Onboarding, Login, Signup, Messages), bump the threshold in the
       // SAME PR so we ratchet up monotonically and can never silently
       // regress. Do not lower these without explicit team agreement.
       thresholds: {
-        lines: 50,
-        functions: 28,
-        branches: 45,
-        statements: 50,
+        lines: 60,
+        functions: 38,
+        branches: 55,
+        statements: 60,
       },
     },
   },
