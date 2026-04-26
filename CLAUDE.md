@@ -72,7 +72,7 @@ Functions with `verify_jwt = false` (public): AI search, property valuation, nei
 
 ### Security Rules
 
-- **CSP headers** are set in `netlify.toml` — update that file if new external domains are added.
+- **CSP headers** are set in `public/_headers` (Cloudflare Pages) — update that file if new external domains are added.
 - **IDOR defense:** All `update`/`delete` mutations must filter by the current user's ownership column in addition to the record `id`.
 - **No email-based auth:** Use `profile.role === "admin"` (via `isPlatformAdmin`) — never `user.email.endsWith(...)`.
 

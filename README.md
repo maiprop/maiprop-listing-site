@@ -126,6 +126,13 @@ supabase gen types typescript --linked > src/integrations/supabase/types.ts
 - [`docs/api/README.md`](./docs/api/README.md) — edge-function API docs, with hosted Redoc at [`/api-docs.html`](./public/api-docs.html) after deploy
 - [`docs/api/edge-functions.openapi.yaml`](./docs/api/edge-functions.openapi.yaml) — OpenAPI source of truth
 
+### Platform reference
+
+- [`docs/PLATFORM_REFERENCE.md`](./docs/PLATFORM_REFERENCE.md) — canonical roles, participant IDs, pricing keys, routes, modules
+- [`docs/QA_CHECKLIST.md`](./docs/QA_CHECKLIST.md) — release smoke + role/plan matrix checklist
+- [`docs/UNDEVELOPED_FEATURES.md`](./docs/UNDEVELOPED_FEATURES.md) — gap list: plan limits not yet enforced
+- [`docs/archive/`](./docs/archive/) — historical audits and completed setup instructions (do not treat as current)
+
 ### Conventions
 
 - [`CLAUDE.md`](./CLAUDE.md) — project conventions for AI-assisted development

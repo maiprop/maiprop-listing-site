@@ -132,19 +132,19 @@ describe("ROLE_PLAN_MAP integrity", () => {
  * Canonical pricing snapshot.
  *
  * If you change ROLE_PLAN_MAP in src/lib/rolePlanMap.ts, you MUST also
- * update the "Layer A" table in MAIPROP_PLATFORM_REFERENCE.md and the
+ * update the "Layer A" table in docs/PLATFORM_REFERENCE.md and the
  * matching expectations below. This test is the single guard against
  * silent pricing drift between code and the platform reference doc.
  *
  * Drift policy:
  *   1. Update src/lib/rolePlanMap.ts.
- *   2. Update MAIPROP_PLATFORM_REFERENCE.md §3 Layer A table.
+ *   2. Update docs/PLATFORM_REFERENCE.md §3 Layer A table.
  *   3. Update this snapshot.
  *   4. Verify create-checkout's Stripe Price IDs in env reflect the new
  *      amount (the displayed price is FALLBACK; Stripe is authoritative).
  */
 describe("ROLE_PLAN_MAP canonical pricing snapshot", () => {
-  it("matches the documented Layer A table in MAIPROP_PLATFORM_REFERENCE.md", () => {
+  it("matches the documented Layer A table in docs/PLATFORM_REFERENCE.md", () => {
     const snapshot = {
       participant:   { planKey: "pro",                    monthlyPrice: 29,   annualPrice: 290,   proOnly: false },
       agent:         { planKey: "agent_basic",            monthlyPrice: 149,  annualPrice: 1490,  proOnly: false },

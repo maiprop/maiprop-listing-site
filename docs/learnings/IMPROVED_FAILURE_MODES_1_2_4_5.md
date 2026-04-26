@@ -166,7 +166,7 @@ Prioritised by impact vs effort. Tackle when bandwidth allows.
 | 8 | **sync_log write policy** | Already restricted to service_role; ensure no client path can insert. Audit any new code that writes to `sync_log` | Low — defence in depth | Low |
 | 9 | **Leaked password protection** | Supabase Dashboard → Auth → enable “Check for compromised passwords” | Medium — stronger signup security | Trivial |
 
-*Source: SECURITY_REPORT.md, UX_AUDIT_REPORT.md, SECURE_ALL_DATA.md, OS_INTEGRATION.md, terminal logs.*
+*Source: `docs/archive/SECURITY_REPORT.md`, `docs/archive/UX_AUDIT_REPORT.md`, `docs/archive/SECURE_ALL_DATA.md`, `docs/OS_INTEGRATION.md`, terminal logs.*
 
 ---
 

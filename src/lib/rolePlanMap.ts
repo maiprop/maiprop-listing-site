@@ -25,7 +25,7 @@
  * in this file are display fallbacks only.
  *
  * If you change anything here, update:
- *   1. MAIPROP_PLATFORM_REFERENCE.md §3 Layer A table
+ *   1. docs/PLATFORM_REFERENCE.md §3 Layer A table
  *   2. src/test/rolePlanMap.test.ts canonical pricing snapshot
  * ─────────────────────────────────────────────────────────────────────
  */
