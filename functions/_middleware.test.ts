@@ -10,7 +10,9 @@
  *   - feature-flag off: no-op
  *   - canonical-host redirect map (currently empty)
  *   - GET /__unlock returns 405 (method-not-allowed)
- *   - POST /__unlock with wrong origin returns 403
+ *   - POST /__unlock same-origin guard: Sec-Fetch-Site primary signal
+ *     + hostname-based Origin/Referer fallback. Trailing-dot, port and
+ *     case variations all considered same-origin; `Origin: null` is rejected.
  *   - POST /__unlock with correct password returns 303 + Set-Cookie
  *   - POST /__unlock with bad form body returns 400
  *   - POST /__unlock with wrong password returns 401 + login form
@@ -38,6 +40,8 @@ function makeCtx(opts: {
   password?: string;
   cookie?: string;
   origin?: string;
+  referer?: string;
+  secFetchSite?: string;
   body?: BodyInit;
   bodyContentType?: string;
   accept?: string;
@@ -46,6 +50,8 @@ function makeCtx(opts: {
   const headers: Record<string, string> = {};
   if (opts.cookie) headers["Cookie"] = opts.cookie;
   if (opts.origin) headers["Origin"] = opts.origin;
+  if (opts.referer) headers["Referer"] = opts.referer;
+  if (opts.secFetchSite) headers["Sec-Fetch-Site"] = opts.secFetchSite;
   if (opts.accept) headers["Accept"] = opts.accept;
   if (opts.bodyContentType) headers["Content-Type"] = opts.bodyContentType;
   const request = new Request(opts.url ?? "https://portal.maiprop.co/", {
@@ -89,7 +95,7 @@ describe("middleware POST /__unlock", () => {
     expect(res.headers.get("Allow")).toBe("POST");
   });
 
-  it("returns 403 when the Origin header doesn't match the request origin", async () => {
+  it("returns 403 when the Origin header doesn't match the request origin (legacy fallback)", async () => {
     // Use a urlencoded *string* + explicit Content-Type. URLSearchParams
     // instances trip Node 20's stricter undici Request validator on Linux
     // CI ("Expected init.body to be an instance of URLSearchParams").
@@ -105,6 +111,153 @@ describe("middleware POST /__unlock", () => {
       }),
     );
     expect(res.status).toBe(403);
+  });
+
+  it("returns 403 when Sec-Fetch-Site is cross-site, regardless of Origin", async () => {
+    // The modern signal short-circuits — even a forged Origin that happens
+    // to match the request origin doesn't rescue a cross-site POST.
+    const body = `password=${encodeURIComponent(PWD)}&redirect=%2F`;
+    const res = await onRequest(
+      makeCtx({
+        method: "POST",
+        url: "https://portal.maiprop.co/__unlock",
+        password: PWD,
+        origin: "https://portal.maiprop.co",
+        secFetchSite: "cross-site",
+        body,
+        bodyContentType: "application/x-www-form-urlencoded",
+      }),
+    );
+    expect(res.status).toBe(403);
+  });
+
+  it("accepts Sec-Fetch-Site=same-origin even when Origin is missing", async () => {
+    // Privacy extensions sometimes strip Origin on top-level form posts but
+    // cannot forge Sec-Fetch-Site. Trust the modern signal.
+    const body = `password=${encodeURIComponent(PWD)}&redirect=%2F`;
+    const res = await onRequest(
+      makeCtx({
+        method: "POST",
+        url: "https://portal.maiprop.co/__unlock",
+        password: PWD,
+        secFetchSite: "same-origin",
+        body,
+        bodyContentType: "application/x-www-form-urlencoded",
+      }),
+    );
+    expect(res.status).toBe(303);
+  });
+
+  it("accepts Sec-Fetch-Site=none (top-level user-initiated nav)", async () => {
+    const body = `password=${encodeURIComponent(PWD)}&redirect=%2F`;
+    const res = await onRequest(
+      makeCtx({
+        method: "POST",
+        url: "https://portal.maiprop.co/__unlock",
+        password: PWD,
+        secFetchSite: "none",
+        body,
+        bodyContentType: "application/x-www-form-urlencoded",
+      }),
+    );
+    expect(res.status).toBe(303);
+  });
+
+  it("accepts Sec-Fetch-Site=same-origin even when Origin is from a translation/proxy host", async () => {
+    // Real-world failure mode: corporate AV / translation proxies leave
+    // Sec-Fetch-Site intact but rewrite Origin. The modern signal wins.
+    const body = `password=${encodeURIComponent(PWD)}&redirect=%2F`;
+    const res = await onRequest(
+      makeCtx({
+        method: "POST",
+        url: "https://portal.maiprop.co/__unlock",
+        password: PWD,
+        origin: "https://portal-maiprop-co.translate.goog",
+        secFetchSite: "same-origin",
+        body,
+        bodyContentType: "application/x-www-form-urlencoded",
+      }),
+    );
+    expect(res.status).toBe(303);
+  });
+
+  it("accepts a trailing-dot hostname in Origin (DNS canonicalisation quirk)", async () => {
+    // Some networks/resolvers preserve the canonical FQDN trailing dot in
+    // Origin. Without normalisation this used to 403 in the field.
+    const body = `password=${encodeURIComponent(PWD)}&redirect=%2F`;
+    const res = await onRequest(
+      makeCtx({
+        method: "POST",
+        url: "https://portal.maiprop.co/__unlock",
+        password: PWD,
+        origin: "https://portal.maiprop.co.",
+        body,
+        bodyContentType: "application/x-www-form-urlencoded",
+      }),
+    );
+    expect(res.status).toBe(303);
+  });
+
+  it("accepts an Origin with an explicit default port (browser quirk)", async () => {
+    const body = `password=${encodeURIComponent(PWD)}&redirect=%2F`;
+    const res = await onRequest(
+      makeCtx({
+        method: "POST",
+        url: "https://portal.maiprop.co/__unlock",
+        password: PWD,
+        origin: "https://portal.maiprop.co:443",
+        body,
+        bodyContentType: "application/x-www-form-urlencoded",
+      }),
+    );
+    expect(res.status).toBe(303);
+  });
+
+  it("falls back to Referer when Origin is absent and Sec-Fetch-Site is missing", async () => {
+    const body = `password=${encodeURIComponent(PWD)}&redirect=%2F`;
+    const res = await onRequest(
+      makeCtx({
+        method: "POST",
+        url: "https://portal.maiprop.co/__unlock",
+        password: PWD,
+        referer: "https://portal.maiprop.co/",
+        body,
+        bodyContentType: "application/x-www-form-urlencoded",
+      }),
+    );
+    expect(res.status).toBe(303);
+  });
+
+  it("rejects literal Origin: null (sandboxed iframe / suspicious context)", async () => {
+    const body = `password=${encodeURIComponent(PWD)}&redirect=%2F`;
+    const res = await onRequest(
+      makeCtx({
+        method: "POST",
+        url: "https://portal.maiprop.co/__unlock",
+        password: PWD,
+        origin: "null",
+        body,
+        bodyContentType: "application/x-www-form-urlencoded",
+      }),
+    );
+    expect(res.status).toBe(403);
+  });
+
+  it("allows a POST with no Origin/Referer/Sec-Fetch-Site (legacy/privacy-stripped)", async () => {
+    // No CSRF signal at all — the cookie this endpoint sets is not a
+    // per-user secret, so we accept rather than locking out legitimate users
+    // behind privacy proxies. The password gate still has to be satisfied.
+    const body = `password=${encodeURIComponent(PWD)}&redirect=%2F`;
+    const res = await onRequest(
+      makeCtx({
+        method: "POST",
+        url: "https://portal.maiprop.co/__unlock",
+        password: PWD,
+        body,
+        bodyContentType: "application/x-www-form-urlencoded",
+      }),
+    );
+    expect(res.status).toBe(303);
   });
 
   it("returns 400 with a login form when the body is missing required fields", async () => {

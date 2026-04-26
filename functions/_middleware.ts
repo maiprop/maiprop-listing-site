@@ -73,6 +73,55 @@ function safeRedirect(raw: string): string {
   return raw;
 }
 
+/** Hostname-only normalisation: lowercased, trailing-dot stripped. */
+function normaliseHost(host: string): string {
+  return host.toLowerCase().replace(/\.$/, "");
+}
+
+/**
+ * Returns true when the request appears to be a legitimate same-origin POST.
+ *
+ * Decision order:
+ *   1. `Sec-Fetch-Site` is the strongest signal when present — modern browsers
+ *      always send it, JavaScript cannot forge it, and `same-origin` /
+ *      `same-site` / `none` all indicate non-cross-site contexts that we
+ *      consider safe for the unlock form. `cross-site` is the only value we
+ *      actively reject.
+ *   2. If `Sec-Fetch-Site` is absent (older browsers, request-stripping
+ *      proxies, certain corporate AV products), fall back to comparing the
+ *      hostname of `Origin` (preferred) or `Referer` (fallback for browsers
+ *      that omit Origin on top-level form navigations) against the request
+ *      URL's hostname. We deliberately ignore the scheme and port to tolerate
+ *      TLS-terminating proxies and trailing-dot hostname quirks; the schema
+ *      is always https on Cloudflare Pages and the cookie this endpoint sets
+ *      is not a per-user secret, so the relaxed check has no realistic CSRF
+ *      impact.
+ *   3. If no Origin/Referer is available either, allow — the request looks
+ *      like a privacy-stripped same-origin POST and we have no signal to
+ *      refute that. The unlock cookie itself is the only thing the endpoint
+ *      can hand out, and it requires knowing the password regardless.
+ *
+ * `Origin: null` (string literal, sent from sandboxed iframes / certain
+ * redirect chains) is rejected because it carries no host to validate and
+ * legitimately strongly suggests a third-party context.
+ */
+function isSameOrigin(request: Request, requestUrl: URL): boolean {
+  const sfs = request.headers.get("Sec-Fetch-Site");
+  if (sfs) return sfs !== "cross-site";
+
+  const candidate = request.headers.get("Origin") ?? request.headers.get("Referer");
+  if (!candidate) return true;
+  if (candidate === "null") return false;
+
+  let candidateHost: string;
+  try {
+    candidateHost = new URL(candidate).hostname;
+  } catch {
+    return false;
+  }
+  return normaliseHost(candidateHost) === normaliseHost(requestUrl.hostname);
+}
+
 function escapeHtml(input: string): string {
   return input
     .replace(/&/g, "&amp;")
@@ -181,9 +230,18 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
         headers: { Allow: "POST", "Cache-Control": "no-store" },
       });
     }
-    // Basic CSRF-lite: require same-origin on form submit.
-    const origin = ctx.request.headers.get("Origin");
-    if (origin && origin !== url.origin) {
+    // Same-origin guard. Prefer Sec-Fetch-Site (sent by every modern browser,
+    // cannot be set by JavaScript, and is the spec-recommended CSRF signal).
+    // Fall back to a hostname comparison on Origin/Referer for older clients
+    // and for cases where intermediaries (corporate AV doing TLS-MITM,
+    // translation proxies, some VPN extensions) strip Sec-Fetch-Site but
+    // leave Origin intact. We use hostname-only — case-insensitive and
+    // trailing-dot-tolerant — because port and trailing-dot variations have
+    // produced legitimate false-403s in the field while not opening any
+    // real CSRF vector here: the cookie this endpoint sets is just
+    // sha256(SITE_LOCK_PASSWORD), identical for every visitor, so a
+    // successful "attack" only confers what the attacker already had.
+    if (!isSameOrigin(ctx.request, url)) {
       return new Response("Forbidden", { status: 403, headers: { "Cache-Control": "no-store" } });
     }
 
