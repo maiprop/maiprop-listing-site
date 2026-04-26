@@ -2,7 +2,6 @@
 import { Loader2, Bookmark, Bell, BellOff, Search, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ProGate } from "@/components/gates/ProGate";
 import {
   useSavedSearches,
   useDeleteSavedSearch,
@@ -15,7 +14,6 @@ export default function SavedSearchesTab() {
   const toggleAlert = useToggleSavedSearchAlert();
 
   return (
-    <ProGate feature="Saved Searches">
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
@@ -124,6 +122,5 @@ export default function SavedSearchesTab() {
         </div>
       )}
     </div>
-    </ProGate>
   );
 }

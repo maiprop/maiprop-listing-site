@@ -116,9 +116,9 @@ export default function Dashboard() {
   });
 
   useEffect(() => {
-    const valid = sectionNavItems.some(i => i.key === activeSection);
-    if (!valid && sectionNavItems.length) setActiveSection(sectionNavItems[0].key as NavKey);
-  }, [role, bioType, activeSection, sectionNavItems]);
+    const validForRole = navItems.some(i => i.key === activeSection);
+    if (!validForRole && sectionNavItems.length) setActiveSection(sectionNavItems[0].key as NavKey);
+  }, [role, bioType, activeSection, navItems, sectionNavItems]);
 
   const { data: myListings = [], isLoading: listingsLoading } = useMyListings();
   const { data: favorites = [], isLoading: favLoading } = useFavorites();
@@ -621,7 +621,9 @@ export default function Dashboard() {
 
           {/* â”€â”€ LEADS & CONTACTS CRM â€” all users who need contacts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
           {activeSection === "leads" && navItems.some(i => i.key === "leads") && (
-            <ContactsAndLeadsSection initialTab="leads" />
+            <ProGate>
+              <ContactsAndLeadsSection initialTab="leads" />
+            </ProGate>
           )}
 
           {/* â”€â”€ MY LISTINGS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
@@ -736,9 +738,9 @@ export default function Dashboard() {
 
           {/* â”€â”€ SAVED SEARCHES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
           {activeSection === "saved-searches" && navItems.some(i => i.key === "saved-searches") && (
-            <Suspense fallback={<TabFallback />}>
-              <SavedSearchesTab />
-            </Suspense>
+            navItems.find(i => i.key === "saved-searches")?.locked
+              ? <ProGate />
+              : <Suspense fallback={<TabFallback />}><SavedSearchesTab /></Suspense>
           )}
 
           {/* â”€â”€ VIEWINGS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
@@ -767,21 +769,23 @@ export default function Dashboard() {
 
           {/* â”€â”€ BOOKING / CALENDAR â€” professional â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
           {activeSection === "booking" && navItems.some(i => i.key === "booking") && (
-            <div className="space-y-6">
-              <div>
-                <h1 className="font-display text-2xl font-bold flex items-center gap-2">
-                  <FolderKanban className="w-6 h-6 text-primary" /> Booking &amp; Calendar
-                </h1>
-                <p className="text-sm text-muted-foreground mt-1">Your consultations and scheduled viewings in one place.</p>
+            <ProGate>
+              <div className="space-y-6">
+                <div>
+                  <h1 className="font-display text-2xl font-bold flex items-center gap-2">
+                    <FolderKanban className="w-6 h-6 text-primary" /> Booking &amp; Calendar
+                  </h1>
+                  <p className="text-sm text-muted-foreground mt-1">Your consultations and scheduled viewings in one place.</p>
+                </div>
+                <BookingCalendarSection
+                  viewings={ownViewings}
+                  leads={leads}
+                  onGoToLeads={() => setActiveSection("leads")}
+                  onGoToViewings={() => setActiveSection("viewings")}
+                  onGoToServices={() => setActiveSection("services")}
+                />
               </div>
-              <BookingCalendarSection
-                viewings={ownViewings}
-                leads={leads}
-                onGoToLeads={() => setActiveSection("leads")}
-                onGoToViewings={() => setActiveSection("viewings")}
-                onGoToServices={() => setActiveSection("services")}
-              />
-            </div>
+            </ProGate>
           )}
 
           {/* â”€â”€ CONTACTS & LEADS CRM â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
@@ -793,7 +797,9 @@ export default function Dashboard() {
 
           {/* â”€â”€ OPEN HOUSES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
           {activeSection === "open-houses" && navItems.some(i => i.key === "open-houses") && (
-            <OpenHouseDashboardSection myListings={myListings} />
+            navItems.find(i => i.key === "open-houses")?.locked
+              ? <ProGate />
+              : <OpenHouseDashboardSection myListings={myListings} />
           )}
 
           {/* â”€â”€ PROJECTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}

@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 
 interface ProGateProps {
   feature?: string;
-  children: ReactNode;
+  children?: ReactNode;
   fallback?: ReactNode;
 }
 
