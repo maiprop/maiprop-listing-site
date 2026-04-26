@@ -1,0 +1,35 @@
+{
+  // ─── Deno LSP scoping ────────────────────────────────────────────────
+  // The repo is a Vite/React app at the root, but `supabase/functions/`
+  // is a separate Deno project (URL imports, `npm:` imports, the `Deno`
+  // global). Without this scoping, the Node TypeScript server flags every
+  // Deno-only import and `Deno.env.get(...)` call as an error.
+  //
+  // - `deno.enable: false`       → the workspace is NOT Deno by default.
+  // - `deno.enablePaths`         → enable Deno LSP only inside these
+  //                                subtrees. Paths are workspace-relative
+  //                                and must be a prefix of the file path.
+  // - `deno.config`              → point at the Deno project config so
+  //                                module resolution honours nodeModulesDir
+  //                                and import maps if added later.
+  // - `deno.lint` / `deno.unstable` → match the Deno version pinned in CI
+  //                                (.github/workflows/ci.yml: deno-version
+  //                                2.7.12).
+  //
+  // Requires the official Deno extension: denoland.vscode-deno.
+  "deno.enable": false,
+  "deno.enablePaths": [
+    "./supabase/functions"
+  ],
+  "deno.config": "./supabase/functions/deno.json",
+  "deno.lint": true,
+  "deno.unstable": false,
+
+  // Stop the Node TS server from typechecking Deno files when they're
+  // opened in the editor. This complements deno.enablePaths: even if the
+  // Deno extension is uninstalled, the noisy "Cannot find name 'Deno'"
+  // squiggles are suppressed for these files.
+  "typescript.tsserver.exclude": [
+    "**/supabase/functions/**"
+  ]
+}

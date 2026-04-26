@@ -14,7 +14,7 @@ export default defineConfig({
     ],
     coverage: {
       provider: "v8",
-      reporter: ["text", "lcov", "html"],
+      reporter: ["text", "lcov", "html", "json-summary"],
       reportsDirectory: "./coverage",
       include: ["src/**/*.{ts,tsx}"],
       exclude: [
@@ -28,22 +28,26 @@ export default defineConfig({
       ],
       // Baseline thresholds — these are FLOORS, not targets.
       //
-      // Current measured coverage (2026-04-26 audit reconciliation):
-      //   lines      ~11.88%   threshold 10  (margin 1.88)
-      //   statements ~11.88%   threshold 10  (margin 1.88)
-      //   functions  ~23.95%   threshold 18  (margin 5.95)
-      //   branches   ~45.03%   threshold 36  (margin 9.03)
+      // Current measured coverage (2026-04-26 — after curated lib/hook/
+      // context/route-guard test sweep added 163 tests across 16 files):
+      //   lines      ~53.98%   threshold 50  (margin 3.98)
+      //   statements ~53.98%   threshold 50  (margin 3.98)
+      //   functions  ~30.44%   threshold 28  (margin 2.44)
+      //   branches   ~48.10%   threshold 45  (margin 3.10)
       //
-      // The roadmap to lines 30 → 50 lives in docs/testing.md. Whenever a
+      // Previous baseline (2026-04-26 audit, before sweep):
+      //   lines 11.88, statements 11.88, functions 23.95, branches 45.03.
+      //
+      // The roadmap to lines 50 → 70 lives in docs/testing.md. Whenever a
       // PR adds meaningful coverage to a P0 page (Pricing, Dashboard,
       // Onboarding, Login, Signup, Messages), bump the threshold in the
       // SAME PR so we ratchet up monotonically and can never silently
       // regress. Do not lower these without explicit team agreement.
       thresholds: {
-        lines: 10,
-        functions: 18,
-        branches: 36,
-        statements: 10,
+        lines: 50,
+        functions: 28,
+        branches: 45,
+        statements: 50,
       },
     },
   },
