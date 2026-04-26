@@ -5,9 +5,15 @@
  * intercept Deno.serve. After the import, call `restoreServe()` and use the
  * returned handler in Deno.test blocks.
  *
- * Usage:
- *   import { captureHandler, restoreServe, req, jsonBody } from "../_shared/testUtils.ts";
- *   const { handler, restore } = await captureHandler("./index.ts", { OPENAI_API_KEY: "k" });
+ * Usage (note: pass `import.meta.url` so relative specifiers resolve against
+ * the *caller's* file, not against testUtils.ts):
+ *
+ *   import { captureHandler, req, jsonBody } from "../_shared/testUtils.ts";
+ *   const { handler, restore } = await captureHandler(
+ *     import.meta.url,
+ *     "./index.ts",
+ *     { OPENAI_API_KEY: "k" },
+ *   );
  *   Deno.test("OPTIONS → 200", async () => {
  *     const res = await handler(req("OPTIONS"));
  *     assertEquals(res.status, 200);
@@ -22,8 +28,18 @@ export interface HandlerCapture {
 /**
  * Patches Deno.serve + Deno.env, dynamically imports the module, then returns
  * the captured handler and a restore function.
+ *
+ * @param callerUrl       Pass `import.meta.url` from the test file. Relative
+ *                        `moduleSpecifier` values are resolved against this
+ *                        URL so e.g. `./index.ts` lands on the function under
+ *                        test, not on `_shared/index.ts`.
+ * @param moduleSpecifier Module path/URL to import. May be relative
+ *                        (`./index.ts`) or absolute (`https://…`, `file://…`).
+ * @param envOverrides    Optional env overrides merged on top of the default
+ *                        test environment.
  */
 export async function captureHandler(
+  callerUrl: string,
   moduleSpecifier: string,
   envOverrides: Record<string, string> = {},
 ): Promise<HandlerCapture> {
@@ -55,7 +71,10 @@ export async function captureHandler(
   };
   envForTest.get = (k: string) => defaultEnv[k] ?? origEnvGet(k);
 
-  await import(moduleSpecifier);
+  // Resolve relative specifiers against the caller's URL so each test imports
+  // the function module sitting next to it, not the one next to testUtils.ts.
+  const resolved = new URL(moduleSpecifier, callerUrl).href;
+  await import(resolved);
 
   denoForTest.serve = origServe;
 
@@ -63,7 +82,9 @@ export async function captureHandler(
     envForTest.get = origEnvGet;
   }
 
-  if (!captured) throw new Error(`Deno.serve was not called by ${moduleSpecifier}`);
+  if (!captured) {
+    throw new Error(`Deno.serve was not called by ${resolved}`);
+  }
 
   return { handler: captured, restore };
 }

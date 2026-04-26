@@ -24,9 +24,16 @@ describe("budgetKeyFor — Vite 7 (base64url hash)", () => {
 
   it("maps named manual chunks with mixed-case hashes", () => {
     expect(budgetKeyFor("vendor-react-AbCdEfGh.js")).toBe("vendor-react");
-    expect(budgetKeyFor("vendor-ui-ZyXwVuTs.js")).toBe("vendor-ui");
+    expect(budgetKeyFor("vendor-radix-ZyXwVuTs.js")).toBe("vendor-radix");
     expect(budgetKeyFor("vendor-motion-0123abCD.js")).toBe("vendor-motion");
     expect(budgetKeyFor("vendor-icons-QwErTyUi.js")).toBe("vendor-icons");
+  });
+
+  it("maps multi-segment chunk names like vendor-ui-extra correctly", () => {
+    // Exercises the leftward-walk logic: the rightmost dash precedes the
+    // hash (`AbCdEf12`), the next dash precedes `extra`, and only at the
+    // third dash do we land on a known budget key (`vendor-ui-extra`).
+    expect(budgetKeyFor("vendor-ui-extra-AbCdEf12.js")).toBe("vendor-ui-extra");
   });
 
   it("tolerates `_` and `-` in the hash alphabet (base64url)", () => {

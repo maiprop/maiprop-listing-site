@@ -21,12 +21,22 @@ const DIST = "dist/assets";
 // Soft budgets — uncompressed size in kilobytes. A breach fails CI.
 // Adjust as chunks grow; the goal is to notice surprise growth, not to chase
 // a specific number.
+//
+// The chunk names below must stay in sync with the manualChunks() function
+// in vite.config.ts. When a new vendor chunk is introduced there, add a
+// budget here in the same change so size growth is gated from day one.
 export const BUDGETS_KB = {
   // The initial entry chunk (Vite names it index-<hash>.js).
   "index": 600,
-  // Manual chunks from vite.config.ts.
-  "vendor-react": 180,
-  "vendor-ui": 150,
+  // Manual chunks from vite.config.ts. vendor-react bundles
+  // react + react-dom + react-router-dom + scheduler; the floor is
+  // ~182 kB raw on the current pinned versions.
+  "vendor-react": 200,
+  // ~25 @radix-ui packages — sum is naturally ~200-220 kB raw.
+  "vendor-radix": 230,
+  // cmdk, vaul, sonner, embla-carousel, react-resizable-panels, input-otp,
+  // react-day-picker, @hello-pangea — small UI companions.
+  "vendor-ui-extra": 180,
   "vendor-charts": 500,
   "vendor-motion": 180,
   "vendor-icons": 250,

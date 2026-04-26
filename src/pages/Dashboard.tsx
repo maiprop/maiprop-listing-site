@@ -4,10 +4,10 @@ import { Link, useParams, useNavigate } from "react-router-dom";
 import {
   Plus, Heart,
   Eye, LogOut, Building2, Gavel, CheckCircle,
-  Loader2, Calendar, Trash2, ToggleLeft, ToggleRight,
+  Loader2, Calendar,
   Search, Wrench, Shield,
   FolderKanban, Users, Briefcase, Flame,
-  Clock, ExternalLink, Crown,
+  Clock, ExternalLink,
   Lock, Bookmark, ArrowRight,
 } from "lucide-react";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -18,7 +18,7 @@ import OpenHouseDashboardSection from "@/components/OpenHouseDashboardSection";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { useAuth } from "@/contexts/AuthContext";
-import { useMyListings, useUpdateListing, useDeleteListing } from "@/hooks/useListings";
+import { useMyListings } from "@/hooks/useListings";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useViewings } from "@/hooks/useViewings";
 import { useSavedSearches } from "@/hooks/useSavedSearches";
@@ -35,6 +35,7 @@ import { ProGate } from "@/components/gates/ProGate";
 import { useTranslation } from "react-i18next";
 import { type NavKey, type DashboardRole, getNavItemsForBioType, NAV_LABEL_KEYS } from "@/lib/dashboardNav";
 import { ContactsAndLeadsSection } from "./dashboard/ContactsAndLeadsSection";
+import { MyListingsSection } from "./dashboard/MyListingsSection";
 import { SavedPropertiesSection } from "./dashboard/SavedPropertiesSection";
 import { ProfileCompletionCard } from "@/components/dashboard/ProfileCompletionCard";
 import { BookingCalendarSection } from "@/components/dashboard/BookingCalendarSection";
@@ -93,7 +94,6 @@ export default function Dashboard() {
   const sectionNavItems = useMemo(() => navItems.filter(i => !("href" in i && i.href) && !i.locked), [navItems]);
   const defaultSection = (sectionNavItems[0]?.key ?? "overview") as NavKey;
   const [activeSection, setActiveSection] = useState<NavKey>((section as NavKey) || defaultSection);
-  const [listingFilter, setListingFilter] = useState<"all" | "off_market" | "pre_sale">("all");
 
   // Quick Sale access application status (invitation_requests) for buyers / non-investors
   const { data: invitationRequestStatus = "none" } = useQuery<"none" | "pending" | "approved" | "rejected">({
@@ -120,7 +120,7 @@ export default function Dashboard() {
     if (!validForRole && sectionNavItems.length) setActiveSection(sectionNavItems[0].key as NavKey);
   }, [role, bioType, activeSection, navItems, sectionNavItems]);
 
-  const { data: myListings = [], isLoading: listingsLoading } = useMyListings();
+  const { data: myListings = [] } = useMyListings();
   const { data: favorites = [], isLoading: favLoading } = useFavorites();
   const { data: viewings = [] } = useViewings("requester");
   const { data: ownViewings = [] } = useViewings("owner");
@@ -129,13 +129,8 @@ export default function Dashboard() {
   const { data: myProfessional } = useMyProfessional();
   const { data: professionalServices = [] } = useProfessionalServices(myProfessional?.id || "");
   const { data: leads = [], isLoading: _leadsLoading } = useMyConsultationRequests();
-  const updateListing = useUpdateListing();
-  const deleteListing = useDeleteListing();
 
   const handleSignOut = async () => { await signOut(); navigate("/"); };
-  const toggleListingStatus = (id: string, currentStatus: string) => {
-    updateListing.mutate({ id, updates: { status: currentStatus === "active" ? "paused" : "active" } });
-  };
 
   const displayName = useMemo(
     () => profile?.display_name || profile?.first_name || user?.email?.split("@")[0] || "User",
@@ -628,96 +623,7 @@ export default function Dashboard() {
 
           {/* â”€â”€ MY LISTINGS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
           {activeSection === "listings" && navItems.some(i => i.key === "listings") && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <h1 className="font-display text-2xl font-bold">My Listings</h1>
-                <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" asChild>
-                  <Link to="/listings/new"><Plus className="w-4 h-4" /> Create Listing</Link>
-                </Button>
-              </div>
-              {(["agent", "seller", "developer", "institutional"] as string[]).includes(role) && myListings.some(l => l.is_off_market || l.is_pre_sale) && (
-                <div className="flex gap-2 flex-wrap text-xs">
-                  {(
-                    [
-                      { key: "all" as const, label: `All (${myListings.length})` },
-                      { key: "off_market" as const, label: `ðŸ”’ Off-market (${myListings.filter(l => l.is_off_market).length})` },
-                      { key: "pre_sale" as const,  label: `ðŸ—ï¸ Pre-sale (${myListings.filter(l => l.is_pre_sale).length})` },
-                    ] satisfies { key: "all" | "off_market" | "pre_sale"; label: string }[]
-                  ).map(f => (
-                    <button key={f.key}
-                      onClick={() => setListingFilter(f.key)}
-                      className={`px-3 py-1.5 rounded-full border font-medium transition-colors ${listingFilter === f.key ? "border-primary bg-primary/10 text-primary" : "border-border bg-secondary text-muted-foreground hover:text-foreground"}`}
-                    >{f.label}</button>
-                  ))}
-                </div>
-              )}
-              {listingsLoading ? (
-                <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
-              ) : myListings.length === 0 ? (
-                <div className="glass-card rounded-xl p-12 text-center">
-                  <Building2 className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-                  <p className="font-semibold">No listings yet</p>
-                  <p className="text-sm text-muted-foreground mt-1 mb-4">Start by creating your first property listing</p>
-                  <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" asChild>
-                    <Link to={bioType === "developer" ? "/listings/new-building" : "/listings/new"}><Plus className="w-4 h-4" /> Create First Listing</Link>
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {(listingFilter === "off_market" ? myListings.filter(l => l.is_off_market)
-                    : listingFilter === "pre_sale" ? myListings.filter(l => l.is_pre_sale)
-                    : myListings
-                  ).map(l => (
-                    <div key={l.id} className="glass-card rounded-xl p-4 flex items-center gap-4">
-                      <img src={l.cover_image_url || "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=200&q=60"} alt="" className="w-16 h-16 rounded-lg object-cover shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="font-semibold text-sm truncate">{l.title}</p>
-                          {l.is_featured && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold border border-brand-gold/30">â­ Featured</span>}
-                          {(l.tags || []).includes("exclusive") && <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/20 text-primary font-medium">Exclusive</span>}
-                          {l.is_off_market && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-secondary border border-border text-muted-foreground">ðŸ”’ Off-market</span>}
-                          {l.is_pre_sale && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">ðŸ—ï¸ Pre-sale</span>}
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-0.5">{l.city} Â· â‚¬{Number(l.price).toLocaleString()} Â· {l.sqm}mÂ²</p>
-                        <span className={`text-xs px-2 py-0.5 rounded-full mt-1 inline-block ${l.status === "active" ? "bg-brand-emerald/20 text-brand-emerald" : "bg-secondary text-muted-foreground"}`}>{l.status}</span>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
-                        {isSellSide && (
-                          <>
-                            <button
-                              onClick={() => updateListing.mutate({ id: l.id, updates: { is_featured: !l.is_featured } })}
-                              className={cn("p-2 rounded-lg transition-colors", l.is_featured ? "bg-brand-gold/20 text-brand-gold" : "text-muted-foreground hover:text-foreground hover:bg-secondary")}
-                              title={l.is_featured ? "Featured (click to remove)" : "Add featured badge"}
-                            >
-                              <Crown className="w-4 h-4" />
-                            </button>
-                            <input
-                              type="number"
-                              min={0}
-                              max={10}
-                              defaultValue={l.priority_placement ?? 0}
-                              onBlur={e => {
-                                const v = Math.min(10, Math.max(0, Number(e.target.value) || 0));
-                                if (v !== (l.priority_placement ?? 0)) updateListing.mutate({ id: l.id, updates: { priority_placement: v } });
-                              }}
-                              className="w-12 px-1.5 py-1 rounded-lg border border-border bg-secondary text-xs text-center"
-                              title="Priority 0â€“10"
-                            />
-                          </>
-                        )}
-                        <span className="text-xs text-muted-foreground mr-2">{l.views_count} views</span>
-                        <button onClick={() => toggleListingStatus(l.id, l.status)} className="p-2 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground">
-                          {l.status === "active" ? <ToggleRight className="w-4 h-4 text-primary" /> : <ToggleLeft className="w-4 h-4" />}
-                        </button>
-                        <button onClick={() => { if (confirm("Delete this listing?")) deleteListing.mutate(l.id); }} className="p-2 rounded-lg hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <MyListingsSection bioType={bioType} role={role} />
           )}
 
           {/* â”€â”€ SAVED â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}

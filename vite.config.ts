@@ -28,25 +28,49 @@ export default defineConfig(({ mode }) => ({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          "vendor-react": ["react", "react-dom", "react-router-dom"],
-          "vendor-ui": [
-            "@radix-ui/react-dialog",
-            "@radix-ui/react-dropdown-menu",
-            "@radix-ui/react-tabs",
-            "@radix-ui/react-tooltip",
-          ],
-          "vendor-charts": ["recharts"],
-          "vendor-motion": ["framer-motion"],
-          // Lucide icons in a shared chunk — prevents them inflating the index bundle
-          "vendor-icons": ["lucide-react"],
-          // mapbox-gl and react-map-gl are intentionally NOT in manualChunks —
-          // they are only imported by lazy-loaded pages (MapView, PropertyMiniMap)
-          // so Rollup naturally puts them in a separate lazy chunk that is NOT
-          // listed in the initial HTML modulepreload, saving ~283kB gzip on first load.
+        // Function form so ALL @radix-ui packages (~25 of them) land in a
+        // single chunk. The previous static list only captured 4, leaving
+        // the others to be auto-bundled into vendor-ui — pushing it well
+        // over its 150 kB budget. Other small UI companions (cmdk, vaul,
+        // sonner, embla-carousel, react-resizable-panels, input-otp,
+        // react-day-picker) share vendor-ui-extra.
+        //
+        // mapbox-gl / react-map-gl are intentionally NOT matched here —
+        // they're only imported by lazy-loaded routes (MapView,
+        // PropertyMiniMap), so Rollup puts them in a separate lazy chunk
+        // that's NOT listed in the initial HTML modulepreload (~283 kB
+        // gzip saved on first load).
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          if (id.includes("@radix-ui/")) return "vendor-radix";
+          if (id.includes("/recharts/") || /\/d3-[a-z-]+\//.test(id)) return "vendor-charts";
+          if (id.includes("/framer-motion/")) return "vendor-motion";
+          if (id.includes("/lucide-react/")) return "vendor-icons";
+          if (
+            id.includes("/react-router") ||
+            id.includes("/react-router-dom/") ||
+            /\/react\/(?!.*\/node_modules\/)/.test(id) ||
+            id.includes("/react-dom/") ||
+            id.includes("/scheduler/")
+          ) {
+            return "vendor-react";
+          }
+          if (
+            id.includes("/cmdk/") ||
+            id.includes("/vaul/") ||
+            id.includes("/sonner/") ||
+            id.includes("/embla-carousel") ||
+            id.includes("/react-resizable-panels/") ||
+            id.includes("/input-otp/") ||
+            id.includes("/react-day-picker/") ||
+            id.includes("/@hello-pangea/")
+          ) {
+            return "vendor-ui-extra";
+          }
+          return undefined;
         },
       },
     },
-    chunkSizeWarningLimit: 1050, // mapbox-gl lazy chunk is inherently large (~275kB gzip)
+    chunkSizeWarningLimit: 1050, // mapbox-gl lazy chunk is inherently large (~275 kB gzip)
   },
 }));

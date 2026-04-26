@@ -9,14 +9,21 @@
 | **Playwright** | E2E browser tests | `npm run test:e2e` |
 | **Deno test** | Edge-function tests | `npm run test:deno` |
 
-## Current coverage baseline (2026-04-16)
+## Current coverage baseline (2026-04-26)
 
 | Metric | Current | Threshold | Target Q3 | Target Q4 |
 |--------|---------|-----------|-----------|-----------|
-| Lines       | ~11%  | 10% | 30% | 50% |
-| Statements  | ~11%  | 10% | 30% | 50% |
-| Functions   | ~24%  | 20% | 35% | 55% |
-| Branches    | ~21%  | 20% | 30% | 45% |
+| Lines       | ~11.88% | 10% | 30% | 50% |
+| Statements  | ~11.88% | 10% | 30% | 50% |
+| Functions   | ~23.95% | 18% | 35% | 55% |
+| Branches    | ~45.03% | 36% | 50% | 60% |
+
+> **Threshold = floor.** The numbers in `vitest.config.ts` MUST match this
+> table. Whenever a PR adds meaningful coverage to one of the P0 priority
+> targets below, raise the threshold in the same PR by an equivalent
+> margin (e.g. lines 10 → 12 if the PR genuinely lifts measured lines from
+> 11.88% to 14%). This makes the floor ratchet upward and prevents silent
+> regression.
 
 ## Priority coverage gaps
 
@@ -38,6 +45,40 @@ Ranked by business impact — files at **0%** that should get tests first:
 
 ### P2 — Dashboard tabs
 - `src/pages/dashboard/*Tab.tsx` (9 files, all 0%)
+
+## Large-file decomposition roadmap
+
+Smaller files are cheaper to test, so this list moves in lockstep with the
+coverage roadmap above. Files are ranked by source-bytes (excluding
+`src/components/ui/` and data dumps). Threshold: >30 kB raw is a
+candidate. Worked example: `src/pages/dashboard/MyListingsSection.tsx`
+was extracted from `Dashboard.tsx` in this cycle, taking it from
+57.7 kB → 50.5 kB. Follow that pattern.
+
+| File | Size (kB) | Suggested extraction |
+|------|-----------|----------------------|
+| `src/pages/Listings.tsx`              | 45.4 | filter rail, results grid, map toggle |
+| `src/pages/OpenHouseDetail.tsx`       | 41.9 | registration dialog state, offers panel |
+| `src/pages/Auctions.tsx`              | 39.9 | auction filters, listings strip |
+| `src/pages/AdminPricing.tsx`          | 38.1 | per-tier editor, plan diff modal |
+| `src/pages/ProjectDetail.tsx`         | 38.0 | unit grid, media carousel, lead form |
+| `src/pages/CreateNewBuildingListing.tsx` | 37.4 | unit picker, media uploader |
+| `src/pages/NewBuildDetail.tsx`        | 35.9 | gallery, unit selector, lead form |
+| `src/pages/Pricing.tsx`               | 34.6 | audience tab content |
+| `src/pages/PropertyDetail.tsx`        | 32.1 | sidebar agent card, similar listings |
+| `src/pages/ProfessionalProfile.tsx`   | 30.8 | review list, booking section |
+
+Extraction recipe (mirrors `MyListingsSection`):
+
+1. Identify a self-contained tab/region with a clear data boundary.
+2. Move the related hooks (`use*`), local state, and helpers *into* the
+   new component — React Query dedupes by key, so the parent can keep
+   reading the same data without an extra request.
+3. Pass only what the parent already derives for routing or guards
+   (e.g. `bioType`, `role`).
+4. Replace `window.confirm` with `ConfirmDialog` while you're there.
+5. Add a smoke test (renders without throwing) before the extraction
+   PR, so coverage is measurably +1 file.
 
 ## Running tests
 

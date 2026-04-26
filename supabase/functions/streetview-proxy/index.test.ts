@@ -5,7 +5,7 @@
 import { assertEquals, assertStringIncludes } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { captureHandler, req } from "../_shared/testUtils.ts";
 
-const { handler, restore } = await captureHandler("./index.ts");
+const { handler, restore } = await captureHandler(import.meta.url, "./index.ts");
 
 Deno.test("OPTIONS preflight returns 200", async () => {
   const res = await handler(req("OPTIONS"));
