@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import {
   Users, Euro, ChevronDown, ChevronUp, Check, X, Loader2, Settings, Calendar, TrendingUp,
-  FileCheck, FileText, Wallet, Shield
+  FileCheck, FileText, Wallet, Shield, ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -15,9 +15,12 @@ import {
   useUpdateOpenHouseOffer,
   useAcceptOpenHouseOffer,
   useRevealAllOffers,
+  getOpenHouseDocSignedUrl,
   type OHTimeslot,
   type OHRegistrationStatus,
 } from "@/hooks/useOpenHouseAssetControl";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 interface Props {
   listingId: string;
@@ -36,7 +39,10 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner }: Props
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [registrationsOpen, setRegistrationsOpen] = useState(true);
   const [offersOpen, setOffersOpen] = useState(true);
+  const [rejectTarget, setRejectTarget] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
 
+  const { user } = useAuth();
   const { data: settings, isLoading: _settingsLoading } = useOpenHouseSettings(listingId);
   const { data: registrations = [], isLoading: regLoading } = useOpenHouseRegistrations(listingId, isOwner);
   const { data: offers = [] } = useOpenHouseOffers(listingId);
@@ -48,6 +54,36 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner }: Props
   const revealAll = useRevealAllOffers();
 
   if (!isOwner) return null;
+
+  const handleApprove = (regId: string) => {
+    updateReg.mutate({
+      id: regId,
+      updates: {
+        status: "approved",
+        approved_at: new Date().toISOString(),
+        approved_by: user?.id ?? undefined,
+      },
+    });
+  };
+
+  const handleRejectConfirm = () => {
+    if (!rejectTarget) return;
+    updateReg.mutate({
+      id: rejectTarget,
+      updates: { status: "rejected", rejection_reason: rejectReason || undefined },
+    });
+    setRejectTarget(null);
+    setRejectReason("");
+  };
+
+  const handleViewDoc = async (path: string) => {
+    try {
+      const url = await getOpenHouseDocSignedUrl(path);
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (_err) {
+      toast.error("Could not open document");
+    }
+  };
 
   const pendingCount = registrations.filter((r: any) => r.status === "pending").length;
   const approvedCount = registrations.filter((r: any) => r.status === "approved").length;
@@ -147,7 +183,7 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner }: Props
                 <span className="px-2 py-0.5 rounded-full bg-primary/20 text-primary font-medium">{attendedCount} Attended</span>
               </span>
             </div>
-            <div className="max-h-64 overflow-y-auto">
+            <div>
             {regLoading ? (
               <div className="p-8 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto text-muted-foreground" /></div>
             ) : registrations.length === 0 ? (
@@ -172,7 +208,16 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner }: Props
                           {STATUS_LABELS[(r.status as import("@/hooks/useOpenHouseAssetControl").OHRegistrationStatus)] || r.status}
                         </span>
                         <span className={cn("inline-flex items-center gap-0.5", r.id_doc_url ? "text-emerald-600" : "text-muted-foreground")}>
-                          <FileCheck className="w-3 h-3" /> {r.id_doc_url ? "ID ✓" : "ID —"}
+                          <FileCheck className="w-3 h-3" />
+                          {r.id_doc_url ? (
+                            <button
+                              onClick={() => handleViewDoc(r.id_doc_url)}
+                              className="underline underline-offset-2 hover:opacity-70 transition-opacity"
+                              title="View ID document"
+                            >
+                              ID ✓ <ExternalLink className="w-2.5 h-2.5 inline" />
+                            </button>
+                          ) : "ID —"}
                         </span>
                         <span className={cn("inline-flex items-center gap-0.5", r.waiver_signed_at ? "text-emerald-600" : "text-muted-foreground")}>
                           <FileText className="w-3 h-3" /> {r.waiver_signed_at ? "Waiver ✓" : "Waiver —"}
@@ -188,11 +233,11 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner }: Props
                     {r.status === "pending" && (
                       <div className="flex gap-2">
                         <Button size="sm" variant="outline" className="gap-1 text-emerald-600 border-emerald-500/40"
-                          onClick={() => updateReg.mutate({ id: r.id, updates: { status: "approved", approved_at: new Date().toISOString() } })}>
+                          onClick={() => handleApprove(r.id)}>
                           <Check className="w-3.5 h-3.5" /> Approve
                         </Button>
                         <Button size="sm" variant="outline" className="gap-1 text-destructive border-destructive/40"
-                          onClick={() => updateReg.mutate({ id: r.id, updates: { status: "rejected" } })}>
+                          onClick={() => { setRejectTarget(r.id); setRejectReason(""); }}>
                           <X className="w-3.5 h-3.5" /> Reject
                         </Button>
                       </div>
@@ -211,6 +256,40 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner }: Props
           </div>
         )}
       </div>
+
+      {/* Reject reason dialog */}
+      {rejectTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-card border border-border rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+              <h3 className="font-semibold text-foreground">Rejection Reason</h3>
+              <button onClick={() => setRejectTarget(null)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="px-6 py-4 space-y-3">
+              <p className="text-sm text-muted-foreground">Provide a reason (optional but recommended — helps the applicant understand).</p>
+              <textarea
+                rows={3}
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="e.g. Timeslot full, incomplete documents, does not meet requirements..."
+                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-destructive resize-none"
+              />
+            </div>
+            <div className="px-6 py-4 border-t border-border flex gap-2">
+              <Button
+                className="flex-1 gap-1.5 bg-destructive/10 text-destructive border border-destructive/20 hover:bg-destructive/20"
+                variant="ghost"
+                onClick={handleRejectConfirm}
+              >
+                <X className="w-4 h-4" /> Confirm Rejection
+              </Button>
+              <Button variant="outline" onClick={() => setRejectTarget(null)}>Cancel</Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Offers */}
       <div className="rounded-xl border border-border bg-card overflow-hidden">

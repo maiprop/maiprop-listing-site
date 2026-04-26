@@ -17,22 +17,21 @@ import { supabase } from "@/integrations/supabase/client";
 type Registration = {
   id: string;
   listing_id: string;
-  timeslot_id: string | null;
+  timeslot_index: number | null;
   status: string | null;           // pending | approved | attended | cancelled
-  mortgage_status: string | null;  // approved | in-progress | cash | unknown
+  mortgage_status: string | null;  // yes | no | exploring
   created_at: string;
 };
 
 type Offer = {
   id: string;
   listing_id: string;
-  registration_id: string | null;
   created_at: string;
 };
 
-type Timeslot = {
-  id: string;
-  label: string;
+type OHTimeslot = {
+  start: string;
+  end: string;
   max_visitors: number;
 };
 
@@ -45,7 +44,7 @@ type KpiData = {
 };
 
 type TimeslotUtil = {
-  id: string;
+  index: number;
   label: string;
   registered: number;
   max_visitors: number;
@@ -55,17 +54,17 @@ type MortgageDist = { name: string; value: number; color: string };
 
 
 const MORTGAGE_COLORS: Record<string, string> = {
-  approved:    "#22c55e",
-  "in-progress": "#f59e0b",
-  cash:        "#3b82f6",
-  unknown:     "#94a3b8",
+  yes:       "#22c55e",
+  no:        "#ef4444",
+  exploring: "#f59e0b",
+  unknown:   "#94a3b8",
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────────
 export default function OpenHouseAnalytics({ listingId }: { listingId: string }) {
   const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [offers, setOffers] = useState<Offer[]>([]);
-  const [timeslots, setTimeslots] = useState<Timeslot[]>([]);
+  const [timeslots, setTimeslots] = useState<OHTimeslot[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -75,30 +74,31 @@ export default function OpenHouseAnalytics({ listingId }: { listingId: string })
     async function load() {
       setLoading(true);
       try {
-        const [regRes, offerRes, slotRes] = await Promise.all([
+        const [regRes, offerRes, settingsRes] = await Promise.all([
           supabase
             .from("open_house_registrations" as never)
-            .select("id, listing_id, timeslot_id, status, mortgage_status, created_at")
+            .select("id, listing_id, timeslot_index, status, mortgage_status, created_at")
             .eq("listing_id", listingId),
           supabase
             .from("open_house_offers" as never)
-            .select("id, listing_id, registration_id, created_at")
+            .select("id, listing_id, created_at")
             .eq("listing_id", listingId),
           supabase
-            .from("open_house_timeslots" as never)
-            .select("id, label, max_visitors")
-            .eq("listing_id", listingId),
+            .from("open_house_settings" as never)
+            .select("timeslots")
+            .eq("listing_id", listingId)
+            .maybeSingle(),
         ]);
 
         if (!mounted) return;
 
         const regs = (regRes.data as Registration[] | null) ?? [];
         const offs = (offerRes.data as Offer[] | null) ?? [];
-        const slots = (slotRes.data as Timeslot[] | null) ?? [];
+        const rawSlots = ((settingsRes.data as { timeslots?: OHTimeslot[] } | null)?.timeslots ?? []) as OHTimeslot[];
 
         setRegistrations(regs);
         setOffers(offs);
-        setTimeslots(slots);
+        setTimeslots(rawSlots);
       } catch (_err: unknown) {
         // leave state empty — UI shows empty state below
       } finally {
@@ -130,11 +130,11 @@ export default function OpenHouseAnalytics({ listingId }: { listingId: string })
   ];
 
   // ── Timeslot utilization ───────────────────────────────────────────────────────
-  const timeslotUtil: TimeslotUtil[] = timeslots.map((slot) => ({
-    id: slot.id,
-    label: slot.label,
+  const timeslotUtil: TimeslotUtil[] = timeslots.map((slot, index) => ({
+    index,
+    label: `${slot.start} – ${slot.end}`,
     max_visitors: slot.max_visitors,
-    registered: registrations.filter((r) => r.timeslot_id === slot.id).length,
+    registered: registrations.filter((r) => r.timeslot_index === index).length,
   }));
 
   // ── Mortgage distribution ──────────────────────────────────────────────────────
@@ -145,7 +145,7 @@ export default function OpenHouseAnalytics({ listingId }: { listingId: string })
       counts[key] = (counts[key] || 0) + 1;
     });
     return Object.entries(counts).map(([name, value]) => ({
-      name: name.charAt(0).toUpperCase() + name.slice(1).replace("-", " "),
+      name: name === "yes" ? "Pre-approved / Funds" : name === "no" ? "Not yet" : name === "exploring" ? "Exploring" : name.charAt(0).toUpperCase() + name.slice(1),
       value,
       color: MORTGAGE_COLORS[name] ?? "#94a3b8",
     }));
@@ -265,7 +265,7 @@ export default function OpenHouseAnalytics({ listingId }: { listingId: string })
                 pct >= 60 ? "bg-amber-500" :
                 "bg-primary";
               return (
-                <div key={slot.id} className="space-y-1">
+                <div key={slot.index} className="space-y-1">
                   <div className="flex items-center justify-between text-sm">
                     <span className="font-medium">{slot.label}</span>
                     <span className="text-muted-foreground text-xs">

@@ -275,6 +275,10 @@ export function useListingForm() {
       toast.error("Price and area must be greater than zero");
       return;
     }
+    if (form.listing_type === "open_house" && !form.open_house_date) {
+      toast.error("Open house date & time is required");
+      return;
+    }
     setSubmitting(true);
     const pt = form.property_type;
     const lt = form.listing_type;

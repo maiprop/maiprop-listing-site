@@ -220,6 +220,7 @@ export function useUpdateOpenHouseRegistration() {
       updates: Partial<{
         id_doc_type: OHIdDocType;
         id_doc_url: string;
+        id_verified_at: string;
         waiver_signed_at: string;
         waiver_url: string;
         proof_of_funds_url: string;

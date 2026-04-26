@@ -13,6 +13,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSubscription } from "@/hooks/useSubscription";
+import { useMyOpenHouseRegistrations } from "@/hooks/useOpenHouseAssetControl";
+import { getPlanLimits } from "@/hooks/usePlanLimits";
+import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
 import {
   useOpenHouseSettings,
   useCreateOpenHouseRegistration,
@@ -55,9 +59,11 @@ export default function OpenHouseRegistrationDialog({
   hasAssetControl,
   listingPrice,
 }: Props) {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const { isPro } = useSubscription();
   const { data: settings } = useOpenHouseSettings(hasAssetControl ? listingId : undefined);
   const { data: registrations = [] } = useOpenHouseRegistrations(listingId, false);
+  const { data: myAllRegs = [] } = useMyOpenHouseRegistrations();
   const createReg = useCreateOpenHouseRegistration();
   const updateReg = useUpdateOpenHouseRegistration();
 
@@ -88,8 +94,32 @@ export default function OpenHouseRegistrationDialog({
   const timeslots = (settings?.timeslots ?? []) as OHTimeslot[];
   const myReg = registrations.find((r: { requester_id: string }) => r.requester_id === user?.id);
   const regId = registrationId || myReg?.id;
+
+  // RSVP plan-limit check (free buyer = 3/month)
+  const participantType = getParticipantTypeFromProfile(profile);
+  const rsvpLimit = getPlanLimits(participantType, isPro ? "pro" : "free").openHouseRsvp;
+  const startOfMonth = new Date();
+  startOfMonth.setDate(1); startOfMonth.setHours(0, 0, 0, 0);
+  const rsvpsThisMonth = (myAllRegs as Array<{ created_at: string; status: string }>).filter(
+    r => new Date(r.created_at) >= startOfMonth && r.status !== "cancelled"
+  ).length;
+  const rsvpLimitReached = !myReg && rsvpLimit !== null && rsvpsThisMonth >= rsvpLimit;
   const requirePOF = settings?.require_proof_of_funds ?? false;
   const requireInvestor = settings?.require_investor_declaration ?? false;
+
+  // Count active registrations per timeslot to enforce per-slot capacity
+  const slotCounts = timeslots.map((_, idx) =>
+    registrations.filter((r: { timeslot_index: number | null; status: string }) =>
+      r.timeslot_index === idx && r.status !== "cancelled" && r.status !== "rejected"
+    ).length
+  );
+
+  // Total active registrations for max_total_visitors check
+  const totalActive = registrations.filter(
+    (r: { status: string }) => r.status !== "cancelled" && r.status !== "rejected"
+  ).length;
+  const maxTotal = settings?.max_total_visitors ?? null;
+  const listingFull = maxTotal !== null && totalActive >= maxTotal && !myReg;
 
   // Determine step order based on configuration
   const stepOrder: Array<typeof step> = (() => {
@@ -109,6 +139,14 @@ export default function OpenHouseRegistrationDialog({
   const handleStartRegistration = async () => {
     if (!user) {
       toast.error("Please sign in to register");
+      return;
+    }
+    if (listingFull) {
+      toast.error("This open house is fully booked");
+      return;
+    }
+    if (rsvpLimitReached) {
+      toast.error(`You've reached your ${rsvpLimit} RSVP limit this month. Upgrade to Pro for unlimited RSVPs.`);
       return;
     }
     setLoading(true);
@@ -175,7 +213,7 @@ export default function OpenHouseRegistrationDialog({
           updates.screening_doc_url = storedPath;
         } catch (_err: unknown) {
           // Non-fatal — proceed without doc
-          toast.warning("ID document upload failed — submission will continue without it.");
+          toast.warning("Screening document upload failed — submission will continue without it.");
         }
       }
       await updateReg.mutateAsync({ id: regId, updates });
@@ -202,7 +240,7 @@ export default function OpenHouseRegistrationDialog({
       const storedPath = await uploadOpenHouseDoc(idDocFile, path);
       await updateReg.mutateAsync({
         id: regId,
-        updates: { id_doc_type: idDocType, id_doc_url: storedPath },
+        updates: { id_doc_type: idDocType, id_doc_url: storedPath, id_verified_at: new Date().toISOString() },
       });
       setStep("waiver");
     } catch (e: unknown) {
@@ -322,27 +360,48 @@ export default function OpenHouseRegistrationDialog({
                   <div>
                     <p className="text-xs font-semibold text-muted-foreground mb-2">Select a timeslot</p>
                     <div className="space-y-2">
-                      {timeslots.map((ts, i) => (
-                        <button
-                          key={i}
-                          onClick={() => setTimeslotIndex(i)}
-                          className={`w-full p-3 rounded-xl border text-left text-sm ${
-                            timeslotIndex === i ? "border-primary bg-primary/10" : "border-border"
-                          }`}
-                        >
-                          {ts.start} – {ts.end} (max {ts.max_visitors} visitors)
-                        </button>
-                      ))}
+                      {timeslots.map((ts, i) => {
+                        const full = slotCounts[i] >= ts.max_visitors;
+                        return (
+                          <button
+                            key={i}
+                            onClick={() => !full && setTimeslotIndex(i)}
+                            disabled={full}
+                            className={`w-full p-3 rounded-xl border text-left text-sm transition-colors ${
+                              full
+                                ? "border-border opacity-50 cursor-not-allowed bg-muted"
+                                : timeslotIndex === i
+                                ? "border-primary bg-primary/10"
+                                : "border-border hover:border-primary/50"
+                            }`}
+                          >
+                            <span>{ts.start} – {ts.end}</span>
+                            <span className={`ml-2 text-xs ${full ? "text-destructive font-medium" : "text-muted-foreground"}`}>
+                              {full ? "Full" : `${slotCounts[i]} / ${ts.max_visitors} booked`}
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
+                  </div>
+                )}
+                {listingFull && (
+                  <div className="rounded-xl bg-destructive/10 border border-destructive/25 px-4 py-3 text-sm text-destructive font-medium">
+                    This open house is fully booked — no more registrations available.
+                  </div>
+                )}
+                {!listingFull && rsvpLimitReached && (
+                  <div className="rounded-xl bg-amber-500/10 border border-amber-500/25 px-4 py-3 text-sm text-amber-700 font-medium">
+                    You've used {rsvpsThisMonth}/{rsvpLimit} RSVPs this month. <a href="/pricing" className="underline underline-offset-2 font-semibold hover:opacity-70">Upgrade to Pro</a> for unlimited RSVPs.
                   </div>
                 )}
                 <Button
                   className="w-full gap-2"
                   onClick={handleStartRegistration}
-                  disabled={loading || (hasAssetControl && timeslots.length > 0 && timeslotIndex === null)}
+                  disabled={loading || listingFull || rsvpLimitReached || (hasAssetControl && timeslots.length > 0 && timeslotIndex === null)}
                 >
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
-                  {myReg ? "Continue" : "Register"}
+                  {myReg ? "Continue" : listingFull ? "Fully Booked" : rsvpLimitReached ? "RSVP Limit Reached" : "Register"}
                 </Button>
               </>
             )}

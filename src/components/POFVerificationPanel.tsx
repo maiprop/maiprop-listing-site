@@ -221,9 +221,9 @@ export function POFVerificationPanel({ dealId }: POFVerificationPanelProps) {
   async function load(): Promise<void> {
     setLoading(true);
     try {
-      let query = supabase
+      let query = (supabase as any)
         .from("open_house_registrations")
-        .select("id, requester_id, proof_of_funds_url, proof_amount, note, created_at, listing_id, rejection_reason, status")
+        .select("id, requester_id, proof_of_funds_url, proof_amount, pof_verified_status, created_at, listing_id, rejection_reason, status")
         .not("proof_of_funds_url", "is", null)
         .order("created_at", { ascending: false })
         .limit(100);
@@ -236,14 +236,9 @@ export function POFVerificationPanel({ dealId }: POFVerificationPanelProps) {
       if (error) throw error;
 
       if (data && data.length > 0) {
-        const mapped: PofEntry[] = data.map((r) => {
-          // Determine pof_verified status from note field (stored as JSON-ish prefix)
-          let status: PofStatus = "unreviewed";
-          if (r.note?.startsWith("pof_verified")) status = "verified";
-          else if (r.note?.startsWith("pof_rejected")) status = "rejected";
-          // Also check native status
-          if (r.status === "approved") status = "verified";
-          if (r.status === "rejected") status = "rejected";
+        const mapped: PofEntry[] = data.map((r: any) => {
+          const pofStatus = r.pof_verified_status as PofStatus | null;
+          const status: PofStatus = pofStatus ?? "unreviewed";
 
           return {
             id: r.id,
@@ -275,7 +270,7 @@ export function POFVerificationPanel({ dealId }: POFVerificationPanelProps) {
     {
       const { error } = await supabase
         .from("open_house_registrations")
-        .update({ note: "pof_verified" })
+        .update({ pof_verified_status: "verified" } as never)
         .eq("id", id);
       if (error) {
         toast.error("Failed to verify. Please try again.");
@@ -298,9 +293,9 @@ export function POFVerificationPanel({ dealId }: POFVerificationPanelProps) {
       const { error } = await supabase
         .from("open_house_registrations")
         .update({
-          note: `pof_rejected: ${reason}`,
+          pof_verified_status: "rejected",
           rejection_reason: reason,
-        })
+        } as never)
         .eq("id", rejectTarget);
       if (error) {
         toast.error("Failed to reject. Please try again.");

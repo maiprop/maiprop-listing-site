@@ -712,6 +712,7 @@ export default function OpenHouseDetail() {
         listingId={id!}
         listingTitle={db.title}
         hasAssetControl={hasAssetControl}
+        listingPrice={price}
       />
       <OpenHouseOfferDialog
         open={modal.isOpen("offer")}

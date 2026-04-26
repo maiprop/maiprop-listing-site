@@ -37,6 +37,7 @@ export default function OpenHouses() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [cityInput, setCityInput] = useState(cityParam);
   const [viewMode, setViewMode] = useState<"grid" | "map">("grid");
+  const [showPast, setShowPast] = useState(false);
 
   const YEAR_RANGES = [
     { label: "Any Year", value: "" },
@@ -58,17 +59,20 @@ export default function OpenHouses() {
   ];
 
   const { data: listings = [], isLoading, isError, refetch } = useQuery({
-    queryKey: ["open-houses"],
+    queryKey: ["open-houses", showPast],
     queryFn: async () => {
       const now = new Date().toISOString();
-      const { data, error } = await supabase
+      let q = supabase
         .from("listings")
         .select("*, listing_images(url, sort_order)")
         .eq("status", "active")
-        .eq("listing_type", "open_house")
-        .gte("open_house_date", now)
-        .order("open_house_date", { ascending: true })
-        .limit(200);
+        .eq("listing_type", "open_house");
+      if (showPast) {
+        q = q.lt("open_house_date", now).order("open_house_date", { ascending: false });
+      } else {
+        q = q.gte("open_house_date", now).order("open_house_date", { ascending: true });
+      }
+      const { data, error } = await q.limit(200);
       if (error) throw error;
       return (data || []).sort((a: any, b: any) => {
         const aHasImg = !!(a.cover_image_url || a.listing_images?.length);
@@ -195,18 +199,34 @@ export default function OpenHouses() {
             </div>
             <div className="flex items-start justify-between gap-4 flex-wrap">
               <div>
-                <h1 className="font-display text-2xl sm:text-3xl font-bold">Upcoming Open Houses</h1>
+                <h1 className="font-display text-2xl sm:text-3xl font-bold">{showPast ? "Past Open Houses" : "Upcoming Open Houses"}</h1>
                 <p className="text-muted-foreground text-sm mt-1">
                   {isError
                     ? "Could not load open houses."
                     : isEmpty
-                    ? "No upcoming open houses. Agents can publish from the dashboard."
+                    ? showPast ? "No past open houses found." : "No upcoming open houses. Agents can publish from the dashboard."
                     : `${filtered.length} event${filtered.length !== 1 ? "s" : ""} found`}
                 </p>
               </div>
-              <Button asChild variant="outline" className="gap-2 shrink-0">
-                <Link to="/dashboard?tab=open-houses">My Open Houses</Link>
-              </Button>
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center rounded-lg border border-border overflow-hidden text-sm">
+                  <button
+                    onClick={() => setShowPast(false)}
+                    className={`px-4 py-2 font-medium transition-colors ${!showPast ? "bg-primary text-primary-foreground" : "bg-card hover:bg-muted text-muted-foreground"}`}
+                  >
+                    Upcoming
+                  </button>
+                  <button
+                    onClick={() => setShowPast(true)}
+                    className={`px-4 py-2 font-medium transition-colors ${showPast ? "bg-primary text-primary-foreground" : "bg-card hover:bg-muted text-muted-foreground"}`}
+                  >
+                    Past
+                  </button>
+                </div>
+                <Button asChild variant="outline" className="gap-2 shrink-0">
+                  <Link to="/dashboard?tab=open-houses">My Open Houses</Link>
+                </Button>
+              </div>
             </div>
           </div>
         </div>
