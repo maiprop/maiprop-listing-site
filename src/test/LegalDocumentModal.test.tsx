@@ -3,7 +3,6 @@
  * mock e-sign. Drives template switching, type / draw mode toggle, sign
  * download flow, share-with-other-party flow, and the reset path.
  */
-import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 
