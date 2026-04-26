@@ -83,7 +83,13 @@ COMMENT ON FUNCTION public.has_role(uuid, public.user_role) IS
   'Returns true if user has the given role. Delegates to authoritative_role().';
 
 -- has_platform_admin: convenience for role = 'admin'.
-CREATE OR REPLACE FUNCTION public.has_platform_admin(_user_id uuid)
+-- NOTE: keep the `DEFAULT auth.uid()` parameter default. Earlier migrations
+-- (20260318140000, 20260326120000, 20260413120000) declared this function
+-- with that default; Postgres rejects `CREATE OR REPLACE` that removes
+-- existing parameter defaults ("cannot remove parameter defaults from
+-- existing function"). Removing the default would also be a silent API
+-- break for every caller doing `has_platform_admin()` with no args.
+CREATE OR REPLACE FUNCTION public.has_platform_admin(_user_id uuid DEFAULT auth.uid())
 RETURNS boolean
 LANGUAGE sql
 STABLE
