@@ -1,14 +1,33 @@
 /**
- * rolePlanMap — single source of truth for participant type → billing plan mapping.
+ * rolePlanMap — Layer-A pricing: one role → one fallback plan.
  *
  * This is the canonical reference used by:
- *   - RoleSwitchModal (upgrade/downgrade warnings)
- *   - Pricing page checkout
- *   - Onboarding done screen
- *   - BillingTab plan display
+ *   - RoleSwitchModal   (upgrade/downgrade warnings)
+ *   - Pricing.tsx       (audience tab default plan)
+ *   - Onboarding.tsx    (post-onboarding upsell)
+ *   - DashboardPlanCard (current plan display)
+ *   - BillingTab        (plan summary)
  *
- * Price IDs are read from env vars so they can differ between dev/staging/prod.
- * Fallback values match the Stripe test prices used in development.
+ * ─────────────────────────────────────────────────────────────────────
+ * Pricing has TWO layers:
+ *
+ *   Layer A — this file. Hardcoded fallback plans, one per audience.
+ *             Drives role-switching UX and display when the DB is
+ *             unavailable.
+ *
+ *   Layer B — `usePricingConfigs.ts` + `pricing_configs` table. Fine-
+ *             grained DB-driven keys editable by admins at runtime,
+ *             including add-on tiers (`agent_plus`, `professional_premium`,
+ *             `valuation_*`) that don't appear here.
+ *
+ * The actual amount charged is determined by the Stripe Price ID resolved
+ * by `create-checkout` (env override → DB lookup → fallback). The numbers
+ * in this file are display fallbacks only.
+ *
+ * If you change anything here, update:
+ *   1. MAIPROP_PLATFORM_REFERENCE.md §3 Layer A table
+ *   2. src/test/rolePlanMap.test.ts canonical pricing snapshot
+ * ─────────────────────────────────────────────────────────────────────
  */
 
 import type { ParticipantId, PricingAudienceId } from "@/lib/participantConfig";

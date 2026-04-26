@@ -8,10 +8,15 @@
  *   const user = await verifyBearerToken(req, supabaseClient);
  */
 
+// Structurally compatible with both our test mocks and the real
+// `@supabase/supabase-js` v2 client. The real client's `User.email` is
+// `string | undefined`; our older signature required `string | null`,
+// which broke assignability. Widening to `email?: string | null` lets
+// callers pass the real client without casting.
 type SupabaseAuth = {
   auth: {
     getUser(token: string): Promise<{
-      data: { user: { id: string; email: string | null } | null };
+      data: { user: { id: string; email?: string | null } | null };
       error: { message: string } | null;
     }>;
   };

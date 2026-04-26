@@ -50,32 +50,61 @@ Defined in `src/lib/participantConfig.ts`. Used for Pricing, Onboarding, Dashboa
 
 ## 3. Pricing Keys & IDs
 
-### PRICING_KEYS (`src/hooks/usePricingConfigs.ts`)
+> **Pricing has two layers, kept intentionally separate.** The displayed
+> price numbers below are *display fallbacks*; the actual amount charged
+> is whatever Stripe says for the resolved Price ID (see resolution order
+> below). If the layers drift, fix `rolePlanMap.ts` first, then mirror to
+> the doc, then run `npm test src/test/rolePlanMap.test.ts` to confirm
+> the snapshot test passes.
 
-| Key | Audience | Use |
-|-----|----------|-----|
-| `pro` | user | mAI Prop Pro (Buyer) — €29/mo |
-| `seller_pro` | user | Seller Pro — €19/mo |
-| `agent_basic` | agent | Agency Pro — €89/mo |
-| `agent_plus` | agent | Agent Plus — €199/mo |
-| `professional_basic` | professional | Pro Plan — €49/mo |
-| `professional_premium` | professional | Premium — €149/mo |
-| `valuation_single` | user | One-off valuation — €29 |
-| `valuation_bundle` | user | 5 reports pack — €99 |
-| `investor_private` | investor | Investor Private — €490/mo (invitation-only) |
-| `investor_institutional` | investor | Investor Institutional — €1490/mo |
+### Layer A — Role-level fallback plans (`src/lib/rolePlanMap.ts`)
+
+Used by `RoleSwitchModal`, `Pricing.tsx`, `Onboarding.tsx`,
+`DashboardPlanCard`, and `BillingTab`. One plan per pricing audience.
+These are display values only; checkout uses the Stripe Price ID.
+
+| Audience | Plan key | Plan name | Monthly | Annual | Pro-only? |
+|----------|----------|-----------|--------:|-------:|:---------:|
+| `participant` (buyer/seller) | `pro` | Pro Plan | €29 | €290 | no |
+| `agent` | `agent_basic` | Agent Pro | €149 | €1490 | no |
+| `developer` | `developer_pro` | Developer Pro | €129 | €1290 | **yes** |
+| `professional` | `professional_basic` | Professional Pro | €69 | €690 | no |
+| `investor` | `investor_private` | Investor Plan | €490 | €4900 | **yes** |
+| `institutional` | `investor_institutional` | Institutional Plan | €1490 | €14900 | **yes** |
+
+### Layer B — Fine-grained DB-driven keys (`src/hooks/usePricingConfigs.ts`)
+
+Used by the Pricing page tabs and AdminPricing editor. Reads from the
+`pricing_configs` table at runtime, so admins can adjust prices without a
+deploy. Some keys (e.g. `agent_plus`, `professional_premium`,
+`valuation_*`) are sub-plans / add-ons that don't appear in Layer A.
+
+| Key | Audience | Notes |
+|-----|----------|-------|
+| `pro` | user | Layer-A `participant` plan |
+| `seller_pro` | user | Seller-specific tier (planned; falls back to `pro` if absent) |
+| `agent_basic` | agent | Layer-A `agent` plan |
+| `agent_plus` | agent | Add-on tier (Pricing page only) |
+| `developer_pro` | developer | Layer-A `developer` plan |
+| `professional_basic` | professional | Layer-A `professional` plan |
+| `professional_premium` | professional | Add-on tier (Pricing page only) |
+| `valuation_single` | user | One-off purchase (`unit: per_use`) |
+| `valuation_bundle` | user | 5-pack purchase (`unit: per_use`) |
+| `investor_private` | investor | Layer-A `investor` plan |
+| `investor_institutional` | investor | Layer-A `institutional` plan |
 
 ### Stripe price resolution (`create-checkout`)
 
-1. Env: `STRIPE_PRICE_<UPPERCASE_KEY>` (e.g. `STRIPE_PRICE_PRO`)
-2. DB: `pricing_configs.metadata.stripe_price_id` for plan key
-3. Fallback: `STRIPE_PRICE_DEFAULT`
+1. **Env override**: `STRIPE_PRICE_<UPPERCASE_KEY>` (e.g. `STRIPE_PRICE_PRO`)
+2. **DB lookup**: `pricing_configs.metadata.stripe_price_id` for the plan key
+3. **Fallback**: `STRIPE_PRICE_DEFAULT`
 
 ### `pricing_configs` table
 
-- `key`, `label`, `description`, `audience`, `module`, `unit`, `currency`, `amount`
-- `metadata` JSONB: `{ stripe_price_id: "price_xxx" }`
-- RLS: Only platform admin can INSERT/UPDATE/DELETE
+- Columns: `key`, `label`, `description`, `audience`, `module`, `unit`,
+  `currency`, `amount`, `is_active`, `sort_order`, `metadata` (JSONB)
+- `metadata` shape: `{ stripe_price_id: "price_xxx" }`
+- RLS: Only platform admin can INSERT/UPDATE/DELETE; SELECT is public
 
 ---
 

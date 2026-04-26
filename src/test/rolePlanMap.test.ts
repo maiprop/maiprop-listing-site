@@ -127,3 +127,38 @@ describe("ROLE_PLAN_MAP integrity", () => {
     }
   });
 });
+
+/**
+ * Canonical pricing snapshot.
+ *
+ * If you change ROLE_PLAN_MAP in src/lib/rolePlanMap.ts, you MUST also
+ * update the "Layer A" table in MAIPROP_PLATFORM_REFERENCE.md and the
+ * matching expectations below. This test is the single guard against
+ * silent pricing drift between code and the platform reference doc.
+ *
+ * Drift policy:
+ *   1. Update src/lib/rolePlanMap.ts.
+ *   2. Update MAIPROP_PLATFORM_REFERENCE.md §3 Layer A table.
+ *   3. Update this snapshot.
+ *   4. Verify create-checkout's Stripe Price IDs in env reflect the new
+ *      amount (the displayed price is FALLBACK; Stripe is authoritative).
+ */
+describe("ROLE_PLAN_MAP canonical pricing snapshot", () => {
+  it("matches the documented Layer A table in MAIPROP_PLATFORM_REFERENCE.md", () => {
+    const snapshot = {
+      participant:   { planKey: "pro",                    monthlyPrice: 29,   annualPrice: 290,   proOnly: false },
+      agent:         { planKey: "agent_basic",            monthlyPrice: 149,  annualPrice: 1490,  proOnly: false },
+      developer:     { planKey: "developer_pro",          monthlyPrice: 129,  annualPrice: 1290,  proOnly: true  },
+      professional:  { planKey: "professional_basic",     monthlyPrice: 69,   annualPrice: 690,   proOnly: false },
+      investor:      { planKey: "investor_private",       monthlyPrice: 490,  annualPrice: 4900,  proOnly: true  },
+      institutional: { planKey: "investor_institutional", monthlyPrice: 1490, annualPrice: 14900, proOnly: true  },
+    };
+    for (const [audience, expected] of Object.entries(snapshot)) {
+      const actual = ROLE_PLAN_MAP[audience as keyof typeof ROLE_PLAN_MAP];
+      expect(actual.planKey,       `${audience}.planKey`).toBe(expected.planKey);
+      expect(actual.monthlyPrice,  `${audience}.monthlyPrice`).toBe(expected.monthlyPrice);
+      expect(actual.annualPrice,   `${audience}.annualPrice`).toBe(expected.annualPrice);
+      expect(actual.proOnly,       `${audience}.proOnly`).toBe(expected.proOnly);
+    }
+  });
+});

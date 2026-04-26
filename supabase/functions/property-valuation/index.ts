@@ -1,10 +1,14 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 import { openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
 
-const valuationLimiter = makeRateLimiter({ maxRequests: 15, windowMs: 60_000 });
+const valuationLimiter = makeRateLimiter({ bucket: "property-valuation", maxRequests: 15, windowMs: 60_000 });
 
-async function requireAuth(req: Request): Promise<Response | null> {
+async function requireAuth(
+  req: Request,
+  corsHeaders: Record<string, string>,
+): Promise<Response | null> {
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
     return new Response(JSON.stringify({ error: "Authentication required" }), {
@@ -227,10 +231,10 @@ Deno.serve(async (req) => {
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
   const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
-  if (valuationLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
+  if (await valuationLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
 
 
-  const authErr = await requireAuth(req);
+  const authErr = await requireAuth(req, corsHeaders);
   if (authErr) return authErr;
 
   try {

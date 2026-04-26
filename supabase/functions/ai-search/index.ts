@@ -3,7 +3,7 @@ import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 import { openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
 
-const aiSearchLimiter = makeRateLimiter({ maxRequests: 20, windowMs: 60_000 });
+const aiSearchLimiter = makeRateLimiter({ bucket: "ai-search", maxRequests: 20, windowMs: 60_000 });
 
 async function requireAuth(req: Request): Promise<Response | null> {
   const corsHeaders = getCorsHeaders(req);
@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
   const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
-  if (aiSearchLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
+  if (await aiSearchLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
 
 
   const authErr = await requireAuth(req);

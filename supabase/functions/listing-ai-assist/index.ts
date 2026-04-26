@@ -3,14 +3,14 @@ import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 import { openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
 
-const listingAiLimiter = makeRateLimiter({ maxRequests: 20, windowMs: 60_000 });
+const listingAiLimiter = makeRateLimiter({ bucket: "listing-ai-assist", maxRequests: 20, windowMs: 60_000 });
 
 Deno.serve(async (req) => {
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
   const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
-  if (listingAiLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
+  if (await listingAiLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
 
 
   try {
