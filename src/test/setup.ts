@@ -1,4 +1,13 @@
 import "@testing-library/jest-dom";
+import { cleanup } from "@testing-library/react";
+import { afterEach } from "vitest";
+
+// React Testing Library v16 removed auto-cleanup-via-test-runner-globals.
+// Without this, rendered DOM persists across `it()` blocks within a file,
+// causing duplicate-element matches in queries like getByTestId.
+afterEach(() => {
+  cleanup();
+});
 
 // ── Browser API stubs required by jsdom ─────────────────────────────────────
 
