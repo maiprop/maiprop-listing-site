@@ -17,7 +17,7 @@
   //                                2.7.12).
   //
   // Requires the official Deno extension: denoland.vscode-deno.
-  "deno.enable": false,
+  "deno.enable": true,
   "deno.enablePaths": [
     "./supabase/functions"
   ],

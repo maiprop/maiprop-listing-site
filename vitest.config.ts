@@ -11,12 +11,16 @@ export default defineConfig({
     include: [
       "src/**/*.{test,spec}.{ts,tsx}",
       "scripts/**/*.{test,spec}.{js,mjs}",
+      "functions/**/*.{test,spec}.ts",
     ],
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov", "html", "json-summary"],
       reportsDirectory: "./coverage",
-      include: ["src/**/*.{ts,tsx}"],
+      include: [
+        "src/**/*.{ts,tsx}",
+        "functions/**/*.ts",
+      ],
       exclude: [
         "src/test/**",
         "src/integrations/**",
@@ -25,6 +29,8 @@ export default defineConfig({
         "src/main.tsx",
         "src/i18n.ts",
         "src/vite-env.d.ts",
+        "functions/**/*.{test,spec}.ts",
+        "functions/tsconfig.json",
       ],
       // Baseline thresholds — these are FLOORS, not targets.
       //
