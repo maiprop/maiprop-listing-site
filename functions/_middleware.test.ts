@@ -90,7 +90,10 @@ describe("middleware POST /__unlock", () => {
   });
 
   it("returns 403 when the Origin header doesn't match the request origin", async () => {
-    const body = new URLSearchParams({ password: PWD, redirect: "/" });
+    // Use a urlencoded *string* + explicit Content-Type. URLSearchParams
+    // instances trip Node 20's stricter undici Request validator on Linux
+    // CI ("Expected init.body to be an instance of URLSearchParams").
+    const body = `password=${encodeURIComponent(PWD)}&redirect=%2F`;
     const res = await onRequest(
       makeCtx({
         method: "POST",
@@ -98,25 +101,25 @@ describe("middleware POST /__unlock", () => {
         password: PWD,
         origin: "https://evil.example",
         body,
+        bodyContentType: "application/x-www-form-urlencoded",
       }),
     );
     expect(res.status).toBe(403);
   });
 
   it("returns 400 with a login form when the body is missing required fields", async () => {
-    // An empty body still parses as FormData (no fields), so the password
-    // check fails with a 401 rather than 400. Trigger 400 by sending a
-    // malformed Content-Type that throws inside formData().
+    // Force formData() to throw by sending a body with a malformed
+    // multipart boundary header. Use a string body (not a Blob) — Node 20's
+    // undici cross-realm checks reject Blob bodies created from a different
+    // global on Linux CI ("object.stream is not a function").
     const res = await onRequest(
       makeCtx({
         method: "POST",
         url: "https://portal.maiprop.co/__unlock",
         password: PWD,
-        // Force formData() to throw by sending a body with an unparseable
-        // multipart boundary.
-        body: new Blob(["definitely not a form"], {
-          type: "multipart/form-data; boundary=---bogus---",
-        }),
+        origin: "https://portal.maiprop.co",
+        body: "definitely not a form",
+        bodyContentType: "multipart/form-data; boundary=---bogus---",
       }),
     );
     expect(res.status).toBe(400);
