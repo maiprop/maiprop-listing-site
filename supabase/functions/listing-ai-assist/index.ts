@@ -1,9 +1,10 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 import { openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
+import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
 
-const listingAiLimiter = makeRateLimiter({ bucket: "listing-ai-assist", maxRequests: 20, windowMs: 60_000 });
+const BUCKET = "listing-ai-assist";
+const listingAiLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 20, windowMs: 60_000 });
 
 Deno.serve(async (req) => {
   const corsPreflightResponse = handleCors(req);
@@ -24,23 +25,10 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Require authenticated user for description/price (not for ping)
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Authentication required" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
-    const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.slice(7));
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Invalid or expired token" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    // Require authenticated user + per-user quota for description/price
+    // (ping is excluded from both since it's a free health check).
+    const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
+    if (quota.errorResponse) return quota.errorResponse;
 
     let systemPrompt = "";
     let userPrompt = "";
@@ -106,6 +94,7 @@ ${property.listing_type === "rent" ? "Provide monthly rent estimate in EUR." : "
     const result = await response.json();
     const content = readOpenAITextContent(result);
 
+    await recordAiCall(quota.userId, BUCKET);
     return new Response(JSON.stringify({ content }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

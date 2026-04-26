@@ -41,6 +41,24 @@ interface PofEntry {
   rejection_reason?: string;
 }
 
+/**
+ * Shape of a row returned from `open_house_registrations` for the POF
+ * panel. Some of these columns may not be in the generated Supabase
+ * types yet (rejection_reason, pof_verified_status), so we declare the
+ * shape locally and cast the query result via `unknown`.
+ */
+interface PofRowFromDb {
+  id: string;
+  requester_id: string;
+  proof_of_funds_url: string | null;
+  proof_amount: number | null;
+  pof_verified_status: PofStatus | null;
+  created_at: string | null;
+  listing_id: string;
+  rejection_reason: string | null;
+  status: string | null;
+}
+
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -221,7 +239,7 @@ export function POFVerificationPanel({ dealId }: POFVerificationPanelProps) {
   async function load(): Promise<void> {
     setLoading(true);
     try {
-      let query = (supabase as any)
+      let query = supabase
         .from("open_house_registrations")
         .select("id, requester_id, proof_of_funds_url, proof_amount, pof_verified_status, created_at, listing_id, rejection_reason, status")
         .not("proof_of_funds_url", "is", null)
@@ -235,10 +253,14 @@ export function POFVerificationPanel({ dealId }: POFVerificationPanelProps) {
       const { data, error } = await query;
       if (error) throw error;
 
-      if (data && data.length > 0) {
-        const mapped: PofEntry[] = data.map((r: any) => {
-          const pofStatus = r.pof_verified_status as PofStatus | null;
-          const status: PofStatus = pofStatus ?? "unreviewed";
+      // Cast through `unknown` because the generated Supabase types may
+      // not yet include all fields we select (rejection_reason,
+      // pof_verified_status). PofRowFromDb mirrors the runtime shape.
+      const rows = (data ?? []) as unknown as PofRowFromDb[];
+
+      if (rows.length > 0) {
+        const mapped: PofEntry[] = rows.map((r) => {
+          const status: PofStatus = r.pof_verified_status ?? "unreviewed";
 
           return {
             id: r.id,

@@ -1,28 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 import { openAIChatCompletion } from "../_shared/openai.ts";
+import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
 
-const smartFiltersLimiter = makeRateLimiter({ bucket: "smart-filters", maxRequests: 20, windowMs: 60_000 });
-
-async function requireAuth(req: Request): Promise<Response | null> {
-  const corsHeaders = getCorsHeaders(req);
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
-    return new Response(JSON.stringify({ error: "Authentication required" }), {
-      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!);
-  const { data: { user }, error } = await supabase.auth.getUser(authHeader.slice(7));
-  if (error || !user) {
-    return new Response(JSON.stringify({ error: "Invalid or expired token" }), {
-      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-  return null;
-}
+const BUCKET = "smart-filters";
+const smartFiltersLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 20, windowMs: 60_000 });
 
 // All available boolean feature fields on listings
 const AVAILABLE_FEATURES = [
@@ -81,8 +64,8 @@ Deno.serve(async (req) => {
   const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
   if (await smartFiltersLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
 
-  const authErr = await requireAuth(req);
-  if (authErr) return authErr;
+  const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
+  if (quota.errorResponse) return quota.errorResponse;
 
   try {
     const { type, subtype, listing_type } = await req.json();
@@ -195,6 +178,7 @@ Rules:
       .filter((k) => featureMap[k])
       .map((k) => featureMap[k]);
 
+    await recordAiCall(quota.userId, BUCKET);
     return new Response(JSON.stringify({
       sections: args.sections,
       features,

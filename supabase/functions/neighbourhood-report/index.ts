@@ -3,26 +3,10 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 import { openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
+import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
 
-const neighbourhoodLimiter = makeRateLimiter({ bucket: "neighbourhood-report", maxRequests: 15, windowMs: 60_000 });
-
-async function requireAuth(req: Request): Promise<Response | null> {
-  const corsHeaders = getCorsHeaders(req);
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
-    return new Response(JSON.stringify({ error: "Authentication required" }), {
-      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-  const { data: { user }, error } = await supabase.auth.getUser(authHeader.slice(7));
-  if (error || !user) {
-    return new Response(JSON.stringify({ error: "Invalid or expired token" }), {
-      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-  return null;
-}
+const BUCKET = "neighbourhood-report";
+const neighbourhoodLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 15, windowMs: 60_000 });
 
 Deno.serve(async (req) => {
   const corsPreflightResponse = handleCors(req);
@@ -31,9 +15,8 @@ Deno.serve(async (req) => {
   const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
   if (await neighbourhoodLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
 
-
-  const authErr = await requireAuth(req);
-  if (authErr) return authErr;
+  const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
+  if (quota.errorResponse) return quota.errorResponse;
 
   try {
     const { city, address, region, propertyType: _propertyType, lat, lng, listingId } = await req.json();
@@ -160,6 +143,7 @@ Rules:
       // fire-and-forget — don't block the response on DB write
     }
 
+    await recordAiCall(quota.userId, BUCKET);
     return new Response(JSON.stringify(parsed), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

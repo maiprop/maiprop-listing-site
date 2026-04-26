@@ -1,27 +1,10 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 import { openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
+import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
 
-const aiSearchLimiter = makeRateLimiter({ bucket: "ai-search", maxRequests: 20, windowMs: 60_000 });
-
-async function requireAuth(req: Request): Promise<Response | null> {
-  const corsHeaders = getCorsHeaders(req);
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
-    return new Response(JSON.stringify({ error: "Authentication required" }), {
-      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-  const { data: { user }, error } = await supabase.auth.getUser(authHeader.slice(7));
-  if (error || !user) {
-    return new Response(JSON.stringify({ error: "Invalid or expired token" }), {
-      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-  return null;
-}
+const BUCKET = "ai-search";
+const aiSearchLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 20, windowMs: 60_000 });
 
 Deno.serve(async (req) => {
   const corsPreflightResponse = handleCors(req);
@@ -30,9 +13,8 @@ Deno.serve(async (req) => {
   const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
   if (await aiSearchLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
 
-
-  const authErr = await requireAuth(req);
-  if (authErr) return authErr;
+  const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
+  if (quota.errorResponse) return quota.errorResponse;
 
   try {
     const { query } = await req.json();
@@ -92,6 +74,7 @@ Deno.serve(async (req) => {
     if (!jsonMatch) throw new Error("No JSON in AI response");
 
     const filters = JSON.parse(jsonMatch[0]);
+    await recordAiCall(quota.userId, BUCKET);
     return new Response(JSON.stringify(filters), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

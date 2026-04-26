@@ -1,28 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 import { openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
+import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
 
-const poisLimiter = makeRateLimiter({ bucket: "property-pois", maxRequests: 20, windowMs: 60_000 });
-
-async function requireAuth(req: Request): Promise<Response | null> {
-  const corsHeaders = getCorsHeaders(req);
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
-    return new Response(JSON.stringify({ error: "Authentication required" }), {
-      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!);
-  const { data: { user }, error } = await supabase.auth.getUser(authHeader.slice(7));
-  if (error || !user) {
-    return new Response(JSON.stringify({ error: "Invalid or expired token" }), {
-      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-  return null;
-}
+const BUCKET = "property-pois";
+const poisLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 20, windowMs: 60_000 });
 
 Deno.serve(async (req) => {
   const corsPreflightResponse = handleCors(req);
@@ -32,8 +15,8 @@ Deno.serve(async (req) => {
   const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
   if (await poisLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
 
-  const authErr = await requireAuth(req);
-  if (authErr) return authErr;
+  const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
+  if (quota.errorResponse) return quota.errorResponse;
 
   try {
     const body = await req.json();
@@ -121,7 +104,7 @@ Rules:
       const repaired = jsonStr
         .replace(/,\s*}/g, "}")          // trailing commas in objects
         .replace(/,\s*]/g, "]")          // trailing commas in arrays
-        .replace(/\)\s*\}/g, "}")        // stray ) before closing brace  ← fixes this specific bug
+        .replace(/\)\s*\}/g, "}")        // stray ) before closing brace
         .replace(/\)\s*,/g, ",")         // stray ) before commas
         // eslint-disable-next-line no-control-regex
         .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ""); // control chars
@@ -149,6 +132,7 @@ Rules:
       }))
       .slice(0, 15);
 
+    await recordAiCall(quota.userId, BUCKET);
     return new Response(JSON.stringify({ pois }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

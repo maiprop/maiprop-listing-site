@@ -2,37 +2,10 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 import { openAIChatCompletion } from "../_shared/openai.ts";
+import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
 
-const serviceMatchLimiter = makeRateLimiter({ bucket: "ai-service-match", maxRequests: 20, windowMs: 60_000 });
-
-async function requireAuth(req: Request): Promise<{ error: Response | null; userId: string | null }> {
-  const corsHeaders = getCorsHeaders(req);
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
-    return {
-      error: new Response(JSON.stringify({ error: "Authentication required" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }),
-      userId: null,
-    };
-  }
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_ANON_KEY")!
-  );
-  const { data: { user }, error } = await supabase.auth.getUser(authHeader.slice(7));
-  if (error || !user) {
-    return {
-      error: new Response(JSON.stringify({ error: "Invalid or expired token" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }),
-      userId: null,
-    };
-  }
-  return { error: null, userId: user.id };
-}
+const BUCKET = "ai-service-match";
+const serviceMatchLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 20, windowMs: 60_000 });
 
 const SYSTEM_PROMPT = `You are a Greek real estate professional matchmaker. A user describes their property need in plain text, and you must:
 
@@ -63,8 +36,8 @@ Deno.serve(async (req) => {
   const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
   if (await serviceMatchLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
 
-  const { error: authErr } = await requireAuth(req);
-  if (authErr) return authErr;
+  const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
+  if (quota.errorResponse) return quota.errorResponse;
 
   try {
     const { need } = await req.json();
@@ -141,6 +114,7 @@ Deno.serve(async (req) => {
     if (!toolCall) throw new Error("No tool call in response");
 
     const result = JSON.parse(toolCall.function.arguments);
+    await recordAiCall(quota.userId, BUCKET);
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
