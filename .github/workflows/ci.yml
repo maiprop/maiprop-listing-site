@@ -285,6 +285,12 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: quality
+    env:
+      # Keep Lighthouse builds on the same format-valid Supabase stubs used
+      # elsewhere in CI so route chunks that import the client never crash.
+      VITE_SUPABASE_URL: https://abcdefghijklmnop.supabase.co
+      VITE_SUPABASE_PUBLISHABLE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlhdCI6MTcwMDAwMDAwMCwiZXhwIjo5OTk5OTk5OTk5fQ.ci_placeholder_signature_not_real
+      VITE_SUPABASE_PROJECT_ID: abcdefghijklmnop
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -367,25 +373,35 @@ jobs:
       # Pages *project* settings (NOT from the GitHub Actions env and NOT from
       # the built Vite bundle). Sync the runtime bindings from GitHub secrets
       # so functions/sitemap-dynamic.xml.ts can resolve SUPABASE_PROJECT_ID on
-      # every request instead of falling back to the static sitemap.
+      # every request, and functions/_middleware.ts can resolve the optional
+      # SITE_LOCK_PASSWORD for the pre-launch passcode gate.
       - name: Sync Cloudflare Pages runtime environment variables
         env:
-          SUPABASE_PROJECT_ID: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
+          SUPABASE_PROJECT_ID:  ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
+          SITE_LOCK_PASSWORD:   ${{ secrets.SITE_LOCK_PASSWORD }}
         run: |
           set -euo pipefail
           if [ -z "${SUPABASE_PROJECT_ID}" ]; then
             echo "::warning::VITE_SUPABASE_PROJECT_ID secret is empty; sitemap function will use static fallback"
-            exit 0
           fi
-          PAYLOAD=$(jq -n --arg v "$SUPABASE_PROJECT_ID" '{
-            deployment_configs: {
-              production: {
-                env_vars: {
-                  SUPABASE_PROJECT_ID: { value: $v, type: "plain_text" }
-                }
-              }
-            }
+
+          # Build env_vars payload. SITE_LOCK_PASSWORD is optional — only
+          # include it when the GitHub secret is set. Remove the secret (and
+          # redeploy) to unlock the site. `secret_text` stores the value
+          # encrypted-at-rest on Cloudflare's side.
+          ENV_JSON=$(jq -n \
+            --arg pid "$SUPABASE_PROJECT_ID" \
+            --arg lock "$SITE_LOCK_PASSWORD" \
+            '
+            ({} +
+              (if $pid  != "" then { SUPABASE_PROJECT_ID: { value: $pid,  type: "plain_text"  } } else {} end) +
+              (if $lock != "" then { SITE_LOCK_PASSWORD: { value: $lock, type: "secret_text" } } else {} end)
+            )')
+
+          PAYLOAD=$(jq -n --argjson env "$ENV_JSON" '{
+            deployment_configs: { production: { env_vars: $env } }
           }')
+
           HTTP_CODE=$(curl -s -o /tmp/cf_env.json -w "%{http_code}" -X PATCH \
             -H "Authorization: Bearer $CF_API_TOKEN" \
             -H "Content-Type: application/json" \
@@ -396,7 +412,11 @@ jobs:
             cat /tmp/cf_env.json
             exit 1
           fi
-          echo "Pages production env vars synced"
+          if [ -n "${SITE_LOCK_PASSWORD}" ]; then
+            echo "Pages production env vars synced (site lock: ENABLED)"
+          else
+            echo "Pages production env vars synced (site lock: disabled)"
+          fi
 
       - name: Deploy to Cloudflare Pages (production)
         uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3.15.0
