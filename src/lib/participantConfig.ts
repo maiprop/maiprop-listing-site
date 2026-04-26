@@ -27,6 +27,17 @@ function isValidParticipantId(v: string): v is ParticipantId {
 }
 
 /**
+ * Strict participant type resolver used by onboarding/route guards.
+ * Returns null until onboarding has explicitly written participant_type.
+ */
+export function getExplicitParticipantTypeFromProfile(
+  profile: { participant_type?: string | null } | null
+): ParticipantId | null {
+  if (!profile?.participant_type) return null;
+  return isValidParticipantId(profile.participant_type) ? profile.participant_type : null;
+}
+
+/**
  * Derives the participant type from a user profile.
  * Resolution order:
  *   1. participant_type column (primary — set by Onboarding since migration 20260522100000)

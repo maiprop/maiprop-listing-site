@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  getExplicitParticipantTypeFromProfile,
   getParticipantTypeFromProfile,
   getOwnerParticipantType,
   getPricingAudienceFromProfile,
@@ -7,6 +8,24 @@ import {
   PARTICIPANT_LABELS,
   type ParticipantId,
 } from "@/lib/participantConfig";
+
+describe("getExplicitParticipantTypeFromProfile", () => {
+  it("returns null for null profile", () => {
+    expect(getExplicitParticipantTypeFromProfile(null)).toBe(null);
+  });
+
+  it("returns null when participant_type is missing", () => {
+    expect(getExplicitParticipantTypeFromProfile({})).toBe(null);
+  });
+
+  it("returns participant_type when valid", () => {
+    expect(getExplicitParticipantTypeFromProfile({ participant_type: "professional" })).toBe("professional");
+  });
+
+  it("returns null when participant_type is invalid", () => {
+    expect(getExplicitParticipantTypeFromProfile({ participant_type: "unknown" })).toBe(null);
+  });
+});
 
 describe("getParticipantTypeFromProfile", () => {
   it("returns 'buyer' for null", () => {

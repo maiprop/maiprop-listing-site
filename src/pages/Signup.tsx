@@ -6,6 +6,7 @@ import { Navbar } from "@/components/Navbar";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { APP_ORIGIN } from "@/lib/config";
+import { trackAnalyticsEvent } from "@/lib/analytics";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import logoImg from "@/assets/logo.png";
@@ -41,11 +42,13 @@ export default function Signup() {
 
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
+    trackAnalyticsEvent("oauth_started", { provider: "google", source: "signup" });
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: `${APP_ORIGIN}/onboarding` },
     });
     if (error) {
+      trackAnalyticsEvent("oauth_error", { provider: "google" });
       toast.error("Google sign-in failed. Please try again.");
       setGoogleLoading(false);
     }
@@ -57,10 +60,10 @@ export default function Signup() {
       toast.error("Please fill in all fields (min 8 chars password)");
       return;
     }
+    trackAnalyticsEvent("signup_submitted", { method: "password" });
     setLoading(true);
     const { error, needsEmailConfirm } = await signUp(form.email, form.password, {
       full_name: `${form.firstName} ${form.lastName}`.trim(),
-      role: "buyer",
     });
     setLoading(false);
     if (error) {
@@ -75,13 +78,16 @@ export default function Signup() {
       } else {
         toast.error(error.message);
       }
+      trackAnalyticsEvent("signup_error", { method: "password" });
     } else if (needsEmailConfirm) {
+      trackAnalyticsEvent("signup_email_confirmation_required", { method: "password" });
       // Email confirmation required — show "check your inbox" screen.
       // The confirmation link (emailRedirectTo) points to /onboarding, so after the
       // user clicks the link, they land there with a live session automatically.
       setSubmittedEmail(form.email);
       setView("confirm");
     } else {
+      trackAnalyticsEvent("signup_completed", { method: "password" });
       // Email confirmation disabled — session exists immediately.
       // The useEffect above will fire when user is set and navigate to /onboarding.
     }
@@ -187,7 +193,7 @@ export default function Signup() {
                     <div className="relative">
                       <input
                         type={showPass ? "text" : "password"}
-                        placeholder="Min. 6 characters"
+                        placeholder="Min. 8 characters"
                         value={form.password}
                         onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
                         required

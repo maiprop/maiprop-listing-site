@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from "react";
+﻿import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Home } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { logger } from "@/lib/logger";
 import { APP_ORIGIN } from "@/lib/config";
+import { trackAnalyticsEvent } from "@/lib/analytics";
 import { usePricingConfigs, formatPrice, PRICING_KEYS } from "@/hooks/usePricingConfigs";
 import { RoleSwitchModal } from "@/components/RoleSwitchModal";
 import { classifySwitch, getPlanForParticipant } from "@/lib/rolePlanMap";
@@ -30,10 +31,13 @@ import { ProVideoStep } from "@/components/onboarding/ProVideoStep";
 
 export default function Onboarding() {
   const navigate = useNavigate();
-  const { user, profile, updateProfile, refreshProfile, loading: authLoading } = useAuth();
+  const { user, profile, refreshProfile, loading: authLoading } = useAuth();
 
   // participant_type is the authoritative onboarding signal (set since migration 20260522100000)
-  const presetType = profile?.participant_type ?? null;
+  const presetType =
+    profile?.participant_type && profile?.role && profile.participant_type === String(profile.role)
+      ? profile.participant_type
+      : null;
 
   const [step, setStep] = useState<OnboardingStep>("pick-type");
   const [selected, setSelected] = useState<ParticipantType | null>(null);
@@ -71,12 +75,62 @@ export default function Onboarding() {
   const [calendarNotes, setCalendarNotes] = useState("");
   const [pendingCardId, setPendingCardId] = useState<string | null>(null);
 
+  const saveRoleSelection = useCallback(async (
+    values: { role: RoleKey; participant_type: ParticipantId } & Record<string, unknown>
+  ): Promise<boolean> => {
+    const displayName = typeof values.display_name === "string" ? values.display_name : null;
+    const city = typeof values.city === "string" ? values.city : null;
+    const phone = typeof values.phone === "string" ? values.phone : null;
+    const { error } = await supabase.rpc("complete_onboarding_role" as never, {
+      p_role: values.role,
+      p_participant_type: values.participant_type,
+      p_display_name: displayName,
+      p_city: city,
+      p_phone: phone,
+    } as never);
+    if (error) {
+      trackAnalyticsEvent("onboarding_error", {
+        stage: "role_save",
+        role: values.role,
+        participant_type: values.participant_type,
+      });
+      toast.error("Could not save account type. Please try again.");
+      return false;
+    }
+    trackAnalyticsEvent("onboarding_role_selected", {
+      role: values.role,
+      participant_type: values.participant_type,
+    });
+    await refreshProfile();
+    return true;
+  }, [refreshProfile]);
+
   // â”€â”€ Role-switch billing context â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Set by Dashboard SettingsSection before navigating here for a role switch.
   // Cleared after first use so it doesn't re-appear on subsequent visits.
   const [switchCtx, setSwitchCtx] = useState<{ fromType: ParticipantId; hadActiveSub: boolean } | null>(null);
   const [billingModalProceed, setBillingModalProceed] = useState<(() => void) | null>(null);
   const [billingModalToType, setBillingModalToType] = useState<ParticipantId | null>(null);
+  const isFirstOnboarding = !(profile?.participant_type && profile?.role && profile.participant_type === String(profile.role));
+  const startedTrackedRef = useRef(false);
+  const completedTrackedRef = useRef(false);
+
+  useEffect(() => {
+    if (!isFirstOnboarding || startedTrackedRef.current) return;
+    startedTrackedRef.current = true;
+    trackAnalyticsEvent("onboarding_started", {
+      source: switchCtx ? "role_switch" : "signup",
+    });
+  }, [isFirstOnboarding, switchCtx]);
+
+  useEffect(() => {
+    if (step !== "done" || !selected || completedTrackedRef.current) return;
+    completedTrackedRef.current = true;
+    trackAnalyticsEvent("onboarding_completed", {
+      participant_type: selected.id,
+      source: switchCtx ? "role_switch" : "signup",
+    });
+  }, [step, selected, switchCtx]);
 
   useEffect(() => {
     try {
@@ -175,22 +229,23 @@ export default function Onboarding() {
         } else {
           // Simple type (e.g. participant): write to DB first, then clean up
           setLoading(true);
-          await updateProfile({ role: p.role as never });
-          const { error } = await supabase.from("profiles").update({ participant_type: p.id } as never).eq("user_id", user.id);
+          const ok = await saveRoleSelection({
+            role: p.role,
+            participant_type: p.id as ParticipantId,
+          });
           setLoading(false);
-          if (error) { toast.error("Could not save account type. Please choose below."); return; }
+          if (!ok) return;
           // Only clean up storage after confirmed DB write
           sessionStorage.removeItem("signup_participant_type");
           localStorage.removeItem("signup_participant_type");
           localStorage.removeItem(DRAFT_KEY);
-          await refreshProfile();
           setStep("done");
         }
       } catch (err: unknown) {
         logger.warn("[Onboarding] auto-upgrade failed:", err instanceof Error ? err.message : err);
       }
     })();
-  }, [user, updateProfile, refreshProfile]);
+  }, [user, saveRoleSelection]);
 
   // â”€â”€ Handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -210,7 +265,7 @@ export default function Onboarding() {
    * For fresh signups (no switchCtx), calls proceed() directly.
    */
   const maybeBillingGate = (toType: ParticipantId, proceed: () => void) => {
-    if (!switchCtx) { proceed(); return; }
+    if (isFirstOnboarding || !switchCtx) { proceed(); return; }
     const kind = classifySwitch(switchCtx.fromType, toType);
     if (kind === "same-tier") { proceed(); return; }
     // Show modal â€” store the proceed callback and target type
@@ -252,10 +307,8 @@ export default function Onboarding() {
     setLoading(true);
     const p = participants.find(x => x.id === goal)!;
     setSelected(p);
-    await updateProfile({ role: role as never });
-    const { error: goalErr } = await supabase.from("profiles").update({ participant_type: goal } as never).eq("user_id", user!.id);
-    if (goalErr) { toast.error("Could not save account type. Please try again."); setLoading(false); return; }
-    await refreshProfile();
+    const ok = await saveRoleSelection({ role, participant_type: goal });
+    if (!ok) { setLoading(false); return; }
     setLoading(false);
     setStep("done");
   };
@@ -279,10 +332,8 @@ export default function Onboarding() {
     const p = participants.find(x => x.id === type)!;
     setSelected(p);
     setLoading(true);
-    await updateProfile({ role: p.role as never });
-    const { error: subErr } = await supabase.from("profiles").update({ participant_type: type } as never).eq("user_id", user!.id);
-    if (subErr) { toast.error("Could not save account type. Please try again."); setLoading(false); return; }
-    await refreshProfile();
+    const ok = await saveRoleSelection({ role: p.role, participant_type: type });
+    if (!ok) { setLoading(false); return; }
     setLoading(false);
     setStep("done");
   };
@@ -296,14 +347,14 @@ export default function Onboarding() {
     if (Object.keys(errs).length) { setDevErrors(errs); return; }
 
     setLoading(true);
-    await updateProfile({ role: "developer" as never, phone: "" });
-    const { error: profErr } = await supabase.from("profiles").update({
+    const ok = await saveRoleSelection({
+      role: "developer",
       participant_type: "developer",
       display_name: devForm.companyName,
       city: devForm.city,
-    } as never).eq("user_id", user!.id);
-    if (profErr) { toast.error("Could not save profile. Please try again."); setLoading(false); return; }
-    await refreshProfile();
+      phone: "",
+    });
+    if (!ok) { setLoading(false); return; }
     setLoading(false);
     setStep("done");
   };
@@ -322,7 +373,6 @@ export default function Onboarding() {
     if (Object.keys(errs).length) { setProErrors(errs); return; }
 
     setLoading(true);
-    await updateProfile({ role: "professional", phone: proForm.phone });
 
     const { data: proData, error } = await supabase
       .from("professionals")
@@ -341,9 +391,8 @@ export default function Onboarding() {
 
     if (error) { toast.error("Could not save professional profile. Please try again."); setLoading(false); return; }
     setProfessionalId((proData as { id: string }).id);
-    const { error: proErr } = await supabase.from("profiles").update({ participant_type: "professional" } as never).eq("user_id", user!.id);
-    if (proErr) { toast.error("Could not save account type. Please try again."); setLoading(false); return; }
-    await refreshProfile();
+    const ok = await saveRoleSelection({ role: "professional", participant_type: "professional", phone: proForm.phone });
+    if (!ok) { setLoading(false); return; }
     setLoading(false);
     setStep("pro-services");
   };
@@ -616,7 +665,7 @@ export default function Onboarding() {
       </Shell>
 
       {/* Role-switch billing modal â€” only visible when switching from a paid role */}
-      {billingModalProceed && billingModalToType && switchCtx && (
+      {billingModalProceed && billingModalToType && switchCtx && !isFirstOnboarding && (
         <RoleSwitchModal
           fromType={switchCtx.fromType}
           toType={billingModalToType}

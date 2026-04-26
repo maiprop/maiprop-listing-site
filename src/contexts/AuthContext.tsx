@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { logger } from "@/lib/logger";
 import { APP_ORIGIN } from "@/lib/config";
+import { getExplicitParticipantTypeFromProfile } from "@/lib/participantConfig";
 
 type Profile = Tables<"profiles">;
 
@@ -25,7 +26,7 @@ interface AuthContextType {
   subscription: SubscriptionState;
   /** True when a newly-signed-up user hasn't completed onboarding yet */
   needsOnboarding: boolean;
-  signUp: (email: string, password: string, meta: { full_name: string; role: string; business_name?: string; tax_id?: string; phone?: string; license_number?: string }) => Promise<{ error: Error | null; needsEmailConfirm: boolean }>;
+  signUp: (email: string, password: string, meta: { full_name: string; business_name?: string; tax_id?: string; phone?: string; license_number?: string }) => Promise<{ error: Error | null; needsEmailConfirm: boolean }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: Error | null }>;
@@ -35,11 +36,14 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-function profileNeedsOnboarding(p: Profile | null): boolean {
+export function profileNeedsOnboarding(p: Profile | null): boolean {
   if (!p) return false;
-  // participant_type is the canonical onboarding signal since migration 20260522100000.
-  // New users always have it set by Onboarding.tsx — bio is never written as a type signal anymore.
-  if (p.participant_type) return false;
+  if (p.role === "admin") return false;
+  const explicitType = getExplicitParticipantTypeFromProfile(p);
+  const roleText = p.role ? String(p.role) : null;
+  // Onboarding is complete only when both role + participant_type are explicitly set.
+  // This prevents implicit defaults from being treated as intentional role choice.
+  if (explicitType && roleText && explicitType === roleText) return false;
   // Legacy read-only fallback: rows created before participant_type existed and were never backfilled.
   // Safe to remove once DB shows 0 profiles with NULL participant_type and non-null __type: bio.
   if (p.bio && p.bio.startsWith("__type:")) return false;
@@ -168,7 +172,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signUp = useCallback(async (
     email: string,
     password: string,
-    meta: { full_name: string; role: string; business_name?: string; tax_id?: string; phone?: string; license_number?: string }
+    meta: { full_name: string; business_name?: string; tax_id?: string; phone?: string; license_number?: string }
   ) => {
     const { data, error } = await supabase.auth.signUp({
       email,
