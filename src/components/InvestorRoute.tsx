@@ -1,8 +1,9 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEligibleForQuickSale } from "@/hooks/useEligibleForQuickSale";
 import { ProtectedRoute } from "./ProtectedRoute";
-import { Flame, Lock, ArrowRight, CheckCircle2 } from "lucide-react";
+import { Flame, Lock, ArrowRight, CheckCircle2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 /** Protects Quick Sale deal flow. Access: admin or approved investors only. */
@@ -17,11 +18,46 @@ export function InvestorRoute({ children }: { children: React.ReactNode }) {
 function InvestorGate({ children }: { children: React.ReactNode }) {
   const { profile, loading: authLoading } = useAuth();
   const { eligible, loading: eligibilityLoading } = useEligibleForQuickSale();
+  const [timedOut, setTimedOut] = useState(false);
 
-  if (authLoading || !profile || eligibilityLoading) {
+  const stillLoading = authLoading || !profile || eligibilityLoading;
+
+  useEffect(() => {
+    if (stillLoading) {
+      const timer = setTimeout(() => setTimedOut(true), 6000);
+      return () => clearTimeout(timer);
+    }
+    setTimedOut(false);
+  }, [stillLoading]);
+
+  if (stillLoading && !timedOut) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="w-10 h-10 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />
+        <span className="sr-only">Checking investor access…</span>
+      </div>
+    );
+  }
+
+  // If data is still loading after timeout, show retry UI instead of access-denied
+  if (stillLoading && timedOut) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center px-4">
+        <div className="max-w-sm w-full text-center space-y-4">
+          <p className="text-muted-foreground text-sm">
+            Taking longer than expected to verify access.
+          </p>
+          <div className="flex gap-3 justify-center">
+            <Button onClick={() => window.location.reload()} className="gap-2">
+              <RefreshCw className="w-4 h-4" /> Retry
+            </Button>
+            <Button asChild variant="outline">
+              <Link to="/dashboard">
+                Go to Dashboard <ArrowRight className="w-4 h-4 ml-1" />
+              </Link>
+            </Button>
+          </div>
+        </div>
       </div>
     );
   }

@@ -397,8 +397,8 @@ export default function ProjectDetail() {
                       <div>
                         <span className="font-semibold">{u.unit_id || u.unit_number || `Unit ${u.floor || "?"}-${u.unit_number || "?"}`}</span>
                         <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${u.availability_status === "sold" ? "bg-brand-emerald/20 text-brand-emerald" : u.availability_status === "reserved" ? "bg-brand-gold/20 text-brand-gold" : "bg-primary/10 text-primary"}`}>{u.availability_status}</span>
-                        {!!u.price && <span className="ml-2 text-sm text-muted-foreground">â‚¬{Number(u.price).toLocaleString()}</span>}
-                        {!!u.internal_sqm && <span className="ml-2 text-xs text-muted-foreground">{u.internal_sqm}mÂ²</span>}
+                        {!!u.price && <span className="ml-2 text-sm text-muted-foreground">€{Number(u.price).toLocaleString()}</span>}
+                        {!!u.internal_sqm && <span className="ml-2 text-xs text-muted-foreground">{u.internal_sqm}m²</span>}
                       </div>
                       <div className="flex gap-1">
                         <Button variant="ghost" size="icon" aria-label="Edit unit" onClick={() => setEditingUnitId(u.id)}><Edit2 className="w-4 h-4" /></Button>
@@ -470,7 +470,7 @@ export default function ProjectDetail() {
                 {listings.map((l: { id: string; title?: string | null; sqm?: number | null; price?: number | null; cover_image_url?: string | null }) => (
                   <div key={l.id} className="flex items-center gap-3 bg-secondary rounded-xl p-3">
                     {l.cover_image_url && <img src={l.cover_image_url} alt="" className="w-12 h-12 rounded-lg object-cover" />}
-                    <div className="flex-1 min-w-0"><Link to={`/property/${l.id}`} className="font-medium hover:underline truncate block">{l.title}</Link><span className="text-xs text-muted-foreground">â‚¬{Number(l.price).toLocaleString()} Â· {l.sqm}mÂ²</span></div>
+                    <div className="flex-1 min-w-0"><Link to={`/property/${l.id}`} className="font-medium hover:underline truncate block">{l.title}</Link><span className="text-xs text-muted-foreground">€{Number(l.price).toLocaleString()} Â· {l.sqm}m²</span></div>
                     <Button variant="ghost" size="sm" onClick={() => handleUnlinkListing(l.id)}>Unlink</Button>
                   </div>
                 ))}
@@ -565,11 +565,11 @@ function UnitEditForm({ unit, onSave, onCancel, isCreate }: { unit?: ProjectUnit
       <div><label className={LABEL_CLS}>Status</label><select value={f.availability_status} onChange={e => setF(x => ({ ...x, availability_status: e.target.value }))} className={INPUT_CLS}><option value="available">Available</option><option value="reserved">Reserved</option><option value="sold">Sold</option></select></div>
       <div><label className={LABEL_CLS}>Internal sqm</label><input type="number" step="0.01" value={f.internal_sqm} onChange={e => setF(x => ({ ...x, internal_sqm: e.target.value }))} placeholder="85" className={INPUT_CLS} /></div>
       <div><label className={LABEL_CLS}>Balcony sqm</label><input type="number" step="0.01" value={f.balcony_sqm} onChange={e => setF(x => ({ ...x, balcony_sqm: e.target.value }))} placeholder="12" className={INPUT_CLS} /></div>
-      <div><label className={LABEL_CLS}>Price (â‚¬)</label><input type="number" value={f.price} onChange={e => setF(x => ({ ...x, price: e.target.value }))} placeholder="250000" className={INPUT_CLS} /></div>
+      <div><label className={LABEL_CLS}>Price (€)</label><input type="number" value={f.price} onChange={e => setF(x => ({ ...x, price: e.target.value }))} placeholder="250000" className={INPUT_CLS} /></div>
       <div><label className={LABEL_CLS}>Bedrooms</label><input type="number" value={f.bedrooms} onChange={e => setF(x => ({ ...x, bedrooms: e.target.value }))} placeholder="2" className={INPUT_CLS} /></div>
       <div><label className={LABEL_CLS}>Bathrooms</label><input type="number" value={f.bathrooms} onChange={e => setF(x => ({ ...x, bathrooms: e.target.value }))} placeholder="2" className={INPUT_CLS} /></div>
-      <div><label className={LABEL_CLS}>Kitchen type</label><select value={f.kitchen_type} onChange={e => setF(x => ({ ...x, kitchen_type: e.target.value }))} className={INPUT_CLS}><option value="">â€”</option>{KITCHEN_TYPES.map(k => <option key={k} value={k}>{k}</option>)}</select></div>
-      <div><label className={LABEL_CLS}>Energy class</label><select value={f.energy_class} onChange={e => setF(x => ({ ...x, energy_class: e.target.value }))} className={INPUT_CLS}><option value="">â€”</option>{ENERGY_CLASSES.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+      <div><label className={LABEL_CLS}>Kitchen type</label><select value={f.kitchen_type} onChange={e => setF(x => ({ ...x, kitchen_type: e.target.value }))} className={INPUT_CLS}><option value="">—</option>{KITCHEN_TYPES.map(k => <option key={k} value={k}>{k}</option>)}</select></div>
+      <div><label className={LABEL_CLS}>Energy class</label><select value={f.energy_class} onChange={e => setF(x => ({ ...x, energy_class: e.target.value }))} className={INPUT_CLS}><option value="">—</option>{ENERGY_CLASSES.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
       <div className="sm:col-span-2 flex items-center gap-2 pt-2">
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.sea_view} onChange={e => setF(x => ({ ...x, sea_view: e.target.checked }))} /> Sea view</label>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.city_view} onChange={e => setF(x => ({ ...x, city_view: e.target.checked }))} /> City view</label>

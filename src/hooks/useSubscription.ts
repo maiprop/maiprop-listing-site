@@ -28,6 +28,7 @@ export function useSubscription() {
   const isInvestorRole = participantType === "investor" || participantType === "institutional";
 
   const profileProductId = (profile as { subscription_product_id?: string | null } | null)?.subscription_product_id ?? null;
+  const forceProAccess = !!(profile as { force_pro_access?: boolean | null } | null)?.force_pro_access;
   const effectiveProductId = subscription.productId ?? profileProductId;
 
   // Any active Stripe subscription grants Pro access — plan key doesn't matter.
@@ -56,7 +57,7 @@ export function useSubscription() {
     isInvestorRole &&
     (investorSubStatus?.status === "active" || investorSubStatus?.status === "trial");
 
-  const isPro = isAdmin || hasStripePro || hasInvestorPro;
+  const isPro = isAdmin || hasStripePro || hasInvestorPro || forceProAccess;
 
   return {
     isPro,

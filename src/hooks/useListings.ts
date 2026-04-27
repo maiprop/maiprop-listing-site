@@ -135,7 +135,7 @@ export function buildListingsQuery(filters?: ListingsFilters, from = 0, pageSize
   if (filters?.is_off_market === true) query = query.eq("is_off_market", true);
   if (filters?.energy_class?.length) query = query.in("energy_class", filters.energy_class);
 
-  // Feature booleans â€” only allow known DB column names to prevent column injection
+  // Feature booleans — only allow known DB column names to prevent column injection
   const ALLOWED_FEATURE_COLUMNS = new Set([
     "has_parking", "has_elevator", "has_balcony", "has_pool", "pets_allowed",
     "has_furnished", "has_garden", "has_ac", "has_fireplace", "has_storage",
@@ -183,7 +183,7 @@ async function fetchListingsPage(filters?: ListingsFilters, page = 1, pageSize =
   return { data: enriched, hasMore: rows.length === pageSize };
 }
 
-/** Paginated listings for grid view â€” fetches 24 per page, server-side filtering */
+/** Paginated listings for grid view — fetches 24 per page, server-side filtering */
 export const PAGE_SIZE = 24;
 
 export function useListingsPaginated(filters?: ListingsFilters) {
@@ -196,7 +196,7 @@ export function useListingsPaginated(filters?: ListingsFilters) {
   });
 }
 
-/** All listings for map/split view â€” single bounded fetch, max 200 rows. Set enabled: false to skip. */
+/** All listings for map/split view — single bounded fetch, max 200 rows. Set enabled: false to skip. */
 export const MAP_FETCH_LIMIT = 200;
 
 export function useListings(
@@ -246,7 +246,7 @@ export function useListing(id: string) {
         `)
         .eq("id", id)
         .maybeSingle();
-      // PGRST116 (no rows) now handled by maybeSingle() â€” only real errors thrown
+      // PGRST116 (no rows) now handled by maybeSingle() — only real errors thrown
       if (error) throw error;
       if (!data) return null;
       // Fetch owner profile and Pro status (Pro owners can receive messages and calendar).
@@ -286,7 +286,7 @@ export function useListing(id: string) {
 }
 
 /**
- * Tracks a listing view â€” call from the detail page component, not inside a queryFn.
+ * Tracks a listing view — call from the detail page component, not inside a queryFn.
  * Deduplicates within the same browser session so refetches don't double-count.
  * Uses DB-side RPCs so the increment is atomic (single UPDATE, no read-modify-write race)
  * and the view event is a plain insert, both via migration 20260404140000.

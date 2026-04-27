@@ -105,7 +105,7 @@ export default function Onboarding() {
     return true;
   }, [refreshProfile]);
 
-  // â”€â”€ Role-switch billing context â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Role-switch billing context ───────────────────────────────────────────────
   // Set by Dashboard SettingsSection before navigating here for a role switch.
   // Cleared after first use so it doesn't re-appear on subsequent visits.
   const [switchCtx, setSwitchCtx] = useState<{ fromType: ParticipantId; hadActiveSub: boolean } | null>(null);
@@ -158,7 +158,7 @@ export default function Onboarding() {
 
   const DRAFT_KEY = "onboarding_draft";
 
-  // â”€â”€ Restore draft (user left mid-flow) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Restore draft (user left mid-flow) ─────────────────────────────────────
   const draftRestoredRef = useRef(false);
   useEffect(() => {
     if (!user?.id || draftRestoredRef.current) return;
@@ -178,7 +178,7 @@ export default function Onboarding() {
     }
   }, [user?.id]);
 
-  // â”€â”€ Persist draft when step/selected changes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Persist draft when step/selected changes ─────────────────────────────────
   useEffect(() => {
     if (!user?.id || step === "done") return;
     try {
@@ -191,12 +191,12 @@ export default function Onboarding() {
     } catch (_err: unknown) { /* ignore draft save failure */ }
   }, [user?.id, step, selected?.id, proCategory]);
 
-  // â”€â”€ Clear draft when done â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Clear draft when done ────────────────────────────────────────────────────
   useEffect(() => {
     if (step === "done") localStorage.removeItem(DRAFT_KEY);
   }, [step]);
 
-  // â”€â”€ Restore participant type from Signup (Google OAuth) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Restore participant type from Signup (Google OAuth) ──────────────────────
   const restoredRef = useRef(false);
   useEffect(() => {
     if (!user || restoredRef.current) return;
@@ -207,7 +207,7 @@ export default function Onboarding() {
         restoredRef.current = true;
         const p = participants.find(x => x.id === stored);
         if (!p) {
-          // Unknown type stored â€” clean up and let user pick
+          // Unknown type stored — clean up and let user pick
           sessionStorage.removeItem("signup_participant_type");
           localStorage.removeItem("signup_participant_type");
           return;
@@ -247,11 +247,11 @@ export default function Onboarding() {
     })();
   }, [user, saveRoleSelection]);
 
-  // â”€â”€ Handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Handlers ─────────────────────────────────────────────────────────────────
 
   /** Block clicks while auth is loading; redirect to login if definitely unauthenticated. */
   const requireAuth = (typeId: string): boolean => {
-    if (authLoading) return true; // session still resolving â€” do nothing
+    if (authLoading) return true; // session still resolving — do nothing
     if (user) return false;
     try { sessionStorage.setItem("signup_participant_type", typeId); } catch (_err: unknown) { /* ignore */ }
     navigate("/login", { state: { from: { pathname: "/onboarding" } } });
@@ -268,7 +268,7 @@ export default function Onboarding() {
     if (isFirstOnboarding || !switchCtx) { proceed(); return; }
     const kind = classifySwitch(switchCtx.fromType, toType);
     if (kind === "same-tier") { proceed(); return; }
-    // Show modal â€” store the proceed callback and target type
+    // Show modal — store the proceed callback and target type
     setBillingModalToType(toType);
     setBillingModalProceed(() => proceed);
   };
@@ -286,11 +286,11 @@ export default function Onboarding() {
           cancel_subscription: switchCtx.hadActiveSub,
         },
       });
-    } catch (_err: unknown) { /* non-blocking â€” audit log failure must not block the user */ }
+    } catch (_err: unknown) { /* non-blocking — audit log failure must not block the user */ }
     const proceed = billingModalProceed;
     setBillingModalProceed(null);
     setBillingModalToType(null);
-    setSwitchCtx(null); // consume context â€” only fire once
+    setSwitchCtx(null); // consume context — only fire once
     proceed?.();
   };
 
@@ -328,7 +328,7 @@ export default function Onboarding() {
       setStep("developer-setup");
       return;
     }
-    // agent â€” save role and go to done
+    // agent — save role and go to done
     const p = participants.find(x => x.id === type)!;
     setSelected(p);
     setLoading(true);
@@ -398,7 +398,7 @@ export default function Onboarding() {
   };
 
   const handleSaveServices = async () => {
-    if (!professionalId) { toast.error("Verification step incomplete â€” please go back and try again."); setStep("pro-verify"); return; }
+    if (!professionalId) { toast.error("Verification step incomplete — please go back and try again."); setStep("pro-verify"); return; }
     if (Object.keys(selectedServices).length === 0) { toast.error("Please select at least one service you offer"); return; }
     setLoading(true);
     const rows = Object.values(selectedServices).map(s => ({
@@ -422,7 +422,7 @@ export default function Onboarding() {
   };
 
   const handleSaveAvailability = async () => {
-    if (!professionalId) { toast.error("Verification step incomplete â€” please go back and try again."); setStep("pro-verify"); return; }
+    if (!professionalId) { toast.error("Verification step incomplete — please go back and try again."); setStep("pro-verify"); return; }
     setLoading(true);
     const rows = availability.map((day, i) => ({ ...day, dayIndex: i })).filter(d => d.enabled).map(d => ({
       professional_id: professionalId!,
@@ -449,7 +449,7 @@ export default function Onboarding() {
   };
 
   const { data: pricingConfigs = {} } = usePricingConfigs();
-  const professionalProPrice = formatPrice(pricingConfigs?.[PRICING_KEYS.professional_basic], { showUnit: true, fallback: "â‚¬49/mo" });
+  const professionalProPrice = formatPrice(pricingConfigs?.[PRICING_KEYS.professional_basic], { showUnit: true, fallback: "€49/mo" });
 
   const handleUpgradeToPro = async () => {
     try {
@@ -463,11 +463,11 @@ export default function Onboarding() {
     }
   };
 
-  // â”€â”€ Step content â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Step content ──────────────────────────────────────────────────────────────
 
   const stepContent = (() => {
 
-    // â”€â”€ Pick type (top-level â€” flat selection across all role types) â”€â”€
+    // ── Pick type (top-level — flat selection across all role types) ──
     if (step === "pick-type") {
       const devParticipant = participants.find(x => x.id === "developer")!;
       const proParticipant = participants.find(x => x.id === "professional")!;
@@ -492,7 +492,7 @@ export default function Onboarding() {
       );
     }
 
-    // â”€â”€ Participant goal (buy / sell) â”€â”€
+    // ── Participant goal (buy / sell) ──
     if (step === "pick-participant-goal") {
       return (
         <PickParticipantGoalStep
@@ -503,7 +503,7 @@ export default function Onboarding() {
       );
     }
 
-    // â”€â”€ Pro sub-type (agent / developer / service professional) â”€â”€
+    // ── Pro sub-type (agent / developer / service professional) ──
     if (step === "pick-pro-type") {
       return (
         <PickProTypeStep
@@ -514,7 +514,7 @@ export default function Onboarding() {
       );
     }
 
-    // â”€â”€ Developer setup â”€â”€
+    // ── Developer setup ──
     if (step === "developer-setup") {
       return (
         <DeveloperSetupStep
@@ -531,7 +531,7 @@ export default function Onboarding() {
       );
     }
 
-    // â”€â”€ Pro category â”€â”€
+    // ── Pro category ──
     if (step === "pro-category") return (
       <ProCategoryStep
         proCategory={proCategory}
@@ -540,7 +540,7 @@ export default function Onboarding() {
       />
     );
 
-    // â”€â”€ Pro verify â”€â”€
+    // ── Pro verify ──
     if (step === "pro-verify") return (
       <ProVerifyStep
         proCategory={proCategory}
@@ -556,7 +556,7 @@ export default function Onboarding() {
       />
     );
 
-    // â”€â”€ Pro services â”€â”€
+    // ── Pro services ──
     if (step === "pro-services") return (
       <ProServicesStep
         proCategory={proCategory}
@@ -567,7 +567,7 @@ export default function Onboarding() {
       />
     );
 
-    // â”€â”€ Pro availability â”€â”€
+    // ── Pro availability ──
     if (step === "pro-availability") return (
       <ProAvailabilityStep
         availability={availability}
@@ -579,7 +579,7 @@ export default function Onboarding() {
       />
     );
 
-    // â”€â”€ Pro video â”€â”€
+    // ── Pro video ──
     if (step === "pro-video") return (
       <ProVideoStep
         videoLink={videoLink}
@@ -593,7 +593,7 @@ export default function Onboarding() {
       />
     );
 
-    // â”€â”€ Done â”€â”€
+    // ── Done ──
     const selectedColor = selected ? colorMap[selected.color] : colorMap.emerald;
     const SelectedIcon = selected?.icon ?? Home;
     const isPro = selected?.isPro;
@@ -664,7 +664,7 @@ export default function Onboarding() {
         {stepContent}
       </Shell>
 
-      {/* Role-switch billing modal â€” only visible when switching from a paid role */}
+      {/* Role-switch billing modal — only visible when switching from a paid role */}
       {billingModalProceed && billingModalToType && switchCtx && !isFirstOnboarding && (
         <RoleSwitchModal
           fromType={switchCtx.fromType}

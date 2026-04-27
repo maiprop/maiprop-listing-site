@@ -1,5 +1,5 @@
 /**
- * LegalDocumentModal â€” Greek property legal document template library with mock e-sign.
+ * LegalDocumentModal — Greek property legal document template library with mock e-sign.
  * Left panel: template list. Right panel: document preview + signature capture.
  */
 
@@ -27,7 +27,7 @@ import {
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
-// â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Types ────────────────────────────────────────────────────────────────────
 
 interface Props {
   open: boolean;
@@ -49,7 +49,7 @@ interface Template {
   description: string;
 }
 
-// â”€â”€ Templates â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Templates ────────────────────────────────────────────────────────────────
 
 const TEMPLATES: Template[] = [
   {
@@ -85,11 +85,11 @@ const TEMPLATES: Template[] = [
     titleEl: "ÎœÎ½Î·Î¼ÏŒÎ½Î¹Î¿ Î£Ï…Î¼Ï†Ï‰Î½Î¯Î±Ï‚",
     titleEn: "Quick Sale MOU",
     tag: "Fast-track",
-    description: "Non-binding letter of intent for firesale or court auction acquisitions â€” agreed within 48 hours.",
+    description: "Non-binding letter of intent for firesale or court auction acquisitions — agreed within 48 hours.",
   },
 ];
 
-// â”€â”€ Document body generator â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Document body generator ───────────────────────────────────────────────────
 
 function fmt(n: number) {
   return new Intl.NumberFormat("el-GR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
@@ -179,11 +179,11 @@ POWER OF ATTORNEY
 Î•Î³ÏŽ, Î¿/Î· ${buyer}, Î´Î¹Î± Ï„Î¿Ï… Ï€Î±ÏÏŒÎ½Ï„Î¿Ï‚ Ï€Î±ÏÎ­Ï‡Ï‰ Ï€Î»Î·ÏÎµÎ¾Î¿Ï…ÏƒÎ¹ÏŒÏ„Î·Ï„Î± ÏƒÏ„Î¿Î½/ÏƒÏ„Î·Î½ ${seller}:
 
 Î•ÎžÎŸÎ¥Î£Î™ÎŸÎ”ÎŸÎ¤Î—Î£Î— / AUTHORITY GRANTED:
-â€¢ ÎÎ± ÎµÎºÏ€ÏÎ¿ÏƒÏ‰Ï€Î®ÏƒÎµÎ¹ Î¼Îµ ÎµÎ½ÏŽÏ€Î¹Î¿Î½ Ï€Î±Î½Ï„ÏŒÏ‚ Î£Ï…Î¼Î²Î¿Î»Î±Î¹Î¿Î³ÏÎ¬Ï†Î¿Ï….
+• ÎÎ± ÎµÎºÏ€ÏÎ¿ÏƒÏ‰Ï€Î®ÏƒÎµÎ¹ Î¼Îµ ÎµÎ½ÏŽÏ€Î¹Î¿Î½ Ï€Î±Î½Ï„ÏŒÏ‚ Î£Ï…Î¼Î²Î¿Î»Î±Î¹Î¿Î³ÏÎ¬Ï†Î¿Ï….
   To represent me before any Notary Public.
-â€¢ ÎÎ± Ï…Ï€Î¿Î³ÏÎ¬ÏˆÎµÎ¹ Î¿ÏÎ¹ÏƒÏ„Î¹ÎºÎ¬ ÏƒÏ…Î¼Î²ÏŒÎ»Î±Î¹Î± Î¼ÎµÏ„Î±Î²Î¯Î²Î±ÏƒÎ·Ï‚.
+• ÎÎ± Ï…Ï€Î¿Î³ÏÎ¬ÏˆÎµÎ¹ Î¿ÏÎ¹ÏƒÏ„Î¹ÎºÎ¬ ÏƒÏ…Î¼Î²ÏŒÎ»Î±Î¹Î± Î¼ÎµÏ„Î±Î²Î¯Î²Î±ÏƒÎ·Ï‚.
   To sign final deeds of transfer on my behalf.
-â€¢ ÎÎ± ÎºÎ±Ï„Î±Î²Î¬Î»ÎµÎ¹ Ï„Ï…Ï‡ÏŒÎ½ Ï†ÏŒÏÎ¿Ï…Ï‚ ÎºÎ±Î¹ Ï„Î­Î»Î·.
+• ÎÎ± ÎºÎ±Ï„Î±Î²Î¬Î»ÎµÎ¹ Ï„Ï…Ï‡ÏŒÎ½ Ï†ÏŒÏÎ¿Ï…Ï‚ ÎºÎ±Î¹ Ï„Î­Î»Î·.
   To pay applicable taxes and fees.
 
 Î‘ÎšÎ™ÎÎ—Î¤ÎŸ / PROPERTY: ${listing}
@@ -195,8 +195,8 @@ POWER OF ATTORNEY
       `;
     case "mou":
       return `
-ÎœÎÎ—ÎœÎŸÎÎ™ÎŸ Î£Î¥ÎœÎ¦Î©ÎÎ™Î‘Î£ â€” Î“Î¡Î—Î“ÎŸÎ¡Î— Î Î©Î›Î—Î£Î—
-MEMORANDUM OF UNDERSTANDING â€” QUICK SALE
+ÎœÎÎ—ÎœÎŸÎÎ™ÎŸ Î£Î¥ÎœÎ¦Î©ÎÎ™Î‘Î£ — Î“Î¡Î—Î“ÎŸÎ¡Î— Î Î©Î›Î—Î£Î—
+MEMORANDUM OF UNDERSTANDING — QUICK SALE
 
 ÎœÎµÏ„Î±Î¾Ï / Between:
 Î Î©Î›Î—Î¤Î—Î£ / SELLER: ${seller}
@@ -222,7 +222,7 @@ MEMORANDUM OF UNDERSTANDING â€” QUICK SALE
   }
 }
 
-// â”€â”€ Canvas draw signature â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Canvas draw signature ────────────────────────────────────────────────────
 
 function SignatureCanvas({ onSign }: { onSign: (dataUrl: string) => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -303,7 +303,7 @@ function SignatureCanvas({ onSign }: { onSign: (dataUrl: string) => void }) {
   );
 }
 
-// â”€â”€ Main component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Main component ───────────────────────────────────────────────────────────
 
 export function LegalDocumentModal({ open, onClose, listingTitle = "Property", sellerName = "Seller Name", buyerName = "Buyer Name", price = 250000 }: Props) {
   const [selected, setSelected] = useState<TemplateId>("preliminary");

@@ -73,12 +73,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfileLoading(true);
     const { data } = await supabase
       .from("profiles")
-      .select("user_id, display_name, avatar_url, role, bio, first_name, last_name, city, country, phone, website_url, is_platform_admin, verified, created_at, updated_at, id, participant_type, investor_mode, subscription_product_id")
+      .select("user_id, display_name, avatar_url, role, bio, first_name, last_name, city, country, phone, website_url, is_platform_admin, verified, created_at, updated_at, id, participant_type, investor_mode, subscription_product_id, force_pro_access")
       .eq("user_id", userId)
       .single();
     // Discard stale result if the auth user changed before this resolved
     if (expectedUserIdRef.current !== userId) return null;
-    if (data) setProfile(data as Profile);
+    if (data) setProfile(data as unknown as Profile);
     setProfileLoading(false);
     return data;
   }, []);

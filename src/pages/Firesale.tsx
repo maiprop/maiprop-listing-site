@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { logger } from "@/lib/logger";
 
 const steps = [
-  { step: "01", title: "Property Details", desc: "Address, KAEK, type, size â€” takes 2 minutes." },
+  { step: "01", title: "Property Details", desc: "Address, KAEK, type, size — takes 2 minutes." },
   { step: "02", title: "AI Valuation Engine", desc: "100+ data points analyzed from mAI Prop OS." },
   { step: "03", title: "Confidential Offer", desc: "Guaranteed cash offer within 96 hours." },
   { step: "04", title: "Close in 96h", desc: "Accept and close. We handle title, notary, everything." },
@@ -71,7 +71,7 @@ export default function Firesale() {
           <div className="container relative">
             <div className="max-w-3xl">
               <div className="reveal in-view inline-flex items-center gap-2 bg-destructive/10 border border-destructive/20 text-destructive px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest mb-6">
-                <Flame className="w-3.5 h-3.5 flame-flicker" /> Quick Saleâ„¢ â€” Instant Cash Offer
+                <Flame className="w-3.5 h-3.5 flame-flicker" /> Quick Sale™ — Instant Cash Offer
               </div>
               <h1 className="reveal in-view reveal-delay-1 font-display text-3xl sm:text-5xl md:text-6xl font-black mb-4 sm:mb-5 leading-tight">
                 Sell Your Property
@@ -125,8 +125,8 @@ export default function Firesale() {
             <Flame className="w-3.5 h-3.5 text-primary shrink-0" />
             <span>
               Submitting is always <strong className="text-foreground">free</strong>. Our fee is{" "}
-              <strong className="text-foreground">0.5% at completion</strong> (min â‚¬500), paid by the seller only when
-              the deal closes â€” never upfront.
+              <strong className="text-foreground">0.5% at completion</strong> (min €500), paid by the seller only when
+              the deal closes — never upfront.
             </span>
           </div>
         </div>
@@ -153,7 +153,7 @@ export default function Firesale() {
           onSuccess={() => {
             setShowInvitationModal(false);
             setInvitationStatus("pending");
-            toast.success("Invitation request submitted â€” we'll be in touch within 48 hours.");
+            toast.success("Invitation request submitted — we'll be in touch within 48 hours.");
           }}
         />
       )}

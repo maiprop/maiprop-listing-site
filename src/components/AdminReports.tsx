@@ -1,8 +1,8 @@
 ﻿/**
- * AdminReports â€” Platform analytics dashboard for admins.
+ * AdminReports — Platform analytics dashboard for admins.
  *
- * Tab 1: Platform Overview â€” KPI cards, monthly listing chart, CSV export.
- * Tab 2: Content Reports  â€” listing_reports table with status filter & resolve action.
+ * Tab 1: Platform Overview — KPI cards, monthly listing chart, CSV export.
+ * Tab 2: Content Reports  — listing_reports table with status filter & resolve action.
  */
 
 import { useState } from "react";
@@ -19,7 +19,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from "recharts";
 
-// â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Types ─────────────────────────────────────────────────────────────────────────
 type ReportStatus = "pending" | "resolved";
 
 type ReportRow = {
@@ -47,7 +47,7 @@ type Tab = "overview" | "reports";
 type ReportFilter = "all" | "pending" | "resolved";
 
 
-// â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Helpers ───────────────────────────────────────────────────────────────────────
 function firstOfMonth(): string {
   const now = new Date();
   return new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
@@ -81,7 +81,7 @@ function getLinkForEntity(entityType: string, entityId: string): string {
   return `/property/${entityId}`;
 }
 
-// â”€â”€ Monthly bar helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Monthly bar helper ─────────────────────────────────────────────────────────────
 function buildMonthlyBars(createdAts: string[]): MonthlyBar[] {
   const byMonth: Record<string, number> = {};
   for (const iso of createdAts) {
@@ -99,13 +99,13 @@ function buildMonthlyBars(createdAts: string[]): MonthlyBar[] {
   return bars;
 }
 
-// â”€â”€ Main component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Main component ────────────────────────────────────────────────────────────────
 export default function AdminReports() {
   const [activeTab, setActiveTab] = useState<Tab>("overview");
 
   return (
     <div className="space-y-6">
-      {/* â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Header ────────────────────────────────────────────────────── */}
       <div>
         <h2 className="font-display text-lg font-semibold flex items-center gap-2">
           <TrendingUp className="w-5 h-5 text-brand-gold" />
@@ -116,7 +116,7 @@ export default function AdminReports() {
         </p>
       </div>
 
-      {/* â”€â”€ Tab bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Tab bar ───────────────────────────────────────────────────── */}
       <div className="flex gap-1 border-b border-border">
         {(
           [
@@ -138,13 +138,13 @@ export default function AdminReports() {
         ))}
       </div>
 
-      {/* â”€â”€ Tab content â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Tab content ───────────────────────────────────────────────── */}
       {activeTab === "overview" ? <PlatformOverviewTab /> : <ContentReportsTab />}
     </div>
   );
 }
 
-// â”€â”€ Tab 1: Platform Overview â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Tab 1: Platform Overview ──────────────────────────────────────────────────────
 function PlatformOverviewTab() {
   const { data: stats, isLoading: loading } = useQuery<PlatformStats>({
     queryKey: ["admin-platform-stats"],
@@ -218,7 +218,7 @@ function PlatformOverviewTab() {
         <StatCard icon={<DoorOpen className="w-4 h-4 text-amber-500" />}    label="Open Houses"           value={s.openHouses}       color="amber" />
       </div>
 
-      {/* Monthly listing chart â€” hidden until real data endpoint is wired */}
+      {/* Monthly listing chart — hidden until real data endpoint is wired */}
       <div className="rounded-xl border border-border bg-card p-5">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-display font-semibold">Monthly Listings Created (last 6 months)</h3>
@@ -270,7 +270,7 @@ function PlatformOverviewTab() {
   );
 }
 
-// â”€â”€ Stat card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Stat card ─────────────────────────────────────────────────────────────────────
 type StatColor = "default" | "emerald" | "blue" | "violet" | "rose" | "amber";
 
 function StatCard({
@@ -303,7 +303,7 @@ function StatCard({
   );
 }
 
-// â”€â”€ Tab 2: Content Reports â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Tab 2: Content Reports ────────────────────────────────────────────────────────
 function ContentReportsTab() {
   const qc = useQueryClient();
   const [filter, setFilter] = useState<ReportFilter>("all");
@@ -404,7 +404,7 @@ function ContentReportsTab() {
                     <td className="px-4 py-3 font-mono text-xs">{r.entity_id}</td>
                     <td className="px-4 py-3 capitalize">{r.entity_type.replace("_", " ")}</td>
                     <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
-                      {r.reporter_id ?? "â€”"}
+                      {r.reporter_id ?? "—"}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
                       {formatDate(r.created_at)}
@@ -445,7 +445,7 @@ function ContentReportsTab() {
   );
 }
 
-// â”€â”€ Report status badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Report status badge ───────────────────────────────────────────────────────────
 function ReportStatusBadge({ status }: { status: ReportStatus }) {
   return status === "resolved" ? (
     <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">

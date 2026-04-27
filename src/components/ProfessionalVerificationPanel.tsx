@@ -1,5 +1,5 @@
 ﻿/**
- * ProfessionalVerificationPanel â€” Admin review of professional credential submissions.
+ * ProfessionalVerificationPanel — Admin review of professional credential submissions.
  * Approve / reject with inline notes. Falls back to mock data when Supabase returns nothing.
  */
 
@@ -24,7 +24,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { PROFESSIONAL_DISPLAY_CATEGORY_COLORS } from "@/lib/statusColors";
 
-// â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Types ────────────────────────────────────────────────────────────────────
 
 type VerifStatus = "pending" | "approved" | "rejected";
 
@@ -41,7 +41,7 @@ interface Professional {
 }
 
 
-// â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
 const CATEGORY_COLORS = PROFESSIONAL_DISPLAY_CATEGORY_COLORS;
 
@@ -53,7 +53,7 @@ import { formatDate as fmtDate } from "@/lib/format";
 
 type TabFilter = "all" | VerifStatus;
 
-// â”€â”€ Status badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Status badge ─────────────────────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: VerifStatus }) {
   if (status === "approved") return (
@@ -73,7 +73,7 @@ function StatusBadge({ status }: { status: VerifStatus }) {
   );
 }
 
-// â”€â”€ Professional row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Professional row ──────────────────────────────────────────────────────────
 
 function ProfRow({ pro, onApprove, onReject }: {
   pro: Professional;
@@ -177,7 +177,7 @@ function ProfRow({ pro, onApprove, onReject }: {
   );
 }
 
-// â”€â”€ Main component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Main component ───────────────────────────────────────────────────────────
 
 export function ProfessionalVerificationPanel() {
   const [professionals, setProfessionals] = useState<Professional[]>([]);
