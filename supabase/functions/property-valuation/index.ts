@@ -2,6 +2,9 @@ import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 import { openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
 import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
+import { createLogger } from "../_shared/logger.ts";
+
+const log = createLogger("property-valuation");
 
 const BUCKET = "property-valuation";
 const valuationLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 15, windowMs: 60_000 });
@@ -378,7 +381,7 @@ Rules:
 
     if (!response.ok) {
       const txt = await response.text();
-      console.error("AI gateway error:", response.status, txt);
+      log.error("AI gateway error", { status: response.status, body: txt.slice(0, 500) });
       const usageLimitMsg = "AI features are temporarily unavailable due to usage limits. Please try again later or contact support.";
       if (response.status === 402 || response.status === 429) {
         return new Response(JSON.stringify({ error: usageLimitMsg }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -409,7 +412,7 @@ Rules:
     try {
       result = JSON.parse(raw);
     } catch (parseErr) {
-      console.error("JSON parse failed:", parseErr, raw.slice(0, 500));
+      log.error("JSON parse failed", { err: parseErr instanceof Error ? parseErr.message : String(parseErr), raw: raw.slice(0, 500) });
       throw new Error("Failed to parse AI response — invalid JSON from model");
     }
 
@@ -431,7 +434,7 @@ Rules:
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
-    console.error("property-valuation error:", err);
+    log.error("valuation error", { err: err instanceof Error ? err.message : String(err) });
     return new Response(
       JSON.stringify({ error: err instanceof Error ? err.message : "Unknown error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

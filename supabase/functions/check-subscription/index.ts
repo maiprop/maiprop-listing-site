@@ -4,13 +4,16 @@ import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { verifyBearerToken, AuthError } from "../_shared/auth.ts";
+import { createLogger } from "../_shared/logger.ts";
+
+const log = createLogger("check-subscription");
 
 // Called on every auth context refresh — 30/min per IP
 const checkSubLimiter = makeRateLimiter({ bucket: "check-subscription", maxRequests: 30, windowMs: 60_000 });
 
+// Redirect the legacy logStep helper through the structured logger.
 const logStep = (step: string, details?: any) => {
-  const detailsStr = details ? ` - ${JSON.stringify(details)}` : "";
-  console.log(`[CHECK-SUBSCRIPTION] ${step}${detailsStr}`);
+  log.info(step, details && typeof details === "object" ? details as Record<string, unknown> : details !== undefined ? { details } : undefined);
 };
 
 Deno.serve(async (req) => {

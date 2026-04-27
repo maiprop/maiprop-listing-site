@@ -11,12 +11,9 @@ function captureLines<T>(fn: () => T): { lines: { stream: "log" | "warn" | "erro
   const origLog = console.log;
   const origWarn = console.warn;
   const origError = console.error;
-  // deno-lint-ignore no-explicit-any
-  console.log = (...args: any[]) => lines.push({ stream: "log", text: String(args[0]) });
-  // deno-lint-ignore no-explicit-any
-  console.warn = (...args: any[]) => lines.push({ stream: "warn", text: String(args[0]) });
-  // deno-lint-ignore no-explicit-any
-  console.error = (...args: any[]) => lines.push({ stream: "error", text: String(args[0]) });
+  console.log = (...args: unknown[]) => lines.push({ stream: "log", text: String(args[0]) });
+  console.warn = (...args: unknown[]) => lines.push({ stream: "warn", text: String(args[0]) });
+  console.error = (...args: unknown[]) => lines.push({ stream: "error", text: String(args[0]) });
   try {
     const result = fn();
     return { lines, result };

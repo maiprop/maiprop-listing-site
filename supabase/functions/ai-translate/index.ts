@@ -16,6 +16,9 @@
 
 import { openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
+import { createLogger } from "../_shared/logger.ts";
+
+const log = createLogger("ai-translate");
 
 const ALLOWED_ORIGINS = [
   "https://maiprop.co", "https://www.maiprop.co", "https://app.maiprop.co", "https://portal.maiprop.co",
@@ -140,7 +143,7 @@ Output (JSON only):`;
 
     if (!response.ok) {
       const err = await response.text();
-      console.error("OpenAI API error:", response.status, err);
+      log.error("OpenAI API error", { status: response.status, body: err?.slice(0, 500) });
       return new Response(JSON.stringify({ error: "Translation API error", detail: response.status }), {
         status: 502, headers: { ...hdrs, "Content-Type": "application/json" },
       });
@@ -155,7 +158,7 @@ Output (JSON only):`;
     try {
       translated = JSON.parse(cleaned);
     } catch {
-      console.error("Failed to parse OpenAI output:", cleaned.slice(0, 200));
+      log.error("failed to parse OpenAI output", { sample: cleaned.slice(0, 200) });
       return new Response(JSON.stringify({ error: "Translation parsing failed", raw: cleaned.slice(0, 500) }), {
         status: 502, headers: { ...hdrs, "Content-Type": "application/json" },
       });
@@ -167,7 +170,7 @@ Output (JSON only):`;
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
-    console.error("ai-translate error:", msg);
+    log.error("translate error", { err: msg });
     return new Response(JSON.stringify({ error: msg }), {
       status: 500, headers: { ...hdrs, "Content-Type": "application/json" },
     });

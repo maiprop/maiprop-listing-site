@@ -2,6 +2,9 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { verifyHmacSignature, HmacVerifyError } from "../_shared/webhookHmac.ts";
 import { errorResponse, unavailableResponse } from "../_shared/response.ts";
+import { createLogger } from "../_shared/logger.ts";
+
+const log = createLogger("receive-from-os");
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -18,7 +21,7 @@ Deno.serve(async (req) => {
 
   const WEBHOOK_SECRET = Deno.env.get("MAIPROP_OS_WEBHOOK_SECRET");
   if (!WEBHOOK_SECRET) {
-    console.error("MAIPROP_OS_WEBHOOK_SECRET is not set — rejecting webhook for security");
+    log.error("MAIPROP_OS_WEBHOOK_SECRET not set, rejecting webhook");
     return unavailableResponse("not_configured", corsHeaders);
   }
 

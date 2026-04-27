@@ -4,12 +4,15 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 import { verifyBearerToken, AuthError } from "../_shared/auth.ts";
+import { createLogger } from "../_shared/logger.ts";
+
+const log = createLogger("customer-portal");
 
 const portalLimiter = makeRateLimiter({ bucket: "customer-portal", maxRequests: 10, windowMs: 60_000 });
 
+// Redirect the legacy logStep helper through the structured logger.
 const logStep = (step: string, details?: any) => {
-  const detailsStr = details ? ` - ${JSON.stringify(details)}` : "";
-  console.log(`[CUSTOMER-PORTAL] ${step}${detailsStr}`);
+  log.info(step, details && typeof details === "object" ? details as Record<string, unknown> : details !== undefined ? { details } : undefined);
 };
 
 /**

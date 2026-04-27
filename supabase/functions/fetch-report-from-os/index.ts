@@ -10,6 +10,9 @@
  */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { createLogger } from "../_shared/logger.ts";
+
+const log = createLogger("fetch-report-from-os");
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -133,7 +136,7 @@ Deno.serve(async (req) => {
 
     if (!res.ok) {
       const text = await res.text();
-      console.warn("fetch-report-from-os: OS returned", res.status, text.slice(0, 200));
+      log.warn("OS returned non-ok", { status: res.status, body: text.slice(0, 200) });
       return new Response(
         JSON.stringify({ ok: true, report: null, source: null, reason: `OS returned ${res.status}` }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -153,7 +156,7 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err: unknown) {
-    console.error("fetch-report-from-os error:", err);
+    log.error("fetch-report error", { err: err instanceof Error ? err.message : String(err) });
     const message = err instanceof Error ? err.message : "Unknown error";
     return new Response(
       JSON.stringify({ ok: false, error: message, report: null }),

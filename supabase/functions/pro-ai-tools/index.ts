@@ -2,6 +2,9 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 import { openAIChatCompletion } from "../_shared/openai.ts";
+import { createLogger } from "../_shared/logger.ts";
+
+const log = createLogger("pro-ai-tools");
 
 const proAiLimiter = makeRateLimiter({ bucket: "pro-ai-tools", maxRequests: 15, windowMs: 60_000 });
 
@@ -130,7 +133,7 @@ Deno.serve(async (req) => {
         });
       }
       const t = await response.text();
-      console.error("AI gateway error:", response.status, t);
+      log.error("AI gateway error", { status: response.status, body: t?.slice(0, 500) });
       return new Response(JSON.stringify({ error: "AI gateway error" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -141,7 +144,7 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
     });
   } catch (e) {
-    console.error("pro-ai-tools error:", e);
+    log.error("pro-ai-tools error", { err: e instanceof Error ? e.message : String(e) });
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

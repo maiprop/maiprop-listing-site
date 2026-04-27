@@ -2,6 +2,9 @@ import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 import { openAIChatCompletion } from "../_shared/openai.ts";
 import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
+import { createLogger } from "../_shared/logger.ts";
+
+const log = createLogger("property-chat");
 
 const BUCKET = "property-chat";
 const chatLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 20, windowMs: 60_000 });
@@ -111,7 +114,7 @@ RESPONSE RULES — follow these strictly:
     });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Unknown error";
-    console.error("property-chat error:", msg);
+    log.error("property-chat error", { err: msg });
     return new Response(JSON.stringify({ error: msg }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

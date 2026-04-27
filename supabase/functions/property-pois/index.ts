@@ -3,6 +3,9 @@ import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 import { openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
 import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
+import { createLogger } from "../_shared/logger.ts";
+
+const log = createLogger("property-pois");
 
 const BUCKET = "property-pois";
 const poisLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 20, windowMs: 60_000 });
@@ -76,7 +79,7 @@ Rules:
         );
       }
       const text = await response.text();
-      console.error("AI error:", status, text);
+      log.error("AI gateway error", { status, body: text.slice(0, 500) });
       throw new Error(`AI gateway error: ${status}`);
     }
 
@@ -112,7 +115,7 @@ Rules:
       try {
         parsed = JSON.parse(repaired);
       } catch {
-        console.error("Failed to parse AI response:", jsonStr);
+        log.error("failed to parse AI response", { response: jsonStr?.slice(0, 500) });
         throw new Error("AI returned invalid JSON");
       }
     }
@@ -137,7 +140,7 @@ Rules:
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
-    console.error("property-pois error:", e);
+    log.error("property-pois error", { err: e instanceof Error ? e.message : String(e) });
     return new Response(
       JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

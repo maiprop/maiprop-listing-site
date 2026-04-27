@@ -36,10 +36,10 @@ const LEVEL_RANK: Record<LogLevel, number> = {
 
 function getMinLevel(): LogLevel {
   // Deno globals are typed loosely in this shared module to keep it
-  // testable under both Deno and Node (vitest).
-  // deno-lint-ignore no-explicit-any
-  const env = (globalThis as any).Deno?.env;
-  const raw: string = env?.get?.("LOG_LEVEL") ?? "info";
+  // testable under both Deno and Node (vitest). We narrow via `unknown`
+  // + structural check so we never introduce an `any` escape hatch.
+  const denoObj = (globalThis as { Deno?: { env?: { get?: (key: string) => string | undefined } } }).Deno;
+  const raw: string = denoObj?.env?.get?.("LOG_LEVEL") ?? "info";
   if (raw === "debug" || raw === "info" || raw === "warn" || raw === "error") {
     return raw;
   }

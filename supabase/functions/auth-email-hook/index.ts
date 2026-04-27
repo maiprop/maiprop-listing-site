@@ -9,6 +9,9 @@ import { MagicLinkEmail } from '../_shared/email-templates/magic-link.tsx'
 import { RecoveryEmail } from '../_shared/email-templates/recovery.tsx'
 import { EmailChangeEmail } from '../_shared/email-templates/email-change.tsx'
 import { ReauthenticationEmail } from '../_shared/email-templates/reauthentication.tsx'
+import { createLogger } from '../_shared/logger.ts'
+
+const log = createLogger('auth-email-hook')
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -334,7 +337,7 @@ async function handleWebhook(req: Request): Promise<Response> {
     payload = webhook.verify(payloadText, headers) as SendEmailHookPayload
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Invalid webhook payload'
-    console.error('Webhook verification failed', { error: message })
+    log.error('webhook verification failed', { err: message })
     return new Response(
       JSON.stringify({ error: 'Invalid webhook payload' }),
       { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -361,7 +364,7 @@ async function handleWebhook(req: Request): Promise<Response> {
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to send email'
-    console.error('Auth email hook error', { error: message })
+    log.error('auth email hook error', { err: message })
     return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -388,7 +391,7 @@ Deno.serve(async (req) => {
   try {
     return await handleWebhook(req)
   } catch (error) {
-    console.error('Webhook handler error:', error)
+    log.error('webhook handler error', { err: error instanceof Error ? error.message : String(error) })
     const message = error instanceof Error ? error.message : 'Unknown error'
     return new Response(JSON.stringify({ error: message }), {
       status: 500,

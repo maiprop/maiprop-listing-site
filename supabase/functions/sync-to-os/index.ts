@@ -9,6 +9,9 @@
  */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { createLogger } from "../_shared/logger.ts";
+
+const log = createLogger("sync-to-os");
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -214,7 +217,7 @@ Deno.serve(async (req) => {
     });
 
   } catch (err: any) {
-    console.error("sync-to-os error:", err.message);
+    log.error("sync error", { err: err?.message ?? String(err) });
     return new Response(JSON.stringify({ error: err.message }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

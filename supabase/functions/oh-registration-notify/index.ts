@@ -2,11 +2,14 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { getBrevoSender, sendBrevoEmail } from "../_shared/brevo.ts";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
+import { createLogger } from "../_shared/logger.ts";
+
+const log = createLogger("oh-registration-notify");
 
 function verifyWebhookSecret(req: Request): boolean {
   const secret = Deno.env.get("WEBHOOK_SECRET");
   if (!secret) {
-    console.error("[oh-registration-notify] WEBHOOK_SECRET not configured - rejecting request");
+    log.error("WEBHOOK_SECRET not configured - rejecting request");
     return false;
   }
   const auth = req.headers.get("Authorization");
@@ -56,7 +59,7 @@ Deno.serve(async (req) => {
 
     const { data: userData, error: userErr } = await supabase.auth.admin.getUserById(record.requester_id);
     if (userErr || !userData?.user?.email) {
-      console.error("Could not fetch user email:", userErr);
+      log.error("could not fetch user email", { err: userErr?.message ?? String(userErr) });
       return new Response(JSON.stringify({ ok: false, reason: "user not found" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -166,12 +169,12 @@ Deno.serve(async (req) => {
       },
     });
 
-    console.log(`Sent ${newStatus} email to ${recipientEmail} for registration ${record.id}`);
+    log.info("sent status email", { new_status: newStatus, recipient: recipientEmail, registration_id: record.id });
     return new Response(JSON.stringify({ ok: true, status: newStatus, recipient: recipientEmail }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
-    console.error("oh-registration-notify error:", err);
+    log.error("notify error", { err: err instanceof Error ? err.message : String(err) });
     return new Response(JSON.stringify({ ok: false, error: String(err) }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

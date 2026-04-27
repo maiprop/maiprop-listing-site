@@ -10,9 +10,14 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
+import { createLogger } from "../_shared/logger.ts";
 
+const structuredLog = createLogger("send-saved-search-alerts");
+
+// Redirect the legacy `log(msg, data?)` helper through the structured logger
+// so all existing call sites emit JSON without modification.
 function log(msg: string, data?: unknown) {
-  console.log(`[send-saved-search-alerts] ${msg}`, data ? JSON.stringify(data) : "");
+  structuredLog.info(msg, data && typeof data === "object" ? data as Record<string, unknown> : data !== undefined ? { data } : undefined);
 }
 
 // Prevent unauthenticated callers from triggering bulk email sends.
@@ -23,7 +28,7 @@ function log(msg: string, data?: unknown) {
 function verifyCronSecret(req: Request): boolean {
   const secret = Deno.env.get("CRON_SECRET");
   if (!secret) {
-    console.error("[send-saved-search-alerts] CRON_SECRET not configured — rejecting request");
+    structuredLog.error("CRON_SECRET not configured, rejecting request");
     return false;
   }
   const auth = req.headers.get("Authorization");

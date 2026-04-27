@@ -8,6 +8,10 @@
  * verify_jwt = false — callable without auth (used on public property pages).
  */
 
+import { createLogger } from "../_shared/logger.ts";
+
+const log = createLogger("os-sales-coordinates");
+
 const ALLOWED_ORIGINS = [
   "https://maiprop.co", "https://www.maiprop.co", "https://app.maiprop.co", "https://portal.maiprop.co",
   "http://localhost:8080", "http://localhost:8081", "http://localhost:8082",
@@ -144,7 +148,7 @@ Deno.serve(async (req) => {
     }
 
     if (!response.ok) {
-      console.warn(`os-sales-coordinates: OS API returned ${response.status}`);
+      log.warn("OS API non-ok", { status: response.status });
       return new Response(
         JSON.stringify({ available: false, reason: "upstream_unavailable" }),
         { status: 503, headers: { ...hdrs, "Content-Type": "application/json" } },
@@ -158,7 +162,7 @@ Deno.serve(async (req) => {
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    console.warn("os-sales-coordinates: fetch failed. Error:", message);
+    log.warn("fetch failed", { err: message });
 
     return new Response(
       JSON.stringify({ available: false, reason: "upstream_unavailable" }),

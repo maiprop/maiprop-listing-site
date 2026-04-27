@@ -1,6 +1,9 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { getBrevoSender, sendBrevoEmail } from "../_shared/brevo.ts";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
+import { createLogger } from "../_shared/logger.ts";
+
+const log = createLogger("invitation-notify");
 
 Deno.serve(async (req) => {
   const corsPreflightResponse = handleCors(req);
@@ -199,7 +202,7 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
-    console.error("invitation-notify error:", err);
+    log.error("invitation-notify error", { err: err instanceof Error ? err.message : String(err) });
     return new Response(JSON.stringify({ error: (err as Error).message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

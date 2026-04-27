@@ -3,10 +3,15 @@ import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { verifyBearerToken, AuthError } from "../_shared/auth.ts";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
+import { createLogger } from "../_shared/logger.ts";
 
+const log = createLogger("create-checkout");
+
+// Redirect the legacy logStep helper through the structured logger so existing
+// call sites don't need to change. The `step` becomes the message and
+// `details` becomes the structured context.
 const logStep = (step: string, details?: any) => {
-  const detailsStr = details ? ` - ${JSON.stringify(details)}` : "";
-  console.log(`[CREATE-CHECKOUT] ${step}${detailsStr}`);
+  log.info(step, details && typeof details === "object" ? details as Record<string, unknown> : details !== undefined ? { details } : undefined);
 };
 
 /** Accepts only same-origin absolute paths starting with "/" (and not "//" or "/\\").
@@ -52,7 +57,7 @@ Deno.serve(async (req) => {
 
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!serviceRoleKey) {
-    console.error("SUPABASE_SERVICE_ROLE_KEY is not set — checkout cannot proceed safely");
+    log.error("SUPABASE_SERVICE_ROLE_KEY not set, checkout cannot proceed safely");
     return new Response(JSON.stringify({ error: "Checkout service unavailable" }), {
       status: 503,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

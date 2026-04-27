@@ -15,10 +15,13 @@
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
+import { createLogger } from "../_shared/logger.ts";
 
+const log = createLogger("log-role-switch");
+
+// Redirect the legacy logStep helper through the structured logger.
 const logStep = (step: string, details?: unknown) => {
-  const suffix = details ? ` — ${JSON.stringify(details)}` : "";
-  console.log(`[LOG-ROLE-SWITCH] ${step}${suffix}`);
+  log.info(step, details && typeof details === "object" ? details as Record<string, unknown> : details !== undefined ? { details } : undefined);
 };
 
 Deno.serve(async (req) => {
