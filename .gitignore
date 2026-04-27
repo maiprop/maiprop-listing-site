@@ -53,5 +53,6 @@ public/docs/
 # Temporary audit / schema snapshots
 schema-openapi.json
 type-errors.txt
+knip-report.txt
 *.bak
 src/integrations/supabase/types.ts.bak
