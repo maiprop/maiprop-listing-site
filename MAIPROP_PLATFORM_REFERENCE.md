@@ -69,8 +69,8 @@ These are display values only; checkout uses the Stripe Price ID.
 | `agent` | `agent_basic` | Agent Pro | €149 | €1490 | no |
 | `developer` | `developer_pro` | Developer Pro | €129 | €1290 | **yes** |
 | `professional` | `professional_basic` | Professional Pro | €69 | €690 | no |
-| `investor` | `investor_private` | Investor Plan | €490 | €4900 | **yes** |
-| `institutional` | `investor_institutional` | Institutional Plan | €1490 | €14900 | **yes** |
+| `investor` | `investor_private` | Investor Plan | €49 | €490 | **yes** |
+| `institutional` | `investor_institutional` | Institutional Plan | €199 | €1,990 | **yes** |
 
 ### Layer B — Fine-grained DB-driven keys (`src/hooks/usePricingConfigs.ts`)
 
