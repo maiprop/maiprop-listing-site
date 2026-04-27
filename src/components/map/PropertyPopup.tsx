@@ -94,6 +94,7 @@ export function PropertyPopup({ listing, onClose: _onClose }: { listing: MapList
         <img
           src={image}
           alt={listing.title}
+          loading="lazy"
           className="w-full h-full object-cover"
           onError={e => { (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400&q=60"; }}
         />
