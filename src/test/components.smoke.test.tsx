@@ -13,7 +13,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import React, { Suspense } from "react";
-import { cleanup } from "@testing-library/react";
+import { act, cleanup } from "@testing-library/react";
 import { renderWithProviders } from "@/test/utils";
 
 // ── requestAnimationFrame stub (not in jsdom) ─────────────────────────────────
@@ -500,7 +500,7 @@ describe("Component smoke tests", () => {
 
   it("CompareAIReports renders without throwing", async () => {
     const { CompareAIReports } = await import("@/components/CompareAIReports");
-    expect(() => renderWithProviders(<CompareAIReports listings={[]} />)).not.toThrow();
+    expect(() => renderWithProviders(<table><tbody><CompareAIReports listings={[]} /></tbody></table>)).not.toThrow();
   });
 
   // ── Dashboard components ───────────────────────────────────────────────────
@@ -879,7 +879,9 @@ describe("Component smoke tests", () => {
 
   it("OpenHouseAnalytics renders without throwing", async () => {
     const { default: OpenHouseAnalytics } = await import("@/components/OpenHouseAnalytics");
-    expect(() => renderWithProviders(<OpenHouseAnalytics listingId="x" />)).not.toThrow();
+    await act(async () => {
+      renderWithProviders(<OpenHouseAnalytics listingId="x" />);
+    });
   });
 
   it("OpenHouseAssetControlPanel renders without throwing", async () => {

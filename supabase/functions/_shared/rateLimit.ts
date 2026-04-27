@@ -194,16 +194,30 @@ export function makeDbRateLimiter(
         },
       );
       if (error) {
-        console.warn(
-          `[rateLimit] RPC error for bucket="${bucket}" key="${key}": ${error.message}`,
+        console.error(
+          JSON.stringify({
+            level: "error",
+            event: "rate_limit_fail_open",
+            bucket,
+            key,
+            reason: error.message,
+            alert: true,
+          }),
         );
         return null;
       }
       return data as RpcResponse;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      console.warn(
-        `[rateLimit] RPC threw for bucket="${bucket}" key="${key}": ${msg}`,
+      console.error(
+        JSON.stringify({
+          level: "error",
+          event: "rate_limit_fail_open",
+          bucket,
+          key,
+          reason: msg,
+          alert: true,
+        }),
       );
       return null;
     }
