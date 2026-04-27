@@ -103,7 +103,7 @@ export default function InvestorDashboard() {
     queryKey: ["investor-deal-feed"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("firesale_requests").select("id, address, city, property_type, sqm, bedrooms, condition, ai_estimate, asking_price, offer_price, status, notes, created_at, days_on_market")
+        .from("firesale_requests").select("id, address, city, property_type, sqm, bedrooms, condition, ai_estimate, asking_price, offer_price, status, notes, created_at")
         .neq("status", "pending")
         .order("created_at", { ascending: false }).limit(50);
       if (error) throw error;
