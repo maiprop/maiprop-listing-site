@@ -142,7 +142,7 @@ Onboarding is complete: `bio` starts with `__type:`, so `needsOnboarding` is fal
 
 | Participant (onboarding label) | profiles.role    | profiles.bio (example) | Steps |
 |--------------------------------|------------------|------------------------|--------|
-| Home Buyer / Renter             | individual       | __type:buyer           | pick-type → done |
+| Home Buyer / Renter             | buyer            | __type:buyer           | pick-type → done |
 | Private Seller / Landlord       | seller_landlord  | __type:seller          | pick-type → done (eligible for Pro selling addons) |
 | Private Investor                | investor         | __type:investor        | pick-type → done |
 | Real Estate Agent / Agency      | agent            | __type:agent           | pick-type → done |
@@ -158,7 +158,7 @@ The **Dashboard** (`/dashboard`) shows different sidebar items and overview cont
 
 | Role | Sidebar sections | Overview focus |
 |------|------------------|----------------|
-| **individual** | Overview, Saved, Saved Searches, Messages, Viewings, Auction Alerts, Profile, Settings | Saved properties & auction alerts; CTA: Browse Listings |
+| **buyer** | Overview, Saved, Saved Searches, Messages, Viewings, Auction Alerts, Profile, Settings | Saved properties & auction alerts; CTA: Browse Listings |
 | **seller_landlord** | Overview, My Listings, Saved, Messages, Viewings, Profile, Settings | My listings, views, viewings; CTA: New Listing; Pro upsell card |
 | **agent** | Overview, My Listings, Analytics, Saved, Saved Searches, Messages, Viewings, Auction Alerts, Contacts, Projects, Portfolios, Profile, Settings | Listings and leads; CTA: New Listing |
 | **investor** | Overview, Deal Flow, Saved, Saved Searches, Messages, Viewings, Auction Alerts, Profile, Settings | Deal pipeline, saved deals; CTA: Investor Dashboard |
@@ -171,13 +171,13 @@ The **Dashboard** (`/dashboard`) shows different sidebar items and overview cont
 
 ## 6. Where roles are used in the app
 
-- **individual**  
-  - Treated as “retailer” for video viewing (free video access in some flows).  
+- **buyer**  
+  - Treated as "retailer" for video viewing (free video access in some flows).  
   - Dashboard, listings, favourites, messages (can message Pro professionals).  
   - No professional directory entry.
 
 - **seller_landlord**  
-  - **Segmented from other individuals** so they can be **eligible for Pro selling addons** (listing visibility, in-app messaging with buyers, etc.).  
+  - **Segmented from buyers** so they can be **eligible for Pro selling addons** (listing visibility, in-app messaging with buyers, etc.).  
   - Displayed in the UI as “Seller / Landlord”.  
   - Can create and manage their own listings (same as agents for own listings).  
   - Pro page shows a note that Pro unlocks listing visibility and selling addons for them.
@@ -207,7 +207,7 @@ The **Dashboard** (`/dashboard`) shows different sidebar items and overview cont
 
 ## 7. Signup defaults
 
-- **Email signup** (`Signup.tsx`): `signUp(..., { role: "individual" })`. So new users start as `individual`; onboarding can change them to `seller_landlord`, `agent`, `investor`, `institutional`, `developer`, or `professional` and set `bio` to `__type:<id>`.
+- **Email signup** (`Signup.tsx`): `signUp(..., { role: "buyer" })`. So new users start as `buyer`; onboarding can change them to `seller_landlord`, `agent`, `investor`, `institutional`, `developer`, or `professional` and set `bio` to `__type:<id>`.
 - **Google signup:** Redirect to `/onboarding`; no role is set until they complete step 1 (and for pros, step 3 sets `professional`).
 
 ---
