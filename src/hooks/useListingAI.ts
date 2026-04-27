@@ -7,7 +7,7 @@
 import { useState, useCallback } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import type { ListingFormData, AIPriceSuggestion } from "@/hooks/useListingForm";
+import type { ListingFormData, AIPriceSuggestion } from "@/hooks/listingForm.types";
 
 interface UseListingAIReturn {
   aiDescLoading: boolean;

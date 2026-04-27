@@ -5,7 +5,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
-import type { ListingFormData } from "@/hooks/useListingForm";
+import type { ListingFormData } from "@/hooks/listingForm.types";
 
 const DRAFT_KEY = "listing_draft";
 
