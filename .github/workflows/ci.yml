@@ -41,6 +41,9 @@ jobs:
       - name: Check bundle size
         run: npm run check:bundle-size
 
+      - name: Lint migrations (idempotency for new migrations)
+        run: npm run lint:migrations
+
       - name: Lint
         run: npm run lint
 

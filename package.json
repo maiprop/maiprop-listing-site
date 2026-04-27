@@ -11,7 +11,8 @@
   },
   "type": "module",
   "overrides": {
-    "tmp": "^0.2.4"
+    "tmp": "^0.2.4",
+    "uuid": "^14.0.0"
   },
   "scripts": {
     "dev": "vite",
@@ -40,6 +41,7 @@
     "test:e2e:ui": "playwright test --ui",
     "test:deno": "deno test --allow-env --allow-net --allow-read supabase/functions/",
     "check:bundle-size": "node scripts/check-bundle-size.mjs",
+    "lint:migrations": "node scripts/check-migration-idempotency.mjs",
     "lighthouse": "lhci autorun",
     "lighthouse:collect": "lhci collect",
     "lighthouse:assert": "lhci assert",
