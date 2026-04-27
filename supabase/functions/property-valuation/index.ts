@@ -1,29 +1,10 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 import { openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
+import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
 
-const valuationLimiter = makeRateLimiter({ bucket: "property-valuation", maxRequests: 15, windowMs: 60_000 });
-
-async function requireAuth(
-  req: Request,
-  corsHeaders: Record<string, string>,
-): Promise<Response | null> {
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
-    return new Response(JSON.stringify({ error: "Authentication required" }), {
-      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-  const { data: { user }, error } = await supabase.auth.getUser(authHeader.slice(7));
-  if (error || !user) {
-    return new Response(JSON.stringify({ error: "Invalid or expired token" }), {
-      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-  return null;
-}
+const BUCKET = "property-valuation";
+const valuationLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 15, windowMs: 60_000 });
 
 // ── Greece 2026 market benchmarks ─────────────────────────────────────────────
 const MARKET_BENCHMARKS = `
@@ -233,9 +214,10 @@ Deno.serve(async (req) => {
   const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
   if (await valuationLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
 
-
-  const authErr = await requireAuth(req, corsHeaders);
-  if (authErr) return authErr;
+  // Enforce AI quota before processing
+  const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
+  if (quota.errorResponse) return quota.errorResponse;
+  const quotaUserId = quota.userId;
 
   try {
     const body = await req.json();
@@ -441,6 +423,9 @@ Rules:
     if (!result.taxFriction) result.taxFriction = 30;
     if (!result.transferReadiness) result.transferReadiness = 55;
     if (!result.valuationMode) result.valuationMode = "MODE_1_LISTING_ONLY";
+
+    // Record usage after successful AI call
+    await recordAiCall(quotaUserId, BUCKET);
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
