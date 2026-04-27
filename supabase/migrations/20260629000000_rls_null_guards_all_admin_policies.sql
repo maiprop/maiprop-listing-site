@@ -69,11 +69,11 @@ CREATE POLICY "Admins can update leads" ON public.leads FOR UPDATE
   TO authenticated
   USING (
     (SELECT auth.uid()) IS NOT NULL
-    AND has_role(auth.uid(), 'admin'::app_role)
+    AND has_role((SELECT auth.uid()), 'admin'::app_role)
   )
   WITH CHECK (
     (SELECT auth.uid()) IS NOT NULL
-    AND has_role(auth.uid(), 'admin'::app_role)
+    AND has_role((SELECT auth.uid()), 'admin'::app_role)
   );
 
 -- ─────────────────────────────────────────────────────────────
@@ -84,7 +84,7 @@ CREATE POLICY "Admins can delete leads" ON public.marketing_leads FOR DELETE
   TO authenticated
   USING (
     (SELECT auth.uid()) IS NOT NULL
-    AND has_role(auth.uid(), 'admin'::app_role)
+    AND has_role((SELECT auth.uid()), 'admin'::app_role)
   );
 
 DROP POLICY IF EXISTS "Admins can update leads" ON public.marketing_leads;
@@ -92,7 +92,7 @@ CREATE POLICY "Admins can update leads" ON public.marketing_leads FOR UPDATE
   TO authenticated
   USING (
     (SELECT auth.uid()) IS NOT NULL
-    AND has_role(auth.uid(), 'admin'::app_role)
+    AND has_role((SELECT auth.uid()), 'admin'::app_role)
   );
 
 -- ─────────────────────────────────────────────────────────────
@@ -126,7 +126,7 @@ CREATE POLICY "Admins can delete properties" ON public.properties FOR DELETE
   TO authenticated
   USING (
     (SELECT auth.uid()) IS NOT NULL
-    AND has_role(auth.uid(), 'admin'::app_role)
+    AND has_role((SELECT auth.uid()), 'admin'::app_role)
   );
 
 DROP POLICY IF EXISTS "Admins can update properties" ON public.properties;
@@ -134,11 +134,11 @@ CREATE POLICY "Admins can update properties" ON public.properties FOR UPDATE
   TO authenticated
   USING (
     (SELECT auth.uid()) IS NOT NULL
-    AND has_role(auth.uid(), 'admin'::app_role)
+    AND has_role((SELECT auth.uid()), 'admin'::app_role)
   )
   WITH CHECK (
     (SELECT auth.uid()) IS NOT NULL
-    AND has_role(auth.uid(), 'admin'::app_role)
+    AND has_role((SELECT auth.uid()), 'admin'::app_role)
   );
 
 -- ─────────────────────────────────────────────────────────────
