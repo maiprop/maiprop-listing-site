@@ -130,3 +130,64 @@ describe("App.tsx render smoke", () => {
     await waitFor(() => expect(screen.getByText("page-notfound")).toBeInTheDocument());
   });
 });
+
+// ── ErrorBoundary peripheral isolation ─────────────────────────────────────
+// Each peripheral component (BottomNav, GlobalAIWidget, CookieConsentBanner,
+// I18nLoader) is wrapped in its own ErrorBoundary so a crash in one cannot
+// take down the routes. Use vi.doMock + dynamic import here so the module
+// graph this block sees overrides the top-of-file BottomNav stub.
+describe("App.tsx ErrorBoundary peripheral isolation", () => {
+  it("keeps routes rendered when BottomNav throws during render", async () => {
+    vi.resetModules();
+    vi.doMock("@/components/BottomNav", () => ({
+      BottomNav: () => {
+        throw new Error("BottomNav exploded");
+      },
+    }));
+    // Re-require all the page mocks under the new module graph.
+    vi.doMock("@/pages/Index", () => ({ default: () => <div>page-index</div> }));
+    vi.doMock("@/pages/NotFound", () => ({ default: () => <div>page-notfound</div> }));
+    vi.doMock("@/components/CookieConsentBanner", () => ({
+      CookieConsentBanner: () => <div>cookie-banner</div>,
+    }));
+    vi.doMock("@/integrations/supabase/client", () => ({
+      supabase: {
+        auth: {
+          onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } })),
+          getSession: vi.fn().mockResolvedValue({ data: { session: null } }),
+          signInWithPassword: vi.fn(),
+          signUp: vi.fn(),
+          signOut: vi.fn(),
+        },
+        from: vi.fn(() => ({
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          update: vi.fn().mockReturnThis(),
+          single: vi.fn().mockResolvedValue({ data: null, error: null }),
+        })),
+        functions: { invoke: vi.fn().mockResolvedValue({ data: null, error: null }) },
+      },
+    }));
+    vi.doMock("@/lib/logger", () => ({
+      logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn(), critical: vi.fn(), debug: vi.fn() },
+    }));
+    vi.doMock("@/lib/config", () => ({ APP_ORIGIN: "https://test.maiprop" }));
+    vi.doMock("@/hooks/useAiTranslation", () => ({ useAiTranslation: () => null }));
+
+    const FreshApp = (await import("@/App")).default;
+    setLocation("/");
+    // React will log the boundary error to console.error — silence to keep
+    // the test output clean while still asserting the route is alive.
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    try {
+      render(<FreshApp />);
+      await waitFor(() => expect(screen.getByText("page-index")).toBeInTheDocument());
+      // BottomNav crashed but routes survived — that's the whole point.
+      expect(screen.queryByText("bottom-nav")).toBeNull();
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+});

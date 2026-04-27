@@ -133,14 +133,16 @@ const App = () => (
                       <Route path="/api-docs" element={<ErrorBoundary><ApiDocs /></ErrorBoundary>} />
                       <Route path="/document-templates" element={<ErrorBoundary><DocumentTemplates /></ErrorBoundary>} />
                       <Route path="/contact" element={<ErrorBoundary><Contact /></ErrorBoundary>} />
-                      <Route path="*" element={<NotFound />} />
+                      <Route path="*" element={<ErrorBoundary><NotFound /></ErrorBoundary>} />
                     </Routes>
                   </Suspense>
                   </ErrorBoundary>
-                  <I18nLoader />
-                  <GlobalAIWidget />
-                  <BottomNav />
-                  <Suspense fallback={null}><CookieConsentBanner /></Suspense>
+                  <ErrorBoundary fallback={null}><I18nLoader /></ErrorBoundary>
+                  <ErrorBoundary fallback={null}><GlobalAIWidget /></ErrorBoundary>
+                  <ErrorBoundary fallback={null}><BottomNav /></ErrorBoundary>
+                  <ErrorBoundary fallback={null}>
+                    <Suspense fallback={null}><CookieConsentBanner /></Suspense>
+                  </ErrorBoundary>
                 </BrowserRouter>
               </TooltipProvider>
         </AuthProvider>
