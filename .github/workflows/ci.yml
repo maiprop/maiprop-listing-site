@@ -157,6 +157,7 @@ jobs:
             "RLS_USER_PASSWORD"
             "ONBOARDING_TEST_EMAIL"
             "ONBOARDING_TEST_PASSWORD"
+            "SUPABASE_SERVICE_ROLE_KEY"
           )
 
           missing=0
