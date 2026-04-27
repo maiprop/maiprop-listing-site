@@ -1,0 +1,71 @@
+# CODEOWNERS — maiprop-listing-site
+#
+# Each line declares which GitHub users/teams are auto-requested as reviewers
+# when a PR modifies the matching paths. The LAST matching pattern takes
+# precedence, so more-specific patterns should come later in the file.
+#
+# This file enforces a 2-eyes review on high-blast-radius modules identified
+# in the 2026-04-27 enterprise quality assessment (see
+# docs/ENTERPRISE_ASSESSMENT_2026-04-27.md, Quadrant IV blast-radius table).
+#
+# Reference: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-security/customizing-your-repository/about-code-owners
+
+# Default owner — every change at minimum routes to the lead.
+*                                                @krenios
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Tier 1 — Highest blast radius (auth, DB, payments, schema)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Database client singleton — imported by 23.4% of the codebase.
+/src/integrations/supabase/                      @krenios
+
+# Auth surface — imported by 20.7% of the codebase.
+/src/contexts/AuthContext.tsx                    @krenios
+/src/lib/participantConfig.ts                    @krenios
+
+# Paywall / subscription gate.
+/src/hooks/useSubscription.ts                    @krenios
+/src/hooks/useSubscription.tsx                   @krenios
+
+# DB schema — migrations are forward-only, irreversible in production.
+/supabase/migrations/                            @krenios
+/supabase/config.toml                            @krenios
+
+# Shared edge-function code — affects every edge function.
+/supabase/functions/_shared/                     @krenios
+
+# Stripe / payments edge functions — financial impact.
+/supabase/functions/stripe-webhook/              @krenios
+/supabase/functions/create-checkout-session/     @krenios
+/supabase/functions/create-customer-portal/      @krenios
+/supabase/functions/cancel-subscription/         @krenios
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Tier 2 — High blast radius (CI, headers, top-level shell)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# CI/CD pipeline — a broken workflow blocks the whole team.
+/.github/workflows/                              @krenios
+/.github/CODEOWNERS                              @krenios
+
+# Cloudflare/security headers and redirects.
+/public/_headers                                 @krenios
+/public/_redirects                               @krenios
+/functions/_middleware.ts                        @krenios
+
+# Top-level app shell, routing, error boundaries.
+/src/App.tsx                                     @krenios
+/src/main.tsx                                    @krenios
+/src/components/ErrorBoundary.tsx                @krenios
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Tier 3 — Lint, type, and test infrastructure
+# ─────────────────────────────────────────────────────────────────────────────
+
+/eslint.config.js                                @krenios
+/tsconfig*.json                                  @krenios
+/vite.config.ts                                  @krenios
+/vitest.config.ts                                @krenios
+/playwright.config.ts                            @krenios
+/scripts/                                        @krenios
