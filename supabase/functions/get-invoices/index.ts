@@ -6,11 +6,19 @@
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
+import { createLogger } from "../_shared/logger.ts";
+import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
+
+const _log = createLogger("get-invoices");
+const limiter = makeRateLimiter({ bucket: "get-invoices", maxRequests: 15, windowMs: 60_000 });
 
 Deno.serve(async (req) => {
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
+
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
+  if (await limiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);
 
   const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");

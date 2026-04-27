@@ -35,8 +35,10 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { verifyBearerToken, AuthError } from "../_shared/auth.ts";
 import { createLogger } from "../_shared/logger.ts";
+import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 
 const log = createLogger("delete-account");
+const limiter = makeRateLimiter({ bucket: "delete-account", maxRequests: 3, windowMs: 60_000 });
 
 const USER_FOLDER_BUCKETS = ["listing-images", "avatars", "project-media", "message-attachments"] as const;
 
@@ -44,6 +46,9 @@ Deno.serve(async (req) => {
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
+
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
+  if (await limiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);
 
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!serviceRoleKey) {

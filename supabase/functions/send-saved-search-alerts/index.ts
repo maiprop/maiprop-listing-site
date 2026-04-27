@@ -11,6 +11,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { createLogger } from "../_shared/logger.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 
 const structuredLog = createLogger("send-saved-search-alerts");
 
@@ -142,7 +143,7 @@ Deno.serve(async (req) => {
       `;
 
       if (BREVO_KEY) {
-        const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+        const res = await fetchWithTimeout("https://api.brevo.com/v3/smtp/email", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

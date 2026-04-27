@@ -7,6 +7,10 @@
  */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
+
+const limiter = makeRateLimiter({ bucket: "os-diagnose", maxRequests: 5, windowMs: 60_000 });
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -37,7 +41,7 @@ async function requireAgent(req: Request, sb: ReturnType<typeof createClient>): 
 }
 
 async function getOsToken(baseUrl: string, email: string, password: string): Promise<string> {
-  const res = await fetch(`${baseUrl}/auth/login`, {
+  const res = await fetchWithTimeout(`${baseUrl}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
@@ -50,6 +54,9 @@ async function getOsToken(baseUrl: string, email: string, password: string): Pro
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
+  if (await limiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -72,7 +79,7 @@ Deno.serve(async (req) => {
 
     // ── Probe 1: GET /api/auctions/future (new endpoint) ──────────────────────
     const futureUrl = `${OS_URL}/api/auctions/future?limit=5`;
-    const futureRes = await fetch(futureUrl, { headers: authHeaders });
+    const futureRes = await fetchWithTimeout(futureUrl, { headers: authHeaders });
     const futureJson = await futureRes.json().catch(() => null);
     const futureTotal: number = futureJson?.total ?? futureJson?.data?.length ?? 0;
     const futureSample = (futureJson?.data ?? []).slice(0, 3).map((a: any) => ({
@@ -87,7 +94,7 @@ Deno.serve(async (req) => {
     }));
 
     // ── Probe 2: count all via /api/v1/auctions/filter/count ──────────────────
-    const countAllRes = await fetch(`${OS_URL}/api/v1/auctions/filter/count`, {
+    const countAllRes = await fetchWithTimeout(`${OS_URL}/api/v1/auctions/filter/count`, {
       method: "POST",
       headers: authHeaders,
       body: JSON.stringify({}),
@@ -95,7 +102,7 @@ Deno.serve(async (req) => {
     const countAll = await countAllRes.json().catch(() => null);
 
     // ── Probe 3: count PENDING auctions ───────────────────────────────────────
-    const countPendingRes = await fetch(`${OS_URL}/api/v1/auctions/filter/count`, {
+    const countPendingRes = await fetchWithTimeout(`${OS_URL}/api/v1/auctions/filter/count`, {
       method: "POST",
       headers: authHeaders,
       body: JSON.stringify({ auctionStatus: "PENDING" }),
@@ -103,7 +110,7 @@ Deno.serve(async (req) => {
     const countPending = await countPendingRes.json().catch(() => null);
 
     // ── Probe 4: count COMPLETED auctions ─────────────────────────────────────
-    const countCompletedRes = await fetch(`${OS_URL}/api/v1/auctions/filter/count`, {
+    const countCompletedRes = await fetchWithTimeout(`${OS_URL}/api/v1/auctions/filter/count`, {
       method: "POST",
       headers: authHeaders,
       body: JSON.stringify({ auctionStatus: "COMPLETED" }),
@@ -114,7 +121,7 @@ Deno.serve(async (req) => {
     // This endpoint has a server-side NullPointerException bug in the OS API — captured for awareness
     let comp: any = null;
     try {
-      const compRes = await fetch(`${OS_URL}/api/v1/auctions/filter/count-comparison`, {
+      const compRes = await fetchWithTimeout(`${OS_URL}/api/v1/auctions/filter/count-comparison`, {
         method: "POST",
         headers: authHeaders,
         body: JSON.stringify({ sortBy: "AUCTION_DATE" }),
@@ -127,7 +134,7 @@ Deno.serve(async (req) => {
     // ── Probe 6: full future count via /api/auctions/future?limit=9999 ────────
     let futureFullTotal = futureTotal;
     try {
-      const fullRes = await fetch(`${OS_URL}/api/auctions/future?limit=9999`, { headers: authHeaders });
+      const fullRes = await fetchWithTimeout(`${OS_URL}/api/auctions/future?limit=9999`, { headers: authHeaders });
       const fullJson = await fullRes.json().catch(() => null);
       futureFullTotal = fullJson?.total ?? fullJson?.data?.length ?? futureTotal;
     } catch {

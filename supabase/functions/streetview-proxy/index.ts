@@ -1,5 +1,6 @@
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 
 /**
  * streetview-proxy
@@ -44,7 +45,7 @@ Deno.serve(async (req) => {
   }
 
   const googleUrl = `https://maps.googleapis.com/maps/api/streetview?size=${size}&location=${locParam}&fov=90&pitch=10&key=${key}`;
-  const imgRes = await fetch(googleUrl);
+  const imgRes = await fetchWithTimeout(googleUrl);
   if (!imgRes.ok) {
     return new Response(JSON.stringify({ error: "Street View unavailable" }), {
       status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },

@@ -4,8 +4,10 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { verifyBearerToken, AuthError } from "../_shared/auth.ts";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { createLogger } from "../_shared/logger.ts";
+import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 
 const log = createLogger("create-checkout");
+const limiter = makeRateLimiter({ bucket: "create-checkout", maxRequests: 10, windowMs: 60_000 });
 
 // Redirect the legacy logStep helper through the structured logger so existing
 // call sites don't need to change. The `step` becomes the message and
@@ -54,6 +56,9 @@ Deno.serve(async (req) => {
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
+
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
+  if (await limiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);
 
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!serviceRoleKey) {
