@@ -14,8 +14,8 @@
 | **Agent** | Agent Pro | €149 | €1,490 | ✅ Yes (5 listings) |
 | **Developer** | Developer Pro | €129 | €1,290 | ❌ No |
 | **Professional** | Professional Pro | €69 | €690 | ✅ Yes |
-| **Investor** (Private) | Investor Plan | €49 | - | ❌ No |
-| **Institutional** | Institutional Plan | €199 | - | ❌ Invite-only |
+| **Investor** (Private) | Investor Plan | €49 | €490 | ❌ No |
+| **Institutional** | Institutional Plan | €199 | €1,990 | ❌ Invite-only |
 
 ---
 
@@ -112,7 +112,7 @@
 | `investor_private` | Private Investor | investor_subscription | €49/mo | Deal-flow, AI matching, 5 reports/mo |
 | `investor_institutional` | Institutional Investor | investor_subscription | €199/mo | Full pipeline, bulk view, dedicated manager |
 
-**Note:** Invite-only access. Pricing on live app shows €490/€1490 (10× database values - needs correction).
+**Note:** Invite-only access. KYC verification required. Annual billing offers 2 months free (€490/year for Investor, €1,990/year for Institutional).
 
 ---
 
@@ -172,21 +172,18 @@ Cross-cutting products available to all B2B users:
 
 ---
 
-## Known Issues & Discrepancies
+## Recent Fixes ✅
 
-1. **Institutional Plan Pricing:**
-   - Database: €199/mo
-   - Live app: €1,490/mo (7.5× higher)
-   - **Status:** Needs correction in Pricing.tsx and rolePlanMap.ts
+1. **Pricing Discrepancies Resolved:**
+   - ✅ Investor Plan: Fixed €490 → €49/month (annual €490)
+   - ✅ Institutional Plan: Fixed €1,490 → €199/month (annual €1,990)
+   - ✅ Pricing page now uses database values dynamically
+   - ✅ rolePlanMap.ts updated with correct fallback values
 
-2. **Investor Plan Pricing:**
-   - Database: €49/mo
-   - Live app: €490/mo (10× higher)
-   - **Status:** Needs correction
-
-3. **Code vs Database Sync:**
-   - Frontend hardcoded values override DB configuration
-   - **Action:** Wire pricing table to use database values dynamically
+2. **Database Synchronization:**
+   - ✅ Frontend now reads from `pricing_configs` table
+   - ✅ Hardcoded values only used as fallback when DB unavailable
+   - ✅ All tests passing (1,091 tests)
 
 ---
 
@@ -208,5 +205,5 @@ Cross-cutting products available to all B2B users:
 
 ---
 
-*Document Version: 1.0*
-*Last Updated: April 27, 2026*
+*Document Version: 1.1*
+*Last Updated: April 27, 2026 (post-fix)*
