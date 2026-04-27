@@ -67,7 +67,7 @@ export function AdminProfessionalVerification() {
       if (notes.trim()) toast.info(`Note saved: "${notes.trim()}"`);
       setModalPro(null);
     },
-    onError: () => toast.error("Failed to approve. Please try again."),
+    onError: () => toast.error("Failed to approve professional. Please try again."),
   });
 
   const requestInfoMutation = useMutation({
@@ -96,7 +96,7 @@ export function AdminProfessionalVerification() {
       toast.success(`${proName}'s application rejected.`);
       setModalPro(null);
     },
-    onError: () => toast.error("Failed to reject. Please try again."),
+    onError: () => toast.error("Failed to reject professional. Please try again."),
   });
 
   const handleApprove = (id: string, licenseNumber: string, notes: string) => {

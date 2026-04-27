@@ -186,7 +186,7 @@ export function useCreateContactTask() {
       qc.invalidateQueries({ queryKey: ["contact_tasks", v.contactId] });
       toast.success("Task added");
     },
-    onError: () => toast.error("Something went wrong. Please try again."),
+    onError: () => toast.error("Failed to add task. Please try again."),
   });
 }
 
@@ -215,6 +215,6 @@ export function useUpdateContactTask() {
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["contact_tasks", data.contact_id] });
     },
-    onError: () => toast.error("Something went wrong. Please try again."),
+    onError: () => toast.error("Failed to update task. Please try again."),
   });
 }

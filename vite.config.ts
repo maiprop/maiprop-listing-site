@@ -11,6 +11,9 @@ export default defineConfig(({ mode }) => ({
     host: "0.0.0.0",
     port: 8080,
     hmr: {
+      // Disabled: the full-screen error overlay obscures the app during
+      // development with React Query / Supabase auth errors that are
+      // handled at runtime. Errors still appear in the browser console.
       overlay: false,
     },
   },

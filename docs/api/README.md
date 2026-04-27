@@ -10,14 +10,14 @@ The authoritative API specification lives in
 Once the site is deployed, the spec is rendered via Redoc at:
 
 - **Production**: <https://maiprop.co/api-docs.html>
-- **Staging**: <https://staging--maiprop.netlify.app/api-docs.html>
+- **Staging**: available via Cloudflare Pages preview deploy
 
 The YAML is copied into `public/docs/` at build time by the `prebuild` hook
 (`npm run api-docs:copy`). Do not edit `public/docs/edge-functions.openapi.yaml`
 directly — it is gitignored and regenerated.
 
 > **CSP note**: the Redoc CDN script is loaded from `https://cdn.redoc.ly`.
-> If you tighten `script-src` in `netlify.toml` to a strict allow-list, add
+> If you tighten `script-src` in `public/_headers` to a strict allow-list, add
 > `https://cdn.redoc.ly` or self-host `redoc.standalone.js` under `/assets/`.
 
 ### Viewing the spec locally

@@ -14,7 +14,7 @@ add a row here in the same PR.
 |---|---|---|---|---|
 | `SUPABASE_SERVICE_ROLE_KEY` | All edge fns; CI; sitemap; admin tooling | Supabase dashboard secrets, GH Actions, local `.env` | **90 days** or on compromise | Platform lead |
 | `SUPABASE_DB_PASSWORD` | Supabase CLI; psql admin | Supabase dashboard | **90 days** | Platform lead |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | Browser bundle (anon key) | Netlify / Cloudflare env (public) | Only if Supabase project rotated | Platform lead |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Browser bundle (anon key) | Cloudflare Pages env (public) | Only if Supabase project rotated | Platform lead |
 | `SUPABASE_ANON_KEY` | Edge fns calling supabase-js with end-user JWT | Supabase fn secrets | Only if Supabase project rotated | Platform lead |
 | `STRIPE_SECRET_KEY` (live) | `create-checkout`, `customer-portal`, `check-subscription`, `stripe-webhook`, `sync-stripe-pricing`, `create-stripe-price`, `get-invoices` | Supabase fn secrets | **180 days** or on compromise | Finance lead |
 | `STRIPE_WEBHOOK_SECRET` | `stripe-webhook` | Supabase fn secrets | On every webhook endpoint recreate | Platform lead |
@@ -35,7 +35,7 @@ add a row here in the same PR.
 | `BREVO_API_KEY` | `_shared/brevo.ts` (all transactional email), `process-email-queue`, `oh-registration-notify`, `invitation-notify`, `auth-email-hook`, `send-saved-search-alerts` | Supabase fn secrets | **90 days** | Platform lead |
 | `BREVO_FROM_EMAIL` / `BREVO_FROM_NAME` | Same as above | Supabase fn secrets | Only on rebrand | Platform lead |
 | `GOOGLE_MAPS_API_KEY` | `streetview-proxy` | Supabase fn secrets | **365 days** | Platform lead |
-| `VITE_MAPBOX_TOKEN` | Browser bundle (map components) | Netlify / Cloudflare env | **365 days** | Platform lead |
+| `VITE_MAPBOX_TOKEN` | Browser bundle (map components) | Cloudflare Pages env | **365 days** | Platform lead |
 
 ### CI / test
 
@@ -43,7 +43,7 @@ add a row here in the same PR.
 |---|---|---|---|---|
 | `LHCI_GITHUB_APP_TOKEN` | Lighthouse CI workflow | GH repo secrets | **365 days** | CI owner |
 | `E2E_TEST_EMAIL` / `E2E_TEST_PASSWORD` | Playwright e2e | GH repo secrets | On demo-account password change | CI owner |
-| `VITE_STRIPE_PRICE_*` (8 IDs) | `rolePlanMap.ts` fallbacks | Netlify / Cloudflare env | Only if Stripe products replaced | Finance lead |
+| `VITE_STRIPE_PRICE_*` (8 IDs) | `rolePlanMap.ts` fallbacks | Cloudflare Pages env | Only if Stripe products replaced | Finance lead |
 
 ---
 
@@ -65,7 +65,7 @@ Record each rotation here. Entries are append-only.
 2. **Set** the new value in every consumer location (see the *Used by* /
    *Stored in* columns above).
 3. **Redeploy** the affected surface (`supabase functions deploy <name>`,
-   Netlify deploy, etc.) so the new env is loaded.
+   Cloudflare Pages deploy, etc.) so the new env is loaded.
 4. **Verify** with a smoke test (see *Verification* below).
 5. **Revoke** the old value upstream.
 6. **Append** a row to the rotation log above in the same commit as any
@@ -84,8 +84,8 @@ zero-downtime is not possible — but the window can be minimised:
 # 2. Push the new key to every consumer FIRST:
 supabase secrets set SUPABASE_SERVICE_ROLE_KEY=<new-key>
 
-# 3. In Netlify (or Cloudflare Pages), update the env var via UI or CLI:
-netlify env:set SUPABASE_SERVICE_ROLE_KEY <new-key>
+# 3. In Cloudflare Pages, update the env var via the dashboard:
+#    Settings → Environment variables → Edit → update SUPABASE_SERVICE_ROLE_KEY
 
 # 4. Redeploy edge functions in one batch so they all pick up the new
 #    key in the same window:

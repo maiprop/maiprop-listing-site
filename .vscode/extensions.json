@@ -1,9 +1,13 @@
 {
   // Workspace-level extension recommendations. VS Code / Windsurf will
-  // surface a one-time prompt to install these the next time the workspace
-  // is opened. None of them are mandatory for `npm` workflows — only for
-  // Deno-aware editing of supabase/functions/.
+  // surface a one-time prompt to install these when the workspace is opened.
   "recommendations": [
-    "denoland.vscode-deno"
+    "denoland.vscode-deno",
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "bradlc.vscode-tailwindcss",
+    "ms-playwright.playwright",
+    "vitest.explorer",
+    "formulahendry.auto-rename-tag"
   ]
 }

@@ -25,6 +25,7 @@ import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "fs";
 import { resolve } from "path";
 import { assertNotProduction } from "./_prod-guard";
+import { getSeedEnv } from "./_seed-env";
 
 // Auto-load .env from project root so the script works without manually sourcing it
 try {
@@ -35,17 +36,8 @@ try {
   }
 } catch { /* .env not found — rely on shell environment */ }
 
-const SUPABASE_URL =
-  process.env.VITE_SUPABASE_URL ??
-  process.env.SUPABASE_URL ??
-  "https://qvvicunqcrwpioqnvzxf.supabase.co";
-const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const { supabaseUrl: SUPABASE_URL, serviceRoleKey: SERVICE_ROLE_KEY } = getSeedEnv();
 const PRO_PRODUCT_ID = process.env.VITE_STRIPE_PRO_PRODUCT_ID ?? "prod_U8SJbk3fZQ3xgD";
-
-if (!SERVICE_ROLE_KEY) {
-  console.error("Missing SUPABASE_SERVICE_ROLE_KEY");
-  process.exit(1);
-}
 
 assertNotProduction(SUPABASE_URL, "seed-demo-accounts.ts");
 
