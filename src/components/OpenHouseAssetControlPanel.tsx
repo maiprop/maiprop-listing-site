@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect } from "react";
 import {
   Users, Euro, ChevronDown, ChevronUp, Check, X, Loader2, Settings, Calendar, TrendingUp,
@@ -18,6 +17,9 @@ import {
   getOpenHouseDocSignedUrl,
   type OHTimeslot,
   type OHRegistrationStatus,
+  type OpenHouseRegistration,
+  type OpenHouseOffer,
+  type OpenHouseSettings,
 } from "@/hooks/useOpenHouseAssetControl";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -85,11 +87,11 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner }: Props
     }
   };
 
-  const pendingCount = registrations.filter((r: any) => r.status === "pending").length;
-  const approvedCount = registrations.filter((r: any) => r.status === "approved").length;
-  const attendedCount = registrations.filter((r: any) => r.status === "attended").length;
+  const pendingCount = registrations.filter((r: OpenHouseRegistration) => r.status === "pending").length;
+  const approvedCount = registrations.filter((r: OpenHouseRegistration) => r.status === "approved").length;
+  const attendedCount = registrations.filter((r: OpenHouseRegistration) => r.status === "attended").length;
   const offersCount = offers.length;
-  const validOffers = offers.filter((o: any) => o.status !== "withdrawn").map((o: any) => Number(o.amount));
+  const validOffers = offers.filter((o: OpenHouseOffer) => o.status !== "withdrawn").map((o: OpenHouseOffer) => Number(o.amount));
   const highestBid = validOffers.length > 0 ? Math.max(...validOffers) : null;
   const conversionRate = approvedCount ? ((attendedCount / approvedCount) * 100).toFixed(1) : "0";
 
@@ -190,7 +192,7 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner }: Props
               <div className="p-8 text-center text-muted-foreground text-sm">No registrations yet</div>
             ) : (
               <div className="divide-y divide-border">
-                {registrations.map((r: any) => (
+                {registrations.map((r: OpenHouseRegistration) => (
                   <div key={r.id} className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div className="min-w-0 flex-1">
                       <div className="font-medium">
@@ -211,7 +213,7 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner }: Props
                           <FileCheck className="w-3 h-3" />
                           {r.id_doc_url ? (
                             <button
-                              onClick={() => handleViewDoc(r.id_doc_url)}
+                              onClick={() => r.id_doc_url && handleViewDoc(r.id_doc_url)}
                               className="underline underline-offset-2 hover:opacity-70 transition-opacity"
                               title="View ID document"
                             >
@@ -301,7 +303,7 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner }: Props
             <Euro className="w-4 h-4" /> Sealed Bids {highestBid != null && (
               <span className="text-xs font-bold bg-primary/20 text-primary rounded-full px-2 py-0.5">€{highestBid.toLocaleString()} highest</span>
             )}
-            {offers.some((o: any) => o.status === "accepted") && (
+            {offers.some((o: OpenHouseOffer) => o.status === "accepted") && (
               <span className="text-xs font-bold bg-emerald-500/20 text-emerald-700 rounded-full px-2 py-0.5">Winner selected</span>
             )}
           </span>
@@ -314,10 +316,10 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner }: Props
             ) : (
               <>
                 {/* Bulk actions bar */}
-                {!offers.some((o: any) => o.status === "accepted") && (
+                {!offers.some((o: OpenHouseOffer) => o.status === "accepted") && (
                   <div className="flex items-center gap-3 px-4 py-3 bg-muted/30 border-b border-border">
                     <span className="text-xs text-muted-foreground font-medium">{offers.length} bid{offers.length !== 1 ? "s" : ""} received</span>
-                    {offers.some((o: any) => o.status === "submitted") && (
+                    {offers.some((o: OpenHouseOffer) => o.status === "submitted") && (
                       <Button
                         size="sm"
                         variant="outline"
@@ -326,7 +328,7 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner }: Props
                         onClick={() =>
                           revealAll.mutate({
                             listingId,
-                            offerIds: offers.filter((o: any) => o.status === "submitted").map((o: any) => o.id),
+                            offerIds: offers.filter((o: OpenHouseOffer) => o.status === "submitted").map((o: OpenHouseOffer) => o.id),
                           })
                         }
                       >
@@ -360,7 +362,7 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner }: Props
                     const isWinner = o.status === "accepted";
                     const isRevealed = o.status === "revealed";
                     const isSealed = o.status === "submitted";
-                    const allOfferIds = offers.map((x: any) => x.id);
+                    const allOfferIds = offers.map((x: OpenHouseOffer) => x.id);
 
                     return (
                       <div key={o.id} className={cn("p-4 flex items-center justify-between gap-4", isWinner && "bg-emerald-500/5")}>
@@ -418,8 +420,8 @@ function OpenHouseSettingsForm({
   saving,
 }: {
   listingId: string;
-  settings: any;
-  onSave: (s: any) => void;
+  settings: OpenHouseSettings | null | undefined;
+  onSave: (s: Partial<OpenHouseSettings>) => void;
   saving: boolean;
 }) {
   const [timeslots, setTimeslots] = useState<OHTimeslot[]>(settings?.timeslots ?? []);

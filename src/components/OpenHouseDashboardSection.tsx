@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -11,7 +10,10 @@ import { cn } from "@/lib/utils";
 import {
   useMyOpenHouseRegistrations,
   useMyOpenHouseOffers,
+  type MyOpenHouseRegistration,
+  type MyOpenHouseOffer,
 } from "@/hooks/useOpenHouseAssetControl";
+import type { ListingWithJoins } from "@/hooks/useListings";
 import OpenHouseAssetControlPanel from "./OpenHouseAssetControlPanel";
 
 import { fmtDate, fmtTime } from "@/lib/format";
@@ -65,7 +67,11 @@ function SectionHeading({ title, count, action }: { title: string; count?: numbe
 }
 
 // ── Expandable owner listing card ─────────────────────────────────────────────
-function OwnerListingCard({ listing }: { listing: any }) {
+/** A subset of fields used by the dashboard card. The dashboard receives full listings
+    via myListings, so we extend ListingWithJoins for compatibility. */
+type DashboardListing = ListingWithJoins;
+
+function OwnerListingCard({ listing }: { listing: DashboardListing }) {
   const [expanded, setExpanded] = useState(false);
   const countdown = listing.open_house_date ? getCountdown(listing.open_house_date) : null;
 
@@ -134,7 +140,7 @@ function OwnerListingCard({ listing }: { listing: any }) {
 }
 
 // ── Participant registration card ─────────────────────────────────────────────
-function ParticipantRegistrationCard({ reg }: { reg: any }) {
+function ParticipantRegistrationCard({ reg }: { reg: MyOpenHouseRegistration }) {
   const listing = reg.listings;
   const StatusIcon = REG_STATUS_ICONS[reg.status] || Timer;
   const countdown = listing?.open_house_date ? getCountdown(listing.open_house_date) : null;
@@ -201,7 +207,7 @@ function ParticipantRegistrationCard({ reg }: { reg: any }) {
 }
 
 // ── Participant offer card ────────────────────────────────────────────────────
-function ParticipantOfferCard({ offer }: { offer: any }) {
+function ParticipantOfferCard({ offer }: { offer: MyOpenHouseOffer }) {
   const listing = offer.listings;
 
   return (
@@ -237,17 +243,17 @@ function ParticipantOfferCard({ offer }: { offer: any }) {
 export default function OpenHouseDashboardSection({
   myListings,
 }: {
-  myListings: any[];
+  myListings: DashboardListing[];
 }) {
   const { data: myRegs = [], isLoading: regsLoading } = useMyOpenHouseRegistrations();
   const { data: myOffers = [], isLoading: offersLoading } = useMyOpenHouseOffers();
 
-  const ownerListings = myListings.filter((l: any) => l.listing_type === "open_house");
-  const upcomingRegs = myRegs.filter((r: any) => r.status !== "cancelled");
-  const activeOffers = myOffers.filter((o: any) => o.status !== "withdrawn");
+  const ownerListings = myListings.filter((l) => l.listing_type === "open_house");
+  const upcomingRegs = myRegs.filter((r) => r.status !== "cancelled");
+  const activeOffers = myOffers.filter((o) => o.status !== "withdrawn");
 
-  const pendingRegs = upcomingRegs.filter((r: any) => r.status === "pending").length;
-  const approvedRegs = upcomingRegs.filter((r: any) => r.status === "approved").length;
+  const pendingRegs = upcomingRegs.filter((r) => r.status === "pending").length;
+  const approvedRegs = upcomingRegs.filter((r) => r.status === "approved").length;
 
   const isEmpty = ownerListings.length === 0 && myRegs.length === 0 && myOffers.length === 0;
 
@@ -310,7 +316,7 @@ export default function OpenHouseDashboardSection({
             }
           />
           <div className="space-y-3">
-            {ownerListings.map((l: any) => (
+            {ownerListings.map((l) => (
               <OwnerListingCard key={l.id} listing={l} />
             ))}
           </div>
@@ -349,7 +355,7 @@ export default function OpenHouseDashboardSection({
                   </span>
                 </div>
               )}
-              {upcomingRegs.map((r: any) => (
+              {upcomingRegs.map((r) => (
                 <ParticipantRegistrationCard key={r.id} reg={r} />
               ))}
             </div>
@@ -374,7 +380,7 @@ export default function OpenHouseDashboardSection({
                 </span>
               </div>
               <div className="space-y-3">
-                {activeOffers.map((o: any) => (
+                {activeOffers.map((o) => (
                   <ParticipantOfferCard key={o.id} offer={o} />
                 ))}
               </div>

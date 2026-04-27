@@ -2,9 +2,34 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import type { TablesUpdate } from "@/integrations/supabase/types";
+import type { Database, TablesUpdate } from "@/integrations/supabase/types";
 
 const DEAL_STAGES = ["new", "contacted", "qualified", "proposal", "negotiation", "won", "lost"] as const;
+
+/** A CRM contact row as returned by the list query, including the joined listing summary. */
+export type Contact = Pick<
+  Database["public"]["Tables"]["contacts"]["Row"],
+  | "id"
+  | "user_id"
+  | "name"
+  | "email"
+  | "phone"
+  | "source"
+  | "deal_stage"
+  | "notes"
+  | "follow_up_at"
+  | "listing_id"
+  | "created_at"
+  | "updated_at"
+> & {
+  listings: Pick<
+    Database["public"]["Tables"]["listings"]["Row"],
+    "id" | "title" | "city" | "cover_image_url"
+  > | null;
+};
+
+/** A contact task row (CRM to-do item). */
+export type ContactTask = Database["public"]["Tables"]["contact_tasks"]["Row"];
 
 /** Returns the current user's CRM contacts with linked listing data. */
 export function useContacts() {

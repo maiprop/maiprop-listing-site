@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Simplified Admin — maiProp OS sync (both directions).
  * One view: status, Pull from OS, Push to OS, sync log. Advanced options collapsed.
@@ -45,9 +44,15 @@ interface SyncLogEntry {
   status: string;
   error_message: string | null;
   records_affected: number | null;
-  payload: any;
+  /** Free-form JSON snapshot of the request/response — varies per direction. */
+  payload: unknown;
   created_at: string;
 }
+
+/** A row from the admin "my listings" sidebar query. */
+type AdminListing = { id: string; title: string | null; city: string | null; status: string };
+/** A row from the admin firesale-push sidebar query. */
+type AdminFiresale = { id: string; address: string | null; city: string | null; status: string };
 
 function useSyncLogs() {
   return useQuery<SyncLogEntry[]>({
@@ -120,7 +125,7 @@ export default function AdminPanel() {
       const errs = a.errors ?? 0;
       toast.success(`Pull: ${imp} new · ${upd} updated${errs ? ` · ${errs} errors` : ""}`);
     },
-    onError: (e: any) => toast.error("Pull failed: " + e.message),
+    onError: (e: Error) => toast.error("Pull failed: " + e.message),
   });
 
   // ── Push: listings ─────────────────────────────────────────────────────────
@@ -155,7 +160,7 @@ export default function AdminPanel() {
         toast.success("Listing pushed to maiProp OS.");
       }
     },
-    onError: (e: any) => toast.error("Push failed: " + e.message),
+    onError: (e: Error) => toast.error("Push failed: " + e.message),
   });
 
   // ── Push: firesales ────────────────────────────────────────────────────────
@@ -188,7 +193,7 @@ export default function AdminPanel() {
         toast.success("Firesale pushed to maiProp OS.");
       }
     },
-    onError: (e: any) => toast.error("Firesale push failed: " + e.message),
+    onError: (e: Error) => toast.error("Firesale push failed: " + e.message),
   });
 
   // ── Advanced: full sync, replace all, edge tester ───────────────────────────
@@ -220,7 +225,7 @@ export default function AdminPanel() {
       qc.invalidateQueries({ queryKey: [SYNC_LOG_QUERY_KEY] });
       toast.success(`Full sync: ${r.totalImported} new · ${r.totalUpdated} updated`);
     },
-    onError: (e: any) => {
+    onError: (e: Error) => {
       setFullSyncProgress(null);
       toast.error("Full sync failed: " + e.message);
     },
@@ -245,7 +250,7 @@ export default function AdminPanel() {
           : "Replace & sync done."
       );
     },
-    onError: (e: any) => {
+    onError: (e: Error) => {
       setFullSyncProgress(null);
       toast.error("Replace failed: " + e.message);
     },
@@ -366,7 +371,7 @@ export default function AdminPanel() {
               <p className="text-xs text-muted-foreground bg-secondary/50 rounded-lg p-2">No active listings.</p>
             ) : (
               <div className="space-y-1.5 max-h-36 overflow-y-auto">
-                {myListings.map((l: any) => (
+                {myListings.map((l: AdminListing) => (
                   <div key={l.id} className="flex items-center gap-2 bg-secondary/50 rounded-lg p-2">
                     <span className="flex-1 min-w-0 text-xs truncate">{l.title ?? l.city}</span>
                     <Button
@@ -393,7 +398,7 @@ export default function AdminPanel() {
               <p className="text-xs text-muted-foreground bg-secondary/50 rounded-lg p-2">No pending firesales.</p>
             ) : (
               <div className="space-y-1.5 max-h-28 overflow-y-auto">
-                {firesales.map((f: any) => (
+                {firesales.map((f: AdminFiresale) => (
                   <div key={f.id} className="flex items-center gap-2 bg-secondary/50 rounded-lg p-2">
                     <span className="flex-1 min-w-0 text-xs truncate">{f.address ?? f.city}</span>
                     <Button

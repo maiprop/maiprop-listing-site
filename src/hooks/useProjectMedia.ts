@@ -1,8 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-
+import type { Database } from "@/integrations/supabase/types";
 
 export type ProjectMediaType =
   | "rendering"
@@ -13,6 +12,12 @@ export type ProjectMediaType =
   | "walkthrough"
   | "progress"
   | "video";
+
+/** A single project_media row with the columns we read in the UI. */
+export type ProjectMedia = Pick<
+  Database["public"]["Tables"]["project_media"]["Row"],
+  "id" | "project_id" | "url" | "media_type" | "title" | "sort_order" | "created_at"
+>;
 
 export function useProjectMedia(projectId: string | undefined) {
   return useQuery({
@@ -56,7 +61,7 @@ export function useAddProjectMedia() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (_: any, { project_id }: { project_id: string; url: string; media_type: ProjectMediaType; title?: string; sort_order?: number }) => {
+    onSuccess: (_: unknown, { project_id }: { project_id: string; url: string; media_type: ProjectMediaType; title?: string; sort_order?: number }) => {
       qc.invalidateQueries({ queryKey: ["project_media", project_id] });
       qc.invalidateQueries({ queryKey: ["projects"] });
       toast.success("Media added");
@@ -76,7 +81,7 @@ export function useDeleteProjectMedia() {
         .eq("project_id", projectId);
       if (error) throw error;
     },
-    onSuccess: (_: any, { projectId }: { id: string; projectId: string }) => {
+    onSuccess: (_: unknown, { projectId }: { id: string; projectId: string }) => {
       qc.invalidateQueries({ queryKey: ["project_media", projectId] });
       qc.invalidateQueries({ queryKey: ["projects"] });
       toast.success("Media removed");

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from "react";
 import { toast } from "sonner";
 import {
@@ -10,6 +9,8 @@ import {
   useCreateContactTask,
   useUpdateContactTask,
   DEAL_STAGES,
+  type Contact,
+  type ContactTask,
 } from "@/hooks/useContacts";
 import { Button } from "@/components/ui/button";
 import {
@@ -109,11 +110,11 @@ export default function ContactsCRM() {
 
   const pipelineCols = ["new", "contacted", "qualified", "proposal", "negotiation", "won", "lost"];
   const contactsByStage = pipelineCols.reduce((acc, s) => {
-    acc[s] = contacts.filter((c: any) => (c.deal_stage || "new") === s);
+    acc[s] = contacts.filter((c: Contact) => (c.deal_stage || "new") === s);
     return acc;
-  }, {} as Record<string, any[]>);
+  }, {} as Record<string, Contact[]>);
 
-  const followUpsToday = contacts.filter((c: any) => {
+  const followUpsToday = contacts.filter((c: Contact) => {
     if (!c.follow_up_at) return false;
     const d = new Date(c.follow_up_at).toDateString();
     return d === new Date().toDateString();
@@ -173,7 +174,7 @@ export default function ContactsCRM() {
           <div>
             <p className="font-semibold text-sm">Follow-ups today ({followUpsToday.length})</p>
             <p className="text-xs text-muted-foreground">
-              {followUpsToday.map((c: any) => c.name).join(", ")}
+              {followUpsToday.map((c: Contact) => c.name).join(", ")}
             </p>
           </div>
         </div>
@@ -274,7 +275,7 @@ export default function ContactsCRM() {
                 <span className="text-xs text-muted-foreground">{(contactsByStage[stage] || []).length}</span>
               </div>
               <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                {(contactsByStage[stage] || []).map((c: any) => (
+                {(contactsByStage[stage] || []).map((c: Contact) => (
                   <ContactCard
                     key={c.id}
                     contact={c}
@@ -307,7 +308,7 @@ export default function ContactsCRM() {
         </div>
       ) : (
         <div className="space-y-3">
-          {contacts.map((c: any) => (
+          {contacts.map((c: Contact) => (
             <div
               key={c.id}
               className="glass-card rounded-xl p-4 flex items-center gap-4"
@@ -406,7 +407,7 @@ export default function ContactsCRM() {
             </Button>
           </div>
           <div className="space-y-2">
-            {tasks.map((t: any) => (
+            {tasks.map((t: ContactTask) => (
               <div key={t.id} className="flex items-center gap-2 py-2 border-b border-border last:border-0">
                 <button
                   onClick={() => updateTask.mutate({ id: t.id, updates: { completed_at: t.completed_at ? null : new Date().toISOString() } })}
@@ -452,13 +453,13 @@ function ContactCard({
   onAddTask,
   onCompleteTask,
 }: {
-  contact: any;
+  contact: Contact;
   onEdit: () => void;
   onDelete: () => void;
   onStageChange: (stage: string) => void;
   expanded: boolean;
   onToggleExpand: () => void;
-  tasks: any[];
+  tasks: ContactTask[];
   taskForm: { title: string; due_at: string };
   onTaskFormChange: (f: typeof taskForm) => void;
   onAddTask: () => void;
@@ -505,7 +506,7 @@ function ContactCard({
               Add
             </Button>
           </div>
-          {tasks.map((t: any) => (
+          {tasks.map((t: ContactTask) => (
             <div key={t.id} className="flex items-center gap-1 text-[10px]">
               <button onClick={() => onCompleteTask(t.id)}>
                 <CheckSquare className={cn("w-3 h-3", t.completed_at ? "text-brand-emerald" : "text-muted-foreground")} />

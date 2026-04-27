@@ -1,8 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-
+import type { Database } from "@/integrations/supabase/types";
 
 export type ProjectLeadInsert = {
   project_id: string;
@@ -16,6 +15,12 @@ export type ProjectLeadInsert = {
 };
 
 export type ProjectLeadUpdate = Partial<Omit<ProjectLeadInsert, "project_id">>;
+
+/** A project lead row as fetched by the list query. */
+export type ProjectLead = Pick<
+  Database["public"]["Tables"]["project_leads"]["Row"],
+  "id" | "project_id" | "unit_id" | "name" | "email" | "phone" | "source" | "status" | "notes" | "metadata" | "created_at" | "updated_at"
+>;
 
 export function useProjectLeads(projectId: string | undefined) {
   return useQuery({
@@ -46,7 +51,7 @@ export function useCreateProjectLead() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (_: any, { project_id }: ProjectLeadInsert) => {
+    onSuccess: (_: unknown, { project_id }: ProjectLeadInsert) => {
       qc.invalidateQueries({ queryKey: ["project_leads", project_id] });
       toast.success("Lead added");
     },
@@ -68,7 +73,7 @@ export function useUpdateProjectLead() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (_: any, { projectId }: { id: string; projectId: string; updates: ProjectLeadUpdate }) => {
+    onSuccess: (_: unknown, { projectId }: { id: string; projectId: string; updates: ProjectLeadUpdate }) => {
       qc.invalidateQueries({ queryKey: ["project_leads", projectId] });
       toast.success("Lead updated");
     },
@@ -87,7 +92,7 @@ export function useDeleteProjectLead() {
         .eq("project_id", projectId);
       if (error) throw error;
     },
-    onSuccess: (_: any, { projectId }: { id: string; projectId: string }) => {
+    onSuccess: (_: unknown, { projectId }: { id: string; projectId: string }) => {
       qc.invalidateQueries({ queryKey: ["project_leads", projectId] });
       toast.success("Lead removed");
     },

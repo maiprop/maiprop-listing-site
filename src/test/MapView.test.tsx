@@ -235,7 +235,6 @@ describe("MapView", () => {
       { lngLat: { lng: 24.5, lat: 39.0 }, point: { x: 3, y: 3 } },
       { lngLat: { lng: 23.0, lat: 39.0 }, point: { x: 4, y: 4 } },
     ]) {
-      // eslint-disable-next-line no-await-in-loop
       await act(async () => {
         handlerHolder.onClick?.(pt);
       });

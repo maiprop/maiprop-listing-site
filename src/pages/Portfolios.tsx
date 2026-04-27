@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -9,12 +8,21 @@ import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { PropertyCard } from "@/components/PropertyCard";
-import { usePortfolios, usePortfolio, useCreatePortfolio, useUpdatePortfolio, useDeletePortfolio } from "@/hooks/usePortfolios";
+import {
+  usePortfolios, usePortfolio, useCreatePortfolio, useUpdatePortfolio, useDeletePortfolio,
+  type Portfolio, type PortfolioListing, type PortfolioWithListings,
+} from "@/hooks/usePortfolios";
+import type { Database } from "@/integrations/supabase/types";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useAuth } from "@/contexts/AuthContext";
 import { dbListingToCard } from "@/lib/listingUtils";
 import { toast } from "sonner";
 import { ProGate } from "@/components/gates/ProGate";
+
+/** Shape returned by useFavorites(): a favorites row with the joined listing. */
+type FavoriteRow = Database["public"]["Tables"]["favorites"]["Row"] & {
+  listings: Database["public"]["Tables"]["listings"]["Row"] | null;
+};
 
 function Portfolios() {
   const { user } = useAuth();
@@ -123,7 +131,7 @@ function Portfolios() {
           </div>
         ) : (
           <div className="space-y-8">
-            {portfolios.map((p: any) => (
+            {portfolios.map((p: Portfolio) => (
               <PortfolioDetail
                 key={p.id}
                 portfolioId={p.id}
@@ -176,8 +184,8 @@ function PortfolioDetail({
   updatePortfolio,
 }: {
   portfolioId: string;
-  portfolio: any;
-  favorites: any[];
+  portfolio: Portfolio;
+  favorites: FavoriteRow[];
   onDelete: (id: string) => void;
   onRename: (id: string, name: string) => void;
   editingId: string | null;
@@ -188,16 +196,18 @@ function PortfolioDetail({
   updatePortfolio: ReturnType<typeof useUpdatePortfolio>;
 }) {
   const { data: fullPortfolio } = usePortfolio(portfolioId);
-  const portfolioData = fullPortfolio || portfolio;
+  // fullPortfolio is the full join (listings included); portfolio is the
+  // sidebar entry (no listings). Default to an empty listings[] so callers
+  // don't have to null-check.
+  const portfolioData: PortfolioWithListings = fullPortfolio ?? { ...portfolio, listings: [] };
   const [showAdd, setShowAdd] = useState(false);
   const listingIds = (portfolioData.listing_ids as string[]) || [];
-  const listings = portfolioData.listings || [];
+  const listings = portfolioData.listings ?? [];
   const favListings = favorites
-    .filter((f: any) => f.listings)
-    .map((f: any) => f.listings)
-    .filter((l: any) => !listingIds.includes(l.id));
+    .map((f) => f.listings)
+    .filter((l): l is NonNullable<FavoriteRow["listings"]> => l != null && !listingIds.includes(l.id));
 
-  const totalValue = listings.reduce((sum: number, l: any) => sum + Number(l?.price || 0), 0);
+  const totalValue = listings.reduce((sum, l) => sum + Number(l?.price || 0), 0);
 
   const handleAdd = (listingId: string) => {
     const ids = [...listingIds, listingId];
@@ -255,7 +265,7 @@ function PortfolioDetail({
             <h4 className="text-sm font-medium">Properties</h4>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {listings.map((l: any) => (
+            {listings.map((l: PortfolioListing) => (
               <div key={l.id} className="relative">
                 <PropertyCard property={dbListingToCard(l)} />
                 <Button
@@ -278,7 +288,7 @@ function PortfolioDetail({
         </Button>
         {showAdd && favListings.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-2">
-            {favListings.slice(0, 8).map((l: any) => (
+            {favListings.slice(0, 8).map((l) => (
               <Button key={l.id} variant="secondary" size="sm" onClick={() => handleAdd(l.id)}>
                 + {l.title?.slice(0, 25)}...
               </Button>

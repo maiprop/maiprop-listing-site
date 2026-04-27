@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -6,7 +5,20 @@ import { toast } from "sonner";
 import type { Database } from "@/integrations/supabase/types";
 
 type OHRegUpdate = Database["public"]["Tables"]["open_house_registrations"]["Update"];
+type OHOfferUpdate = Database["public"]["Tables"]["open_house_offers"]["Update"];
 type OHOfferInsert = Database["public"]["Tables"]["open_house_offers"]["Insert"];
+
+/** Listing summary attached to "my" registrations and offers via the listing_id join. */
+type OHListingSummary = Pick<
+  Database["public"]["Tables"]["listings"]["Row"],
+  "id" | "title" | "city" | "address" | "cover_image_url" | "open_house_date"
+>;
+
+/** Row shape returned by useMyOpenHouseRegistrations() (registration + listing summary). */
+export type MyOpenHouseRegistration = OpenHouseRegistration & { listings: OHListingSummary | null };
+
+/** Row shape returned by useMyOpenHouseOffers() (offer + listing summary). */
+export type MyOpenHouseOffer = OpenHouseOffer & { listings: OHListingSummary | null };
 
 export type OHTimeslot = { start: string; end: string; max_visitors: number };
 export type OHRegistrationStatus = "pending" | "approved" | "rejected" | "attended" | "cancelled";
@@ -166,7 +178,7 @@ export function useMyOpenHouseRegistrations() {
         .eq("requester_id", user.id)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as unknown as MyOpenHouseRegistration[];
     },
     enabled: !!user?.id,
   });
@@ -291,7 +303,7 @@ export function useMyOpenHouseOffers() {
         .eq("bidder_id", user.id)
         .order("submitted_at", { ascending: false });
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as unknown as MyOpenHouseOffer[];
     },
     enabled: !!user?.id,
   });
@@ -348,10 +360,10 @@ export function useUpdateOpenHouseOffer() {
       status: OHOfferStatus;
     }) => {
       const uid = (await supabase.auth.getUser()).data.user?.id;
-      const updates: any = { status };
+      const updates: OHOfferUpdate = { status };
       if (status === "revealed") updates.revealed_at = new Date().toISOString();
       if (status === "accepted" || status === "rejected") {
-        updates.decided_by = uid;
+        updates.decided_by = uid ?? null;
         updates.decided_at = new Date().toISOString();
       }
       const { data, error } = await supabase

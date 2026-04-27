@@ -1,5 +1,4 @@
-﻿/* eslint-disable @typescript-eslint/no-explicit-any */
-import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
+﻿import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database, Enums, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
@@ -7,6 +6,16 @@ import { toast } from "sonner";
 import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
 import { logger } from "@/lib/logger";
 import { getOwnerParticipantType } from "@/lib/participantConfig";
+
+/**
+ * Minimal shape we need from a listings row to enrich it with profiles. The
+ * runtime rows come from `buildListingsQuery` which selects `*, listing_images(...)`,
+ * so they are at minimum a `listings` row but we only ever read `owner_id`
+ * during enrichment.
+ */
+type ListingRowWithOwner = Database["public"]["Tables"]["listings"]["Row"] & {
+  listing_images?: { url: string; sort_order: number }[];
+};
 
 /**
  * A listings row augmented with joined tables and computed fields added by useListing().
@@ -152,19 +161,22 @@ async function fetchListingsPage(filters?: ListingsFilters, page = 1, pageSize =
   const rows = data ?? [];
 
   // Enrich with owner profiles
-  const ownerIds = [...new Set(rows.map((r: any) => r.owner_id).filter(Boolean))];
-  let profileMap = new Map();
+  const typedRows = rows as ListingRowWithOwner[];
+  const ownerIds = [
+    ...new Set(typedRows.map((r) => r.owner_id).filter((id): id is string => Boolean(id))),
+  ];
+  let profileMap = new Map<string, { user_id: string; display_name: string | null; avatar_url: string | null }>();
   if (ownerIds.length > 0) {
     const { data: ownerProfiles = [] } = await supabase
       .from("profiles_public")
       .select("user_id, display_name, avatar_url")
       .in("user_id", ownerIds);
-    profileMap = new Map((ownerProfiles ?? []).map(p => [p.user_id, p]));
+    profileMap = new Map((ownerProfiles ?? []).map((p) => [p.user_id, p]));
   }
 
-  const enriched = rows.map((r: any) => ({
+  const enriched = typedRows.map((r) => ({
     ...r,
-    profiles: profileMap.get(r.owner_id) ?? null,
+    profiles: r.owner_id ? profileMap.get(r.owner_id) ?? null : null,
   }));
 
   // ORDER BY is applied server-side in buildListingsQuery; no client sort needed.
@@ -202,20 +214,21 @@ export function useListings(
       if (rows.length === 0) return rows as ListingWithJoins[];
 
       // ORDER BY is applied server-side in buildListingsQuery; no client sort needed.
-       
-      const ownerIds = [...new Set(rows.map((r: any) => r.owner_id).filter(Boolean))];
-      let profileMap = new Map();
+      const typedRows = rows as ListingRowWithOwner[];
+      const ownerIds = [
+        ...new Set(typedRows.map((r) => r.owner_id).filter((id): id is string => Boolean(id))),
+      ];
+      let profileMap = new Map<string, { user_id: string; display_name: string | null; avatar_url: string | null }>();
       if (ownerIds.length > 0) {
         const { data: ownerProfiles = [] } = await supabase
           .from("profiles_public")
           .select("user_id, display_name, avatar_url")
           .in("user_id", ownerIds);
-        profileMap = new Map((ownerProfiles ?? []).map(p => [p.user_id, p]));
+        profileMap = new Map((ownerProfiles ?? []).map((p) => [p.user_id, p]));
       }
-       
-      return rows.map((r: any) => ({
+      return typedRows.map((r) => ({
         ...r,
-        profiles: profileMap.get(r.owner_id) ?? null,
+        profiles: r.owner_id ? profileMap.get(r.owner_id) ?? null : null,
       })) as ListingWithJoins[];
     },
   });

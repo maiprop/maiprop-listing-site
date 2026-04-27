@@ -1,5 +1,4 @@
-﻿/* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState, useCallback, useEffect } from "react";
+﻿import { useState, useCallback, useEffect } from "react";
 import { useModal } from "@/hooks/useModal";
 import { Link, useParams } from "react-router-dom";
 import {
@@ -12,9 +11,18 @@ import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { useQueryClient } from "@tanstack/react-query";
 import { useProject, useUpdateProject } from "@/hooks/useProjects";
-import { useProjectUnits, useCreateProjectUnit, useUpdateProjectUnit, useDeleteProjectUnit, type ProjectUnitInsert } from "@/hooks/useProjectUnits";
-import { useProjectMedia, useAddProjectMedia, useDeleteProjectMedia, type ProjectMediaType } from "@/hooks/useProjectMedia";
-import { useProjectLeads, useCreateProjectLead, useUpdateProjectLead, useDeleteProjectLead, type ProjectLeadInsert } from "@/hooks/useProjectLeads";
+import {
+  useProjectUnits, useCreateProjectUnit, useUpdateProjectUnit, useDeleteProjectUnit,
+  type ProjectUnitInsert, type ProjectUnit,
+} from "@/hooks/useProjectUnits";
+import {
+  useProjectMedia, useAddProjectMedia, useDeleteProjectMedia,
+  type ProjectMediaType, type ProjectMedia,
+} from "@/hooks/useProjectMedia";
+import {
+  useProjectLeads, useCreateProjectLead, useUpdateProjectLead, useDeleteProjectLead,
+  type ProjectLeadInsert, type ProjectLead,
+} from "@/hooks/useProjectLeads";
 import { useProjectViews } from "@/hooks/useProjectViews";
 import { useMyListings, useUpdateListing } from "@/hooks/useListings";
 import { useAuth } from "@/contexts/AuthContext";
@@ -190,7 +198,7 @@ export default function ProjectDetail() {
     const pct = parseFloat(bulkPricePct);
     if (isNaN(pct) || pct === 0) return;
      
-    const available = units.filter((u: any) => u.availability_status === "available" && u.price);
+    const available = units.filter((u: ProjectUnit) => u.availability_status === "available" && u.price);
     if (available.length === 0) { toast.error("No available units with price to update"); return; }
     setBulkConfirmOpen(true);
   };
@@ -200,7 +208,7 @@ export default function ProjectDetail() {
     if (!id) return;
     const pct = parseFloat(bulkPricePct);
      
-    const availableUnits = units.filter((u: any) => u.availability_status === "available" && u.price);
+    const availableUnits = units.filter((u: ProjectUnit) => u.availability_status === "available" && u.price);
     try {
       for (const u of availableUnits) {
         const newPrice = Math.round(Number(u.price) * (1 + pct / 100));
@@ -343,12 +351,12 @@ export default function ProjectDetail() {
           <Section title="Media" icon={Image}>
             <div className="space-y-4">
               {MEDIA_TYPES.map(({ value, label, mandatory }) => {
-                const items = media.filter((m: any) => m.media_type === value);
+                const items = media.filter((m: ProjectMedia) => m.media_type === value);
                 return (
                   <div key={value} className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-medium w-44">{label}{mandatory && " *"}</span>
                     <div className="flex flex-wrap gap-2">
-                      {items.map((m: any) => (
+                      {items.map((m: ProjectMedia) => (
                         <div key={m.id} className="flex items-center gap-1 bg-secondary rounded-lg px-2 py-1">
                           {m.media_type === "brochure_pdf" ? <FileText className="w-4 h-4" /> : <img src={m.url} alt="" className="w-10 h-10 rounded object-cover" />}
                           <button type="button" onClick={() => deleteMedia.mutate({ id: m.id, projectId: id! })} className="p-1 rounded hover:bg-destructive/10 text-destructive"><Trash2 className="w-3 h-3" /></button>
@@ -380,7 +388,7 @@ export default function ProjectDetail() {
               )}
             </div>
             <div className="space-y-4">
-              {units.map((u: any) => (
+              {units.map((u: ProjectUnit) => (
                 <div key={u.id} className="glass-card rounded-xl p-4 border border-border">
                   {editingUnitId === u.id ? (
                     <UnitEditForm unit={u} onSave={(updates) => handleUpdateUnit(u.id, updates)} onCancel={() => setEditingUnitId(null)} />
@@ -402,7 +410,7 @@ export default function ProjectDetail() {
               ))}
               {modal.isOpen("unitForm") ? (
                 <div className="glass-card rounded-xl p-4 border border-primary/20">
-                  <UnitEditForm unit={{}} onSave={handleAddUnit} onCancel={() => modal.close()} isCreate />
+                  <UnitEditForm unit={null} onSave={handleAddUnit} onCancel={() => modal.close()} isCreate />
                 </div>
               ) : (
                 <Button variant="outline" className="border-border w-full gap-2" onClick={() => modal.open("unitForm")}><Plus className="w-4 h-4" /> Add unit</Button>
@@ -430,7 +438,7 @@ export default function ProjectDetail() {
               <Button variant="outline" size="sm" className="border-border gap-1.5 mb-4" onClick={() => modal.open("leadForm")}><Plus className="w-3.5 h-3.5" /> Add lead</Button>
             )}
             <div className="space-y-2">
-              {leads.map((l: any) => (
+              {leads.map((l: ProjectLead) => (
                 <div key={l.id} className="glass-card rounded-xl p-3 flex items-center justify-between gap-3">
                   <div>
                     <span className="font-medium text-sm">{l.name}</span>
@@ -459,7 +467,7 @@ export default function ProjectDetail() {
             <p className="text-sm text-muted-foreground mb-3">Link existing listings to this project. These appear on the project showcase.</p>
             {listings.length > 0 && (
               <div className="space-y-2 mb-4">
-                {listings.map((l: any) => (
+                {listings.map((l: { id: string; title?: string | null; sqm?: number | null; price?: number | null; cover_image_url?: string | null }) => (
                   <div key={l.id} className="flex items-center gap-3 bg-secondary rounded-xl p-3">
                     {l.cover_image_url && <img src={l.cover_image_url} alt="" className="w-12 h-12 rounded-lg object-cover" />}
                     <div className="flex-1 min-w-0"><Link to={`/property/${l.id}`} className="font-medium hover:underline truncate block">{l.title}</Link><span className="text-xs text-muted-foreground">â‚¬{Number(l.price).toLocaleString()} Â· {l.sqm}mÂ²</span></div>
@@ -469,10 +477,10 @@ export default function ProjectDetail() {
               </div>
             )}
             <div className="flex flex-wrap gap-2">
-              {myListings.filter((l: any) => !linkedListingIds.has(l.id)).map((l: any) => (
-                <Button key={l.id} variant="outline" size="sm" className="border-border" onClick={() => handleLinkListing(l.id)}>+ {l.title?.slice(0, 25)}{l.title?.length > 25 ? "â€¦" : ""}</Button>
+              {myListings.filter((l) => !linkedListingIds.has(l.id)).map((l) => (
+                <Button key={l.id} variant="outline" size="sm" className="border-border" onClick={() => handleLinkListing(l.id)}>+ {l.title?.slice(0, 25)}{(l.title?.length ?? 0) > 25 ? "…" : ""}</Button>
               ))}
-              {myListings.filter((l: any) => !linkedListingIds.has(l.id)).length === 0 && (
+              {myListings.filter((l) => !linkedListingIds.has(l.id)).length === 0 && (
                 <p className="text-sm text-muted-foreground">
                   No unlinked listings. <Link to="/listings/new" className="text-primary underline">Create one</Link>
                   {isDeveloper && <>{" Â· "}<Link to="/listings/new-building" className="text-primary underline">New building</Link></>}
@@ -495,7 +503,7 @@ export default function ProjectDetail() {
   );
 }
 
-function UnitEditForm({ unit, onSave, onCancel, isCreate }: { unit: any; onSave: (u: Partial<ProjectUnitInsert>) => void; onCancel: () => void; isCreate?: boolean }) {
+function UnitEditForm({ unit, onSave, onCancel, isCreate }: { unit?: ProjectUnit | null; onSave: (u: Partial<ProjectUnitInsert>) => void; onCancel: () => void; isCreate?: boolean }) {
   const [f, setF] = useState({
     unit_id: unit?.unit_id || "",
     floor: unit?.floor ?? "",

@@ -1,8 +1,23 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import type { Database } from "@/integrations/supabase/types";
+
+/** A portfolio row as returned by the list/detail queries. */
+export type Portfolio = Pick<
+  Database["public"]["Tables"]["portfolios"]["Row"],
+  "id" | "name" | "listing_ids" | "user_id" | "created_at" | "updated_at"
+>;
+
+/** A listing summary attached to a portfolio detail (subset of fields needed by PropertyCard). */
+export type PortfolioListing = Pick<
+  Database["public"]["Tables"]["listings"]["Row"],
+  "id" | "title" | "city" | "price" | "sqm" | "property_type" | "cover_image_url" | "listing_type"
+>;
+
+/** The shape returned by usePortfolio() — the portfolio plus its listings array. */
+export type PortfolioWithListings = Portfolio & { listings: PortfolioListing[] };
 
 export function usePortfolios() {
   const { user } = useAuth();
@@ -43,7 +58,7 @@ export function usePortfolio(id: string | undefined) {
         .eq("status", "active");
       if (le) return { ...portfolio, listings: [] };
 
-      const byId = Object.fromEntries((listings || []).map((l: any) => [l.id, l]));
+      const byId = Object.fromEntries((listings || []).map((l: PortfolioListing) => [l.id, l]));
       const ordered = ids.map((id) => byId[id]).filter(Boolean);
       return { ...portfolio, listings: ordered };
     },

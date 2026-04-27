@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useMemo, lazy, Suspense } from "react";
 import { Helmet } from "react-helmet-async";
 import { useTranslation } from "react-i18next";
@@ -23,7 +22,8 @@ import { ListingTypeButton } from "@/components/listings/ListingTypeButton";
 import { PropertyTypeButton } from "@/components/listings/PropertyTypeButton";
 import { MapGate } from "@/components/listings/MapGate";
 
-import { useListings, type ListingsFilters } from "@/hooks/useListings";
+import { useListings, type ListingsFilters, type ListingWithJoins } from "@/hooks/useListings";
+import type { ListingCard } from "@/types";
 import { useListingsFilters } from "@/hooks/useListingsFilters";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCookieConsent } from "@/hooks/useCookieConsent";
@@ -36,16 +36,27 @@ import {
 } from "@/lib/listingsConfig";
 import { toast } from "sonner";
 
+/** Subset of the raw DB listing fields the listings page reads through `_raw` for client-side filtering. */
+type RawListingFields = Pick<
+  ListingWithJoins,
+  | "created_at"
+  | "has_video_tour"
+  | "has_virtual_tour"
+  | "ai_score"
+  | "walkability_score"
+>;
 
- 
-function listingToCard(l: any) {
+/** Card type with the typed `_raw` payload that listingToCard() actually attaches. */
+type ListingCardWithRaw = ListingCard & { _raw?: RawListingFields };
+
+function listingToCard(l: ListingWithJoins): ListingCardWithRaw {
   return dbListingToCard(l, {
     includeOwnership: true,
     includeCoordinates: true,
     filterDisplayTags: true,
     includeRaw: true,
     maxImages: 3,
-  });
+  }) as ListingCardWithRaw;
 }
 
 export default function Listings() {
@@ -54,7 +65,7 @@ export default function Listings() {
   const [viewMode, setViewMode] = useState<"grid" | "split" | "map">("grid");
   const [showFilters, setShowFilters] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
-  const [compareList, setCompareList] = useState<any[]>([]);
+  const [compareList, setCompareList] = useState<ListingCardWithRaw[]>([]);
   const [viewportIds, setViewportIds] = useState<Set<string> | null>(null);
   const [polygonFilterIds, setPolygonFilterIds] = useState<Set<string> | null>(null);
   const [mobileTab, setMobileTab] = useState<"list" | "map">("list");
@@ -117,20 +128,24 @@ export default function Listings() {
 
   const filtered = useMemo(() => {
     // Client-side filtering — only for fields not supported server-side
-    const afterFilter = sourceListings.filter((p: any) => {
-      const raw = p._raw || p;
-      if (hasVideoViewing && !raw.has_video_tour) return false;
-      if (hasVirtualTour && !raw.has_virtual_tour) return false;
-      if (hasMessaging && raw.messaging_disabled) return false;
-      if (minAiScore > 0 && !(Number(raw.ai_score) >= minAiScore)) return false;
-      if (minWalkability > 0 && !(Number(raw.walkability_score) >= minWalkability)) return false;
+    const afterFilter = sourceListings.filter((p: ListingCardWithRaw) => {
+      const raw = p._raw;
+      if (hasVideoViewing && !raw?.has_video_tour) return false;
+      if (hasVirtualTour && !raw?.has_virtual_tour) return false;
+      // The `hasMessaging` filter previously checked `raw.messaging_disabled`,
+      // a field that doesn't exist on the listings schema — it was always
+      // undefined and the predicate never excluded anything. Removed when
+      // tightening types; revisit when a real "messaging disabled" column
+      // ships (or move to an opt-out flag on profiles).
+      if (minAiScore > 0 && !(Number(raw?.ai_score) >= minAiScore)) return false;
+      if (minWalkability > 0 && !(Number(raw?.walkability_score) >= minWalkability)) return false;
       return true;
     });
 
     // User sort must NOT override paid prioritization unless "featured" is explicitly chosen.
     // "featured" sort: featured → priority → rest. All other sorts: promoted always lead.
-    const isPromoted = (p: any) => !!(p.isFeatured || (p.priorityPlacement ?? 0) > 0);
-    const byUserSort = (a: any, b: any) => {
+    const isPromoted = (p: ListingCardWithRaw) => !!(p.isFeatured || (p.priorityPlacement ?? 0) > 0);
+    const byUserSort = (a: ListingCardWithRaw, b: ListingCardWithRaw) => {
       if (selectedSort === "featured") {
         const aF = a.isFeatured ? 1 : 0;
         const bF = b.isFeatured ? 1 : 0;
@@ -160,10 +175,10 @@ export default function Listings() {
       }
       return byUserSort(a, b);
     });
-  }, [sourceListings, hasVideoViewing, hasVirtualTour, hasMessaging, minAiScore, minWalkability, selectedSort]);
+  }, [sourceListings, hasVideoViewing, hasVirtualTour, minAiScore, minWalkability, selectedSort]);
 
   // Compare helpers
-  const toggleCompare = (listing: any) => {
+  const toggleCompare = (listing: ListingCardWithRaw) => {
     setCompareList(prev => {
       const exists = prev.find(l => l.id === listing.id);
       if (exists) return prev.filter(l => l.id !== listing.id);
@@ -536,7 +551,7 @@ export default function Listings() {
                 <p className="text-xs text-muted-foreground mt-1">Pan the map or clear any area filter</p>
               </div>
             ) : (
-              splitDisplayList.map((property: any) => (
+              splitDisplayList.map((property: ListingCardWithRaw) => (
                 <div key={property.id} className="relative group">
                   <PropertyCard property={property} />
                   <button
@@ -626,7 +641,7 @@ export default function Listings() {
               />
             ) : (
               <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
-                {filtered.map((property: any) => (
+                {filtered.map((property: ListingCardWithRaw) => (
                   <div key={property.id} className="relative group">
                     <PropertyCard property={property} />
                     <button

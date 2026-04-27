@@ -1,8 +1,10 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import type { Database } from "@/integrations/supabase/types";
 
+/** A project_units row as fetched by the list query. */
+export type ProjectUnit = Database["public"]["Tables"]["project_units"]["Row"];
 
 export type ProjectUnitInsert = {
   project_id: string;
@@ -63,7 +65,7 @@ export function useCreateProjectUnit() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (_: any, { project_id }: ProjectUnitInsert) => {
+    onSuccess: (_data, { project_id }) => {
       qc.invalidateQueries({ queryKey: ["project_units", project_id] });
       qc.invalidateQueries({ queryKey: ["projects"] });
       toast.success("Unit added");
@@ -86,7 +88,7 @@ export function useUpdateProjectUnit() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (_: any, { projectId }: { id: string; projectId: string; updates: ProjectUnitUpdate }) => {
+    onSuccess: (_data, { projectId }) => {
       qc.invalidateQueries({ queryKey: ["project_units", projectId] });
       qc.invalidateQueries({ queryKey: ["projects"] });
       toast.success("Unit updated");
@@ -106,7 +108,7 @@ export function useDeleteProjectUnit() {
         .eq("project_id", projectId);
       if (error) throw error;
     },
-    onSuccess: (_: any, { projectId }: { id: string; projectId: string }) => {
+    onSuccess: (_data, { projectId }) => {
       qc.invalidateQueries({ queryKey: ["project_units", projectId] });
       qc.invalidateQueries({ queryKey: ["projects"] });
       toast.success("Unit removed");
