@@ -4,8 +4,8 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import {
   MapPin, Bed, Bath, Square, Calendar, ChevronLeft, ChevronRight, Eye, Zap,
   Pencil, Pause, Play, Trash2, Loader2, MessageCircle, Euro, Users, LayoutDashboard,
-  Home, Wrench, Lock, ExternalLink, Heart, Share2, Layers, Thermometer, Building2, FileText,
-  Check, ChevronDown, ChevronUp,
+  Home, Wrench, Lock, ExternalLink, Heart, Share2, Layers, Thermometer, Building2,
+  Check,
 } from "lucide-react";
 import { walkScoreLabel, walkScoreColour } from "@/lib/walkScore";
 import { Button } from "@/components/ui/button";
@@ -26,9 +26,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { HEATING_TYPES, CONDITION_OPTIONS } from "@/lib/filterConfig";
 import { getStreetViewProxyUrl } from "@/lib/config";
-import { ENERGY_COLORS, ENERGY_SCALE } from "@/types";
-import { DetailRow, Section, SectionHeader, FeatureSection } from "@/components/property/DetailPrimitives";
+import { Section, SectionHeader, FeatureSection } from "@/components/property/DetailPrimitives";
 import { buildPropertyFeatureGroups, buildDetailRows } from "@/lib/propertyFeatures";
+import { PropertyDetailsAndEnergy } from "@/components/property/PropertyDetailsAndEnergy";
+import { PropertyDescriptionSection } from "@/components/property/PropertyDescriptionSection";
 
 export default function OpenHouseDetail() {
   const { id } = useParams();
@@ -42,7 +43,6 @@ export default function OpenHouseDetail() {
   const [editingDate, setEditingDate] = useState(false);
   const [dateInput, setDateInput] = useState("");
   const [currentImage, setCurrentImage] = useState(0);
-  const [descExpanded, setDescExpanded] = useState(false);
   const [walkScore, setWalkScore] = useState<number | null>(null);
 
   const { data: assetSettings } = useOpenHouseSettings(id || undefined);
@@ -412,76 +412,11 @@ export default function OpenHouseDetail() {
               </Section>
 
               {/* Description */}
-              {db.description && (
-                <Section>
-                  <SectionHeader icon={FileText} title="Description" />
-                  <div className="p-6">
-                    <div className={`text-sm text-muted-foreground leading-relaxed ${!descExpanded ? "line-clamp-4" : ""}`}>
-                      {db.description}
-                    </div>
-                    {db.description.length > 200 && (
-                      <button
-                        onClick={() => setDescExpanded(!descExpanded)}
-                        className="flex items-center gap-1 text-xs text-primary mt-3 hover:underline font-medium"
-                      >
-                        {descExpanded ? <><ChevronUp className="w-3 h-3" />Show less</> : <><ChevronDown className="w-3 h-3" />Read more</>}
-                      </button>
-                    )}
-                  </div>
-                </Section>
-              )}
+              <PropertyDescriptionSection description={db.description} />
 
-              {/* Property Details */}
+              {/* Property Details + Energy Performance Certificate */}
               {detailRows.length > 0 && (
-                <Section>
-                  <SectionHeader icon={Home} title="Property Details" />
-                  <div className="p-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10">
-                      {detailRows.map((r) => <DetailRow key={r.label} label={r.label} value={r.value} />)}
-                    </div>
-
-                    {/* Energy Performance Certificate */}
-                    {db.energy_class && db.energy_class !== "Exempt" && (db.energy_class as import("@/types").EnergyClass) in ENERGY_COLORS && (() => {
-                      const energyData = ENERGY_SCALE.find((e) => e.cls === db.energy_class);
-                      return (
-                        <div className="mt-6 pt-6 border-t border-border">
-                          <div className="flex items-center gap-2 mb-4">
-                            <Zap className="w-3.5 h-3.5 text-muted-foreground" />
-                            <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Energy Performance Certificate</p>
-                          </div>
-                          <div className="flex gap-1 items-end mb-2">
-                            {ENERGY_SCALE.map((e, i) => {
-                              const isActive = e.cls === db.energy_class;
-                              const barH = 16 + i * 4;
-                              return (
-                                <div key={e.cls} className="flex-1 flex flex-col items-center gap-0.5">
-                                  {isActive && <div className="text-[8px] font-black text-foreground">▼</div>}
-                                  <div
-                                    style={{ backgroundColor: e.hex, height: `${barH}px`, opacity: isActive ? 1 : 0.4 }}
-                                    className={`w-full rounded-sm flex items-end justify-center pb-0.5 transition-all ${isActive ? "ring-2 ring-white/30 ring-offset-1 ring-offset-card" : ""}`}
-                                  >
-                                    <span className="text-[8px] font-black leading-none"
-                                      style={{ color: ["B", "C", "D"].includes(e.cls) ? "#000" : "#fff" }}>
-                                      {e.cls}
-                                    </span>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                          {energyData && (
-                            <div className="flex items-center gap-2 mt-3">
-                              <div className={`px-2 py-0.5 rounded text-xs font-black ${ENERGY_COLORS[db.energy_class as import("@/types").EnergyClass]}`}>
-                                {db.energy_class}
-                              </div>
-                              <span className="text-xs text-muted-foreground">{energyData.desc}</span>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })()}
-                  </div>
-                </Section>
+                <PropertyDetailsAndEnergy detailRows={detailRows} energyClass={db.energy_class} />
               )}
 
               {/* Features & Amenities */}
