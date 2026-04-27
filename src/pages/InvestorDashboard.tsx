@@ -48,7 +48,7 @@ export default function InvestorDashboard() {
     queryFn: async () => {
       if (!user) return null;
       const { data } = await supabase
-        .from("investor_subscriptions").select("*")
+        .from("investor_subscriptions").select("id, user_id, tier, status, started_at, expires_at")
         .eq("user_id", user.id).maybeSingle();
       return (data as unknown as Subscription | null) ?? null;
     },
@@ -103,7 +103,7 @@ export default function InvestorDashboard() {
     queryKey: ["investor-deal-feed"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("firesale_requests").select("*")
+        .from("firesale_requests").select("id, address, city, property_type, sqm, bedrooms, condition, ai_estimate, asking_price, offer_price, status, notes, created_at, days_on_market")
         .neq("status", "pending")
         .order("created_at", { ascending: false }).limit(50);
       if (error) throw error;

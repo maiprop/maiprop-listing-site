@@ -84,7 +84,7 @@ function useAdminSubscriptions() {
     queryFn: async () => {
       const { data: subs, error } = await supabase
         .from("investor_subscriptions")
-        .select("*")
+        .select("id, user_id, tier, status, started_at, expires_at, created_at")
         .order("created_at", { ascending: false });
       if (error) throw error;
       const userIds = (subs || []).map((s: any) => s.user_id);

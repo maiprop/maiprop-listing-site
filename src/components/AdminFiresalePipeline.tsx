@@ -18,7 +18,7 @@ function useAdminDeals() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("firesale_requests")
-        .select("*")
+        .select("id, address, city, property_type, sqm, bedrooms, condition, ai_estimate, asking_price, offer_price, status, contact_email, contact_phone, notes, admin_notes, created_at")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data || []) as AdminDeal[];
