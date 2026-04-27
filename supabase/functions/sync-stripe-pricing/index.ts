@@ -9,6 +9,11 @@
  */
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
+import { createLogger } from "../_shared/logger.ts";
+import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
+
+const _log = createLogger("sync-stripe-pricing");
+const limiter = makeRateLimiter({ bucket: "sync-stripe-pricing", maxRequests: 5, windowMs: 60_000 });
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -26,6 +31,9 @@ type SyncResult = {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
+  if (await limiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);
 
   const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");

@@ -10,6 +10,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { createLogger } from "../_shared/logger.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 
 const log = createLogger("sync-to-os");
 
@@ -30,7 +31,7 @@ const TYPE_MAP: Record<string, string> = {
 
 // ── Verified auth helper ──────────────────────────────────────────────────────
 async function getOsToken(baseUrl: string, email: string, password: string): Promise<string> {
-  const res = await fetch(`${baseUrl}/auth/login`, {
+  const res = await fetchWithTimeout(`${baseUrl}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
@@ -190,7 +191,7 @@ Deno.serve(async (req) => {
     const token = await getOsToken(OS_URL, OS_EMAIL, OS_PASS);
 
     // Push to OS backoffice
-    const osResponse = await fetch(`${OS_URL}/bo/auctions/save`, {
+    const osResponse = await fetchWithTimeout(`${OS_URL}/bo/auctions/save`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

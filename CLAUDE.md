@@ -107,4 +107,4 @@ Required vars (see `.env.example`):
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
 - `VITE_TURNSTILE_SITE_KEY` (optional — has fallback)
 
-`src/lib/validateEnv.ts` validates these at startup.
+`src/lib/config.ts` validates these at startup.
