@@ -67,7 +67,13 @@ export type ListingsFilters = {
   sort?: "featured" | "newest" | "price-asc" | "price-desc" | "ai-score" | "views";
 };
 
-function buildListingsQuery(filters?: ListingsFilters, from = 0, pageSize = 24) {
+/**
+ * Builds the Supabase query used by `useListings` / `useListingsPaginated`.
+ * Exported so unit tests can verify each filter branch without requiring a
+ * full hook + react-query wrapper. The shape of the returned object mirrors
+ * the supabase-js query builder so consumers can `await` it directly.
+ */
+export function buildListingsQuery(filters?: ListingsFilters, from = 0, pageSize = 24) {
   const sort = filters?.sort ?? "featured";
   let query = supabase
     .from("listings")

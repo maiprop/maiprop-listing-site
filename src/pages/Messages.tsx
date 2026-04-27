@@ -3,7 +3,6 @@ import { Search, Send, Phone, Video, MoreVertical, Paperclip, Loader2, MessageSq
 import { Navbar } from "@/components/Navbar";
 import { useConversations, useMessages, useSendMessage, useMarkMessagesRead } from "@/hooks/useMessages";
 
-type ConvItem = NonNullable<ReturnType<typeof useConversations>["data"]>[number];
 type MsgItem = NonNullable<ReturnType<typeof useMessages>["data"]>[number];
 import { useAuth } from "@/contexts/AuthContext";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -11,35 +10,8 @@ import { Button } from "@/components/ui/button";
 import { MessageContent } from "@/lib/messageContent";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-
-function SignedAttachment({ path, filename, mimeType }: { path: string; filename: string; mimeType: string }) {
-  const [url, setUrl] = useState<string | null>(null);
-  useEffect(() => {
-    supabase.storage.from("message-attachments").createSignedUrl(path, 3600)
-      .then(({ data }) => { if (data?.signedUrl) setUrl(data.signedUrl); });
-  }, [path]);
-  if (!url) return <span className="text-xs text-muted-foreground">{filename}</span>;
-  const isImage = /^image\//.test(mimeType);
-  return isImage ? (
-    <a href={url} target="_blank" rel="noopener noreferrer" className="block">
-      <img src={url} alt={filename} className="max-w-full max-h-48 rounded-lg object-cover" />
-    </a>
-  ) : (
-    <a href={url} target="_blank" rel="noopener noreferrer" className="text-primary/80 underline text-xs block truncate">
-      {filename}
-    </a>
-  );
-}
-
-function getOtherProfile(conv: ConvItem | undefined, userId: string) {
-  if (!conv) return null;
-  return conv.profile_a?.user_id === userId ? conv.profile_b : conv.profile_a;
-}
-
-function getInitials(name: string) {
-  if (!name) return "?";
-  return name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
-}
+import { SignedAttachment } from "@/components/messages/SignedAttachment";
+import { getOtherProfile, getInitials } from "@/lib/messagesHelpers";
 
 export default function Messages() {
   const { user } = useAuth();
