@@ -56,3 +56,10 @@ type-errors.txt
 knip-report.txt
 *.bak
 src/integrations/supabase/types.ts.bak
+
+# Audit/assessment artifacts (regenerable)
+.sbom-*.json
+.complexity-report.json
+.madge-report.json
+.jscpd-report/
+
