@@ -157,6 +157,13 @@ async function syncSubscription(
   } else {
     console.log("[stripe-webhook] Updated profile subscription", { filter, productId, status: sub.status });
   }
+
+  // Promote the matching professionals row to 'pro' when the subscription is
+  // a professional plan. The plan key is propagated via subscription_data.metadata
+  // by create-checkout. The BEFORE UPDATE trigger
+  // public.professionals_guard_subscription_tier permits service-role writes
+  // because auth.uid() is NULL on edge-function calls without a user JWT.
+  await syncProfessionalTier(supabase, sub, isActive);
 }
 
 async function clearSubscription(
@@ -181,6 +188,60 @@ async function clearSubscription(
   } else {
     console.log("[stripe-webhook] Cleared subscription", { filter });
   }
+
+  // Demote any professional row owned by this customer back to 'free'.
+  const userId = customer.metadata?.user_id as string | undefined
+    ?? await resolveUserIdByEmail(supabase, customer.email ?? null);
+  if (userId) {
+    const { error: profErr } = await supabase
+      .from("professionals")
+      .update({ subscription_tier: "free" })
+      .eq("user_id", userId);
+    if (profErr) {
+      console.error("[stripe-webhook] Failed to clear professional tier", { userId, profErr });
+    }
+  }
+}
+
+/** Update professionals.subscription_tier when the subscription is a professional plan. */
+async function syncProfessionalTier(
+  supabase: ReturnType<typeof createClient>,
+  sub: Stripe.Subscription,
+  isActive: boolean,
+) {
+  const planKey = (sub.metadata?.plan ?? "") as string;
+  if (!planKey.startsWith("professional_")) return;
+
+  const userId = (sub.metadata?.user_id ?? "") as string;
+  if (!userId) {
+    console.warn("[stripe-webhook] Professional plan subscription missing user_id metadata", { subId: sub.id });
+    return;
+  }
+
+  const tier = isActive ? "pro" : "free";
+  const { error } = await supabase
+    .from("professionals")
+    .update({ subscription_tier: tier })
+    .eq("user_id", userId);
+
+  if (error) {
+    console.error("[stripe-webhook] Failed to update professional tier", { userId, tier, error });
+  } else {
+    console.log("[stripe-webhook] Updated professional tier", { userId, tier, planKey });
+  }
+}
+
+async function resolveUserIdByEmail(
+  supabase: ReturnType<typeof createClient>,
+  email: string | null,
+): Promise<string | null> {
+  if (!email) return null;
+  const { data } = await supabase
+    .from("profiles")
+    .select("user_id")
+    .eq("email", email)
+    .maybeSingle();
+  return (data as { user_id?: string } | null)?.user_id ?? null;
 }
 
 function errorResponse(message: string, status: number) {

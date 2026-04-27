@@ -15,6 +15,7 @@
  */
 
 import { openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
+import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 
 const ALLOWED_ORIGINS = [
   "https://maiprop.co", "https://www.maiprop.co", "https://app.maiprop.co", "https://portal.maiprop.co",
@@ -44,27 +45,17 @@ function corsHeaders(req: Request): Record<string, string> {
   };
 }
 
-// Rate limit: 10 req/min per IP
-const ipWindows = new Map<string, { count: number; reset: number }>();
-function isRateLimited(ip: string): boolean {
-  const now = Date.now();
-  const w = ipWindows.get(ip);
-  if (!w || now > w.reset) { ipWindows.set(ip, { count: 1, reset: now + 60_000 }); return false; }
-  if (w.count >= 10) return true;
-  w.count++;
-  return false;
-}
+// Rate limit: 10 req/min per IP — cross-region, DB-backed.
+// The previous in-memory Map was per-isolate and would let the same IP burst
+// 10 × N regions / minute (audit BUG F).
+const translateLimiter = makeRateLimiter({ bucket: "ai-translate", maxRequests: 10, windowMs: 60_000 });
 
 Deno.serve(async (req) => {
   const hdrs = corsHeaders(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: hdrs });
 
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0].trim() ?? "unknown";
-  if (isRateLimited(ip)) {
-    return new Response(JSON.stringify({ error: "Rate limit exceeded. Max 10 translations/min." }), {
-      status: 429, headers: { ...hdrs, "Content-Type": "application/json" },
-    });
-  }
+  if (await translateLimiter.isLimited(ip)) return tooManyRequestsResponse(hdrs);
 
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Use POST" }), {

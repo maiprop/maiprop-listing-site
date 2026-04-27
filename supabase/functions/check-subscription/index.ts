@@ -36,17 +36,39 @@ Deno.serve(async (req) => {
     logStep("User authenticated", { userId: user.id, email: user.email });
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
-    const customers = await stripe.customers.list({ email: user.email, limit: 1 });
 
-    if (customers.data.length === 0) {
+    // Prefer metadata.user_id (set by create-checkout) so the subscription
+    // state survives an auth email change. Fall back to email lookup for
+    // legacy customers and backfill the metadata for future calls.
+    let customerId: string | null = null;
+    try {
+      const search = await stripe.customers.search({
+        query: `metadata['user_id']:'${user.id}'`,
+        limit: 1,
+      });
+      if (search.data[0]) customerId = search.data[0].id;
+    } catch (_err) {
+      // customers.search requires the search API; fall through to email path.
+    }
+    if (!customerId) {
+      const byEmail = await stripe.customers.list({ email: user.email, limit: 1 });
+      if (byEmail.data[0]) {
+        customerId = byEmail.data[0].id;
+        if (!byEmail.data[0].metadata?.user_id) {
+          await stripe.customers.update(customerId, {
+            metadata: { ...(byEmail.data[0].metadata ?? {}), user_id: user.id },
+          });
+        }
+      }
+    }
+
+    if (!customerId) {
       logStep("No customer found");
       return new Response(JSON.stringify({ subscribed: false }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200,
       });
     }
-
-    const customerId = customers.data[0].id;
     logStep("Customer found", { customerId });
 
     // Fetch both active and trialing — consistent with stripe-webhook which treats both as subscribed

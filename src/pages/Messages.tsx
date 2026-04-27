@@ -12,6 +12,25 @@ import { MessageContent } from "@/lib/messageContent";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
+function SignedAttachment({ path, filename, mimeType }: { path: string; filename: string; mimeType: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    supabase.storage.from("message-attachments").createSignedUrl(path, 3600)
+      .then(({ data }) => { if (data?.signedUrl) setUrl(data.signedUrl); });
+  }, [path]);
+  if (!url) return <span className="text-xs text-muted-foreground">{filename}</span>;
+  const isImage = /^image\//.test(mimeType);
+  return isImage ? (
+    <a href={url} target="_blank" rel="noopener noreferrer" className="block">
+      <img src={url} alt={filename} className="max-w-full max-h-48 rounded-lg object-cover" />
+    </a>
+  ) : (
+    <a href={url} target="_blank" rel="noopener noreferrer" className="text-primary/80 underline text-xs block truncate">
+      {filename}
+    </a>
+  );
+}
+
 function getOtherProfile(conv: ConvItem | undefined, userId: string) {
   if (!conv) return null;
   return conv.profile_a?.user_id === userId ? conv.profile_b : conv.profile_a;
@@ -86,8 +105,12 @@ export default function Messages() {
 
     if (!activeConvId || !user) return;
 
+    // Private realtime channel — gated by the realtime.messages SELECT policy
+    // added in 20260627000000_audit_remediations.sql which enforces conversation
+    // participation. Previously the public channel name `typing:<convId>` was
+    // joinable by anyone who knew or guessed a conversation UUID.
     const channel = supabase.channel(`typing:${activeConvId}`, {
-      config: { presence: { key: user.id } },
+      config: { presence: { key: user.id }, private: true },
     });
 
     channel
@@ -148,7 +171,7 @@ export default function Messages() {
       for (let i = 0; i < files.length; i++) {
         const f = files[i];
         const ext = (f.name.split(".").pop() || "bin").toLowerCase();
-        const path = `${activeConvId}/${user.id}/${crypto.randomUUID()}.${ext}`;
+        const path = `${user.id}/${activeConvId}/${crypto.randomUUID()}.${ext}`;
         const { error } = await supabase.storage.from("message-attachments").upload(path, f, {
           contentType: f.type || "application/octet-stream",
         });
@@ -341,19 +364,9 @@ export default function Messages() {
                           {msg.content ? <MessageContent content={msg.content} /> : null}
                           {attachments.length > 0 && (
                             <div className="mt-2 space-y-1">
-                              {attachments.map((a) => {
-                                const url = supabase.storage.from("message-attachments").getPublicUrl(a.storage_path).data.publicUrl;
-                                const isImage = /^image\//.test(a.mime_type || "");
-                                return isImage ? (
-                                  <a key={a.storage_path} href={url} target="_blank" rel="noopener noreferrer" className="block">
-                                    <img src={url} alt={a.filename} className="max-w-full max-h-48 rounded-lg object-cover" />
-                                  </a>
-                                ) : (
-                                  <a key={a.storage_path} href={url} target="_blank" rel="noopener noreferrer" className="text-primary/80 underline text-xs block truncate">
-                                    {a.filename}
-                                  </a>
-                                );
-                              })}
+                              {attachments.map((a) => (
+                                <SignedAttachment key={a.storage_path} path={a.storage_path} filename={a.filename} mimeType={a.mime_type || ""} />
+                              ))}
                             </div>
                           )}
                           <div className={`text-[10px] mt-1 flex items-center justify-end gap-1 ${isMe ? "text-primary-foreground/60" : "text-muted-foreground"}`}>

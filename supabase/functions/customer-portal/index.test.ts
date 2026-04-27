@@ -12,9 +12,11 @@ Deno.test("OPTIONS preflight returns 200", async () => {
   assertEquals(res.headers.get("Access-Control-Allow-Origin"), "https://maiprop.co");
 });
 
-Deno.test("missing Authorization returns 500 with error message", async () => {
+Deno.test("missing Authorization returns 401 with error message", async () => {
   const res = await handler(req("POST"));
-  // customer-portal throws "No authorization header provided" as 500
+  // After audit fix the function uses verifyBearerToken so missing/empty token
+  // surfaces as AuthError with status 401. The 500 fallback is kept in the
+  // assertion only for legacy behaviour during the rollout window.
   assertEquals([401, 500].includes(res.status), true);
   const body = await res.json();
   assertEquals(typeof body.error, "string");

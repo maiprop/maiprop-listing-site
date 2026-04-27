@@ -1,5 +1,9 @@
 /**
- * Tests for create-checkout edge function.
+ * Tests for create-checkout edge function (handler-level only).
+ *
+ * sanitizeRedirectPath unit tests live in `sanitizeRedirectPath.test.ts` —
+ * keeping them out of this file avoids loading the module before
+ * captureHandler patches Deno.serve.
  */
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { captureHandler, req, authedReq } from "../_shared/testUtils.ts";

@@ -9,8 +9,29 @@ const logStep = (step: string, details?: any) => {
   console.log(`[CREATE-CHECKOUT] ${step}${detailsStr}`);
 };
 
-/** Plan keys: env STRIPE_PRICE_<UPPERCASE_KEY>, or DB pricing_configs.metadata.stripe_price_id, or STRIPE_PRICE_DEFAULT. No hardcoded fallback in production. */
-async function getPriceForPlan(supabase: ReturnType<typeof createClient>, planKey: string): Promise<string> {
+/** Accepts only same-origin absolute paths starting with "/" (and not "//" or "/\\").
+ *  Returns null for anything else so callers fall back to a server-controlled default.
+ *  Exported so unit tests can cover every branch without spinning up the handler. */
+export function sanitizeRedirectPath(raw: unknown): string | null {
+  if (typeof raw !== "string" || raw.length === 0) return null;
+  // Reject scheme-relative ("//evil") and back-slash escape ("/\\evil") forms,
+  // both of which browsers may resolve to attacker-controlled origins.
+  if (!raw.startsWith("/") || raw.startsWith("//") || raw.startsWith("/\\")) return null;
+  // Reject anything that looks like an attempt to break out of the origin via
+  // CRLF / control characters in headers Stripe will echo back.
+  if (/[\r\n\t]/.test(raw)) return null;
+  if (raw.length > 512) return null;
+  return raw;
+}
+
+/** Plan keys: env STRIPE_PRICE_<UPPERCASE_KEY>, or DB pricing_configs.metadata.stripe_price_id, or STRIPE_PRICE_DEFAULT. No hardcoded fallback in production.
+ *
+ * supabase param typed `any` to bridge the SupabaseClient generic mismatch
+ * between the call-site `createClient(url, key)` (which produces
+ * `SupabaseClient<any, "public", "public", any, any>`) and `ReturnType<typeof
+ * createClient>` (which produces a narrower default-generic variant). The
+ * file-level eslint-disable at the top already covers the `no-explicit-any`. */
+async function getPriceForPlan(supabase: any, planKey: string): Promise<string> {
   const envKey = `STRIPE_PRICE_${planKey.toUpperCase().replace(/-/g, "_")}`;
   const envPrice = Deno.env.get(envKey);
   if (envPrice) return envPrice;
@@ -45,8 +66,11 @@ Deno.serve(async (req) => {
 
     const body = req.method === "POST" && req.body ? await req.json().catch(() => ({})) : {};
     const plan = (body.plan ?? "pro") as string;
-    // Redirect URLs are derived from the request origin only — caller-provided URLs are ignored
-    // to prevent open-redirect attacks.
+    // Caller-provided redirect URLs are accepted only when they are same-origin
+    // relative paths starting with "/" — guards against open-redirect abuse while
+    // honouring the success_url/cancel_url contract from Onboarding/Pricing.
+    const successPath = sanitizeRedirectPath(body.success_url);
+    const cancelPath = sanitizeRedirectPath(body.cancel_url);
 
     const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", { apiVersion: "2025-08-27.basil" });
 
@@ -75,8 +99,8 @@ Deno.serve(async (req) => {
     }
 
     const origin = req.headers.get("origin") || Deno.env.get("SITE_URL") || "https://portal.maiprop.co/";
-    const success = `${origin}/pricing?checkout=success`;
-    const cancel = `${origin}/pricing?checkout=cancelled`;
+    const success = `${origin}${successPath ?? "/pricing?checkout=success"}`;
+    const cancel = `${origin}${cancelPath ?? "/pricing?checkout=cancelled"}`;
 
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
@@ -85,6 +109,11 @@ Deno.serve(async (req) => {
       success_url: success,
       cancel_url: cancel,
       metadata: { user_id: user.id, plan },
+      // Propagate plan to the subscription object itself so the webhook can
+      // identify professional_* plans and update professionals.subscription_tier.
+      // Stripe does NOT auto-copy session.metadata onto the resulting subscription,
+      // so we set subscription_data.metadata explicitly.
+      subscription_data: { metadata: { user_id: user.id, plan } },
     });
 
     logStep("Checkout session created", { sessionId: session.id, plan });
