@@ -6,6 +6,7 @@ import type { Tables } from "@/integrations/supabase/types";
 import { logger } from "@/lib/logger";
 import { APP_ORIGIN } from "@/lib/config";
 import { getExplicitParticipantTypeFromProfile } from "@/lib/participantConfig";
+import { validatePassword } from "@/lib/passwordPolicy";
 
 type Profile = Tables<"profiles">;
 
@@ -174,21 +175,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     password: string,
     meta: { full_name: string; business_name?: string; tax_id?: string; phone?: string; license_number?: string }
   ) => {
-    // Password strength validation (audit FINDING-1)
-    if (password.length < 12) {
-      return { error: new Error("Password must be at least 12 characters long"), needsEmailConfirm: false };
-    }
-    if (!/[A-Z]/.test(password)) {
-      return { error: new Error("Password must contain at least one uppercase letter"), needsEmailConfirm: false };
-    }
-    if (!/[a-z]/.test(password)) {
-      return { error: new Error("Password must contain at least one lowercase letter"), needsEmailConfirm: false };
-    }
-    if (!/[0-9]/.test(password)) {
-      return { error: new Error("Password must contain at least one number"), needsEmailConfirm: false };
-    }
-    if (!/[^A-Za-z0-9]/.test(password)) {
-      return { error: new Error("Password must contain at least one special character"), needsEmailConfirm: false };
+    const pw = validatePassword(password);
+    if (!pw.valid) {
+      return { error: new Error(pw.error!), needsEmailConfirm: false };
     }
 
     const { data, error } = await supabase.auth.signUp({

@@ -27,13 +27,13 @@ No critical security vulnerabilities identified that would block go-live.
 **Risk:** Account takeover via weak passwords  
 **Status:** FIXED 2026-04-27  
 **Fix:** Added client-side password validation requiring:
-- Minimum 12 characters
+- Minimum 8 characters (matching Signup.tsx — avoids locking out existing users)
 - At least one uppercase letter
 - At least one lowercase letter
 - At least one number
 - At least one special character
 
-**Commit:** `src/contexts/AuthContext.tsx` lines 177-192
+**Commit:** Shared validation in `src/lib/passwordPolicy.ts`, consumed by `AuthContext.tsx` and `ResetPassword.tsx`
 
 ---
 
@@ -203,7 +203,7 @@ No critical security vulnerabilities identified that would block go-live.
 | Category | Risk Level | Notes |
 |----------|------------|-------|
 | Data Breach | LOW | Comprehensive RLS, no PII leakage vectors found |
-| Account Takeover | LOW | Password policy enforced (12+ chars, complexity) |
+| Account Takeover | LOW | Password policy enforced (8+ chars, complexity) |
 | Payment Fraud | LOW | Stripe webhook verification, idempotent handlers |
 | AI Cost Overrun | LOW | Rate limiting on all anonymous endpoints (10-20 req/min IP) |
 | GDPR Violation | LOW | Verified deletion flow, no PII retention |
@@ -214,7 +214,7 @@ No critical security vulnerabilities identified that would block go-live.
 ## CONCLUSION
 
 The application is **READY FOR GO-LIVE**. All medium findings have been addressed:
-- ✅ Password policy enforced (12+ characters with complexity requirements)
+- ✅ Password policy enforced (8+ characters with complexity requirements)
 - ✅ AI endpoints verified to have rate limiting (10-20 req/min per IP)
 
 The security architecture is sound with defense-in-depth patterns throughout.

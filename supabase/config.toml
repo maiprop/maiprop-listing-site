@@ -105,3 +105,6 @@ verify_jwt = false
 
 [functions.log-role-switch]
 verify_jwt = true
+
+[functions.healthz]
+verify_jwt = false

@@ -45,7 +45,8 @@
     "lighthouse": "lhci autorun",
     "lighthouse:collect": "lhci collect",
     "lighthouse:assert": "lhci assert",
-    "i18n:scan": "i18next-scanner --config i18next-scanner.config.js"
+    "i18n:scan": "i18next-scanner --config i18next-scanner.config.js",
+    "prepare": "husky"
   },
   "dependencies": {
     "@lovable.dev/cloud-auth-js": "^1.0.0",
@@ -109,6 +110,8 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.10.1",
     "@cloudflare/workers-types": "^4.20260421.1",
+    "@commitlint/cli": "^20.5.2",
+    "@commitlint/config-conventional": "^20.5.0",
     "@eslint/js": "^9.32.0",
     "@lhci/cli": "^0.15.1",
     "@playwright/test": "^1.59.1",
@@ -125,6 +128,7 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^15.15.0",
+    "husky": "^9.1.7",
     "i18next-scanner": "^4.6.0",
     "jsdom": "^29.0.2",
     "lovable-tagger": "^1.1.13",

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { validatePassword } from "@/lib/passwordPolicy";
 
 export default function ResetPassword() {
   const navigate = useNavigate();
@@ -29,8 +30,9 @@ export default function ResetPassword() {
       toast.error("Passwords do not match");
       return;
     }
-    if (password.length < 6) {
-      toast.error("Password must be at least 6 characters");
+    const pw = validatePassword(password);
+    if (!pw.valid) {
+      toast.error(pw.error!);
       return;
     }
     setLoading(true);
@@ -95,7 +97,7 @@ export default function ResetPassword() {
                 <div className="relative">
                   <input
                     type={showPass ? "text" : "password"}
-                    placeholder="Min. 6 characters"
+                    placeholder="Min. 8 characters"
                     value={password}
                     onChange={e => setPassword(e.target.value)}
                     required

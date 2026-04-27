@@ -94,7 +94,7 @@ const App = () => (
                 <Sonner />
                 <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
                   <ErrorBoundary>
-                  <Suspense fallback={<div className="min-h-screen bg-background" />}>
+                  <Suspense fallback={<div className="min-h-screen bg-background flex items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>}>
                     <Routes>
                       <Route path="/" element={<ErrorBoundary><Index /></ErrorBoundary>} />
                       <Route path="/listings/new" element={<SellerRoute><ErrorBoundary><CreateListing /></ErrorBoundary></SellerRoute>} />

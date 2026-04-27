@@ -60,7 +60,7 @@ function useSyncLogs() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("sync_log")
-        .select("*")
+        .select("id, direction, entity_type, entity_id, status, error_message, records_affected, payload, created_at")
         .order("created_at", { ascending: false })
         .limit(80);
       if (error) throw error;

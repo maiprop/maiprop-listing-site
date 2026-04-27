@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Link } from "react-router-dom";
 import { Gavel, Crown, Calendar, Clock, MapPin, Euro, Heart, Share2, Flag, ExternalLink, Building2, Lock } from "lucide-react";
 import { format } from "date-fns";
@@ -16,7 +17,7 @@ export function PremiumBadge() {
   );
 }
 
-export function AuctionCard({
+export const AuctionCard = memo(function AuctionCard({
   a,
   favoritedIds,
   onToggleFav,
@@ -57,6 +58,7 @@ export function AuctionCard({
           <img
             src={imgSrc}
             alt={a.title}
+            loading="lazy"
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
             onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
           />
@@ -181,4 +183,4 @@ export function AuctionCard({
       </div>
     </div>
   );
-}
+});

@@ -44,6 +44,23 @@ components:
         code:
           type: string
 
+    HealthzResponse:
+      type: object
+      required: [status, checks, timestamp]
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded]
+        checks:
+          type: object
+          additionalProperties:
+            type: string
+            enum: [ok, fail]
+          description: Per-subsystem check results (database, env_vars, openai, stripe, sentry, brevo)
+        timestamp:
+          type: string
+          format: date-time
+
     AISearchRequest:
       type: object
       required: [query]
@@ -646,3 +663,26 @@ paths:
         content: { application/json: { schema: { type: object, additionalProperties: true } } }
       responses:
         '200': { description: OK }
+
+  /healthz:
+    get:
+      operationId: healthz
+      summary: Uptime health check — verifies DB connectivity and required env vars
+      description: |
+        Public endpoint (verify_jwt = false). Returns 200 when all critical checks pass,
+        503 when any critical check (database, env_vars) fails. Optional integration
+        checks (openai, stripe, sentry, brevo) are reported but do not affect status.
+      security: []
+      responses:
+        '200':
+          description: All critical checks pass
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthzResponse'
+        '503':
+          description: One or more critical checks failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthzResponse'

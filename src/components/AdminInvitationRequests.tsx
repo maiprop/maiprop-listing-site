@@ -98,7 +98,7 @@ export default function AdminInvitationRequests() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("invitation_requests")
-        .select("*")
+        .select("id, email, full_name, phone, company, job_title, company_website, linkedin_url, investment_focus, deal_size_range, investment_vehicle, geographic_focus, aum_range, years_experience, source, message, user_id, created_at, status")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data as InvitationRequest[]) || [];

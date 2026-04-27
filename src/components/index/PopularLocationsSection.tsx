@@ -103,7 +103,7 @@ export function PopularLocationsSection() {
               style={{ transitionDelay: `${idx * 0.1}s` }}
             >
               <div className="relative rounded-xl overflow-hidden aspect-[3/4] group shadow-card hover:shadow-elevated transition-shadow duration-500">
-                <img src={city.image} alt={city.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out" />
+                <img src={city.image} alt={city.name} loading="lazy" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out" />
                 <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-background/30 to-transparent group-hover:from-background/95 transition-all duration-500" />
                 <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" style={{ background: "linear-gradient(135deg, hsl(var(--primary) / 0.08) 0%, transparent 60%)" }} />
                 <div className="absolute bottom-4 left-4 translate-y-1 group-hover:translate-y-0 transition-transform duration-300">

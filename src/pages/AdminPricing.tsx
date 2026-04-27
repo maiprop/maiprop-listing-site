@@ -106,7 +106,7 @@ function usePricingConfigs() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("pricing_configs")
-        .select("*")
+        .select("id, created_at, updated_at, key, label, description, audience, module, unit, currency, amount, is_active, sort_order, metadata")
         .order("module", { ascending: true })
         .order("audience", { ascending: true })
         .order("sort_order", { ascending: true });

@@ -268,9 +268,9 @@ describe("AuthProvider auth API methods", () => {
       return outcome;
     }
 
-    it("rejects passwords shorter than 12 characters", async () => {
+    it("rejects passwords shorter than 8 characters", async () => {
       const outcome = await signUpWith("Shrt1!");
-      expect(outcome.error?.message).toMatch(/at least 12 characters/i);
+      expect(outcome.error?.message).toMatch(/at least 8 characters/i);
       expect(outcome.needsEmailConfirm).toBe(false);
       expect(supabaseMock.auth.signUp).not.toHaveBeenCalled();
     });
