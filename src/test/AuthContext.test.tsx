@@ -246,13 +246,68 @@ describe("AuthProvider auth API methods", () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     let outcome!: { error: Error | null; needsEmailConfirm: boolean };
     await act(async () => {
-      outcome = await result.current.signUp("new@x.com", "pw", {
+      outcome = await result.current.signUp("new@x.com", "ValidPass1!@#", {
         full_name: "New User",
         phone: "+30 210 0000",
       });
     });
     expect(outcome.error).toBeNull();
     expect(outcome.needsEmailConfirm).toBe(true);
+  });
+
+  describe("signUp password policy (go-live audit FINDING-1)", () => {
+    const meta = { full_name: "New User", phone: "+30 210 0000" };
+
+    async function signUpWith(password: string) {
+      const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      let outcome!: { error: Error | null; needsEmailConfirm: boolean };
+      await act(async () => {
+        outcome = await result.current.signUp("new@x.com", password, meta);
+      });
+      return outcome;
+    }
+
+    it("rejects passwords shorter than 12 characters", async () => {
+      const outcome = await signUpWith("Shrt1!");
+      expect(outcome.error?.message).toMatch(/at least 12 characters/i);
+      expect(outcome.needsEmailConfirm).toBe(false);
+      expect(supabaseMock.auth.signUp).not.toHaveBeenCalled();
+    });
+
+    it("rejects passwords without uppercase letters", async () => {
+      const outcome = await signUpWith("alllowercase1!");
+      expect(outcome.error?.message).toMatch(/uppercase/i);
+      expect(supabaseMock.auth.signUp).not.toHaveBeenCalled();
+    });
+
+    it("rejects passwords without lowercase letters", async () => {
+      const outcome = await signUpWith("ALLUPPERCASE1!");
+      expect(outcome.error?.message).toMatch(/lowercase/i);
+      expect(supabaseMock.auth.signUp).not.toHaveBeenCalled();
+    });
+
+    it("rejects passwords without numbers", async () => {
+      const outcome = await signUpWith("NoDigitsHere!@");
+      expect(outcome.error?.message).toMatch(/number/i);
+      expect(supabaseMock.auth.signUp).not.toHaveBeenCalled();
+    });
+
+    it("rejects passwords without special characters", async () => {
+      const outcome = await signUpWith("NoSpecials1234");
+      expect(outcome.error?.message).toMatch(/special/i);
+      expect(supabaseMock.auth.signUp).not.toHaveBeenCalled();
+    });
+
+    it("accepts passwords that satisfy every rule", async () => {
+      supabaseMock.auth.signUp.mockResolvedValue({
+        data: { user: { id: "new-u" }, session: null },
+        error: null,
+      });
+      const outcome = await signUpWith("ValidPass1!@#");
+      expect(outcome.error).toBeNull();
+      expect(supabaseMock.auth.signUp).toHaveBeenCalled();
+    });
   });
 
   it("signOut clears local profile + subscription", async () => {
