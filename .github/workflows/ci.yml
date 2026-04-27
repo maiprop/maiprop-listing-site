@@ -137,6 +137,7 @@ jobs:
       RLS_USER_PASSWORD: ${{ secrets.RLS_USER_PASSWORD }}
       ONBOARDING_TEST_EMAIL: ${{ secrets.ONBOARDING_TEST_EMAIL }}
       ONBOARDING_TEST_PASSWORD: ${{ secrets.ONBOARDING_TEST_PASSWORD }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -156,6 +157,7 @@ jobs:
             "RLS_USER_PASSWORD"
             "ONBOARDING_TEST_EMAIL"
             "ONBOARDING_TEST_PASSWORD"
+            "SUPABASE_SERVICE_ROLE_KEY"
           )
 
           missing=0
@@ -179,8 +181,8 @@ jobs:
       - name: Build app
         run: npm run build
 
-      - name: Run staging RLS + onboarding security tests
-        run: npx playwright test --project=chromium e2e/rls-security.spec.ts e2e/onboarding-role-selection.spec.ts
+      - name: Run staging RLS + onboarding + GDPR security tests
+        run: npx playwright test --project=chromium e2e/rls-security.spec.ts e2e/onboarding-role-selection.spec.ts e2e/gdpr-delete-account.spec.ts
 
       - name: Upload Playwright report
         if: failure()

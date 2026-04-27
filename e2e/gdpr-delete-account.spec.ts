@@ -45,6 +45,40 @@ test.describe("GDPR — account deletion", () => {
     const userId = created!.user!.id;
 
     try {
+      // Proxy delete-account calls through Node.js to bypass browser CORS when
+      // running against localhost:4173 (Vite preview). The edge function's CORS
+      // allowlist may not include the CI preview port.
+      await page.route("**/functions/v1/delete-account", async (route) => {
+        const req = route.request();
+        const origin = req.headers()["origin"] ?? "*";
+        if (req.method() === "OPTIONS") {
+          await route.fulfill({
+            status: 200,
+            headers: {
+              "access-control-allow-origin": origin,
+              "access-control-allow-methods": "GET, POST, OPTIONS",
+              "access-control-allow-headers":
+                "authorization, x-client-info, apikey, content-type",
+            },
+          });
+          return;
+        }
+        const headers: Record<string, string> = {};
+        for (const [k, v] of Object.entries(req.headers())) {
+          if (!k.startsWith("sec-") && k !== "origin" && k !== "referer") headers[k] = v;
+        }
+        const res = await fetch(req.url(), {
+          method: req.method(),
+          headers,
+          body: req.postData() ?? undefined,
+        });
+        const body = await res.text();
+        const resHeaders: Record<string, string> = {};
+        res.headers.forEach((v, k) => { resHeaders[k] = v; });
+        resHeaders["access-control-allow-origin"] = origin;
+        await route.fulfill({ status: res.status, headers: resHeaders, body });
+      });
+
       // 2. Sign in via UI.
       await page.goto("/login");
       await page.locator('input[type="email"], input[name="email"]').first().fill(email);
@@ -53,6 +87,14 @@ test.describe("GDPR — account deletion", () => {
       await page.waitForURL(/\/dashboard|\/onboarding/, { timeout: 20_000 });
 
       // 3. Navigate to settings and open delete dialog.
+      //    Dismiss the cookie-consent banner first — it overlays the bottom of
+      //    the page and intercepts pointer events on the Delete Account button.
+      await page.evaluate(() =>
+        localStorage.setItem(
+          "maiprop_cookie_consent",
+          JSON.stringify({ accepted: true, functional: true, analytics: true, mapping: true, timestamp: Date.now() }),
+        ),
+      );
       await page.goto("/dashboard/settings");
       await page.waitForLoadState("networkidle");
 
