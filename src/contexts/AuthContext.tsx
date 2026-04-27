@@ -174,9 +174,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     password: string,
     meta: { full_name: string; business_name?: string; tax_id?: string; phone?: string; license_number?: string }
   ) => {
-    // Password strength validation (audit FINDING-1)
-    if (password.length < 12) {
-      return { error: new Error("Password must be at least 12 characters long"), needsEmailConfirm: false };
+    // Password strength validation — minimum 8 chars, matching Signup.tsx
+    if (password.length < 8) {
+      return { error: new Error("Password must be at least 8 characters long"), needsEmailConfirm: false };
     }
     if (!/[A-Z]/.test(password)) {
       return { error: new Error("Password must contain at least one uppercase letter"), needsEmailConfirm: false };
