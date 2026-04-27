@@ -108,3 +108,6 @@ verify_jwt = true
 
 [functions.healthz]
 verify_jwt = false
+
+[functions.csp-report]
+verify_jwt = false

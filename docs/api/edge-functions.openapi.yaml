@@ -664,6 +664,28 @@ paths:
       responses:
         '200': { description: OK }
 
+  /csp-report:
+    post:
+      operationId: cspReport
+      summary: Receive and log Content-Security-Policy violation reports
+      description: |
+        Public endpoint (verify_jwt = false). Accepts CSP violation reports in both
+        Reporting API format (report-to, JSON array) and legacy report-uri format
+        (single object with csp-report key). Logs violations via structured logger.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '204':
+          description: Report received and logged
+        '405':
+          description: Method not allowed (only POST accepted)
+
   /healthz:
     get:
       operationId: healthz

@@ -4,13 +4,15 @@
  * from triggering expensive AI / data operations via cross-origin requests.
  */
 
-const ALLOWED_ORIGINS = [
+const PRODUCTION_ORIGINS = [
   "https://maiprop.co",
   "https://www.maiprop.co",
   "https://app.maiprop.co",
   "https://portal.maiprop.co",
   "https://os.maiprop.co",
-  // Local dev
+];
+
+const LOCAL_DEV_ORIGINS = [
   "http://localhost:8080",
   "http://localhost:8081",
   "http://localhost:8082",
@@ -19,6 +21,12 @@ const ALLOWED_ORIGINS = [
   "http://localhost:4173",
   "http://localhost:3000",
 ];
+
+const isProduction = Deno.env.get("ENVIRONMENT") === "production";
+
+const ALLOWED_ORIGINS = isProduction
+  ? PRODUCTION_ORIGINS
+  : [...PRODUCTION_ORIGINS, ...LOCAL_DEV_ORIGINS];
 
 export function getCorsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get("origin") ?? "";
