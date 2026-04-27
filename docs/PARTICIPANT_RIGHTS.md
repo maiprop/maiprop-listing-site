@@ -15,7 +15,7 @@ Each participant type has **fixed, non-upgradable** rights. Users cannot escalat
 
 | Participant   | DB role          | Rights |
 |---------------|------------------|--------|
-| **buyer**     | individual       | Browse listings, save, viewings, auction alerts, Quick Sale application tracking |
+| **buyer**     | buyer            | Browse listings, save, viewings, auction alerts, Quick Sale application tracking |
 | **seller**    | seller_landlord  | Create & manage own listings, viewings |
 | **investor**  | investor         | Same as buyer + Quick Sale dashboard (deal flow, saved searches, auctions) |
 | **agent**     | agent            | Listings, analytics, contacts, projects, portfolios — no admin |

@@ -19,12 +19,12 @@
 - **Role cannot change** via normal profile updates (RLS).
 - **`bio` can change** (participant-type label) as long as `role` stays the same.
 - **Valid switches** (same DB role): `agent ↔ developer ↔ institutional`, `buyer ↔ investor`, `seller` only.
-- **Escalation blocked**: `individual` → `agent`/`professional`/`seller_landlord` is blocked. Only platform admin can set these roles.
+- **Escalation blocked**: `buyer` → `agent`/`professional`/`seller_landlord` is blocked. Only platform admin can set these roles.
 
 ### Edge case: first-time onboarding
-- New users get `role = 'individual'` from `handle_new_user`.
+- New users get `role = 'buyer'` from `handle_new_user`.
 - Selecting "seller" or "agent" in onboarding tries `updateProfile({ role: 'seller_landlord' })` or `role: 'agent'`.
-- RLS blocks this (role must stay `individual`).
+- RLS blocks this (role must stay `buyer`).
 - Agent/professional/seller_landlord can only be set by: (a) `auto_grant_owner_privileges` trigger (owner emails), or (b) platform admin.
 
 ---

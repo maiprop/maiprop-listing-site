@@ -42,7 +42,7 @@ This document lists features and limits from the Pricing specs that are **not ye
 
 | Feature | Spec | Status |
 |---------|------|--------|
-| List limit: 2 (free), 5 (Pro) | Enforce on listing insert | No RLS or app check for seller/individual plan |
+| List limit: 2 (free), 5 (Pro) | Enforce on listing insert | No RLS or app check for seller/buyer plan |
 | No AI assistance (free) | Hide AI assist for free | AI assist likely available; no plan gate |
 | Basic dashboard, no analytics (free) | Hide analytics for free | Analytics shown to all |
 | AI listing description assist (Pro) | Pro only | No plan gate |
