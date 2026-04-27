@@ -10,6 +10,9 @@
  */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { createLogger } from "../_shared/logger.ts";
+
+const log = createLogger("poll-os-auctions");
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -159,7 +162,7 @@ async function logSync(
       records_affected,
     });
   } catch (e) {
-    console.warn("logSync failed:", e);
+    log.warn("logSync failed", { err: e instanceof Error ? e.message : String(e) });
   }
 }
 
@@ -324,16 +327,11 @@ Deno.serve(async (req) => {
     const page = Number(body.page ?? 0);
     const size = Math.min(Number(body.size ?? body.pageSize ?? 100), 500);
 
-    console.log(
-      `poll-os-auctions: authenticating against ${OS_URL}...`
-    );
+    log.info("authenticating against OS", { os_url: OS_URL });
     const token = await getOsToken(OS_URL, OS_EMAIL, OS_PASS);
 
     const endpoint = `/api/v1/auctions/filter/details?page=${page}&size=${size}`;
-    console.log(
-      `poll-os-auctions: POST ${OS_URL}${endpoint}`,
-      JSON.stringify(filterRequest)
-    );
+    log.info("requesting auctions page", { endpoint, filter: filterRequest });
 
     const auctRes = await fetchWithTimeout(
       `${OS_URL}${endpoint}`,
@@ -378,9 +376,7 @@ Deno.serve(async (req) => {
     const pagination = auctJson.pagination ?? {};
     const totalAvailable = pagination.totalElements ?? auctions.length;
 
-    console.log(
-      `poll-os-auctions: received ${auctions.length} auctions (total: ${totalAvailable}, page: ${page})`
-    );
+    log.info("received auctions", { received: auctions.length, total_available: totalAvailable, page });
 
     if (auctions.length === 0) {
       await logSync(sb, "success", null, { endpoint, total: 0, page }, 0);
@@ -453,7 +449,7 @@ Deno.serve(async (req) => {
       const chunk = toInsert.slice(i, i + CHUNK);
       const { error } = await sb.from("listings").insert(chunk);
       if (error) {
-        console.error("Insert error:", error.message);
+        log.error("insert failed", { err: error.message, chunk_size: chunk.length });
         errors += chunk.length;
       } else {
         imported += chunk.length;
@@ -467,7 +463,7 @@ Deno.serve(async (req) => {
         .update(u.data)
         .eq("id", u.id);
       if (error) {
-        console.error("Update error:", error.message);
+        log.error("update failed", { err: error.message, listing_id: u.id });
         errors++;
       } else {
         updated++;
@@ -494,13 +490,13 @@ Deno.serve(async (req) => {
       imported + updated
     );
 
-    console.log("poll-os-auctions done:", JSON.stringify(summary));
+    log.info("poll done", { summary });
 
     return new Response(JSON.stringify({ ok: true, ...summary }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err: any) {
-    console.error("poll-os-auctions error:", err.message);
+    log.error("poll error", { err: err?.message ?? String(err) });
     await logSync(sb, "error", err.message);
     return new Response(JSON.stringify({ error: err.message }), {
       status: 500,

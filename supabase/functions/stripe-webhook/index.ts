@@ -13,6 +13,9 @@
 
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
+import { createLogger } from "../_shared/logger.ts";
+
+const log = createLogger("stripe-webhook");
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -41,7 +44,7 @@ Deno.serve(async (req) => {
   try {
     event = await stripe.webhooks.constructEventAsync(body, signature, webhookSecret);
   } catch (err: unknown) {
-    console.error("[stripe-webhook] Signature verification failed:", err instanceof Error ? err.message : err);
+    log.error("signature verification failed", { err: err instanceof Error ? err.message : String(err) });
     return errorResponse("Webhook signature invalid", 400);
   }
 
@@ -49,7 +52,7 @@ Deno.serve(async (req) => {
     auth: { persistSession: false },
   });
 
-  console.log(`[stripe-webhook] Event: ${event.type}`);
+  log.info("event received", { event_type: event.type });
 
   try {
     switch (event.type) {
@@ -83,9 +86,9 @@ Deno.serve(async (req) => {
         if (session.subscription && session.customer) {
           const sub = await stripe.subscriptions.retrieve(session.subscription as string);
           await syncSubscription(supabase, stripe, sub);
-          console.log(`[stripe-webhook] checkout.session.completed synced subscription`, {
-            sessionId: session.id,
-            customerId: session.customer,
+          log.info("checkout.session.completed synced subscription", {
+            session_id: session.id,
+            customer_id: session.customer,
           });
         }
         break;
@@ -103,11 +106,11 @@ Deno.serve(async (req) => {
       }
 
       default:
-        console.log(`[stripe-webhook] Unhandled event type: ${event.type}`);
+        log.info("unhandled event type", { event_type: event.type });
     }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[stripe-webhook] Handler error for ${event.type}:`, msg);
+    log.error("handler error", { event_type: event.type, err: msg });
     // Return 500 so Stripe retries transient failures (DB unavailable, network error, etc.)
     // Only return 200 for truly non-retryable outcomes (unknown event type falls through to the 200 below)
     return new Response(JSON.stringify({ error: msg }), {
@@ -140,7 +143,7 @@ async function syncSubscription(
   const customer = await stripe.customers.retrieve(customerId) as Stripe.Customer;
   const filter = resolveProfileFilter(customer);
   if (!filter) {
-    console.warn("[stripe-webhook] Customer has no user_id metadata or email:", customerId);
+    log.warn("customer has no user_id metadata or email", { customer_id: customerId });
     return;
   }
 
@@ -153,9 +156,9 @@ async function syncSubscription(
     .eq(filter.column, filter.value);
 
   if (error) {
-    console.error("[stripe-webhook] Failed to update profile", { filter, error });
+    log.error("failed to update profile", { filter, err: String(error.message ?? error) });
   } else {
-    console.log("[stripe-webhook] Updated profile subscription", { filter, productId, status: sub.status });
+    log.info("updated profile subscription", { filter, product_id: productId, status: sub.status });
   }
 
   // Promote the matching professionals row to 'pro' when the subscription is
@@ -174,7 +177,7 @@ async function clearSubscription(
   const customer = await stripe.customers.retrieve(customerId) as Stripe.Customer;
   const filter = resolveProfileFilter(customer);
   if (!filter) {
-    console.warn("[stripe-webhook] Customer has no user_id metadata or email:", customerId);
+    log.warn("customer has no user_id metadata or email", { customer_id: customerId });
     return;
   }
 
@@ -184,9 +187,9 @@ async function clearSubscription(
     .eq(filter.column, filter.value);
 
   if (error) {
-    console.error("[stripe-webhook] Failed to clear subscription", { filter, error });
+    log.error("failed to clear subscription", { filter, err: String(error.message ?? error) });
   } else {
-    console.log("[stripe-webhook] Cleared subscription", { filter });
+    log.info("cleared subscription", { filter });
   }
 
   // Demote any professional row owned by this customer back to 'free'.
@@ -198,7 +201,7 @@ async function clearSubscription(
       .update({ subscription_tier: "free" })
       .eq("user_id", userId);
     if (profErr) {
-      console.error("[stripe-webhook] Failed to clear professional tier", { userId, profErr });
+      log.error("failed to clear professional tier", { user_id: userId, err: String(profErr.message ?? profErr) });
     }
   }
 }
@@ -214,7 +217,7 @@ async function syncProfessionalTier(
 
   const userId = (sub.metadata?.user_id ?? "") as string;
   if (!userId) {
-    console.warn("[stripe-webhook] Professional plan subscription missing user_id metadata", { subId: sub.id });
+    log.warn("professional plan subscription missing user_id metadata", { sub_id: sub.id });
     return;
   }
 
@@ -225,9 +228,9 @@ async function syncProfessionalTier(
     .eq("user_id", userId);
 
   if (error) {
-    console.error("[stripe-webhook] Failed to update professional tier", { userId, tier, error });
+    log.error("failed to update professional tier", { user_id: userId, tier, err: String(error.message ?? error) });
   } else {
-    console.log("[stripe-webhook] Updated professional tier", { userId, tier, planKey });
+    log.info("updated professional tier", { user_id: userId, tier, plan_key: planKey });
   }
 }
 

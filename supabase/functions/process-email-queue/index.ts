@@ -1,6 +1,9 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.57.2'
 import { parseEmailIdentity, sendBrevoEmail } from '../_shared/brevo.ts'
 import { getCorsHeaders, handleCors } from '../_shared/cors.ts'
+import { createLogger } from '../_shared/logger.ts'
+
+const log = createLogger('process-email-queue')
 
 const MAX_RETRIES = 5
 const DEFAULT_BATCH_SIZE = 10
@@ -72,7 +75,7 @@ Deno.serve(async (req) => {
   const brevoFromEmail = Deno.env.get('BREVO_FROM_EMAIL')
 
   if (!brevoFromEmail || !supabaseUrl || !supabaseServiceKey) {
-    console.error('Missing required environment variables')
+    log.error('missing required environment variables')
     return new Response(
       JSON.stringify({ error: 'Server configuration error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -131,7 +134,7 @@ Deno.serve(async (req) => {
     })
 
     if (readError) {
-      console.error('Failed to read email batch', { queue, error: readError })
+      log.error('failed to read email batch', { queue, err: String(readError.message ?? readError) })
       continue
     }
 
@@ -159,9 +162,9 @@ Deno.serve(async (req) => {
         .eq('status', 'failed')
 
       if (failedRowsError) {
-        console.error('Failed to load failed-attempt counters', {
+        log.error('failed to load failed-attempt counters', {
           queue,
-          error: failedRowsError,
+          err: String(failedRowsError.message ?? failedRowsError),
         })
       } else {
         for (const row of failedRows ?? []) {
@@ -187,7 +190,7 @@ Deno.serve(async (req) => {
         const ageMs = Date.now() - new Date(payload.queued_at).getTime()
         const maxAgeMs = ttlMinutes[queue] * 60 * 1000
         if (ageMs > maxAgeMs) {
-          console.warn('Email expired (TTL exceeded)', {
+          log.warn('email expired (TTL exceeded)', {
             queue,
             msg_id: msg.msg_id,
             queued_at: payload.queued_at,
@@ -207,7 +210,7 @@ Deno.serve(async (req) => {
             payload,
           })
           if (ttlDlqError) {
-            console.error('Failed to move expired message to DLQ', { queue, msg_id: msg.msg_id, error: ttlDlqError })
+            log.error('failed to move expired message to DLQ', { queue, msg_id: msg.msg_id, err: String(ttlDlqError.message ?? ttlDlqError) })
           }
           continue
         }
@@ -228,7 +231,7 @@ Deno.serve(async (req) => {
           payload,
         })
         if (retryDlqError) {
-          console.error('Failed to move max-retry message to DLQ', { queue, msg_id: msg.msg_id, error: retryDlqError })
+          log.error('failed to move max-retry message to DLQ', { queue, msg_id: msg.msg_id, err: String(retryDlqError.message ?? retryDlqError) })
         }
         continue
       }
@@ -242,7 +245,7 @@ Deno.serve(async (req) => {
           .maybeSingle()
 
         if (alreadySent) {
-          console.warn('Skipping duplicate send (already sent)', {
+          log.warn('skipping duplicate send (already sent)', {
             queue,
             msg_id: msg.msg_id,
             message_id: payload.message_id,
@@ -252,7 +255,7 @@ Deno.serve(async (req) => {
             message_id: msg.msg_id,
           })
           if (dupDelError) {
-            console.error('Failed to delete duplicate message from queue', { queue, msg_id: msg.msg_id, error: dupDelError })
+            log.error('failed to delete duplicate message from queue', { queue, msg_id: msg.msg_id, err: String(dupDelError.message ?? dupDelError) })
           }
           continue
         }
@@ -287,17 +290,17 @@ Deno.serve(async (req) => {
           message_id: msg.msg_id,
         })
         if (delError) {
-          console.error('Failed to delete sent message from queue', { queue, msg_id: msg.msg_id, error: delError })
+          log.error('failed to delete sent message from queue', { queue, msg_id: msg.msg_id, err: String(delError.message ?? delError) })
         }
         totalProcessed++
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error)
-        console.error('Email send failed', {
+        log.error('email send failed', {
           queue,
           msg_id: msg.msg_id,
           read_ct: msg.read_ct,
           failed_attempts: failedAttempts,
-          error: errorMsg,
+          err: errorMsg,
         })
 
         if (isRateLimited(error)) {

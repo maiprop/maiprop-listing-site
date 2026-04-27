@@ -34,6 +34,9 @@ import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { verifyBearerToken, AuthError } from "../_shared/auth.ts";
+import { createLogger } from "../_shared/logger.ts";
+
+const log = createLogger("delete-account");
 
 const USER_FOLDER_BUCKETS = ["listing-images", "avatars", "project-media", "message-attachments"] as const;
 
@@ -65,7 +68,7 @@ Deno.serve(async (req) => {
       .delete()
       .eq("owner_id", user.id);
     if (listingsErr) {
-      console.warn(`[DELETE-ACCOUNT] Listings cleanup failed for ${user.id}:`, listingsErr.message);
+      log.warn("listings cleanup failed", { user_id: user.id, err: listingsErr.message });
     }
 
     // 2) Cancel active/trialing Stripe subscriptions so the user is not billed
@@ -99,10 +102,10 @@ Deno.serve(async (req) => {
           ));
         }
       } catch (stripeErr) {
-        console.warn(
-          `[DELETE-ACCOUNT] Stripe cleanup failed for ${user.id}:`,
-          stripeErr instanceof Error ? stripeErr.message : stripeErr,
-        );
+        log.warn("stripe cleanup failed", {
+          user_id: user.id,
+          err: stripeErr instanceof Error ? stripeErr.message : String(stripeErr),
+        });
       }
     }
 
@@ -113,10 +116,11 @@ Deno.serve(async (req) => {
       try {
         await removeFolderRecursive(supabase, bucket, user.id);
       } catch (storageErr) {
-        console.warn(
-          `[DELETE-ACCOUNT] Storage cleanup (${bucket}) failed for ${user.id}:`,
-          storageErr instanceof Error ? storageErr.message : storageErr,
-        );
+        log.warn("storage cleanup failed", {
+          user_id: user.id,
+          bucket,
+          err: storageErr instanceof Error ? storageErr.message : String(storageErr),
+        });
       }
     }
 
@@ -132,10 +136,10 @@ Deno.serve(async (req) => {
         await removeFolderRecursive(supabase, "firesale-photos", r.id);
       }
     } catch (firesaleErr) {
-      console.warn(
-        `[DELETE-ACCOUNT] firesale-photos cleanup failed for ${user.id}:`,
-        firesaleErr instanceof Error ? firesaleErr.message : firesaleErr,
-      );
+      log.warn("firesale-photos cleanup failed", {
+        user_id: user.id,
+        err: firesaleErr instanceof Error ? firesaleErr.message : String(firesaleErr),
+      });
     }
 
     // (message-attachments cleanup is handled by the USER_FOLDER_BUCKETS loop
@@ -145,7 +149,7 @@ Deno.serve(async (req) => {
     const { error } = await supabase.auth.admin.deleteUser(user.id);
     if (error) throw error;
 
-    console.log(`[DELETE-ACCOUNT] User deleted: ${user.id}`);
+    log.info("user deleted", { user_id: user.id });
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
@@ -154,7 +158,7 @@ Deno.serve(async (req) => {
   } catch (err: unknown) {
     const status = err instanceof AuthError ? err.status : 500;
     const message = err instanceof Error ? err.message : "Unknown error";
-    console.error(`[DELETE-ACCOUNT] Error:`, message);
+    log.error("delete-account error", { err: message });
     return new Response(JSON.stringify({ error: message }), {
       status,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

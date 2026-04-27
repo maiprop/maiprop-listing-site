@@ -10,6 +10,9 @@
  */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { createLogger } from "../_shared/logger.ts";
+
+const log = createLogger("full-sync-from-os");
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -155,7 +158,7 @@ async function logSync(
       records_affected,
     });
   } catch (e) {
-    console.warn("logSync failed:", e);
+    log.warn("logSync failed", { err: e instanceof Error ? e.message : String(e) });
   }
 }
 
@@ -337,7 +340,7 @@ Deno.serve(async (req) => {
         }
         replacedCount += chunk.length;
       }
-      console.log(`full-sync-from-os: replaceAll deleted ${replacedCount} OS auction listing(s)`);
+      log.info("replaceAll deleted OS auction listings", { replaced_count: replacedCount });
     }
 
     const today = new Date().toISOString().split("T")[0];
@@ -351,7 +354,7 @@ Deno.serve(async (req) => {
       ...(body.auctionStatuses && { auctionStatuses: body.auctionStatuses }),
     };
 
-    console.log("full-sync-from-os: authenticating...");
+    log.info("authenticating with OS");
     const token = await getOsToken(OS_URL, OS_EMAIL, OS_PASS);
 
     let totalImported = 0;
@@ -416,7 +419,7 @@ Deno.serve(async (req) => {
       totalAvailableInOS = pagination.totalElements ?? totalAvailableInOS;
 
       if (auctions.length === 0) {
-        console.log(`full-sync-from-os: page ${page} empty, stopping`);
+        log.info("page empty, stopping", { page });
         break;
       }
 
@@ -475,7 +478,7 @@ Deno.serve(async (req) => {
         const chunk = toInsert.slice(i, i + CHUNK);
         const { error } = await sb.from("listings").insert(chunk);
         if (error) {
-          console.error("Insert error:", error.message);
+          log.error("insert failed", { err: error.message, chunk_size: chunk.length });
           totalErrors += chunk.length;
         } else {
           totalImported += chunk.length;
@@ -487,7 +490,7 @@ Deno.serve(async (req) => {
           .update(u.data)
           .eq("id", u.id);
         if (error) {
-          console.error("Update error:", error.message);
+          log.error("update failed", { err: error.message, listing_id: u.id });
           totalErrors++;
         } else {
           totalUpdated++;
@@ -495,9 +498,7 @@ Deno.serve(async (req) => {
       }
 
       pagesDone++;
-      console.log(
-        `full-sync-from-os: page ${page} → imported ${toInsert.length}, updated ${toUpdate.length}`
-      );
+      log.info("page processed", { page, imported: toInsert.length, updated: toUpdate.length });
 
       if (auctions.length < pageSize) break;
     }
@@ -522,7 +523,7 @@ Deno.serve(async (req) => {
       totalImported + totalUpdated
     );
 
-    console.log("full-sync-from-os done:", JSON.stringify(summary));
+    log.info("sync done", { summary });
 
     return new Response(
       JSON.stringify({
@@ -533,7 +534,7 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err: any) {
-    console.error("full-sync-from-os error:", err.message);
+    log.error("sync error", { err: err?.message ?? String(err) });
     return new Response(
       JSON.stringify({ ok: false, error: err.message }),
       {
