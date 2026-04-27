@@ -3,10 +3,8 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { getBrevoSender, sendBrevoEmail } from "../_shared/brevo.ts";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { createLogger } from "../_shared/logger.ts";
-import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 
 const log = createLogger("oh-registration-notify");
-const limiter = makeRateLimiter({ bucket: "oh-registration-notify", maxRequests: 10, windowMs: 60_000 });
 
 function verifyWebhookSecret(req: Request): boolean {
   const secret = Deno.env.get("WEBHOOK_SECRET");
@@ -22,9 +20,6 @@ Deno.serve(async (req) => {
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
-
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
-  if (await limiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);
 
   if (!verifyWebhookSecret(req)) {
     return new Response(JSON.stringify({ ok: false, reason: "unauthorized" }), {
