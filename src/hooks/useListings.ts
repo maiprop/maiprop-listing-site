@@ -230,18 +230,29 @@ export function useListing(id: string) {
       // PGRST116 (no rows) now handled by maybeSingle() â€” only real errors thrown
       if (error) throw error;
       if (!data) return null;
-      // Fetch owner profile and Pro status (Pro owners can receive messages and calendar)
+      // Fetch owner profile and Pro status (Pro owners can receive messages and calendar).
+      // Pro status is resolved via the public.is_pro(uuid) SECURITY DEFINER RPC,
+      // which consolidates the three subscription truth sources (admin role,
+      // profiles.subscription_product_id, investor_subscriptions.status). The
+      // previous client-side check compared investor_subscriptions.tier='pro'
+      // against the actual constraint values ('private','institutional','developer')
+      // and was therefore permanently false — see audit BUG A.
       let profiles = null;
       let ownerIsPro = false;
       let ownerParticipantType: "agent" | "seller" | null = null;
       if (data.owner_id) {
         try {
-          const [{ data: profilePublic }, { data: invSub }] = await Promise.all([
+          const [{ data: profilePublic }, isProRpc] = await Promise.all([
             supabase.from("profiles_public").select("user_id, display_name, avatar_url, role").eq("user_id", data.owner_id).maybeSingle(),
-            supabase.from("investor_subscriptions").select("tier, status").eq("user_id", data.owner_id).order("started_at", { ascending: false }).limit(1).maybeSingle(),
+            // Cast through unknown until `npm run generate-types` regenerates
+            // src/integrations/supabase/types.ts with the new is_pro RPC.
+            (supabase.rpc as unknown as (
+              fn: "is_pro",
+              args: { p_user_id: string },
+            ) => Promise<{ data: boolean | null; error: unknown }>)("is_pro", { p_user_id: data.owner_id }),
           ]);
           profiles = profilePublic ?? null;
-          ownerIsPro = !!(invSub?.status === "active" && (invSub?.tier || "").toLowerCase() === "pro");
+          ownerIsPro = isProRpc.data === true;
           if (profilePublic) {
             ownerParticipantType = getOwnerParticipantType(profilePublic as { role?: string; bio?: string | null });
           }

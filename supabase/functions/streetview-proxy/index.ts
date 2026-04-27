@@ -1,45 +1,23 @@
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
+import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 
 /**
  * streetview-proxy
  * Returns a Google Street View Static API image using server-side key so the key
  * is never exposed in client URLs (fixes "Google Maps API Key in Publicly Readable URLs").
- * Rate limited by IP to reduce abuse (security audit).
+ * Rate limited by IP via the cross-region DB-backed limiter so the cap holds
+ * across edge isolates (the previous in-memory Map was bypassable across regions).
  */
 
-const RATE_LIMIT_PER_MIN = 60;
-const RATE_WINDOW_MS = 60_000;
-const ipCounts = new Map<string, { count: number; resetAt: number }>();
-
-function checkRateLimit(ip: string): boolean {
-  const now = Date.now();
-  let entry = ipCounts.get(ip);
-  if (!entry) {
-    ipCounts.set(ip, { count: 1, resetAt: now + RATE_WINDOW_MS });
-    return true;
-  }
-  if (now > entry.resetAt) {
-    entry = { count: 1, resetAt: now + RATE_WINDOW_MS };
-    ipCounts.set(ip, entry);
-    return true;
-  }
-  entry.count++;
-  if (entry.count > RATE_LIMIT_PER_MIN) return false;
-  return true;
-}
+const streetviewLimiter = makeRateLimiter({ bucket: "streetview-proxy", maxRequests: 60, windowMs: 60_000 });
 
 Deno.serve(async (req) => {
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
 
-
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? req.headers.get("x-real-ip") ?? "unknown";
-  if (!checkRateLimit(ip)) {
-    return new Response(JSON.stringify({ error: "Too many requests. Try again later." }), {
-      status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
+  if (await streetviewLimiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);
 
   const url = new URL(req.url);
   const lat = url.searchParams.get("lat");

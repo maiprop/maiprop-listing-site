@@ -183,7 +183,7 @@ const PLANS: Record<AudienceId, PlanDef> = {
   },
   investor: {
     freeLabel: "—", freePrice: "—", freeDesc: "Invitation-only", freeCTA: "—", freeHref: "#",
-    paidLabel: "Investor Plan", monthlyPrice: 490, annualPrice: 4900,
+    paidLabel: "Investor Plan", monthlyPrice: 49, annualPrice: 490,
     paidDesc: "Deal-flow access, AI matching, market analytics & direct vendor contact",
     paidCTA: "Apply for Access", paidHref: "/investor-dashboard",
     freeList: [], features: INVESTOR_FEATURES,
@@ -192,7 +192,7 @@ const PLANS: Record<AudienceId, PlanDef> = {
   },
   institutional: {
     freeLabel: "—", freePrice: "—", freeDesc: "Invitation-only", freeCTA: "—", freeHref: "#",
-    paidLabel: "Institutional Plan", monthlyPrice: 1490, annualPrice: 14900,
+    paidLabel: "Institutional Plan", monthlyPrice: 199, annualPrice: 1990,
     paidDesc: "Full platform access, bulk pipeline, API, dedicated manager & multi-user seats",
     paidCTA: "Talk to Sales", paidHref: "/contact",
     freeList: [], features: INSTITUTIONAL_FEATURES,
@@ -299,16 +299,24 @@ export default function Pricing() {
   const config = pricingConfigs[planKey];
   const basePlan = PLANS[activeTab];
 
+  // Prioritize database pricing values, fallback to hardcoded defaults
+  const dbMonthlyPrice = config?.amount ?? basePlan.monthlyPrice;
+  const dbAnnualPrice = config?.amount && config?.unit === 'monthly' 
+    ? config.amount * 10  // Assume 2 months free for annual (10 months billed)
+    : basePlan.annualPrice;
+
   // Resolve displayed price from billing cycle
-  const displayMonthly = billingCycle === "monthly" ? basePlan.monthlyPrice : Math.round(basePlan.annualPrice / 12);
-  const displayTotal   = billingCycle === "annual"  ? basePlan.annualPrice : basePlan.monthlyPrice;
-  const annualSaving   = basePlan.monthlyPrice * 12 - basePlan.annualPrice;
+  const displayMonthly = billingCycle === "monthly" ? dbMonthlyPrice : Math.round(dbAnnualPrice / 12);
+  const displayTotal   = billingCycle === "annual"  ? dbAnnualPrice : dbMonthlyPrice;
+  const annualSaving   = dbMonthlyPrice * 12 - dbAnnualPrice;
 
   const plan = config
     ? {
         ...basePlan,
         paidLabel: config.label,
         paidDesc: config.description || basePlan.paidDesc,
+        monthlyPrice: dbMonthlyPrice,
+        annualPrice: dbAnnualPrice,
       }
     : basePlan;
 

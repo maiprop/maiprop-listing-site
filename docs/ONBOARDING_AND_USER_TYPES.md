@@ -10,18 +10,20 @@ The app has **four** values stored in the database for `profiles.role` (enum `us
 
 | Role | Description | Set when |
 |------|-------------|----------|
-| **individual** | Private consumer: buyer, renter, or investor. | Chosen in onboarding (buyer, investor) or default at signup. |
+| **buyer** | Private consumer: buyer, renter, or investor. | Chosen in onboarding (buyer, investor) or default at signup. |
 | **seller_landlord** | Private seller or landlord listing their own property. **Eligible for Pro selling addons** (listing visibility, in-app messaging with buyers, etc.). | Chosen in onboarding (Private Seller / Landlord). |
 | **agent** | **Real estate agents** (one category by themselves), plus institutional/fund and developer. Licensed or business-side listing for clients. | Chosen in onboarding (Real Estate Agent / Agency, Institutional / Fund, Developer / Builder). |
 | **professional** | Service professional: architect, lawyer, notary, contractor, etc. Listed in the Professionals directory. | Chosen in onboarding (Service Professional) and after completing pro verification. |
 
-So there are **4 DB roles** and **7 participant types** in the onboarding UI, grouped into sections: **Private** (buyer, seller, investor), **Real estate agents** (agent only), **Institutional & development** (institutional, developer), **Services** (professional).
+So there are **4 DB roles** (`buyer`, `seller_landlord`, `agent`, `professional`) and **7 participant types** in the onboarding UI, grouped into sections: **Private** (buyer, seller, investor), **Real estate agents** (agent only), **Institutional & development** (institutional, developer), **Services** (professional).
+
+> **Note:** Role `individual` was renamed to `buyer` in migration 20260331120000.
 
 ---
 
 ## 2. When onboarding runs
 
-- **Sign up (email):** User signs up → redirect to `/onboarding`. Profile is created with `role: "individual"` by default; onboarding can change it.
+- **Sign up (email):** User signs up → redirect to `/onboarding`. Profile is created with `role: "buyer"` by default; onboarding can change it.
 - **Sign up (Google):** OAuth redirect is set to `/onboarding`; after Google auth they land there.
 - **Protected routes:** If the user is logged in but their profile has **not** completed onboarding, `ProtectedRoute` redirects them to `/onboarding` (except when they are already on `/onboarding`).
 
@@ -48,9 +50,9 @@ Each card has a **participant id**, a **role** written to `profiles.role`, label
 
 | Participant id   | Label                         | DB role          | Section                  |
 |------------------|-------------------------------|------------------|--------------------------|
-| buyer            | Home Buyer / Renter           | individual       | Private                  |
+| buyer            | Home Buyer / Renter           | buyer            | Private                  |
 | seller           | Private Seller / Landlord     | **seller_landlord** | Private               |
-| investor         | Private Investor              | individual       | Private                  |
+| investor         | Private Investor              | buyer            | Private                  |
 | agent            | Real Estate Agent / Agency    | agent            | Real estate agents       |
 | institutional    | Institutional / Fund          | agent            | Institutional & development |
 | professional     | Service Professional          | professional     | Services                 |
@@ -140,7 +142,7 @@ Onboarding is complete: `bio` starts with `__type:`, so `needsOnboarding` is fal
 
 | Participant (onboarding label) | profiles.role    | profiles.bio (example) | Steps |
 |--------------------------------|------------------|------------------------|--------|
-| Home Buyer / Renter             | individual       | __type:buyer           | pick-type → done |
+| Home Buyer / Renter             | buyer            | __type:buyer           | pick-type → done |
 | Private Seller / Landlord       | seller_landlord  | __type:seller          | pick-type → done (eligible for Pro selling addons) |
 | Private Investor                | investor         | __type:investor        | pick-type → done |
 | Real Estate Agent / Agency      | agent            | __type:agent           | pick-type → done |
@@ -156,7 +158,7 @@ The **Dashboard** (`/dashboard`) shows different sidebar items and overview cont
 
 | Role | Sidebar sections | Overview focus |
 |------|------------------|----------------|
-| **individual** | Overview, Saved, Saved Searches, Messages, Viewings, Auction Alerts, Profile, Settings | Saved properties & auction alerts; CTA: Browse Listings |
+| **buyer** | Overview, Saved, Saved Searches, Messages, Viewings, Auction Alerts, Profile, Settings | Saved properties & auction alerts; CTA: Browse Listings |
 | **seller_landlord** | Overview, My Listings, Saved, Messages, Viewings, Profile, Settings | My listings, views, viewings; CTA: New Listing; Pro upsell card |
 | **agent** | Overview, My Listings, Analytics, Saved, Saved Searches, Messages, Viewings, Auction Alerts, Contacts, Projects, Portfolios, Profile, Settings | Listings and leads; CTA: New Listing |
 | **investor** | Overview, Deal Flow, Saved, Saved Searches, Messages, Viewings, Auction Alerts, Profile, Settings | Deal pipeline, saved deals; CTA: Investor Dashboard |
@@ -169,13 +171,13 @@ The **Dashboard** (`/dashboard`) shows different sidebar items and overview cont
 
 ## 6. Where roles are used in the app
 
-- **individual**  
-  - Treated as “retailer” for video viewing (free video access in some flows).  
+- **buyer**  
+  - Treated as "retailer" for video viewing (free video access in some flows).  
   - Dashboard, listings, favourites, messages (can message Pro professionals).  
   - No professional directory entry.
 
 - **seller_landlord**  
-  - **Segmented from other individuals** so they can be **eligible for Pro selling addons** (listing visibility, in-app messaging with buyers, etc.).  
+  - **Segmented from buyers** so they can be **eligible for Pro selling addons** (listing visibility, in-app messaging with buyers, etc.).  
   - Displayed in the UI as “Seller / Landlord”.  
   - Can create and manage their own listings (same as agents for own listings).  
   - Pro page shows a note that Pro unlocks listing visibility and selling addons for them.
@@ -205,7 +207,7 @@ The **Dashboard** (`/dashboard`) shows different sidebar items and overview cont
 
 ## 7. Signup defaults
 
-- **Email signup** (`Signup.tsx`): `signUp(..., { role: "individual" })`. So new users start as `individual`; onboarding can change them to `seller_landlord`, `agent`, `investor`, `institutional`, `developer`, or `professional` and set `bio` to `__type:<id>`.
+- **Email signup** (`Signup.tsx`): `signUp(..., { role: "buyer" })`. So new users start as `buyer`; onboarding can change them to `seller_landlord`, `agent`, `investor`, `institutional`, `developer`, or `professional` and set `bio` to `__type:<id>`.
 - **Google signup:** Redirect to `/onboarding`; no role is set until they complete step 1 (and for pros, step 3 sets `professional`).
 
 ---

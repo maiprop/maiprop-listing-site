@@ -4,15 +4,38 @@
  * Permanently deletes the authenticated user's account from Supabase Auth.
  * Requires a valid Bearer token (verify_jwt = true in config.toml).
  *
- * On-delete cascades in the DB handle:
- *   profiles, favorites, contacts, listings (soft-deleted), viewings, leads, etc.
+ * GDPR Article 17 (right to erasure) cleanup, run BEFORE auth.admin.deleteUser
+ * because the listings.owner_id FK was dropped in 20260309120114 to support
+ * OS-imported listings — without that FK, deleting the auth.users row would
+ * orphan the user's listings as publicly-active rows that nobody can manage:
  *
- * GDPR Article 17 (right to erasure) — fulfils the ToS and Privacy Policy promise.
+ *   1. HARD DELETE listings owned by the user. Cascades to listing_images,
+ *      favorites, viewings, open_house_*, listing_view_events, new_building_leads.
+ *      We do NOT soft-delete because (a) listing_status enum has no 'deleted'
+ *      value and adding one risks RLS regressions, and (b) GDPR Article 17
+ *      requires actual erasure of personal data.
+ *   2. Cancel any active/trialing Stripe subscriptions  (stop billing).
+ *   3. Empty all storage paths owned by the user across every bucket the user
+ *      can write to:
+ *        - listing-images / avatars       : `${user.id}/<file>`             (flat, 1 level)
+ *        - project-media                  : `${user.id}/<projectId>/<file>`  (nested, 2 levels)
+ *        - message-attachments            : `${user.id}/<convId>/<file>`     (nested, 2 levels)
+ *        - firesale-photos                : `${firesaleRequestId}/<file>`    (NOT under user.id)
+ *      Buckets that put user.id at the top of the path are walked recursively
+ *      by `removeFolderRecursive(supabase, bucket, user.id)`. firesale-photos
+ *      requires a `firesale_requests.user_id = ?` lookup first because the
+ *      photos are filed under the request id.
+ *
+ * Post-delete: ON DELETE CASCADE handles profiles, favorites, viewings, leads,
+ *   professionals, and every other table with a FK to auth.users.
  */
 
+import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { verifyBearerToken, AuthError } from "../_shared/auth.ts";
+
+const USER_FOLDER_BUCKETS = ["listing-images", "avatars", "project-media", "message-attachments"] as const;
 
 Deno.serve(async (req) => {
   const corsPreflightResponse = handleCors(req);
@@ -34,7 +57,91 @@ Deno.serve(async (req) => {
   try {
     const user = await verifyBearerToken(req, supabase);
 
-    // Use service role to delete from auth.users — cascades to all user data
+    // 1) HARD DELETE listings BEFORE the auth row is removed. The FK was dropped
+    //    in 20260309120114, so this must run explicitly. Cascades clean up
+    //    listing_images, favorites, viewings, open_house_*, etc.
+    const { error: listingsErr } = await supabase
+      .from("listings")
+      .delete()
+      .eq("owner_id", user.id);
+    if (listingsErr) {
+      console.warn(`[DELETE-ACCOUNT] Listings cleanup failed for ${user.id}:`, listingsErr.message);
+    }
+
+    // 2) Cancel active/trialing Stripe subscriptions so the user is not billed
+    //    after deletion. Best-effort: a Stripe outage must not block account deletion.
+    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
+    if (stripeKey) {
+      try {
+        const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
+        let customerId: string | null = null;
+        try {
+          const search = await stripe.customers.search({
+            query: `metadata['user_id']:'${user.id}'`,
+            limit: 1,
+          });
+          if (search.data[0]) customerId = search.data[0].id;
+        } catch (_searchErr) {
+          // Search API may not be enabled — fall through to email lookup.
+        }
+        if (!customerId) {
+          const byEmail = await stripe.customers.list({ email: user.email, limit: 1 });
+          if (byEmail.data[0]) customerId = byEmail.data[0].id;
+        }
+        if (customerId) {
+          const active = await stripe.subscriptions.list({ customer: customerId, status: "active", limit: 100 });
+          await Promise.all(active.data.map((s: Stripe.Subscription) =>
+            stripe.subscriptions.cancel(s.id).catch(() => undefined),
+          ));
+          const trialing = await stripe.subscriptions.list({ customer: customerId, status: "trialing", limit: 100 });
+          await Promise.all(trialing.data.map((s: Stripe.Subscription) =>
+            stripe.subscriptions.cancel(s.id).catch(() => undefined),
+          ));
+        }
+      } catch (stripeErr) {
+        console.warn(
+          `[DELETE-ACCOUNT] Stripe cleanup failed for ${user.id}:`,
+          stripeErr instanceof Error ? stripeErr.message : stripeErr,
+        );
+      }
+    }
+
+    // 3a) Buckets where the path starts with `${user.id}/` — list recursively.
+    //     project-media nests `${user.id}/${projectId}/`, listing-images and
+    //     avatars are flat; the recursive walker handles both.
+    for (const bucket of USER_FOLDER_BUCKETS) {
+      try {
+        await removeFolderRecursive(supabase, bucket, user.id);
+      } catch (storageErr) {
+        console.warn(
+          `[DELETE-ACCOUNT] Storage cleanup (${bucket}) failed for ${user.id}:`,
+          storageErr instanceof Error ? storageErr.message : storageErr,
+        );
+      }
+    }
+
+    // 3b) firesale-photos: paths are `${firesaleRequestId}/<file>`; user.id is
+    //     not in the path. Look up every firesale_request the user owns, then
+    //     wipe each request's folder.
+    try {
+      const { data: requests } = await supabase
+        .from("firesale_requests")
+        .select("id")
+        .eq("user_id", user.id);
+      for (const r of (requests ?? []) as Array<{ id: string }>) {
+        await removeFolderRecursive(supabase, "firesale-photos", r.id);
+      }
+    } catch (firesaleErr) {
+      console.warn(
+        `[DELETE-ACCOUNT] firesale-photos cleanup failed for ${user.id}:`,
+        firesaleErr instanceof Error ? firesaleErr.message : firesaleErr,
+      );
+    }
+
+    // (message-attachments cleanup is handled by the USER_FOLDER_BUCKETS loop
+    //  above now that paths are ${user.id}/${convId}/<file>.)
+
+    // 4) Delete from auth.users — cascades the remaining FK-bound rows.
     const { error } = await supabase.auth.admin.deleteUser(user.id);
     if (error) throw error;
 
@@ -54,3 +161,49 @@ Deno.serve(async (req) => {
     });
   }
 });
+
+/**
+ * Recursively delete every object inside `prefix` of `bucket`.
+ *
+ * Supabase storage's `list()` API returns immediate children only, with files
+ * having `id !== null` and folders having `id === null`. We walk depth-first
+ * up to a sane depth limit to guard against pathological structures.
+ *
+ * Structural type used instead of `SupabaseClient` to sidestep a generic
+ * narrowing mismatch between the Deno-edge `createClient()` return type and
+ * `ReturnType<typeof createClient>` seen in this repo's edge functions.
+ */
+type StorageSubset = {
+  storage: {
+    from: (bucket: string) => {
+      list: (
+        prefix: string,
+        options?: { limit?: number },
+      ) => Promise<{ data: Array<{ id: string | null; name: string }> | null; error: unknown }>;
+      remove: (paths: string[]) => Promise<unknown>;
+    };
+  };
+};
+
+async function removeFolderRecursive(
+  supabase: StorageSubset,
+  bucket: string,
+  prefix: string,
+  depth = 0,
+): Promise<void> {
+  if (depth > 4) return; // bucket layouts in this app go at most 2 levels deep
+  const { data: entries, error } = await supabase.storage.from(bucket).list(prefix, { limit: 1000 });
+  if (error || !entries || entries.length === 0) return;
+
+  // Files have a non-null id; folders return id=null.
+  type Entry = { id: string | null; name: string };
+  const list: Entry[] = entries as Entry[];
+  const files = list.filter((e: Entry) => e.id !== null).map((e: Entry) => `${prefix}/${e.name}`);
+  if (files.length > 0) {
+    await supabase.storage.from(bucket).remove(files);
+  }
+  const folders = list.filter((e: Entry) => e.id === null);
+  for (const f of folders) {
+    await removeFolderRecursive(supabase, bucket, `${prefix}/${f.name}`, depth + 1);
+  }
+}
