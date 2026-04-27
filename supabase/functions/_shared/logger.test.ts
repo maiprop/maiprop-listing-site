@@ -3,7 +3,7 @@
  * Run: deno test supabase/functions/_shared/logger.test.ts
  */
 import { assertEquals, assertStrictEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { createLogger } from "./logger.ts";
+import { createLogger, _resetSentryDsnCache } from "./logger.ts";
 
 // Capture stdout/stderr by stubbing the routed console methods.
 function captureLines<T>(fn: () => T): { lines: { stream: "log" | "warn" | "error"; text: string }[]; result: T } {
@@ -123,4 +123,122 @@ Deno.test("info: cyclic context falls back to a serialise-failure record", () =>
   assertStrictEquals(parsed.msg, "logger_serialize_failed");
   assertStrictEquals(parsed.original_msg, "with-cycle");
   assertStrictEquals(parsed.level, "warn");
+});
+
+// ── Sentry forwarding ─────────────────────────────────────────────────────────
+
+interface CapturedSentryRequest {
+  url: string;
+  authHeader: string;
+  body: unknown;
+}
+
+function withSentryStub<T>(
+  dsn: string | undefined,
+  fn: () => T,
+): { result: T; captured: CapturedSentryRequest[] } {
+  // Replace globalThis.fetch and Deno.env.get to simulate a Sentry-configured
+  // environment without making real network calls.
+  const captured: CapturedSentryRequest[] = [];
+  const origFetch = globalThis.fetch;
+  const origDenoEnvGet = Deno.env.get;
+
+  globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    let body: unknown = undefined;
+    try {
+      body = init?.body ? JSON.parse(String(init.body)) : undefined;
+    } catch { /* leave undefined */ }
+    captured.push({
+      url,
+      authHeader: String((init?.headers as Record<string, string>)?.["X-Sentry-Auth"] ?? ""),
+      body,
+    });
+    return Promise.resolve(new Response("{}", { status: 200 }));
+  }) as typeof globalThis.fetch;
+
+  Deno.env.get = ((key: string): string | undefined => {
+    if (key === "SENTRY_DSN") return dsn;
+    if (key === "ENVIRONMENT") return "test";
+    return origDenoEnvGet.call(Deno.env, key);
+  }) as typeof Deno.env.get;
+
+  _resetSentryDsnCache();
+  try {
+    const result = fn();
+    return { result, captured };
+  } finally {
+    globalThis.fetch = origFetch;
+    Deno.env.get = origDenoEnvGet;
+    _resetSentryDsnCache();
+  }
+}
+
+Deno.test("sentry: error events POST to the Sentry store endpoint when DSN is set", () => {
+  const dsn = "https://abc123@o12345.ingest.sentry.io/67890";
+  const { captured } = withSentryStub(dsn, () => {
+    captureLines(() => {
+      createLogger("test-fn").error("boom", { err: "kaboom" });
+    });
+  });
+  assertStrictEquals(captured.length, 1);
+  assertStrictEquals(captured[0].url, "https://o12345.ingest.sentry.io/api/67890/store/");
+  assertEquals(captured[0].authHeader.includes("sentry_key=abc123"), true);
+  assertEquals(captured[0].authHeader.includes("sentry_version=7"), true);
+});
+
+Deno.test("sentry: event payload contains expected Sentry-shaped fields", () => {
+  const dsn = "https://abc123@o12345.ingest.sentry.io/67890";
+  const { captured } = withSentryStub(dsn, () => {
+    captureLines(() => {
+      createLogger("ai-search").error("upstream failed", { err: "503", user_id: "u1" });
+    });
+  });
+  const evt = captured[0].body as Record<string, unknown>;
+  assertStrictEquals(evt.platform, "javascript");
+  assertStrictEquals(evt.level, "error");
+  assertStrictEquals(evt.message, "upstream failed");
+  assertStrictEquals(evt.logger, "ai-search");
+  assertStrictEquals(evt.environment, "test");
+  assertEquals(typeof evt.event_id, "string");
+  assertStrictEquals((evt.event_id as string).length, 32);
+  assertEquals(typeof evt.timestamp, "number");
+  // err string should surface as an exception value
+  const exception = (evt.exception as { values: Array<{ type: string; value: string }> } | undefined);
+  assertStrictEquals(exception?.values[0].type, "Error");
+  assertStrictEquals(exception?.values[0].value, "503");
+  // tag.fn must equal the logger name
+  assertStrictEquals((evt.tags as Record<string, string>).fn, "ai-search");
+  // extra context preserves user_id
+  assertStrictEquals((evt.extra as Record<string, unknown>).user_id, "u1");
+});
+
+Deno.test("sentry: no fetch when SENTRY_DSN is unset", () => {
+  const { captured } = withSentryStub(undefined, () => {
+    captureLines(() => {
+      createLogger("test-fn").error("boom", { err: "kaboom" });
+    });
+  });
+  assertStrictEquals(captured.length, 0);
+});
+
+Deno.test("sentry: no fetch for non-error levels", () => {
+  const dsn = "https://abc123@o12345.ingest.sentry.io/67890";
+  const { captured } = withSentryStub(dsn, () => {
+    captureLines(() => {
+      const log = createLogger("test-fn");
+      log.info("hi");
+      log.warn("careful");
+    });
+  });
+  assertStrictEquals(captured.length, 0);
+});
+
+Deno.test("sentry: malformed DSN is silently skipped (no throw)", () => {
+  const { captured } = withSentryStub("not-a-real-url", () => {
+    captureLines(() => {
+      createLogger("test-fn").error("boom", { err: "kaboom" });
+    });
+  });
+  assertStrictEquals(captured.length, 0);
 });

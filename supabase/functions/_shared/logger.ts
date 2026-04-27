@@ -21,6 +21,13 @@
  * Default minimum level is info; set LOG_LEVEL=debug in the function env to
  * include debug lines.
  *
+ * Sentry forwarding (optional):
+ *   If `SENTRY_DSN` env is set, every `.error()` call is also forwarded as
+ *   a Sentry event via the Sentry Store HTTP API. No SDK is imported — the
+ *   integration is a fire-and-forget POST that never blocks the handler.
+ *   Failures to reach Sentry are intentionally swallowed so they cannot
+ *   themselves cascade into production errors.
+ *
  * See docs/ENTERPRISE_ASSESSMENT_2026-04-27.md (Quadrant II, observability
  * gap) for context.
  */
@@ -34,16 +41,145 @@ const LEVEL_RANK: Record<LogLevel, number> = {
   error: 40,
 };
 
-function getMinLevel(): LogLevel {
+function getEnv(key: string): string | undefined {
   // Deno globals are typed loosely in this shared module to keep it
-  // testable under both Deno and Node (vitest). We narrow via `unknown`
-  // + structural check so we never introduce an `any` escape hatch.
+  // testable under both Deno and Node (vitest). We narrow via structural
+  // check so we never introduce an `any` escape hatch.
   const denoObj = (globalThis as { Deno?: { env?: { get?: (key: string) => string | undefined } } }).Deno;
-  const raw: string = denoObj?.env?.get?.("LOG_LEVEL") ?? "info";
+  return denoObj?.env?.get?.(key);
+}
+
+function getMinLevel(): LogLevel {
+  const raw: string = getEnv("LOG_LEVEL") ?? "info";
   if (raw === "debug" || raw === "info" || raw === "warn" || raw === "error") {
     return raw;
   }
   return "info";
+}
+
+// ─── Sentry forwarding (optional, opt-in via SENTRY_DSN) ─────────────────────
+//
+// Sentry exposes an HTTP Store API that accepts JSON events directly:
+//   POST https://<host>/api/<project_id>/store/
+//   X-Sentry-Auth: Sentry sentry_key=<public_key>, sentry_version=7
+//
+// We parse the DSN once on first use, cache the result, and fire-and-forget
+// a POST per error event. Any failure (network, auth, malformed DSN) is
+// swallowed — Sentry is observability, not a critical-path dependency.
+//
+// Reference: https://develop.sentry.dev/sdk/store/
+
+interface ParsedDsn {
+  endpoint: string; // full URL to POST to
+  authHeader: string; // X-Sentry-Auth value
+}
+
+let dsnCache: { parsed: ParsedDsn | null } | undefined;
+
+function parseSentryDsn(): ParsedDsn | null {
+  if (dsnCache) return dsnCache.parsed;
+  const dsn = getEnv("SENTRY_DSN");
+  if (!dsn) {
+    dsnCache = { parsed: null };
+    return null;
+  }
+  try {
+    // DSN format: https://<public_key>@<host>/<project_id>
+    // (newer DSNs may also include a path prefix before the project id)
+    const url = new URL(dsn);
+    const publicKey = url.username;
+    const projectId = url.pathname.split("/").filter(Boolean).pop();
+    if (!publicKey || !projectId) {
+      dsnCache = { parsed: null };
+      return null;
+    }
+    const host = url.host;
+    const protocol = url.protocol; // "https:" typically
+    // Path prefix support: if the DSN path has more than one segment, all
+    // but the last become the path prefix (some self-hosted Sentry installs
+    // use this).
+    const pathParts = url.pathname.split("/").filter(Boolean);
+    const pathPrefix = pathParts.length > 1 ? "/" + pathParts.slice(0, -1).join("/") : "";
+    const endpoint = `${protocol}//${host}${pathPrefix}/api/${projectId}/store/`;
+    const authHeader = [
+      "Sentry sentry_version=7",
+      `sentry_client=maiprop-edge/1.0`,
+      `sentry_key=${publicKey}`,
+    ].join(", ");
+    const parsed: ParsedDsn = { endpoint, authHeader };
+    dsnCache = { parsed };
+    return parsed;
+  } catch {
+    dsnCache = { parsed: null };
+    return null;
+  }
+}
+
+// Visible to tests so they can reset the cached DSN parse.
+export function _resetSentryDsnCache(): void {
+  dsnCache = undefined;
+}
+
+interface SentryEvent {
+  event_id: string;
+  timestamp: number; // unix seconds
+  platform: "javascript";
+  level: "error";
+  logger: string;
+  message: string;
+  environment: string;
+  release?: string;
+  tags: Record<string, string>;
+  extra: Record<string, unknown>;
+  exception?: { values: Array<{ type: string; value: string }> };
+}
+
+function buildSentryEvent(
+  fn: string,
+  msg: string,
+  context: Record<string, unknown>,
+): SentryEvent {
+  // event_id is a 32-char hex string; crypto.randomUUID() gives us 32 hex
+  // chars after stripping dashes.
+  const id = (globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`)
+    .replace(/-/g, "")
+    .padEnd(32, "0")
+    .slice(0, 32);
+  const errStr = typeof context.err === "string" ? context.err : undefined;
+  return {
+    event_id: id,
+    timestamp: Date.now() / 1000,
+    platform: "javascript",
+    level: "error",
+    logger: fn,
+    message: msg,
+    environment: getEnv("ENVIRONMENT") ?? getEnv("DENO_DEPLOYMENT_ID") ?? "production",
+    tags: { fn },
+    extra: context,
+    ...(errStr ? { exception: { values: [{ type: "Error", value: errStr }] } } : {}),
+  };
+}
+
+function forwardToSentry(fn: string, msg: string, context: Record<string, unknown>): void {
+  const dsn = parseSentryDsn();
+  if (!dsn) return;
+  // Fire-and-forget: never await, never throw. If Sentry is down or the
+  // network drops the request, we don't want that to surface as an error
+  // in the function that's already trying to log an error.
+  try {
+    const body = JSON.stringify(buildSentryEvent(fn, msg, context));
+    void fetch(dsn.endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Sentry-Auth": dsn.authHeader,
+      },
+      body,
+    }).catch(() => undefined);
+  } catch {
+    // Swallow synchronous failures (e.g. JSON.stringify throws on cycle).
+    // The local stdout log already captured the error event.
+  }
 }
 
 export interface Logger {
@@ -96,6 +232,12 @@ export function createLogger(
     if (level === "error") console.error(text);
     else if (level === "warn") console.warn(text);
     else console.log(text);
+
+    // Forward error-level events to Sentry if SENTRY_DSN is configured.
+    // Fire-and-forget so logging latency is not affected.
+    if (level === "error") {
+      forwardToSentry(fn, msg, { ...baseContext, ...(context ?? {}) });
+    }
   }
 
   return {
