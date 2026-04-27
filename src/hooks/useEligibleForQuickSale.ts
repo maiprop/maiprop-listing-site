@@ -29,10 +29,11 @@ export function useEligibleForQuickSale() {
   });
 
   const isAdmin = isPlatformAdmin(profile);
+  const forceProAccess = !!(profile as { force_pro_access?: boolean | null } | null)?.force_pro_access;
   const hasActiveSubscription = !!(subscription?.status === "active" || subscription?.status === "trial");
 
   return {
-    eligible: isAdmin || hasActiveSubscription,
+    eligible: isAdmin || hasActiveSubscription || forceProAccess,
     isAdmin,
     hasActiveSubscription,
     loading: isLoading,

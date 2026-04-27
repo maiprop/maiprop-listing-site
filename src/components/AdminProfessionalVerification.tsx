@@ -1,6 +1,6 @@
 ﻿/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
- * AdminProfessionalVerification â€” Admin UI for reviewing and verifying professional accounts.
+ * AdminProfessionalVerification — Admin UI for reviewing and verifying professional accounts.
  *
  * - Fetches from `professionals` table with filter by verified status
  * - Tabs: Pending / Verified / Rejected

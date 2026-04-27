@@ -18,11 +18,11 @@ const INVESTMENT_FOCUS_OPTIONS = [
 
 const DEAL_SIZE_OPTIONS = [
   { value: "", label: "Select range" },
-  { value: "100k-500k", label: "â‚¬100k â€“ â‚¬500k" },
-  { value: "500k-2m", label: "â‚¬500k â€“ â‚¬2M" },
-  { value: "2m-5m", label: "â‚¬2M â€“ â‚¬5M" },
-  { value: "5m-15m", label: "â‚¬5M â€“ â‚¬15M" },
-  { value: "15m+", label: "â‚¬15M+" },
+  { value: "100k-500k", label: "€100k – €500k" },
+  { value: "500k-2m", label: "€500k – €2M" },
+  { value: "2m-5m", label: "€2M – €5M" },
+  { value: "5m-15m", label: "€5M – €15M" },
+  { value: "15m+", label: "€15M+" },
 ];
 
 const INVESTMENT_VEHICLE_OPTIONS = [
@@ -36,20 +36,20 @@ const INVESTMENT_VEHICLE_OPTIONS = [
 
 const YEARS_EXPERIENCE_OPTIONS = [
   { value: "", label: "Select" },
-  { value: "0-2", label: "0 â€“ 2 years" },
-  { value: "3-5", label: "3 â€“ 5 years" },
-  { value: "6-10", label: "6 â€“ 10 years" },
-  { value: "11-20", label: "11 â€“ 20 years" },
+  { value: "0-2", label: "0 – 2 years" },
+  { value: "3-5", label: "3 – 5 years" },
+  { value: "6-10", label: "6 – 10 years" },
+  { value: "11-20", label: "11 – 20 years" },
   { value: "20+", label: "20+ years" },
 ];
 
 const AUM_OPTIONS = [
   { value: "", label: "Select (optional)" },
-  { value: "under-1m", label: "Under â‚¬1M" },
-  { value: "1m-10m", label: "â‚¬1M â€“ â‚¬10M" },
-  { value: "10m-50m", label: "â‚¬10M â€“ â‚¬50M" },
-  { value: "50m-200m", label: "â‚¬50M â€“ â‚¬200M" },
-  { value: "200m+", label: "â‚¬200M+" },
+  { value: "under-1m", label: "Under €1M" },
+  { value: "1m-10m", label: "€1M – €10M" },
+  { value: "10m-50m", label: "€10M – €50M" },
+  { value: "50m-200m", label: "€50M – €200M" },
+  { value: "200m+", label: "€200M+" },
 ];
 
 const SOURCE_OPTIONS = [
@@ -154,10 +154,10 @@ export function InvitationRequestModal({ user, onClose, onSuccess }: Props) {
               </div>
               <div>
                 <h3 className="font-display text-xl font-bold">
-                  Request <span className="gradient-text-primary">Quick Saleâ„¢</span> Access
+                  Request <span className="gradient-text-primary">Quick Sale™</span> Access
                 </h3>
                 <p className="text-sm text-muted-foreground mt-0.5">
-                  Exclusive investor deal flow â€” by invitation only.
+                  Exclusive investor deal flow — by invitation only.
                 </p>
               </div>
             </div>
@@ -170,19 +170,19 @@ export function InvitationRequestModal({ user, onClose, onSuccess }: Props) {
         <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
           <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
 
-            {/* Access tiers â€” shown so applicants know what they're applying for */}
+            {/* Access tiers — shown so applicants know what they're applying for */}
             <div className="rounded-xl border border-border bg-card/50 p-4">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Quick Saleâ„¢ Access Tiers</p>
+              <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Quick Sale™ Access Tiers</p>
               <div className="grid sm:grid-cols-2 gap-3">
                 {[
                   {
                     name: "Private Investor",
-                    price: "â‚¬49 / mo",
+                    price: "€49 / mo",
                     features: ["Live deal feed (1 active slot)", "AI valuation report per deal", "Seller contact details", "Portfolio analytics"],
                   },
                   {
                     name: "Institutional",
-                    price: "â‚¬199 / mo",
+                    price: "€199 / mo",
                     badge: "Most Powerful",
                     features: ["Unlimited deal slots", "OS data API access", "Dedicated account manager", "Bulk pipeline management"],
                   },
@@ -291,7 +291,7 @@ export function InvitationRequestModal({ user, onClose, onSuccess }: Props) {
 
             <FormSection icon={MessageCircle} title="Additional information">
               <div>
-                <label className={labelCls}>Tell us about your investment strategy and why you are interested in Quick Saleâ„¢ (optional)</label>
+                <label className={labelCls}>Tell us about your investment strategy and why you are interested in Quick Sale™ (optional)</label>
                 <textarea value={message} onChange={e => setMessage(e.target.value)} rows={4} placeholder="E.g. focus on distressed residential, value-add commercial, off-market deals, target yields..." className={textareaCls} />
               </div>
             </FormSection>
@@ -304,7 +304,7 @@ export function InvitationRequestModal({ user, onClose, onSuccess }: Props) {
                   <Link to="/privacy-policy" target="_blank" className="text-primary hover:underline">Privacy Policy</Link>
                   {" "}and{" "}
                   <Link to="/terms-of-service" target="_blank" className="text-primary hover:underline">Terms of Service</Link>
-                  . I understand that Quick Saleâ„¢ access is discretionary and that mAI Prop may contact me regarding this request.
+                  . I understand that Quick Sale™ access is discretionary and that mAI Prop may contact me regarding this request.
                 </span>
               </label>
             </div>

@@ -30,7 +30,7 @@ import { ConstructionSpecs } from "@/components/new-build/ConstructionSpecs";
 import { UnitShowcase } from "@/components/new-build/UnitShowcase";
 import { RegisterInterestCard } from "@/components/new-build/RegisterInterestCard";
 
-// â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Helpers ────────────────────────────────────────────────────────────────────
 function EnergyBadge({ cls }: { cls: string }) {
   const colorClass = (ENERGY_COLORS as Record<string, string>)[cls] ?? "bg-muted text-muted-foreground";
   return (
@@ -38,7 +38,7 @@ function EnergyBadge({ cls }: { cls: string }) {
   );
 }
 
-// â”€â”€ Main page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Main page ─────────────────────────────────────────────────────────────────
 export default function NewBuildDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -117,7 +117,7 @@ export default function NewBuildDetail() {
       title: "New interest registered",
       body: `${contactName} registered interest in ${listing.title}`,
     });
-    toast.success("Interest registered â€” the developer will be in touch");
+    toast.success("Interest registered — the developer will be in touch");
   };
 
   const handleContact = async () => {
@@ -220,7 +220,7 @@ export default function NewBuildDetail() {
         <div className="container max-w-5xl px-4">
           <div className="grid lg:grid-cols-[1fr_340px] gap-8">
 
-            {/* â”€â”€ Left: main content â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+            {/* ── Left: main content ──────────────────────────────── */}
             <div className="space-y-6">
               <Gallery
                 images={allImages}
@@ -256,17 +256,17 @@ export default function NewBuildDetail() {
                     </div>
                     {listing.price_per_sqm != null && (
                       <div className="text-xs text-muted-foreground mt-0.5">
-                        {formatPrice(Number(listing.price_per_sqm))} per mÂ²
+                        {formatPrice(Number(listing.price_per_sqm))} per m²
                       </div>
                     )}
                   </div>
                 </div>
 
-                {/* Key stats bar â€” wrapped flex pills */}
+                {/* Key stats bar — wrapped flex pills */}
                 <div className="flex items-center gap-2 flex-wrap">
                   {listing.sqm != null && (
                     <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
-                      <Maximize2 className="w-3.5 h-3.5 text-primary" />{listing.sqm} mÂ²
+                      <Maximize2 className="w-3.5 h-3.5 text-primary" />{listing.sqm} m²
                     </div>
                   )}
                   {listing.bedrooms != null && (
@@ -332,7 +332,7 @@ export default function NewBuildDetail() {
                   {aiInsightsLoading && (
                     <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground">
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span className="text-xs">Analysing market dataâ€¦</span>
+                      <span className="text-xs">Analysing market data…</span>
                     </div>
                   )}
                   {!aiInsightsLoading && aiInsightsData && (() => {
@@ -359,7 +359,7 @@ export default function NewBuildDetail() {
                         <div className="rounded-xl border border-border bg-secondary/50 p-4 flex flex-col gap-1">
                           <p className="text-[10px] text-muted-foreground uppercase tracking-widest">AI Estimate</p>
                           <span className="font-display font-black text-3xl text-foreground">
-                            â‚¬{(aiInsightsData.estimatedValue / 1000).toFixed(0)}k
+                            €{(aiInsightsData.estimatedValue / 1000).toFixed(0)}k
                           </span>
                           <p className="text-[10px] text-muted-foreground">Confidence: {aiInsightsData.confidenceLabel}</p>
                         </div>
@@ -420,7 +420,7 @@ export default function NewBuildDetail() {
                           const barH = 16 + i * 4;
                           return (
                             <div key={e.cls} className="flex-1 flex flex-col items-center gap-0.5">
-                              {isActive && <div className="text-[8px] font-black text-foreground">â–¼</div>}
+                              {isActive && <div className="text-[8px] font-black text-foreground">▼</div>}
                               <div
                                 style={{ backgroundColor: e.hex, height: `${barH}px`, opacity: isActive ? 1 : 0.4 }}
                                 className={`w-full rounded-sm flex items-end justify-center pb-0.5 transition-all ${isActive ? "ring-2 ring-white/30 ring-offset-1 ring-offset-card" : ""}`}
@@ -540,7 +540,7 @@ export default function NewBuildDetail() {
               )}
             </div>
 
-            {/* â”€â”€ Right: sticky sidebar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+            {/* ── Right: sticky sidebar ───────────────────────────── */}
             <div className="sticky top-24 space-y-4 self-start">
                 {/* Register Interest card */}
                 <RegisterInterestCard
@@ -619,7 +619,7 @@ export default function NewBuildDetail() {
                   {listing.sqm != null && (
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Unit area from</span>
-                      <span className="font-medium">{listing.sqm} mÂ²</span>
+                      <span className="font-medium">{listing.sqm} m²</span>
                     </div>
                   )}
                   {listing.has_parking && (

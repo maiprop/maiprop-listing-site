@@ -31,7 +31,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getParticipantTypeFromProfile, PARTICIPANT_LABELS, type ParticipantId } from "@/lib/participantConfig";
 import { ProGate } from "@/components/gates/ProGate";
-// â”€â”€ Extracted subcomponents â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Extracted subcomponents ───────────────────────────────────────────────────
 import { type NavKey, type DashboardRole, getNavItemsForBioType } from "@/lib/dashboardNav";
 import { ContactsAndLeadsSection } from "./dashboard/ContactsAndLeadsSection";
 import { MyListingsSection } from "./dashboard/MyListingsSection";
@@ -45,7 +45,7 @@ import { SettingsSection } from "@/components/dashboard/SettingsSection";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { DashboardMobileNav } from "@/components/dashboard/DashboardMobileNav";
 
-// Lazy-loaded tab components â€” only mounted when the tab is active
+// Lazy-loaded tab components — only mounted when the tab is active
 const ViewingsTab = lazy(() => import("./dashboard/ViewingsTab"));
 const SavedSearchesTab = lazy(() => import("./dashboard/SavedSearchesTab"));
 const AuctionsTab = lazy(() => import("./dashboard/AuctionsTab"));
@@ -77,7 +77,7 @@ function TabFallback() {
 }
 
 
-// â”€â”€ Main Dashboard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Main Dashboard ────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const { section } = useParams();
   const navigate = useNavigate();
@@ -198,7 +198,7 @@ export default function Dashboard() {
     [bioType, role]
   );
 
-  // Auth loading guard â€” show spinner while session/profile resolves
+  // Auth loading guard — show spinner while session/profile resolves
   if (loading || profileLoading) {
     return (
       <div className="min-h-screen bg-background">
@@ -210,7 +210,7 @@ export default function Dashboard() {
     );
   }
 
-  // Session expired or lost â€” offer recovery
+  // Session expired or lost — offer recovery
   if (!user) {
     return (
       <div className="min-h-screen bg-background">
@@ -253,7 +253,7 @@ export default function Dashboard() {
         {/* Main content */}
         <main className="flex-1 p-4 sm:p-6 max-w-full overflow-hidden pb-28 md:pb-6">
 
-          {/* â”€â”€ OVERVIEW â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          {/* ── OVERVIEW ───────────────────────────────────────────────────── */}
           {activeSection === "overview" && navItems.some(i => i.key === "overview") && (
             <div className="space-y-6">
               <div className="flex items-center justify-between flex-wrap gap-3">
@@ -302,11 +302,11 @@ export default function Dashboard() {
                 />
               )}
 
-              {/* Admin overview â€” unified Admin Dashboard */}
+              {/* Admin overview — unified Admin Dashboard */}
               {role === "admin" && (
                 <div className="glass-card rounded-xl p-5 border border-primary/20 bg-primary/5">
                   <h2 className="font-display font-semibold mb-1 flex items-center gap-2 text-primary"><Shield className="w-4 h-4" /> Admin Dashboard</h2>
-                  <p className="text-sm text-muted-foreground mb-3">Quick Saleâ„¢ pipeline, subscribers, pricing, OS sync, and open house management.</p>
+                  <p className="text-sm text-muted-foreground mb-3">Quick Sale™ pipeline, subscribers, pricing, OS sync, and open house management.</p>
                   <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground gap-1.5" asChild>
                     <Link to="/admin"><Shield className="w-3.5 h-3.5" /> Open Admin</Link>
                   </Button>
@@ -318,7 +318,7 @@ export default function Dashboard() {
                 <div className="grid md:grid-cols-2 gap-5">
                   <div className="glass-card rounded-xl p-5 border border-brand-gold/20 bg-brand-gold/5">
                     <h2 className="font-display font-semibold mb-1 flex items-center gap-2 text-brand-gold"><FolderKanban className="w-4 h-4" /> Deal Flow</h2>
-                    <p className="text-sm text-muted-foreground mb-3">Your private pipeline of off-market and Quick Saleâ„¢ opportunities.</p>
+                    <p className="text-sm text-muted-foreground mb-3">Your private pipeline of off-market and Quick Sale™ opportunities.</p>
                     <Button size="sm" className="bg-gradient-gold border-0 text-background font-semibold gap-1.5" asChild>
                       <Link to="/investor-dashboard"><FolderKanban className="w-3.5 h-3.5" /> Open Dashboard</Link>
                     </Button>
@@ -339,7 +339,7 @@ export default function Dashboard() {
                   </div>
                   <div className="glass-card rounded-xl p-5">
                     <h2 className="font-display font-semibold mb-1 flex items-center gap-2"><Heart className="w-4 h-4 text-destructive" /> Saved Deals</h2>
-                    <p className="text-sm text-muted-foreground mb-3">{favorites.length > 0 ? `${favorites.length} saved â€” tap to view.` : "Save listings you like to compare and track."}</p>
+                    <p className="text-sm text-muted-foreground mb-3">{favorites.length > 0 ? `${favorites.length} saved — tap to view.` : "Save listings you like to compare and track."}</p>
                     <Button variant="outline" size="sm" className="border-border" onClick={() => setActiveSection("saved")}>View Saved</Button>
                   </div>
                 </div>
@@ -350,12 +350,12 @@ export default function Dashboard() {
                 <div className="space-y-6">
                   <div className="grid md:grid-cols-2 gap-6">
                     <div className="glass-card rounded-xl p-6 border border-destructive/20">
-                      <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Flame className="w-4 h-4 text-destructive" /> Quick Saleâ„¢ Access</h2>
+                      <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Flame className="w-4 h-4 text-destructive" /> Quick Sale™ Access</h2>
                       <p className="text-sm text-muted-foreground mb-3">
-                        {invitationRequestStatus === "pending" && "Your application for Quick Saleâ„¢ deal access is under review. We'll notify you within 48 hours."}
-                        {invitationRequestStatus === "approved" && "You have access to the Quick Saleâ„¢ deal flow. View exclusive off-market opportunities."}
+                        {invitationRequestStatus === "pending" && "Your application for Quick Sale™ deal access is under review. We'll notify you within 48 hours."}
+                        {invitationRequestStatus === "approved" && "You have access to the Quick Sale™ deal flow. View exclusive off-market opportunities."}
                         {invitationRequestStatus === "rejected" && "Your application was not approved. You may browse auctions and saved searches."}
-                        {invitationRequestStatus === "none" && "Apply for access to exclusive Quick Saleâ„¢ deals. Invitation-only."}
+                        {invitationRequestStatus === "none" && "Apply for access to exclusive Quick Sale™ deals. Invitation-only."}
                       </p>
                       {invitationRequestStatus === "approved" ? (
                         <Button size="sm" className="bg-gradient-gold border-0 text-background" asChild><Link to="/investor-dashboard">Open Deal Flow</Link></Button>
@@ -365,7 +365,7 @@ export default function Dashboard() {
                     </div>
                     <div className="glass-card rounded-xl p-6">
                       <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Heart className="w-4 h-4 text-destructive" /> Saved Properties</h2>
-                      <p className="text-sm text-muted-foreground mb-3">{favorites.length > 0 ? `${favorites.length} saved â€” open Saved to view.` : "Save listings you like to find them here."}</p>
+                      <p className="text-sm text-muted-foreground mb-3">{favorites.length > 0 ? `${favorites.length} saved — open Saved to view.` : "Save listings you like to find them here."}</p>
                       <Button variant="outline" size="sm" className="border-border" onClick={() => setActiveSection("saved")}>View Saved</Button>
                     </div>
                     <div className="glass-card rounded-xl p-6">
@@ -443,7 +443,7 @@ export default function Dashboard() {
                             <img src={l.cover_image_url || "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400&q=60"} alt="" className="w-full h-36 object-cover" />
                             <div className="p-4">
                               <p className="font-semibold text-sm truncate">{l.title}</p>
-                              <p className="text-xs text-muted-foreground">{l.city} Â· â‚¬{Number(l.price).toLocaleString()}</p>
+                              <p className="text-xs text-muted-foreground">{l.city} Â· €{Number(l.price).toLocaleString()}</p>
                               <div className="flex gap-2 mt-3">
                                 <span className={`text-xs px-2 py-0.5 rounded-full ${l.status === "active" ? "bg-brand-emerald/20 text-brand-emerald" : "bg-secondary text-muted-foreground"}`}>{l.status}</span>
                                 <span className="text-xs text-muted-foreground">{l.views_count} views</span>
@@ -472,7 +472,7 @@ export default function Dashboard() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-sm">Looking for your next home?</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">Browse listings while you sell â€” all in one place.</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Browse listings while you sell — all in one place.</p>
                       </div>
                       <Button size="sm" variant="outline" className="shrink-0 border-border text-xs h-8" asChild>
                         <Link to="/listings">Browse â†’</Link>
@@ -524,24 +524,24 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* â”€â”€ LEADS & CONTACTS CRM â€” all users who need contacts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          {/* ── LEADS & CONTACTS CRM — all users who need contacts ───────────── */}
           {activeSection === "leads" && navItems.some(i => i.key === "leads") && (
             <ProGate>
               <ContactsAndLeadsSection initialTab="leads" />
             </ProGate>
           )}
 
-          {/* â”€â”€ MY LISTINGS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          {/* ── MY LISTINGS ──────────────────────────────────────────────── */}
           {activeSection === "listings" && navItems.some(i => i.key === "listings") && (
             <MyListingsSection bioType={bioType} role={role} />
           )}
 
-          {/* â”€â”€ SAVED â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          {/* ── SAVED ────────────────────────────────────────────────────── */}
           {activeSection === "saved" && navItems.some(i => i.key === "saved") && (
             <SavedPropertiesSection favorites={favorites} favLoading={favLoading} />
           )}
 
-          {/* â”€â”€ MESSAGES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          {/* ── MESSAGES ─────────────────────────────────────────────────── */}
           {activeSection === "messages" && navItems.some(i => i.key === "messages") && (
             <div className="space-y-6">
               <h1 className="font-display text-2xl font-bold">Messages</h1>
@@ -552,38 +552,38 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* â”€â”€ SAVED SEARCHES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          {/* ── SAVED SEARCHES ───────────────────────────────────────────── */}
           {activeSection === "saved-searches" && navItems.some(i => i.key === "saved-searches") && (
             navItems.find(i => i.key === "saved-searches")?.locked
               ? <ProGate />
               : <Suspense fallback={<TabFallback />}><SavedSearchesTab /></Suspense>
           )}
 
-          {/* â”€â”€ VIEWINGS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          {/* ── VIEWINGS ─────────────────────────────────────────────────── */}
           {activeSection === "viewings" && navItems.some(i => i.key === "viewings") && (
             <Suspense fallback={<TabFallback />}>
               <ViewingsTab />
             </Suspense>
           )}
 
-          {/* â”€â”€ AUCTION ALERTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          {/* ── AUCTION ALERTS ───────────────────────────────────────────── */}
           {activeSection === "auctions" && navItems.some(i => i.key === "auctions") && (
             <Suspense fallback={<TabFallback />}>
               <AuctionsTab />
             </Suspense>
           )}
 
-          {/* â”€â”€ PROFILE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          {/* ── PROFILE ──────────────────────────────────────────────────── */}
           {activeSection === "profile" && navItems.some(i => i.key === "profile") && (
             role === "professional"
               ? <ProfessionalProfileEditor onSwitchToSettings={() => setActiveSection("settings")} />
               : <ProfileEditor profile={profile} onUpdate={updateProfile} onSwitchToSettings={() => setActiveSection("settings")} />
           )}
 
-          {/* â”€â”€ MY SERVICES â€” professional â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          {/* ── MY SERVICES — professional ───────────────────────────────── */}
           {activeSection === "services" && navItems.some(i => i.key === "services") && <ProfessionalServicesEditor />}
 
-          {/* â”€â”€ BOOKING / CALENDAR â€” professional â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          {/* ── BOOKING / CALENDAR — professional ───────────────────────── */}
           {activeSection === "booking" && navItems.some(i => i.key === "booking") && (
             <ProGate>
               <div className="space-y-6">
@@ -604,21 +604,21 @@ export default function Dashboard() {
             </ProGate>
           )}
 
-          {/* â”€â”€ CONTACTS & LEADS CRM â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          {/* ── CONTACTS & LEADS CRM ───────────────────────────────────── */}
           {activeSection === "contacts" && navItems.some(i => i.key === "contacts") && (
             <ProGate>
               <ContactsAndLeadsSection initialTab="contacts" />
             </ProGate>
           )}
 
-          {/* â”€â”€ OPEN HOUSES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          {/* ── OPEN HOUSES ─────────────────────────────────────────────── */}
           {activeSection === "open-houses" && navItems.some(i => i.key === "open-houses") && (
             navItems.find(i => i.key === "open-houses")?.locked
               ? <ProGate />
               : <OpenHouseDashboardSection myListings={myListings} />
           )}
 
-          {/* â”€â”€ PROJECTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          {/* ── PROJECTS ─────────────────────────────────────────────────── */}
           {activeSection === "projects" && navItems.some(i => i.key === "projects") && (
             <ProGate feature="Developer projects">
               <Suspense fallback={<TabFallback />}>
@@ -627,7 +627,7 @@ export default function Dashboard() {
             </ProGate>
           )}
 
-          {/* â”€â”€ PORTFOLIOS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          {/* ── PORTFOLIOS ───────────────────────────────────────────────── */}
           {activeSection === "portfolios" && navItems.some(i => i.key === "portfolios") && (
             <ProGate feature="Portfolio management">
               <Suspense fallback={<TabFallback />}>
@@ -636,21 +636,21 @@ export default function Dashboard() {
             </ProGate>
           )}
 
-          {/* â”€â”€ ANALYTICS â€” full analytics dashboard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          {/* ── ANALYTICS — full analytics dashboard ──────────────────── */}
           {activeSection === "analytics" && navItems.some(i => i.key === "analytics") && (
             <Suspense fallback={<TabFallback />}>
               <AnalyticsTab />
             </Suspense>
           )}
 
-          {/* â”€â”€ BILLING â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          {/* ── BILLING ──────────────────────────────────────────────── */}
           {activeSection === "billing" && navItems.some(i => i.key === "billing") && (
             <Suspense fallback={<TabFallback />}>
               <BillingTab />
             </Suspense>
           )}
 
-          {/* â”€â”€ SETTINGS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          {/* ── SETTINGS ─────────────────────────────────────────────── */}
           {activeSection === "settings" && navItems.some(i => i.key === "settings") && (
             <SettingsSection
               roleLabel={roleLabel}
@@ -668,4 +668,4 @@ export default function Dashboard() {
   );
 }
 
-// â”€â”€ [Components moved to src/components/dashboard/ and src/pages/dashboard/] â”€â”€
+// ── [Components moved to src/components/dashboard/ and src/pages/dashboard/] ──

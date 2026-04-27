@@ -190,7 +190,7 @@ export default function CreateNewBuildingListing() {
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <span className="text-sm text-muted-foreground">Redirectingâ€¦</span>
+          <span className="text-sm text-muted-foreground">Redirecting…</span>
         </div>
       </div>
     );
@@ -408,7 +408,7 @@ export default function CreateNewBuildingListing() {
       if (createdProjectId) {
         await supabase.from("projects").delete().eq("id", createdProjectId);
       }
-      toast.error("Something went wrong â€” please try again.");
+      toast.error("Something went wrong — please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -436,7 +436,7 @@ export default function CreateNewBuildingListing() {
               <span className="text-sm font-semibold tabular-nums text-primary">{completionPct}%</span>
             </div>
             <p className="text-muted-foreground text-xs mb-3">
-              Step {stepIndex + 1} of {STEPS.length} â€” {STEPS[stepIndex].label}
+              Step {stepIndex + 1} of {STEPS.length} — {STEPS[stepIndex].label}
             </p>
             <div className="w-full h-1.5 bg-secondary rounded-full overflow-hidden">
               <div className="h-full bg-primary rounded-full transition-all duration-500" style={{ width: `${completionPct}%` }} />
@@ -513,18 +513,18 @@ export default function CreateNewBuildingListing() {
                   <div><label className={LABEL_CLS}>Unit number</label><input value={unit.unit_number} onChange={e => setUnitField("unit_number", e.target.value)} placeholder="101" className={INPUT_CLS} /></div>
                   <div><label className={LABEL_CLS}>Internal sqm *</label><input type="number" step="0.01" value={unit.internal_sqm} onChange={e => setUnitField("internal_sqm", e.target.value)} placeholder="85" className={INPUT_CLS} />{errors.internal_sqm && <p className="text-xs text-destructive">{errors.internal_sqm}</p>}</div>
                   <div><label className={LABEL_CLS}>Balcony sqm</label><input type="number" step="0.01" value={unit.balcony_sqm} onChange={e => setUnitField("balcony_sqm", e.target.value)} placeholder="12" className={INPUT_CLS} /></div>
-                  <div><label className={LABEL_CLS}>Price (â‚¬) *</label><input type="number" value={unit.price} onChange={e => setUnitField("price", e.target.value)} placeholder="250000" className={INPUT_CLS} />{errors.price && <p className="text-xs text-destructive">{errors.price}</p>}</div>
+                  <div><label className={LABEL_CLS}>Price (€) *</label><input type="number" value={unit.price} onChange={e => setUnitField("price", e.target.value)} placeholder="250000" className={INPUT_CLS} />{errors.price && <p className="text-xs text-destructive">{errors.price}</p>}</div>
                   <div><label className={LABEL_CLS}>Bedrooms *</label><input type="number" value={unit.bedrooms} onChange={e => setUnitField("bedrooms", e.target.value)} placeholder="2" className={INPUT_CLS} />{errors.bedrooms && <p className="text-xs text-destructive">{errors.bedrooms}</p>}</div>
                   <div><label className={LABEL_CLS}>Bathrooms *</label><input type="number" value={unit.bathrooms} onChange={e => setUnitField("bathrooms", e.target.value)} placeholder="2" className={INPUT_CLS} />{errors.bathrooms && <p className="text-xs text-destructive">{errors.bathrooms}</p>}</div>
                   <div><label className={LABEL_CLS}>Living rooms</label><input type="number" value={unit.living_rooms} onChange={e => setUnitField("living_rooms", e.target.value)} placeholder="1" className={INPUT_CLS} /></div>
                   <div><label className={LABEL_CLS}>Storage sqm</label><input type="number" step="0.01" value={unit.storage_sqm} onChange={e => setUnitField("storage_sqm", e.target.value)} placeholder="0" className={INPUT_CLS} /></div>
                   <div><label className={LABEL_CLS}>Parking sqm</label><input type="number" step="0.01" value={unit.parking_sqm} onChange={e => setUnitField("parking_sqm", e.target.value)} placeholder="0" className={INPUT_CLS} /></div>
-                  <div><label className={LABEL_CLS}>Kitchen type</label><select value={unit.kitchen_type} onChange={e => setUnitField("kitchen_type", e.target.value)} className={INPUT_CLS}><option value="">â€”</option>{KITCHEN_TYPES.map(k => <option key={k} value={k}>{k}</option>)}</select></div>
-                  <div><label className={LABEL_CLS}>Energy class</label><select value={unit.energy_class} onChange={e => setUnitField("energy_class", e.target.value)} className={INPUT_CLS}><option value="">â€”</option>{ENERGY_CLASSES.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                  <div><label className={LABEL_CLS}>Kitchen type</label><select value={unit.kitchen_type} onChange={e => setUnitField("kitchen_type", e.target.value)} className={INPUT_CLS}><option value="">—</option>{KITCHEN_TYPES.map(k => <option key={k} value={k}>{k}</option>)}</select></div>
+                  <div><label className={LABEL_CLS}>Energy class</label><select value={unit.energy_class} onChange={e => setUnitField("energy_class", e.target.value)} className={INPUT_CLS}><option value="">—</option>{ENERGY_CLASSES.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
                   <div><label className={LABEL_CLS}>Heating</label><input value={unit.heating_system} onChange={e => setUnitField("heating_system", e.target.value)} placeholder="e.g. heat pump" className={INPUT_CLS} /></div>
                   <div><label className={LABEL_CLS}>Cooling</label><input value={unit.cooling_system} onChange={e => setUnitField("cooling_system", e.target.value)} placeholder="e.g. AC" className={INPUT_CLS} /></div>
-                  <div><label className={LABEL_CLS}>Parking price (â‚¬)</label><input type="number" value={unit.parking_price} onChange={e => setUnitField("parking_price", e.target.value)} placeholder="0" className={INPUT_CLS} /></div>
-                  <div><label className={LABEL_CLS}>Storage price (â‚¬)</label><input type="number" value={unit.storage_price} onChange={e => setUnitField("storage_price", e.target.value)} placeholder="0" className={INPUT_CLS} /></div>
+                  <div><label className={LABEL_CLS}>Parking price (€)</label><input type="number" value={unit.parking_price} onChange={e => setUnitField("parking_price", e.target.value)} placeholder="0" className={INPUT_CLS} /></div>
+                  <div><label className={LABEL_CLS}>Storage price (€)</label><input type="number" value={unit.storage_price} onChange={e => setUnitField("storage_price", e.target.value)} placeholder="0" className={INPUT_CLS} /></div>
                   <div className="sm:col-span-2 lg:col-span-3 flex items-center gap-4 pt-2">
                     <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={unit.sea_view} onChange={e => setUnitField("sea_view", e.target.checked)} /> Sea view</label>
                     <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={unit.city_view} onChange={e => setUnitField("city_view", e.target.checked)} /> City view</label>
@@ -615,7 +615,7 @@ export default function CreateNewBuildingListing() {
                   />
                   <Upload className="w-10 h-10 mx-auto text-muted-foreground mb-2" />
                   <p className="text-sm font-medium">Drop photos or click to upload</p>
-                  <p className="text-xs text-muted-foreground mt-1">JPG, PNG, WEBP â€” max 20</p>
+                  <p className="text-xs text-muted-foreground mt-1">JPG, PNG, WEBP — max 20</p>
                 </div>
                 {images.length > 0 && (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
@@ -653,7 +653,7 @@ export default function CreateNewBuildingListing() {
               ) : (
                 <Button onClick={handleSubmit} disabled={submitting} className="gap-2 bg-gradient-primary border-0">
                   {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                  {submitting ? "Creatingâ€¦" : "Create Listing"}
+                  {submitting ? "Creating…" : "Create Listing"}
                 </Button>
               )}
             </div>

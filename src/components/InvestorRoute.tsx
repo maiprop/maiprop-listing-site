@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEligibleForQuickSale } from "@/hooks/useEligibleForQuickSale";
@@ -17,11 +18,21 @@ export function InvestorRoute({ children }: { children: React.ReactNode }) {
 function InvestorGate({ children }: { children: React.ReactNode }) {
   const { profile, loading: authLoading } = useAuth();
   const { eligible, loading: eligibilityLoading } = useEligibleForQuickSale();
+  const [timedOut, setTimedOut] = useState(false);
 
-  if (authLoading || !profile || eligibilityLoading) {
+  useEffect(() => {
+    if (authLoading || eligibilityLoading) {
+      const timer = setTimeout(() => setTimedOut(true), 4000);
+      return () => clearTimeout(timer);
+    }
+    setTimedOut(false);
+  }, [authLoading, eligibilityLoading]);
+
+  if ((authLoading || !profile || eligibilityLoading) && !timedOut) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="w-10 h-10 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />
+        <span className="sr-only">Checking investor access…</span>
       </div>
     );
   }
