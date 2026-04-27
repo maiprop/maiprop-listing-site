@@ -1,23 +1,62 @@
 import { useState } from "react";
-import { ClipboardList, Download, Loader2, Zap } from "lucide-react";
+import { ClipboardList, Loader2, Zap, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useReportUsage, useRecordReport, REPORT_INCLUDED, REPORT_EXTRA_COST } from "@/hooks/useUsageAddons";
+import { supabase } from "@/integrations/supabase/client";
+import type { ListingWithJoins } from "@/hooks/useListings";
+
+interface ReportResult {
+  estimatedValue: number;
+  rangeLow: number;
+  rangeHigh: number;
+  marketComparison: string;
+  marketComparisonPct: number;
+  confidenceLabel: string;
+  source: "os" | "ai";
+}
 
 interface Props {
   listingId: string;
+  listing?: ListingWithJoins | null;
 }
 
-export function PropertyReportCard({ listingId }: Props) {
+export function PropertyReportCard({ listingId, listing }: Props) {
   const { user } = useAuth();
   const { isPro } = useSubscription();
   const { data: reportCount = 0 } = useReportUsage();
   const recordReport = useRecordReport();
 
-  const [reportLoaded, setReportLoaded] = useState(false);
+  const [reportResult, setReportResult] = useState<ReportResult | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
+  const reportLoaded = reportResult !== null;
+
+  const handleLoad = async () => {
+    if (!user) return;
+    setReportLoading(true);
+    try {
+      await recordReport.mutateAsync(listingId);
+      const { data: osRes } = await supabase.functions.invoke("fetch-report-from-os", {
+        body: { listing_id: listingId, report_type: "valuation" },
+      });
+      if (osRes?.ok && osRes.report?.estimatedValue) {
+        const r = osRes.report;
+        setReportResult({ estimatedValue: r.estimatedValue, rangeLow: r.rangeLow ?? r.estimatedValue, rangeHigh: r.rangeHigh ?? r.estimatedValue, marketComparison: r.marketComparison ?? "at_market", marketComparisonPct: r.marketComparisonPct ?? 0, confidenceLabel: r.confidenceLabel ?? "Medium", source: "os" });
+        return;
+      }
+      const body = listing
+        ? { title: listing.title, city: listing.city, address: listing.address, price: Number(listing.price), sqm: Number(listing.sqm), bedrooms: listing.bedrooms, bathrooms: listing.bathrooms, propertyType: listing.property_type, listingType: listing.listing_type, floor: listing.floor, yearBuilt: listing.year_built, energyClass: listing.energy_class, pricePerSqm: listing.price_per_sqm ? Number(listing.price_per_sqm) : undefined, hasParking: listing.has_parking, hasPool: listing.has_pool, hasElevator: listing.has_elevator, region: listing.region }
+        : { listing_id: listingId };
+      const { data } = await supabase.functions.invoke("property-valuation", { body });
+      if (data?.estimatedValue) {
+        setReportResult({ estimatedValue: data.estimatedValue, rangeLow: data.rangeLow ?? data.estimatedValue, rangeHigh: data.rangeHigh ?? data.estimatedValue, marketComparison: data.marketComparison ?? "at_market", marketComparisonPct: data.marketComparisonPct ?? 0, confidenceLabel: data.confidenceLabel ?? "Medium", source: "ai" });
+      }
+    } finally {
+      setReportLoading(false);
+    }
+  };
 
   return (
     <div className={`glass-card rounded-2xl overflow-hidden border ${reportLoaded ? "border-primary/30" : "border-primary/20"}`}>
@@ -42,15 +81,29 @@ export function PropertyReportCard({ listingId }: Props) {
             </Button>
             <p className="text-[10px] text-muted-foreground">Pro Feature · Unlock full reports</p>
           </div>
-        ) : reportLoaded ? (
-          <div className="text-center space-y-3">
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Report loaded. Download your full PDF below.
-            </p>
-            <Button className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2">
-              <Download className="w-4 h-4" /> Download PDF
-            </Button>
-            <p className="text-[10px] text-muted-foreground">Full · Instant · PDF export</p>
+        ) : reportLoaded && reportResult ? (
+          <div className="space-y-3">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">AI Estimated Value</p>
+                <p className="font-display font-bold text-lg">€{reportResult.estimatedValue.toLocaleString()}</p>
+                <p className="text-[10px] text-muted-foreground">€{reportResult.rangeLow.toLocaleString()} – €{reportResult.rangeHigh.toLocaleString()}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] text-muted-foreground mb-0.5">vs Asking</p>
+                <div className={`flex items-center gap-1 justify-end text-xs font-semibold ${
+                  reportResult.marketComparison === "below_market" ? "text-emerald-500" :
+                  reportResult.marketComparison === "above_market" ? "text-red-500" : "text-yellow-500"
+                }`}>
+                  {reportResult.marketComparison === "below_market" ? <TrendingDown className="w-3.5 h-3.5" /> :
+                   reportResult.marketComparison === "above_market" ? <TrendingUp className="w-3.5 h-3.5" /> :
+                   <Minus className="w-3.5 h-3.5" />}
+                  {reportResult.marketComparisonPct > 0 ? "+" : ""}{reportResult.marketComparisonPct}%
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-0.5">{reportResult.confidenceLabel} confidence</p>
+              </div>
+            </div>
+            <p className="text-[10px] text-muted-foreground">Source: {reportResult.source === "os" ? "maiProp OS" : "AI Model"} · Not a formal valuation</p>
           </div>
         ) : reportCount >= REPORT_INCLUDED ? (
           <div className="text-center space-y-3">
@@ -74,16 +127,7 @@ export function PropertyReportCard({ listingId }: Props) {
             </p>
             <Button
               className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2"
-              onClick={async () => {
-                if (!user) return;
-                setReportLoading(true);
-                try {
-                  await recordReport.mutateAsync(listingId);
-                  setReportLoaded(true);
-                } finally {
-                  setReportLoading(false);
-                }
-              }}
+              onClick={handleLoad}
               disabled={reportLoading}
             >
               {reportLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ClipboardList className="w-4 h-4" />}

@@ -46,10 +46,10 @@ Deno.serve(async (req) => {
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("is_platform_admin")
+      .select("role")
       .eq("user_id", userData.user.id)
       .single();
-    if (!(profile as any)?.is_platform_admin) throw new Error("Platform admin only");
+    if ((profile as any)?.role !== "admin") throw new Error("Platform admin only");
 
     // Optional: sync only specific config IDs, or all active configs
     const body = req.method === "POST" && req.body ? await req.json().catch(() => ({})) : {};

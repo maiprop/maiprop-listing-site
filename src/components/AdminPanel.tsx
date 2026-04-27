@@ -106,18 +106,19 @@ export default function AdminPanel() {
   // ── Pull from OS (one primary action) ───────────────────────────────────────
   const pullMutation = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke("poll-os-auctions", {
-        body: { page: 0, pageSize: 100 },
+      const { data, error } = await supabase.functions.invoke("full-sync-from-os", {
+        body: { pageSize: 100, maxPages: 200 },
       });
       if (error) throw error;
       return data;
     },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: [SYNC_LOG_QUERY_KEY] });
-      const imp = data?.imported ?? 0;
-      const upd = data?.updated ?? 0;
-      const ai = data?.aiGenerated ?? 0;
-      toast.success(`Pull: ${imp} new · ${upd} updated · ${ai} AI-generated`);
+      const a = data?.sync?.auctions ?? {};
+      const imp = a.imported ?? 0;
+      const upd = a.updated ?? 0;
+      const errs = a.errors ?? 0;
+      toast.success(`Pull: ${imp} new · ${upd} updated${errs ? ` · ${errs} errors` : ""}`);
     },
     onError: (e: any) => toast.error("Pull failed: " + e.message),
   });
@@ -336,7 +337,7 @@ export default function AdminPanel() {
             <h2 className="font-semibold text-sm">Pull from maiProp OS</h2>
           </div>
           <p className="text-xs text-muted-foreground">
-            Import future auctions from OS into the Hub (one page, 100 records).
+            Import all future auctions from OS into the Hub (paginated, up to 20 000 records).
           </p>
           <Button
             className="w-full gap-2"

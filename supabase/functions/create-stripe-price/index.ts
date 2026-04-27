@@ -31,8 +31,8 @@ Deno.serve(async (req) => {
     if (userError || !userData.user) throw new Error("Unauthenticated");
 
     // Check platform admin
-    const { data: profile } = await supabaseClient.from("profiles").select("is_platform_admin").eq("user_id", userData.user.id).single();
-    if (!(profile as any)?.is_platform_admin) throw new Error("Platform admin only");
+    const { data: profile } = await supabaseClient.from("profiles").select("role").eq("user_id", userData.user.id).single();
+    if ((profile as any)?.role !== "admin") throw new Error("Platform admin only");
 
     const body = (req.method === "POST" && req.body) ? await req.json().catch(() => ({})) : {};
     const configId = body.config_id ?? body.configId;

@@ -596,7 +596,7 @@ export default function PropertyDetail() {
               }
 
               {/* ④ Property Report — Pro only, 3 free/month, €9 each extra */}
-              <PropertyReportCard listingId={id!} />
+              <PropertyReportCard listingId={id!} listing={db} />
 
               {/* Professional add-ons — valuation & legal */}
               <div className="glass-card rounded-2xl border border-border overflow-hidden">
