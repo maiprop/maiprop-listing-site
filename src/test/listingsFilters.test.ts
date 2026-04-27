@@ -24,20 +24,30 @@ describe("Feature filter allowlist", () => {
   it("allows known feature columns through", () => {
     const result = getValidFeatures(["has_parking", "has_elevator"]);
     expect(result).toEqual(["has_parking", "has_elevator"]);
+    expect(result).toHaveLength(2);
+    // Order is preserved.
+    const reverseInput = ["has_elevator", "has_parking"];
+    expect(getValidFeatures(reverseInput)).toEqual(reverseInput);
   });
 
   it("blocks unknown column names (injection attempt)", () => {
     const result = getValidFeatures(["has_parking", "'; DROP TABLE listings; --", "user_id"]);
     expect(result).toEqual(["has_parking"]);
+    expect(result).toHaveLength(1);
+    // The injection vector is dropped, not just sanitised.
+    expect(result).not.toContain("'; DROP TABLE listings; --");
   });
 
   it("blocks empty string", () => {
     expect(getValidFeatures([""])).toEqual([]);
+    expect(getValidFeatures(["", "", ""])).toEqual([]);
   });
 
   it("blocks SQL-like column references", () => {
     const injections = ["is_featured", "owner_id", "price", "created_at", "status", "role"];
     expect(getValidFeatures(injections)).toEqual([]);
+    // Mixing valid + invalid still drops the invalid ones.
+    expect(getValidFeatures([...injections, "has_parking"])).toEqual(["has_parking"]);
   });
 
   it("all FEATURES_RESIDENTIAL keys pass the allowlist", () => {
@@ -47,10 +57,15 @@ describe("Feature filter allowlist", () => {
       "has_view", "has_smart_home", "has_attic", "has_double_glazing",
       "has_secure_door", "has_alarm",
     ];
-    expect(getValidFeatures(residential)).toEqual(residential);
+    const result = getValidFeatures(residential);
+    expect(result).toEqual(residential);
+    expect(result).toHaveLength(residential.length);
   });
 
   it("returns empty array for empty input", () => {
-    expect(getValidFeatures([])).toEqual([]);
+    const result = getValidFeatures([]);
+    expect(result).toEqual([]);
+    expect(result).toHaveLength(0);
+    expect(Array.isArray(result)).toBe(true);
   });
 });

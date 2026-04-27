@@ -3,56 +3,82 @@ import { getPlanLimitErrorMessage, isPlanLimitError } from "@/lib/planLimitError
 
 describe("getPlanLimitErrorMessage", () => {
   it("returns message for saved_search_limit_reached", () => {
-    expect(getPlanLimitErrorMessage(new Error("saved_search_limit_reached"))).toBeTruthy();
+    const result = getPlanLimitErrorMessage(new Error("saved_search_limit_reached"));
+    expect(result).not.toBeNull();
+    expect(result).toMatch(/plan limit/i);
+    expect(result).toMatch(/upgrade to pro/i);
   });
 
   it("returns message for listing_limit_reached", () => {
-    expect(getPlanLimitErrorMessage(new Error("listing_limit_reached"))).toBeTruthy();
+    const result = getPlanLimitErrorMessage(new Error("listing_limit_reached"));
+    expect(result).not.toBeNull();
+    expect(result).toMatch(/plan limit/i);
   });
 
   it("returns message for listing_not_allowed", () => {
-    expect(getPlanLimitErrorMessage(new Error("listing_not_allowed"))).toBeTruthy();
+    const result = getPlanLimitErrorMessage(new Error("listing_not_allowed"));
+    expect(result).not.toBeNull();
+    expect(typeof result).toBe("string");
   });
 
   it("returns message for auction_alert_limit_reached", () => {
-    expect(getPlanLimitErrorMessage(new Error("auction_alert_limit_reached"))).toBeTruthy();
+    const result = getPlanLimitErrorMessage(new Error("auction_alert_limit_reached"));
+    expect(result).not.toBeNull();
+    expect(result).toMatch(/upgrade/i);
   });
 
   it("returns message for viewing_limit_reached", () => {
-    expect(getPlanLimitErrorMessage(new Error("viewing_limit_reached"))).toBeTruthy();
+    const result = getPlanLimitErrorMessage(new Error("viewing_limit_reached"));
+    expect(result).not.toBeNull();
+    expect(result?.length).toBeGreaterThan(0);
   });
 
   it("returns message for search_alert_limit_reached", () => {
-    expect(getPlanLimitErrorMessage(new Error("search_alert_limit_reached"))).toBeTruthy();
+    const result = getPlanLimitErrorMessage(new Error("search_alert_limit_reached"));
+    expect(result).not.toBeNull();
+    expect(result).toMatch(/plan/i);
   });
 
   it("returns null for unrelated error", () => {
-    expect(getPlanLimitErrorMessage(new Error("Network error"))).toBeNull();
+    const result = getPlanLimitErrorMessage(new Error("Network error"));
+    expect(result).toBeNull();
+    expect(isPlanLimitError(new Error("Network error"))).toBe(false);
   });
 
   it("returns null for null input", () => {
     expect(getPlanLimitErrorMessage(null)).toBeNull();
+    expect(getPlanLimitErrorMessage(undefined)).toBeNull();
   });
 
   it("works with plain string errors", () => {
-    expect(getPlanLimitErrorMessage("listing_limit_reached")).toBeTruthy();
+    const result = getPlanLimitErrorMessage("listing_limit_reached");
+    expect(result).not.toBeNull();
+    expect(result).toMatch(/plan limit/i);
   });
 
   it("is case-insensitive (lowercase error string)", () => {
-    expect(getPlanLimitErrorMessage(new Error("LISTING_LIMIT_REACHED"))).toBeTruthy();
+    const upper = getPlanLimitErrorMessage(new Error("LISTING_LIMIT_REACHED"));
+    const lower = getPlanLimitErrorMessage(new Error("listing_limit_reached"));
+    expect(upper).not.toBeNull();
+    expect(upper).toBe(lower);
   });
 });
 
 describe("isPlanLimitError", () => {
   it("returns true for a limit error", () => {
     expect(isPlanLimitError(new Error("listing_limit_reached"))).toBe(true);
+    expect(isPlanLimitError(new Error("viewing_limit_reached"))).toBe(true);
+    expect(isPlanLimitError("saved_search_limit_reached")).toBe(true);
   });
 
   it("returns false for a generic error", () => {
     expect(isPlanLimitError(new Error("Something went wrong"))).toBe(false);
+    expect(isPlanLimitError(new Error("500 Internal Server Error"))).toBe(false);
   });
 
   it("returns false for null", () => {
     expect(isPlanLimitError(null)).toBe(false);
+    expect(isPlanLimitError(undefined)).toBe(false);
+    expect(isPlanLimitError("")).toBe(false);
   });
 });
