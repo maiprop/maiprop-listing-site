@@ -147,3 +147,20 @@ The Quick Sale offering (discounted distressed property deals) must NOT be bundl
 6. Annual billing discount (2 months free) — currently monthly only
 7. ROI calculator widget on Pricing page
 8. Per-deal access option for Quick Sale (€25/deal preview) — as alternative to annual pass
+
+---
+
+## 9. Actual Implemented Pricing (April 2026)
+
+> **Note:** This document reflects March 2026 strategy recommendations. The actual implemented pricing differs:
+>
+> | Plan | Strategy (This Doc) | Actual (Implemented) |
+> |------|---------------------|-------------------|
+> | Participant Pro | €19/mo | €29/mo |
+> | Agent Pro | €49/mo | €149/mo |
+> | Developer Pro | €89/mo | €129/mo |
+> | Professional Pro | €49/mo | €69/mo |
+> | Investor Plan | €299/yr | €49/mo (€490/yr) |
+> | Institutional Plan | — | €199/mo (€1,990/yr) |
+>
+> See `docs/PRICING_MATRIX.md` and `MAIPROP_PLATFORM_REFERENCE.md` for current pricing.

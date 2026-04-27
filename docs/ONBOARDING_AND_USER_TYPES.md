@@ -10,18 +10,20 @@ The app has **four** values stored in the database for `profiles.role` (enum `us
 
 | Role | Description | Set when |
 |------|-------------|----------|
-| **individual** | Private consumer: buyer, renter, or investor. | Chosen in onboarding (buyer, investor) or default at signup. |
+| **buyer** | Private consumer: buyer, renter, or investor. | Chosen in onboarding (buyer, investor) or default at signup. |
 | **seller_landlord** | Private seller or landlord listing their own property. **Eligible for Pro selling addons** (listing visibility, in-app messaging with buyers, etc.). | Chosen in onboarding (Private Seller / Landlord). |
 | **agent** | **Real estate agents** (one category by themselves), plus institutional/fund and developer. Licensed or business-side listing for clients. | Chosen in onboarding (Real Estate Agent / Agency, Institutional / Fund, Developer / Builder). |
 | **professional** | Service professional: architect, lawyer, notary, contractor, etc. Listed in the Professionals directory. | Chosen in onboarding (Service Professional) and after completing pro verification. |
 
-So there are **4 DB roles** and **7 participant types** in the onboarding UI, grouped into sections: **Private** (buyer, seller, investor), **Real estate agents** (agent only), **Institutional & development** (institutional, developer), **Services** (professional).
+So there are **4 DB roles** (`buyer`, `seller_landlord`, `agent`, `professional`) and **7 participant types** in the onboarding UI, grouped into sections: **Private** (buyer, seller, investor), **Real estate agents** (agent only), **Institutional & development** (institutional, developer), **Services** (professional).
+
+> **Note:** Role `individual` was renamed to `buyer` in migration 20260331120000.
 
 ---
 
 ## 2. When onboarding runs
 
-- **Sign up (email):** User signs up → redirect to `/onboarding`. Profile is created with `role: "individual"` by default; onboarding can change it.
+- **Sign up (email):** User signs up → redirect to `/onboarding`. Profile is created with `role: "buyer"` by default; onboarding can change it.
 - **Sign up (Google):** OAuth redirect is set to `/onboarding`; after Google auth they land there.
 - **Protected routes:** If the user is logged in but their profile has **not** completed onboarding, `ProtectedRoute` redirects them to `/onboarding` (except when they are already on `/onboarding`).
 
@@ -48,9 +50,9 @@ Each card has a **participant id**, a **role** written to `profiles.role`, label
 
 | Participant id   | Label                         | DB role          | Section                  |
 |------------------|-------------------------------|------------------|--------------------------|
-| buyer            | Home Buyer / Renter           | individual       | Private                  |
+| buyer            | Home Buyer / Renter           | buyer            | Private                  |
 | seller           | Private Seller / Landlord     | **seller_landlord** | Private               |
-| investor         | Private Investor              | individual       | Private                  |
+| investor         | Private Investor              | buyer            | Private                  |
 | agent            | Real Estate Agent / Agency    | agent            | Real estate agents       |
 | institutional    | Institutional / Fund          | agent            | Institutional & development |
 | professional     | Service Professional          | professional     | Services                 |
