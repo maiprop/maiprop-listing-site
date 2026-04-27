@@ -1,14 +1,14 @@
-﻿import React, { useState, useEffect, useMemo, lazy, Suspense } from "react";
+import React, { useState, useEffect, useMemo, lazy, Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import {
   Plus, Heart,
-  Eye, LogOut, Building2, Gavel, CheckCircle,
+  Eye, Building2, Gavel,
   Loader2, Calendar,
   Search, Wrench, Shield,
   FolderKanban, Users, Briefcase, Flame,
-  Clock, ExternalLink,
-  Lock, Bookmark, ArrowRight,
+  ExternalLink,
+  Bookmark, ArrowRight,
 } from "lucide-react";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useEligibleForQuickSale } from "@/hooks/useEligibleForQuickSale";
@@ -32,8 +32,7 @@ import { cn } from "@/lib/utils";
 import { getParticipantTypeFromProfile, PARTICIPANT_LABELS, type ParticipantId } from "@/lib/participantConfig";
 import { ProGate } from "@/components/gates/ProGate";
 // â”€â”€ Extracted subcomponents â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-import { useTranslation } from "react-i18next";
-import { type NavKey, type DashboardRole, getNavItemsForBioType, NAV_LABEL_KEYS } from "@/lib/dashboardNav";
+import { type NavKey, type DashboardRole, getNavItemsForBioType } from "@/lib/dashboardNav";
 import { ContactsAndLeadsSection } from "./dashboard/ContactsAndLeadsSection";
 import { MyListingsSection } from "./dashboard/MyListingsSection";
 import { SavedPropertiesSection } from "./dashboard/SavedPropertiesSection";
@@ -43,6 +42,8 @@ import { BuyerOpenHousesCard } from "@/components/dashboard/BuyerOpenHousesCard"
 import { ProfessionalProfileEditor } from "@/components/dashboard/ProfessionalProfileEditor";
 import { ProfileEditor } from "@/components/dashboard/ProfileEditor";
 import { SettingsSection } from "@/components/dashboard/SettingsSection";
+import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
+import { DashboardMobileNav } from "@/components/dashboard/DashboardMobileNav";
 
 // Lazy-loaded tab components â€” only mounted when the tab is active
 const ViewingsTab = lazy(() => import("./dashboard/ViewingsTab"));
@@ -80,7 +81,7 @@ function TabFallback() {
 export default function Dashboard() {
   const { section } = useParams();
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  // (t no longer needed - moved to nav components)
   const { profile, user, signOut, updateProfile, refreshProfile, loading, profileLoading } = useAuth();
   const { isPro } = useSubscription();
   const { eligible: eligibleForQuickSale } = useEligibleForQuickSale();
@@ -226,119 +227,28 @@ export default function Dashboard() {
     <div className="min-h-screen bg-background">
       <Navbar />
       <div className="pt-16 flex">
-        {/* Sidebar â€” desktop */}
-        <aside className="w-60 shrink-0 hidden md:flex flex-col bg-card border-r border-border min-h-screen sticky top-16 h-[calc(100vh-4rem)]">
-          <div className="p-5 border-b border-border">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-gradient-primary flex items-center justify-center font-bold text-primary-foreground">
-                {displayName[0]?.toUpperCase()}
-              </div>
-              <div className="min-w-0">
-                <div className="font-semibold text-sm truncate">{displayName}</div>
-                <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-                  <span className="text-xs px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium capitalize">{roleLabel}</span>
-                  {invitationRequestStatus === "pending" && (
-                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-brand-gold/15 text-brand-gold border border-brand-gold/25 font-bold uppercase tracking-wide flex items-center gap-1">
-                      <Clock className="w-2.5 h-2.5" /> Pending
-                    </span>
-                  )}
-                  {invitationRequestStatus === "rejected" && (
-                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-destructive/10 text-destructive border border-destructive/20 font-bold uppercase tracking-wide">
-                      Not approved
-                    </span>
-                  )}
-                  {profile?.verified
-                    ? <CheckCircle className="w-3 h-3 text-primary" />
-                    : profile?.role === "professional"
-                      ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-gold/15 text-brand-gold border border-brand-gold/20 font-semibold">â³ Pending</span>
-                      : null}
-                </div>
-              </div>
-            </div>
-          </div>
-          <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-            {navItems.map(item => (
-              item.locked ? (
-                <div
-                  key={item.key}
-                  aria-label={`${t(NAV_LABEL_KEYS[item.key])} â€” available on Pro`}
-                  role="presentation"
-                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground/40 cursor-not-allowed select-none"
-                >
-                  <item.icon className="w-4 h-4 shrink-0" aria-hidden="true" />
-                  <span>{t(NAV_LABEL_KEYS[item.key])}</span>
-                  <Lock className="w-3 h-3 ml-auto shrink-0 text-muted-foreground/40" aria-hidden="true" />
-                  <span className="sr-only">(Pro only)</span>
-                </div>
-              ) : "href" in item && item.href ? (
-                <Link key={item.key} to={item.href}
-                  className={cn("w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors relative",
-                    "text-muted-foreground hover:text-foreground hover:bg-secondary"
-                  )}>
-                  <item.icon className="w-4 h-4 shrink-0" aria-hidden="true" />
-                  {t(NAV_LABEL_KEYS[item.key])}
-                </Link>
-              ) : (
-                <button key={item.key} onClick={() => setActiveSection(item.key)}
-                  aria-current={activeSection === item.key ? "page" : undefined}
-                  className={cn("w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors relative",
-                    activeSection === item.key ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:text-foreground hover:bg-secondary"
-                  )}>
-                  <item.icon className="w-4 h-4 shrink-0" aria-hidden="true" />
-                  {t(NAV_LABEL_KEYS[item.key])}
-                  {item.key === "leads" && pendingLeadsCount > 0 && (
-                    <span className="ml-auto text-[10px] font-bold bg-brand-gold text-background rounded-full px-1.5 py-0.5 min-w-[18px] text-center" aria-label={`${pendingLeadsCount} pending`}>{pendingLeadsCount}</span>
-                  )}
-                </button>
-              )
-            ))}
-          </nav>
-          <div className="p-3 border-t border-border">
-            <button onClick={handleSignOut} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
-              <LogOut className="w-4 h-4" /> Sign Out
-            </button>
-          </div>
-        </aside>
+        {/* Sidebar - desktop */}
+        <DashboardSidebar
+          navItems={navItems}
+          activeSection={activeSection}
+          onSelect={setActiveSection}
+          onSignOut={handleSignOut}
+          displayName={displayName}
+          roleLabel={roleLabel}
+          invitationRequestStatus={invitationRequestStatus}
+          profileVerified={!!profile?.verified}
+          profileRole={profile?.role}
+          pendingLeadsCount={pendingLeadsCount}
+        />
 
         {/* Mobile horizontal nav */}
-        <div className="md:hidden fixed bottom-14 left-0 right-0 z-40 bg-card/95 backdrop-blur-xl border-t border-border overflow-x-auto scrollbar-none"
-          style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
-          <div className="flex items-stretch h-11 min-w-max">
-            {navItems.map(item => (
-              item.locked ? (
-                <div
-                  key={item.key}
-                  title="Available on Pro"
-                  className="flex flex-col items-center justify-center gap-0.5 px-3.5 text-[9px] font-semibold text-muted-foreground/40 whitespace-nowrap min-w-[56px] relative cursor-not-allowed select-none"
-                >
-                  <item.icon className="w-3.5 h-3.5" />
-                  {t(NAV_LABEL_KEYS[item.key])}
-                  <Lock className="absolute top-0.5 right-1.5 w-2.5 h-2.5 text-muted-foreground/40" />
-                </div>
-              ) : "href" in item && item.href ? (
-                <Link key={item.key} to={item.href}
-                  className="flex flex-col items-center justify-center gap-0.5 px-3.5 text-[9px] font-semibold transition-colors whitespace-nowrap min-w-[56px] relative text-muted-foreground hover:text-foreground">
-                  <item.icon className="w-3.5 h-3.5" />
-                  {t(NAV_LABEL_KEYS[item.key])}
-                </Link>
-              ) : (
-                <button key={item.key} onClick={() => setActiveSection(item.key)}
-                  className={cn("flex flex-col items-center justify-center gap-0.5 px-3.5 text-[9px] font-semibold transition-colors whitespace-nowrap min-w-[56px] relative",
-                    activeSection === item.key ? "text-primary border-b-2 border-primary" : "text-muted-foreground"
-                  )}>
-                  <item.icon className="w-3.5 h-3.5" />
-                  {t(NAV_LABEL_KEYS[item.key])}
-                  {item.key === "leads" && pendingLeadsCount > 0 && (
-                    <span className="absolute top-0.5 right-1.5 text-[8px] font-bold bg-brand-gold text-background rounded-full w-3.5 h-3.5 flex items-center justify-center">{pendingLeadsCount}</span>
-                  )}
-                </button>
-              )
-            ))}
-            <button onClick={handleSignOut} className="flex flex-col items-center justify-center gap-0.5 px-3.5 text-[9px] font-semibold text-muted-foreground whitespace-nowrap min-w-[56px]">
-              <LogOut className="w-3.5 h-3.5" /> Sign Out
-            </button>
-          </div>
-        </div>
+        <DashboardMobileNav
+          navItems={navItems}
+          activeSection={activeSection}
+          onSelect={setActiveSection}
+          onSignOut={handleSignOut}
+          pendingLeadsCount={pendingLeadsCount}
+        />
 
         {/* Main content */}
         <main className="flex-1 p-4 sm:p-6 max-w-full overflow-hidden pb-28 md:pb-6">
