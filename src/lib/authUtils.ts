@@ -12,7 +12,7 @@ export function isPlatformAdmin(
   return profile.role === "admin";
 }
 
-/** Sell-side: can create listings (agent, seller, developer, institutional).
+/** Sell-side: can create listings (agent, seller, developer).
  *  SECURITY: relies solely on the trigger-protected `role` column.
  *  `participant_type` is user-writable and must NOT be used for authorization. */
 export function isSellSideRole(

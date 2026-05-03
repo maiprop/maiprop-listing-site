@@ -130,9 +130,9 @@ REVOKE UPDATE ON public.profiles FROM authenticated;
 GRANT UPDATE (
   display_name, bio, avatar_url, phone, city,
   first_name, last_name, country, video_link, website_url,
-  investor_mode, participant_type, role
+  investor_mode, participant_type
 ) ON public.profiles TO authenticated;
 
--- Note: role + participant_type are granted here because the trigger guard
--- handles the value restrictions. The RPC complete_onboarding_role() also
--- uses SECURITY DEFINER to set these.
+-- Note: participant_type is granted here because the trigger guard
+-- handles the value restrictions. role is NOT granted — it is set
+-- exclusively via the SECURITY DEFINER RPC complete_onboarding_role().
