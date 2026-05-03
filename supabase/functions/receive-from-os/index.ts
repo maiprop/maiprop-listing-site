@@ -32,6 +32,15 @@ function pickStrOrUndef(d: Record<string, unknown>, key: string): string | undef
   const v = d[key];
   return typeof v === "string" ? v : undefined;
 }
+/** OS sometimes serialises identifiers as numbers (see `auctionListingId` in
+ *  `poll-os-auctions`); coerce numeric ids to string so `os_id:` tags and
+ *  `sync_log.entity_id` are stable regardless of wire shape. */
+function pickId(d: Record<string, unknown>, key: string): string | undefined {
+  const v = d[key];
+  if (typeof v === "string") return v;
+  if (typeof v === "number" && Number.isFinite(v)) return String(v);
+  return undefined;
+}
 function pickNum(d: Record<string, unknown>, key: string): number | null {
   const v = d[key];
   return typeof v === "number" ? v : null;
@@ -99,7 +108,7 @@ Deno.serve(async (req) => {
         supabase,
         "os_to_hub",
         entity_type,
-        pickStrOrUndef(data, "id") ?? pickStrOrUndef(data, "externalId") ?? "unknown",
+        pickId(data, "id") ?? pickId(data, "externalId") ?? "unknown",
         "skipped",
         `Unknown entity_type: ${entity_type}`,
         data,
@@ -114,7 +123,7 @@ Deno.serve(async (req) => {
       supabase,
       "os_to_hub",
       entity_type,
-      pickStrOrUndef(data, "id") ?? pickStrOrUndef(data, "externalId") ?? result.id ?? "unknown",
+      pickId(data, "id") ?? pickId(data, "externalId") ?? result.id ?? "unknown",
       result.processed ? "success" : "error",
       result.error ?? null,
       data,
@@ -180,7 +189,7 @@ async function handleListing(
     owner_id: ownerId,
   };
 
-  const externalId = pickStrOrUndef(data, "externalId") ?? pickStrOrUndef(data, "id");
+  const externalId = pickId(data, "externalId") ?? pickId(data, "id");
 
   if (event === "created" || event === "upsert") {
     if (!externalId) return { processed: false, error: "externalId or id required for upsert" };

@@ -41,28 +41,22 @@ export function sanitizeRedirectPath(raw: unknown): string | null {
  *  not in the generated types since this is an unregistered Supabase table. */
 type PricingConfigRow = { metadata?: { stripe_price_id?: string } | null };
 
-/** Structural subset of the Supabase client surface this function uses.
- *  Avoids importing `SupabaseClient<...>` whose generic parameters mismatch
- *  the value returned by `createClient(url, key)` and would otherwise force
- *  a file-level `any` escape hatch. */
-type SupabaseLike = {
-  from: (table: string) => {
-    select: (columns: string) => {
-      eq: (column: string, value: string) => {
-        maybeSingle: () => Promise<{ data: PricingConfigRow | null; error: unknown }>;
-      };
-    };
-  };
-};
-
 /** Plan keys: env STRIPE_PRICE_<UPPERCASE_KEY>, or DB pricing_configs.metadata.stripe_price_id, or STRIPE_PRICE_DEFAULT. No hardcoded fallback in production. */
-async function getPriceForPlan(supabase: SupabaseLike, planKey: string): Promise<string> {
+async function getPriceForPlan(supabase: unknown, planKey: string): Promise<string> {
   const envKey = `STRIPE_PRICE_${planKey.toUpperCase().replace(/-/g, "_")}`;
   const envPrice = Deno.env.get(envKey);
   if (envPrice) return envPrice;
 
-  const { data } = await supabase.from("pricing_configs").select("metadata").eq("key", planKey).maybeSingle();
-  const stripePriceId = data?.metadata?.stripe_price_id;
+  // The runtime Supabase client returned by `createClient(url, key)` carries
+  // generics that don't match the value of `ReturnType<typeof createClient>`,
+  // so we accept it as `unknown` here and bridge through `(... .from as any)`
+  // — the same narrow cast pattern this repo uses for unregistered tables.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data } = await ((supabase as { from: any }).from as any)("pricing_configs")
+    .select("metadata")
+    .eq("key", planKey)
+    .maybeSingle();
+  const stripePriceId = (data as PricingConfigRow | null)?.metadata?.stripe_price_id;
   if (stripePriceId) return stripePriceId;
 
   const defaultPrice = Deno.env.get("STRIPE_PRICE_DEFAULT");
