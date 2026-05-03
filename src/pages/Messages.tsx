@@ -218,7 +218,7 @@ export default function Messages() {
                     onClick={() => handleSelectConv(conv.id)}
                     className={`w-full p-4 text-left flex gap-3 border-b border-border transition-colors hover:bg-secondary ${isActive ? "bg-primary/5 border-l-2 border-l-primary" : ""}`}
                   >
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-brand-purple to-brand-cyan flex items-center justify-center font-bold text-primary-foreground text-sm shrink-0 overflow-hidden">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-brand-purple to-brand-cyan-deep flex items-center justify-center font-bold text-primary-foreground text-sm shrink-0 overflow-hidden">
                       {other?.avatar_url ? (
                         <img src={other.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
                       ) : (
@@ -261,7 +261,7 @@ export default function Messages() {
                 <MessageSquare className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
                 <h3 className="font-display font-semibold text-lg">Select a conversation</h3>
                 <p className="text-muted-foreground text-sm mt-1 mb-4">Or start a new one from a property listing</p>
-                <Button asChild className="bg-gradient-to-r from-brand-purple to-brand-cyan border-0 text-primary-foreground">
+                <Button asChild className="bg-gradient-to-r from-brand-purple to-brand-cyan-deep border-0 text-primary-foreground">
                   <Link to="/listings">Browse Listings</Link>
                 </Button>
               </div>
@@ -278,7 +278,7 @@ export default function Messages() {
                 >
                   <ArrowLeft className="w-4 h-4" />
                 </button>
-                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-brand-purple to-brand-cyan flex items-center justify-center font-bold text-primary-foreground text-sm shrink-0 overflow-hidden">
+                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-brand-purple to-brand-cyan-deep flex items-center justify-center font-bold text-primary-foreground text-sm shrink-0 overflow-hidden">
                   {otherProfile?.avatar_url ? (
                     <img src={otherProfile.avatar_url} alt="" className="w-full h-full object-cover" />
                   ) : (
@@ -324,7 +324,7 @@ export default function Messages() {
                             return (
                       <div key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"} gap-2`}>
                         {!isMe && (
-                          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-brand-purple to-brand-cyan flex items-center justify-center text-xs font-bold text-primary-foreground shrink-0 mt-1 overflow-hidden">
+                          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-brand-purple to-brand-cyan-deep flex items-center justify-center text-xs font-bold text-primary-foreground shrink-0 mt-1 overflow-hidden">
                             {msg.profiles?.avatar_url ? (
                               <img src={msg.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
                             ) : (
@@ -422,7 +422,7 @@ export default function Messages() {
                   <button
                     onClick={handleSend}
                     disabled={(!input.trim() && pendingFiles.length === 0) || sendMessage.isPending}
-                    className="p-2.5 rounded-xl bg-gradient-to-r from-brand-purple to-brand-cyan text-primary-foreground disabled:opacity-50 transition-opacity hover:opacity-90 shrink-0"
+                    className="p-2.5 rounded-xl bg-gradient-to-r from-brand-purple to-brand-cyan-deep text-primary-foreground disabled:opacity-50 transition-opacity hover:opacity-90 shrink-0"
                   >
                     {sendMessage.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                   </button>
