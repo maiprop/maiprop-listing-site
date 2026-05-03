@@ -37,7 +37,13 @@ test.describe("Accessibility", () => {
 
   test("all images have alt text or role=presentation", async ({ page }) => {
     await page.goto("/listings");
-    await page.waitForLoadState("networkidle");
+    // networkidle is unreliable on /listings (Mapbox tile fetches never settle).
+    // Wait for `load` and the React <main> landmark instead.
+    await page.waitForLoadState("load");
+    await page
+      .locator("#main-content, main")
+      .first()
+      .waitFor({ state: "attached", timeout: 15_000 });
 
     const images = await page.locator("img").all();
     const violations: string[] = [];
@@ -87,7 +93,14 @@ test.describe("Accessibility — automated axe-core scans", () => {
       } catch { /* storage may be blocked */ }
     });
     await page.reload();
-    await page.waitForLoadState("networkidle");
+    // networkidle is unreliable on Mapbox-using pages; wait for `load` and
+    // the React-rendered <main> instead. This is sufficient for axe-core,
+    // which reads the rendered DOM + computed styles (CSS is loaded by `load`).
+    await page.waitForLoadState("load");
+    await page
+      .locator("#main-content, main, body > *")
+      .first()
+      .waitFor({ state: "attached", timeout: 15_000 });
     const results = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa"])
       .analyze();
