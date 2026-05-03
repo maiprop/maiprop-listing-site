@@ -107,7 +107,7 @@ export async function requireProSubscription(
       .from("investor_subscriptions")
       .select("id")
       .eq("user_id", userId)
-      .in("status", ["active", "trialing"])
+      .in("status", ["active", "trial"])
       .limit(1)
       .maybeSingle() as { data: { id: string } | null; error: unknown };
 
