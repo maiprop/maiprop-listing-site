@@ -10,14 +10,11 @@ import { RecoveryEmail } from '../_shared/email-templates/recovery.tsx'
 import { EmailChangeEmail } from '../_shared/email-templates/email-change.tsx'
 import { ReauthenticationEmail } from '../_shared/email-templates/reauthentication.tsx'
 import { createLogger } from '../_shared/logger.ts'
+import { getCorsHeaders } from '../_shared/cors.ts'
 
 const log = createLogger('auth-email-hook')
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers':
-    'authorization, x-client-info, apikey, content-type, webhook-id, webhook-signature, webhook-timestamp, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
-}
+let corsHeaders: Record<string, string> = {}
 
 type AuthEmailActionType =
   | 'signup'
@@ -278,10 +275,7 @@ async function buildOutboundEmails(payload: SendEmailHookPayload): Promise<Outbo
 }
 
 async function handlePreview(req: Request): Promise<Response> {
-  const previewCorsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, content-type',
-  }
+  const previewCorsHeaders = getCorsHeaders(req)
 
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: previewCorsHeaders })
@@ -378,6 +372,10 @@ async function handleWebhook(req: Request): Promise<Response> {
 }
 
 Deno.serve(async (req) => {
+  corsHeaders = getCorsHeaders(
+    req,
+    'webhook-id, webhook-signature, webhook-timestamp, x-supabase-client-runtime, x-supabase-client-runtime-version',
+  )
   const url = new URL(req.url)
 
   if (req.method === 'OPTIONS') {

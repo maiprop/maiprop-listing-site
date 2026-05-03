@@ -11,13 +11,11 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { createLogger } from "../_shared/logger.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 const log = createLogger("sync-firesale-to-os");
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+let corsHeaders: Record<string, string> = {};
 
 const TYPE_MAP: Record<string, string> = {
   apartment:  "RESIDENCE",
@@ -99,6 +97,7 @@ async function requireAgent(
 
 // ── Main handler ──────────────────────────────────────────────────────────────
 Deno.serve(async (req) => {
+  corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const supabase = createClient(

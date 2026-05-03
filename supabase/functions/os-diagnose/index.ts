@@ -9,13 +9,11 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 const limiter = makeRateLimiter({ bucket: "os-diagnose", maxRequests: 5, windowMs: 60_000 });
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+let corsHeaders: Record<string, string> = {};
 
 async function requireAgent(req: Request, sb: ReturnType<typeof createClient>): Promise<Response | null> {
   const authHeader = req.headers.get("Authorization");
@@ -53,6 +51,7 @@ async function getOsToken(baseUrl: string, email: string, password: string): Pro
 }
 
 Deno.serve(async (req) => {
+  corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";

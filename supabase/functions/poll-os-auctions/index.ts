@@ -12,15 +12,12 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { createLogger } from "../_shared/logger.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 const log = createLogger("poll-os-auctions");
 const limiter = makeRateLimiter({ bucket: "poll-os-auctions", maxRequests: 3, windowMs: 60_000 });
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
+let corsHeaders: Record<string, string> = {};
 
 // OS propertyCategory → Hub property_type (and optional land_type / commercial_type for filters)
 const CATEGORY_MAP: Record<string, string> = {
@@ -272,6 +269,7 @@ async function requireAgent(
 // ── Main handler ────────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
+  corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS")
     return new Response(null, { headers: corsHeaders });
 

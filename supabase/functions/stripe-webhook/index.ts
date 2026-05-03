@@ -14,15 +14,12 @@
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { createLogger } from "../_shared/logger.ts";
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 const log = createLogger("stripe-webhook");
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, stripe-signature",
-};
-
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req, "stripe-signature");
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
