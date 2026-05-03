@@ -103,10 +103,17 @@ test.describe("Open Houses page", () => {
   });
 
   test("shows open-house cards or empty state", async ({ page }) => {
-    // Either cards are present, or a no-listings message is rendered
-    const hasCards = await page.locator("article, [class*='card']").first().isVisible().catch(() => false);
-    const hasEmpty = await page.locator("[class*='empty'], [class*='no-result'], .text-muted-foreground").first().isVisible().catch(() => false);
-    expect(hasCards || hasEmpty).toBe(true);
+    // Wait for React Query to finish its first open-houses fetch before asserting.
+    // We use `load` in beforeEach to dodge Mapbox's never-settling tile requests,
+    // but `load` only waits for the bundle — data-driven content arrives later.
+    // Use Playwright's auto-retrying `expect(...).toBeVisible()` so the assertion
+    // polls until either a card, an empty-state element, or a skeleton becomes visible.
+    const contentLocator = page.locator(
+      "article, [class*='card'], [class*='empty'], [class*='no-result'], [class*='skeleton'], .text-muted-foreground"
+    );
+
+    await expect(page.locator("main, #main-content, body").first()).toBeVisible();
+    await expect(contentLocator.first()).toBeVisible({ timeout: 20_000 });
   });
 
   test("open-house cards include a date/time element when listings exist", async ({ page }) => {
