@@ -25,7 +25,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { formatPrice, formatDate } from "@/lib/format";
+import { formatPrice, formatPriceFromCents, formatDate } from "@/lib/format";
 import {
   useAgentDataInputs,
   useAgentDataInputQuota,
@@ -207,7 +207,7 @@ export default function DataInputTab() {
             </p>
             <p className="font-display text-2xl font-bold">
               {totalCreditCents > 0
-                ? formatPrice(Math.round(totalCreditCents / 100))
+                ? formatPriceFromCents(totalCreditCents)
                 : `${projectedDiscountPct}%`}
             </p>
             <p className="text-xs text-muted-foreground">
@@ -427,9 +427,7 @@ export default function DataInputTab() {
                   {inputs.map((i) => {
                     const meta = STATUS_META[i.status];
                     const Icon = meta.Icon;
-                    const credit = i.stripe_credit_amount_cents
-                      ? formatPrice(Math.round(i.stripe_credit_amount_cents / 100))
-                      : "—";
+                    const credit = formatPriceFromCents(i.stripe_credit_amount_cents);
                     return (
                       <tr key={i.id} className="border-t border-border/50">
                         <td className="px-4 py-3 whitespace-nowrap">{formatDate(i.created_at)}</td>
