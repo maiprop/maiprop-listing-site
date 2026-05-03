@@ -150,8 +150,10 @@ describe("ROLE_PLAN_MAP canonical pricing snapshot", () => {
       agent:         { planKey: "agent_basic",            monthlyPrice: 149,  annualPrice: 1490,  proOnly: false },
       developer:     { planKey: "developer_pro",          monthlyPrice: 129,  annualPrice: 1290,  proOnly: true  },
       professional:  { planKey: "professional_basic",     monthlyPrice: 69,   annualPrice: 690,   proOnly: false },
-      investor:      { planKey: "investor_private",       monthlyPrice: 49,   annualPrice: 490,   proOnly: true  },
-      institutional: { planKey: "investor_institutional", monthlyPrice: 199,  annualPrice: 1990,  proOnly: true  },
+      // Investor & Institutional are invitation-only — no public price.
+      // The actual price is set per application via a one-off Stripe Payment Link.
+      investor:      { planKey: "investor_private",       monthlyPrice: 0,    annualPrice: 0,     proOnly: true  },
+      institutional: { planKey: "investor_institutional", monthlyPrice: 0,    annualPrice: 0,     proOnly: true  },
     };
     for (const [audience, expected] of Object.entries(snapshot)) {
       const actual = ROLE_PLAN_MAP[audience as keyof typeof ROLE_PLAN_MAP];

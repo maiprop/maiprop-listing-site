@@ -111,12 +111,17 @@ export const ROLE_PLAN_MAP: Record<PricingAudienceId, RolePlan> = {
     stripePriceMonthly: PRICE_IDS.professional_monthly,
     stripePriceAnnual:  PRICE_IDS.professional_annual,
   },
+  // Investor & Institutional are invitation-only.
+  // Pricing is bespoke per application — a one-off Stripe payment link is
+  // generated and emailed after the application is approved. The 0/0 values
+  // here mean "no public price"; the canonical figure is the per-application
+  // payment link's amount, not these display fallbacks.
   investor: {
     planKey: "investor_private",
     planName: "Investor Plan",
     audienceId: "investor",
-    monthlyPrice: 49,
-    annualPrice: 490,
+    monthlyPrice: 0,
+    annualPrice: 0,
     proOnly: true,
     stripePriceMonthly: null,
     stripePriceAnnual:  null,
@@ -125,8 +130,8 @@ export const ROLE_PLAN_MAP: Record<PricingAudienceId, RolePlan> = {
     planKey: "investor_institutional",
     planName: "Institutional Plan",
     audienceId: "institutional",
-    monthlyPrice: 199,
-    annualPrice: 1990,
+    monthlyPrice: 0,
+    annualPrice: 0,
     proOnly: true,
     stripePriceMonthly: null,
     stripePriceAnnual:  null,

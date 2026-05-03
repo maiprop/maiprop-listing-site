@@ -183,7 +183,7 @@ const PLANS: Record<AudienceId, PlanDef> = {
   },
   investor: {
     freeLabel: "—", freePrice: "—", freeDesc: "Invitation-only", freeCTA: "—", freeHref: "#",
-    paidLabel: "Investor Plan", monthlyPrice: 49, annualPrice: 490,
+    paidLabel: "Investor Plan", monthlyPrice: 0, annualPrice: 0,
     paidDesc: "Deal-flow access, AI matching, market analytics & direct vendor contact",
     paidCTA: "Apply for Access", paidHref: "/investor-dashboard",
     freeList: [], features: INVESTOR_FEATURES,
@@ -192,7 +192,7 @@ const PLANS: Record<AudienceId, PlanDef> = {
   },
   institutional: {
     freeLabel: "—", freePrice: "—", freeDesc: "Invitation-only", freeCTA: "—", freeHref: "#",
-    paidLabel: "Institutional Plan", monthlyPrice: 199, annualPrice: 1990,
+    paidLabel: "Institutional Plan", monthlyPrice: 0, annualPrice: 0,
     paidDesc: "Full platform access, bulk pipeline, API, dedicated manager & multi-user seats",
     paidCTA: "Talk to Sales", paidHref: "/contact",
     freeList: [], features: INSTITUTIONAL_FEATURES,
@@ -460,10 +460,7 @@ export default function Pricing() {
                 <p className={cn("text-xs font-bold uppercase tracking-widest mb-2", plan.accent)}>{plan.paidLabel}</p>
                 <div className="flex items-baseline gap-1 mb-1">
                   {plan.inviteOnly ? (
-                    <>
-                      <span className="font-display text-3xl font-black text-foreground">from €{basePlan.monthlyPrice}</span>
-                      <span className="text-muted-foreground text-sm">/ month</span>
-                    </>
+                    <span className="font-display text-3xl font-black text-foreground">Invitation only</span>
                   ) : (
                     <>
                       <span className="font-display text-4xl font-black text-foreground">€{displayMonthly}</span>
@@ -480,7 +477,7 @@ export default function Pricing() {
                   </p>
                 ))}
                 {plan.inviteOnly && (
-                  <p className="text-xs text-muted-foreground">Pricing by arrangement · invitation-based access</p>
+                  <p className="text-xs text-muted-foreground">Custom pricing · a payment link is sent after your application is approved.</p>
                 )}
                 <p className="text-xs text-muted-foreground mt-1">{plan.paidDesc}</p>
               </div>
@@ -558,16 +555,31 @@ export default function Pricing() {
             </div>
           </div>
 
-          {/* Agency upsell callout — shown only on agent tab */}
+          {/* Agency add-on pointer — shown only on agent tab */}
           {activeTab === "agent" && (
             <div className="mt-4 rounded-2xl border border-brand-purple/30 bg-brand-purple/5 p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
               <div className="flex-1">
                 <p className="text-sm font-bold text-brand-purple mb-0.5">Running a team or agency?</p>
-                <p className="text-xs text-muted-foreground">Agency plans from <strong className="text-foreground">€249/month</strong> include multiple agent seats, a shared listing pool, agency-branded profile, and a dedicated account manager.</p>
+                <p className="text-xs text-muted-foreground">Stay on Agent Pro and add what you need: extra agent seats, an agency-branded profile, a dedicated account manager and white-label — all available as add-ons in your dashboard's Billing tab.</p>
               </div>
-              <Link to="/contact" className="shrink-0">
+              <Link to={user ? "/dashboard?tab=billing" : "/signup?type=agent"} className="shrink-0">
                 <Button variant="outline" size="sm" className="border-brand-purple/40 text-brand-purple hover:bg-brand-purple/10 gap-1.5">
-                  Talk to sales <ChevronRight className="w-3.5 h-3.5" />
+                  See add-ons <ChevronRight className="w-3.5 h-3.5" />
+                </Button>
+              </Link>
+            </div>
+          )}
+
+          {/* Professional Premium add-on pointer — shown only on professional tab */}
+          {activeTab === "professional" && (
+            <div className="mt-4 rounded-2xl border border-rose-500/30 bg-rose-500/5 p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+              <div className="flex-1">
+                <p className="text-sm font-bold text-rose-600 dark:text-rose-400 mb-0.5">Need more than Pro?</p>
+                <p className="text-xs text-muted-foreground">Stay on Professional Pro and unlock API access, the referral network and additional client seats as add-ons from your dashboard's Billing tab.</p>
+              </div>
+              <Link to={user ? "/dashboard?tab=billing" : "/signup?type=professional"} className="shrink-0">
+                <Button variant="outline" size="sm" className="border-rose-500/40 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 gap-1.5">
+                  See add-ons <ChevronRight className="w-3.5 h-3.5" />
                 </Button>
               </Link>
             </div>
