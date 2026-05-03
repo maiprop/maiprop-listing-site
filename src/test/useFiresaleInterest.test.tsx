@@ -203,7 +203,7 @@ describe("useExpressInterest", () => {
     await act(async () => {
       await result.current.mutateAsync({ dealId: "d-1" }).catch(() => {});
     });
-    expect(toastMock.error).toHaveBeenCalledWith(expect.stringMatching(/wrong/i));
+    expect(toastMock.error).toHaveBeenCalledWith(expect.stringMatching(/failed to register interest/i));
   });
 
   it("toasts error when storage upload fails", async () => {

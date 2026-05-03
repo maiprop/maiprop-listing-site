@@ -56,7 +56,7 @@ export function useRecordValuation() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["usage_ai_valuations"] });
     },
-    onError: () => toast.error("Something went wrong. Please try again."),
+    onError: () => toast.error("Failed to record AI valuation usage. Please try again."),
   });
 }
 
@@ -95,7 +95,7 @@ export function useRecordReport() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["usage_property_reports"] });
     },
-    onError: () => toast.error("Something went wrong. Please try again."),
+    onError: () => toast.error("Failed to record report usage. Please try again."),
   });
 }
 
@@ -136,7 +136,7 @@ export function useRecordPriorityAd() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["usage_priority_ads"] });
     },
-    onError: () => toast.error("Something went wrong. Please try again."),
+    onError: () => toast.error("Failed to record priority ad usage. Please try again."),
   });
 }
 

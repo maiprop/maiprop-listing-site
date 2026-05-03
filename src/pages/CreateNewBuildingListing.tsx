@@ -408,7 +408,7 @@ export default function CreateNewBuildingListing() {
       if (createdProjectId) {
         await supabase.from("projects").delete().eq("id", createdProjectId);
       }
-      toast.error("Something went wrong — please try again.");
+      toast.error("Failed to create new building listing. Please try again.");
     } finally {
       setSubmitting(false);
     }

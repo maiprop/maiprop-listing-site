@@ -66,7 +66,7 @@ export function useAddProjectMedia() {
       qc.invalidateQueries({ queryKey: ["projects"] });
       toast.success("Media added");
     },
-    onError: () => toast.error("Something went wrong. Please try again."),
+    onError: () => toast.error("Failed to add media. Please try again."),
   });
 }
 
@@ -86,6 +86,6 @@ export function useDeleteProjectMedia() {
       qc.invalidateQueries({ queryKey: ["projects"] });
       toast.success("Media removed");
     },
-    onError: () => toast.error("Something went wrong. Please try again."),
+    onError: () => toast.error("Failed to remove media. Please try again."),
   });
 }

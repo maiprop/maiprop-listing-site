@@ -113,7 +113,7 @@ export function useUpsertProfessionalServices() {
       queryClient.invalidateQueries({ queryKey: ["professional_services", professionalId] });
       toast.success("Services updated!");
     },
-    onError: () => toast.error("Something went wrong. Please try again."),
+    onError: () => toast.error("Failed to update services. Please try again."),
   });
 }
 
@@ -149,7 +149,7 @@ export function useUpsertProfessionalAvailability() {
       queryClient.invalidateQueries({ queryKey: ["professional_availability", professionalId] });
       toast.success("Availability updated!");
     },
-    onError: () => toast.error("Something went wrong. Please try again."),
+    onError: () => toast.error("Failed to update availability. Please try again."),
   });
 }
 
@@ -167,6 +167,6 @@ export function useUpdateProfessional() {
       queryClient.invalidateQueries({ queryKey: ["professionals"] });
       toast.success("Profile updated!");
     },
-    onError: () => toast.error("Something went wrong. Please try again."),
+    onError: () => toast.error("Failed to update profile. Please try again."),
   });
 }

@@ -62,6 +62,32 @@ jobs:
         env:
           NODE_OPTIONS: --max-old-space-size=4096
 
+      - name: Check generated types freshness
+        run: |
+          TYPES_FILE="src/integrations/supabase/types.ts"
+          LINES=$(wc -l < "$TYPES_FILE")
+          echo "Generated types file: $LINES lines"
+          if [ "$LINES" -gt 5000 ]; then
+            echo "::warning file=$TYPES_FILE::Generated types file has grown to $LINES lines (threshold: 5000). Consider reviewing schema size."
+          fi
+
+      - name: SBOM generation
+        run: npm sbom --sbom-format cyclonedx > /dev/null 2>&1 || echo "::notice::npm sbom not supported in this npm version — skipping"
+
+      - name: License compliance check
+        run: |
+          npx license-checker --production --failOn 'GPL-2.0;GPL-3.0;AGPL-1.0;AGPL-3.0;LGPL-2.0;LGPL-2.1;LGPL-3.0;MPL-1.0;MPL-1.1;MPL-2.0;EPL-1.0;EPL-2.0;CDDL-1.0;CDDL-1.1' --summary || {
+            echo "::error::Found dependencies with restricted licenses (GPL/AGPL/LGPL/MPL/EPL/CDDL). Review before deploying."
+            exit 1
+          }
+
+      - name: Secret scanning (gitleaks)
+        uses: gitleaks/gitleaks-action@44c470ffc35caa8b1eb3e8012ca53c2f9bea4eb5 # v2.3.8
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
       - name: Deno edge function tests
         uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:

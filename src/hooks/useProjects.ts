@@ -75,7 +75,7 @@ export function useCreateProject() {
       qc.invalidateQueries({ queryKey: ["projects"] });
       toast.success("Project created");
     },
-    onError: () => toast.error("Something went wrong. Please try again."),
+    onError: () => toast.error("Failed to create project. Please try again."),
   });
 }
 
@@ -100,7 +100,7 @@ export function useUpdateProject() {
       qc.invalidateQueries({ queryKey: ["project", id] });
       toast.success("Project updated");
     },
-    onError: () => toast.error("Something went wrong. Please try again."),
+    onError: () => toast.error("Failed to update project. Please try again."),
   });
 }
 
@@ -117,6 +117,6 @@ export function useDeleteProject() {
       qc.invalidateQueries({ queryKey: ["projects"] });
       toast.success("Project deleted");
     },
-    onError: () => toast.error("Something went wrong. Please try again."),
+    onError: () => toast.error("Failed to delete project. Please try again."),
   });
 }

@@ -88,6 +88,6 @@ export function useDeleteAuctionAlert() {
       qc.invalidateQueries({ queryKey: ["auction_alerts"] });
       toast.success("Alert deleted.");
     },
-    onError: () => toast.error("Something went wrong. Please try again."),
+    onError: () => toast.error("Failed to delete alert. Please try again."),
   });
 }
