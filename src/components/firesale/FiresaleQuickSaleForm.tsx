@@ -226,11 +226,12 @@ export function FiresaleQuickSaleForm() {
       reader.readAsDataURL(file);
     });
 
-  const SAFE_PHOTO_EXTS = new Set(["jpg", "jpeg", "png", "webp"]);
+  const SAFE_PHOTO_EXTS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
   const MIME_TO_EXT: Record<string, string> = {
     "image/jpeg": "jpg",
     "image/png": "png",
     "image/webp": "webp",
+    "image/gif": "gif",
   };
 
   const uploadPhotos = async (rid: string): Promise<string[]> => {
