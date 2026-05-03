@@ -8,14 +8,14 @@ import type { ElementType } from "react";
 import {
   Home, BarChart2, MessageSquare, Heart, Settings, User,
   Building2, Gavel, Calendar, Bookmark, Wrench, CreditCard,
-  FolderKanban, Users, Briefcase, TrendingUp, Globe2, Database,
+  FolderKanban, Users, Briefcase, TrendingUp, Globe2, FileText,
 } from "lucide-react";
 
 export type NavKey =
   | "overview" | "listings" | "analytics" | "saved" | "saved-searches"
   | "messages" | "viewings" | "auctions" | "open-houses" | "services" | "booking" | "leads"
-  | "deal-flow" | "contacts" | "projects" | "portfolios"
-  | "billing" | "profile" | "settings" | "data-input";
+  | "deal-flow" | "contacts" | "projects" | "portfolios" | "data-input"
+  | "billing" | "profile" | "settings";
 
 export type DashboardRole =
   | "buyer" | "seller" | "agent" | "professional"
@@ -73,7 +73,7 @@ export const ALL_NAV_ITEMS: NavItemDef[] = [
   { icon: Users,         label: "Contacts",           key: "contacts"       },
   { icon: Globe2,        label: "Projects",           key: "projects"       },
   { icon: TrendingUp,    label: "Portfolios",         key: "portfolios"     },
-  { icon: Database,      label: "Data Input",         key: "data-input"     },
+  { icon: FileText,      label: "Data Input",         key: "data-input"     },
   { icon: CreditCard,    label: "Billing",            key: "billing"        },
   { icon: User,          label: "Profile",            key: "profile"        },
   { icon: Settings,      label: "Settings",           key: "settings"       },

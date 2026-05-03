@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { formatPrice, formatDate, formatDateTime, fmtDate, fmtTime } from "@/lib/format";
+import {
+  formatPrice,
+  formatPriceFromCents,
+  formatDate,
+  formatDateTime,
+  fmtDate,
+  fmtTime,
+} from "@/lib/format";
 
 describe("formatPrice", () => {
   it("formats a positive integer", () => {
@@ -28,6 +35,43 @@ describe("formatPrice", () => {
 
   it("includes euro sign", () => {
     expect(formatPrice(500)).toContain("€");
+  });
+});
+
+describe("formatPriceFromCents", () => {
+  it("formats 49 cents with two decimals (regression: do NOT round to whole euros)", () => {
+    // Sub-€0.50 credits used to render as "€0" because Math.round was applied
+    // in cents/100 conversions. Should now show "€0,49".
+    expect(formatPriceFromCents(49)).toMatch(/0,49/);
+    expect(formatPriceFromCents(49)).not.toBe("€0");
+  });
+
+  it("formats 99 cents with two decimals", () => {
+    expect(formatPriceFromCents(99)).toMatch(/0,99/);
+  });
+
+  it("formats whole euros with two trailing decimals", () => {
+    expect(formatPriceFromCents(14900)).toMatch(/149,00/);
+  });
+
+  it("formats large amounts with thousands separator", () => {
+    expect(formatPriceFromCents(150000_00)).toMatch(/150[.,\u00A0\u202F]000,00/);
+  });
+
+  it("returns em-dash for null", () => {
+    expect(formatPriceFromCents(null)).toBe("—");
+  });
+
+  it("returns em-dash for undefined", () => {
+    expect(formatPriceFromCents(undefined)).toBe("—");
+  });
+
+  it("returns em-dash for NaN", () => {
+    expect(formatPriceFromCents(NaN)).toBe("—");
+  });
+
+  it("includes euro sign", () => {
+    expect(formatPriceFromCents(100)).toContain("€");
   });
 });
 

@@ -644,7 +644,7 @@ export default function Dashboard() {
             </Suspense>
           )}
 
-          {/* ── DATA INPUT (agent-only) ──────────────────────────────── */}
+          {/* ── DATA INPUT (agent loyalty) ──────────────────────────── */}
           {activeSection === "data-input" && navItems.some(i => i.key === "data-input") && (
             <Suspense fallback={<TabFallback />}>
               <DataInputTab />
