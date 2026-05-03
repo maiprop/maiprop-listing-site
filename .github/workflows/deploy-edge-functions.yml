@@ -1,0 +1,130 @@
+name: Deploy Edge Functions
+
+on:
+  # Manual trigger with optional function filter
+  workflow_dispatch:
+    inputs:
+      functions:
+        description: "Space-separated function names to deploy (leave empty for ALL)"
+        required: false
+        type: string
+      dry_run:
+        description: "Dry run — list functions without deploying"
+        required: false
+        type: boolean
+        default: false
+
+  # Auto-deploy when edge function source changes on main
+  push:
+    branches: [main]
+    paths:
+      - "supabase/functions/**"
+      - "supabase/config.toml"
+
+jobs:
+  deploy:
+    name: Deploy to Supabase
+    runs-on: ubuntu-latest
+    # Only auto-deploy on push; always run on manual dispatch
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      PROJECT_REF: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: supabase/setup-cli@950dd03f0428fd5f0b62f1366e6c0de6f5d0e469 # v1
+        with:
+          version: latest
+
+      - name: Validate secrets
+        run: |
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ] || [ -z "$PROJECT_REF" ]; then
+            echo "::error::Missing SUPABASE_ACCESS_TOKEN or VITE_SUPABASE_PROJECT_ID secrets"
+            exit 1
+          fi
+
+      - name: Link project
+        run: supabase link --project-ref "$PROJECT_REF"
+
+      - name: Detect changed functions (push event)
+        id: changes
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          # Get changed files in the push
+          CHANGED=$(git diff --name-only HEAD~1 HEAD -- supabase/functions/ supabase/config.toml 2>/dev/null || echo "")
+
+          if echo "$CHANGED" | grep -q "config.toml"; then
+            echo "Config changed — deploying all functions"
+            echo "deploy_all=true" >> "$GITHUB_OUTPUT"
+          else
+            # Extract function names from changed paths
+            FUNCS=$(echo "$CHANGED" | grep "^supabase/functions/" | cut -d'/' -f3 | grep -v "^_shared$" | grep -v "^deno" | grep -v "^node_modules$" | sort -u | tr '\n' ' ')
+            if echo "$CHANGED" | grep -q "_shared/"; then
+              echo "Shared code changed — deploying all functions"
+              echo "deploy_all=true" >> "$GITHUB_OUTPUT"
+            elif [ -n "$FUNCS" ]; then
+              echo "Changed functions: $FUNCS"
+              echo "functions=$FUNCS" >> "$GITHUB_OUTPUT"
+              echo "deploy_all=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "No function changes detected"
+              echo "deploy_all=false" >> "$GITHUB_OUTPUT"
+              echo "functions=" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+      - name: Determine functions to deploy
+        id: target
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            INPUT="${{ github.event.inputs.functions }}"
+            if [ -z "$INPUT" ]; then
+              echo "deploy_all=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "functions=$INPUT" >> "$GITHUB_OUTPUT"
+              echo "deploy_all=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "deploy_all=${{ steps.changes.outputs.deploy_all }}" >> "$GITHUB_OUTPUT"
+            echo "functions=${{ steps.changes.outputs.functions }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy functions
+        if: inputs.dry_run != true
+        run: |
+          set -euo pipefail
+          DEPLOY_ALL="${{ steps.target.outputs.deploy_all }}"
+          FUNCTIONS="${{ steps.target.outputs.functions }}"
+
+          if [ "$DEPLOY_ALL" = "true" ]; then
+            echo "Deploying ALL edge functions..."
+            supabase functions deploy --project-ref "$PROJECT_REF"
+          elif [ -n "$FUNCTIONS" ]; then
+            for fn in $FUNCTIONS; do
+              echo "Deploying: $fn"
+              supabase functions deploy "$fn" --project-ref "$PROJECT_REF"
+            done
+          else
+            echo "No functions to deploy"
+          fi
+
+      - name: Dry run — list targets
+        if: inputs.dry_run == true
+        run: |
+          DEPLOY_ALL="${{ steps.target.outputs.deploy_all }}"
+          FUNCTIONS="${{ steps.target.outputs.functions }}"
+          echo "DRY RUN — would deploy:"
+          if [ "$DEPLOY_ALL" = "true" ]; then
+            echo "  ALL functions"
+            ls -d supabase/functions/*/ | grep -v _shared | grep -v node_modules | sed 's|supabase/functions/||;s|/||'
+          elif [ -n "$FUNCTIONS" ]; then
+            for fn in $FUNCTIONS; do
+              echo "  - $fn"
+            done
+          else
+            echo "  (none — no changes detected)"
+          fi

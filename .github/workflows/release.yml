@@ -1,0 +1,20 @@
+name: Release Please
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@7987652d64b4581673a76e33ad5e98e3dd56832f # v4
+        with:
+          release-type: node
+          # Generates CHANGELOG.md from Conventional Commits
+          # Creates a release PR that bumps version + updates changelog
+          # When merged, creates a GitHub Release with tag
