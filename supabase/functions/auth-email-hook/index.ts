@@ -14,8 +14,6 @@ import { getCorsHeaders } from '../_shared/cors.ts'
 
 const log = createLogger('auth-email-hook')
 
-let corsHeaders: Record<string, string> = {}
-
 type AuthEmailActionType =
   | 'signup'
   | 'invite'
@@ -317,7 +315,7 @@ async function handlePreview(req: Request): Promise<Response> {
   })
 }
 
-async function handleWebhook(req: Request): Promise<Response> {
+async function handleWebhook(req: Request, corsHeaders: Record<string, string>): Promise<Response> {
   if (req.method !== 'POST') {
     return new Response('not allowed', { status: 400, headers: corsHeaders })
   }
@@ -372,7 +370,7 @@ async function handleWebhook(req: Request): Promise<Response> {
 }
 
 Deno.serve(async (req) => {
-  corsHeaders = getCorsHeaders(
+  const corsHeaders = getCorsHeaders(
     req,
     'webhook-id, webhook-signature, webhook-timestamp, x-supabase-client-runtime, x-supabase-client-runtime-version',
   )
@@ -387,7 +385,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    return await handleWebhook(req)
+    return await handleWebhook(req, corsHeaders)
   } catch (error) {
     log.error('webhook handler error', { err: error instanceof Error ? error.message : String(error) })
     const message = error instanceof Error ? error.message : 'Unknown error'

@@ -8,6 +8,7 @@
 -- Now requires an active investor_subscriptions row.
 
 DROP POLICY IF EXISTS "Investors manage own firesale interest" ON public.firesale_interest;
+DROP POLICY IF EXISTS "firesale_interest_investor" ON public.firesale_interest;
 
 -- SELECT + UPDATE + DELETE: investors see and manage their own rows.
 CREATE POLICY "Investors read own firesale interest"
@@ -41,8 +42,11 @@ CREATE POLICY "Investors with active subscription insert firesale interest"
 -- Clients should not be able to insert/delete usage rows directly.
 
 DROP POLICY IF EXISTS "Users insert own valuation usage" ON public.usage_ai_valuations;
+DROP POLICY IF EXISTS "usage_ai_valuations_insert" ON public.usage_ai_valuations;
 DROP POLICY IF EXISTS "Users insert own report usage" ON public.usage_property_reports;
+DROP POLICY IF EXISTS "usage_property_reports_insert" ON public.usage_property_reports;
 DROP POLICY IF EXISTS "Users insert own priority ad usage" ON public.usage_priority_ads;
+DROP POLICY IF EXISTS "usage_priority_ads_insert" ON public.usage_priority_ads;
 
 -- SELECT policies remain so the UI can display historical usage.
 -- INSERT/UPDATE/DELETE are now blocked for authenticated (RLS deny-by-default).

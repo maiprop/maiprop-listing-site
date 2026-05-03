@@ -17,8 +17,6 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 const log = createLogger("fetch-report-from-os");
 const limiter = makeRateLimiter({ bucket: "fetch-report-from-os", maxRequests: 20, windowMs: 60_000 });
 
-let corsHeaders: Record<string, string> = {};
-
 async function fetchWithTimeout(
   url: string,
   options: RequestInit,
@@ -55,7 +53,7 @@ async function getOsToken(
 }
 
 Deno.serve(async (req) => {
-  corsHeaders = getCorsHeaders(req);
+  const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";

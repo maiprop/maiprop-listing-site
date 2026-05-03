@@ -17,7 +17,6 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 const log = createLogger("poll-os-auctions");
 const limiter = makeRateLimiter({ bucket: "poll-os-auctions", maxRequests: 3, windowMs: 60_000 });
 
-let corsHeaders: Record<string, string> = {};
 
 // OS propertyCategory → Hub property_type (and optional land_type / commercial_type for filters)
 const CATEGORY_MAP: Record<string, string> = {
@@ -242,7 +241,8 @@ function mapAuctionToListing(a: any) {
 // ── Require agent role (JWT) to prevent unauthenticated PII/sync abuse ───────
 async function requireAgent(
   req: Request,
-  sb: ReturnType<typeof createClient>
+  sb: ReturnType<typeof createClient>,
+  corsHeaders: Record<string, string>,
 ): Promise<Response | null> {
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
@@ -269,7 +269,7 @@ async function requireAgent(
 // ── Main handler ────────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
-  corsHeaders = getCorsHeaders(req);
+  const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS")
     return new Response(null, { headers: corsHeaders });
 
@@ -281,7 +281,7 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
 
-  const authErr = await requireAgent(req, sb);
+  const authErr = await requireAgent(req, sb, corsHeaders);
   if (authErr) return authErr;
 
   const OS_URL = Deno.env.get("MAIPROP_OS_URL")?.replace(/\/$/, "");

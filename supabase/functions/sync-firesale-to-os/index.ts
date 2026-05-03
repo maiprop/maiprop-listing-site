@@ -15,8 +15,6 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 
 const log = createLogger("sync-firesale-to-os");
 
-let corsHeaders: Record<string, string> = {};
-
 const TYPE_MAP: Record<string, string> = {
   apartment:  "RESIDENCE",
   house:      "HOUSE",
@@ -71,7 +69,8 @@ async function logSync(
 // ── Require agent role to prevent unauthenticated sync / PII exposure ───────────
 async function requireAgent(
   req: Request,
-  sb: ReturnType<typeof createClient>
+  sb: ReturnType<typeof createClient>,
+  corsHeaders: Record<string, string>,
 ): Promise<Response | null> {
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
@@ -97,7 +96,7 @@ async function requireAgent(
 
 // ── Main handler ──────────────────────────────────────────────────────────────
 Deno.serve(async (req) => {
-  corsHeaders = getCorsHeaders(req);
+  const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const supabase = createClient(
@@ -105,7 +104,7 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
-  const authErr = await requireAgent(req, supabase);
+  const authErr = await requireAgent(req, supabase, corsHeaders);
   if (authErr) return authErr;
 
   const OS_URL   = Deno.env.get("MAIPROP_OS_URL")?.replace(/\/$/, "");

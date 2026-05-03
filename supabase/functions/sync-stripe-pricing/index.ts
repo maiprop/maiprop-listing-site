@@ -16,8 +16,6 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 const _log = createLogger("sync-stripe-pricing");
 const limiter = makeRateLimiter({ bucket: "sync-stripe-pricing", maxRequests: 5, windowMs: 60_000 });
 
-let corsHeaders: Record<string, string> = {};
-
 type SyncResult = {
   id: string;
   key: string;
@@ -28,7 +26,7 @@ type SyncResult = {
 };
 
 Deno.serve(async (req) => {
-  corsHeaders = getCorsHeaders(req);
+  const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
