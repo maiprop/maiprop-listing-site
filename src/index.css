@@ -32,6 +32,10 @@
     /* Brand book: navy + indigo + purple. Cyan/mint is used sparingly as a highlight. */
     --brand-cyan: 178 89% 63%;
     --brand-cyan-glow: 178 89% 75%;
+    /* AA-contrast variant of brand-cyan for use as a background under white
+     * text (e.g. badges, gradient buttons). The lighter brand-cyan above is
+     * kept for decorative glows/dots/blurs where text is not overlaid. */
+    --brand-cyan-deep: 178 75% 28%;
     --brand-purple: 261 84% 52%;
     --brand-purple-dark: 261 70% 48%;
     --brand-navy: 240 100% 17%;
@@ -107,6 +111,12 @@
 
     --brand-cyan: 178 85% 58%;
     --brand-cyan-glow: 178 85% 70%;
+    /* In dark mode --primary-foreground is dark navy (hsl(240 100% 10%)),
+     * so the foreground over this token is dark text — the light cyan
+     * already provides ~13.9:1 contrast and we keep it identical to
+     * --brand-cyan. (The "deep" semantics in light mode are about giving
+     * white text an AA-safe background; in dark mode the role inverts.) */
+    --brand-cyan-deep: 178 85% 58%;
     --brand-purple: 261 80% 68%;
     --brand-purple-dark: 261 65% 52%;
     --brand-navy: 240 100% 17%;
@@ -178,6 +188,7 @@
     --ring: 261 70% 48%;
     --brand-cyan: 178 89% 63%;
     --brand-cyan-glow: 178 89% 75%;
+    --brand-cyan-deep: 178 75% 28%;
     --brand-purple: 261 84% 52%;
     --brand-purple-dark: 261 70% 48%;
     --brand-navy: 240 100% 17%;

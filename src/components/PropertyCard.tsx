@@ -70,7 +70,8 @@ interface PropertyCardProps {
 }
 
 const energyColors: Record<string, string> = {
-  "A+": "bg-brand-cyan", A: "bg-brand-cyan/80", "B+": "bg-primary/80",
+  /* A+/A use brand-cyan-deep so the white text in line ~369 meets AA contrast. */
+  "A+": "bg-brand-cyan-deep", A: "bg-brand-cyan-deep/85", "B+": "bg-primary/80",
   B: "bg-primary/60", C: "bg-brand-gold/80", D: "bg-brand-gold/60",
   E: "bg-destructive/80", F: "bg-destructive", G: "bg-destructive",
 };

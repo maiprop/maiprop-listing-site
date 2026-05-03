@@ -60,35 +60,59 @@ describe("buildListingsQuery — sort variants", () => {
     expect(orderCalls).toEqual(["is_featured", "priority_placement", "created_at"]);
   });
 
-  it("'price-asc' orders by price ascending", () => {
+  /**
+   * Every non-featured sort still has to lead with is_featured DESC,
+   * priority_placement DESC so that paginated infinite-scroll pages stay
+   * stable when the client re-applies its promoted-first sort. The
+   * user-selected sort key is appended after the promoted-first prefix.
+   */
+  it("'price-asc' leads with promoted-first then orders by price ascending", () => {
     buildListingsQuery({ sort: "price-asc" });
-    const order = calls("order")[0];
-    expect(order.args).toEqual(["price", { ascending: true }]);
-  });
-
-  it("'price-desc' orders by price descending", () => {
-    buildListingsQuery({ sort: "price-desc" });
-    expect(calls("order")[0].args).toEqual(["price", { ascending: false }]);
-  });
-
-  it("'newest' orders by created_at descending", () => {
-    buildListingsQuery({ sort: "newest" });
-    expect(calls("order")[0].args).toEqual(["created_at", { ascending: false }]);
-  });
-
-  it("'ai-score' orders by ai_score with nullsFirst:false", () => {
-    buildListingsQuery({ sort: "ai-score" });
-    expect(calls("order")[0].args).toEqual([
-      "ai_score",
-      { ascending: false, nullsFirst: false },
+    const orderArgs = calls("order").map((c) => c.args);
+    expect(orderArgs).toEqual([
+      ["is_featured", { ascending: false }],
+      ["priority_placement", { ascending: false }],
+      ["price", { ascending: true }],
     ]);
   });
 
-  it("'views' orders by views_count with nullsFirst:false", () => {
+  it("'price-desc' leads with promoted-first then orders by price descending", () => {
+    buildListingsQuery({ sort: "price-desc" });
+    const orderArgs = calls("order").map((c) => c.args);
+    expect(orderArgs).toEqual([
+      ["is_featured", { ascending: false }],
+      ["priority_placement", { ascending: false }],
+      ["price", { ascending: false }],
+    ]);
+  });
+
+  it("'newest' leads with promoted-first then orders by created_at descending", () => {
+    buildListingsQuery({ sort: "newest" });
+    const orderArgs = calls("order").map((c) => c.args);
+    expect(orderArgs).toEqual([
+      ["is_featured", { ascending: false }],
+      ["priority_placement", { ascending: false }],
+      ["created_at", { ascending: false }],
+    ]);
+  });
+
+  it("'ai-score' leads with promoted-first then orders by ai_score with nullsFirst:false", () => {
+    buildListingsQuery({ sort: "ai-score" });
+    const orderArgs = calls("order").map((c) => c.args);
+    expect(orderArgs).toEqual([
+      ["is_featured", { ascending: false }],
+      ["priority_placement", { ascending: false }],
+      ["ai_score", { ascending: false, nullsFirst: false }],
+    ]);
+  });
+
+  it("'views' leads with promoted-first then orders by views_count with nullsFirst:false", () => {
     buildListingsQuery({ sort: "views" });
-    expect(calls("order")[0].args).toEqual([
-      "views_count",
-      { ascending: false, nullsFirst: false },
+    const orderArgs = calls("order").map((c) => c.args);
+    expect(orderArgs).toEqual([
+      ["is_featured", { ascending: false }],
+      ["priority_placement", { ascending: false }],
+      ["views_count", { ascending: false, nullsFirst: false }],
     ]);
   });
 });

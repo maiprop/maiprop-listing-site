@@ -67,6 +67,8 @@ export default {
           cyan: "hsl(var(--brand-cyan))",
           "cyan-glow": "hsl(var(--brand-cyan-glow))",
           "cyan-soft": "hsl(var(--brand-cyan-soft))",
+          /* AA-contrast variant for backgrounds under white text. */
+          "cyan-deep": "hsl(var(--brand-cyan-deep))",
           purple: "hsl(var(--brand-purple))",
           "purple-dark": "hsl(var(--brand-purple-dark))",
           "purple-soft": "hsl(var(--brand-purple-soft))",

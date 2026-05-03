@@ -7,8 +7,15 @@ import { test, expect } from "@playwright/test";
 test.describe("Listings browse", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/listings");
-    // Wait for the page to settle
+    // networkidle is unreliable on /listings — Mapbox tile fetches keep the
+    // network busy past the 30s default timeout. Wait for `load` (initial
+    // resources finished) plus the React-rendered <main> landmark so the
+    // page has actually mounted before assertions run.
     await page.waitForLoadState("load");
+    await page
+      .locator("#main-content, main")
+      .first()
+      .waitFor({ state: "attached", timeout: 15_000 });
   });
 
   test("page title contains 'Listings' or 'Properties'", async ({ page }) => {

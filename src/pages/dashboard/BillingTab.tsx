@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import {
   CreditCard, FileText, ExternalLink, Loader2, CheckCircle2, AlertCircle,
   Calendar, RefreshCw, Zap, Tag, Crown, Star, BarChart2, Globe,
-  Bell, Layers, Shield, TrendingUp,
+  Bell, Layers, Shield, TrendingUp, Users, UserCheck, Briefcase, Mail,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
@@ -111,8 +111,12 @@ const ADDONS_BY_ROLE: Record<string, AddonSection[]> = {
       category: "Agency Add-ons",
       accent: "rose",
       items: [
-        { name: "Extra Priority Ad",    price: "€8",  unit: "/ ad",    desc: "Push any listing to the top of search results for its area.", icon: Bell },
-        { name: "Featured Directory",   price: "€59", unit: "/ month", desc: "Top-of-category placement in the Professionals directory.", icon: Shield },
+        { name: "Extra Agent Seat",       price: "€39", unit: "/ seat / mo",  desc: "Add another agent to your agency under a single Pro plan. Shared listing pool.", icon: Users },
+        { name: "Agency-Branded Profile", price: "€49", unit: "/ month",      desc: "Custom logo, colours and team page on your agency profile.", icon: Crown },
+        { name: "Dedicated Account Mgr", price: "€199",unit: "/ month",      desc: "A named account manager for onboarding, training & support.", icon: UserCheck },
+        { name: "White-label Domain",     price: "€149",unit: "/ month",      desc: "Serve listings on your own domain (yourname.gr).", icon: Globe, badge: "Enterprise" },
+        { name: "Extra Priority Ad",      price: "€8",  unit: "/ ad",         desc: "Push any listing to the top of search results for its area.", icon: Bell },
+        { name: "Featured Directory",     price: "€59", unit: "/ month",      desc: "Top-of-category placement in the Professionals directory.", icon: Shield },
       ],
     },
   ],
@@ -143,6 +147,16 @@ const ADDONS_BY_ROLE: Record<string, AddonSection[]> = {
       items: [
         { name: "Featured Professional", price: "€59", unit: "/ month", desc: "Top-of-category placement in the Professionals directory for 30 days.", icon: Crown },
         { name: "Extra Priority Ad",     price: "€8",  unit: "/ ad",    desc: "Push a listing to the top of search results when acting as a property manager.", icon: Bell },
+      ],
+    },
+    {
+      category: "Premium Tools",
+      accent: "rose",
+      items: [
+        { name: "API Access",             price: "€59", unit: "/ month",  desc: "Programmatic access to your bookings, leads and AI tools — for valuers and legal practices.", icon: Globe, badge: "Pro+" },
+        { name: "Referral Network Slot",  price: "€39", unit: "/ month",  desc: "Get matched with cross-discipline referrals from agents and other professionals.", icon: Briefcase },
+        { name: "Extra Client Seat",      price: "€19", unit: "/ seat / mo", desc: "Add a colleague or paralegal to your account under a single Pro plan.", icon: Users },
+        { name: "Branded Email Templates",price: "€15", unit: "/ month",  desc: "Send all client communications from your own branded templates.", icon: Mail },
       ],
     },
     {
@@ -426,6 +440,20 @@ export default function BillingTab() {
         <p className="text-sm text-muted-foreground mb-6">
           Your plan includes a generous baseline. Add exactly what you need — no upgrade required.
         </p>
+
+        {(participantType === "investor" || participantType === "institutional") && (
+          <div className="mb-6 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 flex items-start gap-3">
+            <Shield className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-foreground">Invitation-only access</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Your subscription tier and pricing were set when your application was approved.
+                For subscription changes contact <a href="mailto:investor@maiprop.co" className="underline hover:text-foreground">investor@maiprop.co</a>.
+                Add-ons below can be purchased on demand without changing your tier.
+              </p>
+            </div>
+          </div>
+        )}
 
         <div className="space-y-8">
           {addonSections.map((section) => (
