@@ -7,6 +7,7 @@ import { createClient } from "@supabase/supabase-js";
 import { readFileSync, existsSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+import { assertNotProduction } from "./_prod-guard.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
@@ -31,6 +32,8 @@ if (!url || !serviceKey) {
   console.error("Need VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (e.g. in .env)");
   process.exit(1);
 }
+
+assertNotProduction(url, "delete-past-auctions.mjs");
 
 const supabase = createClient(url, serviceKey, { auth: { persistSession: false } });
 
