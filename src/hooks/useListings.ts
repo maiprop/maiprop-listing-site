@@ -88,15 +88,23 @@ export function buildListingsQuery(filters?: ListingsFilters, from = 0, pageSize
     .from("listings")
     .select(`*, listing_images(url, sort_order)`);
 
-  // Order: featured/priority first, then by user choice
+  // Promoted listings (is_featured + priority_placement) always lead, then
+  // ties broken by the user-selected sort. The client (Listings.tsx) applies
+  // the same promoted-first rule for all non-featured sorts; the server must
+  // match so that paginated infinite scroll does not produce list jumps when
+  // a later page contains a promoted row that the client then re-sorts to the
+  // top of the already-rendered list. The "featured" sort uses the same
+  // ordering — featured first, priority next, then created_at — so we share
+  // a single ORDER BY chain.
+  query = query
+    .order("is_featured", { ascending: false })
+    .order("priority_placement", { ascending: false });
   if (sort === "price-asc") query = query.order("price", { ascending: true });
   else if (sort === "price-desc") query = query.order("price", { ascending: false });
   else if (sort === "newest") query = query.order("created_at", { ascending: false });
   else if (sort === "ai-score") query = query.order("ai_score", { ascending: false, nullsFirst: false });
   else if (sort === "views") query = query.order("views_count", { ascending: false, nullsFirst: false });
-  else {
-    query = query.order("is_featured", { ascending: false }).order("priority_placement", { ascending: false }).order("created_at", { ascending: false });
-  }
+  else query = query.order("created_at", { ascending: false });
 
   query = query.range(from, from + pageSize - 1);
 
