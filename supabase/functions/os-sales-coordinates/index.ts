@@ -9,38 +9,16 @@
  */
 
 import { createLogger } from "../_shared/logger.ts";
+import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
+import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 
 const log = createLogger("os-sales-coordinates");
 
-const ALLOWED_ORIGINS = [
-  "https://maiprop.co", "https://www.maiprop.co", "https://app.maiprop.co", "https://portal.maiprop.co",
-  "http://localhost:8080", "http://localhost:8081", "http://localhost:8082",
-  "http://localhost:8083", "http://localhost:5173",
-];
-
-function corsHeaders(req: Request): Record<string, string> {
-  const origin = req.headers.get("origin") ?? "";
-  return {
-    "Access-Control-Allow-Origin": ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0],
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Vary": "Origin",
-  };
-}
-
-// Simple in-memory rate limit: max 30 req/min per IP
-const ipWindows = new Map<string, { count: number; reset: number }>();
-function isRateLimited(ip: string): boolean {
-  const now = Date.now();
-  const window = ipWindows.get(ip);
-  if (!window || now > window.reset) {
-    ipWindows.set(ip, { count: 1, reset: now + 60_000 });
-    return false;
-  }
-  if (window.count >= 30) return true;
-  window.count++;
-  return false;
-}
+const limiter = makeRateLimiter({
+  bucket: "os-sales-coordinates",
+  maxRequests: 30,
+  windowMs: 60_000,
+});
 
 
 interface RequestBody {
@@ -95,17 +73,13 @@ function _generateMockSalesDefault(): SaleRecord[] {
 }
 
 Deno.serve(async (req) => {
-  const hdrs = corsHeaders(req);
+  const corsPreflight = handleCors(req);
+  if (corsPreflight) return corsPreflight;
+  const hdrs = getCorsHeaders(req);
 
-  if (req.method === "OPTIONS") return new Response("ok", { headers: hdrs });
-
-  // Rate limit by IP
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0].trim() ?? "unknown";
-  if (isRateLimited(ip)) {
-    return new Response(JSON.stringify({ error: "Rate limit exceeded. Max 30 requests/min." }), {
-      status: 429, headers: { ...hdrs, "Content-Type": "application/json" },
-    });
-  }
+  // DB-backed rate limit shared across edge regions/isolates: 30 req/min per IP.
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  if (await limiter.isLimited(ip)) return tooManyRequestsResponse(hdrs);
 
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed. Use POST." }), {
