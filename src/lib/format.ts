@@ -21,6 +21,22 @@ export function formatPrice(n: number | null | undefined): string {
 }
 
 /**
+ * Format an integer number of cents as a Euro string with always 2 decimals,
+ * e.g. 49 → "€0,49", 14999 → "€149,99". Returns "—" for null/undefined/non-finite.
+ *
+ * Use this for amounts stored as integer cents (e.g. Stripe). For whole-euro
+ * values prefer formatPrice().
+ */
+export function formatPriceFromCents(cents: number | null | undefined): string {
+  if (cents == null || !Number.isFinite(cents)) return "—";
+  const euros = Number(cents) / 100;
+  return `€${euros.toLocaleString("el-GR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+/**
  * Format an ISO date string as a short human-readable date, e.g. "12 Apr 2026" / "12 Απρ 2026".
  * Returns "—" for null/undefined/empty values.
  */
