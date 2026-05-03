@@ -8,8 +8,8 @@
  * verify_jwt = false — callable without auth (used on public property pages).
  */
 
-import { createLogger } from "../_shared/logger.ts";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
+import { createLogger } from "../_shared/logger.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 
 const log = createLogger("os-sales-coordinates");

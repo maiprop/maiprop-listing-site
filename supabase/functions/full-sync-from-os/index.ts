@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * full-sync-from-os
  * ─────────────────────────────────────────────────────────────────────────────
@@ -13,14 +12,10 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { createLogger } from "../_shared/logger.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 
+import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
+
 const log = createLogger("full-sync-from-os");
 const limiter = makeRateLimiter({ bucket: "full-sync-from-os", maxRequests: 3, windowMs: 60_000 });
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
 
 const CATEGORY_MAP: Record<string, string> = {
   RESIDENCE: "apartment",
@@ -95,6 +90,7 @@ function mapOwnershipStatusToTag(rawOwnership?: string | null): string | null {
   return `ownership:${occ.toLowerCase()}`;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- raw OS auction shape; partial keys read defensively
 function buildTitle(a: any): string {
   const catKey = mapCategory(a.propertyCategory);
   const catGr = CATEGORY_GR[catKey] ?? "Ακίνητο";
@@ -142,12 +138,13 @@ async function getOsToken(
 }
 
 async function logSync(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- supabase client typing varies between v2 versions
   sb: any,
   entity_type: string,
   status: string,
   error_message?: string | null,
-  payload?: any,
-  records_affected = 0
+  payload?: unknown,
+  records_affected = 0,
 ) {
   try {
     await sb.from("sync_log").insert({
@@ -164,6 +161,7 @@ async function logSync(
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- raw OS auction shape; many optional/loosely-typed fields
 function mapAuctionToListing(a: any) {
   const osId = String(a.auctionListingId ?? "unknown");
   const tagKey = `os_auction:${osId}`;
@@ -238,7 +236,8 @@ const MAX_PAGES = 200; // safety cap
 
 async function requireAgent(
   req: Request,
-  sb: ReturnType<typeof createClient>
+  sb: ReturnType<typeof createClient>,
+  corsHeaders: Record<string, string>,
 ): Promise<Response | null> {
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
@@ -263,8 +262,9 @@ async function requireAgent(
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS")
-    return new Response(null, { headers: corsHeaders });
+  const corsPreflight = handleCors(req);
+  if (corsPreflight) return corsPreflight;
+  const corsHeaders = getCorsHeaders(req);
 
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
   if (await limiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);
@@ -274,7 +274,7 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
 
-  const authErr = await requireAgent(req, sb);
+  const authErr = await requireAgent(req, sb, corsHeaders);
   if (authErr) return authErr;
 
   const OS_URL = Deno.env.get("MAIPROP_OS_URL")?.replace(/\/$/, "");
@@ -349,7 +349,7 @@ Deno.serve(async (req) => {
     }
 
     const today = new Date().toISOString().split("T")[0];
-    const baseFilter: Record<string, any> = {
+    const baseFilter: Record<string, unknown> = {
       auctionDateFrom: body.auctionDateFrom ?? today,
       ...(body.auctionDateTo && { auctionDateTo: body.auctionDateTo }),
       ...(body.propertyCategories && {
@@ -414,9 +414,16 @@ Deno.serve(async (req) => {
         );
       }
 
-      const auctJson: any = await auctRes.json();
-      const auctions: any[] = Array.isArray(auctJson)
-        ? auctJson
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- OS API response is dynamic; readers handle missing fields
+      type RawAuction = any;
+      interface AuctionListResponse {
+        data?: RawAuction[];
+        pagination?: { totalElements?: number };
+      }
+      const auctJsonRaw: unknown = await auctRes.json();
+      const auctJson: AuctionListResponse = (auctJsonRaw ?? {}) as AuctionListResponse;
+      const auctions: RawAuction[] = Array.isArray(auctJsonRaw)
+        ? (auctJsonRaw as RawAuction[])
         : Array.isArray(auctJson.data)
         ? auctJson.data
         : [];
@@ -442,7 +449,9 @@ Deno.serve(async (req) => {
         }
       }
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- listing rows mirror the wide DB schema
       const toInsert: any[] = [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- listing update payloads mirror the wide DB schema
       const toUpdate: { id: string; data: any }[] = [];
       for (const { tagKey, row } of mapped) {
         if (existingMap[tagKey]) {
@@ -538,10 +547,11 @@ Deno.serve(async (req) => {
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (err: any) {
-    log.error("sync error", { err: err?.message ?? String(err) });
+  } catch (err: unknown) {
+    const errMessage = err instanceof Error ? err.message : String(err);
+    log.error("sync error", { err: errMessage });
     return new Response(
-      JSON.stringify({ ok: false, error: err.message }),
+      JSON.stringify({ ok: false, error: errMessage }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

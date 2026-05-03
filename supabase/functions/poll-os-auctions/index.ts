@@ -13,14 +13,10 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { createLogger } from "../_shared/logger.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 
+import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
+
 const log = createLogger("poll-os-auctions");
 const limiter = makeRateLimiter({ bucket: "poll-os-auctions", maxRequests: 3, windowMs: 60_000 });
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
 
 // OS propertyCategory → Hub property_type (and optional land_type / commercial_type for filters)
 const CATEGORY_MAP: Record<string, string> = {
@@ -245,7 +241,8 @@ function mapAuctionToListing(a: any) {
 // ── Require agent role (JWT) to prevent unauthenticated PII/sync abuse ───────
 async function requireAgent(
   req: Request,
-  sb: ReturnType<typeof createClient>
+  sb: ReturnType<typeof createClient>,
+  corsHeaders: Record<string, string>,
 ): Promise<Response | null> {
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
@@ -272,8 +269,9 @@ async function requireAgent(
 // ── Main handler ────────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS")
-    return new Response(null, { headers: corsHeaders });
+  const corsPreflight = handleCors(req);
+  if (corsPreflight) return corsPreflight;
+  const corsHeaders = getCorsHeaders(req);
 
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
   if (await limiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);
@@ -283,7 +281,7 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
 
-  const authErr = await requireAgent(req, sb);
+  const authErr = await requireAgent(req, sb, corsHeaders);
   if (authErr) return authErr;
 
   const OS_URL = Deno.env.get("MAIPROP_OS_URL")?.replace(/\/$/, "");

@@ -1,16 +1,16 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import type { Profile } from "@/contexts/AuthContext";
 
 export function ProfileEditor({
   profile,
   onUpdate,
   onSwitchToSettings,
 }: {
-  profile: any;
-  onUpdate: (updates: any) => Promise<{ error: Error | null }>;
+  profile: Profile | null;
+  onUpdate: (updates: Partial<Profile>) => Promise<{ error: Error | null }>;
   onSwitchToSettings?: () => void;
 }) {
   type ProfileForm = { display_name: string; first_name: string; last_name: string; phone: string; city: string; website_url: string; video_link: string };
