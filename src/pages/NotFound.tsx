@@ -1,6 +1,7 @@
 import { useLocation, Link } from "react-router-dom";
 import { useEffect } from "react";
 import { Home, Search, Gavel, Flame, Building2 } from "lucide-react";
+import * as Sentry from "@sentry/react";
 import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 
@@ -8,7 +9,11 @@ const NotFound = () => {
   const location = useLocation();
 
   useEffect(() => {
-    // 404 hit — no logging to avoid noise in production
+    Sentry.addBreadcrumb({
+      category: "navigation",
+      message: `404: ${location.pathname}`,
+      level: "warning",
+    });
   }, [location.pathname]);
 
   const quickLinks = [

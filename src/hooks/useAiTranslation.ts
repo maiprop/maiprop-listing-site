@@ -2,8 +2,9 @@
  * useAiTranslation — fetches AI-translated strings for non-static locales
  * and loads them into i18next at runtime.
  *
- * Translations are cached in sessionStorage to avoid repeat API calls.
- * Static locales ("en", "el") are skipped — they're bundled as JSON.
+ * Translations are cached in localStorage (persists across sessions) with
+ * LRU eviction to stay within the 5 MB quota. Static locales ("en", "el")
+ * are skipped — they're bundled as JSON.
  */
 
 import { useState, useEffect } from "react";
@@ -28,6 +29,39 @@ function flattenObject(obj: Record<string, unknown>, prefix = ""): Record<string
 
 const FLAT_EN = flattenObject(en as Record<string, unknown>);
 
+/** djb2 hash of source strings — cache auto-invalidates when en.json changes. */
+function hashSource(obj: Record<string, string>): string {
+  const str = JSON.stringify(obj);
+  let h = 5381;
+  for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+}
+const EN_HASH = hashSource(FLAT_EN);
+
+const I18N_PREFIX = "maiprop_i18n_";
+const MAX_CACHED_LOCALES = 10;
+
+/** Evict oldest cached locale when we exceed the limit. */
+function evictOldestLocale(): void {
+  try {
+    const entries: { key: string; ts: number }[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key?.startsWith(I18N_PREFIX)) continue;
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      try {
+        const parsed = JSON.parse(raw) as { ts?: number };
+        entries.push({ key, ts: parsed.ts ?? 0 });
+      } catch { entries.push({ key, ts: 0 }); }
+    }
+    if (entries.length < MAX_CACHED_LOCALES) return;
+    entries.sort((a, b) => a.ts - b.ts);
+    const toRemove = entries.slice(0, entries.length - MAX_CACHED_LOCALES + 1);
+    for (const { key } of toRemove) localStorage.removeItem(key);
+  } catch { /* storage unavailable */ }
+}
+
 export type TranslationStatus = "idle" | "loading" | "ready" | "error";
 
 export function useAiTranslation() {
@@ -49,17 +83,22 @@ export function useAiTranslation() {
       return;
     }
 
-    // Check sessionStorage cache
-    const cacheKey = `maiprop_i18n_${locale}`;
-    const cached = sessionStorage.getItem(cacheKey);
+    // Check localStorage cache (persists across sessions)
+    const cacheKey = `${I18N_PREFIX}${EN_HASH}_${locale}`;
+    const cached = localStorage.getItem(cacheKey);
     if (cached) {
       try {
-        const parsed = JSON.parse(cached) as Record<string, string>;
-        i18n.addResourceBundle(locale, "translation", parsed, true, true);
-        setStatus("ready");
-        return;
+        const parsed = JSON.parse(cached) as { strings: Record<string, string>; ts: number; v?: string };
+        if (parsed.strings && parsed.v === EN_HASH) {
+          i18n.addResourceBundle(locale, "translation", parsed.strings, true, true);
+          try {
+            localStorage.setItem(cacheKey, JSON.stringify({ ...parsed, ts: Date.now() }));
+          } catch { /* quota full — cache entry remains valid */ }
+          setStatus("ready");
+          return;
+        }
       } catch (_err: unknown) {
-        sessionStorage.removeItem(cacheKey);
+        localStorage.removeItem(cacheKey);
       }
     }
 
@@ -78,7 +117,10 @@ export function useAiTranslation() {
         }
         const strings = data.strings as Record<string, string>;
         i18n.addResourceBundle(locale, "translation", strings, true, true);
-        try { sessionStorage.setItem(cacheKey, JSON.stringify(strings)); } catch (_err: unknown) { /* quota full */ }
+        try {
+          evictOldestLocale();
+          localStorage.setItem(cacheKey, JSON.stringify({ strings, ts: Date.now(), v: EN_HASH }));
+        } catch (_err: unknown) { /* quota full */ }
         setStatus("ready");
       })
       .catch((err: unknown) => {
