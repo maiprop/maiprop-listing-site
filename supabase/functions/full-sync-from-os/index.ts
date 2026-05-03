@@ -414,10 +414,16 @@ Deno.serve(async (req) => {
         );
       }
 
-      const auctJson: unknown = await auctRes.json();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- OS API response is dynamic; readers handle missing fields
-      const auctions: any[] = Array.isArray(auctJson)
-        ? auctJson
+      type RawAuction = any;
+      interface AuctionListResponse {
+        data?: RawAuction[];
+        pagination?: { totalElements?: number };
+      }
+      const auctJsonRaw: unknown = await auctRes.json();
+      const auctJson: AuctionListResponse = (auctJsonRaw ?? {}) as AuctionListResponse;
+      const auctions: RawAuction[] = Array.isArray(auctJsonRaw)
+        ? (auctJsonRaw as RawAuction[])
         : Array.isArray(auctJson.data)
         ? auctJson.data
         : [];
