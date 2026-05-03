@@ -51,7 +51,7 @@ export function PropertyReportCard({ listingId, listing }: Props) {
       const { data } = await supabase.functions.invoke("property-valuation", { body });
       if (data?.estimatedValue) {
         setReportResult({ estimatedValue: data.estimatedValue, rangeLow: data.rangeLow ?? data.estimatedValue, rangeHigh: data.rangeHigh ?? data.estimatedValue, marketComparison: data.marketComparison ?? "at_market", marketComparisonPct: data.marketComparisonPct ?? 0, confidenceLabel: data.confidenceLabel ?? "Medium", source: "ai" });
-        void queryClient.invalidateQueries({ queryKey: ["usage_ai_calls", "property-valuation"] });
+        void queryClient.invalidateQueries({ queryKey: ["usage_ai_calls", "report-usage"] });
       }
     } finally {
       setReportLoading(false);

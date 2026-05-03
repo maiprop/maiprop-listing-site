@@ -67,11 +67,12 @@ export function useReportUsage() {
   const monthStart = startOfMonth();
 
   return useQuery({
-    queryKey: ["usage_ai_calls", "property-valuation", user?.id, monthStart],
+    // Key uses "report-usage" to avoid React Query deduplication with
+    // useValuationUsage. Both query the same bucket because
+    // PropertyReportCard falls back to the property-valuation edge fn.
+    queryKey: ["usage_ai_calls", "report-usage", user?.id, monthStart],
     enabled: !!user,
     queryFn: async () => {
-      // PropertyReportCard falls back to property-valuation edge function
-      // which records under this bucket; fetch-report-from-os doesn't record usage.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data, error } = await (supabase.from as any)("usage_ai_calls")
         .select("id")
