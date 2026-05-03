@@ -19,7 +19,9 @@ import { test, expect, type Page, type BrowserContext } from "@playwright/test";
 // Constants
 // ---------------------------------------------------------------------------
 
-const BASE_URL = "http://localhost:8080";
+// baseURL mirrors playwright.config.ts so newContext() inherits the same target
+// when CI is running against the preview server (port 4173).
+const BASE_URL = process.env.CI ? "http://localhost:4173" : "http://localhost:8080";
 const PASSWORD = "Demo2025!";
 const hasCredentials = !!(process.env.E2E_TEST_EMAIL && process.env.E2E_TEST_PASSWORD);
 

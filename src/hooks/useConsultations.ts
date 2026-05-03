@@ -85,7 +85,23 @@ export function useMyConsultationRequests() {
   });
 }
 
+/**
+ * Resolves the current user's `professionals.id` so consultation mutations
+ * can add an ownership filter alongside the row id. Returns null if the
+ * user isn't logged in or has no professional profile.
+ */
+async function getCurrentProfessionalId(userId: string | undefined): Promise<string | null> {
+  if (!userId) return null;
+  const { data } = await supabase
+    .from("professionals")
+    .select("id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  return data?.id ?? null;
+}
+
 export function useUpdateConsultationRequest() {
+  const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({
@@ -95,10 +111,17 @@ export function useUpdateConsultationRequest() {
       id: string;
       updates: { status?: string; notes?: string; lead_status?: string };
     }) => {
+      // Defence-in-depth ownership filter: RLS already restricts the update
+      // server-side, but the repo rule (CLAUDE.md) is to also filter client-side
+      // so a malformed/forged id can't accidentally target someone else's row.
+      const proId = await getCurrentProfessionalId(user?.id);
+      if (!proId) throw new Error("Not authorised: no professional profile");
+
       const { data, error } = await supabase
         .from("consultation_requests")
         .update(updates)
         .eq("id", id)
+        .eq("professional_id", proId)
         .select()
         .single();
       if (error) throw error;
@@ -113,6 +136,7 @@ export function useUpdateConsultationRequest() {
 }
 
 export function useBulkUpdateConsultationRequests() {
+  const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({
@@ -122,10 +146,14 @@ export function useBulkUpdateConsultationRequests() {
       ids: string[];
       updates: { status?: string; lead_status?: string };
     }) => {
+      const proId = await getCurrentProfessionalId(user?.id);
+      if (!proId) throw new Error("Not authorised: no professional profile");
+
       const { error } = await supabase
         .from("consultation_requests")
         .update(updates)
-        .in("id", ids);
+        .in("id", ids)
+        .eq("professional_id", proId);
       if (error) throw error;
     },
     onSuccess: () => {

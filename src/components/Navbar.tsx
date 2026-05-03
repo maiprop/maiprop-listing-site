@@ -73,9 +73,14 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
   });
 
   const markNotifRead = async (id: string) => {
-    await supabase.from("notifications").update({ read: true }).eq("id", id);
-    queryClient.invalidateQueries({ queryKey: ["notifications_unread", user?.id] });
-    queryClient.invalidateQueries({ queryKey: ["notifications_list", user?.id] });
+    if (!user) return;
+    // Defence in depth: include user_id ownership filter in addition to id —
+    // RLS protects this server-side but the repo rule is to also filter
+    // client-side so a malformed/forged id can't be used to update someone
+    // else's notification by accident.
+    await supabase.from("notifications").update({ read: true }).eq("id", id).eq("user_id", user.id);
+    queryClient.invalidateQueries({ queryKey: ["notifications_unread", user.id] });
+    queryClient.invalidateQueries({ queryKey: ["notifications_list", user.id] });
   };
 
   const markAllRead = async () => {

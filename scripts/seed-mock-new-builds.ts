@@ -5,9 +5,12 @@
  */
 
 import { createClient } from "@supabase/supabase-js";
+import { assertNotProduction } from "./_prod-guard";
 import { getSeedEnv } from "./_seed-env";
 
 const { supabaseUrl: SUPABASE_URL, serviceRoleKey: SERVICE_ROLE_KEY } = getSeedEnv();
+
+assertNotProduction(SUPABASE_URL, "seed-mock-new-builds.ts");
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
