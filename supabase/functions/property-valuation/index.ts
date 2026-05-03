@@ -2,6 +2,7 @@ import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 import { openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
 import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
+import { requireProSubscription } from "../_shared/proGate.ts";
 import { createLogger } from "../_shared/logger.ts";
 
 const log = createLogger("property-valuation");
@@ -221,6 +222,12 @@ Deno.serve(async (req) => {
   const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
   if (quota.errorResponse) return quota.errorResponse;
   const quotaUserId = quota.userId;
+
+  // Pro subscription gate — this is a Pro-only feature
+  if (quotaUserId) {
+    const proCheck = await requireProSubscription(quotaUserId, corsHeaders);
+    if (proCheck.errorResponse) return proCheck.errorResponse;
+  }
 
   try {
     const body = await req.json();
