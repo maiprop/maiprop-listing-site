@@ -18,8 +18,10 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 
 const log = createLogger("stripe-webhook");
 
+let corsHeaders: Record<string, string> = {};
+
 Deno.serve(async (req) => {
-  const corsHeaders = getCorsHeaders(req, "stripe-signature");
+  corsHeaders = getCorsHeaders(req, "stripe-signature");
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
