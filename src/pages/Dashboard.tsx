@@ -53,6 +53,7 @@ const ProjectsTab = lazy(() => import("./dashboard/ProjectsTab"));
 const PortfoliosTab = lazy(() => import("./dashboard/PortfoliosTab"));
 const AnalyticsTab = lazy(() => import("./dashboard/AnalyticsTab"));
 const BillingTab = lazy(() => import("./dashboard/BillingTab"));
+const DataInputTab = lazy(() => import("./dashboard/DataInputTab"));
 
 /** Lazy-tab fallback with a 5-second timeout before showing a retry link */
 function TabFallback() {
@@ -640,6 +641,13 @@ export default function Dashboard() {
           {activeSection === "analytics" && navItems.some(i => i.key === "analytics") && (
             <Suspense fallback={<TabFallback />}>
               <AnalyticsTab />
+            </Suspense>
+          )}
+
+          {/* ── DATA INPUT (agent-only) ──────────────────────────────── */}
+          {activeSection === "data-input" && navItems.some(i => i.key === "data-input") && (
+            <Suspense fallback={<TabFallback />}>
+              <DataInputTab />
             </Suspense>
           )}
 

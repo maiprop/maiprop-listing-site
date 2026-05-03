@@ -8,6 +8,7 @@
  *   customer.subscription.created   → mark pro
  *   customer.subscription.updated   → update product / status
  *   customer.subscription.deleted   → clear subscription
+ *   invoice.created                  → apply Agent Data Input discount to draft
  *   invoice.payment_failed           → clear subscription (grace period expired)
  */
 
@@ -81,6 +82,26 @@ Deno.serve(async (req) => {
         const invoice = event.data.object as Stripe.Invoice;
         if (invoice.customer) {
           await clearSubscription(supabase, stripe, invoice.customer as string);
+        }
+        break;
+      }
+
+      case "invoice.created": {
+        // Apply the Agent "Data Input" discount to the draft invoice if the
+        // user has accumulated verified entries that have not yet been credited.
+        // Idempotent — apply_verified_data_input_discount() flips
+        // discount_applied=true atomically, so a retry returns 0 entries.
+        const invoice = event.data.object as Stripe.Invoice;
+        try {
+          await applyAgentDataInputDiscount(supabase, stripe, invoice);
+        } catch (err: unknown) {
+          // Discount application is best-effort — log but don't block the
+          // invoice. Stripe will still bill the regular amount and the
+          // unapplied entries remain available for the next invoice cycle.
+          log.error("agent data input discount failed", {
+            invoice_id: invoice.id,
+            err: err instanceof Error ? err.message : String(err),
+          });
         }
         break;
       }
@@ -259,5 +280,90 @@ function errorResponse(message: string, status: number, corsHeaders: Record<stri
   return new Response(JSON.stringify({ error: message }), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+/**
+ * Agent "Data Input" discount.
+ *
+ * On invoice.created (Stripe creates a draft renewal invoice ~1h before
+ * billing), check whether the customer's user has accumulated verified
+ * data-input entries that have not yet been credited. If so, mark them
+ * applied via the SECURITY DEFINER RPC and post a one-off negative
+ * invoice_item to the draft invoice equal to subtotal × pct.
+ *
+ * Caps:
+ *   - Each verified entry yields 0.5% off (server-side constant).
+ *   - The DB RPC selects at most MAX_PER_MONTH (=20) entries per call,
+ *     i.e. at most 10% off any single invoice.
+ *
+ * Skipped when:
+ *   - Invoice is not a draft (already finalised — too late).
+ *   - billing_reason is "subscription_create" (initial signup, no prior
+ *     verified inputs are possible yet).
+ *   - Customer has no user_id metadata.
+ */
+async function applyAgentDataInputDiscount(
+  supabase: ReturnType<typeof createClient>,
+  stripe: Stripe,
+  invoice: Stripe.Invoice,
+): Promise<void> {
+  if (invoice.status && invoice.status !== "draft") return;
+  if (!invoice.id || !invoice.customer) return;
+
+  const customer = await stripe.customers.retrieve(invoice.customer as string) as Stripe.Customer;
+  const userId = customer.metadata?.user_id ?? await resolveUserIdByEmail(supabase, customer.email ?? null);
+  if (!userId) {
+    log.info("invoice.created: cannot resolve user_id, skipping data input discount", { invoice_id: invoice.id });
+    return;
+  }
+
+  const { data, error } = await supabase.rpc("apply_verified_data_input_discount", {
+    p_user_id: userId,
+    p_invoice_id: invoice.id,
+  });
+  if (error) {
+    log.error("apply_verified_data_input_discount rpc failed", { user_id: userId, invoice_id: invoice.id, err: String(error.message ?? error) });
+    return;
+  }
+
+  const row = (Array.isArray(data) ? data[0] : data) as { applied_count?: number; applied_pct?: number | string } | null;
+  const appliedCount = Number(row?.applied_count ?? 0);
+  const appliedPct = Number(row?.applied_pct ?? 0);
+  if (!appliedCount || appliedPct <= 0) {
+    log.info("no verified data inputs to apply", { user_id: userId, invoice_id: invoice.id });
+    return;
+  }
+
+  // Compute discount on the current pre-tax subtotal of the invoice. We round
+  // toward the nearest cent. Stripe expects integer minor units.
+  const subtotalMinor = invoice.subtotal ?? 0;
+  if (subtotalMinor <= 0) {
+    log.warn("invoice subtotal non-positive — skipping discount", { invoice_id: invoice.id, subtotal: subtotalMinor });
+    return;
+  }
+  const discountMinor = Math.round((subtotalMinor * appliedPct) / 100);
+  if (discountMinor <= 0) return;
+
+  await stripe.invoiceItems.create({
+    customer: invoice.customer as string,
+    invoice: invoice.id,
+    amount: -discountMinor, // negative = credit
+    currency: invoice.currency,
+    description: `Data Input reward — ${appliedCount} verified closing(s) × 0.5% (${appliedPct}% off)`,
+    metadata: {
+      type: "agent_data_input_discount",
+      user_id: userId,
+      applied_count: String(appliedCount),
+      applied_pct: String(appliedPct),
+    },
+  });
+
+  log.info("applied agent data input discount", {
+    user_id: userId,
+    invoice_id: invoice.id,
+    applied_count: appliedCount,
+    applied_pct: appliedPct,
+    discount_minor: discountMinor,
   });
 }
