@@ -93,6 +93,15 @@ describe("classifySwitch", () => {
     expect(classifySwitch("buyer", "institutional")).toBe("invite-only");
   });
 
+  it("same-audience invite-only / pro-only switches are same-tier", () => {
+    // re-selecting the current role must always short-circuit, regardless of
+    // how that role is priced (developer is proOnly, investor/institutional
+    // are inviteOnly).
+    expect(classifySwitch("investor", "investor")).toBe("same-tier");
+    expect(classifySwitch("institutional", "institutional")).toBe("same-tier");
+    expect(classifySwitch("developer", "developer")).toBe("same-tier");
+  });
+
   it("investor → buyer is downgrade (leaving bespoke tier)", () => {
     expect(classifySwitch("investor", "buyer")).toBe("downgrade");
   });

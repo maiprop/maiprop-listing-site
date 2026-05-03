@@ -193,9 +193,11 @@ export type SwitchKind = "same-tier" | "upgrade" | "downgrade" | "proonly" | "in
 export function classifySwitch(from: ParticipantId, to: ParticipantId): SwitchKind {
   const fromPlan = getPlanForParticipant(from);
   const toPlan   = getPlanForParticipant(to);
+  // Same audience short-circuits — re-selecting the current role is always a
+  // no-op regardless of how the target role is priced (free / paid / invite).
+  if (fromPlan.audienceId === toPlan.audienceId) return "same-tier";
   if (toPlan.inviteOnly) return "invite-only";
   if (toPlan.proOnly) return "proonly";
-  if (fromPlan.audienceId === toPlan.audienceId) return "same-tier";
   if (fromPlan.inviteOnly) return "downgrade";
   if (toPlan.monthlyPrice > fromPlan.monthlyPrice) return "upgrade";
   return "downgrade";
