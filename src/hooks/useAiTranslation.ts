@@ -91,8 +91,9 @@ export function useAiTranslation() {
         const parsed = JSON.parse(cached) as { strings: Record<string, string>; ts: number; v?: string };
         if (parsed.strings && parsed.v === EN_HASH) {
           i18n.addResourceBundle(locale, "translation", parsed.strings, true, true);
-          // Touch timestamp for LRU
-          localStorage.setItem(cacheKey, JSON.stringify({ ...parsed, ts: Date.now() }));
+          try {
+            localStorage.setItem(cacheKey, JSON.stringify({ ...parsed, ts: Date.now() }));
+          } catch { /* quota full — cache entry remains valid */ }
           setStatus("ready");
           return;
         }
