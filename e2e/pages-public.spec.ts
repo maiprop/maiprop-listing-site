@@ -107,7 +107,7 @@ test.describe("Public — Professionals directory", () => {
   test("navigating to /professionals/non-existent-id does not crash", async ({ page }) => {
     await page.goto("/professionals/non-existent-id-456");
     await page.waitForLoadState("load", { timeout: 15_000 });
-    await expect(page.locator("header, main, body, nav").first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("header, main, nav").first()).toBeVisible({ timeout: 10_000 });
     const bodyText = await page.locator("body").innerText();
     expect(bodyText.trim().length).toBeGreaterThan(10);
   });
@@ -131,7 +131,7 @@ test.describe("Public — Open Houses", () => {
   test("navigating to /open-house/non-existent-id does not crash", async ({ page }) => {
     await page.goto("/open-house/non-existent-id-789");
     await page.waitForLoadState("load", { timeout: 15_000 });
-    await expect(page.locator("header, main, body, nav").first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("header, main, nav").first()).toBeVisible({ timeout: 10_000 });
     const bodyText = await page.locator("body").innerText();
     expect(bodyText.trim().length).toBeGreaterThan(10);
   });
@@ -143,7 +143,9 @@ test.describe("Public — New-build detail", () => {
   test("navigating to /new-build/non-existent-id does not crash", async ({ page }) => {
     await page.goto("/new-build/non-existent-id-abc");
     await page.waitForLoadState("load", { timeout: 15_000 });
-    await expect(page.locator("header, main, body, nav").first()).toBeVisible({ timeout: 10_000 });
+    // body is always visible — wait for an element that's only rendered once
+    // React mounts.
+    await expect(page.locator("header, main, nav").first()).toBeVisible({ timeout: 15_000 });
     const bodyText = await page.locator("body").innerText();
     expect(bodyText.trim().length).toBeGreaterThan(10);
   });
@@ -170,7 +172,7 @@ test.describe("Public — Auth pages (sign-up, reset-password)", () => {
   test("reset-password page renders without crash", async ({ page }) => {
     await page.goto("/reset-password");
     await page.waitForLoadState("load", { timeout: 15_000 });
-    await expect(page.locator("header, main, body, nav").first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("header, main, nav").first()).toBeVisible({ timeout: 10_000 });
     const bodyText = await page.locator("body").innerText();
     expect(bodyText.trim().length).toBeGreaterThan(10);
   });
