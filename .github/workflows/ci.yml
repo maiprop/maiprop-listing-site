@@ -62,6 +62,38 @@ jobs:
         env:
           NODE_OPTIONS: --max-old-space-size=4096
 
+      - name: Check generated types freshness
+        run: |
+          TYPES_FILE="src/integrations/supabase/types.ts"
+          LINES=$(wc -l < "$TYPES_FILE")
+          echo "Generated types file: $LINES lines"
+          if [ "$LINES" -gt 5000 ]; then
+            echo "::warning file=$TYPES_FILE::Generated types file has grown to $LINES lines (threshold: 5000). Consider reviewing schema size."
+          fi
+
+      - name: SBOM generation
+        run: npm sbom --sbom-format cyclonedx > /dev/null 2>&1 || echo "::notice::npm sbom not supported in this npm version — skipping"
+
+      - name: License compliance check
+        run: |
+          npx license-checker --production --failOn 'GPL-2.0;GPL-3.0;AGPL-1.0;AGPL-3.0' --summary || {
+            echo "::error::Found dependencies with restricted licenses (GPL/AGPL). Review before deploying."
+            exit 1
+          }
+
+      - name: Secret scanning (git-leaks)
+        run: |
+          # Only scan new commits in PRs, full scan on push to main
+          if command -v gitleaks &>/dev/null; then
+            if [ "${{ github.event_name }}" = "pull_request" ]; then
+              gitleaks detect --source . --log-opts "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}" --verbose || true
+            else
+              gitleaks detect --source . --verbose || true
+            fi
+          else
+            echo "::notice::gitleaks not installed — skipping secret scan"
+          fi
+
       - name: Deno edge function tests
         uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:

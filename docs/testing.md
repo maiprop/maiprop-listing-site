@@ -9,14 +9,14 @@
 | **Playwright** | E2E browser tests | `npm run test:e2e` |
 | **Deno test** | Edge-function tests | `npm run test:deno` |
 
-## Current coverage baseline (2026-04-27)
+## Current coverage baseline (2026-04-27, updated 2026-04-27)
 
 | Metric | Current | Threshold | Target Q3 | Target Q4 |
 |--------|---------|-----------|-----------|-----------|
-| Lines       | ~63.84% | 60% | 70% | 80% |
-| Statements  | ~63.84% | 60% | 70% | 80% |
-| Functions   | ~41.23% | 38% | 50% | 60% |
-| Branches    | ~58.98% | 55% | 65% | 75% |
+| Lines       | ~64.63% | 60% | 70% | 80% |
+| Statements  | ~64.63% | 60% | 70% | 80% |
+| Functions   | ~42.15% | 38% | 50% | 60% |
+| Branches    | ~60.66% | 55% | 65% | 75% |
 
 > **Threshold = floor.** The numbers in `vitest.config.ts` MUST match this
 > table. Whenever a PR adds meaningful coverage to one of the P0 priority

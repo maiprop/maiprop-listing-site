@@ -1,96 +1,95 @@
 # Index Strategy
 
-Documents all database indexes, the queries they serve, and the rationale for each.
+> Last updated: 2026-04-27
 
-## Listings Indexes
+## Design Principles
 
-| Index | Columns | Rationale |
-|-------|---------|-----------|
-| `idx_listings_city` | `city` | `buildListingsQuery` filters by city |
-| `idx_listings_status` | `status` | Active/inactive filtering |
-| `idx_listings_type` | `listing_type` | Sale/rent/auction filter |
-| `idx_listings_owner` | `owner_id` | "My Listings" dashboard query |
-| `idx_listings_featured` | `(is_featured, priority_placement DESC)` | Homepage featured sort |
-| `idx_listings_is_off_market` | `is_off_market` (partial, WHERE true) | Off-market filter |
-| `idx_listings_is_pre_sale` | `is_pre_sale` (partial, WHERE true) | Pre-sale filter |
-| `idx_listings_project` | `project_id` (partial, WHERE NOT NULL) | Developer project listings |
-| `idx_listings_price` | `price` | Price range filters in `buildListingsQuery` |
-| `idx_listings_sqm` | `sqm` | Size range filters |
-| `idx_listings_bedrooms` | `bedrooms` | Bedroom count filter |
-| `idx_listings_property_type` | `property_type` | Property type filter |
-| `idx_listings_year_built` | `year_built` | Year built filter |
-| `idx_listings_construction_status` | `construction_status` | Condition filter |
-| `idx_listings_energy_class` | `energy_class` | Energy class filter |
-| `idx_listings_heating_system` | `heating_system` | Heating system filter |
-| `idx_listings_city_type_status_price` | `(city, listing_type, status, price)` | Common multi-filter combo |
+1. **Index for the query, not the column** — only add indexes that serve real query patterns in `buildListingsQuery` and hooks.
+2. **Composite beats multiple singles** — Postgres can only use one index per scan; composite indexes cover multi-column WHERE clauses efficiently.
+3. **Partial indexes for sparse booleans** — `WHERE col = true` avoids indexing the majority FALSE rows.
+4. **UNIQUE indexes double as constraints** — favorites uniqueness is enforced at the index level.
 
-### Why no further composite indexes
+## Current Indexes
 
-The `(city, listing_type, status, price)` composite covers the highest-traffic query path. Additional composites add diminishing returns at the current data size (154 listings). Monitor slow query logs if dataset grows beyond 10K rows.
+### listings (primary table, ~154 rows)
 
-## Favorites Indexes
+| Index | Columns | Type | Serves |
+|-------|---------|------|--------|
+| `idx_listings_city` | `city` | B-tree | City filter in search |
+| `idx_listings_status` | `status` | B-tree | Active/sold/pending filter |
+| `idx_listings_type` | `listing_type` | B-tree | Sale vs rent filter |
+| `idx_listings_owner` | `owner_id` | B-tree | Dashboard "my listings" |
+| `idx_listings_price` | `price` | B-tree | Price range filter |
+| `idx_listings_sqm` | `sqm` | B-tree | Area range filter |
+| `idx_listings_bedrooms` | `bedrooms` | B-tree | Bedroom count filter |
+| `idx_listings_property_type` | `property_type` | B-tree | Apartment/house/land filter |
+| `idx_listings_year_built` | `year_built` | B-tree | Age filter |
+| `idx_listings_construction_status` | `construction_status` | B-tree | New build status |
+| `idx_listings_energy_class` | `energy_class` | B-tree | Energy cert filter |
+| `idx_listings_heating_system` | `heating_system` | B-tree | Heating type filter |
+| `idx_listings_city_type_status_price` | `(city, listing_type, status, price)` | Composite B-tree | Main search page — most common filter combination |
+| `idx_listings_featured` | `(is_featured, priority_placement DESC)` | B-tree | Homepage featured section |
+| `idx_listings_is_off_market` | `is_off_market` WHERE `true` | Partial B-tree | Off-market filter |
+| `idx_listings_is_pre_sale` | `is_pre_sale` WHERE `true` | Partial B-tree | New development filter |
+| `idx_listings_project` | `project_id` WHERE NOT NULL | Partial B-tree | Project grouping |
 
-| Index | Columns | Rationale |
-|-------|---------|-----------|
-| `idx_favorites_user_listing` | `(user_id, listing_id)` UNIQUE | Prevent duplicate favorites, fast lookup |
+### favorites
 
-## Conversations & Messages
+| Index | Columns | Type | Serves |
+|-------|---------|------|--------|
+| `idx_favorites_user_listing` | `(user_id, listing_id)` | UNIQUE B-tree | Lookup + dedup |
 
-| Index | Columns | Rationale |
-|-------|---------|-----------|
-| `idx_conversations_participant_a` | `participant_a` | Inbox queries |
-| `idx_conversations_participant_b` | `participant_b` | Inbox queries |
-| `idx_messages_conversation` | `conversation_id` | Message thread loading |
+### conversations / messages
 
-## Sync Log
+| Index | Columns | Type | Serves |
+|-------|---------|------|--------|
+| `idx_conversations_participant_a` | `participant_a` | B-tree | Inbox query |
+| `idx_conversations_participant_b` | `participant_b` | B-tree | Inbox query |
+| `idx_messages_conversation` | `conversation_id` | B-tree | Chat thread |
 
-| Index | Columns | Rationale |
-|-------|---------|-----------|
-| `idx_sync_log_direction_created` | `(direction, created_at DESC)` | Sync status dashboard |
-| `idx_sync_log_entity_type` | `(entity_type, created_at DESC)` | Entity-specific sync queries |
-| `idx_sync_log_status` | `(status, created_at DESC)` | Failed sync queries |
+### sync_log
 
-## Email Infrastructure
+| Index | Columns | Type | Serves |
+|-------|---------|------|--------|
+| `idx_sync_log_direction_created` | `(direction, created_at DESC)` | B-tree | Admin sync dashboard |
+| `idx_sync_log_entity_type` | `(entity_type, created_at DESC)` | B-tree | Filter by entity |
+| `idx_sync_log_status` | `(status, created_at DESC)` | B-tree | Error investigation |
 
-| Index | Columns | Rationale |
-|-------|---------|-----------|
-| `idx_email_send_log_created` | `created_at DESC` | Recent email list |
-| `idx_email_send_log_recipient` | `recipient_email` | Recipient lookup |
-| `idx_email_send_log_message` | `message_id` | Deduplication |
-| `idx_email_send_log_message_sent_unique` | `(message_id, sent_at)` UNIQUE | Prevent double sends |
-| `idx_suppressed_emails_email` | `email` | Suppression check on send |
-| `idx_unsubscribe_tokens_token` | `token` | Token validation |
+### contacts / deal_checklists / portfolios
 
-## Contacts / Deal Checklists / Portfolios
+| Index | Columns | Type | Serves |
+|-------|---------|------|--------|
+| `idx_contacts_user_id` | `user_id` | B-tree | CRM per-user |
+| `idx_deal_checklists_user_id` | `user_id` | B-tree | Deal tracking |
+| `idx_portfolios_user_id` | `user_id` | B-tree | Portfolio view |
+| `idx_projects_owner_id` | `owner_id` | B-tree | Project management |
 
-| Index | Columns | Rationale |
-|-------|---------|-----------|
-| `idx_contacts_user_id` | `user_id` | User's contacts list |
-| `idx_deal_checklists_user_id` | `user_id` | User's checklists |
-| `idx_portfolios_user_id` | `user_id` | User's portfolios |
-| `idx_projects_owner_id` | `owner_id` | Developer's projects |
+### email infrastructure
 
-## Developer Projects
+| Index | Columns | Type | Serves |
+|-------|---------|------|--------|
+| `idx_email_send_log_created` | `created_at DESC` | B-tree | Recent emails |
+| `idx_email_send_log_recipient` | `recipient_email` | B-tree | Per-user history |
+| `idx_email_send_log_message` | `message_id` | B-tree | Dedup lookup |
+| `idx_email_send_log_message_sent_unique` | `(message_id, sent_at)` | UNIQUE | Hard dedup |
+| `idx_suppressed_emails_email` | `email` | B-tree | Bounce check |
+| `idx_unsubscribe_tokens_token` | `token` | B-tree | Unsubscribe flow |
 
-| Index | Columns | Rationale |
-|-------|---------|-----------|
-| `idx_project_units_project` | `project_id` | Units in a project |
-| `idx_project_units_status` | `availability_status` | Available units filter |
-| `idx_project_media_project` | `project_id` | Media for a project |
-| `idx_project_leads_project` | `project_id` | Leads for a project |
+## Missing Indexes (Candidates)
 
-## Admin / Platform
+These are columns used in queries but not yet indexed. At ~154 listings the impact is negligible, but they'll matter at scale:
 
-| Index | Columns | Rationale |
-|-------|---------|-----------|
-| `idx_profiles_single_admin` | `role` UNIQUE (partial, WHERE role = 'admin') | Enforce single platform admin |
+| Table | Column(s) | Query Pattern | Priority |
+|-------|-----------|---------------|----------|
+| `listings` | `latitude, longitude` | Map bounds filter (`gte`/`lte`) | P2 — spatial index (`gist`) would be ideal but requires PostGIS |
+| `listings` | `created_at` | Sort by newest | P2 — covered by primary key sort for now |
+| `auction_listings` | `auction_date` | Upcoming auctions | P2 |
+| `open_houses` | `event_date` | Upcoming events | P2 |
+| `profiles` | `role` | Admin queries | P2 — low cardinality, full scan is fast |
 
-## Missing Indexes (Monitored)
+## When to Add New Indexes
 
-These columns are not indexed because the dataset is small or the query pattern doesn't warrant it yet:
-
-- `listings.bathrooms` — rarely filtered alone
-- `profiles.subscription_tier` — small table, seq scan is fine
-- `auction_alerts.user_id` — low-volume table
-
-Re-evaluate if any of these tables exceed 10K rows.
+1. Check if `buildListingsQuery` or a hook adds a new `.eq()` / `.gte()` / `.order()` call.
+2. If the column is used in a WHERE clause and the table has >1000 rows, add an index.
+3. For composite indexes, put the most selective column first (lowest cardinality).
+4. Use `EXPLAIN ANALYZE` against the Supabase SQL editor to verify the index is used.
