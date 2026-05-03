@@ -103,6 +103,8 @@ export async function captureHandler(
   }) as typeof Deno.serve;
 
   const origEnvGet = Deno.env.get.bind(Deno.env);
+  const origEnvSet = Deno.env.set.bind(Deno.env);
+  const origEnvDelete = Deno.env.delete.bind(Deno.env);
   const defaultEnv: Record<string, string> = {
     SUPABASE_URL: "https://test.supabase.co",
     SUPABASE_SERVICE_ROLE_KEY: "test-service-key",
@@ -120,7 +122,18 @@ export async function captureHandler(
     MAIPROP_OS_WEBHOOK_SECRET: "test-os-webhook-secret",
     ...envOverrides,
   };
+  // Patch get/set/delete so that tests exercising "env vars missing" paths
+  // can use Deno.env.delete() / Deno.env.set() and have those mutations
+  // reflected when the handler calls Deno.env.get().
   envForTest.get = (k: string) => defaultEnv[k] ?? origEnvGet(k);
+  (envForTest as typeof Deno.env & { set: typeof Deno.env.set }).set = (k: string, v: string) => {
+    defaultEnv[k] = v;
+    origEnvSet(k, v);
+  };
+  (envForTest as typeof Deno.env & { delete: typeof Deno.env.delete }).delete = (k: string) => {
+    delete defaultEnv[k];
+    origEnvDelete(k);
+  };
 
   // Resolve relative specifiers against the caller's URL so each test imports
   // the function module sitting next to it, not the one next to testUtils.ts.
@@ -140,6 +153,8 @@ export async function captureHandler(
     if (restored) return;
     restored = true;
     envForTest.get = origEnvGet;
+    (envForTest as typeof Deno.env & { set: typeof Deno.env.set }).set = origEnvSet;
+    (envForTest as typeof Deno.env & { delete: typeof Deno.env.delete }).delete = origEnvDelete;
   };
   globalThis.addEventListener("unload", restoreEnv);
 
