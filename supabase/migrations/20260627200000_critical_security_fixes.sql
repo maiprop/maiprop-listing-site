@@ -8,7 +8,7 @@
 --   A buyer can set participant_type = 'institutional' and pass SellerRoute.
 --   Fix: trigger guard that prevents setting privileged participant_type values.
 --
--- Finding 3: subscription_product_id, force_pro_access, stripe_customer_id are
+-- Finding 3: subscription_product_id, force_pro_access are
 --   user-writable via direct UPDATE. Fix: column-level REVOKE + trigger guard.
 
 -- ══════════════════════════════════════════════════════════════════════════════
@@ -19,6 +19,9 @@
 CREATE TABLE IF NOT EXISTS public.pro_product_ids (
   product_id TEXT PRIMARY KEY
 );
+
+-- Ensure force_pro_access column exists (may have been added manually)
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS force_pro_access BOOLEAN DEFAULT false;
 
 CREATE OR REPLACE FUNCTION check_listing_quota()
 RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER
@@ -89,13 +92,6 @@ BEGIN
     END IF;
   END IF;
 
-  -- Guard stripe_customer_id
-  IF NEW.stripe_customer_id IS DISTINCT FROM OLD.stripe_customer_id THEN
-    IF NOT public.has_platform_admin((SELECT auth.uid())) THEN
-      NEW.stripe_customer_id := OLD.stripe_customer_id;
-    END IF;
-  END IF;
-
   -- Guard participant_type: non-admins can only set allowed values.
   -- 'investor' and 'institutional' require admin approval.
   IF NEW.participant_type IS DISTINCT FROM OLD.participant_type THEN
@@ -126,9 +122,8 @@ REVOKE UPDATE ON public.profiles FROM authenticated;
 
 GRANT UPDATE (
   display_name, bio, avatar_url, phone, city,
-  full_name, business_name, tax_id, license_number,
-  preferred_language, email_notifications, push_notifications,
-  onboarding_completed, participant_type, role
+  first_name, last_name, country, video_link, website_url,
+  investor_mode, verified, participant_type, role
 ) ON public.profiles TO authenticated;
 
 -- Note: role + participant_type are granted here because the trigger guard

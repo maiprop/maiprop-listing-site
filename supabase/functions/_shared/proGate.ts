@@ -13,6 +13,9 @@
  */
 
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
+import { createLogger } from "./logger.ts";
+
+const log = createLogger("proGate");
 
 type SupabaseClient = ReturnType<typeof createClient>;
 
@@ -49,7 +52,7 @@ export async function requireProSubscription(
 ): Promise<ProGateResult> {
   const client = getServiceClient();
   if (!client) {
-    console.warn("[proGate] no SUPABASE_URL/SERVICE_ROLE_KEY — failing open");
+    log.warn("no SUPABASE_URL/SERVICE_ROLE_KEY — failing open");
     return { allowed: true, errorResponse: null };
   }
 
@@ -70,7 +73,7 @@ export async function requireProSubscription(
       .single() as { data: ProfileRow | null; error: { message: string } | null };
 
     if (error || !profile) {
-      console.warn(`[proGate] profile lookup failed: ${error?.message ?? "not found"} — failing open`);
+      log.warn("profile lookup failed — failing open", { error: error?.message ?? "not found" });
       return { allowed: true, errorResponse: null };
     }
 
@@ -126,7 +129,7 @@ export async function requireProSubscription(
       ),
     };
   } catch (err) {
-    console.warn(`[proGate] unexpected error — failing open: ${err instanceof Error ? err.message : String(err)}`);
+    log.warn("unexpected error — failing open", { error: err instanceof Error ? err.message : String(err) });
     return { allowed: true, errorResponse: null };
   }
 }

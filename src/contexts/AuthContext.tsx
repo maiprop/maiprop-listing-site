@@ -220,7 +220,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const ALLOWED_FIELDS: ReadonlySet<keyof Profile> = new Set([
       "display_name", "bio", "avatar_url", "phone", "city",
       "first_name", "last_name", "country", "video_link", "website_url",
-      "investor_mode", "verified",
+      "investor_mode", "verified", "participant_type",
     ] as const);
 
     const safe: Partial<Profile> = {};
