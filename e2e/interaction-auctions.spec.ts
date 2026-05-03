@@ -16,6 +16,7 @@
  * Multi-context tests use the `browser` fixture to open isolated browser contexts.
  */
 import { test, expect, type Page, type Browser } from "@playwright/test";
+import { getBaseURL } from "./helpers/baseURL";
 
 // ─── Credentials ─────────────────────────────────────────────────────────────
 
@@ -304,8 +305,9 @@ test.describe("Multi-user simultaneous browsing", () => {
   }: {
     browser: Browser;
   }) => {
-    const buyerCtx = await browser.newContext();
-    const investorCtx = await browser.newContext();
+    const baseURL = getBaseURL();
+    const buyerCtx = await browser.newContext({ baseURL });
+    const investorCtx = await browser.newContext({ baseURL });
 
     const buyerPage = await buyerCtx.newPage();
     const investorPage = await investorCtx.newPage();
@@ -356,9 +358,10 @@ test.describe("Multi-user simultaneous browsing", () => {
   }: {
     browser: Browser;
   }) => {
-    const invPrivateCtx = await browser.newContext();
-    const invInstitutionalCtx = await browser.newContext();
-    const buyerCtx = await browser.newContext();
+    const baseURL = getBaseURL();
+    const invPrivateCtx = await browser.newContext({ baseURL });
+    const invInstitutionalCtx = await browser.newContext({ baseURL });
+    const buyerCtx = await browser.newContext({ baseURL });
 
     const invPrivatePage = await invPrivateCtx.newPage();
     const invInstitutionalPage = await invInstitutionalCtx.newPage();
@@ -426,8 +429,9 @@ test.describe("Multi-user simultaneous browsing", () => {
   }: {
     browser: Browser;
   }) => {
-    const adminCtx = await browser.newContext();
-    const investorCtx = await browser.newContext();
+    const baseURL = getBaseURL();
+    const adminCtx = await browser.newContext({ baseURL });
+    const investorCtx = await browser.newContext({ baseURL });
 
     const adminPage = await adminCtx.newPage();
     const investorPage = await investorCtx.newPage();

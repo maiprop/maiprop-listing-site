@@ -14,17 +14,12 @@
  *   agent.pro@maiprop.demo
  */
 import { test, expect, type Page, type BrowserContext } from "@playwright/test";
+import { getBaseURL } from "./helpers/baseURL";
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-// `browser.newContext()` does NOT inherit `use.baseURL` from playwright.config.ts —
-// fixtures populate it on `page`, but raw contexts start with no baseURL. Read it
-// at runtime from the active project's config so this stays in sync if the config changes.
-function getBaseURL(): string {
-  return test.info().project.use.baseURL ?? "http://localhost:8080";
-}
 const PASSWORD = "Demo2025!";
 const hasCredentials = !!(process.env.E2E_TEST_EMAIL && process.env.E2E_TEST_PASSWORD);
 

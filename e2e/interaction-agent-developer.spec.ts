@@ -17,6 +17,7 @@
  *   E2E_BUYER_EMAIL / E2E_BUYER_PASSWORD
  */
 import { test, expect, type Page, type Browser, type BrowserContext } from "@playwright/test";
+import { getBaseURL } from "./helpers/baseURL";
 
 // ---------------------------------------------------------------------------
 // Credentials
@@ -204,8 +205,9 @@ test.describe("Cross-user — Agent and Buyer simultaneously", () => {
     let buyerCtx: BrowserContext | null = null;
 
     try {
-      agentCtx = await browser.newContext();
-      buyerCtx = await browser.newContext();
+      const baseURL = getBaseURL();
+      agentCtx = await browser.newContext({ baseURL });
+      buyerCtx = await browser.newContext({ baseURL });
 
       const agentPage = await agentCtx.newPage();
       const buyerPage = await buyerCtx.newPage();
@@ -263,8 +265,9 @@ test.describe("Cross-user — Developer and Buyer simultaneously", () => {
 
     test.setTimeout(90_000);
     try {
-      devCtx   = await browser.newContext();
-      buyerCtx = await browser.newContext();
+      const baseURL = getBaseURL();
+      devCtx   = await browser.newContext({ baseURL });
+      buyerCtx = await browser.newContext({ baseURL });
 
       const devPage   = await devCtx.newPage();
       const buyerPage = await buyerCtx.newPage();

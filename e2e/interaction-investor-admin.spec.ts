@@ -12,6 +12,7 @@
  * Multi-context tests (simultaneous sessions) use the `browser` fixture.
  */
 import { test, expect, type Page } from "@playwright/test";
+import { getBaseURL } from "./helpers/baseURL";
 
 // ─── Credentials ─────────────────────────────────────────────────────────────
 
@@ -127,8 +128,9 @@ test.describe("Simultaneous investor sessions", () => {
   test.skip(!hasCredentials, "Set investor + E2E_DEMO_PASSWORD env vars to run");
   test("both investor accounts sign in simultaneously and both reach /investor-dashboard", async ({ browser }) => {
     test.setTimeout(90_000);
-    const privateCtx = await browser.newContext();
-    const institutionalCtx = await browser.newContext();
+    const baseURL = getBaseURL();
+    const privateCtx = await browser.newContext({ baseURL });
+    const institutionalCtx = await browser.newContext({ baseURL });
 
     const privateErrors: string[] = [];
     const institutionalErrors: string[] = [];
@@ -240,8 +242,9 @@ test.describe("Simultaneous admin and investor sessions", () => {
   test.skip(!hasCredentials, "Set admin + investor + E2E_DEMO_PASSWORD env vars to run");
   test("admin on /admin and investor on /investor-dashboard — no JS errors and pages render", async ({ browser }) => {
     test.setTimeout(90_000);
-    const adminCtx = await browser.newContext();
-    const investorCtx = await browser.newContext();
+    const baseURL = getBaseURL();
+    const adminCtx = await browser.newContext({ baseURL });
+    const investorCtx = await browser.newContext({ baseURL });
 
     const adminErrors: string[] = [];
     const investorErrors: string[] = [];

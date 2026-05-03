@@ -8,6 +8,7 @@
  * Tests are self-skipping when credentials are absent so CI never blocks on missing secrets.
  */
 import { test, expect, type Page, type Browser } from "@playwright/test";
+import { getBaseURL } from "./helpers/baseURL";
 
 // ── Credentials ───────────────────────────────────────────────────────────────
 
@@ -62,8 +63,9 @@ test.describe("Buyer + Seller simultaneous sessions", () => {
   // 1. Both users can sign in at the same time
   test("buyer and seller can both sign in simultaneously", async ({ browser }: { browser: Browser }) => {
     test.setTimeout(90_000);
-    const buyerCtx  = await browser.newContext();
-    const sellerCtx = await browser.newContext();
+    const baseURL = getBaseURL();
+    const buyerCtx  = await browser.newContext({ baseURL });
+    const sellerCtx = await browser.newContext({ baseURL });
     const buyerPage  = await buyerCtx.newPage();
     const sellerPage = await sellerCtx.newPage();
 
@@ -84,8 +86,9 @@ test.describe("Buyer + Seller simultaneous sessions", () => {
   // 7. Both contexts visit /messages without JS errors
   test("both buyer and seller see messages page without crash", async ({ browser }: { browser: Browser }) => {
     test.setTimeout(90_000);
-    const buyerCtx  = await browser.newContext();
-    const sellerCtx = await browser.newContext();
+    const baseURL = getBaseURL();
+    const buyerCtx  = await browser.newContext({ baseURL });
+    const sellerCtx = await browser.newContext({ baseURL });
     const buyerPage  = await buyerCtx.newPage();
     const sellerPage = await sellerCtx.newPage();
 

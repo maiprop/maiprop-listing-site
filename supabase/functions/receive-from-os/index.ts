@@ -94,8 +94,7 @@ Deno.serve(async (req) => {
       return errorResponse("Missing event, entity_type, or data", 400, corsHeaders);
     }
 
-    let result: HandlerResult = { processed: false };
-
+    let result: HandlerResult;
     if (entity_type === "listing") {
       result = await handleListing(supabase, event, data);
     } else if (entity_type === "lead" || entity_type === "consultation") {
