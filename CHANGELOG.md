@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.3](https://github.com/maiprop/maiprop-listing-site/compare/v1.1.2...v1.1.3) (2026-05-03)
+
+
+### Bug Fixes
+
+* **a11y:** add brand-cyan-deep token for white text on cyan (WCAG AA) ([#76](https://github.com/maiprop/maiprop-listing-site/issues/76)) ([0aeaec2](https://github.com/maiprop/maiprop-listing-site/commit/0aeaec28247db6db0f9c00e52530daea3f9ef25a))
+* **audit:** batch P2/P3 audit cleanup (defence-in-depth, code quality) ([#66](https://github.com/maiprop/maiprop-listing-site/issues/66)) ([a188e35](https://github.com/maiprop/maiprop-listing-site/commit/a188e35ffca1a5bb296cb78f6af718dbc5fc7dfe))
+
 ## [1.1.2](https://github.com/maiprop/maiprop-listing-site/compare/v1.1.1...v1.1.2) (2026-05-03)
 
 
