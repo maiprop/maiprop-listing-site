@@ -3,6 +3,7 @@ import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 import { openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
 import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
+import { requireProSubscription } from "../_shared/proGate.ts";
 import { createLogger } from "../_shared/logger.ts";
 
 const log = createLogger("neighbourhood-report");
@@ -19,6 +20,12 @@ Deno.serve(async (req) => {
 
   const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
   if (quota.errorResponse) return quota.errorResponse;
+
+  // Pro subscription gate — this is a Pro-only feature
+  if (quota.userId) {
+    const proCheck = await requireProSubscription(quota.userId, corsHeaders);
+    if (proCheck.errorResponse) return proCheck.errorResponse;
+  }
 
   try {
     const { city, address, region, propertyType: _propertyType, lat, lng, listingId } = await req.json();
@@ -136,17 +143,26 @@ Rules:
     }
 
     // Persist neighbourhood scores back to the listing row so they can be filtered on.
+    // SECURITY: verify the caller owns the listing before writing scores.
     if (listingId && parsed.walkabilityScore != null) {
       const adminClient = createClient(
         Deno.env.get("SUPABASE_URL")!,
         Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
       );
-      await adminClient.from("listings").update({
-        walkability_score: Math.round(parsed.walkabilityScore),
-        safety_score:      parsed.safetyScore?.score  != null ? Math.round(parsed.safetyScore.score)  : undefined,
-        noise_score:       parsed.noiseLevel?.score   != null ? Math.round(parsed.noiseLevel.score)   : undefined,
-      }).eq("id", listingId);
-      // fire-and-forget — don't block the response on DB write
+      const { data: listing } = await adminClient
+        .from("listings")
+        .select("owner_id")
+        .eq("id", listingId)
+        .single();
+      if (listing && listing.owner_id === quota.userId) {
+        await adminClient.from("listings").update({
+          walkability_score: Math.round(parsed.walkabilityScore),
+          safety_score:      parsed.safetyScore?.score  != null ? Math.round(parsed.safetyScore.score)  : undefined,
+          noise_score:       parsed.noiseLevel?.score   != null ? Math.round(parsed.noiseLevel.score)   : undefined,
+        }).eq("id", listingId);
+      } else {
+        log.warn("neighbourhood-report: listing ownership mismatch", { listingId, userId: quota.userId });
+      }
     }
 
     await recordAiCall(quota.userId, BUCKET);

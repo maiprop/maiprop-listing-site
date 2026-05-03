@@ -212,7 +212,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const updateProfile = useCallback(async (updates: Partial<Profile>) => {
     if (!user) return { error: new Error("Not authenticated") };
-    const { error } = await supabase.from("profiles").update(updates).eq("user_id", user.id);
+
+    // Allowlist: only these fields may be self-updated by the user.
+    // Sensitive columns (role, is_platform_admin, subscription_product_id,
+    // force_pro_access, stripe_customer_id) are excluded — they must be set
+    // server-side via RPC or admin action.
+    const ALLOWED_FIELDS: ReadonlySet<keyof Profile> = new Set([
+      "display_name", "bio", "avatar_url", "phone", "city",
+      "first_name", "last_name", "country", "video_link", "website_url",
+      "investor_mode", "participant_type",
+    ] as const);
+
+    const safe: Partial<Profile> = {};
+    for (const key of Object.keys(updates) as Array<keyof Profile>) {
+      if (ALLOWED_FIELDS.has(key)) {
+        (safe as Record<string, unknown>)[key] = updates[key];
+      }
+    }
+
+    if (Object.keys(safe).length === 0) {
+      return { error: new Error("No allowed fields to update") };
+    }
+
+    const { error } = await supabase.from("profiles").update(safe).eq("user_id", user.id);
     if (!error) await fetchProfile(user.id);
     return { error: error as Error | null };
   }, [user, fetchProfile]);
