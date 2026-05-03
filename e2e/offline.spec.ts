@@ -44,7 +44,13 @@ test.describe("Offline / network failure handling", () => {
     );
 
     await page.goto("/listings");
-    await page.waitForLoadState("networkidle");
+    // networkidle is unreliable on /listings (Mapbox tile fetches never settle).
+    // Wait for `load` and the React-rendered <main> instead.
+    await page.waitForLoadState("load");
+    await page
+      .locator("#main-content, main")
+      .first()
+      .waitFor({ state: "attached", timeout: 15_000 });
 
     // The app should NOT white-screen. Either an empty state, an error message,
     // or a skeleton that eventually resolves to text is acceptable.
