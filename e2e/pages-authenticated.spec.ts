@@ -105,7 +105,7 @@ test.describe("Dashboard — structure", () => {
   test("dashboard loads with a sidebar or nav after sign-in", async ({ page }) => {
     await signIn(page);
     // ProtectedRoute shows a spinner while loading; wait for it to settle
-    await page.waitForLoadState("domcontentloaded");
+    await page.waitForLoadState("load");
     // At least one sidebar/nav element must be present
     const nav = page.locator('nav, [role="navigation"], [data-testid="dashboard-nav"], aside').first();
     await expect(nav).toBeAttached({ timeout: 10_000 });
@@ -113,7 +113,7 @@ test.describe("Dashboard — structure", () => {
 
   test("dashboard has at least one active/highlighted nav item", async ({ page }) => {
     await signIn(page);
-    await page.waitForLoadState("domcontentloaded");
+    await page.waitForLoadState("load");
     // Active nav items typically carry aria-current or a highlighted class
     const activeItem = page.locator(
       '[aria-current="page"], [data-active="true"], [data-state="active"], .bg-primary, .text-primary'
@@ -123,7 +123,7 @@ test.describe("Dashboard — structure", () => {
 
   test("user name or avatar visible in navbar after sign-in", async ({ page }) => {
     await signIn(page);
-    await page.waitForLoadState("domcontentloaded");
+    await page.waitForLoadState("load");
     // Avatar image, initials, or profile button
     const userIndicator = page.locator(
       'img[alt*="avatar"], img[alt*="profile"], [data-testid="user-avatar"], [aria-label*="profile"], [aria-label*="account"]'
@@ -140,7 +140,7 @@ test.describe("Dashboard — structure", () => {
   test("dashboard /settings section renders without crash", async ({ page }) => {
     await signIn(page);
     await page.goto("/dashboard/settings");
-    await page.waitForLoadState("domcontentloaded");
+    await page.waitForLoadState("load");
     await expect(page.locator("main, #main-content, [data-testid='settings']")).toBeVisible({ timeout: 10_000 });
   });
 });
@@ -155,7 +155,7 @@ test.describe("Messages page", () => {
   test("messages page loads a conversation list or empty state", async ({ page }) => {
     await signIn(page);
     await page.goto("/messages");
-    await page.waitForLoadState("domcontentloaded");
+    await page.waitForLoadState("load");
     // Accept either a list of conversations or an empty-state element
     const content = page.locator(
       '[data-testid="conversation-list"], [data-testid="empty-state"], h1, h2, ul'
@@ -169,7 +169,7 @@ test.describe("Messages page", () => {
 
     await signIn(page);
     await page.goto("/messages");
-    await page.waitForLoadState("domcontentloaded");
+    await page.waitForLoadState("load");
 
     expect(errors).toHaveLength(0);
   });
@@ -185,14 +185,14 @@ test.describe("Firesale page", () => {
   test("firesale page loads for authenticated users", async ({ page }) => {
     await signIn(page);
     await page.goto("/firesale");
-    await page.waitForLoadState("domcontentloaded");
+    await page.waitForLoadState("load");
     await expect(page.locator("main, #main-content")).toBeVisible({ timeout: 10_000 });
   });
 
   test("firesale shows deal cards or investor-only access gate", async ({ page }) => {
     await signIn(page);
     await page.goto("/firesale");
-    await page.waitForLoadState("domcontentloaded");
+    await page.waitForLoadState("load");
     // Either deal content or an access-gate/upgrade prompt is acceptable
     const content = page.locator(
       '[data-testid="firesale-card"], [data-testid="access-gate"], h1, h2, [class*="gate"], [class*="lock"]'
@@ -211,7 +211,7 @@ test.describe("Listing creation form", () => {
   test("/listings/new shows a multi-step form or seller-access gate", async ({ page }) => {
     await signIn(page);
     await page.goto("/listings/new");
-    await page.waitForLoadState("domcontentloaded");
+    await page.waitForLoadState("load");
     // Either the creation form or the SellerGate "Listing Access Required" message
     const content = page.locator(
       'form, [data-testid="create-listing"], h1, h2, [class*="step"]'
@@ -222,7 +222,7 @@ test.describe("Listing creation form", () => {
   test("listing form step 1 contains property type selection", async ({ page }) => {
     await signIn(page);
     await page.goto("/listings/new");
-    await page.waitForLoadState("domcontentloaded");
+    await page.waitForLoadState("load");
     // Skip assertion if user hits the seller-access gate
     const isGated = await page.locator('text="Listing Access Required"').isVisible();
     if (isGated) {
@@ -239,7 +239,7 @@ test.describe("Listing creation form", () => {
   test("submitting an empty form shows required-field validation", async ({ page }) => {
     await signIn(page);
     await page.goto("/listings/new");
-    await page.waitForLoadState("domcontentloaded");
+    await page.waitForLoadState("load");
 
     const isGated = await page.locator('text="Listing Access Required"').isVisible();
     if (isGated) {
@@ -273,7 +273,7 @@ test.describe("New building listing", () => {
   test("/listings/new-building renders a form or access gate", async ({ page }) => {
     await signIn(page);
     await page.goto("/listings/new-building");
-    await page.waitForLoadState("domcontentloaded");
+    await page.waitForLoadState("load");
     const content = page.locator(
       'form, h1, h2, [data-testid="create-new-build"], text="Listing Access Required"'
     ).first();
@@ -286,7 +286,7 @@ test.describe("New building listing", () => {
 
     await signIn(page);
     await page.goto("/listings/new-building");
-    await page.waitForLoadState("domcontentloaded");
+    await page.waitForLoadState("load");
 
     expect(errors).toHaveLength(0);
   });
@@ -302,7 +302,7 @@ test.describe("Professional profile (own)", () => {
   test("/professionals/me renders an editable profile or create-profile prompt", async ({ page }) => {
     await signIn(page);
     await page.goto("/professionals/me");
-    await page.waitForLoadState("domcontentloaded");
+    await page.waitForLoadState("load");
     // Should show either an edit form or a "create profile" CTA — not a blank page
     const content = page.locator(
       'form, h1, h2, [data-testid="professional-profile"], button:has-text("Create"), button:has-text("Save")'
@@ -316,7 +316,7 @@ test.describe("Professional profile (own)", () => {
 
     await signIn(page);
     await page.goto("/professionals/me");
-    await page.waitForLoadState("domcontentloaded");
+    await page.waitForLoadState("load");
 
     await expect(page.locator("body")).not.toBeEmpty();
     expect(errors).toHaveLength(0);
@@ -333,7 +333,7 @@ test.describe("Projects page", () => {
   test("/projects loads a project list or empty state", async ({ page }) => {
     await signIn(page);
     await page.goto("/projects");
-    await page.waitForLoadState("domcontentloaded");
+    await page.waitForLoadState("load");
     const content = page.locator(
       '[data-testid="project-list"], [data-testid="empty-state"], h1, h2, table, ul'
     ).first();
@@ -346,7 +346,7 @@ test.describe("Projects page", () => {
 
     await signIn(page);
     await page.goto("/projects");
-    await page.waitForLoadState("domcontentloaded");
+    await page.waitForLoadState("load");
 
     expect(errors).toHaveLength(0);
   });
@@ -362,7 +362,7 @@ test.describe("Portfolios page", () => {
   test("/portfolios loads correctly", async ({ page }) => {
     await signIn(page);
     await page.goto("/portfolios");
-    await page.waitForLoadState("domcontentloaded");
+    await page.waitForLoadState("load");
     const content = page.locator(
       '[data-testid="portfolio-list"], [data-testid="empty-state"], h1, h2'
     ).first();
@@ -375,7 +375,7 @@ test.describe("Portfolios page", () => {
 
     await signIn(page);
     await page.goto("/portfolios");
-    await page.waitForLoadState("domcontentloaded");
+    await page.waitForLoadState("load");
 
     expect(errors).toHaveLength(0);
   });

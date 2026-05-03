@@ -51,7 +51,7 @@ test.describe("Role guards — unauthenticated redirects", () => {
 test.describe("Auctions page", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/auctions");
-    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
   });
 
   test("auctions page loads without crashing", async ({ page }) => {
@@ -91,7 +91,7 @@ test.describe("Auctions page", () => {
 test.describe("Open Houses page", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/open-houses");
-    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
   });
 
   test("open-houses page loads without crashing", async ({ page }) => {
@@ -126,13 +126,13 @@ test.describe("Open Houses page", () => {
 test.describe("AI Assistant page", () => {
   test("ai-assistant page loads without crashing", async ({ page }) => {
     await page.goto("/ai-assistant");
-    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
     await expect(page.locator("main, body")).toBeVisible();
   });
 
   test("chat input is visible on ai-assistant page", async ({ page }) => {
     await page.goto("/ai-assistant");
-    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
     const chatInput = page.locator(
       'input[placeholder*="Ask"], textarea[placeholder*="Ask"], input[placeholder*="question"], textarea[placeholder*="question"], input[placeholder*="property"], textarea[placeholder*="property"]'
     ).first();
@@ -145,7 +145,7 @@ test.describe("AI Assistant page", () => {
 test.describe("Pricing page", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/pricing");
-    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
   });
 
   test("pricing page loads without crashing", async ({ page }) => {
@@ -181,7 +181,7 @@ test.describe("Pricing page", () => {
 test.describe("Professionals directory", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/professionals");
-    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
   });
 
   test("professionals page loads without crashing", async ({ page }) => {
@@ -213,7 +213,7 @@ test.describe("Professionals directory", () => {
 test.describe("Property detail — graceful error handling", () => {
   test("invalid property UUID shows not-found or skeleton — does NOT white-screen", async ({ page }) => {
     await page.goto("/property/00000000-0000-0000-0000-000000000000");
-    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
 
     // Navbar must render — proves the React app bootstrapped without crashing.
     // Use `header` (the top Navbar) directly; the mobile bottom-<nav> is hidden
@@ -226,7 +226,7 @@ test.describe("Property detail — graceful error handling", () => {
 
   test("invalid new-build slug handles gracefully — no white-screen", async ({ page }) => {
     await page.goto("/new-build/non-existent-slug-00000000");
-    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
 
     const bodyText = await page.locator("body").textContent();
     expect(bodyText?.trim().length).toBeGreaterThan(10);
@@ -268,7 +268,7 @@ test.describe("Navbar — unauthenticated user", () => {
 
   test("language switcher opens a dropdown with English and Greek options", async ({ page }) => {
     await page.goto("/");
-    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
     // aria-label is t("language.select") = "Language"
     const langBtn = page.locator('button[aria-label="Language"]').first();
     await expect(langBtn).toBeAttached({ timeout: 8_000 });
@@ -299,7 +299,7 @@ test.describe("Role guards — wrong role (credentialed)", () => {
   test("investor-dashboard shows InvestorAccessGate for non-investor user", async ({ page }) => {
     await signIn(page);
     await page.goto("/investor-dashboard");
-    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
 
     // Acceptable outcomes: the access-gate UI, OR a redirect away from /investor-dashboard
     const isRedirected = !page.url().includes("/investor-dashboard");
@@ -316,7 +316,7 @@ test.describe("Role guards — wrong role (credentialed)", () => {
   test("admin panel shows redirect or forbidden UI for non-admin user", async ({ page }) => {
     await signIn(page);
     await page.goto("/admin");
-    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
 
     // Non-admin users are redirected to /dashboard by AdminGate
     const redirectedToDashboard = page.url().includes("/dashboard");

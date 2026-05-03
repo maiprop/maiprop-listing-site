@@ -17,7 +17,7 @@ test.describe("Offline / network failure handling", () => {
     // do NOT page.reload() because vite preview doesn't send cache headers
     // that would let the HTML be served from disk cache while offline.
     await page.goto("/");
-    await page.waitForLoadState("domcontentloaded");
+    await page.waitForLoadState("load");
 
     // Sanity: the SPA has mounted before we go offline.
     await expect(page.locator("#root")).toBeAttached({ timeout: 10_000 });
@@ -44,7 +44,7 @@ test.describe("Offline / network failure handling", () => {
     );
 
     await page.goto("/listings");
-    await page.waitForLoadState("domcontentloaded");
+    await page.waitForLoadState("load");
 
     // The app should NOT white-screen. Either an empty state, an error message,
     // or a skeleton that eventually resolves to text is acceptable.

@@ -17,7 +17,7 @@ import { test, expect } from "@playwright/test";
 test.describe("Public — Homepage sections", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
-    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
   });
 
   test("navbar is visible on homepage", async ({ page }) => {
@@ -46,19 +46,19 @@ test.describe("Public — Homepage sections", () => {
 test.describe("Public — Auctions page", () => {
   test("auctions page loads and shows structural elements", async ({ page }) => {
     await page.goto("/auctions");
-    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
     await expect(page.locator("header, main, nav").first()).toBeVisible({ timeout: 10_000 });
   });
 
   test("auctions page has a heading or title element", async ({ page }) => {
     await page.goto("/auctions");
-    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
     await expect(page.locator("h1, h2").first()).toBeVisible({ timeout: 10_000 });
   });
 
   test("auctions page does not crash with white screen", async ({ page }) => {
     await page.goto("/auctions");
-    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
     // Body must have content — the error-boundary or actual page, not a blank div
     const bodyText = await page.locator("body").innerText();
     expect(bodyText.trim().length).toBeGreaterThan(10);
@@ -70,7 +70,7 @@ test.describe("Public — Auctions page", () => {
 test.describe("Public — Property / Auction detail with unknown ID", () => {
   test("navigating to /property/non-existent-id shows detail shell or not-found", async ({ page }) => {
     await page.goto("/property/non-existent-id-123");
-    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
     // Navbar <header> must be visible — proves the React app bootstrapped and
     // didn't white-screen. Using just `header` avoids matching the hidden
     // mobile bottom-nav <nav class="lg:hidden"> which appears earlier in DOM.
@@ -82,7 +82,7 @@ test.describe("Public — Property / Auction detail with unknown ID", () => {
 
   test("navigating to /auction/non-existent-id shows detail shell or not-found", async ({ page }) => {
     await page.goto("/auction/non-existent-id-123");
-    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
     await expect(page.locator("header").first()).toBeVisible({ timeout: 10_000 });
     const nodeCount = await page.locator("body *").count();
     expect(nodeCount).toBeGreaterThan(5);
@@ -94,19 +94,19 @@ test.describe("Public — Property / Auction detail with unknown ID", () => {
 test.describe("Public — Professionals directory", () => {
   test("professionals page loads with structural elements", async ({ page }) => {
     await page.goto("/professionals");
-    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
     await expect(page.locator("header, main, nav").first()).toBeVisible({ timeout: 10_000 });
   });
 
   test("professionals page has a heading", async ({ page }) => {
     await page.goto("/professionals");
-    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
     await expect(page.locator("h1, h2").first()).toBeVisible({ timeout: 10_000 });
   });
 
   test("navigating to /professionals/non-existent-id does not crash", async ({ page }) => {
     await page.goto("/professionals/non-existent-id-456");
-    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
     await expect(page.locator("header, main, body, nav").first()).toBeVisible({ timeout: 10_000 });
     const bodyText = await page.locator("body").innerText();
     expect(bodyText.trim().length).toBeGreaterThan(10);
@@ -118,19 +118,19 @@ test.describe("Public — Professionals directory", () => {
 test.describe("Public — Open Houses", () => {
   test("open houses page loads with structural elements", async ({ page }) => {
     await page.goto("/open-houses");
-    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
     await expect(page.locator("header, main, nav").first()).toBeVisible({ timeout: 10_000 });
   });
 
   test("open houses page has a heading", async ({ page }) => {
     await page.goto("/open-houses");
-    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
     await expect(page.locator("h1, h2").first()).toBeVisible({ timeout: 10_000 });
   });
 
   test("navigating to /open-house/non-existent-id does not crash", async ({ page }) => {
     await page.goto("/open-house/non-existent-id-789");
-    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
     await expect(page.locator("header, main, body, nav").first()).toBeVisible({ timeout: 10_000 });
     const bodyText = await page.locator("body").innerText();
     expect(bodyText.trim().length).toBeGreaterThan(10);
@@ -142,7 +142,7 @@ test.describe("Public — Open Houses", () => {
 test.describe("Public — New-build detail", () => {
   test("navigating to /new-build/non-existent-id does not crash", async ({ page }) => {
     await page.goto("/new-build/non-existent-id-abc");
-    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
     await expect(page.locator("header, main, body, nav").first()).toBeVisible({ timeout: 10_000 });
     const bodyText = await page.locator("body").innerText();
     expect(bodyText.trim().length).toBeGreaterThan(10);
@@ -154,7 +154,7 @@ test.describe("Public — New-build detail", () => {
 test.describe("Public — Auth pages (sign-up, reset-password)", () => {
   test("signup page renders sign-up form elements", async ({ page }) => {
     await page.goto("/signup");
-    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
     // At minimum an email input or the confirmation view
     await expect(
       page.locator('input[type="email"], input[name="email"], input[type="text"]').first()
@@ -163,13 +163,13 @@ test.describe("Public — Auth pages (sign-up, reset-password)", () => {
 
   test("signup page has a nav element", async ({ page }) => {
     await page.goto("/signup");
-    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
     await expect(page.locator("header, nav").first()).toBeVisible({ timeout: 10_000 });
   });
 
   test("reset-password page renders without crash", async ({ page }) => {
     await page.goto("/reset-password");
-    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
     await expect(page.locator("header, main, body, nav").first()).toBeVisible({ timeout: 10_000 });
     const bodyText = await page.locator("body").innerText();
     expect(bodyText.trim().length).toBeGreaterThan(10);
@@ -177,7 +177,7 @@ test.describe("Public — Auth pages (sign-up, reset-password)", () => {
 
   test("reset-password page renders a password input or info message", async ({ page }) => {
     await page.goto("/reset-password");
-    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
     // Without a recovery token the page shows an info state; with one it shows a form
     const hasInput = await page.locator('input[type="password"]').isVisible();
     const hasInfoText = await page.locator("p, span, h1, h2").first().isVisible();
@@ -190,13 +190,13 @@ test.describe("Public — Auth pages (sign-up, reset-password)", () => {
 test.describe("Public — Pricing page", () => {
   test("pricing page loads and renders main content", async ({ page }) => {
     await page.goto("/pricing");
-    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
     await expect(page.locator("header, main, nav").first()).toBeVisible({ timeout: 10_000 });
   });
 
   test("pricing page has an h1 or h2 heading", async ({ page }) => {
     await page.goto("/pricing");
-    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
     await expect(page.locator("h1, h2").first()).toBeVisible({ timeout: 10_000 });
   });
 });
@@ -206,28 +206,28 @@ test.describe("Public — Pricing page", () => {
 test.describe("Public — Legal pages", () => {
   test("privacy policy page renders content", async ({ page }) => {
     await page.goto("/privacy-policy");
-    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
     await expect(page.locator("header, main, nav").first()).toBeVisible({ timeout: 10_000 });
     await expect(page.locator("h1, h2").first()).toBeVisible({ timeout: 10_000 });
   });
 
   test("terms of service page renders content", async ({ page }) => {
     await page.goto("/terms-of-service");
-    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
     await expect(page.locator("header, main, nav").first()).toBeVisible({ timeout: 10_000 });
     await expect(page.locator("h1, h2").first()).toBeVisible({ timeout: 10_000 });
   });
 
   test("cookie policy page renders content", async ({ page }) => {
     await page.goto("/cookie-policy");
-    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
     await expect(page.locator("header, main, nav").first()).toBeVisible({ timeout: 10_000 });
     await expect(page.locator("h1, h2").first()).toBeVisible({ timeout: 10_000 });
   });
 
   test("legal pages have a footer", async ({ page }) => {
     await page.goto("/privacy-policy");
-    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
     await expect(page.locator("footer")).toBeVisible({ timeout: 10_000 });
   });
 });
@@ -237,13 +237,13 @@ test.describe("Public — Legal pages", () => {
 test.describe("Public — AI Assistant page", () => {
   test("ai-assistant page loads without crash", async ({ page }) => {
     await page.goto("/ai-assistant");
-    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
     await expect(page.locator("header, main, nav").first()).toBeVisible({ timeout: 10_000 });
   });
 
   test("ai-assistant page renders a chat input or widget container", async ({ page }) => {
     await page.goto("/ai-assistant");
-    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
     // The AIAssistantWidget renders a textarea or input for the chat
     const hasInput = await page
       .locator('textarea, input[type="text"], [role="dialog"], [role="main"]')
