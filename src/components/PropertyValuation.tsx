@@ -4,6 +4,7 @@ import {
   ChevronDown, ChevronUp, Info, AlertTriangle, Lightbulb,
   BarChart3, Droplets, Scale, MapPin, Receipt, FileCheck,
 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { getAiErrorMessage } from "@/lib/aiErrorUtils";
@@ -184,6 +185,7 @@ function ScoreBar({ label, score, invert = false, icon }: { label: string; score
 export default function PropertyValuation(props: PropertyValuationProps) {
   const { user } = useAuth();
   const { isPro } = useSubscription();
+  const queryClient = useQueryClient();
   const { data: valuationCount = 0 } = useValuationUsage();
   const [result, setResult] = useState<ValuationResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -222,6 +224,7 @@ export default function PropertyValuation(props: PropertyValuationProps) {
       if (!data?.estimatedValue) throw new Error("Valuation returned no result");
       setResult(data as ValuationResult);
       setExpanded(true);
+      void queryClient.invalidateQueries({ queryKey: ["usage_ai_calls", "property-valuation"] });
     } catch (e: unknown) {
       toast.error(getAiErrorMessage(e, null, "Valuation failed"));
     } finally {

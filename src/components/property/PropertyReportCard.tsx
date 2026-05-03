@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ClipboardList, Loader2, Zap, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -26,6 +27,7 @@ interface Props {
 export function PropertyReportCard({ listingId, listing }: Props) {
   const { user } = useAuth();
   const { isPro } = useSubscription();
+  const queryClient = useQueryClient();
   const { data: reportCount = 0 } = useReportUsage();
   const [reportResult, setReportResult] = useState<ReportResult | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
@@ -49,6 +51,7 @@ export function PropertyReportCard({ listingId, listing }: Props) {
       const { data } = await supabase.functions.invoke("property-valuation", { body });
       if (data?.estimatedValue) {
         setReportResult({ estimatedValue: data.estimatedValue, rangeLow: data.rangeLow ?? data.estimatedValue, rangeHigh: data.rangeHigh ?? data.estimatedValue, marketComparison: data.marketComparison ?? "at_market", marketComparisonPct: data.marketComparisonPct ?? 0, confidenceLabel: data.confidenceLabel ?? "Medium", source: "ai" });
+        void queryClient.invalidateQueries({ queryKey: ["usage_ai_calls", "property-valuation"] });
       }
     } finally {
       setReportLoading(false);

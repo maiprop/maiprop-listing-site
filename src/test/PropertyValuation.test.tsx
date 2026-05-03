@@ -16,15 +16,20 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
 const {
-  useAuthMock, useSubMock, useValMock, invokeMock, toastMock,
+  useAuthMock, useSubMock, useValMock, invokeMock, toastMock, invalidateQueriesMock,
 } = vi.hoisted(() => ({
   useAuthMock: vi.fn(),
   useSubMock: vi.fn(),
   useValMock: vi.fn(),
   invokeMock: vi.fn(),
   toastMock: { success: vi.fn(), error: vi.fn() },
+  invalidateQueriesMock: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("@tanstack/react-query", async () => {
+  const actual = await vi.importActual("@tanstack/react-query");
+  return { ...actual, useQueryClient: () => ({ invalidateQueries: invalidateQueriesMock }) };
+});
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => useAuthMock() }));
 vi.mock("@/hooks/useSubscription", () => ({ useSubscription: () => useSubMock() }));
 vi.mock("@/hooks/useUsageAddons", () => ({
