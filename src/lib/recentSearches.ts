@@ -18,13 +18,24 @@ export function getRecentSearches(): string[] {
 export function addRecentSearch(query: string): void {
   if (!query.trim()) return;
   const existing = getRecentSearches().filter((s) => s !== query);
-  localStorage.setItem(
-    RECENT_SEARCHES_KEY,
-    JSON.stringify([query, ...existing].slice(0, MAX_RECENT)),
-  );
+  // Safari Private Browsing and other hardened browsers throw on any
+  // localStorage.setItem; we don't surface this to the user — recent searches
+  // are best-effort UI sugar.
+  try {
+    localStorage.setItem(
+      RECENT_SEARCHES_KEY,
+      JSON.stringify([query, ...existing].slice(0, MAX_RECENT)),
+    );
+  } catch {
+    /* noop */
+  }
 }
 
 export function removeRecentSearch(query: string): void {
   const existing = getRecentSearches().filter((s) => s !== query);
-  localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(existing));
+  try {
+    localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(existing));
+  } catch {
+    /* noop */
+  }
 }

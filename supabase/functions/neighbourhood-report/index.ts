@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
@@ -121,6 +120,10 @@ Rules:
     const end = raw.lastIndexOf("}");
     const jsonStr = start !== -1 && end !== -1 ? raw.slice(start, end + 1) : raw;
 
+    // The shape of the AI's parsed JSON is unknown until we run the
+    // downstream guardrails on it; intentionally typed broadly here and
+    // narrowed at every read site.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let parsed: any;
     try {
       parsed = JSON.parse(jsonStr);

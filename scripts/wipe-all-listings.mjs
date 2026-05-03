@@ -34,6 +34,8 @@ if (!url || !serviceKey) {
   process.exit(1);
 }
 
+// Guard before we even create the client — a misrouted service-role key
+// pointed at production should never get past this line.
 assertNotProduction(url, "wipe-all-listings.mjs");
 
 const supabase = createClient(url, serviceKey, { auth: { persistSession: false } });

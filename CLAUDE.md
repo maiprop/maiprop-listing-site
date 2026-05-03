@@ -96,7 +96,7 @@ Canonical helpers — import from here, never define locally:
 
 - `buildListingsQuery(filters, from, pageSize)` — single query builder; all filtering + ORDER BY happens server-side
 - `useListingsPaginated(filters)` — infinite scroll; uses `PAGE_SIZE = 24`
-- `useListings(filters)` — full fetch for map view (up to 500); no client-side sort
+- `useListings(filters)` — full fetch for map view (up to `MAP_FETCH_LIMIT = 200`); no client-side sort
 - `ALLOWED_FEATURE_COLUMNS` — Set of valid listing boolean column names; guards against column injection
 
 ### Environment Variables

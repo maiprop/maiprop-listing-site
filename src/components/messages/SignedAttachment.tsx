@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 /**
@@ -6,9 +6,13 @@ import { supabase } from "@/integrations/supabase/client";
  * private `message-attachments` Supabase Storage bucket. Images are inlined
  * (clickable to open full-size); everything else falls back to a download link.
  *
- * The signed URL is requested on mount with a 1h TTL. While it is being
- * resolved the filename is shown as a placeholder so the layout doesn't shift.
+ * The signed URL is re-requested on demand if the rendered <img> errors out
+ * (e.g. the user opens an old conversation after the URL has expired). The
+ * fallback path is to show the filename as a plain link rather than a broken
+ * image — never a silent black box.
  */
+const SIGNED_URL_TTL_SECONDS = 3600;
+
 export function SignedAttachment({
   path,
   filename,
@@ -19,28 +23,77 @@ export function SignedAttachment({
   mimeType: string;
 }) {
   const [url, setUrl] = useState<string | null>(null);
+  const [errored, setErrored] = useState(false);
+  // Tracks whether we've already attempted one refresh for the current `path`.
+  // `createSignedUrl` always returns a freshly-signed URL (different token /
+  // timestamp), so the URL string itself can never be used as the "already
+  // tried" guard — a genuinely broken file (deleted, wrong path) would
+  // otherwise loop forever between onError → refresh → setUrl → onError.
+  const retriedRef = useRef(false);
+
+  const refresh = useCallback(async (): Promise<string | null> => {
+    const { data } = await supabase.storage
+      .from("message-attachments")
+      .createSignedUrl(path, SIGNED_URL_TTL_SECONDS);
+    return data?.signedUrl ?? null;
+  }, [path]);
 
   useEffect(() => {
     let cancelled = false;
-    supabase.storage
-      .from("message-attachments")
-      .createSignedUrl(path, 3600)
-      .then(({ data }) => {
-        if (!cancelled && data?.signedUrl) setUrl(data.signedUrl);
-      });
+    retriedRef.current = false;
+    setErrored(false);
+    refresh().then((next) => {
+      if (!cancelled && next) setUrl(next);
+    });
     return () => {
       cancelled = true;
     };
-  }, [path]);
+  }, [refresh]);
+
+  const handleImageError = useCallback(async () => {
+    // The most common failure mode is the signed URL expiring after an hour.
+    // Try once to refresh; if that also fails, show the filename fallback so
+    // the user is never left staring at a broken image icon.
+    if (retriedRef.current) {
+      setErrored(true);
+      return;
+    }
+    retriedRef.current = true;
+    const next = await refresh();
+    if (next) {
+      setUrl(next);
+    } else {
+      setErrored(true);
+    }
+  }, [refresh]);
 
   if (!url) {
     return <span className="text-xs text-muted-foreground">{filename}</span>;
   }
 
   const isImage = /^image\//.test(mimeType);
+
+  if (errored) {
+    return (
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-primary/80 underline text-xs block truncate"
+      >
+        {filename}
+      </a>
+    );
+  }
+
   return isImage ? (
     <a href={url} target="_blank" rel="noopener noreferrer" className="block">
-      <img src={url} alt={filename} className="max-w-full max-h-48 rounded-lg object-cover" />
+      <img
+        src={url}
+        alt={filename}
+        className="max-w-full max-h-48 rounded-lg object-cover"
+        onError={handleImageError}
+      />
     </a>
   ) : (
     <a

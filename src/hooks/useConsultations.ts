@@ -36,25 +36,50 @@ export function useSubmitConsultation() {
         message: input.message ?? null,
       });
       if (error) throw error;
-      // Create lead for professional
-      const { data: pro } = await supabase.from("professionals").select("user_id").eq("id", input.professional_id).single();
+      // Create lead for professional. Lead creation is best-effort: a failure
+      // here doesn't roll back the consultation_requests insert (the user-
+      // facing action), but we want to surface it so the professional knows
+      // their CRM may be missing the row. Return whether the lead was saved
+      // so onSuccess can pick exactly one toast (success vs partial-success)
+      // instead of firing both.
+      let leadSaved = true;
+      const { data: pro } = await supabase
+        .from("professionals")
+        .select("user_id")
+        .eq("id", input.professional_id)
+        .single();
       if (pro?.user_id) {
-         
-        supabase.from("leads").insert({
+        const { error: leadErr } = await supabase.from("leads").insert({
           owner_id: pro.user_id,
-          source: input.request_type === "callback" ? "callback" : input.request_type === "message" ? "message" : "consultation",
+          source:
+            input.request_type === "callback"
+              ? "callback"
+              : input.request_type === "message"
+                ? "message"
+                : "consultation",
           professional_id: input.professional_id,
           name: input.requester_name,
           email: input.requester_email,
           phone: input.requester_phone ?? null,
           message: input.message ?? null,
           status: "new",
-        }).then(({ error: leadErr }) => { if (leadErr) logger.warn("Lead create:", leadErr); });
+        });
+        if (leadErr) {
+          logger.warn("Lead create:", leadErr);
+          leadSaved = false;
+        }
       }
+      return { leadSaved };
     },
-    onSuccess: () => {
+    onSuccess: ({ leadSaved }) => {
       qc.invalidateQueries({ queryKey: ["consultation-requests"] });
-      toast.success("Request sent! The professional will contact you soon.");
+      if (leadSaved) {
+        toast.success("Request sent! The professional will contact you soon.");
+      } else {
+        toast.warning(
+          "Request sent, but the professional's lead record could not be created.",
+        );
+      }
     },
     onError: () => toast.error("Could not send consultation request. Please try again."),
   });

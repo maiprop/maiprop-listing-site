@@ -5,7 +5,7 @@
  * Extracted to keep the page component focused on rendering the wizard UI.
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -24,6 +24,14 @@ import type {
 // Re-export the types so existing callers (`import { type ListingFormData }
 // from "@/hooks/useListingForm"`) keep working.
 export type { PropertyType, ListingType, WizardStep, AIPriceSuggestion, ListingFormData };
+
+/**
+ * Set of keys on `ListingFormData` whose values are booleans — derived once
+ * from `INITIAL_FORM` so `toggle()` never silently mutates a non-boolean
+ * column (or, worse, creates a brand-new key that doesn't exist on the type).
+ * Populated lazily below since INITIAL_FORM is declared just after this.
+ */
+let BOOLEAN_KEYS: Set<string> | null = null;
 
 const INITIAL_FORM: ListingFormData = {
   listing_type: "sale",
@@ -73,6 +81,17 @@ export function useListingForm() {
   // Image state
   const [images, setImages] = useState<UploadedImage[]>([]);
   const [coverImageId, setCoverImageId] = useState<string | null>(null);
+  // Track every blob URL we hand out via URL.createObjectURL so we can
+  // revoke them on unmount or replacement — leaking these on a long
+  // listing-creation session leaks raw image bytes for the page lifetime.
+  const blobUrlsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const urls = blobUrlsRef.current;
+    return () => {
+      urls.forEach((u) => URL.revokeObjectURL(u));
+      urls.clear();
+    };
+  }, []);
 
   // ── Sub-hooks ─────────────────────────────────────────────────────────────
 
@@ -106,7 +125,20 @@ export function useListingForm() {
   }, []);
 
   const toggle = useCallback((key: string) => {
-    setForm(f => ({ ...f, [key]: !(f as unknown as Record<string, unknown>)[key] }));
+    if (!BOOLEAN_KEYS) {
+      BOOLEAN_KEYS = new Set(
+        Object.entries(INITIAL_FORM)
+          .filter(([, v]) => typeof v === "boolean")
+          .map(([k]) => k),
+      );
+    }
+    if (!BOOLEAN_KEYS.has(key)) {
+      // Refuse to flip non-boolean (or unknown) columns. Catches typos in
+      // call sites and blocks injection of attacker-controlled keys via UI
+      // bindings.
+      return;
+    }
+    setForm(f => ({ ...f, [key]: !(f as unknown as Record<string, boolean>)[key] }));
   }, []);
 
   const { draftBanner, setDraftBanner, checkDraft, handleSaveDraft, handleRestoreDraft, handleDiscardDraft } =
@@ -141,18 +173,25 @@ export function useListingForm() {
     const newFiles = all.filter(f => f.size <= MAX_FILE_BYTES);
     if (newFiles.length === 0) return;
 
-    const placeholders: UploadedImage[] = newFiles.map(file => ({
-      id: `placeholder-${crypto.randomUUID()}`,
-      url: URL.createObjectURL(file),
-      file,
-      uploading: true,
-    }));
+    const placeholders: UploadedImage[] = newFiles.map(file => {
+      const url = URL.createObjectURL(file);
+      blobUrlsRef.current.add(url);
+      return {
+        id: `placeholder-${crypto.randomUUID()}`,
+        url,
+        file,
+        uploading: true,
+      };
+    });
     setImages(prev => [...prev, ...placeholders]);
 
     for (let i = 0; i < newFiles.length; i++) {
       const placeholder = placeholders[i];
       try {
         const uploaded = await uploadImage(newFiles[i]);
+        // Successful upload — the placeholder blob URL is no longer needed.
+        URL.revokeObjectURL(placeholder.url);
+        blobUrlsRef.current.delete(placeholder.url);
         setImages(prev => prev.map(img =>
           img.id === placeholder.id ? { ...uploaded, uploading: false } : img
         ));
@@ -183,7 +222,14 @@ export function useListingForm() {
   }, []);
 
   const handleRemove = useCallback((id: string) => {
-    setImages(prev => prev.filter(img => img.id !== id));
+    setImages(prev => {
+      const removed = prev.find(img => img.id === id);
+      if (removed && id.startsWith("placeholder-") && removed.url.startsWith("blob:")) {
+        URL.revokeObjectURL(removed.url);
+        blobUrlsRef.current.delete(removed.url);
+      }
+      return prev.filter(img => img.id !== id);
+    });
     setCoverImageId(prev => prev === id ? null : prev);
   }, []);
 

@@ -4,11 +4,52 @@
 **Risk Level:** HIGH (users, data, payments)  
 **Auditor:** Cascade AI  
 
+> ## ⚠️ POST-AUDIT REVIEW (2026-05-03)
+>
+> A follow-up production-readiness audit performed on **2026-05-03** identified
+> additional risks that were **not** captured in this 2026-04-27 report. The
+> "0 critical findings" claim and the "mature security practices" language
+> below are accurate only for the snapshot of code that existed on 2026-04-27;
+> they do **not** reflect the current state of the live Supabase project or
+> the repository as of 2026-05-03.
+>
+> Specifically, the live Supabase advisor reports **121 SECURITY warnings +
+> 354 PERFORMANCE warnings**, including 56 SECURITY DEFINER functions
+> executable to anon/authenticated, 4 public buckets that allow listing,
+> `pg_net` in the public schema, mutable function search paths, and the
+> leaked-password-protection setting being disabled. The 2026-05-03 audit
+> also found:
+>
+> - Several seed/destructive scripts could target the live Supabase URL
+>   without a guard. **Fixed in PR #67 (merged).**
+> - A few user-owned mutations relied on RLS alone for IDOR defence with
+>   no client-side ownership filter. **Fixed in PR #69 (merged).**
+> - File uploads silently passed unsupported MIME types through the
+>   compression helper. **Fixed in PR #70 (merged).**
+> - The main listings grid silently capped results at 200 rows.
+>   **Fixed in PR #72.**
+> - Two of the lower-risk Supabase advisor findings (mutable search_path,
+>   rls_enabled_no_policy on `rate_limit_counters`) are remediated;
+>   the remaining advisor findings need explicit owner sign-off.
+>   **See PR #74 + `docs/SUPABASE_ADVISOR_REMEDIATION.md`.**
+> - `bg-brand-cyan` with white text measured ~1.34:1 contrast, failing
+>   WCAG AA. **Fixed in PR #76.**
+>
+> **For the current open security work, see
+> [`SUPABASE_ADVISOR_REMEDIATION.md`](./SUPABASE_ADVISOR_REMEDIATION.md).**
+>
+> This report should be read as a historical artefact, not a live
+> production-readiness statement.
+
 ---
 
 ## EXECUTIVE SUMMARY
 
 **Status:** ⚠️ **CONDITIONALLY READY** — 2 medium-priority items require attention before go-live, 1 low-priority item recommended for post-launch.
+
+> *Note added 2026-05-03: see the post-audit review banner above — additional
+> findings have surfaced since this report was written. The "executive
+> summary" reflects the 2026-04-27 snapshot only.*
 
 The codebase demonstrates **mature security practices** with comprehensive RLS policies, proper Stripe webhook handling, GDPR-compliant data deletion, XSS defenses, and rate limiting. Multiple audit findings have already been remediated in migrations `20260615000000` and `20260627000000`.
 

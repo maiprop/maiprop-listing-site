@@ -63,6 +63,11 @@ const SUGGESTIONS_PROPERTY = (ctx: PropertyContext) => [
   "What should I know about this neighbourhood?",
 ];
 
+const FOCUSABLE_SELECTOR =
+  'a[href], area[href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), ' +
+  'textarea:not([disabled]), button:not([disabled]), iframe, object, embed, ' +
+  '[tabindex]:not([tabindex="-1"]), [contenteditable="true"]';
+
 const AIAssistantWidget = forwardRef<HTMLDivElement, AIAssistantWidgetProps>(function AIAssistantWidget({ propertyContext, variant = "floating" }, _ref) {
   const [open, setOpen] = useState(variant === "embedded");
   const [minimized, setMinimized] = useState(false);
@@ -71,6 +76,7 @@ const AIAssistantWidget = forwardRef<HTMLDivElement, AIAssistantWidgetProps>(fun
   const [isStreaming, setIsStreaming] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const suggestions = propertyContext
@@ -233,6 +239,7 @@ const AIAssistantWidget = forwardRef<HTMLDivElement, AIAssistantWidgetProps>(fun
   const isEmbedded = variant === "embedded";
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal={!isEmbedded}
       aria-label="AI Property Assistant"
@@ -241,7 +248,33 @@ const AIAssistantWidget = forwardRef<HTMLDivElement, AIAssistantWidgetProps>(fun
           ? `flex flex-col overflow-hidden transition-all duration-200 rounded-2xl border border-border bg-card shadow-elevated ${minimized ? "h-[52px]" : "min-h-[420px] flex-1"}`
           : `fixed bottom-6 right-6 z-50 w-[360px] bg-card border border-border rounded-2xl shadow-elevated flex flex-col overflow-hidden transition-all duration-200 ${minimized ? "h-[52px]" : "h-[520px]"}`
       }
-      onKeyDown={(e) => { if (e.key === "Escape" && !isEmbedded) { setOpen(false); setMinimized(false); } }}
+      onKeyDown={(e) => {
+        if (e.key === "Escape" && !isEmbedded) {
+          setOpen(false);
+          setMinimized(false);
+          return;
+        }
+        // Manual focus trap — the floating variant declares aria-modal=true
+        // but isn't a real Radix Dialog, so we wrap Tab around the dialog's
+        // own focusable elements. The embedded variant lives inside a page,
+        // so Tab should escape normally.
+        if (e.key === "Tab" && !isEmbedded && dialogRef.current) {
+          const focusables = Array.from(
+            dialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+          ).filter((el) => !el.hasAttribute("aria-hidden"));
+          if (focusables.length === 0) return;
+          const first = focusables[0];
+          const last = focusables[focusables.length - 1];
+          const active = document.activeElement as HTMLElement | null;
+          if (e.shiftKey && (active === first || !dialogRef.current.contains(active))) {
+            e.preventDefault();
+            last.focus();
+          } else if (!e.shiftKey && active === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }}
     >
       {/* Header */}
       <div className="flex items-center gap-2.5 px-4 py-3 bg-gradient-primary shrink-0">

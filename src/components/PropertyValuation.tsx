@@ -11,7 +11,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { SignInForAI } from "@/components/SignInForAI";
 import { toast } from "sonner";
 import { useSubscription } from "@/hooks/useSubscription";
-import { useValuationUsage, useRecordValuation, VALUATION_INCLUDED, VALUATION_EXTRA_COST } from "@/hooks/useUsageAddons";
+import { useValuationUsage, VALUATION_INCLUDED, VALUATION_EXTRA_COST } from "@/hooks/useUsageAddons";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -185,7 +185,6 @@ export default function PropertyValuation(props: PropertyValuationProps) {
   const { user } = useAuth();
   const { isPro } = useSubscription();
   const { data: valuationCount = 0 } = useValuationUsage();
-  const recordValuation = useRecordValuation();
   const [result, setResult] = useState<ValuationResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -211,7 +210,6 @@ export default function PropertyValuation(props: PropertyValuationProps) {
           body: { listing_id: listingId, report_type: "valuation" },
         });
         if (!osErr && osRes?.ok && osRes.report && typeof (osRes.report as ValuationResult).estimatedValue === "number") {
-          await recordValuation.mutateAsync(listingId);
           setResult(osRes.report as ValuationResult);
           setExpanded(true);
           setLoading(false);
@@ -222,7 +220,6 @@ export default function PropertyValuation(props: PropertyValuationProps) {
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       if (!data?.estimatedValue) throw new Error("Valuation returned no result");
-      await recordValuation.mutateAsync(listingId ?? undefined);
       setResult(data as ValuationResult);
       setExpanded(true);
     } catch (e: unknown) {

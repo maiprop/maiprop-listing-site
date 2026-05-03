@@ -98,7 +98,7 @@ supabase gen types typescript --linked > src/integrations/supabase/types.ts
 
 ### Performance
 
-- Listings grid uses `pageSize = 24` (infinite scroll); map view fetches up to 500
+- Listings grid uses `pageSize = 24` (infinite scroll via `useListingsPaginated`); map and split views fetch up to `MAP_FETCH_LIMIT = 200` rows in a single bounded request via `useListings` (see `src/hooks/useListings.ts`)
 - `PropertyCard` images use `loading="lazy"` for native browser lazy-loading
 - Dashboard analytics queries (`useListingViewTrends`, `useLeadFunnel`) are only fired inside the lazy-loaded `AnalyticsTab` — not on Dashboard mount
 - Mapbox is dynamically imported inside `MapView` to keep it out of the initial JS bundle

@@ -16,12 +16,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
 const {
-  useAuthMock, useSubMock, useValMock, recordValMock, invokeMock, toastMock,
+  useAuthMock, useSubMock, useValMock, invokeMock, toastMock,
 } = vi.hoisted(() => ({
   useAuthMock: vi.fn(),
   useSubMock: vi.fn(),
   useValMock: vi.fn(),
-  recordValMock: vi.fn(),
   invokeMock: vi.fn(),
   toastMock: { success: vi.fn(), error: vi.fn() },
 }));
@@ -30,7 +29,6 @@ vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => useAuthMock() }));
 vi.mock("@/hooks/useSubscription", () => ({ useSubscription: () => useSubMock() }));
 vi.mock("@/hooks/useUsageAddons", () => ({
   useValuationUsage: () => useValMock(),
-  useRecordValuation: () => ({ mutateAsync: recordValMock }),
   VALUATION_INCLUDED: 5,
   VALUATION_EXTRA_COST: 9,
 }));
@@ -94,14 +92,12 @@ beforeEach(() => {
   useAuthMock.mockReset();
   useSubMock.mockReset();
   useValMock.mockReset();
-  recordValMock.mockReset();
   invokeMock.mockReset();
   toastMock.success.mockReset();
   toastMock.error.mockReset();
   useAuthMock.mockReturnValue({ user: { id: "u-1" } });
   useSubMock.mockReturnValue({ isPro: true });
   useValMock.mockReturnValue({ data: 0 });
-  recordValMock.mockResolvedValue(undefined);
 });
 
 describe("PropertyValuation — gates", () => {
@@ -144,7 +140,6 @@ describe("PropertyValuation — happy paths", () => {
     render(<PropertyValuation {...baseProps} listingId="l-1" />);
     fireEvent.click(screen.getByRole("button", { name: /Run AI Valuation/i }));
     await waitFor(() => expect(screen.getByText("€240.000")).toBeInTheDocument());
-    expect(recordValMock).toHaveBeenCalledWith("l-1");
     // Pricing badge "Underpriced".
     expect(screen.getByText(/Underpriced/i)).toBeInTheDocument();
   });

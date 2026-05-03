@@ -14,6 +14,18 @@ export const LEAD_STAGE_COLORS: Record<string, string> = {
   lost: "bg-muted text-muted-foreground border-border",
 };
 
+/** Display label for each LEAD_STAGE_COLORS key. Single source of truth so
+ * ContactsCRM and any future leads UI render the same labels. */
+export const LEAD_STAGE_LABELS: Record<string, string> = {
+  new: "New",
+  contacted: "Contacted",
+  qualified: "Qualified",
+  proposal: "Proposal",
+  negotiation: "Negotiation",
+  won: "Won",
+  lost: "Lost",
+};
+
 /** Invitation-request / access-request status */
 export const REQUEST_STATUS_COLORS: Record<string, string> = {
   pending: "bg-amber-500/15 text-amber-600 border-amber-500/20",
@@ -76,6 +88,28 @@ export const PROFESSIONAL_DISPLAY_CATEGORY_COLORS: Record<string, string> = {
 export const ENERGY_CLASS_COLORS: Record<string, string> = {
   "A+": "#1a9e3f", A: "#4db848", "B+": "#8dc63f", B: "#c5d92d",
   C: "#f7ec0f", D: "#f6a817", E: "#f26522", F: "#ec1c24", G: "#b31b1b",
+};
+
+/**
+ * Tailwind class tokens for the segmented Energy class selector — paired with
+ * a foreground colour so high-luminosity bands (B/C) get black text and the
+ * dark bands get white. Used by ListingsAdvancedFilters; centralised here
+ * so the colour scale is the single source of truth for both compare drawers
+ * and filter UIs.
+ */
+export const ENERGY_CLASS_BUTTON_COLORS: Record<
+  string,
+  { bg: string; text: string }
+> = {
+  "A+": { bg: "bg-[#00a550]", text: "text-white" },
+  "A":  { bg: "bg-[#50b848]", text: "text-white" },
+  "B+": { bg: "bg-[#8dc63f]", text: "text-white" },
+  "B":  { bg: "bg-[#c3d600]", text: "text-black" },
+  "C":  { bg: "bg-[#ffcc00]", text: "text-black" },
+  "D":  { bg: "bg-[#f7941e]", text: "text-white" },
+  "E":  { bg: "bg-[#f15a22]", text: "text-white" },
+  "F":  { bg: "bg-[#ed1c24]", text: "text-white" },
+  "G":  { bg: "bg-[#be1e2d]", text: "text-white" },
 };
 
 /** Professional category badge — slug keyed (ProVerificationComponents) */

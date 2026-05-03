@@ -324,7 +324,7 @@ Deno.serve(async (req) => {
         }
         if (!rows?.length) break;
         for (const r of rows) {
-          if (Array.isArray(r.tags) && r.tags.some((t: string) => String(t).startsWith("os_auction:")))
+          if (Array.isArray(r.tags) && r.tags.some((t: string) => t.startsWith("os_auction:")))
             idsToDelete.push(r.id);
         }
         if (rows.length < pageSizeSelect) break;

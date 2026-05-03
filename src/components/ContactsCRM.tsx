@@ -20,17 +20,7 @@ import {
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { LEAD_STAGE_COLORS } from "@/lib/statusColors";
-
-const STAGE_LABELS: Record<string, string> = {
-  new: "New",
-  contacted: "Contacted",
-  qualified: "Qualified",
-  proposal: "Proposal",
-  negotiation: "Negotiation",
-  won: "Won",
-  lost: "Lost",
-};
+import { LEAD_STAGE_COLORS, LEAD_STAGE_LABELS as STAGE_LABELS } from "@/lib/statusColors";
 
 export default function ContactsCRM() {
   const [adding, setAdding] = useState(false);

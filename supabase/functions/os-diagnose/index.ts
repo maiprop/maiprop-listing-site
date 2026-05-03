@@ -13,7 +13,11 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 
 const limiter = makeRateLimiter({ bucket: "os-diagnose", maxRequests: 5, windowMs: 60_000 });
 
-async function requireAgent(req: Request, sb: ReturnType<typeof createClient>, corsHeaders: Record<string, string>): Promise<Response | null> {
+async function requireAgent(
+  req: Request,
+  sb: ReturnType<typeof createClient>,
+  corsHeaders: Record<string, string>,
+): Promise<Response | null> {
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
     return new Response(JSON.stringify({ error: "Missing or invalid Authorization header" }), {

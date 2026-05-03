@@ -76,7 +76,49 @@ Deno.serve(async (req) => {
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error("No JSON in AI response");
 
-    const filters = JSON.parse(jsonMatch[0]);
+    const parsed: unknown = JSON.parse(jsonMatch[0]);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("AI response is not an object");
+    }
+
+    // Whitelist + coerce. The AI prompt asks for a fixed schema; if it returns
+    // anything else we drop it on the floor rather than passing the raw object
+    // to the client (which would otherwise echo whatever shape the model felt
+    // like).
+    const src = parsed as Record<string, unknown>;
+    const optionalString = (v: unknown): string | null =>
+      typeof v === "string" && v.trim() !== "" ? v.trim().slice(0, 80) : null;
+    const optionalNumber = (v: unknown, lo = 0, hi = 1_000_000_000): number | null => {
+      const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN;
+      if (!Number.isFinite(n)) return null;
+      return Math.max(lo, Math.min(hi, Math.round(n)));
+    };
+    const optionalEnum = <T extends string>(v: unknown, allowed: readonly T[]): T | null => {
+      return typeof v === "string" && (allowed as readonly string[]).includes(v) ? (v as T) : null;
+    };
+    const optionalStringArray = (v: unknown, max = 30): string[] => {
+      if (!Array.isArray(v)) return [];
+      return v.filter((x): x is string => typeof x === "string").slice(0, max);
+    };
+
+    const filters = {
+      city: optionalString(src.city),
+      listing_type: optionalEnum(src.listing_type, ["sale", "rent", "auction"] as const),
+      property_type: optionalEnum(src.property_type, [
+        "apartment", "house", "villa", "land", "commercial", "office",
+      ] as const),
+      price_min: optionalNumber(src.price_min),
+      price_max: optionalNumber(src.price_max),
+      beds_min: optionalNumber(src.beds_min, 0, 100),
+      beds_max: optionalNumber(src.beds_max, 0, 100),
+      sqm_min: optionalNumber(src.sqm_min, 0, 100_000),
+      sqm_max: optionalNumber(src.sqm_max, 0, 100_000),
+      features: optionalStringArray(src.features),
+      energy: optionalStringArray(src.energy, 12),
+      heating: optionalEnum(src.heating, ["autonomous", "central", "floor", "none"] as const),
+      summary: optionalString(src.summary) ?? "",
+    };
+
     await recordAiCall(quota.userId, BUCKET);
     return new Response(JSON.stringify(filters), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
