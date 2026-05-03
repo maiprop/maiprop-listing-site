@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.1.2](https://github.com/maiprop/maiprop-listing-site/compare/v1.1.1...v1.1.2) (2026-05-03)
+
+
+### Bug Fixes
+
+* **listings:** paginate grid view to remove silent 200-row cap ([#72](https://github.com/maiprop/maiprop-listing-site/issues/72)) ([11f70de](https://github.com/maiprop/maiprop-listing-site/commit/11f70de4301fdd4fa81dd362245074fee7afd9e5))
+* **security,quality:** address 5 deep-read findings (rate limiter, CORS, any types, BASE_URL, ProfileEditor) ([#62](https://github.com/maiprop/maiprop-listing-site/issues/62)) ([48a83ee](https://github.com/maiprop/maiprop-listing-site/commit/48a83ee0f21fd8358dff46b61a0ecc4e18c98078))
+* **upload:** centralised MIME allowlist + reject unsupported uploads ([#70](https://github.com/maiprop/maiprop-listing-site/issues/70)) ([dd9d69f](https://github.com/maiprop/maiprop-listing-site/commit/dd9d69f1557775fc7943484c3665fc2409010a15))
+
 ## [1.1.1](https://github.com/maiprop/maiprop-listing-site/compare/v1.1.0...v1.1.1) (2026-05-03)
 
 
