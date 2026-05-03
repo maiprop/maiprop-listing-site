@@ -87,6 +87,6 @@ export function useAuctionListings() {
         new Promise<never>((_, rej) => setTimeout(() => rej(new Error("Request timeout")), QUERY_TIMEOUT_MS)),
       ]);
     },
-    staleTime: 60 * 1000, // 1 minute — auction status changes frequently
+    staleTime: 30_000, // 30s — auction status changes frequently
   });
 }

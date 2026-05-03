@@ -5,11 +5,11 @@ This repo runs in three environments. Each has its own variables and its own sou
 | Env | Source of truth | Who edits |
 |---|---|---|
 | Local dev | `.env` at repo root (gitignored) | every developer |
-| Staging | Netlify → Environment variables, scoped to branch `staging` | platform lead |
-| Production | Netlify → Environment variables, scoped to `production` context | platform lead |
+| Staging | Cloudflare Pages → Environment variables, scoped to `staging` branch | platform lead |
+| Production | Cloudflare Pages → Environment variables, scoped to `production` context | platform lead |
 | CI (GH Actions) | Repo → Settings → Secrets and variables → Actions | repo admin |
 
-Edge-function secrets (Stripe keys, service role, OpenAI) live in **Supabase → Project Settings → Edge Functions → Secrets**, **not** in Netlify. They never reach the browser.
+Edge-function secrets (Stripe keys, service role, OpenAI) live in **Supabase → Project Settings → Edge Functions → Secrets**, **not** in Cloudflare Pages. They never reach the browser.
 
 ---
 
@@ -72,10 +72,10 @@ See [`STAGING_SETUP.md`](./STAGING_SETUP.md) for the full walkthrough. Variables
 
 ## Production
 
-### In Netlify
+### In Cloudflare Pages
 
-1. Site settings → Environment variables.
-2. Add each variable from the table below with scope = `production`.
+1. Project settings → Environment variables.
+2. Add each variable below for the `Production` environment.
 3. Do **not** add service-role, Stripe secret, or OpenAI keys here — those go to Supabase edge-function secrets.
 
 | Variable | Required | Notes |

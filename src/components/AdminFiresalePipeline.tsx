@@ -87,7 +87,7 @@ function useUpdateAdminDeal() {
         toast.success(status === "closed" ? "Deal closed!" : "Deal updated");
       }
     },
-    onError: () => toast.error("Failed to update"),
+    onError: () => toast.error("Failed to update firesale deal. Please try again."),
   });
 }
 

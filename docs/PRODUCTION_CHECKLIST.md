@@ -12,7 +12,7 @@ Go through every box **before** promoting a release to production. This is a saf
 
 ## 2. Secrets & environment
 
-- [ ] All variables in [`ENV_SETUP.md`](./ENV_SETUP.md) "Production" table are set in Netlify.
+- [ ] All variables in [`ENV_SETUP.md`](./ENV_SETUP.md) "Production" table are set in Cloudflare Pages.
 - [ ] All edge-function secrets are set in Supabase → Edge Functions → Secrets.
 - [ ] No `VITE_` key contains a value that should be server-side only (publishable_key ≠ service_role).
 - [ ] `VITE_SENTRY_DSN` set → verify by triggering a test error in Sentry staging project.
@@ -39,14 +39,14 @@ Go through every box **before** promoting a release to production. This is a saf
 ## 5. Monitoring & observability
 
 - [ ] Sentry production project exists and has release created (`SENTRY_RELEASE` set in build if using source maps).
-- [ ] Source maps uploaded to Sentry (if enabled) and **not** served publicly (`/*.map` rule in `netlify.toml`).
+- [ ] Source maps uploaded to Sentry (if enabled) and **not** served publicly (`/*.map` rule in `public/_headers`).
 - [ ] Supabase logs retention is adequate (pro tier → 7 days minimum).
 - [ ] On-call rota documented and current contact knows who escalates.
 - [ ] At least one synthetic uptime check (e.g. UptimeRobot, Better Stack) points at `https://maiprop.co/` and `/functions/v1/sitemap`.
 
 ## 6. Security headers & CSP
 
-- [ ] `netlify.toml` CSP reviewed for this release. New third-party scripts require explicit entries in `script-src`.
+- [ ] `public/_headers` CSP reviewed for this release. New third-party scripts require explicit entries in `script-src`.
 - [ ] HSTS is set with `preload` and the domain is submitted to <https://hstspreload.org/> (once — not every release).
 - [ ] No `'unsafe-eval'` or `'unsafe-inline'` in `script-src`.
 - [ ] Run <https://securityheaders.com> against the staging URL — at least grade A.
@@ -54,8 +54,8 @@ Go through every box **before** promoting a release to production. This is a saf
 
 ## 7. DNS, CDN, TLS
 
-- [ ] Custom domain `maiprop.co` resolves to Netlify and serves the current build.
-- [ ] TLS certificate is valid and renewal is automatic (Netlify managed cert).
+- [ ] Custom domain `maiprop.co` resolves to Cloudflare Pages and serves the current build.
+- [ ] TLS certificate is valid and renewal is automatic (Cloudflare managed cert).
 - [ ] `www.maiprop.co` and apex both work and one 301s to the other consistently.
 - [ ] robots.txt + sitemap.xml accessible and up to date.
 
@@ -78,7 +78,7 @@ Go through every box **before** promoting a release to production. This is a saf
 - [ ] Sign in / sign out works.
 - [ ] At least one successful upgrade via Stripe in live mode.
 - [ ] Sentry received at least one transaction and zero new `error`-level events from real users.
-- [ ] Netlify analytics shows traffic (rules out DNS misrouting).
+- [ ] Cloudflare analytics shows traffic (rules out DNS misrouting).
 - [ ] Stripe dashboard shows webhook delivered 200 for the test checkout.
 
 ---
@@ -87,7 +87,7 @@ Go through every box **before** promoting a release to production. This is a saf
 
 If any post-deploy check fails within the first 30 minutes:
 
-1. **Netlify**: Site → Deploys → find the previous green deploy → **Publish deploy**. This is near-instant.
+1. **Cloudflare Pages**: Deployments → find the previous green deploy → **Rollback to this deploy**. This is near-instant.
 2. **Supabase migrations** are not automatically rolled back. If the bad deploy applied a schema change, write a compensating migration — do **not** drop the new column blindly.
 3. File an incident under `docs/incidents/YYYY-MM-DD-<slug>.md` with a blameless timeline.
 
