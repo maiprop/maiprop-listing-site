@@ -106,5 +106,12 @@ Required vars (see `.env.example`):
 - `VITE_SUPABASE_PROJECT_ID`
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
 - `VITE_TURNSTILE_SITE_KEY` (optional — has fallback)
+- `VITE_SENTRY_DSN` (optional — enables error tracking + performance tracing)
 
 `src/lib/config.ts` validates these at startup.
+
+### Supabase Secrets (Edge Functions)
+
+Set via `supabase secrets set KEY=value`:
+- `SENTRY_DSN` — enables error forwarding from edge functions to Sentry (fire-and-forget HTTP POST, no SDK)
+- `ENVIRONMENT` — tags Sentry events (`production` / `staging`); defaults to `production`
