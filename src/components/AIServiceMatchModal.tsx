@@ -81,7 +81,7 @@ export function AIServiceMatchModal({ onClose, onNavigate }: AIServiceMatchModal
             <p className="font-display font-semibold text-sm">Find Matching Professional</p>
             <p className="text-[11px] text-muted-foreground">Describe your need — we'll match you by criteria, availability & area</p>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-secondary transition-colors">
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-secondary transition-colors" aria-label="Close">
             <X className="w-4 h-4 text-muted-foreground" />
           </button>
         </div>

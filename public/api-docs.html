@@ -9,7 +9,7 @@
       Hosted at https://maiprop.co/api-docs.html once the site is deployed.
       Renders docs/api/edge-functions.openapi.yaml via Redoc (CDN).
       The YAML itself is served from /docs/edge-functions.openapi.yaml by the
-      redirect below; if you change the URL, update netlify.toml accordingly.
+      redirect below; if you change the URL, update public/_redirects accordingly.
     -->
     <style>
       body { margin: 0; padding: 0; font-family: system-ui, sans-serif; }
@@ -17,6 +17,8 @@
   </head>
   <body>
     <redoc spec-url="/docs/edge-functions.openapi.yaml" hide-hostname></redoc>
-    <script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"></script>
+    <script src="https://cdn.redoc.ly/redoc/v2.5.2/bundles/redoc.standalone.js"
+            integrity="sha384-70P5pmIdaQdVbxvjhrcTDv1uKcKqalZ3OHi7S2J+uzDl0PW8dO6L+pHOpm9EEjGJ"
+            crossorigin="anonymous"></script>
   </body>
 </html>
