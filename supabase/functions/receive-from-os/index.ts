@@ -3,18 +3,19 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { verifyHmacSignature, HmacVerifyError } from "../_shared/webhookHmac.ts";
 import { errorResponse, unavailableResponse } from "../_shared/response.ts";
 import { createLogger } from "../_shared/logger.ts";
-import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 const log = createLogger("receive-from-os");
 
 Deno.serve(async (req) => {
-  const corsPreflight = handleCors(req);
-  if (corsPreflight) return corsPreflight;
   const corsHeaders = {
     ...getCorsHeaders(req),
     "Access-Control-Allow-Headers":
       "authorization, x-client-info, apikey, content-type, x-os-signature",
   };
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,

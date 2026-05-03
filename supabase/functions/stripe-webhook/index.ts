@@ -17,7 +17,7 @@ import { createLogger } from "../_shared/logger.ts";
 
 const log = createLogger("stripe-webhook");
 
-import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 function stripeCorsHeaders(req: Request): Record<string, string> {
   return {
@@ -28,9 +28,10 @@ function stripeCorsHeaders(req: Request): Record<string, string> {
 }
 
 Deno.serve(async (req) => {
-  const corsPreflight = handleCors(req);
-  if (corsPreflight) return corsPreflight;
   const corsHeaders = stripeCorsHeaders(req);
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
 
   const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
   const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
