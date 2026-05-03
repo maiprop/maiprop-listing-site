@@ -1,0 +1,97 @@
+# Changelog
+
+## 1.0.0 (2026-05-03)
+
+
+### Features
+
+* add new-build for-rent listings to seed script (6 managed rentals) ([abde18a](https://github.com/maiprop/maiprop-listing-site/commit/abde18a7db8a10bf9c09054d678c3225ed34f2f7))
+* add seed-mock-open-houses script (12 listings with full settings) ([d92adb6](https://github.com/maiprop/maiprop-listing-site/commit/d92adb655818e4e98d995d03614e498fdd0ca23c))
+* **ai-usage:** monthly quota enforcement across AI edge functions ([f99a996](https://github.com/maiprop/maiprop-listing-site/commit/f99a9961c624e9deea76fe70a155923f1d3582b3))
+* CI/CD batch — edge function deploy, release-please, docs, Dockerfile, i18n cache ([#58](https://github.com/maiprop/maiprop-listing-site/issues/58)) ([155e1d0](https://github.com/maiprop/maiprop-listing-site/commit/155e1d00ea7869f3d5a6e106e8c8622261692462))
+* code quality batch — SRI, ARIA, dashboard tests, observability & image docs ([#59](https://github.com/maiprop/maiprop-listing-site/issues/59)) ([e71accb](https://github.com/maiprop/maiprop-listing-site/commit/e71accb1213efdfce7facfb52b1a18ff155006ee))
+* comprehensive code quality improvements ([84c6c4a](https://github.com/maiprop/maiprop-listing-site/commit/84c6c4a43fd2e0b10bb5b5367919b0f92dfe9bf2))
+* CORS env-gating, CSP reporting, retry utility, rate-limit alerting, index docs ([#39](https://github.com/maiprop/maiprop-listing-site/issues/39)) ([cf90ca3](https://github.com/maiprop/maiprop-listing-site/commit/cf90ca31847e063a36fe89c3ecfd89a02607d449))
+* **deploy:** migrate from Netlify to Cloudflare Pages ([4431cec](https://github.com/maiprop/maiprop-listing-site/commit/4431cecad10c7bfb47fbebe7b9c9e84bd2b22a19))
+* **deploy:** rebuild with real Vite secrets in the Cloudflare production deploy ([f53e14c](https://github.com/maiprop/maiprop-listing-site/commit/f53e14cb5655e898afde07ac9df5d7a17e7b186e))
+* **edge:** add site-lock + canonical-host 301 redirect ([cd5917f](https://github.com/maiprop/maiprop-listing-site/commit/cd5917fe419fa5ade39987ab2a7e94c133b98c2c))
+* i18n, performance optimisations, new pages, Netlify deploy config ([9b47596](https://github.com/maiprop/maiprop-listing-site/commit/9b47596a38f83360e4f323eef5e66367916079a0))
+* **logger:** add structured JSON logger for edge functions; migrate top 5 fns ([5acde61](https://github.com/maiprop/maiprop-listing-site/commit/5acde61f59de725751a894fbe111407d6e066d25))
+* **logger:** migrate remaining 24 edge functions to structured logger (0 console.* left) ([ae99647](https://github.com/maiprop/maiprop-listing-site/commit/ae99647ebe583ef0af572438b8270b1977669b80))
+* notifications dropdown, new build interest form, featured ads expiry ([7db58b9](https://github.com/maiprop/maiprop-listing-site/commit/7db58b97aaa10f356c9b37466ff6011dd77f4279))
+* **observability:** forward edge function errors to Sentry via SENTRY_DSN ([2bfff42](https://github.com/maiprop/maiprop-listing-site/commit/2bfff42553e35082248ea233c8e2d6fa40023da6))
+* overhaul onboarding role selection flow and security checks ([6368178](https://github.com/maiprop/maiprop-listing-site/commit/636817830908819af59f3b2fd736cea874c4ff1c))
+* overhaul onboarding role selection flow and security checks ([435ec26](https://github.com/maiprop/maiprop-listing-site/commit/435ec26273d153ddb81d9becc3da5d7f1f217dc5))
+* Phase 2e-3 — password policy, select(*) fix, circuit breaker, healthz, commitlint ([#37](https://github.com/maiprop/maiprop-listing-site/issues/37)) ([07e9f2d](https://github.com/maiprop/maiprop-listing-site/commit/07e9f2d8c78500bd976fabfff737f383ab7940aa))
+* phase 4 batch 2 — seed hardening, docs cleanup, DR runbook, tests ([#40](https://github.com/maiprop/maiprop-listing-site/issues/40)) ([7691d27](https://github.com/maiprop/maiprop-listing-site/commit/7691d2738cbfd2590ffa64c9c852d56de46073ca))
+* Phase 5 Batch 1 — docs, CI hardening, error toast specificity ([#55](https://github.com/maiprop/maiprop-listing-site/issues/55)) ([887a6f3](https://github.com/maiprop/maiprop-listing-site/commit/887a6f34bda248299110447bbbdbe1b360a6be9c))
+* plan limits, usage-based add-ons, free/pro dashboard and profile tiers ([6467718](https://github.com/maiprop/maiprop-listing-site/commit/6467718a02f08bd126a188835480c42793cec1b0))
+* **pro-gate:** consolidate paywall at the dashboard section level ([0b90eba](https://github.com/maiprop/maiprop-listing-site/commit/0b90eba721ba39de766dc01b896ecac50741ab89))
+* RLS NULL guards on all admin policies + rate limit & timeout all edge functions ([#33](https://github.com/maiprop/maiprop-listing-site/issues/33)) ([bf3f569](https://github.com/maiprop/maiprop-listing-site/commit/bf3f56995bdb356d067d67b840341a296079d373))
+* **scripts:** migration idempotency lint with vitest tests and CI step ([1782c07](https://github.com/maiprop/maiprop-listing-site/commit/1782c07ae96098be8f9e664700d66c83302b3a5f))
+* security batch — Sentry, CSP, UptimeRobot, auth audit, on-call docs ([#57](https://github.com/maiprop/maiprop-listing-site/issues/57)) ([f754edf](https://github.com/maiprop/maiprop-listing-site/commit/f754edf76a59ae48f07f0713e598e5a4273c13fa))
+* **security:** server-side rate limiting + authoritative role + plan-limit hardening ([e95ece4](https://github.com/maiprop/maiprop-listing-site/commit/e95ece430f8280a13a36e1ffa14453918717083b))
+
+
+### Bug Fixes
+
+* 25 issues across forms, auth, admin, pricing, and UX flows ([4bd780d](https://github.com/maiprop/maiprop-listing-site/commit/4bd780d9c5a508cabac487922fd9860328c0b718))
+* **a11y+e2e:** final axe fixes and nav locator ordering ([d14d512](https://github.com/maiprop/maiprop-listing-site/commit/d14d5126282debbcbfe545d0df6a95e4fb01e325))
+* **a11y+e2e:** render Navbar during PropertyDetail loading, add h1 on Listings, fix form labels, darken Pricing accents, stabilize offline test ([6a2756a](https://github.com/maiprop/maiprop-listing-site/commit/6a2756a7567963276241d125428c4b24976dee1c))
+* **a11y:** add aria-labels to OpenHouses view-mode, filters buttons and year select ([78c1f59](https://github.com/maiprop/maiprop-listing-site/commit/78c1f59620bad613a9f4c819cebb55c66882829a))
+* add getPlanLimits to usePlanLimits vi.mock in both test files ([f377d7c](https://github.com/maiprop/maiprop-listing-site/commit/f377d7c137d9e184124c188b67f06e647390ec56))
+* add missing Clock import in NeighbourhoodReport (crashed all property pages) ([ffc99d5](https://github.com/maiprop/maiprop-listing-site/commit/ffc99d563a893d789dad5ed49f3172c972739870))
+* auction map — remove type tags, fix heatmap, fix draw area filter ([26e0f31](https://github.com/maiprop/maiprop-listing-site/commit/26e0f315e46f2b01b8d7f96d54f5b9858f5b0656))
+* audit gap remediation - stripe admin auth, message attachments, OS sync, report card ([ea43c9e](https://github.com/maiprop/maiprop-listing-site/commit/ea43c9e0ecb46769698492d854b318a9be09a95c))
+* **audit:** remediate 12 deep-audit findings ([63a35e4](https://github.com/maiprop/maiprop-listing-site/commit/63a35e42013f0a94e10a85357ccb88ee8fbc1b7d))
+* brand name in auth emails, CI gate deploy, edge fn auth ([c76203a](https://github.com/maiprop/maiprop-listing-site/commit/c76203a6f145e32efc19d5105b5f2a28f27c3c93))
+* **check-bundle-size:** support Vite 7 base64url chunk hashes + add regression tests ([5d2b1a1](https://github.com/maiprop/maiprop-listing-site/commit/5d2b1a18028e35731bff72fe07359d0af55e391a))
+* **ci+a11y:** resolve final 2 migration failures and axe contrast ([6b526d4](https://github.com/maiprop/maiprop-listing-site/commit/6b526d4c0831670812e2301595d2359e701aa1a7))
+* **ci:** unblock vitest run by stubbing Navigate + fixing smoke fixtures ([7187e83](https://github.com/maiprop/maiprop-listing-site/commit/7187e8349b3bae1f2522dba3d3e7a23795c018c4))
+* **config:** flip canonical origin to portal.maiprop.co ([02a6a74](https://github.com/maiprop/maiprop-listing-site/commit/02a6a746e5e48c6d1f95a1af5511b39818f62f41))
+* **cors:** add portal.maiprop.co to edge-function allowlists ([6c198d9](https://github.com/maiprop/maiprop-listing-site/commit/6c198d978ad04a8f0c99560ff289740d4dee7c4a))
+* deno cache npm dep before test to ensure type resolution ([5a3d2e2](https://github.com/maiprop/maiprop-listing-site/commit/5a3d2e2d70d82ee343497756374f5db2f99c11cc))
+* **deno-tests:** unblock the entire edge-function suite (171/171 green) ([5cc64aa](https://github.com/maiprop/maiprop-listing-site/commit/5cc64aaaaabbbbcb1641d918f2b192b63f0ab708))
+* **e2e a11y:** pre-dismiss cookie banner before axe scans ([6c6eace](https://github.com/maiprop/maiprop-listing-site/commit/6c6eacebaba5b1b450b3cf3a814107810c49fa2b))
+* handle header-normalised Bearer token in verifyBearerToken ([d98d3dc](https://github.com/maiprop/maiprop-listing-site/commit/d98d3dc0d0457d694b27be4ba27af79335113465))
+* **lint:** remove unused createClient imports in ai-service-match and property-chat ([3f5941c](https://github.com/maiprop/maiprop-listing-site/commit/3f5941c321cad2afe0cf4c0ce15b997aa752cfdb))
+* make all interaction E2E specs skip gracefully when creds are absent ([1b37c83](https://github.com/maiprop/maiprop-listing-site/commit/1b37c83f5805fce99eaeaf4187c883b71b093a83))
+* **migrations:** add 'admin' enum value before referencing it in 20260318140000 ([6520b83](https://github.com/maiprop/maiprop-listing-site/commit/6520b835372538c42d3af9fe9ea1c747667a93cb))
+* **migrations:** preserve auth.uid() default on has_platform_admin ([18f74fd](https://github.com/maiprop/maiprop-listing-site/commit/18f74fd5321989611ab50784300987968c1b7b7a))
+* open house registration handles duplicate gracefully + better error messages ([#52](https://github.com/maiprop/maiprop-listing-site/issues/52)) ([d1dd759](https://github.com/maiprop/maiprop-listing-site/commit/d1dd759f1aeb343fef86b9b14356f705f415b353))
+* **open-house:** comprehensive module audit fixes (12 bugs + 3 follow-ups) ([041b0c8](https://github.com/maiprop/maiprop-listing-site/commit/041b0c8adb7e12d07a73f6f6304f6d6378cd4c64))
+* **pricing:** align Investor/Institutional pricing with database values and wire all features with limits ([572ad99](https://github.com/maiprop/maiprop-listing-site/commit/572ad99c5e398e9452c7fee7f51dd82bf9d84101))
+* property pages, user type switching, quick sale loading, pricing tailoring ([eb6d41b](https://github.com/maiprop/maiprop-listing-site/commit/eb6d41bb59acf0b7654d95840e4dd4e0c77d4c97))
+* remove admin/listing duplicates - delete useAuth, simplify AdminPricing, clarify nav labels ([401a3f5](https://github.com/maiprop/maiprop-listing-site/commit/401a3f5deb8e9cc8548584c517d1f06b49f9e414))
+* remove npm:@supabase/supabase-js import from shared auth utilities ([794befa](https://github.com/maiprop/maiprop-listing-site/commit/794befa133abc5c31438b5f954b4c2cfc5076c4d))
+* resolve 18 CI migration failures + a11y + pro-only types ([4eca0ea](https://github.com/maiprop/maiprop-listing-site/commit/4eca0eace07877f89eca9bd0d52b0aa888d4ca06))
+* resolve 3 critical QA issues — UTF-8 mojibake, InvestorRoute blank page, force_pro_access override ([#38](https://github.com/maiprop/maiprop-listing-site/issues/38)) ([7fe7ae9](https://github.com/maiprop/maiprop-listing-site/commit/7fe7ae92f7235ee67debbf2f13dd1495c514bead))
+* resolve all 19 reported issues ([e242795](https://github.com/maiprop/maiprop-listing-site/commit/e242795c93f69391ff4afa2acacad98fafa3f7d8))
+* resolve all migration-validate CI failures ([0184a50](https://github.com/maiprop/maiprop-listing-site/commit/0184a5046dcfd19a48c09d68b707cfbbb6a2ac58))
+* resolve all remaining audit issues from pre-launch review ([9842db6](https://github.com/maiprop/maiprop-listing-site/commit/9842db624c061e483b0126eaebb1bb5b6e4cc527))
+* resolve all user typology flow issues across free and paid plans ([f691238](https://github.com/maiprop/maiprop-listing-site/commit/f691238cfa719334c993237ab57ed30b7b10ec61))
+* resolve CI Deno type-resolution failure and harden deployment pipeline ([96c3ec8](https://github.com/maiprop/maiprop-listing-site/commit/96c3ec8cd5a4973ba091e4488619b898b3fc2678))
+* resolve CI failures — migrations, axe violations, TS errors ([bcf9fc2](https://github.com/maiprop/maiprop-listing-site/commit/bcf9fc2ab7fab370eb3696d27c2e1521ad5d1b19))
+* resolve CI failures from previous commit ([99b77e7](https://github.com/maiprop/maiprop-listing-site/commit/99b77e756c9ec56390263a1379dbee0db16a91cf))
+* resolve lint errors in edge function test files ([f5343e1](https://github.com/maiprop/maiprop-listing-site/commit/f5343e1b513ced691fccd257d3b20f1ddd8425fc))
+* resolve P0/P1 issues from pre-launch audit ([1d5be95](https://github.com/maiprop/maiprop-listing-site/commit/1d5be95a0857b626ac307967cc939831fb211854))
+* resolve profiles RLS infinite recursion and add missing indexes ([#31](https://github.com/maiprop/maiprop-listing-site/issues/31)) ([89c399b](https://github.com/maiprop/maiprop-listing-site/commit/89c399b30d81ef6dd4500b056f6a7df9af604d29))
+* resolve two E2E test failures ([bc7cc26](https://github.com/maiprop/maiprop-listing-site/commit/bc7cc26afae24cc1db092629599002ccda8db72d))
+* run deno test from supabase/functions so deno.json is discovered ([f04330e](https://github.com/maiprop/maiprop-listing-site/commit/f04330e7d2155ef0310c16ab962c1c3ad7bbe970))
+* sidebar button detects existing registration after page refresh ([#56](https://github.com/maiprop/maiprop-listing-site/issues/56)) ([2e11cdc](https://github.com/maiprop/maiprop-listing-site/commit/2e11cdca50d333a7d35f9495e077642878d0f636))
+* **site-lock:** tolerate Sec-Fetch-Site / hostname variants in CSRF guard ([01b0421](https://github.com/maiprop/maiprop-listing-site/commit/01b04218c17d784235a7b484a93900f56a7bc390))
+* sync package-lock.json after i18next-scanner was added ([31902ad](https://github.com/maiprop/maiprop-listing-site/commit/31902ad2c3bee5cde3295d3954819828e5193a6d))
+* **test:** add afterEach(cleanup) to fix stale-DOM failures ([a5a28e5](https://github.com/maiprop/maiprop-listing-site/commit/a5a28e58604ae4d1230ab76126d13a2669fa7e3c))
+* **test:** use string body+Content-Type in middleware tests for Node 20 undici ([8e5288f](https://github.com/maiprop/maiprop-listing-site/commit/8e5288fa3fae34daa916953d239ef3065b6c5668))
+* **types:** gate CI build on tsc + fix 13 TS errors ([f12a218](https://github.com/maiprop/maiprop-listing-site/commit/f12a2181598e636d1dc67d5077f5c80fc7e5e8fc))
+* UX crash audit — null coordinates, broken avatar img, valuation guard ([c9dd1b5](https://github.com/maiprop/maiprop-listing-site/commit/c9dd1b580e5e0d8c425ab6702f0811d3d5869d5e))
+
+
+### Performance Improvements
+
+* code splitting, WebP images, WebM hero video, pagination ([2d88a62](https://github.com/maiprop/maiprop-listing-site/commit/2d88a62a201c4ea2a7ebd93bd76bf20a13bb9fef))
+
+
+### Reverts
+
+* **edge:** disable portal\u2192maiprop.co 301 \u2014 DNS not aligned ([e9e19c6](https://github.com/maiprop/maiprop-listing-site/commit/e9e19c6789eccd808d1a325083594e7e2d33f644))
