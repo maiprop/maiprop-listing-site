@@ -139,7 +139,10 @@ export function useUpsertOpenHouseSettings() {
       qc.invalidateQueries({ queryKey: ["open_house_registrations", v.listingId] });
       toast.success("Settings saved");
     },
-    onError: () => toast.error("Failed to save open house settings. Please try again."),
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : "Failed to save settings. Please try again.";
+      toast.error(msg);
+    },
   });
 }
 
@@ -209,7 +212,20 @@ export function useCreateOpenHouseRegistration() {
         })
         .select()
         .single();
-      if (error) throw error;
+      if (error) {
+        // Handle duplicate registration gracefully — fetch existing and return it
+        if (error.code === "23505") {
+          const { data: existing, error: fetchErr } = await supabase
+            .from("open_house_registrations")
+            .select("*")
+            .eq("listing_id", listingId)
+            .eq("requester_id", authUser.id)
+            .single();
+          if (fetchErr || !existing) throw new Error("You already have a registration for this open house.");
+          return existing;
+        }
+        throw error;
+      }
       return data;
     },
     onSuccess: (_, v) => {
@@ -217,7 +233,10 @@ export function useCreateOpenHouseRegistration() {
       qc.invalidateQueries({ queryKey: ["open_house_registrations_mine"] });
       toast.success("Registration submitted. Complete ID verification and waiver to be considered.");
     },
-    onError: () => toast.error("Failed to submit registration. Please try again."),
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : "Registration failed. Please try again.";
+      toast.error(msg);
+    },
   });
 }
 
@@ -264,7 +283,10 @@ export function useUpdateOpenHouseRegistration() {
       qc.invalidateQueries({ queryKey: ["open_house_registrations_mine"] });
       toast.success("Updated");
     },
-    onError: () => toast.error("Failed to update registration. Please try again."),
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : "Update failed. Please try again.";
+      toast.error(msg);
+    },
   });
 }
 
@@ -345,7 +367,10 @@ export function useSubmitOpenHouseOffer() {
       qc.invalidateQueries({ queryKey: ["open_house_offers_mine"] });
       toast.success("Offer submitted");
     },
-    onError: () => toast.error("Failed to submit offer. Please try again."),
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : "Failed to submit offer. Please try again.";
+      toast.error(msg);
+    },
   });
 }
 
@@ -379,7 +404,10 @@ export function useUpdateOpenHouseOffer() {
       qc.invalidateQueries({ queryKey: ["open_house_offers"] });
       toast.success("Offer updated");
     },
-    onError: () => toast.error("Failed to update offer. Please try again."),
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : "Failed to update offer. Please try again.";
+      toast.error(msg);
+    },
   });
 }
 
@@ -417,7 +445,10 @@ export function useAcceptOpenHouseOffer() {
       qc.invalidateQueries({ queryKey: ["open_house_offers", v.listingId] });
       toast.success("Offer accepted — other bids automatically rejected");
     },
-    onError: () => toast.error("Failed to accept offer. Please try again."),
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : "Failed to accept offer. Please try again.";
+      toast.error(msg);
+    },
   });
 }
 
@@ -437,7 +468,10 @@ export function useRevealAllOffers() {
       qc.invalidateQueries({ queryKey: ["open_house_offers", v.listingId] });
       toast.success("All bids revealed");
     },
-    onError: () => toast.error("Failed to reveal bids. Please try again."),
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : "Failed to reveal offers. Please try again.";
+      toast.error(msg);
+    },
   });
 }
 

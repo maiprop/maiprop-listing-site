@@ -76,8 +76,8 @@ jobs:
 
       - name: License compliance check
         run: |
-          npx license-checker --production --failOn 'GPL-2.0;GPL-3.0;AGPL-1.0;AGPL-3.0' --summary || {
-            echo "::error::Found dependencies with restricted licenses (GPL/AGPL). Review before deploying."
+          npx license-checker --production --failOn 'GPL-2.0;GPL-3.0;AGPL-1.0;AGPL-3.0;LGPL-2.0;LGPL-2.1;LGPL-3.0;MPL-1.0;MPL-1.1;MPL-2.0;EPL-1.0;EPL-2.0;CDDL-1.0;CDDL-1.1' --summary || {
+            echo "::error::Found dependencies with restricted licenses (GPL/AGPL/LGPL/MPL/EPL/CDDL). Review before deploying."
             exit 1
           }
 
