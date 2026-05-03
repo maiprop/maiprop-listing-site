@@ -8,7 +8,7 @@
  *   proonly    → warn that the new role (developer) requires a paid plan
  */
 
-import { AlertTriangle, ArrowRight, CreditCard, TrendingDown, TrendingUp, Loader2 } from "lucide-react";
+import { AlertTriangle, ArrowRight, CreditCard, Mail, TrendingDown, TrendingUp, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { ParticipantId } from "@/lib/participantConfig";
@@ -25,6 +25,13 @@ interface RoleSwitchModalProps {
 }
 
 function SwitchKindBadge({ kind }: { kind: SwitchKind }) {
+  if (kind === "invite-only") {
+    return (
+      <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+        <Mail className="w-3 h-3" /> Invitation-only
+      </span>
+    );
+  }
   if (kind === "upgrade" || kind === "proonly") {
     return (
       <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">
@@ -40,6 +47,13 @@ function SwitchKindBadge({ kind }: { kind: SwitchKind }) {
     );
   }
   return null;
+}
+
+/** Format a plan's monthly price for the role-switch summary row. */
+function formatPlanLine(plan: { monthlyPrice: number; inviteOnly: boolean }): string {
+  if (plan.inviteOnly) return "By application";
+  if (plan.monthlyPrice === 0) return "Free";
+  return `€${plan.monthlyPrice}/mo`;
 }
 
 export function RoleSwitchModal({
@@ -65,15 +79,21 @@ export function RoleSwitchModal({
         {/* Header */}
         <div className={cn(
           "px-6 py-4 border-b border-border flex items-center gap-3",
-          kind === "upgrade" || kind === "proonly" ? "bg-amber-500/5" : "bg-blue-500/5"
+          kind === "invite-only" ? "bg-emerald-500/5"
+            : kind === "upgrade" || kind === "proonly" ? "bg-amber-500/5"
+            : "bg-blue-500/5"
         )}>
           <div className={cn(
             "w-9 h-9 rounded-xl flex items-center justify-center shrink-0",
-            kind === "upgrade" || kind === "proonly" ? "bg-amber-500/15" : "bg-blue-500/15"
+            kind === "invite-only" ? "bg-emerald-500/15"
+              : kind === "upgrade" || kind === "proonly" ? "bg-amber-500/15"
+              : "bg-blue-500/15"
           )}>
-            {kind === "downgrade"
-              ? <TrendingDown className="w-5 h-5 text-blue-400" />
-              : <AlertTriangle className="w-5 h-5 text-amber-400" />
+            {kind === "invite-only"
+              ? <Mail className="w-5 h-5 text-emerald-400" />
+              : kind === "downgrade"
+                ? <TrendingDown className="w-5 h-5 text-blue-400" />
+                : <AlertTriangle className="w-5 h-5 text-amber-400" />
             }
           </div>
           <div>
@@ -89,9 +109,7 @@ export function RoleSwitchModal({
             <div className="text-center flex-1 min-w-0">
               <p className="text-[11px] text-muted-foreground mb-0.5">From</p>
               <p className="text-sm font-semibold text-foreground truncate">{fromLabel}</p>
-              <p className="text-xs text-muted-foreground">
-                {fromPlan.monthlyPrice === 0 ? "Free" : `€${fromPlan.monthlyPrice}/mo`}
-              </p>
+              <p className="text-xs text-muted-foreground">{formatPlanLine(fromPlan)}</p>
             </div>
             <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
             <div className="text-center flex-1 min-w-0">
@@ -99,13 +117,17 @@ export function RoleSwitchModal({
               <p className="text-sm font-semibold text-foreground truncate">{toLabel}</p>
               <p className={cn(
                 "text-xs font-medium",
-                kind === "upgrade" || kind === "proonly" ? "text-amber-400" : "text-blue-400"
+                kind === "invite-only" ? "text-emerald-400"
+                  : kind === "upgrade" || kind === "proonly" ? "text-amber-400"
+                  : "text-blue-400"
               )}>
-                {toPlan.proOnly
-                  ? `€${toPlan.monthlyPrice}/mo required`
-                  : toPlan.monthlyPrice === 0
-                    ? "Free available"
-                    : `€${toPlan.monthlyPrice}/mo`
+                {toPlan.inviteOnly
+                  ? "By application"
+                  : toPlan.proOnly
+                    ? `€${toPlan.monthlyPrice}/mo required`
+                    : toPlan.monthlyPrice === 0
+                      ? "Free available"
+                      : `€${toPlan.monthlyPrice}/mo`
                 }
               </p>
             </div>
@@ -113,6 +135,15 @@ export function RoleSwitchModal({
 
           {/* Billing notices */}
           <div className="space-y-2.5">
+            {kind === "invite-only" && (
+              <Notice
+                icon={<Mail className="w-4 h-4 text-emerald-400" />}
+                title="Invitation required"
+                body={`The ${toLabel} role is invitation-only. Submit an application — once approved, you'll receive an email with a payment link at your bespoke rate. Your current account stays active in the meantime.`}
+                color="emerald"
+              />
+            )}
+
             {kind === "proonly" && (
               <Notice
                 icon={<CreditCard className="w-4 h-4 text-amber-400" />}
@@ -175,7 +206,9 @@ export function RoleSwitchModal({
           <Button
             className={cn(
               "flex-1 border-0 text-white gap-2",
-              kind === "downgrade" ? "bg-blue-600 hover:bg-blue-700" : "bg-amber-600 hover:bg-amber-700"
+              kind === "invite-only" ? "bg-emerald-600 hover:bg-emerald-700"
+                : kind === "downgrade" ? "bg-blue-600 hover:bg-blue-700"
+                : "bg-amber-600 hover:bg-amber-700"
             )}
             onClick={onConfirm}
             disabled={confirming}
@@ -184,9 +217,11 @@ export function RoleSwitchModal({
               ? <Loader2 className="w-4 h-4 animate-spin" />
               : <ArrowRight className="w-4 h-4" />
             }
-            {kind === "proonly" || kind === "upgrade"
-              ? "Continue to setup"
-              : "Switch role"
+            {kind === "invite-only"
+              ? "Apply for access"
+              : kind === "proonly" || kind === "upgrade"
+                ? "Continue to setup"
+                : "Switch role"
             }
           </Button>
         </div>
@@ -206,10 +241,11 @@ function Notice({
   icon: React.ReactNode;
   title: string;
   body: string;
-  color: "amber" | "blue" | "neutral";
+  color: "amber" | "blue" | "emerald" | "neutral";
 }) {
-  const bg = color === "amber" ? "bg-amber-500/8 border-amber-500/20"
-           : color === "blue"  ? "bg-blue-500/8 border-blue-500/20"
+  const bg = color === "amber"   ? "bg-amber-500/8 border-amber-500/20"
+           : color === "blue"    ? "bg-blue-500/8 border-blue-500/20"
+           : color === "emerald" ? "bg-emerald-500/8 border-emerald-500/20"
            : "bg-secondary/60 border-border";
   return (
     <div className={cn("rounded-xl border p-3 flex gap-2.5", bg)}>

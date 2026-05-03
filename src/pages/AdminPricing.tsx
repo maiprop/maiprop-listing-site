@@ -30,15 +30,16 @@ type PricingConfig = {
 
 /** Predefined sections so admin can manage all pricings: users, professionals, agents, valuation, investors, ad-hoc */
 const PRICING_SECTIONS = [
-  { key: "users",       label: "Users (consumers)",         module: "user_subscription",         audience: "user" },
-  { key: "agents",      label: "Agents",                    module: "agent_subscription",         audience: "agent" },
-  { key: "developers",  label: "Developers",                module: "developer_subscription",     audience: "agent" },
-  { key: "professionals",label: "Professionals",            module: "professional_subscription",  audience: "professional" },
-  { key: "investors",   label: "Investors",                 module: "investor_subscription",      audience: "investor" },
-  { key: "valuation",   label: "Valuation / AI reports",   module: "valuation_reports",          audience: "user" },
-  { key: "adhoc_user",  label: "Ad-hoc — listings / users",module: "adhoc_charges",              audience: "user" },
-  { key: "adhoc_pro",   label: "Ad-hoc — professionals",   module: "adhoc_charges",              audience: "professional" },
-  { key: "os_data",     label: "OS Data Products (B2B)",   module: "os_data_products",           audience: "user" },
+  { key: "users",        label: "Users (consumers)",         module: "user_subscription",         audience: "user" },
+  { key: "agents",       label: "Agents",                    module: "agent_subscription",        audience: "agent" },
+  { key: "developers",   label: "Developers",                module: "developer_subscription",    audience: "agent" },
+  { key: "professionals",label: "Professionals",             module: "professional_subscription", audience: "professional" },
+  { key: "investors",    label: "Investors",                 module: "investor_subscription",     audience: "investor" },
+  { key: "valuation",    label: "Valuation / AI reports",    module: "valuation_reports",         audience: "user" },
+  { key: "adhoc_user",   label: "Ad-hoc — listings / users", module: "adhoc_charges",             audience: "user" },
+  { key: "adhoc_agent",  label: "Add-ons — agents",          module: "adhoc_charges",             audience: "agent" },
+  { key: "adhoc_pro",    label: "Add-ons — professionals",   module: "adhoc_charges",             audience: "professional" },
+  { key: "os_data",      label: "OS Data Products (B2B)",    module: "os_data_products",          audience: "user" },
 ] as const;
 
 const MODULES = [
@@ -60,26 +61,39 @@ const AUDIENCES = ["user", "professional", "agent", "investor"] as const;
 /**
  * Default pricing — Greek market rates (aligned with /pricing page).
  * Participant Pro €29/mo · Agent Pro €149/mo · Developer Pro €129/mo
- * Professional Pro €69/mo · Investor Private €49/mo · Institutional €199/mo
+ * Professional Pro €69/mo
+ *
+ * Investor & Institutional are invitation-only — their `amount` is 0 here
+ * and the canonical price is set per application via a one-off Stripe
+ * Payment Link. The `metadata.by_application` flag indicates this.
+ *
+ * Agents and Professionals only have **Free + Pro** plans on the public
+ * pricing page. Anything beyond that (extra seats, branding, white-label,
+ * API access, referral network) is sold as an add-on under
+ * `module: adhoc_charges`. The previous bundled `agency_*` and
+ * `professional_premium` tiers are seeded with `is_active: false` for
+ * historical reference; they are not displayed anywhere.
  */
 const DEFAULT_SEED: Omit<PricingConfig, "id" | "created_at" | "updated_at">[] = [
   // ── Participants (Buyer / Seller) ─────────────────────────────────────────
   { key: "participant_free",          label: "Free",                    description: "Basic search, limited features",                                           audience: "user",         module: "user_subscription",        unit: "monthly",    currency: "EUR", amount: 0,    is_active: true, sort_order: 1,  metadata: {} },
   { key: "pro",                       label: "Participant Pro",          description: "AI insights, analytics, priority matching & up to 5 listings",             audience: "user",         module: "user_subscription",        unit: "monthly",    currency: "EUR", amount: 29,   is_active: true, sort_order: 2,  metadata: {} },
-  // ── Agents ────────────────────────────────────────────────────────────────
+  // ── Agents (Free + Pro only — everything else is an add-on) ───────────────
   { key: "agent_free",                label: "Agent Free",              description: "Up to 5 active listings + basic tools",                                    audience: "agent",        module: "agent_subscription",       unit: "monthly",    currency: "EUR", amount: 0,    is_active: true, sort_order: 1,  metadata: {} },
   { key: "agent_basic",               label: "Agent Pro",               description: "Unlimited listings, full CRM, AI tools, analytics & 10 priority ads",      audience: "agent",        module: "agent_subscription",       unit: "monthly",    currency: "EUR", amount: 149,  is_active: true, sort_order: 2,  metadata: {} },
-  { key: "agency_starter",            label: "Agency Starter",          description: "Up to 3 agent seats, shared listing pool, branded profile",                audience: "agent",        module: "agent_subscription",       unit: "monthly",    currency: "EUR", amount: 249,  is_active: true, sort_order: 3,  metadata: {} },
-  { key: "agency_growth",             label: "Agency Growth",           description: "Up to 10 seats + priority placement & dedicated manager",                  audience: "agent",        module: "agent_subscription",       unit: "monthly",    currency: "EUR", amount: 449,  is_active: true, sort_order: 4,  metadata: {} },
-  { key: "agency_enterprise",         label: "Agency Enterprise",       description: "Unlimited seats + white-label, SLA & dedicated support",                   audience: "agent",        module: "agent_subscription",       unit: "monthly",    currency: "EUR", amount: 749,  is_active: true, sort_order: 5,  metadata: {} },
+  // Legacy agency bundles — kept inactive for historical reference; replaced by add-ons below.
+  { key: "agency_starter",            label: "Agency Starter (legacy)", description: "Replaced by per-seat & branded-profile add-ons.",                          audience: "agent",        module: "agent_subscription",       unit: "monthly",    currency: "EUR", amount: 249,  is_active: false, sort_order: 3,  metadata: { deprecated: true } },
+  { key: "agency_growth",             label: "Agency Growth (legacy)",  description: "Replaced by per-seat, priority and dedicated-manager add-ons.",            audience: "agent",        module: "agent_subscription",       unit: "monthly",    currency: "EUR", amount: 449,  is_active: false, sort_order: 4,  metadata: { deprecated: true } },
+  { key: "agency_enterprise",         label: "Agency Enterprise (legacy)", description: "Replaced by white-label & dedicated-manager add-ons.",                  audience: "agent",        module: "agent_subscription",       unit: "monthly",    currency: "EUR", amount: 749,  is_active: false, sort_order: 5,  metadata: { deprecated: true } },
   // ── Developers ────────────────────────────────────────────────────────────
   { key: "developer_pro",             label: "Developer Pro",           description: "Unlimited projects, new build showcase, pre-sale & floor plans",            audience: "agent",        module: "developer_subscription",   unit: "monthly",    currency: "EUR", amount: 129,  is_active: true, sort_order: 1,  metadata: {} },
-  // ── Professionals (architects, lawyers, valuers) ──────────────────────────
+  // ── Professionals (Free + Pro only — everything else is an add-on) ────────
   { key: "professional_basic",        label: "Professional Pro",        description: "Priority leads, booking calendar, verified badge & AI tools",              audience: "professional", module: "professional_subscription", unit: "monthly",    currency: "EUR", amount: 69,   is_active: true, sort_order: 1,  metadata: {} },
-  { key: "professional_premium",      label: "Professional Premium",    description: "Full tools, API access & referral network",                                audience: "professional", module: "professional_subscription", unit: "monthly",    currency: "EUR", amount: 129,  is_active: true, sort_order: 2,  metadata: {} },
-  // ── Investors ─────────────────────────────────────────────────────────────
-  { key: "investor_private",          label: "Private Investor",        description: "Pre-market deal flow, OS auction routing, real-time alerts & yield tools", audience: "investor",     module: "investor_subscription",    unit: "monthly",    currency: "EUR", amount: 49,   is_active: true, sort_order: 1,  metadata: {} },
-  { key: "investor_institutional",    label: "Institutional Investor",  description: "Full deal pipeline, bulk view, OS market intelligence & dedicated manager", audience: "investor",     module: "investor_subscription",    unit: "monthly",    currency: "EUR", amount: 199,  is_active: true, sort_order: 2,  metadata: {} },
+  // Legacy Premium tier — replaced by API access, referral network and seat add-ons.
+  { key: "professional_premium",      label: "Professional Premium (legacy)", description: "Replaced by API, referral-network and seat add-ons.",                  audience: "professional", module: "professional_subscription", unit: "monthly",    currency: "EUR", amount: 129,  is_active: false, sort_order: 2,  metadata: { deprecated: true } },
+  // ── Investors (invitation-only — pricing set per application) ─────────────
+  { key: "investor_private",          label: "Private Investor",        description: "Invitation-only — pricing set per application via one-off payment link.",  audience: "investor",     module: "investor_subscription",    unit: "monthly",    currency: "EUR", amount: 0,    is_active: true, sort_order: 1,  metadata: { by_application: true } },
+  { key: "investor_institutional",    label: "Institutional Investor",  description: "Invitation-only — pricing set per application via one-off payment link.",  audience: "investor",     module: "investor_subscription",    unit: "monthly",    currency: "EUR", amount: 0,    is_active: true, sort_order: 2,  metadata: { by_application: true } },
   // ── Valuation / AI reports ────────────────────────────────────────────────
   { key: "valuation_single",          label: "AI Valuation (single)",   description: "Full AI valuation: market comp, yield estimate & confidence score",        audience: "user",         module: "valuation_reports",        unit: "per_report", currency: "EUR", amount: 39,   is_active: true, sort_order: 1,  metadata: {} },
   { key: "valuation_bundle",          label: "AI Valuation × 5",        description: "5 valuation reports — save 24% vs single",                                 audience: "user",         module: "valuation_reports",        unit: "bundle",     currency: "EUR", amount: 149,  is_active: true, sort_order: 2,  metadata: {} },
@@ -91,9 +105,19 @@ const DEFAULT_SEED: Omit<PricingConfig, "id" | "created_at" | "updated_at">[] = 
   { key: "featured_listing",          label: "Featured listing",        description: "Homepage carousel + search spotlight for 30 days (avg 3× more views)",     audience: "user",         module: "adhoc_charges",            unit: "per_listing",currency: "EUR", amount: 39,   is_active: true, sort_order: 2,  metadata: {} },
   { key: "priority_placement",        label: "Priority placement",      description: "Pinned above all non-priority results in area & type for 30 days",          audience: "user",         module: "adhoc_charges",            unit: "per_listing",currency: "EUR", amount: 59,   is_active: true, sort_order: 3,  metadata: {} },
   { key: "featured_priority_bundle",  label: "Featured + Priority",     description: "Both boosts combined — maximum exposure, bundled rate, 30 days",           audience: "user",         module: "adhoc_charges",            unit: "per_listing",currency: "EUR", amount: 79,   is_active: true, sort_order: 4,  metadata: {} },
+  // ── Add-ons for agents (replaces the deprecated agency_* tiers) ───────────
+  { key: "agent_extra_seat",          label: "Extra agent seat",        description: "Add another agent to your agency under a single Pro plan. Shared listing pool.", audience: "agent",        module: "adhoc_charges",            unit: "monthly",    currency: "EUR", amount: 39,   is_active: true, sort_order: 1,  metadata: {} },
+  { key: "agency_branded_profile",    label: "Agency-branded profile",  description: "Custom logo, colours and team page on your agency profile",                 audience: "agent",        module: "adhoc_charges",            unit: "monthly",    currency: "EUR", amount: 49,   is_active: true, sort_order: 2,  metadata: {} },
+  { key: "agency_dedicated_manager",  label: "Dedicated account manager", description: "A named account manager for onboarding, training & support",              audience: "agent",        module: "adhoc_charges",            unit: "monthly",    currency: "EUR", amount: 199,  is_active: true, sort_order: 3,  metadata: {} },
+  { key: "agency_white_label",        label: "White-label domain",      description: "Serve listings on your own domain (yourname.gr)",                            audience: "agent",        module: "adhoc_charges",            unit: "monthly",    currency: "EUR", amount: 149,  is_active: true, sort_order: 4,  metadata: {} },
   // ── Ad-hoc / add-on charges (professionals) ───────────────────────────────
   { key: "featured_professional",     label: "Featured professional",   description: "Top-of-category placement in Professional directory (monthly)",             audience: "professional", module: "adhoc_charges",            unit: "monthly",    currency: "EUR", amount: 59,   is_active: true, sort_order: 1,  metadata: {} },
   { key: "extra_priority_ad",         label: "Extra priority ad",       description: "Push any listing to top of search for its area (per ad)",                  audience: "professional", module: "adhoc_charges",            unit: "per_ad",     currency: "EUR", amount: 8,    is_active: true, sort_order: 2,  metadata: {} },
+  // Replaces the deprecated professional_premium tier
+  { key: "professional_api_access",   label: "Professional API access", description: "Programmatic access to bookings, leads and AI tools",                       audience: "professional", module: "adhoc_charges",            unit: "monthly",    currency: "EUR", amount: 59,   is_active: true, sort_order: 3,  metadata: {} },
+  { key: "professional_referral_network", label: "Referral network slot", description: "Cross-discipline referral network membership",                          audience: "professional", module: "adhoc_charges",            unit: "monthly",    currency: "EUR", amount: 39,   is_active: true, sort_order: 4,  metadata: {} },
+  { key: "professional_extra_seat",   label: "Extra client seat",       description: "Add a colleague or paralegal under a single Pro plan",                      audience: "professional", module: "adhoc_charges",            unit: "monthly",    currency: "EUR", amount: 19,   is_active: true, sort_order: 5,  metadata: {} },
+  { key: "professional_branded_email", label: "Branded email templates", description: "Send all client communications from your own branded templates",          audience: "professional", module: "adhoc_charges",            unit: "monthly",    currency: "EUR", amount: 15,   is_active: true, sort_order: 6,  metadata: {} },
   // ── OS Data Products (B2B) ────────────────────────────────────────────────
   { key: "market_intelligence",       label: "Market Intelligence",     description: "Greek property price index, transaction comps, trend reports by region",   audience: "user",         module: "os_data_products",         unit: "monthly",    currency: "EUR", amount: 199,  is_active: true, sort_order: 1,  metadata: {} },
   { key: "avm_api",                   label: "AVM API",                 description: "Automated valuation endpoint for mortgage lenders, advisors & RICS valuers",audience: "user",         module: "os_data_products",         unit: "monthly",    currency: "EUR", amount: 299,  is_active: true, sort_order: 2,  metadata: {} },
