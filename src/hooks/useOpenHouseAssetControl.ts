@@ -272,18 +272,27 @@ export function useUpdateOpenHouseRegistration() {
     }) => {
       const uid = (await supabase.auth.getUser()).data.user?.id;
       if (!uid) throw new Error("Not authenticated");
-      // Mirror the RLS check: only the listing owner can mutate registrations
-      // for that listing. RLS already enforces this server-side, but mirroring
-      // here keeps the hook self-defending and surfaces ownership errors
-      // earlier with a clearer message.
+      // Mirror the RLS check: this hook is shared between two actors:
+      //   1. the listing owner (approves / rejects / marks attended)
+      //   2. the requester (uploads ID doc, signs waiver, submits screening)
+      // RLS enforces both server-side via separate policies; we mirror the
+      // OR here so the hook surfaces a clear "not authorised" error before
+      // a server round-trip rather than getting an opaque RLS rejection.
       const { data: reg, error: lookupErr } = await supabase
         .from("open_house_registrations")
-        .select("listings!inner(user_id)")
+        .select("requester_id, listings!inner(owner_id)")
         .eq("id", id)
         .maybeSingle();
       if (lookupErr) throw lookupErr;
-      const ownerId = (reg as unknown as { listings?: { user_id?: string } })?.listings?.user_id;
-      if (!ownerId || ownerId !== uid) throw new Error("Not authorised for this listing");
+      const lookup = reg as unknown as {
+        requester_id?: string;
+        listings?: { owner_id?: string };
+      } | null;
+      const requesterId = lookup?.requester_id;
+      const ownerId = lookup?.listings?.owner_id;
+      if (uid !== requesterId && uid !== ownerId) {
+        throw new Error("Not authorised for this registration");
+      }
       const { data, error } = await supabase
         .from("open_house_registrations")
         .update(updates as OHRegUpdate)
@@ -401,18 +410,26 @@ export function useUpdateOpenHouseOffer() {
     }) => {
       const uid = (await supabase.auth.getUser()).data.user?.id;
       if (!uid) throw new Error("Not authenticated");
-      // Mirror the RLS listing-ownership check. Only the listing owner can
-      // accept/reject/reveal offers; RLS enforces this, but mirroring here
-      // makes the hook self-defending and prevents accidental cross-listing
-      // writes if the policy ever drifts.
+      // Mirror the RLS check: shared between two actors:
+      //   1. the listing owner (reveal / accept / reject)
+      //   2. the bidder (withdraw their own offer)
+      // RLS enforces both via separate policies; we mirror the OR here so
+      // the hook surfaces a clear "not authorised" before the server call.
       const { data: offer, error: lookupErr } = await supabase
         .from("open_house_offers")
-        .select("listings!inner(user_id)")
+        .select("bidder_id, listings!inner(owner_id)")
         .eq("id", id)
         .maybeSingle();
       if (lookupErr) throw lookupErr;
-      const ownerId = (offer as unknown as { listings?: { user_id?: string } })?.listings?.user_id;
-      if (!ownerId || ownerId !== uid) throw new Error("Not authorised for this listing");
+      const lookup = offer as unknown as {
+        bidder_id?: string;
+        listings?: { owner_id?: string };
+      } | null;
+      const bidderId = lookup?.bidder_id;
+      const ownerId = lookup?.listings?.owner_id;
+      if (uid !== bidderId && uid !== ownerId) {
+        throw new Error("Not authorised for this offer");
+      }
       const updates: OHOfferUpdate = { status };
       if (status === "revealed") updates.revealed_at = new Date().toISOString();
       if (status === "accepted" || status === "rejected") {

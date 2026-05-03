@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 /**
@@ -24,6 +24,12 @@ export function SignedAttachment({
 }) {
   const [url, setUrl] = useState<string | null>(null);
   const [errored, setErrored] = useState(false);
+  // Tracks whether we've already attempted one refresh for the current `path`.
+  // `createSignedUrl` always returns a freshly-signed URL (different token /
+  // timestamp), so the URL string itself can never be used as the "already
+  // tried" guard — a genuinely broken file (deleted, wrong path) would
+  // otherwise loop forever between onError → refresh → setUrl → onError.
+  const retriedRef = useRef(false);
 
   const refresh = useCallback(async (): Promise<string | null> => {
     const { data } = await supabase.storage
@@ -34,6 +40,8 @@ export function SignedAttachment({
 
   useEffect(() => {
     let cancelled = false;
+    retriedRef.current = false;
+    setErrored(false);
     refresh().then((next) => {
       if (!cancelled && next) setUrl(next);
     });
@@ -44,15 +52,20 @@ export function SignedAttachment({
 
   const handleImageError = useCallback(async () => {
     // The most common failure mode is the signed URL expiring after an hour.
-    // Try once to refresh; if that also fails, show the filename fallback.
+    // Try once to refresh; if that also fails, show the filename fallback so
+    // the user is never left staring at a broken image icon.
+    if (retriedRef.current) {
+      setErrored(true);
+      return;
+    }
+    retriedRef.current = true;
     const next = await refresh();
-    if (next && next !== url) {
-      setErrored(false);
+    if (next) {
       setUrl(next);
     } else {
       setErrored(true);
     }
-  }, [refresh, url]);
+  }, [refresh]);
 
   if (!url) {
     return <span className="text-xs text-muted-foreground">{filename}</span>;
