@@ -45,7 +45,7 @@ describe("useEligibleForQuickSale", () => {
   it("admin is always eligible", async () => {
     setupMock({ role: "admin" }, null);
     const { result } = renderHook(() => useEligibleForQuickSale(), { wrapper });
-    await waitFor(() => !result.current.loading);
+    await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.eligible).toBe(true);
     expect(result.current.isAdmin).toBe(true);
   });
@@ -60,14 +60,14 @@ describe("useEligibleForQuickSale", () => {
   it("force_pro_access grants eligibility", async () => {
     setupMock({ role: "buyer", force_pro_access: true }, null);
     const { result } = renderHook(() => useEligibleForQuickSale(), { wrapper });
-    await waitFor(() => !result.current.loading);
+    await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.eligible).toBe(true);
   });
 
   it("non-admin without subscription is not eligible", async () => {
     setupMock({ role: "buyer" }, null);
     const { result } = renderHook(() => useEligibleForQuickSale(), { wrapper });
-    await waitFor(() => !result.current.loading);
+    await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.eligible).toBe(false);
   });
 });
