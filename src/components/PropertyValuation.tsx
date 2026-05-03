@@ -224,7 +224,7 @@ export default function PropertyValuation(props: PropertyValuationProps) {
       if (!data?.estimatedValue) throw new Error("Valuation returned no result");
       setResult(data as ValuationResult);
       setExpanded(true);
-      void queryClient.invalidateQueries({ queryKey: ["usage_ai_calls", "property-valuation"] });
+      void queryClient.invalidateQueries({ queryKey: ["usage_ai_calls"] });
     } catch (e: unknown) {
       toast.error(getAiErrorMessage(e, null, "Valuation failed"));
     } finally {
