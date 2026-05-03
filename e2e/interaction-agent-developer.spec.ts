@@ -61,7 +61,7 @@ test.describe("Agent Pro — sign-in and dashboard", () => {
   // 1. Basic sign-in check
   test("agent.pro signs in and reaches dashboard", async ({ page }) => {
     await signIn(page, AGENT_EMAIL, AGENT_PASSWORD);
-    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
     expect(page.url()).toMatch(/\/dashboard|\/onboarding/);
     // Main content area must be present — not a blank screen
     await expect(page.locator("main, #main-content, body").first()).toBeVisible({ timeout: 10_000 });
@@ -71,7 +71,7 @@ test.describe("Agent Pro — sign-in and dashboard", () => {
   test("agent.pro can access /listings/new (not gated)", async ({ page }) => {
     await signIn(page, AGENT_EMAIL, AGENT_PASSWORD);
     await page.goto("/listings/new");
-    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
     // Expect a form, heading, or step indicator — NOT just a redirect to /login
     expect(page.url()).not.toMatch(/\/login/);
     const content = page
@@ -84,7 +84,7 @@ test.describe("Agent Pro — sign-in and dashboard", () => {
   test("agent.pro listing form shows property type selection on step 1", async ({ page }) => {
     await signIn(page, AGENT_EMAIL, AGENT_PASSWORD);
     await page.goto("/listings/new");
-    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
 
     // If the account hits the SellerGate for some reason, skip gracefully
     const isGated = await page.locator('text="Listing Access Required"').isVisible();
@@ -107,7 +107,7 @@ test.describe("Agent Pro — sign-in and dashboard", () => {
   // 4. Dashboard nav contains listings / CRM section
   test("agent.pro dashboard shows a nav with listings or CRM section", async ({ page }) => {
     await signIn(page, AGENT_EMAIL, AGENT_PASSWORD);
-    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
 
     // Look for sidebar / nav items relevant to an agent workflow
     const navItem = page
@@ -128,7 +128,7 @@ test.describe("Agent Pro — sign-in and dashboard", () => {
 
     await signIn(page, AGENT_EMAIL, AGENT_PASSWORD);
     await page.goto("/listings/new");
-    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
 
     expect(errors).toHaveLength(0);
   });
@@ -144,7 +144,7 @@ test.describe("Developer Pro — sign-in, dashboard, and new-building form", () 
   // 6. Basic sign-in check
   test("developer.pro signs in and reaches dashboard", async ({ page }) => {
     await signIn(page, DEV_EMAIL, DEV_PASSWORD);
-    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
     expect(page.url()).toMatch(/\/dashboard|\/onboarding/);
     await expect(page.locator("main, #main-content, body").first()).toBeVisible({ timeout: 10_000 });
   });
@@ -153,7 +153,7 @@ test.describe("Developer Pro — sign-in, dashboard, and new-building form", () 
   test("developer.pro can access /listings/new-building", async ({ page }) => {
     await signIn(page, DEV_EMAIL, DEV_PASSWORD);
     await page.goto("/listings/new-building");
-    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
 
     expect(page.url()).not.toMatch(/\/login/);
 
@@ -171,7 +171,7 @@ test.describe("Developer Pro — sign-in, dashboard, and new-building form", () 
   // 8. Dashboard has any navigation links in sidebar (developer shares the common dashboard nav)
   test("developer.pro dashboard has a sidebar navigation", async ({ page }) => {
     await signIn(page, DEV_EMAIL, DEV_PASSWORD);
-    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
 
     // Any nav link in the sidebar confirms the dashboard shell rendered correctly.
     const navItem = page.locator('nav a, aside a, [role="navigation"] a').first();
@@ -185,7 +185,7 @@ test.describe("Developer Pro — sign-in, dashboard, and new-building form", () 
 
     await signIn(page, DEV_EMAIL, DEV_PASSWORD);
     await page.goto("/listings/new-building");
-    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
 
     expect(errors).toHaveLength(0);
   });

@@ -17,25 +17,32 @@ import { createLogger } from "../_shared/logger.ts";
 
 const log = createLogger("stripe-webhook");
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, stripe-signature",
-};
+import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
+
+function stripeCorsHeaders(req: Request): Record<string, string> {
+  return {
+    ...getCorsHeaders(req),
+    "Access-Control-Allow-Headers":
+      "authorization, x-client-info, apikey, content-type, stripe-signature",
+  };
+}
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const corsPreflight = handleCors(req);
+  if (corsPreflight) return corsPreflight;
+  const corsHeaders = stripeCorsHeaders(req);
 
   const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
   const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-  if (!stripeKey) return errorResponse("STRIPE_SECRET_KEY not set", 500);
-  if (!webhookSecret) return errorResponse("STRIPE_WEBHOOK_SECRET not set", 500);
-  if (!supabaseUrl || !serviceRoleKey) return errorResponse("Supabase env not set", 500);
+  if (!stripeKey) return errorResponse("STRIPE_SECRET_KEY not set", 500, corsHeaders);
+  if (!webhookSecret) return errorResponse("STRIPE_WEBHOOK_SECRET not set", 500, corsHeaders);
+  if (!supabaseUrl || !serviceRoleKey) return errorResponse("Supabase env not set", 500, corsHeaders);
 
   const signature = req.headers.get("stripe-signature");
-  if (!signature) return errorResponse("Missing stripe-signature header", 400);
+  if (!signature) return errorResponse("Missing stripe-signature header", 400, corsHeaders);
 
   const body = await req.text();
   const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
@@ -45,7 +52,7 @@ Deno.serve(async (req) => {
     event = await stripe.webhooks.constructEventAsync(body, signature, webhookSecret);
   } catch (err: unknown) {
     log.error("signature verification failed", { err: err instanceof Error ? err.message : String(err) });
-    return errorResponse("Webhook signature invalid", 400);
+    return errorResponse("Webhook signature invalid", 400, corsHeaders);
   }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
@@ -247,7 +254,7 @@ async function resolveUserIdByEmail(
   return (data as { user_id?: string } | null)?.user_id ?? null;
 }
 
-function errorResponse(message: string, status: number) {
+function errorResponse(message: string, status: number, corsHeaders: Record<string, string>) {
   return new Response(JSON.stringify({ error: message }), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },

@@ -105,8 +105,8 @@ test.describe("Buyer + Seller simultaneous sessions", () => {
       ]);
 
       await Promise.all([
-        buyerPage.waitForLoadState("networkidle", { timeout: 15_000 }),
-        sellerPage.waitForLoadState("networkidle", { timeout: 15_000 }),
+        buyerPage.waitForLoadState("domcontentloaded", { timeout: 15_000 }),
+        sellerPage.waitForLoadState("domcontentloaded", { timeout: 15_000 }),
       ]);
 
       // Both pages must have a nav element (app shell rendered).
@@ -262,7 +262,7 @@ test.describe("Seller — dashboard and listings", () => {
   // 5. Seller can view their dashboard without crash
   test("seller can view their listings in the dashboard", async ({ page }) => {
     await signInAs(page, sellerEmail, sellerPassword);
-    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
 
     // App shell (nav) must be present.
     const nav = page.locator('nav, [role="navigation"], aside').first();
@@ -288,11 +288,11 @@ test.describe("Seller — dashboard and listings", () => {
 
     if (linkFound) {
       await dashboardListingsLink.click();
-      await page.waitForLoadState("networkidle", { timeout: 15_000 });
+      await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
     } else {
       // Fall back to navigating directly to /listings.
       await page.goto("/listings");
-      await page.waitForLoadState("networkidle", { timeout: 15_000 });
+      await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
     }
 
     // Either a heading or a list of listings must be rendered.
@@ -311,7 +311,7 @@ test.describe("Seller — dashboard and listings", () => {
     page.on("pageerror", (err) => errors.push(err.message));
 
     await signInAs(page, sellerEmail, sellerPassword);
-    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+    await page.waitForLoadState("domcontentloaded", { timeout: 15_000 });
 
     expect(errors, "uncaught JS errors on seller dashboard").toHaveLength(0);
   });

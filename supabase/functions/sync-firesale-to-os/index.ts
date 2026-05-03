@@ -14,10 +14,7 @@ import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 
 const log = createLogger("sync-firesale-to-os");
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 
 const TYPE_MAP: Record<string, string> = {
   apartment:  "RESIDENCE",
@@ -73,7 +70,8 @@ async function logSync(
 // ── Require agent role to prevent unauthenticated sync / PII exposure ───────────
 async function requireAgent(
   req: Request,
-  sb: ReturnType<typeof createClient>
+  sb: ReturnType<typeof createClient>,
+  corsHeaders: Record<string, string>,
 ): Promise<Response | null> {
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
@@ -99,14 +97,16 @@ async function requireAgent(
 
 // ── Main handler ──────────────────────────────────────────────────────────────
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const corsPreflight = handleCors(req);
+  if (corsPreflight) return corsPreflight;
+  const corsHeaders = getCorsHeaders(req);
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
-  const authErr = await requireAgent(req, supabase);
+  const authErr = await requireAgent(req, supabase, corsHeaders);
   if (authErr) return authErr;
 
   const OS_URL   = Deno.env.get("MAIPROP_OS_URL")?.replace(/\/$/, "");

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Admin-only: Create a Stripe Price from a pricing_configs row and save the price ID.
  * Used when admin changes amount and needs a new Stripe price (prices are immutable).
@@ -11,6 +10,20 @@ import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.t
 
 const _log = createLogger("create-stripe-price");
 const limiter = makeRateLimiter({ bucket: "create-stripe-price", maxRequests: 5, windowMs: 60_000 });
+
+interface ProfileRow {
+  role?: string | null;
+}
+
+interface PricingConfigRow {
+  id: string;
+  key: string;
+  label?: string | null;
+  amount?: number | string | null;
+  currency?: string | null;
+  unit?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
 
 Deno.serve(async (req) => {
   const corsPreflightResponse = handleCors(req);
@@ -39,22 +52,23 @@ Deno.serve(async (req) => {
 
     // Check platform admin
     const { data: profile } = await supabaseClient.from("profiles").select("role").eq("user_id", userData.user.id).single();
-    if ((profile as any)?.role !== "admin") throw new Error("Platform admin only");
+    if ((profile as ProfileRow | null)?.role !== "admin") throw new Error("Platform admin only");
 
     const body = (req.method === "POST" && req.body) ? await req.json().catch(() => ({})) : {};
     const configId = body.config_id ?? body.configId;
     if (!configId) throw new Error("config_id required");
 
-    const { data: config, error: configError } = await supabaseClient
+    const { data: configRaw, error: configError } = await supabaseClient
       .from("pricing_configs")
       .select("id, key, label, amount, currency, unit, metadata")
       .eq("id", configId)
       .single();
-    if (configError || !config) throw new Error("Pricing config not found");
+    if (configError || !configRaw) throw new Error("Pricing config not found");
+    const config = configRaw as PricingConfigRow;
 
-    const amount = Math.round(Number((config as any).amount ?? 0) * 100); // Stripe uses cents
-    const currency = ((config as any).currency ?? "eur").toLowerCase();
-    const unit = (config as any).unit ?? "monthly";
+    const amount = Math.round(Number(config.amount ?? 0) * 100); // Stripe uses cents
+    const currency = (config.currency ?? "eur").toLowerCase();
+    const unit = config.unit ?? "monthly";
 
     if (amount <= 0) throw new Error("Amount must be greater than 0");
 
@@ -65,23 +79,23 @@ Deno.serve(async (req) => {
     const interval = unit === "yearly" ? "year" : "month";
 
     const product = await stripe.products.create({
-      name: (config as any).label || (config as any).key,
-      metadata: { pricing_config_key: (config as any).key },
+      name: config.label || config.key,
+      metadata: { pricing_config_key: config.key },
     });
 
     const priceParams: Stripe.PriceCreateParams = {
       product: product.id,
       currency,
       unit_amount: amount,
-      metadata: { pricing_config_key: (config as any).key, pricing_config_id: configId },
+      metadata: { pricing_config_key: config.key, pricing_config_id: configId },
     };
     if (isRecurring) {
-      (priceParams as any).recurring = { interval: interval };
+      priceParams.recurring = { interval };
     }
 
     const price = await stripe.prices.create(priceParams);
 
-    const meta = ((config as any).metadata ?? {}) as Record<string, unknown>;
+    const meta: Record<string, unknown> = { ...(config.metadata ?? {}) };
     meta.stripe_price_id = price.id;
     meta.stripe_product_id = product.id;
 
@@ -99,8 +113,9 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
     });
-  } catch (error: any) {
-    return new Response(JSON.stringify({ error: error.message }), {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    return new Response(JSON.stringify({ error: message }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,
     });

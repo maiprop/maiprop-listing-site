@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Returns the authenticated user's Stripe invoices + current subscription info.
  * Used by the Billing tab in the dashboard.
@@ -64,6 +63,7 @@ Deno.serve(async (req) => {
         plan_name: product?.name ?? "Pro",
         amount: price?.unit_amount ? price.unit_amount / 100 : null,
         currency: price?.currency?.toUpperCase() ?? "EUR",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- recurring is missing from the Stripe.Price type for this API version
         interval: (price as any)?.recurring?.interval ?? "month",
       };
     }
@@ -88,8 +88,9 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
     });
-  } catch (error: any) {
-    return new Response(JSON.stringify({ error: error.message }), {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    return new Response(JSON.stringify({ error: message }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,
     });

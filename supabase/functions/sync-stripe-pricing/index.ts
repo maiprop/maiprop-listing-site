@@ -15,10 +15,7 @@ import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.t
 const _log = createLogger("sync-stripe-pricing");
 const limiter = makeRateLimiter({ bucket: "sync-stripe-pricing", maxRequests: 5, windowMs: 60_000 });
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 
 type SyncResult = {
   id: string;
@@ -30,7 +27,9 @@ type SyncResult = {
 };
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const corsPreflight = handleCors(req);
+  if (corsPreflight) return corsPreflight;
+  const corsHeaders = getCorsHeaders(req);
 
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
   if (await limiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);

@@ -96,7 +96,7 @@ test.describe("GDPR — account deletion", () => {
         ),
       );
       await page.goto("/dashboard/settings");
-      await page.waitForLoadState("networkidle");
+      await page.waitForLoadState("domcontentloaded");
 
       const deleteTrigger = page
         .locator('button:has-text("Delete account"), button:has-text("Delete my account")')

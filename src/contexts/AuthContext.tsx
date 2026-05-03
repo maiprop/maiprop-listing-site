@@ -8,7 +8,7 @@ import { APP_ORIGIN } from "@/lib/config";
 import { getExplicitParticipantTypeFromProfile } from "@/lib/participantConfig";
 import { validatePassword } from "@/lib/passwordPolicy";
 
-type Profile = Tables<"profiles">;
+export type Profile = Tables<"profiles">;
 
 export interface SubscriptionState {
   subscribed: boolean;

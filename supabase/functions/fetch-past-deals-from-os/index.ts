@@ -17,11 +17,7 @@ import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.t
 const log = createLogger("fetch-past-deals-from-os");
 const limiter = makeRateLimiter({ bucket: "fetch-past-deals-from-os", maxRequests: 20, windowMs: 60_000 });
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
+import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 
 async function fetchWithTimeout(
   url: string,
@@ -66,7 +62,9 @@ function extractOsAuctionId(tags: string[] | null): string | null {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const corsPreflight = handleCors(req);
+  if (corsPreflight) return corsPreflight;
+  const corsHeaders = getCorsHeaders(req);
 
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
   if (await limiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);
