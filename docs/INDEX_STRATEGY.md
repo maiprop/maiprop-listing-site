@@ -83,13 +83,13 @@ These are columns used in queries but not yet indexed. At ~154 listings the impa
 |-------|-----------|---------------|----------|
 | `listings` | `latitude, longitude` | Map bounds filter (`gte`/`lte`) | P2 — spatial index (`gist`) would be ideal but requires PostGIS |
 | `listings` | `created_at` | Sort by newest | P2 — covered by primary key sort for now |
-| `auction_listings` | `auction_date` | Upcoming auctions | P2 |
-| `open_houses` | `event_date` | Upcoming events | P2 |
+| `listings` | `auction_date` | Upcoming auctions | P2 |
+| `open_house_registrations` | `created_at` | Recent registrations | P3 — low volume |
 | `profiles` | `role` | Admin queries | P2 — low cardinality, full scan is fast |
 
 ## When to Add New Indexes
 
 1. Check if `buildListingsQuery` or a hook adds a new `.eq()` / `.gte()` / `.order()` call.
 2. If the column is used in a WHERE clause and the table has >1000 rows, add an index.
-3. For composite indexes, put the most selective column first (lowest cardinality).
+3. For composite indexes, put equality-predicate columns before range-predicate columns; among equals, put the most selective column first (highest cardinality).
 4. Use `EXPLAIN ANALYZE` against the Supabase SQL editor to verify the index is used.
