@@ -306,11 +306,16 @@ LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   v_caller UUID := auth.uid();
 BEGIN
-  -- Allow self-lookup or admin-of-anyone.
+  -- service_role calls (e.g. from edge functions) have auth.uid() = NULL; in
+  -- that case the caller has already vetted authorization (they hold the
+  -- service role key) and must explicitly pass p_user_id. For end-user calls
+  -- through PostgREST, require either self-lookup or admin.
   IF v_caller IS NULL THEN
-    RAISE EXCEPTION 'not_authenticated';
-  END IF;
-  IF v_caller IS DISTINCT FROM p_user_id AND NOT public.has_platform_admin(v_caller) THEN
+    IF p_user_id IS NULL THEN
+      RAISE EXCEPTION 'not_authenticated';
+    END IF;
+  ELSIF v_caller IS DISTINCT FROM p_user_id
+        AND NOT public.has_platform_admin(v_caller) THEN
     RAISE EXCEPTION 'forbidden';
   END IF;
 
@@ -330,8 +335,11 @@ BEGIN
     WHERE user_id = p_user_id
   ),
   ban AS (
-    SELECT b.reason, b.banned_at FROM public.agent_data_input_bans b
-    WHERE b.user_id = p_user_id LIMIT 1
+    -- Alias columns away from this function's OUT-parameter names
+    -- (`ban_reason`, `banned_at`) so the SELECT below isn't ambiguous.
+    SELECT b.reason AS b_reason, b.banned_at AS b_banned_at
+      FROM public.agent_data_input_bans b
+     WHERE b.user_id = p_user_id LIMIT 1
   )
   SELECT
     c.monthly_count,
@@ -346,8 +354,8 @@ BEGIN
     c.total_verified,
     c.total_rejected,
     EXISTS (SELECT 1 FROM ban) AS lifetime_banned,
-    (SELECT reason FROM ban),
-    (SELECT banned_at FROM ban)
+    (SELECT b_reason    FROM ban),
+    (SELECT b_banned_at FROM ban)
   FROM counts c;
 END;
 $$;
@@ -402,20 +410,40 @@ $$;
 -- 6.d Admin review RPC — admin verifies/rejects an entry. If rejection reason
 -- is "hallucination" or admin sets ban=true the user is added to the lifetime
 -- ban table.
+-- Drop the previous 4-arg signature (if any) so re-running this migration
+-- against a DB where it already exists doesn't leave both overloads behind.
+DROP FUNCTION IF EXISTS public.admin_review_agent_data_input(UUID, TEXT, TEXT, BOOLEAN);
+
 CREATE OR REPLACE FUNCTION public.admin_review_agent_data_input(
-  p_input_id   UUID,
-  p_decision   TEXT,
-  p_reason     TEXT DEFAULT NULL,
-  p_lifetime_ban BOOLEAN DEFAULT FALSE
+  p_input_id     UUID,
+  p_decision     TEXT,
+  p_reason       TEXT DEFAULT NULL,
+  p_lifetime_ban BOOLEAN DEFAULT FALSE,
+  p_reviewer_id  UUID DEFAULT NULL
 )
 RETURNS public.agent_data_inputs
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
-  v_uid    UUID := auth.uid();
-  v_row    public.agent_data_inputs%ROWTYPE;
+  v_uid      UUID := auth.uid();
+  v_reviewer UUID;
+  v_row      public.agent_data_inputs%ROWTYPE;
 BEGIN
-  IF v_uid IS NULL THEN RAISE EXCEPTION 'not_authenticated'; END IF;
-  IF NOT public.has_platform_admin(v_uid) THEN RAISE EXCEPTION 'forbidden'; END IF;
+  -- service_role / edge-function path: auth.uid() is NULL, but the caller
+  -- holds the service role key so they have already verified authorization
+  -- before calling. Trust them but require an explicit reviewer id so the
+  -- audit trail (reviewed_by) is populated.
+  IF v_uid IS NULL THEN
+    IF p_reviewer_id IS NULL THEN
+      RAISE EXCEPTION 'not_authenticated';
+    END IF;
+    v_reviewer := p_reviewer_id;
+  ELSE
+    IF NOT public.has_platform_admin(v_uid) THEN
+      RAISE EXCEPTION 'forbidden';
+    END IF;
+    v_reviewer := COALESCE(p_reviewer_id, v_uid);
+  END IF;
+
   IF p_decision NOT IN ('verified','rejected','flagged','pending') THEN
     RAISE EXCEPTION 'invalid_decision';
   END IF;
@@ -424,7 +452,7 @@ BEGIN
      SET status           = p_decision,
          rejection_reason = CASE WHEN p_decision IN ('rejected','flagged') THEN p_reason ELSE NULL END,
          reviewed_at      = now(),
-         reviewed_by      = v_uid
+         reviewed_by      = v_reviewer
    WHERE id = p_input_id
    RETURNING * INTO v_row;
 
@@ -434,7 +462,7 @@ BEGIN
 
   IF p_lifetime_ban THEN
     INSERT INTO public.agent_data_input_bans (user_id, banned_by, reason)
-    VALUES (v_row.user_id, v_uid, COALESCE(p_reason, 'False / hallucinated submission'))
+    VALUES (v_row.user_id, v_reviewer, COALESCE(p_reason, 'False / hallucinated submission'))
     ON CONFLICT (user_id) DO NOTHING;
   END IF;
 
@@ -447,6 +475,6 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.get_agent_data_input_status(UUID)            TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_agent_monthly_input_count(UUID)          TO authenticated;
-GRANT EXECUTE ON FUNCTION public.admin_review_agent_data_input(UUID, TEXT, TEXT, BOOLEAN) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.admin_review_agent_data_input(UUID, TEXT, TEXT, BOOLEAN, UUID) TO authenticated;
 -- apply_verified_data_input_discount is intentionally NOT granted to authenticated;
 -- only service_role (used by the stripe-webhook edge function) may call it.

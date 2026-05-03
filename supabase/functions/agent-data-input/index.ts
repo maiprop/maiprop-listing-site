@@ -275,11 +275,16 @@ Deno.serve(async (req) => {
         return json({ error: "Invalid decision" }, 400);
       }
 
+      // Pass user.id as p_reviewer_id so the RPC populates `reviewed_by`
+      // correctly. The RPC trusts service_role callers (auth.uid() is NULL)
+      // when an explicit reviewer id is supplied; we already verified the
+      // caller is an admin above.
       const { data, error } = await supabase.rpc("admin_review_agent_data_input", {
         p_input_id: inputId,
         p_decision: decision,
         p_reason: reason,
         p_lifetime_ban: lifetimeBan,
+        p_reviewer_id: user.id,
       });
       if (error) {
         log.error("admin_review failed", { user_id: user.id, err: error.message });
