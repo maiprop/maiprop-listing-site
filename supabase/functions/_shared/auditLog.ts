@@ -61,7 +61,8 @@ export async function logAuditEvent(event: AuditEvent): Promise<void> {
   }
 
   try {
-    const { error } = await client.from("admin_audit_log").insert({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (client.from as any)("admin_audit_log").insert({
       actor_id: event.actor_id ?? null,
       target_id: event.target_id ?? null,
       entity: event.entity,
