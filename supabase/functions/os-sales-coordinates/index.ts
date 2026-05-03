@@ -77,11 +77,9 @@ Deno.serve(async (req) => {
   if (corsPreflight) return corsPreflight;
   const hdrs = getCorsHeaders(req);
 
-  // Rate limit by IP — DB-backed limiter shared across edge regions/isolates
+  // DB-backed rate limit shared across edge regions/isolates: 30 req/min per IP.
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-  if (await limiter.isLimited(ip)) {
-    return tooManyRequestsResponse(hdrs);
-  }
+  if (await limiter.isLimited(ip)) return tooManyRequestsResponse(hdrs);
 
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed. Use POST." }), {
