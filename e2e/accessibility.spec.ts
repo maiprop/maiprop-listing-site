@@ -37,7 +37,7 @@ test.describe("Accessibility", () => {
 
   test("all images have alt text or role=presentation", async ({ page }) => {
     await page.goto("/listings");
-    await page.waitForLoadState("load");
+    await page.waitForLoadState("networkidle");
 
     const images = await page.locator("img").all();
     const violations: string[] = [];
@@ -87,7 +87,7 @@ test.describe("Accessibility — automated axe-core scans", () => {
       } catch { /* storage may be blocked */ }
     });
     await page.reload();
-    await page.waitForLoadState("load");
+    await page.waitForLoadState("networkidle");
     const results = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa"])
       .analyze();

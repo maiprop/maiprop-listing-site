@@ -55,7 +55,7 @@ test.describe("Public auction browsing", () => {
     page.on("pageerror", (err) => errors.push(err.message));
 
     await page.goto("/auctions");
-    await page.waitForLoadState("load", { timeout: 15_000 });
+    await page.waitForLoadState("networkidle", { timeout: 15_000 });
 
     // Heading must be visible
     await expect(page.locator("h1, h2, [role='heading']").first()).toBeVisible({
@@ -83,7 +83,7 @@ test.describe("Public auction browsing", () => {
 
   test("auctions page has a map/list view toggle", async ({ page }) => {
     await page.goto("/auctions");
-    await page.waitForLoadState("load", { timeout: 15_000 });
+    await page.waitForLoadState("networkidle", { timeout: 15_000 });
 
     const toggle = page
       .locator(
@@ -96,7 +96,7 @@ test.describe("Public auction browsing", () => {
 
   test("clicking an auction card navigates to auction detail", async ({ page }) => {
     await page.goto("/auctions");
-    await page.waitForLoadState("load", { timeout: 15_000 });
+    await page.waitForLoadState("networkidle", { timeout: 15_000 });
 
     const card = page
       .locator("article, [class*='card'], [data-testid*='auction']")
@@ -119,7 +119,7 @@ test.describe("Public auction browsing", () => {
 
   test("auction detail page shows bid history or property info", async ({ page }) => {
     await page.goto("/auctions");
-    await page.waitForLoadState("load", { timeout: 15_000 });
+    await page.waitForLoadState("networkidle", { timeout: 15_000 });
 
     const card = page
       .locator("article, [class*='card'], [data-testid*='auction']")
@@ -132,7 +132,7 @@ test.describe("Public auction browsing", () => {
     }
 
     await card.click();
-    await page.waitForLoadState("load", { timeout: 15_000 });
+    await page.waitForLoadState("networkidle", { timeout: 15_000 });
 
     // Accept any of: price/bid info, a property heading, or a "No bids" message
     const hasPriceOrBid = await page
@@ -164,7 +164,7 @@ test.describe("Authenticated auction interaction", () => {
   test("buyer.pro can view auctions after sign-in", async ({ page }) => {
     await signIn(page, BUYER_EMAIL, PW);
     await page.goto("/auctions");
-    await page.waitForLoadState("load", { timeout: 15_000 });
+    await page.waitForLoadState("networkidle", { timeout: 15_000 });
 
     // Heading must be visible
     await expect(page.locator("h1, h2, [role='heading']").first()).toBeVisible({
@@ -184,7 +184,7 @@ test.describe("Authenticated auction interaction", () => {
 
     await signIn(page, INVESTOR_PRIVATE_EMAIL, PW);
     await page.goto("/auctions");
-    await page.waitForLoadState("load", { timeout: 15_000 });
+    await page.waitForLoadState("networkidle", { timeout: 15_000 });
 
     await expect(page.locator("h1, h2, [role='heading']").first()).toBeVisible({
       timeout: 10_000,
@@ -197,7 +197,7 @@ test.describe("Authenticated auction interaction", () => {
     const cardExists = await card.isVisible({ timeout: 8_000 }).catch(() => false);
     if (cardExists) {
       await card.click();
-      await page.waitForLoadState("load", { timeout: 15_000 });
+      await page.waitForLoadState("networkidle", { timeout: 15_000 });
       // Detail page must render without crashing
       const bodyText = await page.locator("body").textContent();
       expect((bodyText ?? "").trim().length).toBeGreaterThan(10);
@@ -211,7 +211,7 @@ test.describe("Authenticated auction interaction", () => {
   }) => {
     await signIn(page, INVESTOR_PRIVATE_EMAIL, PW);
     await page.goto("/investor-dashboard");
-    await page.waitForLoadState("load", { timeout: 15_000 });
+    await page.waitForLoadState("networkidle", { timeout: 15_000 });
 
     // Body must render content
     const bodyText = await page.locator("body").textContent();
@@ -228,7 +228,7 @@ test.describe("Authenticated auction interaction", () => {
   test("investor.institutional accesses /investor-dashboard", async ({ page }) => {
     await signIn(page, INVESTOR_INSTITUTIONAL_EMAIL, PW);
     await page.goto("/investor-dashboard");
-    await page.waitForLoadState("load", { timeout: 15_000 });
+    await page.waitForLoadState("networkidle", { timeout: 15_000 });
 
     const bodyText = await page.locator("body").textContent();
     expect((bodyText ?? "").trim().length).toBeGreaterThan(10);
@@ -248,7 +248,7 @@ test.describe("Authenticated auction interaction", () => {
 
     await signIn(page, BUYER_EMAIL, PW);
     await page.goto("/auctions");
-    await page.waitForLoadState("load", { timeout: 15_000 });
+    await page.waitForLoadState("networkidle", { timeout: 15_000 });
 
     const alertBtn = page
       .locator(
@@ -322,10 +322,10 @@ test.describe("Multi-user simultaneous browsing", () => {
       // Both navigate to /auctions simultaneously
       await Promise.all([
         buyerPage.goto("/auctions").then(() =>
-          buyerPage.waitForLoadState("load", { timeout: 15_000 })
+          buyerPage.waitForLoadState("networkidle", { timeout: 15_000 })
         ),
         investorPage.goto("/auctions").then(() =>
-          investorPage.waitForLoadState("load", { timeout: 15_000 })
+          investorPage.waitForLoadState("networkidle", { timeout: 15_000 })
         ),
       ]);
 
@@ -386,17 +386,17 @@ test.describe("Multi-user simultaneous browsing", () => {
         invPrivatePage
           .goto("/investor-dashboard")
           .then(() =>
-            invPrivatePage.waitForLoadState("load", { timeout: 15_000 })
+            invPrivatePage.waitForLoadState("networkidle", { timeout: 15_000 })
           ),
         invInstitutionalPage
           .goto("/auctions")
           .then(() =>
-            invInstitutionalPage.waitForLoadState("load", { timeout: 15_000 })
+            invInstitutionalPage.waitForLoadState("networkidle", { timeout: 15_000 })
           ),
         buyerPage
           .goto("/auctions")
           .then(() =>
-            buyerPage.waitForLoadState("load", { timeout: 15_000 })
+            buyerPage.waitForLoadState("networkidle", { timeout: 15_000 })
           ),
       ]);
 
@@ -448,12 +448,12 @@ test.describe("Multi-user simultaneous browsing", () => {
         adminPage
           .goto("/admin")
           .then(() =>
-            adminPage.waitForLoadState("load", { timeout: 15_000 })
+            adminPage.waitForLoadState("networkidle", { timeout: 15_000 })
           ),
         investorPage
           .goto("/investor-dashboard")
           .then(() =>
-            investorPage.waitForLoadState("load", { timeout: 15_000 })
+            investorPage.waitForLoadState("networkidle", { timeout: 15_000 })
           ),
       ]);
 

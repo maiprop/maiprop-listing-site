@@ -32,7 +32,7 @@ test.describe("Stripe checkout flow", () => {
 
     // Navigate to pricing.
     await page.goto("/pricing");
-    await page.waitForLoadState("load");
+    await page.waitForLoadState("networkidle");
 
     // Click the first "Upgrade" / "Subscribe" CTA. Button text varies by locale.
     const upgradeBtn = page

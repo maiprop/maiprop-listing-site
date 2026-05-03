@@ -8,7 +8,7 @@ test.describe("Listings browse", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/listings");
     // Wait for the page to settle
-    await page.waitForLoadState("load");
+    await page.waitForLoadState("networkidle");
   });
 
   test("page title contains 'Listings' or 'Properties'", async ({ page }) => {
