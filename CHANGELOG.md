@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.2](https://github.com/maiprop/maiprop-listing-site/compare/v1.1.1...v1.1.2) (2026-05-03)
+
+
+### Bug Fixes
+
+* **security,quality:** address 5 deep-read findings (rate limiter, CORS, any types, BASE_URL, ProfileEditor) ([#62](https://github.com/maiprop/maiprop-listing-site/issues/62)) ([48a83ee](https://github.com/maiprop/maiprop-listing-site/commit/48a83ee0f21fd8358dff46b61a0ecc4e18c98078))
+
 ## [1.1.1](https://github.com/maiprop/maiprop-listing-site/compare/v1.1.0...v1.1.1) (2026-05-03)
 
 
