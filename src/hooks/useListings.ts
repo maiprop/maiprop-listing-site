@@ -186,13 +186,17 @@ async function fetchListingsPage(filters?: ListingsFilters, page = 1, pageSize =
 /** Paginated listings for grid view — fetches 24 per page, server-side filtering */
 export const PAGE_SIZE = 24;
 
-export function useListingsPaginated(filters?: ListingsFilters) {
+export function useListingsPaginated(
+  filters?: ListingsFilters,
+  options?: { enabled?: boolean },
+) {
   return useInfiniteQuery({
     queryKey: ["listings-paginated", filters],
     queryFn: ({ pageParam = 1 }) => fetchListingsPage(filters, pageParam, PAGE_SIZE),
     getNextPageParam: (lastPage, allPages) =>
       lastPage.hasMore ? allPages.length + 1 : undefined,
     initialPageParam: 1,
+    enabled: options?.enabled ?? true,
   });
 }
 

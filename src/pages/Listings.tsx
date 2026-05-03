@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, lazy, Suspense } from "react";
+import { useState, useEffect, useMemo, useRef, lazy, Suspense } from "react";
 import { Helmet } from "react-helmet-async";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
@@ -22,7 +22,7 @@ import { ListingTypeButton } from "@/components/listings/ListingTypeButton";
 import { PropertyTypeButton } from "@/components/listings/PropertyTypeButton";
 import { MapGate } from "@/components/listings/MapGate";
 
-import { useListings, type ListingsFilters, type ListingWithJoins } from "@/hooks/useListings";
+import { useListings, useListingsPaginated, type ListingsFilters, type ListingWithJoins } from "@/hooks/useListings";
 import type { ListingCard } from "@/types";
 import { useListingsFilters } from "@/hooks/useListingsFilters";
 import { useAuth } from "@/contexts/AuthContext";
@@ -92,7 +92,7 @@ export default function Listings() {
     ? selectedPrice.split("-").map(Number)
     : [undefined, undefined];
 
-  const { data: dbListings = [], isLoading, isError, error } = useListings({
+  const filters = useMemo<ListingsFilters>(() => ({
     city: searchQuery || undefined,
     listing_type: preSaleOnly ? "sale" : (selectedListingType || undefined),
     property_type: selectedType || undefined,
@@ -116,7 +116,49 @@ export default function Listings() {
     commercial_subtype: selectedSubtype || undefined,
     features: selectedFeatures.length > 0 ? selectedFeatures : undefined,
     sort: (selectedSort as ListingsFilters["sort"]) || undefined,
-  });
+  }), [
+    searchQuery, preSaleOnly, selectedListingType, selectedType, offMarketOnly,
+    priceMin, priceMax, bedsRange, bathsRange, floorRange, yearRange,
+    minSqm, maxSqm, selectedEnergyClasses, selectedHeating, selectedConstruction,
+    selectedSubtype, selectedFeatures, selectedSort,
+  ]);
+
+  // Grid view paginates 24 at a time (infinite scroll). Map / split views need
+  // every visible marker at once, so they use the bounded full-fetch (200 cap).
+  // Only one query is enabled at a time to avoid wasting bandwidth.
+  const isGrid = viewMode === "grid";
+  const paginated = useListingsPaginated(filters, { enabled: isGrid });
+  const fullFetch = useListings(filters, { enabled: !isGrid });
+
+  const dbListings = useMemo<ListingWithJoins[]>(() => {
+    // Both paths produce rows with the same shape that listingToCard() reads.
+    // The type cast matches how useListings() casts its enriched rows internally
+    // (ownerIsPro / ownerParticipantType are only set by the single-listing path).
+    if (isGrid) return (paginated.data?.pages.flatMap((p) => p.data) ?? []) as ListingWithJoins[];
+    return fullFetch.data ?? [];
+  }, [isGrid, paginated.data, fullFetch.data]);
+
+  const isLoading = isGrid ? paginated.isLoading : fullFetch.isLoading;
+  const isError = isGrid ? paginated.isError : fullFetch.isError;
+  const error = isGrid ? paginated.error : fullFetch.error;
+
+  // Infinite-scroll sentinel — load the next 24 when the user nears it.
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!isGrid) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && paginated.hasNextPage && !paginated.isFetchingNextPage) {
+          paginated.fetchNextPage();
+        }
+      },
+      { rootMargin: "400px 0px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [isGrid, paginated]);
 
   useEffect(() => {
     if (isError && error) {
@@ -640,27 +682,42 @@ export default function Listings() {
                 testId="empty-listings"
               />
             ) : (
-              <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
-                {filtered.map((property: ListingCardWithRaw) => (
-                  <div key={property.id} className="relative group">
-                    <PropertyCard property={property} />
-                    <button
-                      onClick={() => toggleCompare(property)}
-                      disabled={!isComparing(property.id) && compareList.length >= 3}
-                      className={`absolute bottom-[108px] right-2 z-10 flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold border transition-all shadow-card ${
-                        isComparing(property.id)
-                          ? "bg-accent/90 border-accent text-accent-foreground"
-                          : compareList.length >= 3
-                          ? "bg-secondary/80 border-border text-muted-foreground opacity-50 cursor-not-allowed"
-                          : "bg-card/80 border-border text-muted-foreground hover:border-accent/60 hover:text-accent backdrop-blur-sm opacity-0 group-hover:opacity-100"
-                      }`}
-                    >
-                      <GitCompare className="w-3 h-3" />
-                      {isComparing(property.id) ? "✓" : "Compare"}
-                    </button>
+              <>
+                <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
+                  {filtered.map((property: ListingCardWithRaw) => (
+                    <div key={property.id} className="relative group">
+                      <PropertyCard property={property} />
+                      <button
+                        onClick={() => toggleCompare(property)}
+                        disabled={!isComparing(property.id) && compareList.length >= 3}
+                        className={`absolute bottom-[108px] right-2 z-10 flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold border transition-all shadow-card ${
+                          isComparing(property.id)
+                            ? "bg-accent/90 border-accent text-accent-foreground"
+                            : compareList.length >= 3
+                            ? "bg-secondary/80 border-border text-muted-foreground opacity-50 cursor-not-allowed"
+                            : "bg-card/80 border-border text-muted-foreground hover:border-accent/60 hover:text-accent backdrop-blur-sm opacity-0 group-hover:opacity-100"
+                        }`}
+                      >
+                        <GitCompare className="w-3 h-3" />
+                        {isComparing(property.id) ? "✓" : "Compare"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                {paginated.isFetchingNextPage && (
+                  <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 mt-3 sm:mt-4">
+                    {Array.from({ length: 4 }).map((_, i) => <PropertyCardSkeleton key={`more-${i}`} />)}
                   </div>
-                ))}
-              </div>
+                )}
+                {paginated.hasNextPage && !paginated.isFetchingNextPage && (
+                  <div ref={sentinelRef} aria-hidden="true" className="h-8 mt-2" />
+                )}
+                {!paginated.hasNextPage && filtered.length > 0 && (
+                  <div className="text-center text-xs text-muted-foreground mt-6 pb-2">
+                    {t("listings.endOfResults", "No more results")}
+                  </div>
+                )}
+              </>
             )
           ) : (
             /* Full map view */
