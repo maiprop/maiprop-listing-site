@@ -55,7 +55,7 @@ export function useCreateProjectLead() {
       qc.invalidateQueries({ queryKey: ["project_leads", project_id] });
       toast.success("Lead added");
     },
-    onError: () => toast.error("Something went wrong. Please try again."),
+    onError: () => toast.error("Failed to add lead. Please try again."),
   });
 }
 
@@ -77,7 +77,7 @@ export function useUpdateProjectLead() {
       qc.invalidateQueries({ queryKey: ["project_leads", projectId] });
       toast.success("Lead updated");
     },
-    onError: () => toast.error("Something went wrong. Please try again."),
+    onError: () => toast.error("Failed to update lead. Please try again."),
   });
 }
 
@@ -96,6 +96,6 @@ export function useDeleteProjectLead() {
       qc.invalidateQueries({ queryKey: ["project_leads", projectId] });
       toast.success("Lead removed");
     },
-    onError: () => toast.error("Something went wrong. Please try again."),
+    onError: () => toast.error("Failed to remove lead. Please try again."),
   });
 }

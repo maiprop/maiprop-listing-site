@@ -139,7 +139,7 @@ export function useUpsertOpenHouseSettings() {
       qc.invalidateQueries({ queryKey: ["open_house_registrations", v.listingId] });
       toast.success("Settings saved");
     },
-    onError: () => toast.error("Something went wrong. Please try again."),
+    onError: () => toast.error("Failed to save open house settings. Please try again."),
   });
 }
 
@@ -217,7 +217,7 @@ export function useCreateOpenHouseRegistration() {
       qc.invalidateQueries({ queryKey: ["open_house_registrations_mine"] });
       toast.success("Registration submitted. Complete ID verification and waiver to be considered.");
     },
-    onError: () => toast.error("Something went wrong. Please try again."),
+    onError: () => toast.error("Failed to submit registration. Please try again."),
   });
 }
 
@@ -264,7 +264,7 @@ export function useUpdateOpenHouseRegistration() {
       qc.invalidateQueries({ queryKey: ["open_house_registrations_mine"] });
       toast.success("Updated");
     },
-    onError: () => toast.error("Something went wrong. Please try again."),
+    onError: () => toast.error("Failed to update registration. Please try again."),
   });
 }
 
@@ -345,7 +345,7 @@ export function useSubmitOpenHouseOffer() {
       qc.invalidateQueries({ queryKey: ["open_house_offers_mine"] });
       toast.success("Offer submitted");
     },
-    onError: () => toast.error("Something went wrong. Please try again."),
+    onError: () => toast.error("Failed to submit offer. Please try again."),
   });
 }
 
@@ -379,7 +379,7 @@ export function useUpdateOpenHouseOffer() {
       qc.invalidateQueries({ queryKey: ["open_house_offers"] });
       toast.success("Offer updated");
     },
-    onError: () => toast.error("Something went wrong. Please try again."),
+    onError: () => toast.error("Failed to update offer. Please try again."),
   });
 }
 
@@ -417,7 +417,7 @@ export function useAcceptOpenHouseOffer() {
       qc.invalidateQueries({ queryKey: ["open_house_offers", v.listingId] });
       toast.success("Offer accepted — other bids automatically rejected");
     },
-    onError: () => toast.error("Something went wrong. Please try again."),
+    onError: () => toast.error("Failed to accept offer. Please try again."),
   });
 }
 
@@ -437,7 +437,7 @@ export function useRevealAllOffers() {
       qc.invalidateQueries({ queryKey: ["open_house_offers", v.listingId] });
       toast.success("All bids revealed");
     },
-    onError: () => toast.error("Something went wrong. Please try again."),
+    onError: () => toast.error("Failed to reveal bids. Please try again."),
   });
 }
 

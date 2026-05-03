@@ -83,7 +83,7 @@ export function useCreatePortfolio() {
       qc.invalidateQueries({ queryKey: ["portfolios"] });
       toast.success("Portfolio created");
     },
-    onError: () => toast.error("Something went wrong. Please try again."),
+    onError: () => toast.error("Failed to create portfolio. Please try again."),
   });
 }
 
@@ -114,7 +114,7 @@ export function useUpdatePortfolio() {
       qc.invalidateQueries({ queryKey: ["portfolio", id] });
       toast.success("Portfolio updated");
     },
-    onError: () => toast.error("Something went wrong. Please try again."),
+    onError: () => toast.error("Failed to update portfolio. Please try again."),
   });
 }
 
@@ -131,6 +131,6 @@ export function useDeletePortfolio() {
       qc.invalidateQueries({ queryKey: ["portfolios"] });
       toast.success("Portfolio deleted");
     },
-    onError: () => toast.error("Something went wrong. Please try again."),
+    onError: () => toast.error("Failed to delete portfolio. Please try again."),
   });
 }

@@ -43,7 +43,7 @@ export function usePrivateOwnerAdAlert() {
       qc.invalidateQueries({ queryKey: ["private_owner_ad_alert"] });
       toast.success(enable ? "Private Owner Ad alerts enabled" : "Private Owner Ad alerts disabled");
     },
-    onError: () => toast.error("Something went wrong. Please try again."),
+    onError: () => toast.error("Failed to update ad alert preference. Please try again."),
   });
 
   return {

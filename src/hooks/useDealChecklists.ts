@@ -80,6 +80,6 @@ export function useUpsertDealChecklist() {
       qc.invalidateQueries({ queryKey: ["deal-checklist"] });
       toast.success("Checklist saved");
     },
-    onError: () => toast.error("Something went wrong. Please try again."),
+    onError: () => toast.error("Failed to save checklist. Please try again."),
   });
 }

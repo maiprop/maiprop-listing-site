@@ -70,7 +70,7 @@ export function useCreateProjectUnit() {
       qc.invalidateQueries({ queryKey: ["projects"] });
       toast.success("Unit added");
     },
-    onError: () => toast.error("Something went wrong. Please try again."),
+    onError: () => toast.error("Failed to add unit. Please try again."),
   });
 }
 
@@ -93,7 +93,7 @@ export function useUpdateProjectUnit() {
       qc.invalidateQueries({ queryKey: ["projects"] });
       toast.success("Unit updated");
     },
-    onError: () => toast.error("Something went wrong. Please try again."),
+    onError: () => toast.error("Failed to update unit. Please try again."),
   });
 }
 
@@ -113,6 +113,6 @@ export function useDeleteProjectUnit() {
       qc.invalidateQueries({ queryKey: ["projects"] });
       toast.success("Unit removed");
     },
-    onError: () => toast.error("Something went wrong. Please try again."),
+    onError: () => toast.error("Failed to remove unit. Please try again."),
   });
 }

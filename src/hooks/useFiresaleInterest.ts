@@ -135,7 +135,7 @@ export function useExpressInterest() {
       qc.invalidateQueries({ queryKey: ["firesale_interest_queue", v.dealId] });
       toast.success("Interest registered — admin will be in touch");
     },
-    onError: () => toast.error("Something went wrong. Please try again."),
+    onError: () => toast.error("Failed to register interest. Please try again."),
   });
 }
 
@@ -154,6 +154,6 @@ export function useUpdateInterestStatus() {
       qc.invalidateQueries({ queryKey: ["firesale_interest_queue", v.dealId] });
       toast.success("Status updated");
     },
-    onError: () => toast.error("Something went wrong. Please try again."),
+    onError: () => toast.error("Failed to update interest status. Please try again."),
   });
 }
