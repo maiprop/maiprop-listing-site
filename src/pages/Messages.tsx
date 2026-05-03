@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { SignedAttachment } from "@/components/messages/SignedAttachment";
 import { getOtherProfile, getInitials } from "@/lib/messagesHelpers";
+import { MESSAGE_ATTACHMENT_MIME_TYPES, assertAllowedUpload } from "@/lib/uploadValidation";
 
 export default function Messages() {
   const { user } = useAuth();
@@ -129,10 +130,16 @@ export default function Messages() {
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files?.length || !activeConvId || !user) return;
-    const MAX_SIZE = 10 * 1024 * 1024;
+    // Validate ALL files up-front against the message-attachment allowlist
+    // and the 10 MB size cap. The <input accept=".."> is a UX hint only.
     for (let i = 0; i < files.length; i++) {
-      if (files[i].size > MAX_SIZE) {
-        toast.error(`"${files[i].name}" exceeds the 10 MB limit`);
+      try {
+        assertAllowedUpload(files[i], MESSAGE_ATTACHMENT_MIME_TYPES, {
+          label: "attachment",
+          maxBytes: 10 * 1024 * 1024,
+        });
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : "Unsupported file");
         e.target.value = "";
         return;
       }
@@ -145,10 +152,10 @@ export default function Messages() {
         const ext = (f.name.split(".").pop() || "bin").toLowerCase();
         const path = `${user.id}/${activeConvId}/${crypto.randomUUID()}.${ext}`;
         const { error } = await supabase.storage.from("message-attachments").upload(path, f, {
-          contentType: f.type || "application/octet-stream",
+          contentType: f.type,
         });
         if (error) throw error;
-        uploaded.push({ path, filename: f.name, mime_type: f.type || "" });
+        uploaded.push({ path, filename: f.name, mime_type: f.type });
       }
       setPendingFiles((prev) => [...prev, ...uploaded]);
     } catch (err: unknown) {
