@@ -249,8 +249,15 @@ Deno.serve(async (req) => {
       },
     });
 
-    // Persist to DB so we never double-apply.
-    const { error: updateErr } = await supabase
+    // Persist to DB so we never double-apply. The conditional `.is(..., null)`
+    // filter is the atomic guard that closes the read-then-write race: two
+    // concurrent callers may both have read a null `stripe_credit_id` above,
+    // but the database will only let the FIRST of these two UPDATEs match the
+    // null condition. The second UPDATE returns 0 rows; we detect that by
+    // asking PostgREST to RETURN the affected row and treat a missing row as
+    // "another caller won the race", in which case we reverse the orphaned
+    // Stripe credit so the customer is never charged twice.
+    const { data: claimed, error: updateErr } = await supabase
       .from("agent_data_inputs")
       .update({
         applied_to_invoice_at: new Date().toISOString(),
@@ -258,10 +265,15 @@ Deno.serve(async (req) => {
         stripe_credit_amount_cents: creditCents,
         stripe_credit_currency: currency,
       })
-      .eq("id", row.id);
+      .eq("id", row.id)
+      .eq("status", "verified")
+      .is("stripe_credit_id", null)
+      .select("id")
+      .maybeSingle();
+
     if (updateErr) {
-      // The credit was created on Stripe but we failed to record it. Surface
-      // loudly so an operator can reconcile via the Stripe metadata search.
+      // DB error after Stripe write — surface loudly so an operator can
+      // reconcile via the Stripe metadata search.
       log.error("DB update after credit failed", {
         id: row.id,
         stripe_credit_id: balanceTx.id,
@@ -273,6 +285,45 @@ Deno.serve(async (req) => {
       }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (!claimed) {
+      // Race lost — another concurrent caller has already recorded a credit
+      // for this row. Reverse the orphan we just created so Stripe's net
+      // effect remains exactly one credit per row.
+      log.warn("race lost, reversing orphan Stripe credit", {
+        id: row.id,
+        orphan_balance_tx: balanceTx.id,
+      });
+      try {
+        await stripe.customers.createBalanceTransaction(customerId, {
+          amount: creditCents, // positive = revoke the negative credit above
+          currency,
+          description: `Reversal: duplicate apply attempt on data input ${row.id}`,
+          metadata: {
+            reversed_for: balanceTx.id,
+            agent_data_input_id: row.id,
+            user_id: row.user_id,
+          },
+        });
+      } catch (revErr: unknown) {
+        // If the reversal fails, the Stripe balance is over-credited and an
+        // operator must manually reverse using the metadata above. Logging is
+        // the only safe action — the user's primary credit is still recorded.
+        log.error("reversal of orphan credit failed", {
+          id: row.id,
+          orphan_balance_tx: balanceTx.id,
+          err: revErr instanceof Error ? revErr.message : String(revErr),
+        });
+      }
+      return new Response(JSON.stringify({
+        applied: false,
+        reason: "duplicate_concurrent_apply",
+        orphan_balance_tx: balanceTx.id,
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
       });
     }
 
