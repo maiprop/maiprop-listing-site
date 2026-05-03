@@ -79,32 +79,36 @@ jobs:
 
       - name: Determine functions to deploy
         id: target
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_FUNCTIONS: ${{ github.event.inputs.functions }}
+          CHANGES_DEPLOY_ALL: ${{ steps.changes.outputs.deploy_all }}
+          CHANGES_FUNCTIONS: ${{ steps.changes.outputs.functions }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            INPUT="${{ github.event.inputs.functions }}"
-            if [ -z "$INPUT" ]; then
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            if [ -z "$INPUT_FUNCTIONS" ]; then
               echo "deploy_all=true" >> "$GITHUB_OUTPUT"
             else
-              echo "functions=$INPUT" >> "$GITHUB_OUTPUT"
+              echo "functions=$INPUT_FUNCTIONS" >> "$GITHUB_OUTPUT"
               echo "deploy_all=false" >> "$GITHUB_OUTPUT"
             fi
           else
-            echo "deploy_all=${{ steps.changes.outputs.deploy_all }}" >> "$GITHUB_OUTPUT"
-            echo "functions=${{ steps.changes.outputs.functions }}" >> "$GITHUB_OUTPUT"
+            echo "deploy_all=$CHANGES_DEPLOY_ALL" >> "$GITHUB_OUTPUT"
+            echo "functions=$CHANGES_FUNCTIONS" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Deploy functions
         if: inputs.dry_run != true
+        env:
+          TARGET_DEPLOY_ALL: ${{ steps.target.outputs.deploy_all }}
+          TARGET_FUNCTIONS: ${{ steps.target.outputs.functions }}
         run: |
           set -euo pipefail
-          DEPLOY_ALL="${{ steps.target.outputs.deploy_all }}"
-          FUNCTIONS="${{ steps.target.outputs.functions }}"
-
-          if [ "$DEPLOY_ALL" = "true" ]; then
+          if [ "$TARGET_DEPLOY_ALL" = "true" ]; then
             echo "Deploying ALL edge functions..."
             supabase functions deploy --project-ref "$PROJECT_REF"
-          elif [ -n "$FUNCTIONS" ]; then
-            for fn in $FUNCTIONS; do
+          elif [ -n "$TARGET_FUNCTIONS" ]; then
+            for fn in $TARGET_FUNCTIONS; do
               echo "Deploying: $fn"
               supabase functions deploy "$fn" --project-ref "$PROJECT_REF"
             done
@@ -114,15 +118,16 @@ jobs:
 
       - name: Dry run — list targets
         if: inputs.dry_run == true
+        env:
+          TARGET_DEPLOY_ALL: ${{ steps.target.outputs.deploy_all }}
+          TARGET_FUNCTIONS: ${{ steps.target.outputs.functions }}
         run: |
-          DEPLOY_ALL="${{ steps.target.outputs.deploy_all }}"
-          FUNCTIONS="${{ steps.target.outputs.functions }}"
           echo "DRY RUN — would deploy:"
-          if [ "$DEPLOY_ALL" = "true" ]; then
+          if [ "$TARGET_DEPLOY_ALL" = "true" ]; then
             echo "  ALL functions"
             ls -d supabase/functions/*/ | grep -v _shared | grep -v node_modules | sed 's|supabase/functions/||;s|/||'
-          elif [ -n "$FUNCTIONS" ]; then
-            for fn in $FUNCTIONS; do
+          elif [ -n "$TARGET_FUNCTIONS" ]; then
+            for fn in $TARGET_FUNCTIONS; do
               echo "  - $fn"
             done
           else

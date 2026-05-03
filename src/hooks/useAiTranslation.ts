@@ -46,7 +46,7 @@ function evictOldestLocale(): void {
         entries.push({ key, ts: parsed.ts ?? 0 });
       } catch { entries.push({ key, ts: 0 }); }
     }
-    if (entries.length <= MAX_CACHED_LOCALES) return;
+    if (entries.length < MAX_CACHED_LOCALES) return;
     entries.sort((a, b) => a.ts - b.ts);
     const toRemove = entries.slice(0, entries.length - MAX_CACHED_LOCALES);
     for (const { key } of toRemove) localStorage.removeItem(key);
