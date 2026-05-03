@@ -92,6 +92,13 @@ BEGIN
     END IF;
   END IF;
 
+  -- Guard verified (trust badge — admin-only)
+  IF NEW.verified IS DISTINCT FROM OLD.verified THEN
+    IF NOT public.has_platform_admin((SELECT auth.uid())) THEN
+      NEW.verified := OLD.verified;
+    END IF;
+  END IF;
+
   -- Guard participant_type: non-admins can only set allowed values.
   -- 'investor' and 'institutional' require admin approval.
   IF NEW.participant_type IS DISTINCT FROM OLD.participant_type THEN
@@ -123,7 +130,7 @@ REVOKE UPDATE ON public.profiles FROM authenticated;
 GRANT UPDATE (
   display_name, bio, avatar_url, phone, city,
   first_name, last_name, country, video_link, website_url,
-  investor_mode, verified, participant_type, role
+  investor_mode, participant_type, role
 ) ON public.profiles TO authenticated;
 
 -- Note: role + participant_type are granted here because the trigger guard
