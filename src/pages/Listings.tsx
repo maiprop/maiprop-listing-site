@@ -673,7 +673,14 @@ export default function Listings() {
                 action={{ label: "Retry", onClick: () => window.location.reload() }}
                 testId="empty-listings"
               />
-            ) : filtered.length === 0 ? (
+            ) : filtered.length === 0 && !paginated.hasNextPage ? (
+              /* Show "no results" only when we have actually exhausted the
+               * paginated source. Client-side filters (hasVideoViewing,
+               * hasVirtualTour, minAiScore, minWalkability) may exclude every
+               * row in the first 24-row page even though later pages would
+               * match — keep the sentinel rendered (next branch) so
+               * fetchNextPage continues until either we get a hit or
+               * hasNextPage flips to false. */
               <EmptyState
                 icon={Building2}
                 title={t("listings.noResults")}
@@ -683,6 +690,7 @@ export default function Listings() {
               />
             ) : (
               <>
+                {filtered.length > 0 && (
                 <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
                   {filtered.map((property: ListingCardWithRaw) => (
                     <div key={property.id} className="relative group">
@@ -704,7 +712,17 @@ export default function Listings() {
                     </div>
                   ))}
                 </div>
-                {paginated.isFetchingNextPage && (
+                )}
+                {/* Searching state: every loaded row was excluded by the
+                 * client-side filters but more pages exist. Render a few
+                 * skeletons so the user sees progress while the sentinel
+                 * keeps fetching pages. */}
+                {filtered.length === 0 && paginated.hasNextPage && (
+                  <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
+                    {Array.from({ length: 4 }).map((_, i) => <PropertyCardSkeleton key={`searching-${i}`} />)}
+                  </div>
+                )}
+                {paginated.isFetchingNextPage && filtered.length > 0 && (
                   <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 mt-3 sm:mt-4">
                     {Array.from({ length: 4 }).map((_, i) => <PropertyCardSkeleton key={`more-${i}`} />)}
                   </div>
