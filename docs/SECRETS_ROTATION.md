@@ -91,7 +91,7 @@ supabase secrets set SUPABASE_SERVICE_ROLE_KEY=<new-key>
 #    key in the same window:
 supabase functions deploy --project-ref <ref>
 
-# 5. Trigger a Netlify rebuild so SSR / build-time tooling picks it up.
+# 5. Trigger a Cloudflare Pages rebuild so build-time tooling picks it up.
 
 # 6. Now click "Confirm" in the Supabase dashboard to actually revoke
 #    the old key. Window of mismatch ≈ 10–60 seconds.
