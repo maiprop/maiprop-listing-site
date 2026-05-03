@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from "react";
 import { X, ArrowRight, Check, Minus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -6,8 +5,14 @@ import { Link } from "react-router-dom";
 import { CompareAIReports } from "@/components/CompareAIReports";
 import { ENERGY_CLASS_COLORS } from "@/lib/statusColors";
 
+// Compare drawer renders an arbitrary listing column row at runtime; the
+// formatter receives whatever the (heavily projected) listing record holds.
+// Narrowing every column would force a 200-line discriminated union and
+// no safety win, so we keep `any` here behind explicit, narrow suppressions.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Listing = Record<string, any>;
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const ROWS: { label: string; key: string; format?: (v: any) => string }[] = [
   { label: "Price", key: "price", format: v => v ? `€${Number(v).toLocaleString()}` : "—" },
   { label: "Price / m²", key: "price_per_sqm", format: v => v ? `€${Number(v).toLocaleString()}/m²` : "—" },

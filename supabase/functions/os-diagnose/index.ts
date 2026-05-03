@@ -9,12 +9,15 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
+import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 
 const limiter = makeRateLimiter({ bucket: "os-diagnose", maxRequests: 5, windowMs: 60_000 });
 
-import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
-
-async function requireAgent(req: Request, sb: ReturnType<typeof createClient>, corsHeaders: Record<string, string>): Promise<Response | null> {
+async function requireAgent(
+  req: Request,
+  sb: ReturnType<typeof createClient>,
+  corsHeaders: Record<string, string>,
+): Promise<Response | null> {
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
     return new Response(JSON.stringify({ error: "Missing or invalid Authorization header" }), {

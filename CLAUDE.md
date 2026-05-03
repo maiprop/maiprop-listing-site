@@ -65,7 +65,7 @@ Functions with `verify_jwt = false` (public): AI search, property valuation, nei
 - **Ownership guards:** Mutation hooks for user-owned data must include `.eq("user_id", user.id)` or equivalent ownership column alongside `.eq("id", id)`.
 - **Admin check:** Use `isPlatformAdmin(profile)` from `src/lib/authUtils.ts`. Never check admin status by email address.
 - **Relative time formatting:** Use `formatTimeAgo(iso)` from `src/lib/format.ts`. Do not define local `timeAgo`/`formatTimeAgo` functions.
-- **MIME type validation:** Use the explicit allowlist in `compressImage.ts` — not `.startsWith("image/")`.
+- **Upload validation:** Call `assertAllowedUpload(file, ALLOWLIST, { label, maxBytes })` from `src/lib/uploadValidation.ts` at every `supabase.storage.from(...).upload(...)` site (including drag-drop and `onChange` handlers). Use the named allowlists (`IMAGE_MIME_TYPES`, `IMAGE_AND_VIDEO_MIME_TYPES`, `PDF_MIME_TYPES`, `MESSAGE_ATTACHMENT_MIME_TYPES`, etc.). The `<input accept="...">` attribute is a UX hint, not a security boundary. `compressImage.ts` is a compression helper only — never use `.startsWith("image/")` or its internal `COMPRESSIBLE_IMAGE_MIME_TYPES` constant for security checks.
 - **Confirm dialogs:** Use `<ConfirmDialog>` from `@/components/ui/ConfirmDialog` instead of `window.confirm()`. Pattern: add `const [deleteTarget, setDeleteTarget] = useState<string | null>(null)`, call `setDeleteTarget(id)` on click, render `<ConfirmDialog open={!!deleteTarget} onConfirm={() => { mutate(deleteTarget!); setDeleteTarget(null); }} onCancel={() => setDeleteTarget(null)} />`.
 - **Listing type cast:** Use `const db = dbListing as ListingWithJoins` (exported from `useListings.ts`) as a single top-level cast instead of scattering `(db as any).field` throughout a component.
 - **Unregistered Supabase tables:** Use `(supabase.from as any)("table_name")` with an `// eslint-disable-next-line` comment rather than `supabase.from("table_name" as any)` — keeps the cast narrow and the lint suppression explicit.
@@ -96,7 +96,7 @@ Canonical helpers — import from here, never define locally:
 
 - `buildListingsQuery(filters, from, pageSize)` — single query builder; all filtering + ORDER BY happens server-side
 - `useListingsPaginated(filters)` — infinite scroll; uses `PAGE_SIZE = 24`
-- `useListings(filters)` — full fetch for map view (up to 500); no client-side sort
+- `useListings(filters)` — full fetch for map view (up to `MAP_FETCH_LIMIT = 200`); no client-side sort
 - `ALLOWED_FEATURE_COLUMNS` — Set of valid listing boolean column names; guards against column injection
 
 ### Environment Variables

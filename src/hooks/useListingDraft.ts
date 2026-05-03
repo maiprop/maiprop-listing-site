@@ -5,6 +5,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
+import { logger } from "@/lib/logger";
 import type { ListingFormData } from "@/hooks/listingForm.types";
 
 const DRAFT_KEY = "listing_draft";
@@ -33,7 +34,15 @@ export function useListingDraft(
       try {
         localStorage.setItem(DRAFT_KEY, JSON.stringify(form));
         setDraftBanner(prev => prev === "none" || prev === "autosaved" ? "autosaved" : prev);
-      } catch (_err: unknown) { /* ignore quota errors */ }
+      } catch (err: unknown) {
+        // Quota / private-mode failures: don't toast on every keystroke,
+        // but at least leave a breadcrumb so a real autosave bug is
+        // visible in the dev console rather than silently swallowed.
+        logger.warn(
+          "Listing autosave failed:",
+          err instanceof Error ? err.message : String(err),
+        );
+      }
     }, 2000);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [form]);
@@ -48,7 +57,11 @@ export function useListingDraft(
     try {
       localStorage.setItem(DRAFT_KEY, JSON.stringify(form));
       toast.success("Draft saved");
-    } catch (_err: unknown) {
+    } catch (err: unknown) {
+      logger.warn(
+        "Listing draft save failed:",
+        err instanceof Error ? err.message : String(err),
+      );
       toast.error("Could not save draft");
     }
   }, [form]);
@@ -61,7 +74,11 @@ export function useListingDraft(
         setForm(f => ({ ...f, ...parsed }));
         toast.success("Draft restored");
       }
-    } catch (_err: unknown) {
+    } catch (err: unknown) {
+      logger.warn(
+        "Listing draft restore failed:",
+        err instanceof Error ? err.message : String(err),
+      );
       toast.error("Could not restore draft");
     }
     setDraftBanner("dismissed");

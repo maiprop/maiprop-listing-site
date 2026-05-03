@@ -534,7 +534,7 @@ describe("Component smoke tests", () => {
   it("ProfileEditor renders without throwing", async () => {
     const { ProfileEditor } = await import("@/components/dashboard/ProfileEditor");
     expect(() => renderWithProviders(
-      <ProfileEditor profile={null} onUpdate={asyncNoop as any} onSwitchToSettings={noop} />
+      <ProfileEditor profile={null} onUpdate={async () => ({ error: null })} onSwitchToSettings={noop} />
     )).not.toThrow();
   });
 

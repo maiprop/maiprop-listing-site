@@ -64,17 +64,49 @@ export function HeroSection() {
     navigate(`/professionals?category=${category}`);
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleAIFilters = (filters: Record<string, any>) => {
+  const handleAIFilters = (filters: Record<string, unknown>) => {
     const params = new URLSearchParams();
-    if (filters.city) params.set("city", filters.city);
-    if (filters.listing_type) params.set("listing_type", filters.listing_type);
-    if (filters.property_type) params.set("type", filters.property_type);
-    if (filters.price_min != null || filters.price_max != null)
-      params.set("price", `${filters.price_min ?? 0}-${filters.price_max ?? 9999999}`);
-    if (filters.beds_min) params.set("beds_min", String(filters.beds_min));
-    if (filters.sqm_min) params.set("sqm_min", String(filters.sqm_min));
-    if (filters.features?.length) params.set("features", filters.features.join(","));
+
+    // Cap numeric values from the AI response so a malformed/hostile suggestion
+    // can never inject garbage or absurd numbers into the listings URL.
+    const PRICE_MAX = 1_000_000_000;
+    const BEDS_MAX = 100;
+    const SQM_MAX = 100_000;
+
+    const clampInt = (v: unknown, lo: number, hi: number): number | null => {
+      const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN;
+      if (!Number.isFinite(n)) return null;
+      return Math.max(lo, Math.min(hi, Math.round(n)));
+    };
+
+    const asString = (v: unknown): string | null =>
+      typeof v === "string" && v.trim() !== "" ? v.trim().slice(0, 80) : null;
+
+    const city = asString(filters.city);
+    if (city) params.set("city", city);
+    const listingType = asString(filters.listing_type);
+    if (listingType) params.set("listing_type", listingType);
+    const propertyType = asString(filters.property_type);
+    if (propertyType) params.set("type", propertyType);
+
+    const priceMin = clampInt(filters.price_min, 0, PRICE_MAX);
+    const priceMax = clampInt(filters.price_max, 0, PRICE_MAX);
+    if (priceMin != null || priceMax != null) {
+      params.set("price", `${priceMin ?? 0}-${priceMax ?? PRICE_MAX}`);
+    }
+
+    const bedsMin = clampInt(filters.beds_min, 0, BEDS_MAX);
+    if (bedsMin) params.set("beds_min", String(bedsMin));
+    const sqmMin = clampInt(filters.sqm_min, 0, SQM_MAX);
+    if (sqmMin) params.set("sqm_min", String(sqmMin));
+
+    if (Array.isArray(filters.features) && filters.features.length) {
+      const features = filters.features
+        .filter((f): f is string => typeof f === "string")
+        .slice(0, 30);
+      if (features.length) params.set("features", features.join(","));
+    }
+
     navigate(`/listings?${params.toString()}`);
   };
 

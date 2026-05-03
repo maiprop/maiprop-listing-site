@@ -226,12 +226,26 @@ export function FiresaleQuickSaleForm() {
       reader.readAsDataURL(file);
     });
 
+  const SAFE_PHOTO_EXTS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
+  const MIME_TO_EXT: Record<string, string> = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/gif": "gif",
+  };
+
   const uploadPhotos = async (rid: string): Promise<string[]> => {
     const urls: string[] = [];
     for (const file of photoFiles) {
-      const ext = file.name.split(".").pop();
-      const path = `${rid}/${crypto.randomUUID()}.${ext}`;
       const compressed = await compressImage(file);
+      // Validate extension against an allowlist — never trust raw `file.name`.
+      // The MIME allowlist is enforced earlier (handlePhotoFiles), so the
+      // compressed blob's type is the source of truth here. `file.name` is
+      // only consulted as a fallback when MIME is missing/unknown.
+      const fromMime = MIME_TO_EXT[compressed.type];
+      const fromName = (file.name.split(".").pop() ?? "").toLowerCase();
+      const ext = fromMime ?? (SAFE_PHOTO_EXTS.has(fromName) ? fromName : "jpg");
+      const path = `${rid}/${crypto.randomUUID()}.${ext}`;
       const { error } = await supabase.storage.from("firesale-photos").upload(path, compressed);
       if (error) {
         logger.warn("[Firesale] photo upload failed:", error.message);

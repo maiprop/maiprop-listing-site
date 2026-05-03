@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Investor subscribers management. Admin-only.
  */
@@ -82,26 +81,38 @@ function useAdminSubscriptions() {
   return useQuery<AdminSubscription[]>({
     queryKey: ["admin-subscriptions"],
     queryFn: async () => {
+      type SubRow = {
+        id: string;
+        user_id: string;
+        tier: string;
+        status: string;
+        started_at: string | null;
+        expires_at: string | null;
+        created_at: string | null;
+      };
+      type ProfileRow = { user_id: string; display_name: string | null };
+
       const { data: subs, error } = await supabase
         .from("investor_subscriptions")
         .select("id, user_id, tier, status, started_at, expires_at, created_at")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      const userIds = (subs || []).map((s: any) => s.user_id);
+      const subRows = (subs ?? []) as SubRow[];
+      const userIds = subRows.map((s) => s.user_id);
       const profileMap: Record<string, string> = {};
       if (userIds.length > 0) {
         const { data: profiles } = await supabase
           .from("profiles_public")
           .select("user_id, display_name")
           .in("user_id", userIds);
-        (profiles || []).forEach((p: any) => {
+        for (const p of ((profiles ?? []) as ProfileRow[])) {
           profileMap[p.user_id] = p.display_name || p.user_id.slice(0, 8);
-        });
+        }
       }
-      return (subs || []).map((s: any) => ({
+      return subRows.map((s) => ({
         ...s,
         display_name: profileMap[s.user_id] || s.user_id.slice(0, 8),
-      }));
+      })) as AdminSubscription[];
     },
   });
 }
