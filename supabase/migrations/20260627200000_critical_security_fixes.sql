@@ -77,24 +77,26 @@ RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
   -- Only admins (via service role / RPC) can change these columns.
   -- Regular authenticated users must not self-assign subscription or privilege fields.
+  -- When auth.uid() IS NULL (service-role edge functions like stripe-webhook),
+  -- the guard is skipped so those writes go through.
 
   -- Guard subscription_product_id
   IF NEW.subscription_product_id IS DISTINCT FROM OLD.subscription_product_id THEN
-    IF NOT public.has_platform_admin((SELECT auth.uid())) THEN
+    IF (SELECT auth.uid()) IS NOT NULL AND NOT public.has_platform_admin((SELECT auth.uid())) THEN
       NEW.subscription_product_id := OLD.subscription_product_id;
     END IF;
   END IF;
 
   -- Guard force_pro_access
   IF NEW.force_pro_access IS DISTINCT FROM OLD.force_pro_access THEN
-    IF NOT public.has_platform_admin((SELECT auth.uid())) THEN
+    IF (SELECT auth.uid()) IS NOT NULL AND NOT public.has_platform_admin((SELECT auth.uid())) THEN
       NEW.force_pro_access := OLD.force_pro_access;
     END IF;
   END IF;
 
   -- Guard verified (trust badge — admin-only)
   IF NEW.verified IS DISTINCT FROM OLD.verified THEN
-    IF NOT public.has_platform_admin((SELECT auth.uid())) THEN
+    IF (SELECT auth.uid()) IS NOT NULL AND NOT public.has_platform_admin((SELECT auth.uid())) THEN
       NEW.verified := OLD.verified;
     END IF;
   END IF;
@@ -102,7 +104,7 @@ BEGIN
   -- Guard participant_type: non-admins can only set allowed values.
   -- 'investor' and 'institutional' require admin approval.
   IF NEW.participant_type IS DISTINCT FROM OLD.participant_type THEN
-    IF NOT public.has_platform_admin((SELECT auth.uid())) THEN
+    IF (SELECT auth.uid()) IS NOT NULL AND NOT public.has_platform_admin((SELECT auth.uid())) THEN
       IF NEW.participant_type NOT IN ('buyer', 'seller', 'agent', 'developer', 'professional') THEN
         NEW.participant_type := OLD.participant_type;
       END IF;
