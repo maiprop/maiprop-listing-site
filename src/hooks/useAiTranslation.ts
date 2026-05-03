@@ -29,6 +29,15 @@ function flattenObject(obj: Record<string, unknown>, prefix = ""): Record<string
 
 const FLAT_EN = flattenObject(en as Record<string, unknown>);
 
+/** djb2 hash of source strings — cache auto-invalidates when en.json changes. */
+function hashSource(obj: Record<string, string>): string {
+  const str = JSON.stringify(obj);
+  let h = 5381;
+  for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+}
+const EN_HASH = hashSource(FLAT_EN);
+
 const I18N_PREFIX = "maiprop_i18n_";
 const MAX_CACHED_LOCALES = 10;
 
@@ -75,12 +84,12 @@ export function useAiTranslation() {
     }
 
     // Check localStorage cache (persists across sessions)
-    const cacheKey = `${I18N_PREFIX}${locale}`;
+    const cacheKey = `${I18N_PREFIX}${EN_HASH}_${locale}`;
     const cached = localStorage.getItem(cacheKey);
     if (cached) {
       try {
-        const parsed = JSON.parse(cached) as { strings: Record<string, string>; ts: number };
-        if (parsed.strings) {
+        const parsed = JSON.parse(cached) as { strings: Record<string, string>; ts: number; v?: string };
+        if (parsed.strings && parsed.v === EN_HASH) {
           i18n.addResourceBundle(locale, "translation", parsed.strings, true, true);
           // Touch timestamp for LRU
           localStorage.setItem(cacheKey, JSON.stringify({ ...parsed, ts: Date.now() }));
@@ -109,7 +118,7 @@ export function useAiTranslation() {
         i18n.addResourceBundle(locale, "translation", strings, true, true);
         try {
           evictOldestLocale();
-          localStorage.setItem(cacheKey, JSON.stringify({ strings, ts: Date.now() }));
+          localStorage.setItem(cacheKey, JSON.stringify({ strings, ts: Date.now(), v: EN_HASH }));
         } catch (_err: unknown) { /* quota full */ }
         setStatus("ready");
       })
