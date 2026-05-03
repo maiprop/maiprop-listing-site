@@ -83,7 +83,10 @@ export function assertAllowedUpload(
   }
 
   if (file.size > maxBytes) {
-    const mb = (maxBytes / (1024 * 1024)).toFixed(0);
-    throw new Error(`"${file.name}" exceeds the ${mb} MB limit.`);
+    const limit =
+      maxBytes < 1024 * 1024
+        ? `${Math.round(maxBytes / 1024)} KB`
+        : `${(maxBytes / (1024 * 1024)).toFixed(0)} MB`;
+    throw new Error(`"${file.name}" exceeds the ${limit} limit.`);
   }
 }

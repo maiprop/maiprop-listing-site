@@ -85,14 +85,24 @@ describe("uploadValidation", () => {
       ).toThrow(/exceeds the 10 MB limit/);
     });
 
-    it("respects a custom maxBytes", () => {
+    it("respects a custom maxBytes (sub-MB rendered in KB, not 0 MB)", () => {
       expect(() =>
         assertAllowedUpload(
           fakeFile({ name: "small.png", type: "image/png", size: 600_000 }),
           IMAGE_MIME_TYPES,
           { maxBytes: 500_000 },
         ),
-      ).toThrow(/exceeds the 0 MB limit/);
+      ).toThrow(/exceeds the 488 KB limit/);
+    });
+
+    it("formats MB-scale limits with MB units", () => {
+      expect(() =>
+        assertAllowedUpload(
+          fakeFile({ name: "huge.png", type: "image/png", size: 6 * 1024 * 1024 }),
+          IMAGE_MIME_TYPES,
+          { maxBytes: 5 * 1024 * 1024 },
+        ),
+      ).toThrow(/exceeds the 5 MB limit/);
     });
 
     it("excludes SVG (XSS vector via embedded script) from images", () => {
