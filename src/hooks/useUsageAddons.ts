@@ -1,6 +1,7 @@
 /**
  * Usage-based add-ons: AI valuations, Property Reports, Priority Ads.
- * Tracks usage per month and enforces limits (included in Pro, extra cost beyond).
+ * Reads current-month usage from the canonical usage_ai_calls table
+ * (populated server-side by edge functions via recordAiCall).
  */
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -26,13 +27,14 @@ export function useValuationUsage() {
   const monthStart = startOfMonth();
 
   return useQuery({
-    queryKey: ["usage_ai_valuations", user?.id, monthStart],
+    queryKey: ["usage_ai_calls", "property-valuation", user?.id, monthStart],
     enabled: !!user,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("usage_ai_valuations")
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase.from as any)("usage_ai_calls")
         .select("id")
         .eq("user_id", user!.id)
+        .eq("bucket", "property-valuation")
         .gte("created_at", monthStart);
       if (error) throw error;
       return (data ?? []).length;
@@ -65,13 +67,14 @@ export function useReportUsage() {
   const monthStart = startOfMonth();
 
   return useQuery({
-    queryKey: ["usage_property_reports", user?.id, monthStart],
+    queryKey: ["usage_ai_calls", "neighbourhood-report", user?.id, monthStart],
     enabled: !!user,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("usage_property_reports")
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase.from as any)("usage_ai_calls")
         .select("id")
         .eq("user_id", user!.id)
+        .eq("bucket", "neighbourhood-report")
         .gte("created_at", monthStart);
       if (error) throw error;
       return (data ?? []).length;
