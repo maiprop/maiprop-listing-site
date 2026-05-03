@@ -9,8 +9,31 @@
 | `SUPABASE_ANON_KEY` | **WARNING: Currently contains the SERVICE ROLE key** (`sb_secret_*`). Use this for admin operations. |
 | `SUPABASE_SERVICE_ROLE_KEY` | **WARNING: Currently contains the ANON JWT** (`eyJ...`, `role: "anon"`). Use this for anon testing. |
 | `SUPABASE_ACCESS_TOKEN` | Personal access token for Supabase Management API (migrations, schema queries). Generate at https://supabase.com/dashboard/account/tokens |
+| `ONBOARDING_TEST_EMAIL` | Email for test account login |
+| `ONBOARDING_TEST_PASSWORD` | Password for test account login |
+| `RLS_USER_A_EMAIL` | Email for RLS test user A |
+| `RLS_USER_B_EMAIL` | Email for RLS test user B |
+| `RLS_USER_PASSWORD` | Shared password for RLS test users |
 
 > **Key gotcha**: The `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` names are swapped. Always verify by decoding the JWT: `echo $KEY | python3 -c "import sys,base64,json; t=sys.stdin.read().strip().split('.'); print(json.loads(base64.urlsafe_b64decode(t[1]+'=='))['role'])"` — if it says `anon`, it's the anon key regardless of the env var name.
+
+## Local Dev Server
+
+```bash
+cd /home/ubuntu/repos/maiprop-listing-site
+npm run dev    # Starts on port 8080 (falls back to 8081 if 8080 is busy)
+```
+
+- The app connects to live Supabase (env vars from `.env` or shell environment)
+- Homepage, listings, auctions, and login all work locally
+- Login with `ONBOARDING_TEST_EMAIL` / `ONBOARDING_TEST_PASSWORD` redirects to `/dashboard`
+- Admin pages (`/admin`) require `AdminRoute` — only accessible if the logged-in user has admin role
+
+## Environment Access Constraints
+
+- **Production site** (`maiprop.co`) may time out from testing VMs — use local dev server instead
+- **Cloudflare Pages preview deploys** are behind Cloudflare Access (requires email login code). You cannot access preview URLs without the owner's Cloudflare Access credentials.
+- **Local dev server** is the most reliable testing path — connects to live Supabase backend
 
 ## Testing RLS Policies
 
@@ -86,6 +109,31 @@ npx supabase migration repair TIMESTAMP --status applied --linked
 - Functions with `verify_jwt = false` in `supabase/config.toml` are publicly accessible.
 - Webhook/cron functions (`process-email-queue`, `oh-registration-notify`, `receive-from-os`, `stripe-webhook`) should NOT have IP-based rate limiting — they're called from infrastructure with shared IPs.
 
+## Running Tests
+
+```bash
+# Vitest (frontend unit tests) — ~1179 tests
+npm test
+
+# Deno tests (edge function tests) — ~238 tests
+export PATH="$HOME/.deno/bin:$PATH"
+cd supabase/functions && deno test --allow-env --allow-net --allow-read .
+
+# Single Vitest file
+npx vitest run src/test/SomeFile.test.ts
+```
+
+## Seed Script Testing
+
+```bash
+# Should fail fast with exit code 1 when env vars missing:
+env -u VITE_SUPABASE_URL -u SUPABASE_URL -u SUPABASE_SERVICE_ROLE_KEY npx tsx scripts/seed-mock-users.ts
+# Expected: "Missing SUPABASE_URL..." error, exit code 1
+
+# Should succeed with env vars set:
+VITE_SUPABASE_URL=https://example.supabase.co SUPABASE_SERVICE_ROLE_KEY=key npx tsx scripts/seed-mock-users.ts
+```
+
 ## Key Tables for Testing
 
 - `articles` — requires: slug (text, NOT NULL), topic (text), title, meta_description, content (jsonb), category, read_time
@@ -100,3 +148,17 @@ The database has two `has_role` function signatures with different behavior:
 - `has_role(uuid, user_role)` → delegates to `authoritative_role()` which queries `profiles.role`
 
 Existing policies use `app_role`. Changing to `user_role` changes behavior — should be done as a dedicated migration, not bundled with other fixes.
+
+## UI Navigation for Testing
+
+| Page | Route | Auth Required | Notes |
+|------|-------|---------------|-------|
+| Homepage | `/` | No | Hero, live market, featured properties |
+| Listings | `/listings` | No | Filterable property grid |
+| Auctions | `/auctions` | No | Uses `useAuctionListings` hook with staleTime |
+| Login | `/login` | No | Email + password form |
+| Dashboard | `/dashboard` | Yes (any user) | Sidebar with Overview, Saved, Messages, etc. |
+| Admin | `/admin` | Yes (admin role) | Tabs: pipeline, subscribers, pricing, etc. |
+| CRM Contacts | `/dashboard` → Contacts tab | Yes | Uses `useContacts` hook |
+| Firesale Admin | `/admin?tab=pipeline` | Yes (admin) | Uses `AdminFiresalePipeline` |
+| Pro Verification | `/admin?tab=pro-verification` | Yes (admin) | Uses `AdminProfessionalVerification` |
