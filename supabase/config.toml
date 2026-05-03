@@ -40,7 +40,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.fetch-report-from-os]
-verify_jwt = false
+verify_jwt = true
 
 [functions.os-diagnose]
 verify_jwt = false
@@ -101,7 +101,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.fetch-past-deals-from-os]
-verify_jwt = false
+verify_jwt = true
 
 [functions.log-role-switch]
 verify_jwt = true
