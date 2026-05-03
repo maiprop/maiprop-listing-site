@@ -156,7 +156,7 @@ export function useOpenHouseRegistrations(listingId: string | undefined, _asOwne
         .from("open_house_registrations")
         .select(`
           *,
-          profiles:requester_id (display_name, first_name, last_name, avatar_url, email)
+          profiles:requester_id (display_name, first_name, last_name, avatar_url)
         `)
         .eq("listing_id", listingId)
         .order("created_at", { ascending: false });
