@@ -147,8 +147,9 @@ export function useUpsertOpenHouseSettings() {
 }
 
 export function useOpenHouseRegistrations(listingId: string | undefined, _asOwner: boolean) {
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ["open_house_registrations", listingId],
+    queryKey: ["open_house_registrations", listingId, user?.id ?? "anon"],
     queryFn: async () => {
       if (!listingId) return [];
       const { data, error } = await supabase
