@@ -39,12 +39,23 @@ export interface RolePlan {
   planName: string;
   /** Pricing audience tab on /pricing */
   audienceId: PricingAudienceId;
-  /** Monthly price in EUR (0 = free tier available) */
+  /**
+   * Monthly price in EUR.
+   *   0 + `inviteOnly: false` = free tier available
+   *   0 + `inviteOnly: true`  = no public price; bespoke per-application pricing
+   */
   monthlyPrice: number;
-  /** Annual price in EUR */
+  /** Annual price in EUR (same semantics as monthlyPrice) */
   annualPrice: number;
   /** When true the role has no free tier — paid plan is mandatory */
   proOnly: boolean;
+  /**
+   * When true the plan is invitation-only — there is no public price.
+   * After application approval, an automated Stripe Payment Link with a
+   * per-application amount is emailed. UI consumers must NOT display the
+   * `monthlyPrice`/`annualPrice` for invitation-only plans (they are 0).
+   */
+  inviteOnly: boolean;
   /** Stripe Price ID for monthly billing (from env) */
   stripePriceMonthly: string | null;
   /** Stripe Price ID for annual billing (from env) */
@@ -78,6 +89,7 @@ export const ROLE_PLAN_MAP: Record<PricingAudienceId, RolePlan> = {
     monthlyPrice: 29,
     annualPrice: 290,
     proOnly: false,
+    inviteOnly: false,
     stripePriceMonthly: PRICE_IDS.participant_monthly,
     stripePriceAnnual:  PRICE_IDS.participant_annual,
   },
@@ -88,6 +100,7 @@ export const ROLE_PLAN_MAP: Record<PricingAudienceId, RolePlan> = {
     monthlyPrice: 149,
     annualPrice: 1490,
     proOnly: false,
+    inviteOnly: false,
     stripePriceMonthly: PRICE_IDS.agent_monthly,
     stripePriceAnnual:  PRICE_IDS.agent_annual,
   },
@@ -98,6 +111,7 @@ export const ROLE_PLAN_MAP: Record<PricingAudienceId, RolePlan> = {
     monthlyPrice: 129,
     annualPrice: 1290,
     proOnly: true,
+    inviteOnly: false,
     stripePriceMonthly: PRICE_IDS.developer_monthly,
     stripePriceAnnual:  PRICE_IDS.developer_annual,
   },
@@ -108,6 +122,7 @@ export const ROLE_PLAN_MAP: Record<PricingAudienceId, RolePlan> = {
     monthlyPrice: 69,
     annualPrice: 690,
     proOnly: false,
+    inviteOnly: false,
     stripePriceMonthly: PRICE_IDS.professional_monthly,
     stripePriceAnnual:  PRICE_IDS.professional_annual,
   },
@@ -123,6 +138,7 @@ export const ROLE_PLAN_MAP: Record<PricingAudienceId, RolePlan> = {
     monthlyPrice: 0,
     annualPrice: 0,
     proOnly: true,
+    inviteOnly: true,
     stripePriceMonthly: null,
     stripePriceAnnual:  null,
   },
@@ -133,6 +149,7 @@ export const ROLE_PLAN_MAP: Record<PricingAudienceId, RolePlan> = {
     monthlyPrice: 0,
     annualPrice: 0,
     proOnly: true,
+    inviteOnly: true,
     stripePriceMonthly: null,
     stripePriceAnnual:  null,
   },
@@ -156,21 +173,30 @@ export function getPlanForParticipant(pt: ParticipantId): RolePlan {
   return ROLE_PLAN_MAP[participantToPricingAudience(pt)];
 }
 
-export type SwitchKind = "same-tier" | "upgrade" | "downgrade" | "proonly";
+export type SwitchKind = "same-tier" | "upgrade" | "downgrade" | "proonly" | "invite-only";
 
 /**
  * Classify a role switch from → to.
  *
- * same-tier  — same monthly price (e.g. buyer ↔ seller, both €29)
- * upgrade    — new role costs more per month
- * downgrade  — new role costs less per month
- * proonly    — new role has no free tier (developer)
+ * same-tier    — same monthly price (e.g. buyer ↔ seller, both €29)
+ * upgrade      — new role costs more per month
+ * downgrade    — new role costs less per month
+ * proonly      — new role has no free tier (developer)
+ * invite-only  — new role is invitation-only (investor / institutional);
+ *                checks precedence over `proonly` because there is no public
+ *                price and the user must apply rather than pay at checkout.
+ *
+ * Note: switching FROM an invite-only role to any non-invite role is treated
+ * as a "downgrade" (the user is leaving a bespoke / paid tier). The price
+ * comparison is skipped because invite-only fallback prices are 0.
  */
 export function classifySwitch(from: ParticipantId, to: ParticipantId): SwitchKind {
   const fromPlan = getPlanForParticipant(from);
   const toPlan   = getPlanForParticipant(to);
+  if (toPlan.inviteOnly) return "invite-only";
   if (toPlan.proOnly) return "proonly";
   if (fromPlan.audienceId === toPlan.audienceId) return "same-tier";
+  if (fromPlan.inviteOnly) return "downgrade";
   if (toPlan.monthlyPrice > fromPlan.monthlyPrice) return "upgrade";
   return "downgrade";
 }

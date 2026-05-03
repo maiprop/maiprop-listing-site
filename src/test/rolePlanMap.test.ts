@@ -84,12 +84,21 @@ describe("classifySwitch", () => {
     expect(classifySwitch("agent", "developer")).toBe("proonly");
   });
 
-  it("any → investor is proonly", () => {
-    expect(classifySwitch("buyer", "investor")).toBe("proonly");
+  it("any → investor is invite-only", () => {
+    expect(classifySwitch("buyer", "investor")).toBe("invite-only");
+    expect(classifySwitch("agent", "investor")).toBe("invite-only");
   });
 
-  it("any → institutional is proonly", () => {
-    expect(classifySwitch("buyer", "institutional")).toBe("proonly");
+  it("any → institutional is invite-only", () => {
+    expect(classifySwitch("buyer", "institutional")).toBe("invite-only");
+  });
+
+  it("investor → buyer is downgrade (leaving bespoke tier)", () => {
+    expect(classifySwitch("investor", "buyer")).toBe("downgrade");
+  });
+
+  it("institutional → agent is downgrade (leaving bespoke tier)", () => {
+    expect(classifySwitch("institutional", "agent")).toBe("downgrade");
   });
 
   it("agent → professional is downgrade (€149 → €69)", () => {
@@ -116,6 +125,16 @@ describe("ROLE_PLAN_MAP integrity", () => {
       expect(typeof plan.monthlyPrice).toBe("number");
       expect(typeof plan.annualPrice).toBe("number");
       expect(typeof plan.proOnly).toBe("boolean");
+      expect(typeof plan.inviteOnly).toBe("boolean");
+    }
+  });
+
+  it("invitation-only plans carry zero monthly/annual fallback prices", () => {
+    for (const plan of Object.values(ROLE_PLAN_MAP)) {
+      if (plan.inviteOnly) {
+        expect(plan.monthlyPrice, `${plan.planKey}.monthlyPrice`).toBe(0);
+        expect(plan.annualPrice,  `${plan.planKey}.annualPrice`).toBe(0);
+      }
     }
   });
 
@@ -146,14 +165,14 @@ describe("ROLE_PLAN_MAP integrity", () => {
 describe("ROLE_PLAN_MAP canonical pricing snapshot", () => {
   it("matches the documented Layer A table in docs/PLATFORM_REFERENCE.md", () => {
     const snapshot = {
-      participant:   { planKey: "pro",                    monthlyPrice: 29,   annualPrice: 290,   proOnly: false },
-      agent:         { planKey: "agent_basic",            monthlyPrice: 149,  annualPrice: 1490,  proOnly: false },
-      developer:     { planKey: "developer_pro",          monthlyPrice: 129,  annualPrice: 1290,  proOnly: true  },
-      professional:  { planKey: "professional_basic",     monthlyPrice: 69,   annualPrice: 690,   proOnly: false },
+      participant:   { planKey: "pro",                    monthlyPrice: 29,   annualPrice: 290,   proOnly: false, inviteOnly: false },
+      agent:         { planKey: "agent_basic",            monthlyPrice: 149,  annualPrice: 1490,  proOnly: false, inviteOnly: false },
+      developer:     { planKey: "developer_pro",          monthlyPrice: 129,  annualPrice: 1290,  proOnly: true,  inviteOnly: false },
+      professional:  { planKey: "professional_basic",     monthlyPrice: 69,   annualPrice: 690,   proOnly: false, inviteOnly: false },
       // Investor & Institutional are invitation-only — no public price.
       // The actual price is set per application via a one-off Stripe Payment Link.
-      investor:      { planKey: "investor_private",       monthlyPrice: 0,    annualPrice: 0,     proOnly: true  },
-      institutional: { planKey: "investor_institutional", monthlyPrice: 0,    annualPrice: 0,     proOnly: true  },
+      investor:      { planKey: "investor_private",       monthlyPrice: 0,    annualPrice: 0,     proOnly: true,  inviteOnly: true  },
+      institutional: { planKey: "investor_institutional", monthlyPrice: 0,    annualPrice: 0,     proOnly: true,  inviteOnly: true  },
     };
     for (const [audience, expected] of Object.entries(snapshot)) {
       const actual = ROLE_PLAN_MAP[audience as keyof typeof ROLE_PLAN_MAP];
@@ -161,6 +180,7 @@ describe("ROLE_PLAN_MAP canonical pricing snapshot", () => {
       expect(actual.monthlyPrice,  `${audience}.monthlyPrice`).toBe(expected.monthlyPrice);
       expect(actual.annualPrice,   `${audience}.annualPrice`).toBe(expected.annualPrice);
       expect(actual.proOnly,       `${audience}.proOnly`).toBe(expected.proOnly);
+      expect(actual.inviteOnly,    `${audience}.inviteOnly`).toBe(expected.inviteOnly);
     }
   });
 });

@@ -30,15 +30,16 @@ type PricingConfig = {
 
 /** Predefined sections so admin can manage all pricings: users, professionals, agents, valuation, investors, ad-hoc */
 const PRICING_SECTIONS = [
-  { key: "users",       label: "Users (consumers)",         module: "user_subscription",         audience: "user" },
-  { key: "agents",      label: "Agents",                    module: "agent_subscription",         audience: "agent" },
-  { key: "developers",  label: "Developers",                module: "developer_subscription",     audience: "agent" },
-  { key: "professionals",label: "Professionals",            module: "professional_subscription",  audience: "professional" },
-  { key: "investors",   label: "Investors",                 module: "investor_subscription",      audience: "investor" },
-  { key: "valuation",   label: "Valuation / AI reports",   module: "valuation_reports",          audience: "user" },
-  { key: "adhoc_user",  label: "Ad-hoc — listings / users",module: "adhoc_charges",              audience: "user" },
-  { key: "adhoc_pro",   label: "Ad-hoc — professionals",   module: "adhoc_charges",              audience: "professional" },
-  { key: "os_data",     label: "OS Data Products (B2B)",   module: "os_data_products",           audience: "user" },
+  { key: "users",        label: "Users (consumers)",         module: "user_subscription",         audience: "user" },
+  { key: "agents",       label: "Agents",                    module: "agent_subscription",        audience: "agent" },
+  { key: "developers",   label: "Developers",                module: "developer_subscription",    audience: "agent" },
+  { key: "professionals",label: "Professionals",             module: "professional_subscription", audience: "professional" },
+  { key: "investors",    label: "Investors",                 module: "investor_subscription",     audience: "investor" },
+  { key: "valuation",    label: "Valuation / AI reports",    module: "valuation_reports",         audience: "user" },
+  { key: "adhoc_user",   label: "Ad-hoc — listings / users", module: "adhoc_charges",             audience: "user" },
+  { key: "adhoc_agent",  label: "Add-ons — agents",          module: "adhoc_charges",             audience: "agent" },
+  { key: "adhoc_pro",    label: "Add-ons — professionals",   module: "adhoc_charges",             audience: "professional" },
+  { key: "os_data",      label: "OS Data Products (B2B)",    module: "os_data_products",          audience: "user" },
 ] as const;
 
 const MODULES = [
