@@ -8,7 +8,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 
 const mockSelect = vi.fn();
-const mockFrom = vi.fn(() => ({ select: mockSelect }));
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockFrom = vi.fn((..._args: any[]) => ({ select: mockSelect }));
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: { from: (...args: unknown[]) => mockFrom(...args) },
 }));
