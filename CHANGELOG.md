@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/maiprop/maiprop-listing-site/compare/v1.0.0...v1.1.0) (2026-05-03)
+
+
+### Features
+
+* testing & docs batch — 27 new hook tests, accessibility audit, B5/F7 docs ([#61](https://github.com/maiprop/maiprop-listing-site/issues/61)) ([11645af](https://github.com/maiprop/maiprop-listing-site/commit/11645afe268d60f7487043d479d97c231fbccc15))
+
 ## 1.0.0 (2026-05-03)
 
 

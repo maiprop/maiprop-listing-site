@@ -54,3 +54,29 @@ Pages over 600 LOC have been reviewed. All use extracted sub-components already:
 Previously identified cycles have been resolved:
 - `AuthContext` ↔ `useSubscription` — broken by extracting `isPlatformAdmin` to `authUtils.ts`
 - No new cycles detected via `madge --circular src/`
+
+## Storybook (F7) — Deferred
+
+Storybook is not currently installed. Recommended setup when the team grows beyond 2 engineers:
+
+```bash
+npx storybook@latest init --type react_vite
+```
+
+Priority components for stories:
+1. `PropertyCard` — most reused component, 5+ variants (auction, firesale, new build, etc.)
+2. `AuctionCard` — bid status states
+3. `ConfirmDialog` — the shared modal replacement for `window.confirm()`
+4. `ProGate` — subscription gating states (free, pro, loading)
+5. `EmptyState` — various illustration + CTA combinations
+
+**Why deferred:** The team is currently 1 engineer. Storybook adds ~50MB to `node_modules` and requires ongoing story maintenance. The ROI is better after hiring.
+
+## Accessibility (M1-M3)
+
+| Check | Status |
+|-------|--------|
+| axe-core in E2E | ✅ 3 pages scanned (index, listings, login) |
+| ARIA labels on icon-only buttons | ✅ All close buttons labeled |
+| Alt text on images | ✅ All `<img>` tags have `alt` attributes |
+| `window.confirm()` → `ConfirmDialog` | ✅ Zero `window.confirm()` in production code |

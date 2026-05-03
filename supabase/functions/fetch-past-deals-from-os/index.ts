@@ -13,11 +13,11 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { createLogger } from "../_shared/logger.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
+import { requireProSubscription } from "../_shared/proGate.ts";
+import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 
 const log = createLogger("fetch-past-deals-from-os");
 const limiter = makeRateLimiter({ bucket: "fetch-past-deals-from-os", maxRequests: 20, windowMs: 60_000 });
-
-import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 
 async function fetchWithTimeout(
   url: string,
@@ -62,8 +62,8 @@ function extractOsAuctionId(tags: string[] | null): string | null {
 }
 
 Deno.serve(async (req) => {
-  const corsPreflight = handleCors(req);
-  if (corsPreflight) return corsPreflight;
+  const corsPreflightResponse = handleCors(req);
+  if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
 
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
@@ -88,6 +88,10 @@ Deno.serve(async (req) => {
       { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
+
+  // Pro subscription gate — this is a Pro-only feature
+  const proCheck = await requireProSubscription(user.id, corsHeaders);
+  if (proCheck.errorResponse) return proCheck.errorResponse;
 
   try {
     const body = await req.json().catch(() => ({}));
