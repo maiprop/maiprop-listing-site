@@ -19,6 +19,9 @@ import { test, expect, type Page, type BrowserContext } from "@playwright/test";
 // Constants
 // ---------------------------------------------------------------------------
 
+// baseURL mirrors playwright.config.ts so newContext() inherits the same target
+// when CI is running against the preview server (port 4173).
+const BASE_URL = process.env.CI ? "http://localhost:4173" : "http://localhost:8080";
 const PASSWORD = "Demo2025!";
 const hasCredentials = !!(process.env.E2E_TEST_EMAIL && process.env.E2E_TEST_PASSWORD);
 
@@ -51,7 +54,7 @@ async function signIn(page: Page, email: string, password: string): Promise<void
 test.describe("Public — open house browsing", () => {
   test("open houses page renders cards or empty state", async ({ page }) => {
     await page.goto("/open-houses");
-    await page.waitForLoadState("load", { timeout: 15_000 });
+    await page.waitForLoadState("networkidle", { timeout: 15_000 });
 
     // Heading must be visible
     await expect(page.locator("h1, h2, [role='heading']").first()).toBeVisible({
@@ -78,7 +81,7 @@ test.describe("Public — open house browsing", () => {
 
   test("clicking an open house card navigates to detail page", async ({ page }) => {
     await page.goto("/open-houses");
-    await page.waitForLoadState("load", { timeout: 15_000 });
+    await page.waitForLoadState("networkidle", { timeout: 15_000 });
 
     const cards = page.locator("article, [class*='card']");
     const cardCount = await cards.count();
@@ -90,7 +93,7 @@ test.describe("Public — open house browsing", () => {
     }
 
     await cards.first().click();
-    await page.waitForLoadState("load", { timeout: 15_000 });
+    await page.waitForLoadState("networkidle", { timeout: 15_000 });
 
     // Navbar must still be visible (app did not crash)
     await expect(page.locator("nav, header").first()).toBeVisible({ timeout: 10_000 });
@@ -102,7 +105,7 @@ test.describe("Public — open house browsing", () => {
 
   test("open house detail page has RSVP or Register button", async ({ page }) => {
     await page.goto("/open-houses");
-    await page.waitForLoadState("load", { timeout: 15_000 });
+    await page.waitForLoadState("networkidle", { timeout: 15_000 });
 
     const cards = page.locator("article, [class*='card']");
     const cardCount = await cards.count();
@@ -113,7 +116,7 @@ test.describe("Public — open house browsing", () => {
     }
 
     await cards.first().click();
-    await page.waitForLoadState("load", { timeout: 15_000 });
+    await page.waitForLoadState("networkidle", { timeout: 15_000 });
 
     // Accept any CTA wording a detail page might use
     const rsvpButton = page
@@ -144,7 +147,7 @@ test.describe("Buyer — authenticated open house browsing", () => {
     await signIn(page, ACCOUNTS.buyerFree, PASSWORD);
 
     await page.goto("/open-houses");
-    await page.waitForLoadState("load", { timeout: 15_000 });
+    await page.waitForLoadState("networkidle", { timeout: 15_000 });
 
     // Heading must be present
     await expect(page.locator("h1, h2, [role='heading']").first()).toBeVisible({
@@ -177,7 +180,7 @@ test.describe("Buyer — authenticated open house browsing", () => {
     await signIn(page, ACCOUNTS.buyerPro, PASSWORD);
 
     await page.goto("/open-houses");
-    await page.waitForLoadState("load", { timeout: 15_000 });
+    await page.waitForLoadState("networkidle", { timeout: 15_000 });
 
     const cards = page.locator("article, [class*='card']");
     const cardCount = await cards.count();
@@ -188,7 +191,7 @@ test.describe("Buyer — authenticated open house browsing", () => {
     }
 
     await cards.first().click();
-    await page.waitForLoadState("load", { timeout: 15_000 });
+    await page.waitForLoadState("networkidle", { timeout: 15_000 });
 
     // Detail page must render without crashing
     await expect(page.locator("nav, header").first()).toBeVisible({ timeout: 10_000 });
@@ -205,7 +208,7 @@ test.describe("Buyer — authenticated open house browsing", () => {
     await signIn(page, ACCOUNTS.buyerPro, PASSWORD);
 
     await page.goto("/open-houses");
-    await page.waitForLoadState("load", { timeout: 15_000 });
+    await page.waitForLoadState("networkidle", { timeout: 15_000 });
 
     const cards = page.locator("article, [class*='card']");
     const cardCount = await cards.count();
@@ -216,7 +219,7 @@ test.describe("Buyer — authenticated open house browsing", () => {
     }
 
     await cards.first().click();
-    await page.waitForLoadState("load", { timeout: 15_000 });
+    await page.waitForLoadState("networkidle", { timeout: 15_000 });
 
     const rsvpButton = page
       .locator(
@@ -246,9 +249,8 @@ test.describe("Buyer — authenticated open house browsing", () => {
 
   test("buyer.free and buyer.pro browse simultaneously", async ({ browser }) => {
     // Two independent browser contexts — they must not interfere with each other
-    // Inherit baseURL from playwright.config.ts (port 8080 locally, 4173 in CI).
-    const ctx1: BrowserContext = await browser.newContext();
-    const ctx2: BrowserContext = await browser.newContext();
+    const ctx1: BrowserContext = await browser.newContext({ baseURL: BASE_URL });
+    const ctx2: BrowserContext = await browser.newContext({ baseURL: BASE_URL });
 
     const page1: Page = await ctx1.newPage();
     const page2: Page = await ctx2.newPage();
@@ -262,10 +264,10 @@ test.describe("Buyer — authenticated open house browsing", () => {
       // Navigate both to /open-houses in parallel
       await Promise.all([
         page1.goto("/open-houses").then(() =>
-          page1.waitForLoadState("load", { timeout: 15_000 })
+          page1.waitForLoadState("networkidle", { timeout: 15_000 })
         ),
         page2.goto("/open-houses").then(() =>
-          page2.waitForLoadState("load", { timeout: 15_000 })
+          page2.waitForLoadState("networkidle", { timeout: 15_000 })
         ),
       ]);
 
@@ -300,7 +302,7 @@ test.describe("Seller / agent — hosting view", () => {
     await signIn(page, ACCOUNTS.sellerPro, PASSWORD);
 
     // Already on /dashboard — wait for it to fully settle
-    await page.waitForLoadState("load", { timeout: 15_000 });
+    await page.waitForLoadState("networkidle", { timeout: 15_000 });
 
     // Dashboard must render structural content
     const nav = page.locator("nav, [role='navigation'], aside").first();
@@ -316,7 +318,7 @@ test.describe("Seller / agent — hosting view", () => {
     page.on("pageerror", (err) => errors.push(err.message));
 
     await signIn(page, ACCOUNTS.agentPro, PASSWORD);
-    await page.waitForLoadState("load", { timeout: 15_000 });
+    await page.waitForLoadState("networkidle", { timeout: 15_000 });
 
     // Look for any nav link or section referencing Open House / Events in the dashboard
     // Using toBeAttached because the item may live in a collapsed sidebar or off-screen panel
@@ -346,10 +348,10 @@ test.describe("Multi-context — four accounts simultaneously", () => {
     // Increase per-test timeout to accommodate 4 full sign-in flows.
     test.setTimeout(90_000);
 
-    const ctx1: BrowserContext = await browser.newContext();
-    const ctx2: BrowserContext = await browser.newContext();
-    const ctx3: BrowserContext = await browser.newContext();
-    const ctx4: BrowserContext = await browser.newContext();
+    const ctx1: BrowserContext = await browser.newContext({ baseURL: BASE_URL });
+    const ctx2: BrowserContext = await browser.newContext({ baseURL: BASE_URL });
+    const ctx3: BrowserContext = await browser.newContext({ baseURL: BASE_URL });
+    const ctx4: BrowserContext = await browser.newContext({ baseURL: BASE_URL });
 
     const p1: Page = await ctx1.newPage();
     const p2: Page = await ctx2.newPage();

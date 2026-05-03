@@ -9,13 +9,18 @@ import { RecoveryEmail } from '../_shared/email-templates/recovery.tsx'
 import { EmailChangeEmail } from '../_shared/email-templates/email-change.tsx'
 import { ReauthenticationEmail } from '../_shared/email-templates/reauthentication.tsx'
 import { createLogger } from '../_shared/logger.ts'
+import { getCorsHeaders } from '../_shared/cors.ts'
 
 const log = createLogger('auth-email-hook')
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers':
-    'authorization, x-client-info, apikey, content-type, webhook-id, webhook-signature, webhook-timestamp, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+const WEBHOOK_ALLOW_HEADERS =
+  'authorization, x-client-info, apikey, content-type, webhook-id, webhook-signature, webhook-timestamp, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version'
+
+function webhookCorsHeaders(req: Request): Record<string, string> {
+  return {
+    ...getCorsHeaders(req),
+    'Access-Control-Allow-Headers': WEBHOOK_ALLOW_HEADERS,
+  }
 }
 
 type AuthEmailActionType =
@@ -283,7 +288,7 @@ async function buildOutboundEmails(payload: SendEmailHookPayload): Promise<Outbo
 
 async function handlePreview(req: Request): Promise<Response> {
   const previewCorsHeaders = {
-    'Access-Control-Allow-Origin': '*',
+    ...getCorsHeaders(req),
     'Access-Control-Allow-Headers': 'authorization, content-type',
   }
 
@@ -328,6 +333,7 @@ async function handlePreview(req: Request): Promise<Response> {
 }
 
 async function handleWebhook(req: Request): Promise<Response> {
+  const corsHeaders = webhookCorsHeaders(req)
   if (req.method !== 'POST') {
     return new Response('not allowed', { status: 400, headers: corsHeaders })
   }
@@ -385,7 +391,7 @@ Deno.serve(async (req) => {
   const url = new URL(req.url)
 
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
+    return new Response(null, { headers: webhookCorsHeaders(req) })
   }
 
   if (url.pathname.endsWith('/preview')) {
@@ -399,7 +405,7 @@ Deno.serve(async (req) => {
     const message = error instanceof Error ? error.message : 'Unknown error'
     return new Response(JSON.stringify({ error: message }), {
       status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...webhookCorsHeaders(req), 'Content-Type': 'application/json' },
     })
   }
 })

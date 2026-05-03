@@ -2,9 +2,7 @@ import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import type { Tables } from "@/integrations/supabase/types";
-
-type Profile = Tables<"profiles">;
+import type { Profile } from "@/contexts/AuthContext";
 
 export function ProfileEditor({
   profile,

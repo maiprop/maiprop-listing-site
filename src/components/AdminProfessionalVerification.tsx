@@ -39,7 +39,21 @@ export function AdminProfessionalVerification() {
       {
         onSuccess: () => {
           toast.success(`${pro.display_name} has been verified.`);
-          if (notes.trim()) toast.info(`Note saved: "${notes.trim()}"`);
+          // Persist the admin's verification notes alongside the approval.
+          // useApproveProfessional only writes verified/license/rejection_reason;
+          // the notes column lives separately and is updated via the same hook
+          // used by the "Request more info" flow. If the notes save fails we
+          // surface a soft warning rather than failing the approval.
+          if (notes.trim()) {
+            requestInfoMutation.mutate(
+              { id, notes },
+              {
+                onSuccess: () => toast.info(`Note saved: "${notes.trim()}"`),
+                onError: () =>
+                  toast.warning("Approval saved, but the admin note could not be persisted."),
+              },
+            );
+          }
           setModalPro(null);
         },
         onError: () => toast.error("Failed to approve professional. Please try again."),
