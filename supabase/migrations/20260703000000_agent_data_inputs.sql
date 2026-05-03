@@ -111,7 +111,11 @@ DECLARE
   v_uid UUID := auth.uid();
   v_is_admin BOOLEAN;
 BEGIN
-  -- service_role bypasses auth.uid() (returns null); allow it through.
+  -- Always refresh updated_at on every row update regardless of caller role.
+  NEW.updated_at := now();
+
+  -- service_role bypasses auth.uid() (returns null); allow it through
+  -- without enforcing admin-column guards (service_role is trusted).
   IF v_uid IS NULL THEN
     RETURN NEW;
   END IF;
@@ -129,7 +133,6 @@ BEGIN
     NEW.discount_invoice_id := OLD.discount_invoice_id;
   END IF;
 
-  NEW.updated_at := now();
   RETURN NEW;
 END;
 $$;
