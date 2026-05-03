@@ -94,11 +94,14 @@ test.describe("Accessibility — automated axe-core scans", () => {
     });
     await page.reload();
     // networkidle is unreliable on Mapbox-using pages; wait for `load` and
-    // the React-rendered <main> instead. This is sufficient for axe-core,
-    // which reads the rendered DOM + computed styles (CSS is loaded by `load`).
+    // a React-rendered landmark instead. The Navbar (header) is rendered
+    // by every scanned page (/, /listings, /login), and none of these
+    // landmarks exist in the static index.html shell, so this is a
+    // reliable post-mount signal. Suitable for axe-core, which reads the
+    // rendered DOM + computed styles (CSS is loaded by `load`).
     await page.waitForLoadState("load");
     await page
-      .locator("#main-content, main, body > *")
+      .locator("#main-content, main, header, nav")
       .first()
       .waitFor({ state: "attached", timeout: 15_000 });
     const results = await new AxeBuilder({ page })
