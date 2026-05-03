@@ -18,6 +18,12 @@ import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
 import { useSubscription } from "@/hooks/useSubscription";
 import { getPlanLimits } from "@/hooks/usePlanLimits";
 import { useMyListings } from "@/hooks/useListings";
+import {
+  IMAGE_MIME_TYPES,
+  IMAGE_AND_VIDEO_MIME_TYPES,
+  PDF_MIME_TYPES,
+  assertAllowedUpload,
+} from "@/lib/uploadValidation";
 
 const INPUT_CLS = "w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors";
 const LABEL_CLS = "text-xs text-muted-foreground block mb-1.5 font-medium";
@@ -137,6 +143,9 @@ export default function CreateNewBuildingListing() {
 
   const uploadListingImage = useCallback(async (file: File): Promise<UploadedImage> => {
     if (!user) throw new Error("Must be logged in");
+    // Reject anything that isn't a recognised image MIME type before it
+    // hits the bucket — the <input accept="..."> attribute is only a UX hint.
+    assertAllowedUpload(file, IMAGE_MIME_TYPES, { label: "image" });
     const ext = file.name.split(".").pop();
     const id = crypto.randomUUID();
     const path = `${user.id}/${id}.${ext}`;
@@ -146,8 +155,13 @@ export default function CreateNewBuildingListing() {
     return { id, url: data.publicUrl };
   }, [user]);
 
-  const uploadProjectMedia = useCallback(async (file: File, projectId: string): Promise<string> => {
+  const uploadProjectMedia = useCallback(async (file: File, projectId: string, mediaType: ProjectMediaType): Promise<string> => {
     if (!user) throw new Error("Not authenticated");
+    const allowed = mediaType === "brochure_pdf" ? PDF_MIME_TYPES : IMAGE_AND_VIDEO_MIME_TYPES;
+    assertAllowedUpload(file, allowed, {
+      label: mediaType === "brochure_pdf" ? "PDF brochure" : "media file",
+      maxBytes: 50 * 1024 * 1024, // 50 MB — videos/brochures can be larger than photos
+    });
     const ext = file.name.split(".").pop() || "jpg";
     const path = `${user.id}/${projectId}/media-${crypto.randomUUID()}.${ext}`;
     const { error } = await supabase.storage.from("project-media").upload(path, file, { upsert: true });
@@ -216,10 +230,11 @@ export default function CreateNewBuildingListing() {
         ));
         if (i === 0) setCoverImageId(prev => prev ?? uploaded.id);
       } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Upload failed";
         setImages(prev => prev.map(img =>
-          img.id === placeholder.id ? { ...img, uploading: false, error: err instanceof Error ? err.message : "Upload failed" } : img
+          img.id === placeholder.id ? { ...img, uploading: false, error: msg } : img
         ));
-        toast.error(`Failed to upload ${newFiles[i].name}`);
+        toast.error(`Failed to upload ${newFiles[i].name}: ${msg}`);
       }
     }
   };
@@ -355,7 +370,7 @@ export default function CreateNewBuildingListing() {
 
       for (const [mediaType, file] of Object.entries(projectMedia)) {
         if (file) {
-          const url = await uploadProjectMedia(file, createdProject.id);
+          const url = await uploadProjectMedia(file, createdProject.id, mediaType as ProjectMediaType);
           await addMedia.mutateAsync({ project_id: createdProject.id, url, media_type: mediaType as ProjectMediaType });
         }
       }
@@ -550,7 +565,20 @@ export default function CreateNewBuildingListing() {
                           accept={value === "brochure_pdf" ? "application/pdf" : "image/*,video/*"}
                           onChange={e => {
                             const f = e.target.files?.[0];
-                            if (f) setProjectMedia(p => ({ ...p, [value]: f }));
+                            if (!f) return;
+                            // Fail fast at selection rather than waiting until upload.
+                            try {
+                              const allowed = value === "brochure_pdf" ? PDF_MIME_TYPES : IMAGE_AND_VIDEO_MIME_TYPES;
+                              assertAllowedUpload(f, allowed, {
+                                label: value === "brochure_pdf" ? "PDF brochure" : "media file",
+                                maxBytes: 50 * 1024 * 1024,
+                              });
+                            } catch (err: unknown) {
+                              toast.error(err instanceof Error ? err.message : "Unsupported file");
+                              e.target.value = "";
+                              return;
+                            }
+                            setProjectMedia(p => ({ ...p, [value]: f }));
                           }}
                           className="text-sm"
                         />

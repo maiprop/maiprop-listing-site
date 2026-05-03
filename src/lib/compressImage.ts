@@ -6,6 +6,13 @@
  *  - Resize to max 1920px on longest side (listing hero) or 400px (avatar)
  *  - Convert to WebP when browser supports it (falls back to JPEG)
  *  - Target quality 0.82 — good visual fidelity at ~60-80% size reduction
+ *
+ * NOTE: This function is a compression helper, NOT a security boundary.
+ * It will silently return non-image files unchanged so callers can pipe
+ * mixed input through it without crashing. Callers MUST validate the
+ * MIME type with `assertAllowedUpload()` from `@/lib/uploadValidation`
+ * before deciding whether to upload. See the audit note below for the
+ * historical reason this got flagged.
  */
 
 export interface CompressOptions {
@@ -45,9 +52,14 @@ export async function compressImage(
     mimeType = _webpSupported ? "image/webp" : "image/jpeg",
   } = opts;
 
-  // Only process images from the explicit allowlist; reject everything else
-  const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif", "image/avif"]);
-  if (!ALLOWED_MIME_TYPES.has(file.type) || file.size < 150_000) return file;
+  // Skip compression for tiny images (already small) or anything that isn't
+  // a recognised image type. This is a *processing skip*, not a security
+  // check — see the file header. Callers must validate MIME types separately
+  // with assertAllowedUpload() before deciding to upload.
+  const COMPRESSIBLE_IMAGE_MIME_TYPES = new Set([
+    "image/jpeg", "image/png", "image/webp", "image/heic", "image/heif", "image/avif",
+  ]);
+  if (!COMPRESSIBLE_IMAGE_MIME_TYPES.has(file.type) || file.size < 150_000) return file;
 
   return new Promise((resolve, _reject) => {
     const img = new Image();
