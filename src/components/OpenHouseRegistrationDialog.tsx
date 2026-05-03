@@ -62,7 +62,7 @@ export default function OpenHouseRegistrationDialog({
   const { user, profile } = useAuth();
   const { isPro } = useSubscription();
   const { data: settings } = useOpenHouseSettings(hasAssetControl ? listingId : undefined);
-  const { data: registrations = [] } = useOpenHouseRegistrations(listingId, false);
+  const { data: registrations = [], isLoading: regsLoading } = useOpenHouseRegistrations(listingId, false);
   const { data: myAllRegs = [] } = useMyOpenHouseRegistrations();
   const createReg = useCreateOpenHouseRegistration();
   const updateReg = useUpdateOpenHouseRegistration();
@@ -398,10 +398,10 @@ export default function OpenHouseRegistrationDialog({
                 <Button
                   className="w-full gap-2"
                   onClick={handleStartRegistration}
-                  disabled={loading || listingFull || rsvpLimitReached || (hasAssetControl && timeslots.length > 0 && timeslotIndex === null)}
+                  disabled={loading || regsLoading || listingFull || rsvpLimitReached || (hasAssetControl && timeslots.length > 0 && timeslotIndex === null)}
                 >
-                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
-                  {myReg ? "Continue" : listingFull ? "Fully Booked" : rsvpLimitReached ? "RSVP Limit Reached" : "Register"}
+                  {loading || regsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
+                  {regsLoading ? "Loading…" : myReg ? "Continue" : listingFull ? "Fully Booked" : rsvpLimitReached ? "RSVP Limit Reached" : "Register"}
                 </Button>
               </>
             )}
