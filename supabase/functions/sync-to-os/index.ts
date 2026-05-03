@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * sync-to-os
  * ─────────────────────────────────────────────────────────────────────────────
@@ -42,22 +41,68 @@ async function getOsToken(baseUrl: string, email: string, password: string): Pro
 
 // ── Sync logger ───────────────────────────────────────────────────────────────
 async function logSync(
-  supabase: any,
+  supabase: ReturnType<typeof createClient>,
   direction: string,
   entity_type: string,
   entity_id: string,
   status: string,
   error_message?: string | null,
-  payload?: any,
+  payload?: unknown,
   records_affected = 0,
-) {
-  await supabase.from("sync_log").insert({
+): Promise<void> {
+  // `sync_log` is unregistered in the generated Supabase types; cast through
+  // the narrow `from` overload bridge that the rest of this codebase uses.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (supabase.from as any)("sync_log").insert({
     direction, entity_type, entity_id, status,
     error_message: error_message ?? null,
     payload: payload ?? null,
     records_affected,
   });
 }
+
+// Subset of `listings` columns + the joined `listing_images` rows we read here.
+// The full row type isn't in the generated Supabase types since the columns
+// vary across this codebase's migrations.
+type ListingImageRow = { url: string; sort_order: number };
+type ListingRow = {
+  id: string;
+  title?: string | null;
+  description?: string | null;
+  auction_starting_bid?: number | null;
+  price?: number | null;
+  price_per_sqm?: number | null;
+  auction_date?: string | null;
+  auction_court?: string | null;
+  property_type?: string | null;
+  sqm?: number | null;
+  address?: string | null;
+  city?: string | null;
+  region?: string | null;
+  postal_code?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  floor?: number | null;
+  total_floors?: number | null;
+  year_built?: number | null;
+  cadastre_number?: string | null;
+  listing_type?: string | null;
+  status?: string | null;
+  energy_class?: string | null;
+  has_parking?: boolean | null;
+  has_elevator?: boolean | null;
+  has_pool?: boolean | null;
+  has_garden?: boolean | null;
+  has_balcony?: boolean | null;
+  has_furnished?: boolean | null;
+  has_ac?: boolean | null;
+  cover_image_url?: string | null;
+  ai_score?: number | null;
+  tags?: string[] | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  listing_images?: ListingImageRow[] | null;
+};
 
 // ── Require agent role to prevent unauthenticated sync / PII exposure ───────────
 async function requireAgent(
@@ -115,12 +160,14 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Fetch listing + images
-    const { data: listing, error: listingError } = await supabase
+    // Fetch listing + images. Generated Supabase types cover `listings` but
+    // the joined `listing_images` aliasing varies; narrow at the boundary.
+    const { data: listingRaw, error: listingError } = await supabase
       .from("listings")
       .select("*, listing_images(url, sort_order)")
       .eq("id", listing_id)
       .single();
+    const listing = listingRaw as ListingRow | null;
 
     if (listingError || !listing) {
       await logSync(supabase, "hub_to_os", entity_type, listing_id, "error", "Listing not found");
@@ -130,8 +177,9 @@ Deno.serve(async (req) => {
     }
 
     const sortedImages = (listing.listing_images ?? [])
-      .sort((a: any, b: any) => a.sort_order - b.sort_order)
-      .map((img: any) => img.url);
+      .slice()
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map((img) => img.url);
 
     // Build OS payload — maps Hub fields → OS AuctionInputDto field names
     const osPayload = {
@@ -144,7 +192,7 @@ Deno.serve(async (req) => {
       pricePerSquareMeter:  listing.price_per_sqm,
       auctionDate:          listing.auction_date,
       auctionStatus:        listing.auction_court ?? "ACTIVE",
-      propertyCategory:     TYPE_MAP[listing.property_type] ?? "RESIDENCE",
+      propertyCategory:     (listing.property_type && TYPE_MAP[listing.property_type]) ?? "RESIDENCE",
       propertySquareMeters: listing.sqm,
       propertyAddress:      listing.address,
       propertyMunicipalityName: listing.city,
@@ -216,9 +264,10 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
-  } catch (err: any) {
-    log.error("sync error", { err: err?.message ?? String(err) });
-    return new Response(JSON.stringify({ error: err.message }), {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    log.error("sync error", { err: message });
+    return new Response(JSON.stringify({ error: message }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

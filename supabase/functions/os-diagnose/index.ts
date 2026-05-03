@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * os-diagnose — probes the OS API to understand data shape, filters, and
  * how many PENDING (future) auctions are available.
@@ -84,7 +83,17 @@ Deno.serve(async (req) => {
     const futureRes = await fetchWithTimeout(futureUrl, { headers: authHeaders });
     const futureJson = await futureRes.json().catch(() => null);
     const futureTotal: number = futureJson?.total ?? futureJson?.data?.length ?? 0;
-    const futureSample = (futureJson?.data ?? []).slice(0, 3).map((a: any) => ({
+    type FutureAuction = {
+      id?: string;
+      title?: string;
+      city?: string;
+      auction_date?: string;
+      starting_price?: number;
+      status?: string;
+      lat?: number | null;
+      lng?: number | null;
+    };
+    const futureSample = ((futureJson?.data ?? []) as FutureAuction[]).slice(0, 3).map((a) => ({
       id: a.id,
       title: a.title,
       city: a.city,
@@ -121,7 +130,7 @@ Deno.serve(async (req) => {
 
     // ── Probe 5: count-comparison endpoint ────────────────────────────────────
     // This endpoint has a server-side NullPointerException bug in the OS API — captured for awareness
-    let comp: any = null;
+    let comp: unknown = null;
     try {
       const compRes = await fetchWithTimeout(`${OS_URL}/api/v1/auctions/filter/count-comparison`, {
         method: "POST",
@@ -154,7 +163,7 @@ Deno.serve(async (req) => {
             status: futureRes.status,
             available: futureFullTotal,
             sample: futureSample,
-            hasCoordinates: futureSample.filter((a: any) => a.has_lat).length,
+            hasCoordinates: futureSample.filter((a) => a.has_lat).length,
           },
           // ── Legacy endpoint probes ──────────────────────────────────────────────
           counts: {
@@ -172,12 +181,13 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       },
     );
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
     return new Response(
       JSON.stringify({
-        error: err.message,
+        error: message,
         osReachable: false,
-        detail: err.message,
+        detail: message,
       }),
       {
         status: 500,
