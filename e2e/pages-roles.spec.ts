@@ -59,15 +59,19 @@ test.describe("Auctions page", () => {
   });
 
   test("shows auction listings or an empty/error state", async ({ page }) => {
-    // Accept: at least one auction card, OR an empty-state element, OR a loader that resolves
+    // Wait for React Query to finish its first auctions fetch before asserting.
+    // We switched the beforeEach from `networkidle` to `load` to dodge Mapbox's
+    // never-settling tile requests, but `load` only waits for the bundle —
+    // data-driven content arrives later. Use Playwright's auto-retrying
+    // `expect(...).toBeVisible()` instead of a one-shot `isVisible()` so the
+    // assertion polls until either an auction card, an empty-state element,
+    // or any rendered card/skeleton becomes visible.
     const contentLocator = page.locator(
-      '[data-testid="auction-card"], article, [class*="card"], [class*="empty"], [class*="no-result"], .text-muted-foreground'
+      '[data-testid="auction-card"], article, [class*="card"], [class*="empty"], [class*="no-result"], [class*="skeleton"], .text-muted-foreground'
     );
-    const hasContent = await contentLocator.first().isVisible({ timeout: 10_000 }).catch(() => false);
 
-    // Fallback: at least main body content is rendered
     await expect(page.locator("main, #main-content, body").first()).toBeVisible();
-    expect(hasContent).toBe(true);
+    await expect(contentLocator.first()).toBeVisible({ timeout: 20_000 });
   });
 
   test("map / list view toggle button is present", async ({ page }) => {

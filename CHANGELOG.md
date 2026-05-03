@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.1](https://github.com/maiprop/maiprop-listing-site/compare/v1.1.0...v1.1.1) (2026-05-03)
+
+
+### Bug Fixes
+
+* CRITICAL — close paywall bypass, ownership check, Pro gate, mass-assignment ([#64](https://github.com/maiprop/maiprop-listing-site/issues/64)) ([656791d](https://github.com/maiprop/maiprop-listing-site/commit/656791d57661754dbe44dc3c09a90ebaa81f323e))
+* **security:** close 2 P1 audit findings ([#65](https://github.com/maiprop/maiprop-listing-site/issues/65)) ([f861ca3](https://github.com/maiprop/maiprop-listing-site/commit/f861ca38057129cc723275a508e353417af32ee5))
+
 ## [1.1.0](https://github.com/maiprop/maiprop-listing-site/compare/v1.0.0...v1.1.0) (2026-05-03)
 
 

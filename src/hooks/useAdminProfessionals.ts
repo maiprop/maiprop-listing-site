@@ -69,14 +69,25 @@ export function useProfessionalsAdmin() {
   });
 }
 
-/** Mark a professional as verified, optionally setting their license number. */
+/**
+ * Mark a professional as verified, optionally setting their license number.
+ *
+ * Also clears `rejection_reason`. `useProfessionalsAdmin` derives status as
+ * `rejection_reason ? 'rejected' : verified ? 'verified' : 'pending'`, so a
+ * lingering `rejection_reason` from a prior rejection would otherwise pin a
+ * re-approved professional in the rejected bucket even with `verified=true`.
+ */
 export function useApproveProfessional() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, licenseNumber }: { id: string; licenseNumber: string }) => {
       const { error } = await supabase
         .from("professionals")
-        .update({ verified: true, license_number: licenseNumber || null })
+        .update({
+          verified: true,
+          license_number: licenseNumber || null,
+          rejection_reason: null,
+        } as never)
         .eq("id", id);
       if (error) throw error;
     },

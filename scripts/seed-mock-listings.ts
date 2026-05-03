@@ -17,6 +17,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "fs";
 import { resolve } from "path";
+import { assertNotProduction } from "./_prod-guard";
 import { getSeedEnv } from "./_seed-env";
 
 // Auto-load .env from project root so the script works without manually sourcing it
@@ -29,6 +30,8 @@ try {
 } catch { /* .env not found — rely on shell environment */ }
 
 const { supabaseUrl: SUPABASE_URL, serviceRoleKey: SERVICE_ROLE_KEY } = getSeedEnv();
+
+assertNotProduction(SUPABASE_URL, "seed-mock-listings.ts");
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },

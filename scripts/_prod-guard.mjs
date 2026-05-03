@@ -1,29 +1,37 @@
 /**
- * Production safety guard for plain-JS seed/admin scripts (.mjs).
+ * Production safety guard for seed/destructive scripts (.mjs flavour).
  *
- * Mirrors the TypeScript guard in scripts/_prod-guard.ts. Any script that
- * writes to the database via the service-role key MUST call
- * `assertNotProduction()` before doing so. This prevents accidental runs
- * like `SUPABASE_SERVICE_ROLE_KEY=... node scripts/wipe-all-listings.mjs`
- * from destroying production data.
+ * Mirrors `_prod-guard.ts` for use from plain Node ESM (.mjs) scripts that
+ * cannot import the TS file directly. Keep the two implementations in sync.
  *
- * Override: set `I_KNOW_THIS_IS_PROD=yes` in the environment. This is logged
- * loudly and pauses for 5 s to give the operator time to abort.
+ * Any .mjs script that writes to the database via the service-role key MUST
+ * call `assertNotProduction()` before doing so.
+ *
+ * Override with `I_KNOW_THIS_IS_PROD=yes` if you really do mean to seed prod.
  */
 
 const PRODUCTION_SUPABASE_REFS = new Set([
-  // Known production project ref. Keep in sync with scripts/_prod-guard.ts.
+  // Known production project ref. Update this set if the prod project changes.
   "qvvicunqcrwpioqnvzxf",
 ]);
 
 const SAFE_HOST_SUBSTRINGS = ["staging", "dev", "local", "test", "127.0.0.1"];
 
+/**
+ * @param {string | undefined} supabaseUrl
+ * @param {string} scriptName
+ */
 export function assertNotProduction(supabaseUrl, scriptName) {
   const override = process.env.I_KNOW_THIS_IS_PROD === "yes";
 
-  if (!supabaseUrl) return;
+  if (!supabaseUrl) {
+    // No URL configured — nothing can be written, allow to proceed and let the
+    // caller error out with a clearer message.
+    return;
+  }
 
-  let host, ref;
+  let host;
+  let ref;
   try {
     const u = new URL(supabaseUrl);
     host = u.hostname;
@@ -37,6 +45,7 @@ export function assertNotProduction(supabaseUrl, scriptName) {
   const nodeEnvProd = process.env.NODE_ENV === "production";
 
   const appearsProduction = isKnownProd || nodeEnvProd || !looksSafe;
+
   if (!appearsProduction) return;
 
   const banner = "═".repeat(76);
@@ -55,7 +64,8 @@ export function assertNotProduction(supabaseUrl, scriptName) {
     console.error(`  Press Ctrl-C NOW if this is not intended.`);
     console.error(banner + "\n");
     const until = Date.now() + 5000;
-    while (Date.now() < until) { /* busy-wait so override is deliberately painful */ }
+    // eslint-disable-next-line no-empty
+    while (Date.now() < until) {}
     return;
   }
 

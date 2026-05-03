@@ -162,20 +162,31 @@ describe("useMyConsultationRequests", () => {
   });
 });
 
+/**
+ * Helper: mock supabase.from() to dispatch by table.
+ * - "professionals" → returns { id: "p-99" } via select+eq+maybeSingle (used
+ *   by update hooks to resolve the current user's professional id).
+ * - "consultation_requests" → caller-supplied chain.
+ */
+function mockFromBy(consultationChain: unknown, proId: string | null = "p-99") {
+  const proMaybeSingle = vi.fn().mockResolvedValue({ data: proId ? { id: proId } : null, error: null });
+  fromMock.mockImplementation((table: string) => {
+    if (table === "professionals") {
+      return { select: () => ({ eq: () => ({ maybeSingle: proMaybeSingle }) }) };
+    }
+    if (table === "consultation_requests") return consultationChain;
+    throw new Error("unexpected table " + table);
+  });
+}
+
 describe("useUpdateConsultationRequest", () => {
-  it("updates with both id and professional_id ownership filters, then toasts success", async () => {
-    const proSingle = vi.fn().mockResolvedValue({ data: { id: "p-99" }, error: null });
+  it("updates with id + professional_id ownership filter, returns the row, toasts success", async () => {
     const single = vi.fn().mockResolvedValue({ data: { id: "c-1", status: "confirmed" }, error: null });
     const select = vi.fn().mockReturnValue({ single });
     const eqProf = vi.fn().mockReturnValue({ select });
     const eqId = vi.fn().mockReturnValue({ eq: eqProf });
     const update = vi.fn().mockReturnValue({ eq: eqId });
-    fromMock.mockImplementation((table: string) => {
-      if (table === "professionals")
-        return { select: () => ({ eq: () => ({ maybeSingle: proSingle }) }) };
-      if (table === "consultation_requests") return { update };
-      throw new Error("unexpected " + table);
-    });
+    mockFromBy({ update });
     const { result } = renderHook(() => useUpdateConsultationRequest(), { wrapper: wrapper() });
     await act(async () => {
       await result.current.mutateAsync({ id: "c-1", updates: { status: "confirmed" } });
@@ -187,15 +198,8 @@ describe("useUpdateConsultationRequest", () => {
   });
 
   it("toasts error on failure", async () => {
-    const proSingle = vi.fn().mockResolvedValue({ data: { id: "p-99" }, error: null });
     const single = vi.fn().mockResolvedValue({ data: null, error: new Error("nope") });
-    fromMock.mockImplementation((table: string) => {
-      if (table === "professionals")
-        return { select: () => ({ eq: () => ({ maybeSingle: proSingle }) }) };
-      if (table === "consultation_requests")
-        return { update: () => ({ eq: () => ({ eq: () => ({ select: () => ({ single }) }) }) }) };
-      throw new Error("unexpected " + table);
-    });
+    mockFromBy({ update: () => ({ eq: () => ({ eq: () => ({ select: () => ({ single }) }) }) }) });
     const { result } = renderHook(() => useUpdateConsultationRequest(), { wrapper: wrapper() });
     await act(async () => {
       await result.current
@@ -204,20 +208,25 @@ describe("useUpdateConsultationRequest", () => {
     });
     expect(toastMock.error).toHaveBeenCalledWith(expect.stringMatching(/Could not update/i));
   });
+
+  it("rejects when caller has no professional profile (no row touched)", async () => {
+    const update = vi.fn();
+    mockFromBy({ update }, null);
+    const { result } = renderHook(() => useUpdateConsultationRequest(), { wrapper: wrapper() });
+    await act(async () => {
+      await result.current.mutateAsync({ id: "c-1", updates: {} }).catch(() => {});
+    });
+    expect(update).not.toHaveBeenCalled();
+    expect(toastMock.error).toHaveBeenCalled();
+  });
 });
 
 describe("useBulkUpdateConsultationRequests", () => {
-  it("updates many ids via .in() with professional_id filter and toasts success", async () => {
-    const proSingle = vi.fn().mockResolvedValue({ data: { id: "p-99" }, error: null });
+  it("updates many ids with ownership filter and toasts success", async () => {
     const eqProf = vi.fn().mockResolvedValue({ error: null });
     const inFn = vi.fn().mockReturnValue({ eq: eqProf });
     const update = vi.fn().mockReturnValue({ in: inFn });
-    fromMock.mockImplementation((table: string) => {
-      if (table === "professionals")
-        return { select: () => ({ eq: () => ({ maybeSingle: proSingle }) }) };
-      if (table === "consultation_requests") return { update };
-      throw new Error("unexpected " + table);
-    });
+    mockFromBy({ update });
     const { result } = renderHook(() => useBulkUpdateConsultationRequests(), { wrapper: wrapper() });
     await act(async () => {
       await result.current.mutateAsync({
@@ -232,19 +241,23 @@ describe("useBulkUpdateConsultationRequests", () => {
   });
 
   it("toasts error on failure", async () => {
-    const proSingle = vi.fn().mockResolvedValue({ data: { id: "p-99" }, error: null });
     const eqProf = vi.fn().mockResolvedValue({ error: new Error("rls") });
-    const inFn = vi.fn().mockReturnValue({ eq: eqProf });
-    fromMock.mockImplementation((table: string) => {
-      if (table === "professionals")
-        return { select: () => ({ eq: () => ({ maybeSingle: proSingle }) }) };
-      if (table === "consultation_requests") return { update: () => ({ in: inFn }) };
-      throw new Error("unexpected " + table);
-    });
+    mockFromBy({ update: () => ({ in: () => ({ eq: eqProf }) }) });
     const { result } = renderHook(() => useBulkUpdateConsultationRequests(), { wrapper: wrapper() });
     await act(async () => {
       await result.current.mutateAsync({ ids: ["a"], updates: {} }).catch(() => {});
     });
     expect(toastMock.error).toHaveBeenCalledWith(expect.stringMatching(/Could not update/i));
+  });
+
+  it("rejects when caller has no professional profile (no row touched)", async () => {
+    const update = vi.fn();
+    mockFromBy({ update }, null);
+    const { result } = renderHook(() => useBulkUpdateConsultationRequests(), { wrapper: wrapper() });
+    await act(async () => {
+      await result.current.mutateAsync({ ids: ["a"], updates: {} }).catch(() => {});
+    });
+    expect(update).not.toHaveBeenCalled();
+    expect(toastMock.error).toHaveBeenCalled();
   });
 });
