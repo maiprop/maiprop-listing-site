@@ -1,0 +1,121 @@
+/**
+ * Admin-only React Query hooks for the professional verification queue.
+ *
+ * Lifted out of `AdminProfessionalVerification.tsx` so the data layer
+ * (queries + mutations) is reusable, mock-able in tests, and not entangled
+ * with the verification UI's component state. The hooks here intentionally
+ * only do the database write — toasts, modal state, and admin-name display
+ * stay in the component.
+ */
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import type { ProCard } from "@/components/admin/ProVerificationComponents";
+
+const KEY = ["admin-professionals"] as const;
+
+// Narrow shape of the row this admin queue actually needs. Keeping a local
+// type instead of importing the full Tables<"professionals"> means the
+// admin view stays decoupled from the broader professional schema.
+type ProAdminRow = {
+  id: string;
+  display_name: string | null;
+  category: string | null;
+  title: string | null;
+  avatar_url: string | null;
+  created_at: string | null;
+  license_number: string | null;
+  specialties: string[] | null;
+  verified: boolean | null;
+  rejection_reason: string | null;
+  verified_at: string | null;
+};
+
+export function useProfessionalsAdmin() {
+  return useQuery<ProCard[]>({
+    queryKey: KEY,
+    queryFn: async () => {
+      // `rejection_reason` and `verified_at` exist in production but aren't
+      // yet reflected in the generated Database types, hence the cast
+      // through `unknown` rather than directly to ProAdminRow[].
+      const { data, error } = await supabase
+        .from("professionals")
+        .select(
+          "id, display_name, category, title, avatar_url, created_at, license_number, specialties, verified, rejection_reason, verified_at",
+        )
+        .order("created_at", { ascending: false })
+        .limit(100);
+      if (error) throw error;
+      const rows = (data ?? []) as unknown as ProAdminRow[];
+      return rows.map(
+        (raw): ProCard => ({
+          id: raw.id,
+          display_name: raw.display_name ?? "Unknown",
+          category: raw.category ?? "",
+          title: raw.title ?? "",
+          avatar_url: raw.avatar_url ?? null,
+          created_at: raw.created_at ?? "",
+          license_number: raw.license_number ?? null,
+          specialties: raw.specialties ?? [],
+          status: raw.rejection_reason
+            ? "rejected"
+            : raw.verified
+              ? "verified"
+              : "pending",
+          verified_at: raw.verified_at ?? undefined,
+          rejection_reason: raw.rejection_reason ?? undefined,
+        }),
+      );
+    },
+  });
+}
+
+/** Mark a professional as verified, optionally setting their license number. */
+export function useApproveProfessional() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, licenseNumber }: { id: string; licenseNumber: string }) => {
+      const { error } = await supabase
+        .from("professionals")
+        .update({ verified: true, license_number: licenseNumber || null })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+  });
+}
+
+/**
+ * Save admin notes against a professional record without changing their
+ * verification status. Used by the "Request more info" path.
+ *
+ * The `notes` column is not in the generated schema yet, so we cast the
+ * update payload narrowly here rather than at every call site.
+ */
+export function useUpdateProfessionalNotes() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, notes }: { id: string; notes: string }) => {
+      const { error } = await supabase
+        .from("professionals")
+        .update({ notes: notes || null } as never)
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+  });
+}
+
+/** Reject a professional and capture the reason on the row. */
+export function useRejectProfessional() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, notes }: { id: string; notes: string }) => {
+      const { error } = await supabase
+        .from("professionals")
+        .update({ verified: false, rejection_reason: notes || null } as never)
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+  });
+}

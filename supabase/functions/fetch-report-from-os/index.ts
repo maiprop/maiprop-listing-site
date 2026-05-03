@@ -12,15 +12,10 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { createLogger } from "../_shared/logger.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
+import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 
 const log = createLogger("fetch-report-from-os");
 const limiter = makeRateLimiter({ bucket: "fetch-report-from-os", maxRequests: 20, windowMs: 60_000 });
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
 
 async function fetchWithTimeout(
   url: string,
@@ -58,7 +53,9 @@ async function getOsToken(
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const corsPreflight = handleCors(req);
+  if (corsPreflight) return corsPreflight;
+  const corsHeaders = getCorsHeaders(req);
 
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
   if (await limiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);

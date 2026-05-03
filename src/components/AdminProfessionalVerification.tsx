@@ -1,4 +1,3 @@
-﻿/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * AdminProfessionalVerification — Admin UI for reviewing and verifying professional accounts.
  *
@@ -11,110 +10,72 @@
 import { useState } from "react";
 import { RefreshCw, Users, CalendarCheck, Timer } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
   type ProCard, type TabKey,
   VerificationModal, ProCardItem,
 } from "@/components/admin/ProVerificationComponents";
-
-function useProfessionalsAdmin() {
-  return useQuery<ProCard[]>({
-    queryKey: ["admin-professionals"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("professionals")
-        .select("id, display_name, category, title, avatar_url, created_at, license_number, specialties, verified, rejection_reason, verified_at")
-        .order("created_at", { ascending: false })
-        .limit(100);
-      if (error) throw error;
-      return (data || []).map((raw: any) => ({
-        id: raw.id,
-        display_name: raw.display_name ?? "Unknown",
-        category: raw.category,
-        title: raw.title,
-        avatar_url: raw.avatar_url,
-        created_at: raw.created_at,
-        license_number: raw.license_number,
-        specialties: raw.specialties,
-        status: raw.rejection_reason ? "rejected" : raw.verified ? "verified" : "pending",
-        verified_at: raw.verified_at ?? undefined,
-        rejection_reason: raw.rejection_reason ?? undefined,
-      })) as ProCard[];
-    },
-  });
-}
+import {
+  useProfessionalsAdmin,
+  useApproveProfessional,
+  useUpdateProfessionalNotes,
+  useRejectProfessional,
+} from "@/hooks/useAdminProfessionals";
 
 export function AdminProfessionalVerification() {
   const [tab, setTab] = useState<TabKey>("pending");
   const [modalPro, setModalPro] = useState<ProCard | null>(null);
 
   const { data: professionals = [], isLoading, refetch } = useProfessionalsAdmin();
-  const qc = useQueryClient();
-
-  const approveMutation = useMutation({
-    mutationFn: async ({ id, licenseNumber }: { id: string; licenseNumber: string; notes: string; proName: string }) => {
-      const { error } = await supabase
-        .from("professionals")
-        .update({ verified: true, license_number: licenseNumber || null })
-        .eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: (_, { notes, proName }) => {
-      qc.invalidateQueries({ queryKey: ["admin-professionals"] });
-      toast.success(`${proName} has been verified.`);
-      if (notes.trim()) toast.info(`Note saved: "${notes.trim()}"`);
-      setModalPro(null);
-    },
-    onError: () => toast.error("Failed to approve professional. Please try again."),
-  });
-
-  const requestInfoMutation = useMutation({
-    mutationFn: async ({ id, notes }: { id: string; notes: string; proName: string }) => {
-       
-      await supabase.from("professionals").update({ notes: notes || null }).eq("id", id);
-    },
-    onSuccess: (_, { proName, notes }) => {
-      toast.success(`Request for more info sent to ${proName}.`);
-      if (notes.trim()) toast.info(`Note: "${notes.trim()}"`);
-      setModalPro(null);
-    },
-  });
-
-  const rejectMutation = useMutation({
-    mutationFn: async ({ id, notes }: { id: string; notes: string; proName: string }) => {
-      const { error } = await supabase
-        .from("professionals")
-         
-        .update({ verified: false, rejection_reason: notes || null } as never)
-        .eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: (_, { proName }) => {
-      qc.invalidateQueries({ queryKey: ["admin-professionals"] });
-      toast.success(`${proName}'s application rejected.`);
-      setModalPro(null);
-    },
-    onError: () => toast.error("Failed to reject professional. Please try again."),
-  });
+  const approveMutation = useApproveProfessional();
+  const requestInfoMutation = useUpdateProfessionalNotes();
+  const rejectMutation = useRejectProfessional();
 
   const handleApprove = (id: string, licenseNumber: string, notes: string) => {
     const pro = professionals.find((p) => p.id === id);
     if (!pro) return;
-    approveMutation.mutate({ id, licenseNumber, notes, proName: pro.display_name });
+    approveMutation.mutate(
+      { id, licenseNumber },
+      {
+        onSuccess: () => {
+          toast.success(`${pro.display_name} has been verified.`);
+          if (notes.trim()) toast.info(`Note saved: "${notes.trim()}"`);
+          setModalPro(null);
+        },
+        onError: () => toast.error("Failed to approve professional. Please try again."),
+      },
+    );
   };
 
   const handleRequestInfo = (id: string, notes: string) => {
     const pro = professionals.find((p) => p.id === id);
     if (!pro) return;
-    requestInfoMutation.mutate({ id, notes, proName: pro.display_name });
+    requestInfoMutation.mutate(
+      { id, notes },
+      {
+        onSuccess: () => {
+          toast.success(`Request for more info sent to ${pro.display_name}.`);
+          if (notes.trim()) toast.info(`Note: "${notes.trim()}"`);
+          setModalPro(null);
+        },
+        onError: () => toast.error("Failed to save note. Please try again."),
+      },
+    );
   };
 
   const handleReject = (id: string, notes: string) => {
     const pro = professionals.find((p) => p.id === id);
     if (!pro) return;
-    rejectMutation.mutate({ id, notes, proName: pro.display_name });
+    rejectMutation.mutate(
+      { id, notes },
+      {
+        onSuccess: () => {
+          toast.success(`${pro.display_name}'s application rejected.`);
+          setModalPro(null);
+        },
+        onError: () => toast.error("Failed to reject professional. Please try again."),
+      },
+    );
   };
 
   const counts: Record<TabKey, number> = {

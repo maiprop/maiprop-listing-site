@@ -1,4 +1,3 @@
-﻿/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -54,6 +53,9 @@ export function useProfessionalReviews(professionalId: string) {
     queryKey: ["professional-reviews", professionalId],
     enabled: !!professionalId,
     queryFn: async (): Promise<ProfessionalReview[]> => {
+      type ReviewRow = Omit<ProfessionalReview, "reviewer"> & {
+        profiles: { display_name: string | null; avatar_url: string | null } | null;
+      };
       const { data, error } = await supabase.from("professional_reviews")
         .select(`
           id, professional_id, reviewer_id, rating, title, body,
@@ -63,9 +65,9 @@ export function useProfessionalReviews(professionalId: string) {
         .eq("professional_id", professionalId)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data ?? []).map((r: any) => ({
-        ...r,
-        reviewer: r.profiles ?? null,
+      return ((data ?? []) as unknown as ReviewRow[]).map(({ profiles, ...rest }) => ({
+        ...rest,
+        reviewer: profiles ?? undefined,
       }));
     },
   });

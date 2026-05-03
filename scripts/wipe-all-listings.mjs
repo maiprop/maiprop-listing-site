@@ -8,6 +8,7 @@ import { readFileSync, existsSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import * as readline from "readline";
+import { assertNotProduction } from "./_prod-guard.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
@@ -32,6 +33,10 @@ if (!url || !serviceKey) {
   console.error("Need VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env");
   process.exit(1);
 }
+
+// Guard before we even create the client — a misrouted service-role key
+// pointed at production should never get past this line.
+assertNotProduction(url, "wipe-all-listings.mjs");
 
 const supabase = createClient(url, serviceKey, { auth: { persistSession: false } });
 

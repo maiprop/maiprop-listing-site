@@ -218,16 +218,46 @@ describe("useCreateOpenHouseRegistration", () => {
 // ─── useUpdateOpenHouseRegistration ─────────────────────────────────────────
 
 describe("useUpdateOpenHouseRegistration", () => {
-  it("updates the registration and toasts 'Updated'", async () => {
+  it("verifies listing ownership, updates the registration and toasts 'Updated'", async () => {
+    const lookupMaybe = vi
+      .fn()
+      .mockResolvedValue({ data: { listings: { user_id: "u-1" } }, error: null });
     const single = vi.fn().mockResolvedValue({ data: { id: "r-1" }, error: null });
     const eq = vi.fn().mockReturnValue({ select: vi.fn().mockReturnValue({ single }) });
-    fromMock.mockReturnValue({ update: vi.fn().mockReturnValue({ eq }) });
+    let calls = 0;
+    fromMock.mockImplementation((table: string) => {
+      if (table !== "open_house_registrations") throw new Error("unexpected " + table);
+      calls++;
+      if (calls === 1) {
+        return {
+          select: () => ({ eq: () => ({ maybeSingle: lookupMaybe }) }),
+        };
+      }
+      return { update: vi.fn().mockReturnValue({ eq }) };
+    });
     const { result } = renderHookWithQuery(() => useUpdateOpenHouseRegistration());
     await act(async () => {
       await result.current.mutateAsync({ id: "r-1", updates: { status: "approved" } });
     });
     expect(eq).toHaveBeenCalledWith("id", "r-1");
     expect(toastMock.success).toHaveBeenCalledWith("Updated");
+  });
+
+  it("rejects when the caller is not the listing owner", async () => {
+    const lookupMaybe = vi
+      .fn()
+      .mockResolvedValue({ data: { listings: { user_id: "someone-else" } }, error: null });
+    fromMock.mockImplementation((table: string) => {
+      if (table !== "open_house_registrations") throw new Error("unexpected " + table);
+      return { select: () => ({ eq: () => ({ maybeSingle: lookupMaybe }) }) };
+    });
+    const { result } = renderHookWithQuery(() => useUpdateOpenHouseRegistration());
+    await act(async () => {
+      await result.current
+        .mutateAsync({ id: "r-1", updates: { status: "approved" } })
+        .catch(() => {});
+    });
+    expect(toastMock.error).toHaveBeenCalled();
   });
 });
 
@@ -301,12 +331,30 @@ describe("useSubmitOpenHouseOffer", () => {
 // ─── useUpdateOpenHouseOffer ────────────────────────────────────────────────
 
 describe("useUpdateOpenHouseOffer", () => {
-  it("stamps revealed_at when status='revealed'", async () => {
-    const updateMock = vi.fn();
+  // Helper that mocks the listings ownership lookup performed before the
+  // actual update mutation, then returns the captured `update` mock so the
+  // body of each test can assert on it.
+  function mockOfferUpdate(ownerId: string = "u-1") {
+    const lookupMaybe = vi
+      .fn()
+      .mockResolvedValue({ data: { listings: { user_id: ownerId } }, error: null });
     const single = vi.fn().mockResolvedValue({ data: { id: "o-1" }, error: null });
     const eq = vi.fn().mockReturnValue({ select: vi.fn().mockReturnValue({ single }) });
-    updateMock.mockReturnValue({ eq });
-    fromMock.mockReturnValue({ update: updateMock });
+    const updateMock = vi.fn().mockReturnValue({ eq });
+    let calls = 0;
+    fromMock.mockImplementation((table: string) => {
+      if (table !== "open_house_offers") throw new Error("unexpected " + table);
+      calls++;
+      if (calls === 1) {
+        return { select: () => ({ eq: () => ({ maybeSingle: lookupMaybe }) }) };
+      }
+      return { update: updateMock };
+    });
+    return updateMock;
+  }
+
+  it("stamps revealed_at when status='revealed'", async () => {
+    const updateMock = mockOfferUpdate();
     const { result } = renderHookWithQuery(() => useUpdateOpenHouseOffer());
     await act(async () => {
       await result.current.mutateAsync({ id: "o-1", status: "revealed" });
@@ -318,11 +366,7 @@ describe("useUpdateOpenHouseOffer", () => {
   });
 
   it("stamps decided_by + decided_at when status='accepted'", async () => {
-    const updateMock = vi.fn();
-    const single = vi.fn().mockResolvedValue({ data: { id: "o-1" }, error: null });
-    const eq = vi.fn().mockReturnValue({ select: vi.fn().mockReturnValue({ single }) });
-    updateMock.mockReturnValue({ eq });
-    fromMock.mockReturnValue({ update: updateMock });
+    const updateMock = mockOfferUpdate();
     const { result } = renderHookWithQuery(() => useUpdateOpenHouseOffer());
     await act(async () => {
       await result.current.mutateAsync({ id: "o-1", status: "accepted" });
@@ -335,11 +379,7 @@ describe("useUpdateOpenHouseOffer", () => {
   });
 
   it("does not stamp the revealed/decided fields for status='withdrawn'", async () => {
-    const updateMock = vi.fn();
-    const single = vi.fn().mockResolvedValue({ data: { id: "o-1" }, error: null });
-    const eq = vi.fn().mockReturnValue({ select: vi.fn().mockReturnValue({ single }) });
-    updateMock.mockReturnValue({ eq });
-    fromMock.mockReturnValue({ update: updateMock });
+    const updateMock = mockOfferUpdate();
     const { result } = renderHookWithQuery(() => useUpdateOpenHouseOffer());
     await act(async () => {
       await result.current.mutateAsync({ id: "o-1", status: "withdrawn" });

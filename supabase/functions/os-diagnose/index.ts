@@ -9,15 +9,15 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
+import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 
 const limiter = makeRateLimiter({ bucket: "os-diagnose", maxRequests: 5, windowMs: 60_000 });
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
-
-async function requireAgent(req: Request, sb: ReturnType<typeof createClient>): Promise<Response | null> {
+async function requireAgent(
+  req: Request,
+  sb: ReturnType<typeof createClient>,
+  corsHeaders: Record<string, string>,
+): Promise<Response | null> {
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
     return new Response(JSON.stringify({ error: "Missing or invalid Authorization header" }), {
@@ -53,7 +53,9 @@ async function getOsToken(baseUrl: string, email: string, password: string): Pro
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const corsPreflight = handleCors(req);
+  if (corsPreflight) return corsPreflight;
+  const corsHeaders = getCorsHeaders(req);
 
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
   if (await limiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);
@@ -62,7 +64,7 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
-  const authErr = await requireAgent(req, supabase);
+  const authErr = await requireAgent(req, supabase, corsHeaders);
   if (authErr) return authErr;
 
   const OS_URL = Deno.env.get("MAIPROP_OS_URL")?.replace(/\/$/, "") ?? "";

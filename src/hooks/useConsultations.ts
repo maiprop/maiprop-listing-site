@@ -40,7 +40,7 @@ export function useSubmitConsultation() {
       const { data: pro } = await supabase.from("professionals").select("user_id").eq("id", input.professional_id).single();
       if (pro?.user_id) {
          
-        supabase.from("leads").insert({
+        const { error: leadErr } = await supabase.from("leads").insert({
           owner_id: pro.user_id,
           source: input.request_type === "callback" ? "callback" : input.request_type === "message" ? "message" : "consultation",
           professional_id: input.professional_id,
@@ -49,7 +49,11 @@ export function useSubmitConsultation() {
           phone: input.requester_phone ?? null,
           message: input.message ?? null,
           status: "new",
-        }).then(({ error: leadErr }) => { if (leadErr) logger.warn("Lead create:", leadErr); });
+        });
+        if (leadErr) {
+          logger.warn("Lead create:", leadErr);
+          toast.warning("Request sent, but the professional's lead record could not be created.");
+        }
       }
     },
     onSuccess: () => {
@@ -85,7 +89,25 @@ export function useMyConsultationRequests() {
   });
 }
 
+/**
+ * Resolve the current user's professional row id, throwing if they are not
+ * a professional. Used to mirror the RLS ownership constraint in the hook so
+ * the mutation is self-defending and never accidentally writes a row that
+ * belongs to another professional.
+ */
+async function getOwnProfessionalId(userId: string): Promise<string> {
+  const { data: pro, error } = await supabase
+    .from("professionals")
+    .select("id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!pro) throw new Error("Not a professional account");
+  return pro.id;
+}
+
 export function useUpdateConsultationRequest() {
+  const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({
@@ -95,10 +117,13 @@ export function useUpdateConsultationRequest() {
       id: string;
       updates: { status?: string; notes?: string; lead_status?: string };
     }) => {
+      if (!user) throw new Error("Must be logged in");
+      const proId = await getOwnProfessionalId(user.id);
       const { data, error } = await supabase
         .from("consultation_requests")
         .update(updates)
         .eq("id", id)
+        .eq("professional_id", proId)
         .select()
         .single();
       if (error) throw error;
@@ -113,6 +138,7 @@ export function useUpdateConsultationRequest() {
 }
 
 export function useBulkUpdateConsultationRequests() {
+  const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({
@@ -122,10 +148,13 @@ export function useBulkUpdateConsultationRequests() {
       ids: string[];
       updates: { status?: string; lead_status?: string };
     }) => {
+      if (!user) throw new Error("Must be logged in");
+      const proId = await getOwnProfessionalId(user.id);
       const { error } = await supabase
         .from("consultation_requests")
         .update(updates)
-        .in("id", ids);
+        .in("id", ids)
+        .eq("professional_id", proId);
       if (error) throw error;
     },
     onSuccess: () => {

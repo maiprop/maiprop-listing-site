@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect as _useEffect } from "react";
 import { Sparkles, Loader2, TrendingUp, TrendingDown, Minus, ShieldCheck, Volume2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -7,6 +6,12 @@ import { useAuth } from "@/contexts/AuthContext";
 import { SignInForAI } from "@/components/SignInForAI";
 import { computeWalkScore, walkScoreLabel, walkScoreColour } from "@/lib/walkScore";
 
+// Compare drawer is fed both the formatted card view and the raw listing row
+// from useListings. Both shapes have ~80 columns between them and a tighter
+// type would force a sweeping refactor of the join projection. Per-line
+// suppression here keeps the suppression visible at the type definition
+// without re-enabling `any` everywhere else in the file.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Listing = Record<string, any>;
 
 interface AIReport {
@@ -206,11 +211,16 @@ export function CompareAIReports({ listings }: { listings: Listing[] }) {
           const poisFail = poisRes.error?.message ?? poisRes.data?.error;
           if (poisFail && !reportError) reportError = getAiErrorMessage(null, { error: poisFail }, "AI analysis failed");
           if (!poisRes.error && poisRes.data?.pois) {
+            const pois = poisRes.data.pois as Array<{
+              distanceKm?: number;
+              distance_km?: number;
+              category?: string;
+            }>;
             walkScore = computeWalkScore(
-              poisRes.data.pois.map((p: any) => ({
+              pois.map((p) => ({
                 distanceKm: p.distanceKm ?? p.distance_km ?? 0.5,
                 category: (p.category ?? "").toLowerCase(),
-              }))
+              })),
             );
           }
         }
