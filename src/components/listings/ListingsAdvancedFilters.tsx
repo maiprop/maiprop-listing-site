@@ -102,7 +102,7 @@ export function ListingsAdvancedFilters({ filteredCount, onClose }: Props) {
               )}
             </div>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground">
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground" aria-label="Close filters">
             <X className="w-4 h-4" />
           </button>
         </div>

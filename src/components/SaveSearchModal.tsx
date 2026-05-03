@@ -36,7 +36,7 @@ export function SaveSearchModal({ currentFilters, onClose }: Props) {
             <Bookmark className="w-4 h-4 text-primary" />
             <h3 className="font-display font-semibold text-base">Save This Search</h3>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-secondary transition-colors">
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-secondary transition-colors" aria-label="Close">
             <X className="w-4 h-4 text-muted-foreground" />
           </button>
         </div>
