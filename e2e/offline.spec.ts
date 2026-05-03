@@ -45,6 +45,10 @@ test.describe("Offline / network failure handling", () => {
 
     await page.goto("/listings");
     await page.waitForLoadState("load");
+    // Wait for React to mount and render initial UI (header/nav/main).
+    // Using `load` (not `networkidle`) — networkidle never fires when Mapbox
+    // tile fetches keep the network busy, so we wait for an element instead.
+    await expect(page.locator("header, nav, main, #main-content").first()).toBeVisible({ timeout: 15_000 });
 
     // The app should NOT white-screen. Either an empty state, an error message,
     // or a skeleton that eventually resolves to text is acceptable.

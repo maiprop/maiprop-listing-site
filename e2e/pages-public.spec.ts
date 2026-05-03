@@ -244,12 +244,12 @@ test.describe("Public — AI Assistant page", () => {
   test("ai-assistant page renders a chat input or widget container", async ({ page }) => {
     await page.goto("/ai-assistant");
     await page.waitForLoadState("load", { timeout: 15_000 });
-    // The AIAssistantWidget renders a textarea or input for the chat
-    const hasInput = await page
-      .locator('textarea, input[type="text"], [role="dialog"], [role="main"]')
-      .first()
-      .isVisible();
-    expect(hasInput).toBe(true);
+    // The AIAssistantWidget renders a textarea or input for the chat —
+    // use a Playwright wait (not isVisible(), which is a one-shot check)
+    // so React has time to mount the widget after `load` fires.
+    await expect(
+      page.locator('textarea, input[type="text"], [role="dialog"], [role="main"]').first()
+    ).toBeVisible({ timeout: 15_000 });
   });
 });
 
