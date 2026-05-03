@@ -348,10 +348,10 @@ test.describe("Multi-context — four accounts simultaneously", () => {
     // Increase per-test timeout to accommodate 4 full sign-in flows.
     test.setTimeout(90_000);
 
-    const ctx1: BrowserContext = await browser.newContext();
-    const ctx2: BrowserContext = await browser.newContext();
-    const ctx3: BrowserContext = await browser.newContext();
-    const ctx4: BrowserContext = await browser.newContext();
+    const ctx1: BrowserContext = await browser.newContext({ baseURL: BASE_URL });
+    const ctx2: BrowserContext = await browser.newContext({ baseURL: BASE_URL });
+    const ctx3: BrowserContext = await browser.newContext({ baseURL: BASE_URL });
+    const ctx4: BrowserContext = await browser.newContext({ baseURL: BASE_URL });
 
     const p1: Page = await ctx1.newPage();
     const p2: Page = await ctx2.newPage();

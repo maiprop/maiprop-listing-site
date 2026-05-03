@@ -22,6 +22,7 @@ import {
 import {
   bathsOpts, floorOpts, yearOpts,
 } from "@/lib/listingsConfig";
+import { ENERGY_CLASS_BUTTON_COLORS } from "@/lib/statusColors";
 
 interface Props {
   filteredCount: number;
@@ -342,17 +343,9 @@ export function ListingsAdvancedFilters({ filteredCount, onClose }: Props) {
                   )}
                 </label>
                 <div className="flex items-stretch gap-1 rounded-xl overflow-hidden border border-border p-1 bg-secondary/50">
-                  {[
-                    { ec: "A+", color: "bg-[#00a550]", text: "text-white", badge: "A+" },
-                    { ec: "A",  color: "bg-[#50b848]", text: "text-white", badge: "A" },
-                    { ec: "B+", color: "bg-[#8dc63f]", text: "text-white", badge: "B+" },
-                    { ec: "B",  color: "bg-[#c3d600]", text: "text-black", badge: "B" },
-                    { ec: "C",  color: "bg-[#ffcc00]", text: "text-black", badge: "C" },
-                    { ec: "D",  color: "bg-[#f7941e]", text: "text-white", badge: "D" },
-                    { ec: "E",  color: "bg-[#f15a22]", text: "text-white", badge: "E" },
-                    { ec: "F",  color: "bg-[#ed1c24]", text: "text-white", badge: "F" },
-                    { ec: "G",  color: "bg-[#be1e2d]", text: "text-white", badge: "G" },
-                  ].map(({ ec, color, text, badge }) => {
+                  {(["A+","A","B+","B","C","D","E","F","G"] as const).map((ec) => {
+                    const { bg: color, text } = ENERGY_CLASS_BUTTON_COLORS[ec];
+                    const badge = ec;
                     const active = selectedEnergyClasses.includes(ec);
                     return (
                       <button

@@ -12,11 +12,10 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { createLogger } from "../_shared/logger.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
+import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 
 const log = createLogger("fetch-report-from-os");
 const limiter = makeRateLimiter({ bucket: "fetch-report-from-os", maxRequests: 20, windowMs: 60_000 });
-
-import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 
 async function fetchWithTimeout(
   url: string,

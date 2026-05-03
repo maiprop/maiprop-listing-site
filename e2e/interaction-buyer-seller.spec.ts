@@ -38,15 +38,16 @@ async function navigateToFirstListing(page: Page): Promise<string | null> {
   await page.goto("/listings");
   // Use "load" instead of "networkidle" — Mapbox tile requests keep the network busy indefinitely.
   await page.waitForLoadState("load", { timeout: 15_000 });
-  // Give React a moment to render cards after the initial load.
-  await page.waitForTimeout(2_000);
 
-  // Cards may be <article>, <a>, or a div with common card class names.
+  // Cards may be <article>, <a>, or a div with common card class names. Wait
+  // for the first card's link to render rather than sleeping for a fixed
+  // duration; cuts ~2 s off every run when the page is fast and avoids racing
+  // when it's slow.
   const cardLink = page.locator(
     'a[href*="/property/"], a[href*="/listing/"]'
   ).first();
 
-  const attached = await cardLink.isVisible({ timeout: 10_000 }).catch(() => false);
+  const attached = await cardLink.waitFor({ state: "visible", timeout: 10_000 }).then(() => true).catch(() => false);
   if (!attached) return null;
 
   const href = await cardLink.getAttribute("href");
@@ -105,8 +106,8 @@ test.describe("Buyer + Seller simultaneous sessions", () => {
       ]);
 
       await Promise.all([
-        buyerPage.waitForLoadState("networkidle", { timeout: 15_000 }),
-        sellerPage.waitForLoadState("networkidle", { timeout: 15_000 }),
+        buyerPage.waitForLoadState("load", { timeout: 15_000 }),
+        sellerPage.waitForLoadState("load", { timeout: 15_000 }),
       ]);
 
       // Both pages must have a nav element (app shell rendered).
@@ -262,7 +263,7 @@ test.describe("Seller — dashboard and listings", () => {
   // 5. Seller can view their dashboard without crash
   test("seller can view their listings in the dashboard", async ({ page }) => {
     await signInAs(page, sellerEmail, sellerPassword);
-    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
 
     // App shell (nav) must be present.
     const nav = page.locator('nav, [role="navigation"], aside').first();
@@ -288,11 +289,11 @@ test.describe("Seller — dashboard and listings", () => {
 
     if (linkFound) {
       await dashboardListingsLink.click();
-      await page.waitForLoadState("networkidle", { timeout: 15_000 });
+      await page.waitForLoadState("load", { timeout: 15_000 });
     } else {
       // Fall back to navigating directly to /listings.
       await page.goto("/listings");
-      await page.waitForLoadState("networkidle", { timeout: 15_000 });
+      await page.waitForLoadState("load", { timeout: 15_000 });
     }
 
     // Either a heading or a list of listings must be rendered.
@@ -311,7 +312,7 @@ test.describe("Seller — dashboard and listings", () => {
     page.on("pageerror", (err) => errors.push(err.message));
 
     await signInAs(page, sellerEmail, sellerPassword);
-    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
 
     expect(errors, "uncaught JS errors on seller dashboard").toHaveLength(0);
   });

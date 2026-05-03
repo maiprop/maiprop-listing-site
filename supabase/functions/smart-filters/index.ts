@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 import { openAIChatCompletion } from "../_shared/openai.ts";
@@ -158,6 +157,9 @@ Rules:
     const argsEnd = rawArgs.lastIndexOf("}");
     if (argsStart !== -1 && argsEnd !== -1) rawArgs = rawArgs.slice(argsStart, argsEnd + 1);
 
+    // OpenAI tool-call args; shape depends on the called tool and is
+    // narrowed once we dispatch on tool name below.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let args: any;
     try {
       args = JSON.parse(rawArgs);

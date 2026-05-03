@@ -148,24 +148,3 @@ export interface SortOption {
   labelKey: string;
   value: string;
 }
-
-/** Buy-mode price ranges for the listings filter bar. */
-export const BUY_PRICE_RANGES: PriceRange[] = [
-  { label: "Any Price",      value: "" },
-  { label: "Under €80k",     value: "0-80000" },
-  { label: "€80k – €150k",  value: "80000-150000" },
-  { label: "€150k – €300k", value: "150000-300000" },
-  { label: "€300k – €600k", value: "300000-600000" },
-  { label: "€600k – €1M",   value: "600000-1000000" },
-  { label: "€1M+",          value: "1000000-9999999" },
-];
-
-/** Rent-mode price ranges for the listings filter bar. */
-export const RENT_PRICE_RANGES: PriceRange[] = [
-  { label: "Any Rent",          value: "" },
-  { label: "Under €400/mo",     value: "0-400" },
-  { label: "€400 – €700/mo",   value: "400-700" },
-  { label: "€700 – €1,200/mo", value: "700-1200" },
-  { label: "€1,200 – €2,500/mo", value: "1200-2500" },
-  { label: "€2,500+/mo",       value: "2500-99999" },
-];

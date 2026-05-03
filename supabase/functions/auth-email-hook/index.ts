@@ -69,7 +69,11 @@ const EMAIL_SUBJECTS: Record<AuthEmailActionType, string> = {
   reauthentication: 'Your verification code',
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- each template has its own prop shape; sample data is asserted at use site
+// React.ComponentType is parameterised by props; each template here accepts a
+// different prop shape (verification URL vs token, etc.). Keeping `any` for
+// the union avoids a runtime narrowing layer that adds nothing — the per-
+// template renderer below already passes the correct props.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const EMAIL_TEMPLATES: Record<AuthEmailActionType, React.ComponentType<any>> = {
   signup: SignupEmail,
   invite: InviteEmail,
