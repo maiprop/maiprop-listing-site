@@ -589,6 +589,31 @@ describe("Component smoke tests", () => {
     )).not.toThrow();
   });
 
+  it("AnalyticsTab renders without throwing", async () => {
+    const { default: AnalyticsTab } = await import("@/pages/dashboard/AnalyticsTab");
+    expect(() => renderWithProviders(<AnalyticsTab />)).not.toThrow();
+  });
+
+  it("AuctionsTab renders without throwing", async () => {
+    const { default: AuctionsTab } = await import("@/pages/dashboard/AuctionsTab");
+    expect(() => renderWithProviders(<AuctionsTab />)).not.toThrow();
+  });
+
+  it("BillingTab renders without throwing", async () => {
+    const { default: BillingTab } = await import("@/pages/dashboard/BillingTab");
+    expect(() => renderWithProviders(<BillingTab />)).not.toThrow();
+  });
+
+  it("SavedSearchesTab renders without throwing", async () => {
+    const { default: SavedSearchesTab } = await import("@/pages/dashboard/SavedSearchesTab");
+    expect(() => renderWithProviders(<SavedSearchesTab />)).not.toThrow();
+  });
+
+  it("ViewingsTab renders without throwing", async () => {
+    const { default: ViewingsTab } = await import("@/pages/dashboard/ViewingsTab");
+    expect(() => renderWithProviders(<ViewingsTab />)).not.toThrow();
+  });
+
   // ── Onboarding components ──────────────────────────────────────────────────
 
   it("OnboardingShell renders without throwing", async () => {
