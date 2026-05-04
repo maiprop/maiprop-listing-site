@@ -115,9 +115,11 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Load the data input row.
-    const { data: rowRaw, error: rowErr } = await supabase
-      .from("agent_data_inputs")
+    // Load the data input row. `agent_data_inputs` is unregistered in the
+    // generated Supabase types; cast through the narrow `from` overload bridge
+    // that the rest of this codebase uses for unregistered tables.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: rowRaw, error: rowErr } = await (supabase.from as any)("agent_data_inputs")
       .select("id, user_id, status, discount_pct, applied_to_invoice_at, stripe_credit_id, stripe_credit_amount_cents, stripe_credit_currency")
       .eq("id", dataInputId)
       .maybeSingle();
@@ -185,9 +187,14 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Find the agent's active subscription to compute the credit base.
-    const subs = await stripe.subscriptions.list({ customer: customerId, status: "active", limit: 1 });
-    const sub = subs.data[0];
+    // Find the agent's active or trialing subscription to compute the credit
+    // base. `check-subscription` and `delete-account` both treat trialing as
+    // subscribed, so accept either here for consistency.
+    const [activeSubs, trialingSubs] = await Promise.all([
+      stripe.subscriptions.list({ customer: customerId, status: "active", limit: 1 }),
+      stripe.subscriptions.list({ customer: customerId, status: "trialing", limit: 1 }),
+    ]);
+    const sub = activeSubs.data[0] ?? trialingSubs.data[0];
     if (!sub) {
       return new Response(JSON.stringify({ error: "Agent has no active subscription" }), {
         status: 422,
@@ -209,8 +216,8 @@ Deno.serve(async (req) => {
     // calendar month, even if more verified rows than the DB cap somehow
     // exist (e.g. data drift).
     const monthStart = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)).toISOString();
-    const { data: appliedThisMonthRaw } = await supabase
-      .from("agent_data_inputs")
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: appliedThisMonthRaw } = await (supabase.from as any)("agent_data_inputs")
       .select("stripe_credit_amount_cents")
       .eq("user_id", row.user_id)
       .gte("applied_to_invoice_at", monthStart);
@@ -257,8 +264,8 @@ Deno.serve(async (req) => {
     // asking PostgREST to RETURN the affected row and treat a missing row as
     // "another caller won the race", in which case we reverse the orphaned
     // Stripe credit so the customer is never charged twice.
-    const { data: claimed, error: updateErr } = await supabase
-      .from("agent_data_inputs")
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: claimed, error: updateErr } = await (supabase.from as any)("agent_data_inputs")
       .update({
         applied_to_invoice_at: new Date().toISOString(),
         stripe_credit_id: balanceTx.id,
