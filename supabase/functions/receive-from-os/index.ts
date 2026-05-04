@@ -8,14 +8,8 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 const log = createLogger("receive-from-os");
 
 Deno.serve(async (req) => {
-  const corsHeaders = {
-    ...getCorsHeaders(req),
-    "Access-Control-Allow-Headers":
-      "authorization, x-client-info, apikey, content-type, x-os-signature",
-  };
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+  const corsHeaders = getCorsHeaders(req, "x-os-signature");
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,

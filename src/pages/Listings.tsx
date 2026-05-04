@@ -214,6 +214,12 @@ export default function Listings() {
       if (aPromo && bPromo) {
         const pri = (b.priorityPlacement ?? 0) - (a.priorityPlacement ?? 0);
         if (pri !== 0) return pri;
+        // Same priority bucket: featured beats non-featured. Mirrors the
+        // server ORDER BY tiebreak in buildListingsQuery so that the client's
+        // re-sort is a no-op on already-paginated server output.
+        const aF = a.isFeatured ? 1 : 0;
+        const bF = b.isFeatured ? 1 : 0;
+        if (bF !== aF) return bF - aF;
       }
       return byUserSort(a, b);
     });
