@@ -15,24 +15,13 @@
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { createLogger } from "../_shared/logger.ts";
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 const log = createLogger("stripe-webhook");
 
-import { getCorsHeaders } from "../_shared/cors.ts";
-
-function stripeCorsHeaders(req: Request): Record<string, string> {
-  return {
-    ...getCorsHeaders(req),
-    "Access-Control-Allow-Headers":
-      "authorization, x-client-info, apikey, content-type, stripe-signature",
-  };
-}
-
 Deno.serve(async (req) => {
-  const corsHeaders = stripeCorsHeaders(req);
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+  const corsHeaders = getCorsHeaders(req, "stripe-signature");
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
   const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");

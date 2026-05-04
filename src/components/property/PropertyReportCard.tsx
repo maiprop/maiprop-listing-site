@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { ClipboardList, Loader2, Zap, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
-import { useReportUsage, useRecordReport, REPORT_INCLUDED, REPORT_EXTRA_COST } from "@/hooks/useUsageAddons";
+import { useReportUsage, REPORT_INCLUDED, REPORT_EXTRA_COST } from "@/hooks/useUsageAddons";
 import { supabase } from "@/integrations/supabase/client";
 import type { ListingWithJoins } from "@/hooks/useListings";
 
@@ -26,9 +27,8 @@ interface Props {
 export function PropertyReportCard({ listingId, listing }: Props) {
   const { user } = useAuth();
   const { isPro } = useSubscription();
+  const queryClient = useQueryClient();
   const { data: reportCount = 0 } = useReportUsage();
-  const recordReport = useRecordReport();
-
   const [reportResult, setReportResult] = useState<ReportResult | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
   const reportLoaded = reportResult !== null;
@@ -37,7 +37,6 @@ export function PropertyReportCard({ listingId, listing }: Props) {
     if (!user) return;
     setReportLoading(true);
     try {
-      await recordReport.mutateAsync(listingId);
       const { data: osRes } = await supabase.functions.invoke("fetch-report-from-os", {
         body: { listing_id: listingId, report_type: "valuation" },
       });
@@ -52,6 +51,7 @@ export function PropertyReportCard({ listingId, listing }: Props) {
       const { data } = await supabase.functions.invoke("property-valuation", { body });
       if (data?.estimatedValue) {
         setReportResult({ estimatedValue: data.estimatedValue, rangeLow: data.rangeLow ?? data.estimatedValue, rangeHigh: data.rangeHigh ?? data.estimatedValue, marketComparison: data.marketComparison ?? "at_market", marketComparisonPct: data.marketComparisonPct ?? 0, confidenceLabel: data.confidenceLabel ?? "Medium", source: "ai" });
+        void queryClient.invalidateQueries({ queryKey: ["usage_ai_calls"] });
       }
     } finally {
       setReportLoading(false);
