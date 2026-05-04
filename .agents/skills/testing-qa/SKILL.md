@@ -1,3 +1,8 @@
+---
+name: testing-qa
+description: Local dev setup, demo accounts, and key UI flows for end-to-end testing the maiprop-listing-site app.
+---
+
 # Testing QA — maiprop-listing-site
 
 ## Local Dev Setup
@@ -36,6 +41,11 @@ All demo accounts use:
 | Investor Private | investor.private@maiprop.demo | investor (private) | Yes |
 | Agent Pro | agent.pro@maiprop.demo | agent | Yes |
 | Developer Pro | developer.pro@maiprop.demo | developer | Yes |
+| Professional (Architect) | professional1@maiprop.demo | professional | Yes |
+| Professional (Lawyer) | professional2@maiprop.demo | professional | Yes |
+| Professional (Valuer) | professional3@maiprop.demo | professional | Yes |
+
+The three professional accounts are seeded by `scripts/seed-mock-professionals.ts` and are needed for any flow gated by `participant_type === "professional"` (e.g., the "Premium Tools" section on the Billing tab).
 
 ## Pro Access Override
 
@@ -134,13 +144,19 @@ await supabase.from('open_house_registrations').delete().eq('requester_id', user
 3. Non-investors should see "Investor Access Required" gate page (not blank)
 4. The InvestorRoute has a 6-second timeout — if loading takes longer, shows retry UI
 
+### Billing Tab Add-ons (role-gated)
+1. Navigate to `/dashboard?tab=billing` after logging in
+2. The visible add-on sections depend on `participant_type` in the profile:
+   - `agent` → "Agency Add-ons" section (Extra Seat, Branded Profile, Dedicated Manager, White-label Domain)
+   - `professional` → "Premium Tools" section (API Access, Referral Network, Extra Client Seat, Branded Email Templates)
+   - `investor` / `institutional` → green "Invitation-only access" banner above the add-ons grid
+3. Source: `src/pages/dashboard/BillingTab.tsx` — `ADDONS_BY_ROLE[participantType]` is keyed off `getParticipantTypeFromProfile(profile)`.
+
 ## Known Gotchas
 
 - **Quick Sale form requires 5+ photos**: The "Get AI Estimate & Continue" button stays disabled until at least 5 photos are uploaded. There's no way to bypass this in the UI.
 - **Open house registration**: The `open_house_registrations` table has a UNIQUE(listing_id, requester_id) constraint. The mutation handles duplicates gracefully (catches error code 23505). RLS policies are correct — the `oh_regs_requester` policy allows buyers to insert their own registrations.
 - **Listing URL patterns**: User-created listings use `/property/{id}`, while seeded/new-build listings use `/new-build/{id}`. The listings grid links correctly based on type.
 - **Investor dashboard empty state**: If there are 0 deals in the pipeline, the "Express Interest" flow cannot be tested. Deals appear only after Quick Sale requests are approved by admin.
-- **UTF-8 encoding**: Previously had mojibake issues (â„¢ instead of ™). Fixed in PR #38 across 2924 instances. If new mojibake appears, check if source files are saved as UTF-8.
-- **Port conflicts**: If the dev server starts on a different port (e.g., 8081), kill existing processes on 8080 first.
-- **portal.maiprop.co vs localhost**: The live site has a "Private preview" passcode gate. For testing, localhost is preferred as it doesn't require the gate password and connects to the same Supabase backend.
+- **Cloudflare Pages preview gate**: The branch preview deploys (`devin-XXX.maiprop-listing-site.pages.dev`) sit behind Cloudflare Access — `curl` returns a 302 to `cloudflareaccess.com`. For runtime testing, use local `npm run dev` at port 8080 (it talks to the same production Supabase the preview uses).
 - **Error messages in mutations**: All `onError` handlers in `useOpenHouseAssetControl.ts` now surface actual error messages (not generic "Something went wrong"). This applies to: create registration, update registration, upsert settings, create offer, update offer, accept offer, reveal offers.
