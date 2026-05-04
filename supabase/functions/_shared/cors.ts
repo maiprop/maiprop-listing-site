@@ -28,13 +28,20 @@ const ALLOWED_ORIGINS = isProduction
   ? PRODUCTION_ORIGINS
   : [...PRODUCTION_ORIGINS, ...LOCAL_DEV_ORIGINS];
 
-export function getCorsHeaders(req: Request): Record<string, string> {
+const BASE_ALLOWED_HEADERS =
+  "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version";
+
+export function getCorsHeaders(
+  req: Request,
+  extraAllowedHeaders?: string,
+): Record<string, string> {
   const origin = req.headers.get("origin") ?? "";
   const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
     "Access-Control-Allow-Origin": allowedOrigin,
-    "Access-Control-Allow-Headers":
-      "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version",
+    "Access-Control-Allow-Headers": extraAllowedHeaders
+      ? `${BASE_ALLOWED_HEADERS}, ${extraAllowedHeaders}`
+      : BASE_ALLOWED_HEADERS,
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Vary": "Origin",
   };

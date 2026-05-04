@@ -23,7 +23,7 @@ add a row here in the same PR.
 
 | Secret | Used by | Stored in | Cadence | Owner |
 |---|---|---|---|---|
-| `CRON_SECRET` | `send-saved-search-alerts` (cron auth) | Supabase fn secrets, pg_cron config | **180 days** | Platform lead |
+| `CRON_SECRET` | `send-saved-search-alerts` (cron auth, `verify_jwt=false`) | Supabase fn secrets, pg_cron config | **180 days** — must be ≥ 32 random chars | Platform lead |
 | `MAIPROP_OS_WEBHOOK_SECRET` | `receive-from-os` (signature verification) | Supabase fn secrets, OS config | **180 days** | Platform lead |
 | `MAIPROP_OS_EMAIL` / `MAIPROP_OS_PASSWORD` | `sync-to-os`, `sync-firesale-to-os`, `poll-os-auctions`, `fetch-*-from-os`, `full-sync-from-os`, `os-diagnose` | Supabase fn secrets | **90 days** | Platform lead |
 

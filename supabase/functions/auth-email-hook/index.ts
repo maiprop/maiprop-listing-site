@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import * as React from 'npm:react@18.3.1'
 import { renderAsync } from 'npm:@react-email/components@0.0.22'
 import { Webhook } from 'https://esm.sh/standardwebhooks@1.0.0'
@@ -12,16 +13,6 @@ import { createLogger } from '../_shared/logger.ts'
 import { getCorsHeaders } from '../_shared/cors.ts'
 
 const log = createLogger('auth-email-hook')
-
-const WEBHOOK_ALLOW_HEADERS =
-  'authorization, x-client-info, apikey, content-type, webhook-id, webhook-signature, webhook-timestamp, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version'
-
-function webhookCorsHeaders(req: Request): Record<string, string> {
-  return {
-    ...getCorsHeaders(req),
-    'Access-Control-Allow-Headers': WEBHOOK_ALLOW_HEADERS,
-  }
-}
 
 type AuthEmailActionType =
   | 'signup'
@@ -287,10 +278,7 @@ async function buildOutboundEmails(payload: SendEmailHookPayload): Promise<Outbo
 }
 
 async function handlePreview(req: Request): Promise<Response> {
-  const previewCorsHeaders = {
-    ...getCorsHeaders(req),
-    'Access-Control-Allow-Headers': 'authorization, content-type',
-  }
+  const previewCorsHeaders = getCorsHeaders(req)
 
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: previewCorsHeaders })
@@ -332,8 +320,7 @@ async function handlePreview(req: Request): Promise<Response> {
   })
 }
 
-async function handleWebhook(req: Request): Promise<Response> {
-  const corsHeaders = webhookCorsHeaders(req)
+async function handleWebhook(req: Request, corsHeaders: Record<string, string>): Promise<Response> {
   if (req.method !== 'POST') {
     return new Response('not allowed', { status: 400, headers: corsHeaders })
   }
@@ -388,10 +375,14 @@ async function handleWebhook(req: Request): Promise<Response> {
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(
+    req,
+    'webhook-id, webhook-signature, webhook-timestamp, x-supabase-client-runtime, x-supabase-client-runtime-version',
+  )
   const url = new URL(req.url)
 
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: webhookCorsHeaders(req) })
+    return new Response(null, { headers: corsHeaders })
   }
 
   if (url.pathname.endsWith('/preview')) {
@@ -399,13 +390,13 @@ Deno.serve(async (req) => {
   }
 
   try {
-    return await handleWebhook(req)
+    return await handleWebhook(req, corsHeaders)
   } catch (error) {
     log.error('webhook handler error', { err: error instanceof Error ? error.message : String(error) })
     const message = error instanceof Error ? error.message : 'Unknown error'
     return new Response(JSON.stringify({ error: message }), {
       status: 500,
-      headers: { ...webhookCorsHeaders(req), 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   }
 })

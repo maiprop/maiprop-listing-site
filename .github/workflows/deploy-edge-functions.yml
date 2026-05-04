@@ -25,6 +25,7 @@ jobs:
   deploy:
     name: Deploy to Supabase
     runs-on: ubuntu-latest
+    environment: production
     # Only auto-deploy on push; always run on manual dispatch
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
 
