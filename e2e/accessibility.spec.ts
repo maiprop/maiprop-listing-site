@@ -98,6 +98,17 @@ test.describe("Accessibility — automated axe-core scans", () => {
       .locator("#main-content, main, header, nav")
       .first()
       .waitFor({ state: "attached", timeout: 15_000 });
+    // Snap all scroll-reveal elements to their final state so axe doesn't
+    // catch them mid-transition (opacity ~0.5 → computed blended colour fails
+    // contrast even though the fully-rendered colour would pass).
+    await page.addStyleTag({
+      content: [
+        ".reveal { opacity: 1 !important; transform: none !important; transition: none !important; }",
+        "*, *::before, *::after { transition-duration: 0ms !important; animation-duration: 0ms !important; }",
+      ].join(" "),
+    });
+    // One rAF tick so any pending IntersectionObserver callbacks flush.
+    await page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => r())));
     const results = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa"])
       .analyze();
