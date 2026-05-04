@@ -191,7 +191,7 @@ Deno.serve(async (req) => {
       pricePerSquareMeter:  listing.price_per_sqm,
       auctionDate:          listing.auction_date,
       auctionStatus:        listing.auction_court ?? "ACTIVE",
-      propertyCategory:     (listing.property_type && TYPE_MAP[listing.property_type]) ?? "RESIDENCE",
+      propertyCategory:     (listing.property_type ? TYPE_MAP[listing.property_type] : undefined) ?? "RESIDENCE",
       propertySquareMeters: listing.sqm,
       propertyAddress:      listing.address,
       propertyMunicipalityName: listing.city,

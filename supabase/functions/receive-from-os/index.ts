@@ -296,14 +296,20 @@ async function logSync(
 ): Promise<void> {
   // `sync_log` is unregistered in the generated Supabase types; cast through
   // the narrow `from` overload bridge that the rest of this codebase uses.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (supabase.from as any)("sync_log").insert({
-    direction,
-    entity_type,
-    entity_id,
-    status,
-    error_message: error_message ?? null,
-    payload: payload ?? null,
-    records_affected,
-  });
+  // Wrap in try/catch so a logging failure (schema mismatch, transient DB
+  // issue) never aborts the webhook response — matches `poll-os-auctions`.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase.from as any)("sync_log").insert({
+      direction,
+      entity_type,
+      entity_id,
+      status,
+      error_message: error_message ?? null,
+      payload: payload ?? null,
+      records_affected,
+    });
+  } catch (err: unknown) {
+    log.error("logSync failed", { err: err instanceof Error ? err.message : String(err) });
+  }
 }
