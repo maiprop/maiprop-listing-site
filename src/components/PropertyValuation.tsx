@@ -214,6 +214,7 @@ export default function PropertyValuation(props: PropertyValuationProps) {
         if (!osErr && osRes?.ok && osRes.report && typeof (osRes.report as ValuationResult).estimatedValue === "number") {
           setResult(osRes.report as ValuationResult);
           setExpanded(true);
+          void queryClient.invalidateQueries({ queryKey: ["usage_ai_calls"] });
           setLoading(false);
           return;
         }
