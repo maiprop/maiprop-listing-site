@@ -10,7 +10,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { createLogger } from "../_shared/logger.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
-import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 const log = createLogger("sync-to-os");
 
@@ -134,9 +134,8 @@ async function requireAgent(
 
 // ── Main handler ──────────────────────────────────────────────────────────────
 Deno.serve(async (req) => {
-  const corsPreflight = handleCors(req);
-  if (corsPreflight) return corsPreflight;
   const corsHeaders = getCorsHeaders(req);
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,

@@ -20,12 +20,12 @@ export function HomepageAuctionsSection({ listings, isLoading }: Props) {
         <div className={`flex items-center justify-between mb-6 sm:mb-8 reveal ${inView ? "in-view" : ""}`}>
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <Gavel className="w-4 h-4 text-brand-gold" />
-              <span className="text-xs font-semibold text-brand-gold uppercase tracking-widest">Greek Auctions</span>
+              <Gavel className="w-4 h-4 text-brand-purple-dark" />
+              <span className="text-xs font-semibold text-brand-purple-dark uppercase tracking-widest">Greek Auctions</span>
             </div>
             <h2 className="font-display text-xl sm:text-2xl font-bold">This Week's Auctions</h2>
           </div>
-          <Button variant="outline" size="sm" className="border-brand-gold/30 text-brand-gold hover:bg-brand-gold/10 text-xs" asChild>
+          <Button variant="outline" size="sm" className="border-brand-purple-dark/30 text-brand-purple-dark hover:bg-brand-purple-dark/10 text-xs" asChild>
             <Link to="/auctions">
               All Auctions <ArrowRight className="w-3 h-3 ml-1" />
             </Link>

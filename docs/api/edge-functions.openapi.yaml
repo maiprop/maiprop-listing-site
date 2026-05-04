@@ -409,6 +409,50 @@ paths:
             application/json:
               schema: { type: object, properties: { url: { type: string, format: uri } } }
 
+  /apply-data-input-credit:
+    post:
+      operationId: applyDataInputCredit
+      summary: |
+        (Admin) Convert a verified agent_data_inputs row into a Stripe customer
+        balance credit applied to the agent's next invoice. Idempotent on
+        stripe_credit_id.
+      security: [{ SupabaseJWT: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [data_input_id]
+              properties:
+                data_input_id: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Credit applied (or already applied)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  applied: { type: boolean }
+                  idempotent: { type: boolean }
+                  stripe_credit_id: { type: string, nullable: true }
+                  amount_cents: { type: integer, nullable: true }
+                  currency: { type: string, nullable: true }
+                  reason: { type: string, nullable: true }
+        '403':
+          description: Caller is not a platform admin
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '404':
+          description: Data input or Stripe customer not found
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '409':
+          description: Row is not in 'verified' status
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '422':
+          description: Agent missing email or active subscription
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
   /get-invoices:
     get:
       operationId: getInvoices

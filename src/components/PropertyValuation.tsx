@@ -4,6 +4,7 @@ import {
   ChevronDown, ChevronUp, Info, AlertTriangle, Lightbulb,
   BarChart3, Droplets, Scale, MapPin, Receipt, FileCheck,
 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { getAiErrorMessage } from "@/lib/aiErrorUtils";
@@ -11,7 +12,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { SignInForAI } from "@/components/SignInForAI";
 import { toast } from "sonner";
 import { useSubscription } from "@/hooks/useSubscription";
-import { useValuationUsage, useRecordValuation, VALUATION_INCLUDED, VALUATION_EXTRA_COST } from "@/hooks/useUsageAddons";
+import { useValuationUsage, VALUATION_INCLUDED, VALUATION_EXTRA_COST } from "@/hooks/useUsageAddons";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -184,8 +185,8 @@ function ScoreBar({ label, score, invert = false, icon }: { label: string; score
 export default function PropertyValuation(props: PropertyValuationProps) {
   const { user } = useAuth();
   const { isPro } = useSubscription();
+  const queryClient = useQueryClient();
   const { data: valuationCount = 0 } = useValuationUsage();
-  const recordValuation = useRecordValuation();
   const [result, setResult] = useState<ValuationResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -211,9 +212,9 @@ export default function PropertyValuation(props: PropertyValuationProps) {
           body: { listing_id: listingId, report_type: "valuation" },
         });
         if (!osErr && osRes?.ok && osRes.report && typeof (osRes.report as ValuationResult).estimatedValue === "number") {
-          await recordValuation.mutateAsync(listingId);
           setResult(osRes.report as ValuationResult);
           setExpanded(true);
+          void queryClient.invalidateQueries({ queryKey: ["usage_ai_calls"] });
           setLoading(false);
           return;
         }
@@ -222,9 +223,9 @@ export default function PropertyValuation(props: PropertyValuationProps) {
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       if (!data?.estimatedValue) throw new Error("Valuation returned no result");
-      await recordValuation.mutateAsync(listingId ?? undefined);
       setResult(data as ValuationResult);
       setExpanded(true);
+      void queryClient.invalidateQueries({ queryKey: ["usage_ai_calls"] });
     } catch (e: unknown) {
       toast.error(getAiErrorMessage(e, null, "Valuation failed"));
     } finally {

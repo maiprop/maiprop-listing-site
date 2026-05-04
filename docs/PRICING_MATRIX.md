@@ -14,8 +14,18 @@
 | **Agent** | Agent Pro | €149 | €1,490 | ✅ Yes (5 listings) |
 | **Developer** | Developer Pro | €129 | €1,290 | ❌ No |
 | **Professional** | Professional Pro | €69 | €690 | ✅ Yes |
-| **Investor** (Private) | Investor Plan | €49 | €490 | ❌ No |
-| **Institutional** | Institutional Plan | €199 | €1,990 | ❌ Invite-only |
+| **Investor** (Private) | Investor Plan | _by application_ | _by application_ | ❌ Invitation-only |
+| **Institutional** | Institutional Plan | _by application_ | _by application_ | ❌ Invitation-only |
+
+> **Investor & Institutional** tiers are invitation-only and have **no public price**.
+> After an application is approved, a one-off Stripe **Payment Link** with a
+> per-application amount is emailed to the applicant. Subscriptions are then
+> activated in Supabase via the Stripe webhook.
+>
+> **Agents & Professionals** have only **Free + Pro** plans. Anything beyond Pro
+> (extra seats, branded profile, white-label, API access, referral network) is
+> sold as an **add-on** from the dashboard's Billing tab — there is no Agency
+> tier and no Professional Premium tier.
 
 ---
 
@@ -53,15 +63,22 @@
 |----------|-------|--------|-------|-------|----------|
 | `agent_free` | Agent Free | agent_subscription | €0 | 1 | 5 listings, 3 viewings/mo, basic profile |
 | `agent_basic` | Agent Pro | agent_subscription | €149 | 1 | Unlimited listings, CRM, 10 priority ads |
-| `agency_starter` | Agency Starter | agent_subscription | €249 | 3 | Shared listing pool, branded profile |
-| `agency_growth` | Agency Growth | agent_subscription | €449 | 10 | Priority placement, dedicated manager |
-| `agency_enterprise` | Agency Enterprise | agent_subscription | €749 | Unlimited | White-label, SLA, support |
+
+> Legacy `agency_starter` / `agency_growth` / `agency_enterprise` tiers are deprecated
+> (`is_active: false` in `pricing_configs`). They are kept for historical reference
+> only and are not displayed anywhere. Agency-style functionality is now sold as
+> add-ons (see below).
 
 ### Agent Add-ons
 | Key | Label | Price | Unit |
 |-----|-------|-------|------|
-| `extra_priority_ad` | Extra Priority Ad | €8 | per_ad |
-| `featured_professional` | Featured Professional | €59 | monthly |
+| `agent_extra_seat` | Extra agent seat | €39 | monthly |
+| `agency_branded_profile` | Agency-branded profile | €49 | monthly |
+| `agency_dedicated_manager` | Dedicated account manager | €199 | monthly |
+| `agency_white_label` | White-label domain | €149 | monthly |
+| `extra_priority_ad` | Extra priority ad | €8 | per_ad |
+| `featured_professional` | Featured professional | €59 | monthly |
+| `extra_listing` / `featured_listing` / `priority_placement` / `featured_priority_bundle` | Listing boosts | €12–€79 | varies |
 
 ---
 
@@ -94,25 +111,40 @@
 |----------|-------|--------|-------|----------|
 | Free (implied) | Directory Only | - | €0 | Basic listing, enquiries |
 | `professional_basic` | Professional Pro | professional_subscription | €69 | Priority leads, calendar, verified badge, 3 AI tools/mo |
-| `professional_premium` | Professional Premium | professional_subscription | €129 | API access, referral network, full tools |
+
+> Legacy `professional_premium` tier is deprecated (`is_active: false`). API access,
+> referral network and additional client seats are now sold as add-ons.
 
 ### Professional Add-ons
 | Key | Label | Price | Unit |
 |-----|-------|-------|------|
 | `featured_professional` | Featured Professional | €59 | monthly |
 | `extra_priority_ad` | Extra Priority Ad | €8 | per_ad |
+| `professional_api_access` | Professional API access | €59 | monthly |
+| `professional_referral_network` | Referral network slot | €39 | monthly |
+| `professional_extra_seat` | Extra client seat | €19 | monthly |
+| `professional_branded_email` | Branded email templates | €15 | monthly |
 
 ---
 
-## 5. INVESTORS
+## 5. INVESTORS & INSTITUTIONAL
 
-### Subscription Plans
+### Subscription Plans (invitation-only)
 | Plan Key | Label | Module | Price | Features |
 |----------|-------|--------|-------|----------|
-| `investor_private` | Private Investor | investor_subscription | €49/mo | Deal-flow, AI matching, 5 reports/mo |
-| `investor_institutional` | Institutional Investor | investor_subscription | €199/mo | Full pipeline, bulk view, dedicated manager |
+| `investor_private` | Private Investor | investor_subscription | _by application_ | Deal-flow, AI matching, 5 reports/mo |
+| `investor_institutional` | Institutional Investor | investor_subscription | _by application_ | Full pipeline, bulk view, dedicated manager |
 
-**Note:** Invite-only access. KYC verification required. Annual billing offers 2 months free (€490/year for Investor, €1,990/year for Institutional).
+**Flow:**
+1. Applicant submits the **Investor / Institutional Application** form.
+2. The maiProp team reviews KYC + portfolio fit.
+3. On approval, an automated email is sent containing a Stripe **Payment Link**
+   with a **per-application amount** (the price is bespoke — not a public price).
+4. After the payment is captured, the Stripe webhook activates the
+   `investor_subscriptions` row and grants access to the Investor / Firesale tabs.
+
+`pricing_configs` rows for these tiers carry `metadata.by_application: true` and
+`amount: 0` to signal that the amount is set on the Payment Link, not in the DB.
 
 ---
 
