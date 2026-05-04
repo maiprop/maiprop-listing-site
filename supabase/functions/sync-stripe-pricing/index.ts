@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Admin-only: Sync all pricing_configs to Stripe.
  * - For each active config with amount > 0:
@@ -23,6 +22,19 @@ type SyncResult = {
   price_id?: string;
   product_id?: string;
   error?: string;
+};
+
+/** Subset of `pricing_configs` columns this function touches. The full row
+ *  type is not in the generated Supabase types since the table is unregistered. */
+type PricingConfigRow = {
+  id: string;
+  key: string;
+  amount: number | string;
+  currency?: string | null;
+  unit?: string | null;
+  label?: string | null;
+  description?: string | null;
+  metadata?: Record<string, string> | null;
 };
 
 Deno.serve(async (req) => {
@@ -54,7 +66,7 @@ Deno.serve(async (req) => {
       .select("role")
       .eq("user_id", userData.user.id)
       .single();
-    if ((profile as any)?.role !== "admin") throw new Error("Platform admin only");
+    if ((profile as { role?: string } | null)?.role !== "admin") throw new Error("Platform admin only");
 
     // Optional: sync only specific config IDs, or all active configs
     const body = req.method === "POST" && req.body ? await req.json().catch(() => ({})) : {};
@@ -68,7 +80,8 @@ Deno.serve(async (req) => {
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
     const results: SyncResult[] = [];
 
-    for (const config of (configs ?? [])) {
+    const typedConfigs = (configs ?? []) as PricingConfigRow[];
+    for (const config of typedConfigs) {
       const meta = (config.metadata ?? {}) as Record<string, string>;
       const existingProductId = meta.stripe_product_id;
       const existingPriceId = meta.stripe_price_id;
@@ -117,7 +130,7 @@ Deno.serve(async (req) => {
             unit_amount: amount,
             metadata: { pricing_config_key: config.key, pricing_config_id: config.id },
           };
-          if (isRecurring) (priceParams as any).recurring = { interval };
+          if (isRecurring) priceParams.recurring = { interval };
           const price = await stripe.prices.create(priceParams);
           priceId = price.id;
           newMeta.stripe_price_id = priceId;
@@ -134,7 +147,7 @@ Deno.serve(async (req) => {
             unit_amount: amount,
             metadata: { pricing_config_key: config.key, pricing_config_id: config.id },
           };
-          if (isRecurring) (priceParams as any).recurring = { interval };
+          if (isRecurring) priceParams.recurring = { interval };
           const newPrice = await stripe.prices.create(priceParams);
           priceId = newPrice.id;
           newMeta.stripe_price_id = priceId;
@@ -156,9 +169,9 @@ Deno.serve(async (req) => {
 
         result.price_id = priceId;
         result.product_id = productId;
-      } catch (err: any) {
+      } catch (err: unknown) {
         result.action = "error";
-        result.error = err.message;
+        result.error = err instanceof Error ? err.message : String(err);
       }
 
       results.push(result);
@@ -177,8 +190,9 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
     });
-  } catch (error: any) {
-    return new Response(JSON.stringify({ error: error.message }), {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    return new Response(JSON.stringify({ error: message }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,
     });

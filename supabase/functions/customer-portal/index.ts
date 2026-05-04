@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
@@ -11,8 +10,15 @@ const log = createLogger("customer-portal");
 const portalLimiter = makeRateLimiter({ bucket: "customer-portal", maxRequests: 10, windowMs: 60_000 });
 
 // Redirect the legacy logStep helper through the structured logger.
-const logStep = (step: string, details?: any) => {
-  log.info(step, details && typeof details === "object" ? details as Record<string, unknown> : details !== undefined ? { details } : undefined);
+const logStep = (step: string, details?: unknown): void => {
+  log.info(
+    step,
+    details && typeof details === "object"
+      ? (details as Record<string, unknown>)
+      : details !== undefined
+        ? { details }
+        : undefined,
+  );
 };
 
 /**
@@ -92,10 +98,11 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     const status = error instanceof AuthError ? error.status : 500;
-    logStep("ERROR", { message: error.message, status });
-    return new Response(JSON.stringify({ error: error.message }), {
+    const message = error instanceof Error ? error.message : String(error);
+    logStep("ERROR", { message, status });
+    return new Response(JSON.stringify({ error: message }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status,
     });

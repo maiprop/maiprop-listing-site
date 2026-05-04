@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { verifyBearerToken, AuthError } from "../_shared/auth.ts";
@@ -12,8 +11,15 @@ const limiter = makeRateLimiter({ bucket: "create-checkout", maxRequests: 10, wi
 // Redirect the legacy logStep helper through the structured logger so existing
 // call sites don't need to change. The `step` becomes the message and
 // `details` becomes the structured context.
-const logStep = (step: string, details?: any) => {
-  log.info(step, details && typeof details === "object" ? details as Record<string, unknown> : details !== undefined ? { details } : undefined);
+const logStep = (step: string, details?: unknown): void => {
+  log.info(
+    step,
+    details && typeof details === "object"
+      ? (details as Record<string, unknown>)
+      : details !== undefined
+        ? { details }
+        : undefined,
+  );
 };
 
 /** Accepts only same-origin absolute paths starting with "/" (and not "//" or "/\\").
@@ -31,20 +37,26 @@ export function sanitizeRedirectPath(raw: unknown): string | null {
   return raw;
 }
 
-/** Plan keys: env STRIPE_PRICE_<UPPERCASE_KEY>, or DB pricing_configs.metadata.stripe_price_id, or STRIPE_PRICE_DEFAULT. No hardcoded fallback in production.
- *
- * supabase param typed `any` to bridge the SupabaseClient generic mismatch
- * between the call-site `createClient(url, key)` (which produces
- * `SupabaseClient<any, "public", "public", any, any>`) and `ReturnType<typeof
- * createClient>` (which produces a narrower default-generic variant). The
- * file-level eslint-disable at the top already covers the `no-explicit-any`. */
-async function getPriceForPlan(supabase: any, planKey: string): Promise<string> {
+/** Shape of a single `pricing_configs` row we care about. The full table is
+ *  not in the generated types since this is an unregistered Supabase table. */
+type PricingConfigRow = { metadata?: { stripe_price_id?: string } | null };
+
+/** Plan keys: env STRIPE_PRICE_<UPPERCASE_KEY>, or DB pricing_configs.metadata.stripe_price_id, or STRIPE_PRICE_DEFAULT. No hardcoded fallback in production. */
+async function getPriceForPlan(supabase: unknown, planKey: string): Promise<string> {
   const envKey = `STRIPE_PRICE_${planKey.toUpperCase().replace(/-/g, "_")}`;
   const envPrice = Deno.env.get(envKey);
   if (envPrice) return envPrice;
 
-  const { data } = await supabase.from("pricing_configs").select("metadata").eq("key", planKey).maybeSingle();
-  const stripePriceId = (data as any)?.metadata?.stripe_price_id;
+  // The runtime Supabase client returned by `createClient(url, key)` carries
+  // generics that don't match the value of `ReturnType<typeof createClient>`,
+  // so we accept it as `unknown` here and bridge through `(... .from as any)`
+  // — the same narrow cast pattern this repo uses for unregistered tables.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data } = await ((supabase as { from: any }).from as any)("pricing_configs")
+    .select("metadata")
+    .eq("key", planKey)
+    .maybeSingle();
+  const stripePriceId = (data as PricingConfigRow | null)?.metadata?.stripe_price_id;
   if (stripePriceId) return stripePriceId;
 
   const defaultPrice = Deno.env.get("STRIPE_PRICE_DEFAULT");

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { verifyHmacSignature, HmacVerifyError } from "../_shared/webhookHmac.ts";
 import { errorResponse, unavailableResponse } from "../_shared/response.ts";
@@ -6,6 +5,49 @@ import { createLogger } from "../_shared/logger.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
 const log = createLogger("receive-from-os");
+
+type SupabaseSrv = ReturnType<typeof createClient>;
+
+// OS webhook payload envelope. The OS API doesn't ship typed schemas, so we
+// shape the inbound JSON as discriminated unions of "data" payloads keyed by
+// `entity_type` and validate field-by-field at the handler boundary instead
+// of trusting the wire shape.
+type WebhookEnvelope = {
+  event?: string;
+  entity_type?: string;
+  data?: Record<string, unknown>;
+};
+
+type HandlerResult = { processed: boolean; id?: string; error?: string };
+
+/** Read a field from an unknown OS payload, narrowing common scalar types. */
+function pick<T = unknown>(d: Record<string, unknown>, key: string): T | undefined {
+  return d[key] as T | undefined;
+}
+function pickStr(d: Record<string, unknown>, key: string): string | null {
+  const v = d[key];
+  return typeof v === "string" ? v : null;
+}
+function pickStrOrUndef(d: Record<string, unknown>, key: string): string | undefined {
+  const v = d[key];
+  return typeof v === "string" ? v : undefined;
+}
+/** OS sometimes serialises identifiers as numbers (see `auctionListingId` in
+ *  `poll-os-auctions`); coerce numeric ids to string so `os_id:` tags and
+ *  `sync_log.entity_id` are stable regardless of wire shape. */
+function pickId(d: Record<string, unknown>, key: string): string | undefined {
+  const v = d[key];
+  if (typeof v === "string") return v;
+  if (typeof v === "number" && Number.isFinite(v)) return String(v);
+  return undefined;
+}
+function pickNum(d: Record<string, unknown>, key: string): number | null {
+  const v = d[key];
+  return typeof v === "number" ? v : null;
+}
+function pickBool(d: Record<string, unknown>, key: string): boolean {
+  return d[key] === true;
+}
 
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req, "x-os-signature");
@@ -34,9 +76,9 @@ Deno.serve(async (req) => {
       throw err;
     }
 
-    let body: any;
+    let body: WebhookEnvelope;
     try {
-      body = JSON.parse(rawBody);
+      body = JSON.parse(rawBody) as WebhookEnvelope;
     } catch {
       return errorResponse("Invalid JSON body", 400, corsHeaders);
     }
@@ -46,9 +88,7 @@ Deno.serve(async (req) => {
       return errorResponse("Missing event, entity_type, or data", 400, corsHeaders);
     }
 
-    let result: { processed: boolean; id?: string; error?: string } = { processed: false };
-
-    // Handle different entity types coming from OS
+    let result: HandlerResult;
     if (entity_type === "listing") {
       result = await handleListing(supabase, event, data);
     } else if (entity_type === "lead" || entity_type === "consultation") {
@@ -57,9 +97,15 @@ Deno.serve(async (req) => {
       result = await handleProfile(supabase, event, data);
     } else {
       // Unknown entity type – log and acknowledge (not an error, just unsupported)
-      await logSync(supabase, "os_to_hub", entity_type,
-        data.id || data.externalId || "unknown", "skipped",
-        `Unknown entity_type: ${entity_type}`, data);
+      await logSync(
+        supabase,
+        "os_to_hub",
+        entity_type,
+        pickId(data, "id") ?? pickId(data, "externalId") ?? "unknown",
+        "skipped",
+        `Unknown entity_type: ${entity_type}`,
+        data,
+      );
       return new Response(
         JSON.stringify({ ok: true, status: "skipped", reason: "unknown entity_type" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -67,8 +113,10 @@ Deno.serve(async (req) => {
     }
 
     await logSync(
-      supabase, "os_to_hub", entity_type,
-      data.id || data.externalId || result.id || "unknown",
+      supabase,
+      "os_to_hub",
+      entity_type,
+      pickId(data, "id") ?? pickId(data, "externalId") ?? result.id ?? "unknown",
       result.processed ? "success" : "error",
       result.error ?? null,
       data,
@@ -80,53 +128,66 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
 
-  } catch (err: any) {
-    return errorResponse(err.message, 500, corsHeaders);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return errorResponse(message, 500, corsHeaders);
   }
 });
 
 // ─── Handlers ────────────────────────────────────────────────────────────────
 
-async function handleListing(supabase: any, event: string, data: any) {
-  // Map OS fields → Hub fields
-  const mapped: any = {
-    title: data.title,
-    description: data.description,
-    price: data.price,
-    price_per_sqm: data.pricePerSqm ?? null,
-    sqm: data.sqm,
-    bedrooms: data.bedrooms ?? null,
-    bathrooms: data.bathrooms ?? null,
-    city: data.city,
-    region: data.region ?? null,
-    address: data.address ?? null,
-    postal_code: data.postalCode ?? null,
-    latitude: data.latitude ?? null,
-    longitude: data.longitude ?? null,
-    property_type: data.propertyType ?? "apartment",
-    listing_type: data.listingType ?? "sale",
-    status: data.status ?? "active",
-    energy_class: data.energyClass ?? null,
-    year_built: data.yearBuilt ?? null,
-    has_parking: data.hasParking ?? false,
-    has_elevator: data.hasElevator ?? false,
-    has_pool: data.hasPool ?? false,
-    has_garden: data.hasGarden ?? false,
-    has_balcony: data.hasBalcony ?? false,
-    has_furnished: data.hasFurnished ?? false,
-    has_ac: data.hasAc ?? false,
-    cover_image_url: data.coverImage ?? (data.images?.[0] ?? null),
-    tags: data.tags ?? null,
-    owner_id: data.ownerId,
-  };
-
-  if (!mapped.owner_id) {
+async function handleListing(
+  supabase: SupabaseSrv,
+  event: string,
+  data: Record<string, unknown>,
+): Promise<HandlerResult> {
+  const ownerId = pickStr(data, "ownerId");
+  if (!ownerId) {
     return { processed: false, error: "ownerId is required — cannot create listing without a mapped Hub user" };
   }
 
+  const images = pick<unknown[]>(data, "images");
+  const firstImage = Array.isArray(images) && typeof images[0] === "string" ? (images[0] as string) : null;
+  const inboundTags = pick<unknown[]>(data, "tags");
+  const tags = Array.isArray(inboundTags) ? (inboundTags.filter((t) => typeof t === "string") as string[]) : null;
+
+  const mapped = {
+    title: pickStr(data, "title"),
+    description: pickStr(data, "description"),
+    price: pickNum(data, "price"),
+    price_per_sqm: pickNum(data, "pricePerSqm"),
+    sqm: pickNum(data, "sqm"),
+    bedrooms: pickNum(data, "bedrooms"),
+    bathrooms: pickNum(data, "bathrooms"),
+    city: pickStr(data, "city"),
+    region: pickStr(data, "region"),
+    address: pickStr(data, "address"),
+    postal_code: pickStr(data, "postalCode"),
+    latitude: pickNum(data, "latitude"),
+    longitude: pickNum(data, "longitude"),
+    property_type: pickStrOrUndef(data, "propertyType") ?? "apartment",
+    listing_type: pickStrOrUndef(data, "listingType") ?? "sale",
+    status: pickStrOrUndef(data, "status") ?? "active",
+    energy_class: pickStr(data, "energyClass"),
+    year_built: pickNum(data, "yearBuilt"),
+    has_parking: pickBool(data, "hasParking"),
+    has_elevator: pickBool(data, "hasElevator"),
+    has_pool: pickBool(data, "hasPool"),
+    has_garden: pickBool(data, "hasGarden"),
+    has_balcony: pickBool(data, "hasBalcony"),
+    has_furnished: pickBool(data, "hasFurnished"),
+    has_ac: pickBool(data, "hasAc"),
+    cover_image_url: pickStr(data, "coverImage") ?? firstImage,
+    tags,
+    owner_id: ownerId,
+  };
+
+  const externalId = pickId(data, "externalId") ?? pickId(data, "id");
+
   if (event === "created" || event === "upsert") {
+    if (!externalId) return { processed: false, error: "externalId or id required for upsert" };
+
     // Check if listing with this externalId already exists (via tags)
-    const externalId = data.externalId ?? data.id;
     const { data: existing } = await supabase
       .from("listings")
       .select("id")
@@ -134,28 +195,27 @@ async function handleListing(supabase: any, event: string, data: any) {
       .maybeSingle();
 
     if (existing) {
-      // Update existing
       const { error } = await supabase
         .from("listings")
         .update({ ...mapped, updated_at: new Date().toISOString() })
         .eq("id", existing.id);
       if (error) return { processed: false, error: error.message };
       return { processed: true, id: existing.id };
-    } else {
-      // Insert new, tag with os_id for future dedup
-      const tags = [...(mapped.tags ?? []), `os_id:${externalId}`];
-      const { data: inserted, error } = await supabase
-        .from("listings")
-        .insert({ ...mapped, tags })
-        .select("id")
-        .single();
-      if (error) return { processed: false, error: error.message };
-      return { processed: true, id: inserted.id };
     }
+
+    // Insert new, tag with os_id for future dedup
+    const insertTags = [...(tags ?? []), `os_id:${externalId}`];
+    const { data: inserted, error } = await supabase
+      .from("listings")
+      .insert({ ...mapped, tags: insertTags })
+      .select("id")
+      .single();
+    if (error) return { processed: false, error: error.message };
+    return { processed: true, id: inserted.id };
   }
 
   if (event === "deleted") {
-    const externalId = data.externalId ?? data.id;
+    if (!externalId) return { processed: false, error: "externalId or id required for delete" };
     const { error } = await supabase
       .from("listings")
       .update({ status: "expired" })
@@ -167,68 +227,89 @@ async function handleListing(supabase: any, event: string, data: any) {
   return { processed: false, error: `Unknown event: ${event}` };
 }
 
-async function handleLead(supabase: any, event: string, data: any) {
+async function handleLead(
+  supabase: SupabaseSrv,
+  event: string,
+  data: Record<string, unknown>,
+): Promise<HandlerResult> {
   if (event === "created" || event === "upsert") {
-    if (!data.professionalId) {
+    const professionalId = pickStr(data, "professionalId");
+    if (!professionalId) {
       return { processed: false, error: "professionalId is required for lead sync" };
     }
-    const { data: inserted, error } = await supabase
-      .from("consultation_requests")
+    // `consultation_requests` columns may not be in the generated types in
+    // every branch; cast through the narrow `from` overload bridge.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: inserted, error } = await (supabase.from as any)("consultation_requests")
       .insert({
-        professional_id: data.professionalId,
-        requester_name: data.name ?? data.contactName ?? "Unknown",
-        requester_email: data.email ?? data.contactEmail ?? "unknown@example.com",
-        requester_phone: data.phone ?? data.contactPhone ?? null,
-        message: data.message ?? data.notes ?? null,
-        request_type: data.type ?? "inquiry",
-        service: data.service ?? null,
+        professional_id: professionalId,
+        requester_name: pickStr(data, "name") ?? pickStr(data, "contactName") ?? "Unknown",
+        requester_email: pickStr(data, "email") ?? pickStr(data, "contactEmail") ?? "unknown@example.com",
+        requester_phone: pickStr(data, "phone") ?? pickStr(data, "contactPhone"),
+        message: pickStr(data, "message") ?? pickStr(data, "notes"),
+        request_type: pickStrOrUndef(data, "type") ?? "inquiry",
+        service: pickStr(data, "service"),
         status: "pending",
       })
       .select("id")
       .single();
     if (error) return { processed: false, error: error.message };
-    return { processed: true, id: inserted.id };
+    return { processed: true, id: (inserted as { id: string } | null)?.id };
   }
   return { processed: false, error: `Unhandled lead event: ${event}` };
 }
 
-async function handleProfile(supabase: any, _event: string, data: any) {
-  if (!data.userId) return { processed: false, error: "userId required for profile sync" };
+async function handleProfile(
+  supabase: SupabaseSrv,
+  _event: string,
+  data: Record<string, unknown>,
+): Promise<HandlerResult> {
+  const userId = pickStr(data, "userId");
+  if (!userId) return { processed: false, error: "userId required for profile sync" };
   const { error } = await supabase
     .from("profiles")
     .update({
-      display_name: data.displayName ?? null,
-      first_name: data.firstName ?? null,
-      last_name: data.lastName ?? null,
-      phone: data.phone ?? null,
-      city: data.city ?? null,
-      bio: data.bio ?? null,
-      avatar_url: data.avatarUrl ?? null,
+      display_name: pickStr(data, "displayName"),
+      first_name: pickStr(data, "firstName"),
+      last_name: pickStr(data, "lastName"),
+      phone: pickStr(data, "phone"),
+      city: pickStr(data, "city"),
+      bio: pickStr(data, "bio"),
+      avatar_url: pickStr(data, "avatarUrl"),
     })
-    .eq("user_id", data.userId);
+    .eq("user_id", userId);
   if (error) return { processed: false, error: error.message };
-  return { processed: true, id: data.userId };
+  return { processed: true, id: userId };
 }
 
 // ─── Sync Logger ─────────────────────────────────────────────────────────────
 
 async function logSync(
-  supabase: any,
+  supabase: SupabaseSrv,
   direction: string,
   entity_type: string,
   entity_id: string,
   status: string,
   error_message?: string | null,
-  payload?: any,
+  payload?: unknown,
   records_affected = 0,
-) {
-  await supabase.from("sync_log").insert({
-    direction,
-    entity_type,
-    entity_id,
-    status,
-    error_message: error_message ?? null,
-    payload: payload ?? null,
-    records_affected,
-  });
+): Promise<void> {
+  // `sync_log` is unregistered in the generated Supabase types; cast through
+  // the narrow `from` overload bridge that the rest of this codebase uses.
+  // Wrap in try/catch so a logging failure (schema mismatch, transient DB
+  // issue) never aborts the webhook response — matches `poll-os-auctions`.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase.from as any)("sync_log").insert({
+      direction,
+      entity_type,
+      entity_id,
+      status,
+      error_message: error_message ?? null,
+      payload: payload ?? null,
+      records_affected,
+    });
+  } catch (err: unknown) {
+    log.error("logSync failed", { err: err instanceof Error ? err.message : String(err) });
+  }
 }

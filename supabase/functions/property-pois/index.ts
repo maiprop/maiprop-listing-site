@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 import { openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
@@ -99,7 +98,14 @@ Rules:
       jsonStr = jsonStr.substring(jsonStart, jsonEnd + 1);
     }
 
-    let parsed: { pois: any[] };
+    type RawPoi = {
+      name?: unknown;
+      category?: unknown;
+      distanceKm?: unknown;
+      walkMinutes?: unknown;
+      description?: unknown;
+    };
+    let parsed: { pois: RawPoi[] };
     try {
       parsed = JSON.parse(jsonStr);
     } catch {
@@ -125,14 +131,24 @@ Rules:
     // Validate and sanitise
     const categories = ["school", "transit", "cafe", "hospital", "shopping", "park"];
     const pois = parsed.pois
-      .filter((p: any) => p.name && categories.includes(p.category) && typeof p.distanceKm === "number")
-      .map((p: any) => ({
-        name: String(p.name).slice(0, 60),
-        category: p.category,
-        distanceKm: Math.max(0.05, Math.min(5, Number(p.distanceKm))),
-        walkMinutes: Math.max(1, Math.min(60, Number(p.walkMinutes ?? Math.round(p.distanceKm * 12)))),
-        description: p.description ? String(p.description).slice(0, 40) : undefined,
-      }))
+      .filter(
+        (p) =>
+          typeof p.name === "string" &&
+          typeof p.category === "string" &&
+          categories.includes(p.category) &&
+          typeof p.distanceKm === "number",
+      )
+      .map((p) => {
+        const distanceKm = Math.max(0.05, Math.min(5, Number(p.distanceKm)));
+        const fallbackWalk = Math.round(distanceKm * 12);
+        return {
+          name: String(p.name).slice(0, 60),
+          category: p.category as string,
+          distanceKm,
+          walkMinutes: Math.max(1, Math.min(60, Number(p.walkMinutes ?? fallbackWalk))),
+          description: p.description ? String(p.description).slice(0, 40) : undefined,
+        };
+      })
       .slice(0, 15);
 
     await recordAiCall(quota.userId, BUCKET);

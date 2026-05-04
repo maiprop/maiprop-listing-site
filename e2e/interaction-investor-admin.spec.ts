@@ -12,6 +12,7 @@
  * Multi-context tests (simultaneous sessions) use the `browser` fixture.
  */
 import { test, expect, type Page } from "@playwright/test";
+import { getBaseURL } from "./helpers/baseURL";
 
 // ─── Credentials ─────────────────────────────────────────────────────────────
 
@@ -44,7 +45,7 @@ test.describe("Investor (private) — sign in and basic navigation", () => {
   test.skip(!hasCredentials, "Set E2E_INVESTOR_PRIVATE_EMAIL / E2E_DEMO_PASSWORD to run");
   test("investor.private can sign in and reach /dashboard", async ({ page }) => {
     await signIn(page, INVESTOR_PRIVATE_EMAIL, DEMO_PASSWORD);
-    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
 
     // Must have landed somewhere meaningful — nav or sidebar present
     const nav = page.locator('nav, [role="navigation"], aside').first();
@@ -54,7 +55,7 @@ test.describe("Investor (private) — sign in and basic navigation", () => {
   test("investor.private accesses /investor-dashboard without being gated", async ({ page }) => {
     await signIn(page, INVESTOR_PRIVATE_EMAIL, DEMO_PASSWORD);
     await page.goto("/investor-dashboard");
-    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
     // Must NOT have been redirected to /login
     expect(page.url()).not.toContain("/login");
 
@@ -68,7 +69,7 @@ test.describe("Investor (private) — sign in and basic navigation", () => {
   test("investor.private sees /firesale content", async ({ page }) => {
     await signIn(page, INVESTOR_PRIVATE_EMAIL, DEMO_PASSWORD);
     await page.goto("/firesale");
-    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
 
     // Must NOT have been redirected to /login
     expect(page.url()).not.toContain("/login");
@@ -87,7 +88,7 @@ test.describe("Investor (private) — sign in and basic navigation", () => {
 
     await signIn(page, INVESTOR_PRIVATE_EMAIL, DEMO_PASSWORD);
     await page.goto("/auctions");
-    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
 
     // Must NOT have been redirected to /login
     expect(page.url()).not.toContain("/login");
@@ -108,7 +109,7 @@ test.describe("Investor (institutional) — investor-dashboard access", () => {
   test("investor.institutional accesses /investor-dashboard without being gated", async ({ page }) => {
     await signIn(page, INVESTOR_INSTITUTIONAL_EMAIL, DEMO_PASSWORD);
     await page.goto("/investor-dashboard");
-    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
     // Must NOT have been redirected to /login
     expect(page.url()).not.toContain("/login");
 
@@ -127,8 +128,9 @@ test.describe("Simultaneous investor sessions", () => {
   test.skip(!hasCredentials, "Set investor + E2E_DEMO_PASSWORD env vars to run");
   test("both investor accounts sign in simultaneously and both reach /investor-dashboard", async ({ browser }) => {
     test.setTimeout(90_000);
-    const privateCtx = await browser.newContext();
-    const institutionalCtx = await browser.newContext();
+    const baseURL = getBaseURL();
+    const privateCtx = await browser.newContext({ baseURL });
+    const institutionalCtx = await browser.newContext({ baseURL });
 
     const privateErrors: string[] = [];
     const institutionalErrors: string[] = [];
@@ -151,8 +153,8 @@ test.describe("Simultaneous investor sessions", () => {
       ]);
 
       await Promise.all([
-        privatePage.waitForLoadState("networkidle", { timeout: 15_000 }),
-        institutionalPage.waitForLoadState("networkidle", { timeout: 15_000 }),
+        privatePage.waitForLoadState("load", { timeout: 15_000 }),
+        institutionalPage.waitForLoadState("load", { timeout: 15_000 }),
       ]);
 
       // Neither page should have redirected to /login
@@ -181,7 +183,7 @@ test.describe("Admin — sign in and panel access", () => {
   test.skip(!hasCredentials, "Set E2E_ADMIN_EMAIL / E2E_DEMO_PASSWORD to run");
   test("admin can sign in and reach /dashboard or /admin", async ({ page }) => {
     await signIn(page, ADMIN_EMAIL, DEMO_PASSWORD);
-    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
 
     // Must have landed on a legitimate post-login route
     expect(page.url()).toMatch(/\/dashboard|\/admin|\/onboarding/);
@@ -194,7 +196,7 @@ test.describe("Admin — sign in and panel access", () => {
   test("admin can access /admin panel without redirect", async ({ page }) => {
     await signIn(page, ADMIN_EMAIL, DEMO_PASSWORD);
     await page.goto("/admin");
-    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
 
     // URL must still contain /admin — admin was not redirected away
     expect(page.url()).toContain("/admin");
@@ -207,7 +209,7 @@ test.describe("Admin — sign in and panel access", () => {
   test("admin panel renders key management sections", async ({ page }) => {
     await signIn(page, ADMIN_EMAIL, DEMO_PASSWORD);
     await page.goto("/admin");
-    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
     // URL must still be /admin (admin was not redirected to /dashboard)
     expect(page.url()).toContain("/admin");
 
@@ -228,7 +230,7 @@ test.describe("Admin — sign in and panel access", () => {
 
     await signIn(page, ADMIN_EMAIL, DEMO_PASSWORD);
     await page.goto("/admin");
-    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+    await page.waitForLoadState("load", { timeout: 15_000 });
 
     expect(errors).toHaveLength(0);
   });
@@ -240,8 +242,9 @@ test.describe("Simultaneous admin and investor sessions", () => {
   test.skip(!hasCredentials, "Set admin + investor + E2E_DEMO_PASSWORD env vars to run");
   test("admin on /admin and investor on /investor-dashboard — no JS errors and pages render", async ({ browser }) => {
     test.setTimeout(90_000);
-    const adminCtx = await browser.newContext();
-    const investorCtx = await browser.newContext();
+    const baseURL = getBaseURL();
+    const adminCtx = await browser.newContext({ baseURL });
+    const investorCtx = await browser.newContext({ baseURL });
 
     const adminErrors: string[] = [];
     const investorErrors: string[] = [];
@@ -265,8 +268,8 @@ test.describe("Simultaneous admin and investor sessions", () => {
       ]);
 
       await Promise.all([
-        adminPage.waitForLoadState("networkidle", { timeout: 15_000 }),
-        investorPage.waitForLoadState("networkidle", { timeout: 15_000 }),
+        adminPage.waitForLoadState("load", { timeout: 15_000 }),
+        investorPage.waitForLoadState("load", { timeout: 15_000 }),
       ]);
 
       // Wait for auth spinners to clear on both pages

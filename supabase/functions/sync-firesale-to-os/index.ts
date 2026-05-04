@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * sync-firesale-to-os
  * ─────────────────────────────────────────────────────────────────────────────
@@ -49,14 +48,17 @@ async function getOsToken(baseUrl: string, email: string, password: string): Pro
 
 // ── Sync logger ───────────────────────────────────────────────────────────────
 async function logSync(
-  supabase: any,
+  supabase: ReturnType<typeof createClient>,
   entity_id: string,
   status: string,
   error_message?: string | null,
-  payload?: any,
+  payload?: unknown,
   records_affected = 0,
-) {
-  await supabase.from("sync_log").insert({
+): Promise<void> {
+  // `sync_log` is unregistered in the generated Supabase types; cast through
+  // the narrow `from` overload bridge that the rest of this codebase uses.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (supabase.from as any)("sync_log").insert({
     direction: "hub_to_os",
     entity_type: "firesale",
     entity_id, status,
@@ -65,6 +67,28 @@ async function logSync(
     records_affected,
   });
 }
+
+// Shape of `firesale_requests` rows we read here. Full row type isn't in the
+// generated Supabase types since the table is unregistered.
+type FiresaleRow = {
+  id: string;
+  property_type?: string | null;
+  address?: string | null;
+  city?: string | null;
+  sqm?: number | null;
+  bedrooms?: number | null;
+  condition?: string | null;
+  asking_price?: number | null;
+  ai_estimate?: number | null;
+  offer_price?: number | null;
+  contact_email?: string | null;
+  contact_phone?: string | null;
+  notes?: string | null;
+  admin_notes?: string | null;
+  status: string;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
 
 // ── Require agent role to prevent unauthenticated sync / PII exposure ───────────
 async function requireAgent(
@@ -121,12 +145,14 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Fetch firesale request
-    const { data: fs, error: fsErr } = await supabase
-      .from("firesale_requests")
+    // Fetch firesale request — `firesale_requests` isn't in the generated
+    // Supabase types; cast through the narrow `from` overload bridge.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: fsRaw, error: fsErr } = await (supabase.from as any)("firesale_requests")
       .select("*")
       .eq("id", firesale_id)
       .single();
+    const fs = fsRaw as FiresaleRow | null;
 
     if (fsErr || !fs) {
       await logSync(supabase, firesale_id, "error", "Firesale request not found");
@@ -147,7 +173,7 @@ Deno.serve(async (req) => {
       propertyMunicipalityName: fs.city,
       propertySquareMeters: fs.sqm,
       numberOfBedrooms:     fs.bedrooms ?? null,
-      condition:            CONDITION_MAP[fs.condition] ?? fs.condition,
+      condition:            (fs.condition && CONDITION_MAP[fs.condition]) ?? fs.condition ?? null,
 
       // Pricing
       firstPriceOffer:      fs.asking_price ?? fs.ai_estimate ?? null,
@@ -162,7 +188,7 @@ Deno.serve(async (req) => {
       adminNotes:           fs.admin_notes ?? null,
 
       // Status
-      auctionStatus:        fs.status.toUpperCase(),
+      auctionStatus:        fs.status?.toUpperCase() ?? "PENDING",
       submittedAt:          fs.created_at,
       updatedAt:            fs.updated_at,
     };
@@ -208,9 +234,10 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
-  } catch (err: any) {
-    log.error("sync error", { err: err?.message ?? String(err) });
-    return new Response(JSON.stringify({ error: err.message }), {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    log.error("sync error", { err: message });
+    return new Response(JSON.stringify({ error: message }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
