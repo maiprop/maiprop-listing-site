@@ -68,7 +68,7 @@ export interface OpenHouseRegistration {
   working_with_agent: string | null;
   screening_doc_url: string | null;
   screening_score: number | null;
-  profiles?: { display_name: string; first_name: string; last_name: string; avatar_url: string; email?: string } | null;
+  profiles?: { display_name: string; first_name: string; last_name: string; avatar_url: string } | null;
 }
 
 export interface OpenHouseOffer {
@@ -156,7 +156,7 @@ export function useOpenHouseRegistrations(listingId: string | undefined, _asOwne
         .from("open_house_registrations")
         .select(`
           *,
-          profiles:requester_id (display_name, first_name, last_name, avatar_url, email)
+          profiles:requester_id (display_name, first_name, last_name, avatar_url)
         `)
         .eq("listing_id", listingId)
         .order("created_at", { ascending: false });
