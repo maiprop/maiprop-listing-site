@@ -68,7 +68,7 @@ export interface OpenHouseRegistration {
   working_with_agent: string | null;
   screening_doc_url: string | null;
   screening_score: number | null;
-  profiles?: { display_name: string; first_name: string; last_name: string; avatar_url: string; email?: string } | null;
+  profiles?: { display_name: string; first_name: string; last_name: string; avatar_url: string } | null;
 }
 
 export interface OpenHouseOffer {
