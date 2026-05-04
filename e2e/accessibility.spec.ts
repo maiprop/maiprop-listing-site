@@ -37,7 +37,13 @@ test.describe("Accessibility", () => {
 
   test("all images have alt text or role=presentation", async ({ page }) => {
     await page.goto("/listings");
+    // networkidle is unreliable on /listings (Mapbox tile fetches never settle).
+    // Wait for `load` and the React <main> landmark instead.
     await page.waitForLoadState("load");
+    await page
+      .locator("#main-content, main")
+      .first()
+      .waitFor({ state: "attached", timeout: 15_000 });
 
     const images = await page.locator("img").all();
     const violations: string[] = [];
