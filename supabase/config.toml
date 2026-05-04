@@ -112,5 +112,8 @@ verify_jwt = false
 [functions.csp-report]
 verify_jwt = false
 
+[functions.agent-data-input]
+verify_jwt = true
+
 [functions.apply-data-input-credit]
 verify_jwt = true

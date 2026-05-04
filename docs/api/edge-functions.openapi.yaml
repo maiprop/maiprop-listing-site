@@ -468,6 +468,66 @@ paths:
                 properties:
                   invoices: { type: array, items: { type: object } }
 
+  /agent-data-input:
+    post:
+      operationId: agentDataInput
+      summary: |
+        Agent "Data Input" feature. Action-based router for the agent dashboard
+        — agents submit their closings (sale/rental deals) in exchange for a
+        0.5%-per-verified-entry discount on their next subscription invoice
+        (capped at 20 entries per calendar month = up to 10% off). Hallucinated
+        submissions trigger a permanent (lifetime) ban via admin review.
+      security: [{ SupabaseJWT: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  required: [action]
+                  properties:
+                    action: { type: string, enum: [status, list] }
+                - type: object
+                  required: [action, payload]
+                  properties:
+                    action: { type: string, enum: [submit] }
+                    payload:
+                      type: object
+                      required: [property_address, property_type, transaction_type, agent_side, sale_price, closing_date]
+                      properties:
+                        property_address: { type: string, minLength: 5, maxLength: 300 }
+                        city:             { type: string, nullable: true }
+                        postal_code:      { type: string, nullable: true }
+                        kaek:             { type: string, nullable: true }
+                        property_type:    { type: string, enum: [apartment, house, commercial, land, other] }
+                        transaction_type: { type: string, enum: [sale, rental] }
+                        agent_side:       { type: string, enum: [buyer, seller, both] }
+                        sale_price:       { type: number, exclusiveMinimum: 0 }
+                        closing_date:     { type: string, format: date }
+                        buyer_name:       { type: string, nullable: true }
+                        seller_name:      { type: string, nullable: true }
+                        notes:            { type: string, nullable: true, maxLength: 2000 }
+                - type: object
+                  required: [action, input_id, decision]
+                  properties:
+                    action:        { type: string, enum: [admin_review] }
+                    input_id:      { type: string, format: uuid }
+                    decision:      { type: string, enum: [verified, rejected, flagged, pending] }
+                    reason:        { type: string, nullable: true }
+                    lifetime_ban:  { type: boolean, default: false }
+      responses:
+        '200':
+          description: |
+            For action=status/list — counters + entries; for action=submit — created entry; for action=admin_review — updated entry.
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        '400': { description: Validation error,            content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '401': { description: Unauthenticated,             content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '403': { description: Forbidden / lifetime banned, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '429': { description: Monthly limit reached,       content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
   /create-stripe-price:
     post:
       operationId: createStripePrice
