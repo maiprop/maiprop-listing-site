@@ -116,14 +116,26 @@ export function useUpdateProfessionalNotes() {
   });
 }
 
-/** Reject a professional and capture the reason on the row. */
+/**
+ * Reject a professional and capture the reason on the row.
+ *
+ * `useProfessionalsAdmin` derives status as
+ * `rejection_reason ? 'rejected' : verified ? 'verified' : 'pending'`,
+ * so `rejection_reason` MUST be non-null for the row to appear in the
+ * rejected bucket. The UI already requires a non-empty note before the
+ * Reject button is enabled, but we belt-and-brace here: trim the note
+ * and fall back to a sentinel string if it's blank, so a rejected
+ * professional can never silently drop back into the pending queue.
+ */
 export function useRejectProfessional() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, notes }: { id: string; notes: string }) => {
+      const trimmed = notes.trim();
+      const reason = trimmed.length > 0 ? trimmed : "Rejected by admin";
       const { error } = await supabase
         .from("professionals")
-        .update({ verified: false, rejection_reason: notes || null } as never)
+        .update({ verified: false, rejection_reason: reason } as never)
         .eq("id", id);
       if (error) throw error;
     },

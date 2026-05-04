@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * poll-os-auctions
  * ─────────────────────────────────────────────────────────────────────────────
@@ -95,7 +94,37 @@ function mapOwnershipStatusToTag(rawOwnership?: string | null): string | null {
   return `ownership:${occ.toLowerCase()}`;
 }
 
-function buildTitle(a: any): string {
+// AuctionOutputDto from the OS API. The OS service does not publish a typed
+// schema, so we describe only the fields this function reads. All fields are
+// optional because OS may omit any of them depending on the auction state.
+type OsAuction = {
+  auctionListingId?: string | number;
+  propertyCategory?: string;
+  propertyMunicipalityName?: string;
+  propertyPrefectureName?: string;
+  propertyAddress?: string;
+  propertyPostalCode?: string;
+  propertyLatitude?: number | string;
+  propertyLongitude?: number | string;
+  propertySquareMeters?: number | string;
+  propertyFloor?: number | string;
+  propertyFullKaek?: string;
+  numberOfFloors?: number | string;
+  constructionYear?: number | string;
+  pricePerSquareMeter?: number | string;
+  firstPriceOffer?: number | string;
+  auctionDate?: string;
+  auctionStatus?: string;
+  currentRound?: number | string;
+  ownershipStatus?: string;
+  ownershipPercentage?: number | string;
+  url?: string;
+  auctionUrl?: string;
+  listingUrl?: string;
+  eAuctionUrl?: string;
+};
+
+function buildTitle(a: OsAuction): string {
   const catKey = mapCategory(a.propertyCategory);
   const catGr = CATEGORY_GR[catKey] ?? "Ακίνητο";
   const city = a.propertyMunicipalityName ?? "Ελλάδα";
@@ -143,14 +172,17 @@ async function getOsToken(
 }
 
 async function logSync(
-  sb: any,
+  sb: ReturnType<typeof createClient>,
   status: string,
   error_message?: string | null,
-  payload?: any,
-  records_affected = 0
-) {
+  payload?: unknown,
+  records_affected = 0,
+): Promise<void> {
   try {
-    await sb.from("sync_log").insert({
+    // `sync_log` is unregistered in the generated Supabase types; cast through
+    // the narrow `from` overload bridge that the rest of this codebase uses.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (sb.from as any)("sync_log").insert({
       direction: "os_to_hub",
       entity_type: "auction",
       entity_id: "poll-batch",
@@ -164,10 +196,43 @@ async function logSync(
   }
 }
 
+/** Hub `listings` row produced from one OS auction. The full DB row type isn't
+ *  in the generated Supabase types since columns vary across migrations. */
+type MappedListingRow = {
+  title: string;
+  description: string | null;
+  website_url: string | null;
+  cover_image_url: string | null;
+  price: number;
+  price_per_sqm: number | null;
+  auction_starting_bid: number;
+  auction_date: string | null;
+  auction_court: string | null;
+  property_type: string;
+  listing_type: string;
+  status: string;
+  city: string;
+  region: string | null;
+  address: string | null;
+  postal_code: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  sqm: number;
+  floor: number | null;
+  total_floors: number | null;
+  year_built: number | null;
+  cadastre_number: string | null;
+  owner_id: string | null;
+  ai_score: number;
+  tags: string[];
+};
+
+type MappedAuction = { tagKey: string; row: MappedListingRow };
+
 /**
  * Map an AuctionOutputDto from the OS API to a Hub listing row.
  */
-function mapAuctionToListing(a: any) {
+function mapAuctionToListing(a: OsAuction): MappedAuction {
   const osId = String(a.auctionListingId ?? "unknown");
   const tagKey = `os_auction:${osId}`;
   const catKey = mapCategory(a.propertyCategory);
@@ -303,8 +368,10 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json().catch(() => ({}));
 
-    // Build AuctionFilterRequest from caller params
-    const filterRequest: Record<string, any> = {};
+    // Build AuctionFilterRequest from caller params. Fields are passed through
+    // verbatim to the OS API, which doesn't publish a typed schema, so we
+    // accept arbitrary JSON-serialisable values.
+    const filterRequest: Record<string, unknown> = {};
 
     // Only fetch future auctions by default
     const today = new Date().toISOString().split("T")[0]; // yyyy-mm-dd
@@ -368,15 +435,19 @@ Deno.serve(async (req) => {
       );
     }
 
-    const auctJson: any = await auctRes.json();
+    type OsAuctionListResponse = {
+      data?: OsAuction[];
+      pagination?: { totalElements?: number };
+    };
+    const auctJson = (await auctRes.json()) as OsAuctionListResponse | OsAuction[];
 
     // The v1 API wraps data in AnalyticaResponse → data is the list
-    const auctions: any[] = Array.isArray(auctJson)
+    const auctions: OsAuction[] = Array.isArray(auctJson)
       ? auctJson
       : Array.isArray(auctJson.data)
       ? auctJson.data
       : [];
-    const pagination = auctJson.pagination ?? {};
+    const pagination = (Array.isArray(auctJson) ? undefined : auctJson.pagination) ?? {};
     const totalAvailable = pagination.totalElements ?? auctions.length;
 
     log.info("received auctions", { received: auctions.length, total_available: totalAvailable, page });
@@ -399,15 +470,17 @@ Deno.serve(async (req) => {
       .select("id, tags")
       .overlaps("tags", osIds);
 
+    type ListingIdTagsRow = { id: string; tags?: string[] | null };
     const existingMap: Record<string, string> = {};
-    for (const row of existingRows ?? []) {
+    for (const row of (existingRows ?? []) as ListingIdTagsRow[]) {
       for (const tag of row.tags ?? []) {
         if (tag.startsWith("os_auction:")) existingMap[tag] = row.id;
       }
     }
 
-    const toInsert: any[] = [];
-    const toUpdate: { id: string; data: any }[] = [];
+    type ListingUpdate = Partial<MappedListingRow> & { updated_at?: string };
+    const toInsert: MappedListingRow[] = [];
+    const toUpdate: { id: string; data: ListingUpdate }[] = [];
 
     for (const { tagKey, row } of mapped) {
       if (existingMap[tagKey]) {
@@ -498,10 +571,11 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ ok: true, ...summary }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (err: any) {
-    log.error("poll error", { err: err?.message ?? String(err) });
-    await logSync(sb, "error", err.message);
-    return new Response(JSON.stringify({ error: err.message }), {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    log.error("poll error", { err: message });
+    await logSync(sb, "error", message);
+    return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

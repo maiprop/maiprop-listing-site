@@ -12,6 +12,7 @@
  * Tests run without env-var overrides using the seeded credentials below.
  */
 import { test, expect, type Page, type Browser, type BrowserContext } from "@playwright/test";
+import { getBaseURL } from "./helpers/baseURL";
 
 // ─── Credentials ─────────────────────────────────────────────────────────────
 
@@ -50,7 +51,7 @@ async function signInContext(
   email: string,
   password = PASSWORD,
 ): Promise<{ ctx: BrowserContext; page: Page }> {
-  const ctx = await browser.newContext();
+  const ctx = await browser.newContext({ baseURL: getBaseURL() });
   const page = await ctx.newPage();
   await signIn(page, email, password);
   return { ctx, page };
