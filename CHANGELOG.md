@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.3.0](https://github.com/maiprop/maiprop-listing-site/compare/v1.2.0...v1.3.0) (2026-05-04)
+
+
+### Features
+
+* **dashboard:** Agent Data Input — closings to next-invoice discount with lifetime submission ban ([#86](https://github.com/maiprop/maiprop-listing-site/issues/86)) ([e8ef2f0](https://github.com/maiprop/maiprop-listing-site/commit/e8ef2f0727a44d27eb04095ebaf38d2b6f35bef8))
+
+
+### Bug Fixes
+
+* **admin:** rejection with empty notes no longer falls into pending bucket ([#84](https://github.com/maiprop/maiprop-listing-site/issues/84)) ([a0f4f42](https://github.com/maiprop/maiprop-listing-site/commit/a0f4f426fdc464fe7f6c53ee9a41dcab86d86af5))
+* **audit:** re-do deep-read findings — E2E + edge-fn type safety ([#83](https://github.com/maiprop/maiprop-listing-site/issues/83)) ([b298c1e](https://github.com/maiprop/maiprop-listing-site/commit/b298c1ee86e26430e3ceed8d75d6f380fa9136e9))
+* remove non-existent email column from registrations profiles embed ([#85](https://github.com/maiprop/maiprop-listing-site/issues/85)) ([e157b1b](https://github.com/maiprop/maiprop-listing-site/commit/e157b1be4608000b41cab93f449856a8913effd8))
+
 ## [1.2.0](https://github.com/maiprop/maiprop-listing-site/compare/v1.1.2...v1.2.0) (2026-05-04)
 
 
