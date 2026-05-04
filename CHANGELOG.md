@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.2.0](https://github.com/maiprop/maiprop-listing-site/compare/v1.1.2...v1.2.0) (2026-05-04)
+
+
+### Features
+
+* **agent:** Data Input loyalty programme — DB, backend, Stripe, UI ([#87](https://github.com/maiprop/maiprop-listing-site/issues/87)) ([c00c6c9](https://github.com/maiprop/maiprop-listing-site/commit/c00c6c96fc9e670b545452f04e6df98acd0514ee))
+* **pricing:** invitation-only Investor & Institutional; Agent/Professional Pro-only with add-ons ([#79](https://github.com/maiprop/maiprop-listing-site/issues/79)) ([5672b33](https://github.com/maiprop/maiprop-listing-site/commit/5672b33208f8ec574c1e2d713f52d3ef37353bf1))
+
+
+### Bug Fixes
+
+* **a11y:** add brand-cyan-deep token for white text on cyan (WCAG AA) ([#76](https://github.com/maiprop/maiprop-listing-site/issues/76)) ([0aeaec2](https://github.com/maiprop/maiprop-listing-site/commit/0aeaec28247db6db0f9c00e52530daea3f9ef25a))
+* **audit:** batch P2/P3 audit cleanup (defence-in-depth, code quality) ([#66](https://github.com/maiprop/maiprop-listing-site/issues/66)) ([a188e35](https://github.com/maiprop/maiprop-listing-site/commit/a188e35ffca1a5bb296cb78f6af718dbc5fc7dfe))
+* **ci:** drop unmeasurable Lighthouse assertions for LH12/stub build ([9b334de](https://github.com/maiprop/maiprop-listing-site/commit/9b334de19ac16622b02ee277e8c9040b25bb6fec))
+* **e2e:** close deferred finding [#6](https://github.com/maiprop/maiprop-listing-site/issues/6) — replace networkidle with React-mount waits on Mapbox routes ([#78](https://github.com/maiprop/maiprop-listing-site/issues/78)) ([baf743b](https://github.com/maiprop/maiprop-listing-site/commit/baf743b17db7f24ace19542c749d0ef68285891a))
+* **lint:** remove stale eslint-disable-next-line in auth-email-hook ([c99c7ef](https://github.com/maiprop/maiprop-listing-site/commit/c99c7ef6d3772bdf231cf3212efd1254fb0db164))
+* **listings:** align server priority bucket with client to stop mid-scroll reorder ([#88](https://github.com/maiprop/maiprop-listing-site/issues/88)) ([3ac2b26](https://github.com/maiprop/maiprop-listing-site/commit/3ac2b2666222ca3145395d838c42ca73dc36e24b))
+* **listings:** make server ORDER BY match the client promoted-first sort ([#80](https://github.com/maiprop/maiprop-listing-site/issues/80)) ([10f32fe](https://github.com/maiprop/maiprop-listing-site/commit/10f32febf8902375eae41bdd64d66ddba12df093))
+* Medium audit findings — CORS, RLS, route gating, a11y, Deno tests ([#73](https://github.com/maiprop/maiprop-listing-site/issues/73)) ([dccb7c6](https://github.com/maiprop/maiprop-listing-site/commit/dccb7c6b4cdace03ac2e845dfe8100f4bcd208eb))
+
 ## [1.1.2](https://github.com/maiprop/maiprop-listing-site/compare/v1.1.1...v1.1.2) (2026-05-03)
 
 

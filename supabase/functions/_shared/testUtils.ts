@@ -122,15 +122,27 @@ export async function captureHandler(
     MAIPROP_OS_WEBHOOK_SECRET: "test-os-webhook-secret",
     ...envOverrides,
   };
+  // Track keys explicitly deleted by tests so they short-circuit before
+  // falling through to a previous captureHandler's origEnvGet closure.
+  // Without this, multiple test files in the same Deno process chain their
+  // Deno.env.get patches; deleting from *this* defaultEnv still lets the
+  // fallback find the key in a previous file's defaultEnv.
+  const deletedKeys = new Set<string>();
+
   // Patch get/set/delete so that tests exercising "env vars missing" paths
   // can use Deno.env.delete() / Deno.env.set() and have those mutations
   // reflected when the handler calls Deno.env.get().
-  envForTest.get = (k: string) => defaultEnv[k] ?? origEnvGet(k);
+  envForTest.get = (k: string) => {
+    if (deletedKeys.has(k)) return undefined;
+    return defaultEnv[k] ?? origEnvGet(k);
+  };
   (envForTest as typeof Deno.env & { set: typeof Deno.env.set }).set = (k: string, v: string) => {
+    deletedKeys.delete(k);
     defaultEnv[k] = v;
     origEnvSet(k, v);
   };
   (envForTest as typeof Deno.env & { delete: typeof Deno.env.delete }).delete = (k: string) => {
+    deletedKeys.add(k);
     delete defaultEnv[k];
     origEnvDelete(k);
   };
