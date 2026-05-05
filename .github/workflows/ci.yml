@@ -622,7 +622,14 @@ jobs:
   deploy-staging:
     name: Deploy to Cloudflare Pages (preview)
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
+    # Skip for Dependabot PRs — secrets are unavailable to bot-generated PRs
+    # by default and Wrangler will fail with "CLOUDFLARE_API_TOKEN not set".
+    # Dependabot bumps are validated by quality + e2e checks; a preview deploy
+    # adds no value there. Human PRs still get full preview deploys.
+    if: >
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.draft == false &&
+      github.actor != 'dependabot[bot]'
     needs: quality
 
     steps:
