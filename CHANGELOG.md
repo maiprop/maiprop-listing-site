@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/maiprop/maiprop-listing-site/compare/v1.3.1...v1.4.0) (2026-05-05)
+
+
+### Features
+
+* **auctions:** 200/day rotating poll cap, flag + enrichment edge functions ([8aef14e](https://github.com/maiprop/maiprop-listing-site/commit/8aef14e51639d9baeb0b3ba5c826f85934a32842))
+
 ## [1.3.1](https://github.com/maiprop/maiprop-listing-site/compare/v1.3.0...v1.3.1) (2026-05-05)
 
 
