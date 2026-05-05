@@ -9,6 +9,10 @@
 
 DROP POLICY IF EXISTS "Investors manage own firesale interest" ON public.firesale_interest;
 DROP POLICY IF EXISTS "firesale_interest_investor" ON public.firesale_interest;
+DROP POLICY IF EXISTS "Investors read own firesale interest" ON public.firesale_interest;
+DROP POLICY IF EXISTS "Investors update own firesale interest" ON public.firesale_interest;
+DROP POLICY IF EXISTS "Investors delete own firesale interest" ON public.firesale_interest;
+DROP POLICY IF EXISTS "Investors with active subscription insert firesale interest" ON public.firesale_interest;
 
 -- SELECT + UPDATE + DELETE: investors see and manage their own rows.
 CREATE POLICY "Investors read own firesale interest"

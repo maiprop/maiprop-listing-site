@@ -16,6 +16,16 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 const log = createLogger("poll-os-auctions");
 const limiter = makeRateLimiter({ bucket: "poll-os-auctions", maxRequests: 3, windowMs: 60_000 });
 
+/** Maximum number of OS auctions to sync per UTC calendar day. */
+const DAILY_AUCTION_LIMIT = 200;
+
+/**
+ * Number of distinct pages we cycle through before repeating.
+ * With DAILY_AUCTION_LIMIT = 200 this covers up to 10 × 200 = 2 000 auctions
+ * in rotation over 10 days, giving broad variety without hammering OS.
+ */
+const ROTATION_PAGE_COUNT = 10;
+
 
 // OS propertyCategory → Hub property_type (and optional land_type / commercial_type for filters)
 const CATEGORY_MAP: Record<string, string> = {
@@ -349,6 +359,40 @@ Deno.serve(async (req) => {
   const authErr = await requireAgent(req, sb, corsHeaders);
   if (authErr) return authErr;
 
+  // ── Daily quota guard ────────────────────────────────────────────────────
+  // Count auctions already synced in this UTC calendar day. We use sync_log
+  // records_affected which holds imported + updated from each run.
+  const utcDayStart = new Date();
+  utcDayStart.setUTCHours(0, 0, 0, 0);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: todayLogs } = await (sb.from as any)("sync_log")
+    .select("records_affected")
+    .eq("direction", "os_to_hub")
+    .eq("entity_type", "auction")
+    .eq("status", "success")
+    .gte("created_at", utcDayStart.toISOString()) as {
+      data: { records_affected: number }[] | null;
+    };
+
+  const todaySynced = (todayLogs ?? []).reduce(
+    (sum, r) => sum + (r.records_affected ?? 0),
+    0,
+  );
+
+  if (todaySynced >= DAILY_AUCTION_LIMIT) {
+    log.info("Daily auction limit reached — skipping", { todaySynced, limit: DAILY_AUCTION_LIMIT });
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        status: "skipped",
+        reason: `Daily limit of ${DAILY_AUCTION_LIMIT} auctions already reached`,
+        today_synced: todaySynced,
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+
   const OS_URL = Deno.env.get("MAIPROP_OS_URL")?.replace(/\/$/, "");
   const OS_EMAIL = Deno.env.get("MAIPROP_OS_EMAIL");
   const OS_PASS = Deno.env.get("MAIPROP_OS_PASSWORD");
@@ -393,9 +437,19 @@ Deno.serve(async (req) => {
       filterRequest.order = body.order ?? "ASC";
     }
 
-    // Pagination (accept pageSize from UI or size from API)
-    const page = Number(body.page ?? 0);
-    const size = Math.min(Number(body.size ?? body.pageSize ?? 100), 500);
+    // ── Pagination with daily rotation ──────────────────────────────────────
+    // When no explicit page is supplied, rotate through ROTATION_PAGE_COUNT
+    // pages using today's UTC day number as a deterministic seed. This means
+    // a different slice of OS auctions surfaces each calendar day, giving the
+    // auction page variety without fetching the same first page every run.
+    const dayNumber = Math.floor(Date.now() / (24 * 60 * 60 * 1000));
+    const defaultPage = dayNumber % ROTATION_PAGE_COUNT;
+    const page = Number(body.page ?? defaultPage);
+
+    // Hard cap: never exceed what's left of today's daily quota, and never
+    // exceed DAILY_AUCTION_LIMIT in a single call regardless of the caller.
+    const remaining = DAILY_AUCTION_LIMIT - todaySynced;
+    const size = Math.min(Number(body.size ?? body.pageSize ?? DAILY_AUCTION_LIMIT), remaining);
 
     log.info("authenticating against OS", { os_url: OS_URL });
     const token = await getOsToken(OS_URL, OS_EMAIL, OS_PASS);
@@ -450,12 +504,19 @@ Deno.serve(async (req) => {
     const pagination = (Array.isArray(auctJson) ? undefined : auctJson.pagination) ?? {};
     const totalAvailable = pagination.totalElements ?? auctions.length;
 
-    log.info("received auctions", { received: auctions.length, total_available: totalAvailable, page });
+    log.info("received auctions", {
+      received: auctions.length,
+      total_available: totalAvailable,
+      page,
+      daily_limit: DAILY_AUCTION_LIMIT,
+      today_synced_before: todaySynced,
+      remaining,
+    });
 
     if (auctions.length === 0) {
       await logSync(sb, "success", null, { endpoint, total: 0, page }, 0);
       return new Response(
-        JSON.stringify({ ok: true, total: 0, imported: 0, updated: 0, page }),
+        JSON.stringify({ ok: true, total: 0, imported: 0, updated: 0, page, daily_limit: DAILY_AUCTION_LIMIT, today_synced: todaySynced }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -556,6 +617,9 @@ Deno.serve(async (req) => {
       page,
       size,
       filter: filterRequest,
+      daily_limit: DAILY_AUCTION_LIMIT,
+      today_synced_before: todaySynced,
+      today_synced_after: todaySynced + imported + updated,
     };
 
     await logSync(
