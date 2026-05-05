@@ -38,7 +38,7 @@ export const EmailChangeEmail = ({ siteName: _siteName, email, newEmail, confirm
           <Section style={btnWrap}><Button style={button} href={confirmationUrl}>Confirm Email Change</Button></Section>
         </Section>
         <Text style={footer}>If you didn't request this change, please secure your account immediately.</Text>
-        <Text style={footerBrand}>© 2025 mAI Prop · <Link href="https://investmentsmai.lovable.app" style={footerLink}>investmentsmai.lovable.app</Link></Text>
+        <Text style={footerBrand}>© 2025 mAI Prop · <Link href="https://maiprop.co" style={footerLink}>maiprop.co</Link></Text>
       </Container>
     </Body>
   </Html>

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useMemo, lazy, Suspense } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
@@ -74,7 +73,7 @@ export default function OpenHouses() {
       }
       const { data, error } = await q.limit(200);
       if (error) throw error;
-      return (data || []).sort((a: any, b: any) => {
+      return (data || []).sort((a, b) => {
         const aHasImg = !!(a.cover_image_url || a.listing_images?.length);
         const bHasImg = !!(b.cover_image_url || b.listing_images?.length);
         return (bHasImg ? 1 : 0) - (aHasImg ? 1 : 0);
@@ -84,7 +83,7 @@ export default function OpenHouses() {
 
   // Client-side filtering
   const filtered = useMemo(() => {
-    return listings.filter((l: any) => {
+    return listings.filter((l) => {
       if (cityFilter && !l.city?.toLowerCase().includes(cityFilter.toLowerCase())) return false;
       if (propertyType && l.property_type !== propertyType) return false;
       if (minPrice && Number(l.price) < Number(minPrice)) return false;
@@ -123,11 +122,11 @@ export default function OpenHouses() {
     );
   }
 
-  const cards = filtered.map((l: any) => {
+  const cards = filtered.map((l) => {
     const imgs: string[] = l.cover_image_url ? [l.cover_image_url] : [];
     if (!imgs.length && l.listing_images?.length) {
-      const sorted = [...l.listing_images].sort((a: any, b: any) => a.sort_order - b.sort_order);
-      sorted.forEach((img: any) => imgs.push(img.url));
+      const sorted = [...l.listing_images].sort((a, b) => a.sort_order - b.sort_order);
+      sorted.forEach((img) => imgs.push(img.url));
     }
     const svFallback =
       l.latitude != null && l.longitude != null

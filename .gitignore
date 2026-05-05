@@ -46,6 +46,12 @@ playwright-report/
 test-results/
 .lighthouseci/
 
+# Lighthouse run outputs and CI debug screenshots (regenerable)
+lh-*.json
+*-ci-debug*.png
+*-ci-debug*.json
+coverage_output.txt
+
 # Generated at build time by `npm run api-docs:copy` (prebuild hook)
 # Source of truth is docs/api/edge-functions.openapi.yaml
 public/docs/

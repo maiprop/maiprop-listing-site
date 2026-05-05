@@ -36,7 +36,7 @@ export const MagicLinkEmail = ({ siteName: _siteName, confirmationUrl }: MagicLi
           <Section style={btnWrap}><Button style={button} href={confirmationUrl}>Log In</Button></Section>
         </Section>
         <Text style={footer}>If you didn't request this link, you can safely ignore this email.</Text>
-        <Text style={footerBrand}>© 2025 mAI Prop · <Link href="https://investmentsmai.lovable.app" style={footerLink}>investmentsmai.lovable.app</Link></Text>
+        <Text style={footerBrand}>© 2025 mAI Prop · <Link href="https://maiprop.co" style={footerLink}>maiprop.co</Link></Text>
       </Container>
     </Body>
   </Html>

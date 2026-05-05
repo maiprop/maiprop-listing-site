@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useRef } from "react";
 import { Helmet } from "react-helmet-async";
 import { useSearchParams } from "react-router-dom";
@@ -221,7 +220,7 @@ export default function Professionals() {
 
   const { data: professionals = [], isLoading } = useProfessionals(dbCategory);
 
-  const filtered = (Array.isArray(professionals) ? professionals : []).filter((p: any) => {
+  const filtered = (Array.isArray(professionals) ? professionals : []).filter((p) => {
     // Category from URL (e.g. from homepage search) — exact match
     if (categoryFromUrl) {
       if (p.category !== categoryFromUrl) return false;
@@ -435,7 +434,7 @@ export default function Professionals() {
           <>
               <p className="text-sm text-muted-foreground mb-4" aria-live="polite" aria-atomic="true">{filtered.length} professional{filtered.length !== 1 ? "s" : ""} found{activeGroup ? ` in ${activeGroup.label}` : ""}</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                {filtered.map((pro: any) => {
+                {filtered.map((pro) => {
                 const name = pro.display_name || "Professional";
                 const catData = categoryInfo[pro.category] || { emoji: "👤", label: pro.category, group: "" };
                 const group = categoryGroups.find((g) => g.id === catData.group);

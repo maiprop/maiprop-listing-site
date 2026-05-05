@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from "react";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Link, useNavigate } from "react-router-dom";
@@ -14,6 +13,10 @@ import {
   useCreateProject,
   useDeleteProject,
 } from "@/hooks/useProjects";
+import type { Tables } from "@/integrations/supabase/types";
+
+type Project = Tables<"projects">;
+type ProjectListing = { id: string; title: string; city: string | null; project_id: string | null };
 
 export default function ProjectsTab() {
   const { user } = useAuth();
@@ -43,7 +46,7 @@ export default function ProjectsTab() {
         building_permit_number: newPermit.trim() || undefined,
       },
       {
-        onSuccess: (data: any) => {
+        onSuccess: (data: Project | null) => {
           setNewName("");
           setNewDesc("");
           setNewCity("");
@@ -167,7 +170,7 @@ export default function ProjectsTab() {
         </div>
       ) : (
         <div className="space-y-4">
-          {myProjects.map((p: any) => (
+          {myProjects.map((p: Project) => (
             <div key={p.id} className="glass-card rounded-xl border border-border overflow-hidden">
               <div className="p-5 flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
@@ -232,7 +235,7 @@ export default function ProjectsTab() {
                     {p.listings.length} linked listing(s)
                   </p>
                   <div className="flex flex-wrap gap-2">
-                    {p.listings.map((l: any) => (
+                    {(p.listings as ProjectListing[]).map((l: ProjectListing) => (
                       <Link
                         key={l.id}
                         to={`/property/${l.id}`}

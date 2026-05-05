@@ -1,5 +1,4 @@
-﻿/* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState, useCallback, useEffect } from "react";
+﻿import { useState, useCallback, useEffect } from "react";
 import { useFormWizard } from "@/hooks/useFormWizard";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -375,7 +374,7 @@ export default function CreateNewBuildingListing() {
         }
       }
 
-      const listingPayload: any = {
+      const listingPayload: Record<string, unknown> = {
         title: finalTitle,
         description: listing.description || undefined,
         city: project.city.trim(),

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from "react";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Link } from "react-router-dom";
@@ -14,8 +13,13 @@ import {
   useCreatePortfolio,
   useUpdatePortfolio,
   useDeletePortfolio,
+  type Portfolio,
+  type PortfolioListing,
 } from "@/hooks/usePortfolios";
 import { useFavorites } from "@/hooks/useFavorites";
+
+type PortfolioItem = Portfolio & { listings?: PortfolioListing[] };
+type FavoriteWithListing = { listing_id: string; listings?: { id: string; title: string } | null };
 
 export default function PortfoliosTab() {
   const { data: portfolios = [], isLoading: portfoliosLoading } = usePortfolios();
@@ -121,10 +125,10 @@ export default function PortfoliosTab() {
         </div>
       ) : (
         <div className="space-y-4">
-          {portfolios.map((p: any) => {
+          {portfolios.map((p: PortfolioItem) => {
             const listingIds: string[] = p.listing_ids || [];
             const totalValue = (p.listings || []).reduce(
-              (s: number, l: any) => s + Number(l?.price || 0),
+              (s: number, l: PortfolioListing) => s + Number(l?.price || 0),
               0
             );
             const isEditing = editingId === p.id;
@@ -208,7 +212,7 @@ export default function PortfoliosTab() {
                 {(p.listings || []).length > 0 && (
                   <div className="border-t border-border px-5 py-3 bg-muted/20">
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                      {(p.listings || []).map((l: any) => (
+                      {(p.listings || []).map((l: PortfolioListing) => (
                         <div key={l.id} className="relative">
                           <PropertyCard property={dbListingToCard(l)} />
                           <Button
@@ -234,7 +238,7 @@ export default function PortfoliosTab() {
                         Add from Saved Properties:
                       </p>
                       {favorites.filter(
-                        (f: any) => f.listings && !listingIds.includes(f.listings.id)
+                        (f: FavoriteWithListing) => f.listings && !listingIds.includes(f.listings.id)
                       ).length === 0 ? (
                         <p className="text-xs text-muted-foreground">
                           No saved properties available to add.
@@ -243,9 +247,9 @@ export default function PortfoliosTab() {
                         <div className="flex flex-wrap gap-2">
                           {favorites
                             .filter(
-                              (f: any) => f.listings && !listingIds.includes(f.listings.id)
+                              (f: FavoriteWithListing) => f.listings && !listingIds.includes(f.listings.id)
                             )
-                            .map((f: any) => (
+                            .map((f: FavoriteWithListing) => (
                               <button
                                 key={f.listings.id}
                                 className="text-xs px-2.5 py-1.5 bg-secondary border border-border rounded-lg hover:border-primary/50 hover:bg-primary/10 transition-colors truncate max-w-[200px]"

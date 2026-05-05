@@ -1,5 +1,4 @@
-﻿/* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect, type ElementType } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -449,9 +448,9 @@ export default function NewBuildDetail() {
 
               {/* Features & Amenities */}
               {(() => {
-                const internalFeatures: { icon?: any; label: string }[] = [];
-                const externalFeatures: { icon?: any; label: string }[] = [];
-                const constructionFeatures: { icon?: any; label: string }[] = [];
+                const internalFeatures: { icon?: ElementType; label: string }[] = [];
+                const externalFeatures: { icon?: ElementType; label: string }[] = [];
+                const constructionFeatures: { icon?: ElementType; label: string }[] = [];
 
                 if (listing.has_elevator) internalFeatures.push({ icon: Building2, label: "Elevator" });
                 if (listing.has_ac) internalFeatures.push({ icon: Thermometer, label: "Air Conditioning" });

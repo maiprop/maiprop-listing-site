@@ -1,14 +1,17 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Loader2, Calendar, ExternalLink, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useViewings, useUpdateViewing } from "@/hooks/useViewings";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useNavigate } from "react-router-dom";
+import type { Tables } from "@/integrations/supabase/types";
+import type { Profile } from "@/contexts/AuthContext";
+
+type Viewing = Tables<"viewings"> & { listings?: { title: string; id: string } | null };
 
 const FREE_VIEWING_CAP = 3;
 
-function ViewingCard({ v, isOwner, profile, updateViewing }: { v: any; isOwner: boolean; profile: any; updateViewing: ReturnType<typeof useUpdateViewing> }) {
+function ViewingCard({ v, isOwner, profile, updateViewing }: { v: Viewing; isOwner: boolean; profile: Profile | null; updateViewing: ReturnType<typeof useUpdateViewing> }) {
   const isVideo = v.viewing_type === "video";
   const hasVideoLink = !!v.video_link;
   return (
@@ -73,7 +76,7 @@ export default function ViewingsTab() {
   const updateViewing = useUpdateViewing();
 
   const all = [...viewings, ...ownViewings];
-  const byDate = all.reduce((acc: Record<string, any[]>, v) => {
+  const byDate = all.reduce((acc: Record<string, Viewing[]>, v) => {
     const d = new Date(v.scheduled_at).toLocaleDateString("en-GB");
     if (!acc[d]) acc[d] = [];
     acc[d].push(v);
@@ -111,8 +114,8 @@ export default function ViewingsTab() {
           ) : (
             <div className="space-y-4">
               {sortedDates.map((dateStr) => {
-                const dateCards = byDate[dateStr].map((v: any) => {
-                  const isOwner = ownViewings.some((o: any) => o.id === v.id);
+                const dateCards = byDate[dateStr].map((v: Viewing) => {
+                  const isOwner = ownViewings.some((o: Viewing) => o.id === v.id);
                   freeCount++;
                   const locked = !isPro && freeCount > FREE_VIEWING_CAP;
                   if (locked) return null;

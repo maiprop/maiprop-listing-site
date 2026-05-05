@@ -573,6 +573,52 @@ jobs:
             -H "Authorization: Bearer $CF_API_TOKEN" \
             "$CF_API_BASE/accounts/$CF_ACCOUNT_ID/pages/projects/$CF_PROJECT/deployments/${{ steps.prev_deploy.outputs.id }}/rollback"
 
+  deploy-supabase-staging:
+    name: Deploy Supabase edge functions (staging)
+    runs-on: ubuntu-latest
+    # Manual trigger until a staging Supabase project is provisioned.
+    # Switch `if` to include `github.event_name == 'pull_request'` once
+    # STAGING_SUPABASE_PROJECT_ID and SUPABASE_ACCESS_TOKEN secrets are set.
+    if: github.event_name == 'workflow_dispatch'
+    needs: quality
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Validate required staging secrets
+        run: |
+          required=(
+            "STAGING_SUPABASE_PROJECT_ID"
+            "SUPABASE_ACCESS_TOKEN"
+          )
+          missing=0
+          for key in "${required[@]}"; do
+            if [ -z "${!key}" ]; then
+              echo "::error::Missing required secret: $key"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+        env:
+          STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          SUPABASE_ACCESS_TOKEN:       ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Deploy edge functions to staging
+        run: |
+          supabase functions deploy \
+            --project-ref "$STAGING_SUPABASE_PROJECT_ID" \
+            --no-verify-jwt
+        env:
+          SUPABASE_ACCESS_TOKEN:         ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_ID:   ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+
   deploy-staging:
     name: Deploy to Cloudflare Pages (preview)
     runs-on: ubuntu-latest

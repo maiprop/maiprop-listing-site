@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useMemo, useEffect, lazy, Suspense } from "react";
 import { TrendingUp, AlertCircle, Loader2, Map, List, SlidersHorizontal, X, ChevronDown, Gavel, ExternalLink, Lock, MapPin } from "lucide-react";
 import { Helmet } from "react-helmet-async";
@@ -68,7 +67,7 @@ export default function Auctions() {
   }, [auctions]);
 
   const roundOptions = useMemo(() => {
-    const rounds = auctions.map((a: any) => getAuctionRound(a.tags)).filter((n): n is number => n != null);
+    const rounds = auctions.map((a) => getAuctionRound(a.tags)).filter((n): n is number => n != null);
     const opts: {value: string;label: string;}[] = [{ value: "", label: "All Rounds" }];
     if (rounds.some((n) => n === 1)) opts.push({ value: "1", label: "1st Auction" });
     if (rounds.some((n) => n === 2)) opts.push({ value: "2", label: "2nd Auction" });
@@ -218,8 +217,8 @@ export default function Auctions() {
     images: (() => {
       const imgs: string[] = a.cover_image_url ? [a.cover_image_url] : [];
       if (!imgs.length && a.listing_images?.length) {
-        const sorted = [...a.listing_images].sort((x: any, y: any) => x.sort_order - y.sort_order);
-        sorted.forEach((img: any) => imgs.push(img.url));
+        const sorted = [...a.listing_images].sort((x, y) => x.sort_order - y.sort_order);
+        sorted.forEach((img) => imgs.push(img.url));
       }
       if (!imgs.length) {
         const sv = streetViewImg(a.latitude, a.longitude);

@@ -1,10 +1,9 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from "react";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Loader2, Bell, BellOff, MapPin, Euro, Edit2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { useAuctionAlerts, useDeleteAuctionAlert, useUpdateAuctionAlert } from "@/hooks/useAuctionAlerts";
+import { useAuctionAlerts, useDeleteAuctionAlert, useUpdateAuctionAlert, type AuctionAlert } from "@/hooks/useAuctionAlerts";
 import { usePrivateOwnerAdAlert } from "@/hooks/usePrivateOwnerAdAlert";
 import { useSubscription } from "@/hooks/useSubscription";
 import { AuctionAlertModal } from "@/components/AuctionAlertModal";
@@ -24,7 +23,7 @@ export default function AuctionsTab() {
   const privateOwnerAlert = usePrivateOwnerAdAlert();
 
   const [alertModalOpen, setAlertModalOpen] = useState(false);
-  const [editingAlert, setEditingAlert] = useState<any>(null);
+  const [editingAlert, setEditingAlert] = useState<AuctionAlert | null>(null);
 
   return (
     <div className="space-y-6">
@@ -69,7 +68,7 @@ export default function AuctionsTab() {
         </div>
       ) : (
         <div className="space-y-3">
-          {auctionAlerts.map((a: any) => (
+          {auctionAlerts.map((a: AuctionAlert) => (
             <div key={a.id} className="glass-card rounded-xl p-4 flex items-center gap-4">
               <div
                 className={`w-2 h-10 rounded-full shrink-0 ${

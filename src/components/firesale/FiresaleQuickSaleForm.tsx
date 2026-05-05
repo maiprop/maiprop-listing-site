@@ -287,10 +287,9 @@ export function FiresaleQuickSaleForm() {
 
   const handleContinue = async () => {
     if (!canSubmitQuickSale) {
-      toast.error("To submit a Quick Sale™ request, please sign up as a Seller first.");
       if (!user) { navigate("/signup?type=seller"); }
       else {
-        try { sessionStorage.setItem("signup_participant_type", "seller"); localStorage.setItem("signup_participant_type", "seller"); } catch (_err: unknown) { /* ignore */ }
+        try { localStorage.setItem("signup_participant_type", "seller"); } catch (_err: unknown) { /* ignore */ }
         navigate("/onboarding");
       }
       return;
@@ -303,10 +302,9 @@ export function FiresaleQuickSaleForm() {
   };
 
   const handleSubmit = async () => {
-    if (!user) { toast.error("You must be logged in to submit a Quick Sale™ request."); navigate("/login"); return; }
+    if (!user) { navigate("/login"); return; }
     if (!canSubmitQuickSale) {
-      toast.error("Please complete Seller signup to submit a Quick Sale™ request.");
-      try { sessionStorage.setItem("signup_participant_type", "seller"); localStorage.setItem("signup_participant_type", "seller"); } catch (_err: unknown) { /* ignore */ }
+      try { localStorage.setItem("signup_participant_type", "seller"); } catch (_err: unknown) { /* ignore */ }
       navigate("/onboarding");
       return;
     }
@@ -489,7 +487,7 @@ export function FiresaleQuickSaleForm() {
                       className="bg-gradient-primary border-0 text-primary-foreground"
                       onClick={() => {
                         if (!user) { navigate("/signup?type=seller"); return; }
-                        try { sessionStorage.setItem("signup_participant_type", "seller"); localStorage.setItem("signup_participant_type", "seller"); } catch (_err: unknown) { /* ignore */ }
+                        try { localStorage.setItem("signup_participant_type", "seller"); } catch (_err: unknown) { /* ignore */ }
                         navigate("/onboarding");
                       }}
                     >

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from "react";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -162,8 +161,8 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
       qc.invalidateQueries({ queryKey: ["pricing-configs-public"] });
       toast.success("Pricing configuration saved.");
     },
-    onError: (e: any) => {
-      toast.error(e.message || "Failed to save pricing configuration.");
+    onError: (e: unknown) => {
+      toast.error((e instanceof Error ? e.message : null) ?? "Failed to save pricing configuration.");
     },
   });
 
@@ -176,7 +175,7 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
       qc.invalidateQueries({ queryKey: ["admin-pricing-configs"] });
       toast.success("Pricing row deleted.");
     },
-    onError: (e: any) => toast.error(e.message || "Failed to delete pricing row."),
+    onError: (e: unknown) => toast.error((e instanceof Error ? e.message : null) ?? "Failed to delete pricing row."),
   });
 
   const seedMutation = useMutation({
@@ -196,7 +195,7 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
       qc.invalidateQueries({ queryKey: ["pricing-configs-public"] });
       toast.success("Default pricing seeded. You can adjust amounts and save.");
     },
-    onError: (e: any) => toast.error(e.message || "Failed to seed default pricing."),
+    onError: (e: unknown) => toast.error((e instanceof Error ? e.message : null) ?? "Failed to seed default pricing."),
   });
 
   const grouped = configs.reduce<Record<string, PricingConfig[]>>((acc, row) => {
@@ -303,7 +302,7 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
     }
   };
 
-  const handleFieldChange = (id: string, field: keyof PricingConfig, value: any) => {
+  const handleFieldChange = (id: string, field: keyof PricingConfig, value: string | number | boolean | null) => {
     qc.setQueryData<PricingConfig[]>(["admin-pricing-configs"], (prev = []) =>
       prev.map((row) => (row.id === id ? { ...row, [field]: value } : row)),
     );

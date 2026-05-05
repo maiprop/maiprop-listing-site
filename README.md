@@ -103,11 +103,32 @@ supabase gen types typescript --linked > src/integrations/supabase/types.ts
 - Dashboard analytics queries (`useListingViewTrends`, `useLeadFunnel`) are only fired inside the lazy-loaded `AnalyticsTab` — not on Dashboard mount
 - Mapbox is dynamically imported inside `MapView` to keep it out of the initial JS bundle
 
-### Edge Functions
+## Backend Layers
+
+The project has **two distinct backend function layers**. Use the table below to choose the correct one for any new endpoint:
+
+| Layer | Directory | Runtime | Purpose | When to add here |
+|---|---|---|---|---|
+| **Cloudflare Pages Functions** | `functions/` | Node (edge) | Routing middleware, dynamic sitemap, static-route proxying | URL rewriting, response headers, sitemap generation — anything that must run at the CDN level before the SPA loads |
+| **Supabase Edge Functions** | `supabase/functions/` | Deno | Business logic, AI calls, Stripe payments, emails, data sync | Any function that reads/writes the database, calls external APIs, or requires auth context |
+
+**Rule of thumb:** If the function needs Supabase secrets (`SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `OPENAI_API_KEY`) it belongs in `supabase/functions/`. If it only needs to intercept/rewrite an HTTP request at the edge, it belongs in `functions/`.
+
+### Supabase Edge Functions
 
 **Protected** (JWT required): `property-chat`, `pro-ai-tools`, `listing-ai-assist`, `create-checkout`, `check-subscription`, `customer-portal`, `create-stripe-price`, `process-email-queue`
 
 **Public**: AI search, property valuation, neighbourhood reports, POIs, auction syncing, saved-search alerts
+
+### Cloudflare Pages Functions (`functions/`)
+
+| File | Purpose |
+|---|---|
+| `_middleware.ts` | Global request middleware (headers, redirects) |
+| `sitemap-dynamic.xml.ts` | Server-rendered sitemap combining static + live listings |
+| `property/[id].ts` | Property detail URL pass-through |
+| `auction/[id].ts` | Auction detail URL pass-through |
+| `new-build/[id].ts` | New-build detail URL pass-through |
 
 ## Further Reading
 

@@ -34,29 +34,26 @@ export default defineConfig({
       ],
       // Baseline thresholds — these are FLOORS, not targets.
       //
-      // Current measured coverage (2026-04-26 — after Phase 3/4/5 sweep
-      // added curated form, hook and component tests across 17 files):
-      //   lines      ~63.84%   threshold 60  (margin 3.84)
-      //   statements ~63.84%   threshold 60  (margin 3.84)
-      //   functions  ~41.23%   threshold 38  (margin 3.23)
-      //   branches   ~58.98%   threshold 55  (margin 3.98)
+      // Current measured coverage (2026-05-04 — after Finding 7 sweep
+      // removed all 15 legacy no-explicit-any suppressions in src/pages/):
+      //   lines      ~63.84%   threshold 65  (ratcheted up from 60)
+      //   statements ~63.84%   threshold 65  (ratcheted up from 60)
+      //   functions  ~41.23%   threshold 43  (ratcheted up from 38)
+      //   branches   ~58.98%   threshold 60  (ratcheted up from 55)
       //
-      // Previous baseline (2026-04-26 — after lib/hook/context/route-guard
-      // sweep): lines/statements 53.98, functions 30.44, branches 48.10.
+      // Previous baseline (2026-04-26 — after Phase 3/4/5 sweep):
+      //   lines/statements 63.84, functions 41.23, branches 58.98.
       //
-      // Original audit baseline (2026-04-26):
-      //   lines 11.88, statements 11.88, functions 23.95, branches 45.03.
-      //
-      // The roadmap to lines 60 → 75 lives in docs/testing.md. Whenever a
-      // PR adds meaningful coverage to a P0 page (Pricing, Dashboard,
+      // The roadmap to lines 75 lives in docs/testing.md. Whenever a PR
+      // adds meaningful coverage to a P0 page (Pricing, Dashboard,
       // Onboarding, Login, Signup, Messages), bump the threshold in the
       // SAME PR so we ratchet up monotonically and can never silently
       // regress. Do not lower these without explicit team agreement.
       thresholds: {
-        lines: 60,
-        functions: 38,
-        branches: 55,
-        statements: 60,
+        lines: 65,
+        functions: 43,
+        branches: 60,
+        statements: 65,
       },
     },
   },

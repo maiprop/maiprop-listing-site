@@ -34,7 +34,7 @@ export const ReauthenticationEmail = ({ token }: ReauthenticationEmailProps) => 
           <Text style={codeStyle}>{token}</Text>
         </Section>
         <Text style={footer}>This code expires shortly. If you didn't request this, ignore this email.</Text>
-        <Text style={footerBrand}>© 2025 mAI Prop · <Link href="https://investmentsmai.lovable.app" style={footerLink}>investmentsmai.lovable.app</Link></Text>
+        <Text style={footerBrand}>© 2025 mAI Prop · <Link href="https://maiprop.co" style={footerLink}>maiprop.co</Link></Text>
       </Container>
     </Body>
   </Html>

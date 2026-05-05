@@ -60,7 +60,7 @@ export const SignupEmail = ({
           If you didn't create an account, you can safely ignore this email.
         </Text>
         <Text style={footerBrand}>
-          © 2025 mAI Prop · <Link href="https://investmentsmai.lovable.app" style={footerLink}>investmentsmai.lovable.app</Link>
+          © 2025 mAI Prop · <Link href="https://maiprop.co" style={footerLink}>maiprop.co</Link>
         </Text>
       </Container>
     </Body>

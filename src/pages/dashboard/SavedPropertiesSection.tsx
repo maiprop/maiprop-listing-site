@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Heart, Search, Loader2 } from "lucide-react";
@@ -14,16 +13,22 @@ const SAVED_TABS = [
   { label: "Quick Sale", value: "firesale" },
 ] as const;
 
+type FavoriteItem = {
+  id?: string;
+  listing_id: string;
+  listings?: { id: string; title: string; listing_type: string; [key: string]: unknown } | null;
+};
+
 export function SavedPropertiesSection({
   favorites,
   favLoading,
 }: {
-  favorites: any[];
+  favorites: FavoriteItem[];
   favLoading: boolean;
 }) {
   const [tab, setTab] = useState<string>("");
   const filtered = favorites.filter(
-    (f: any) => f.listings && (!tab || f.listings.listing_type === tab),
+    (f) => f.listings && (!tab || f.listings.listing_type === tab),
   );
 
   return (
@@ -52,7 +57,7 @@ export function SavedPropertiesSection({
             {t.label}
             {t.value && (
               <span className="ml-1.5 text-xs opacity-60">
-                {favorites.filter((f: any) => f.listings?.listing_type === t.value).length}
+                {favorites.filter((f) => f.listings?.listing_type === t.value).length}
               </span>
             )}
           </button>
@@ -74,8 +79,8 @@ export function SavedPropertiesSection({
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-          {filtered.map((f: any) => (
-            <PropertyCard key={f.id} property={dbListingToCard(f.listings)} />
+          {filtered.map((f) => (
+            <PropertyCard key={f.id ?? f.listing_id} property={dbListingToCard(f.listings)} />
           ))}
         </div>
       )}

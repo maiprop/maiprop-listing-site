@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { lazy, Suspense, useMemo } from "react";
 import { Helmet } from "react-helmet-async";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -106,13 +105,13 @@ export default function Index() {
             .order("auction_date", { ascending: true, nullsFirst: false }).limit(6);
           if (fallback.error) throw fallback.error;
           const list = fallback.data || [];
-          return list.sort((a: any, b: any) => {
+          return list.sort((a, b) => {
             const aHasImg = !!(a.cover_image_url || a.listing_images?.length);
             const bHasImg = !!(b.cover_image_url || b.listing_images?.length);
             return (bHasImg ? 1 : 0) - (aHasImg ? 1 : 0);
           });
         }
-        return (data || []).sort((a: any, b: any) => {
+        return (data || []).sort((a, b) => {
           const aHasImg = !!(a.cover_image_url || a.listing_images?.length);
           const bHasImg = !!(b.cover_image_url || b.listing_images?.length);
           return (bHasImg ? 1 : 0) - (aHasImg ? 1 : 0);
@@ -136,7 +135,7 @@ export default function Index() {
         .eq("status", "active").eq("listing_type", "open_house")
         .gte("open_house_date", now).order("open_house_date", { ascending: true }).limit(6);
       if (error) return [];
-      return (data || []).sort((a: any, b: any) => {
+      return (data || []).sort((a, b) => {
         const aHasImg = !!(a.cover_image_url || a.listing_images?.length);
         const bHasImg = !!(b.cover_image_url || b.listing_images?.length);
         return (bHasImg ? 1 : 0) - (aHasImg ? 1 : 0);

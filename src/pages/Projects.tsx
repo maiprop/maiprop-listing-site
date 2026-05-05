@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -188,7 +187,7 @@ function Projects() {
           </div>
         ) : (
           <div className="space-y-6">
-            {projects.map((p: any) => {
+            {projects.map((p) => {
               const listings = Array.isArray(p.listings) ? p.listings : [];
               const isEditing = editingId === p.id;
 
@@ -270,7 +269,7 @@ function Projects() {
                     <div className="border-t border-border px-5 py-4">
                       <h4 className="text-xs font-medium text-muted-foreground mb-3">Listings in this project</h4>
                       <div className="flex flex-wrap gap-2">
-                        {listings.map((l: any) => (
+                        {listings.map((l) => (
                           <div
                             key={l.id}
                             className="flex items-center gap-2 bg-secondary border border-border rounded-xl px-3 py-2 text-sm"
@@ -301,8 +300,8 @@ function Projects() {
                     <h4 className="text-xs font-medium text-muted-foreground mb-2">Link your listings</h4>
                     <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
                       {myListings
-                        .filter((l: any) => l.project_id !== p.id)
-                        .map((l: any) => (
+                        .filter((l) => l.project_id !== p.id)
+                        .map((l) => (
                           <Button
                             key={l.id}
                             variant="outline"
@@ -312,7 +311,7 @@ function Projects() {
                             + {l.title?.slice(0, 30)}{l.title?.length > 30 ? "…" : ""}
                           </Button>
                         ))}
-                      {myListings.filter((l: any) => l.project_id !== p.id).length === 0 && (
+                      {myListings.filter((l) => l.project_id !== p.id).length === 0 && (
                         <p className="text-xs text-muted-foreground">
                           No unlinked listings. <Link to="/listings/new" className="underline text-primary">Create one</Link>
                         </p>

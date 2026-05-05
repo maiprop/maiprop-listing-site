@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Loader2, Bookmark, Bell, BellOff, Search, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -6,6 +5,7 @@ import {
   useSavedSearches,
   useDeleteSavedSearch,
   useToggleSavedSearchAlert,
+  type SavedSearch,
 } from "@/hooks/useSavedSearches";
 
 export default function SavedSearchesTab() {
@@ -45,7 +45,7 @@ export default function SavedSearchesTab() {
         </div>
       ) : (
         <div className="space-y-3">
-          {savedSearches.map((s: any) => {
+          {savedSearches.map((s: SavedSearch) => {
             const filterCount = Object.keys(s.filters || {}).filter(
               (k) => s.filters[k]
             ).length;

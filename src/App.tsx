@@ -103,7 +103,7 @@ const App = () => (
                       <Route path="/property/:id" element={<ErrorBoundary><PropertyDetail /></ErrorBoundary>} />
                       <Route path="/auction/:id" element={<ErrorBoundary><PropertyDetail /></ErrorBoundary>} />
                       <Route path="/auctions" element={<ErrorBoundary><Auctions /></ErrorBoundary>} />
-                      <Route path="/firesale" element={<InvestorRoute><ErrorBoundary><Firesale /></ErrorBoundary></InvestorRoute>} />
+                      <Route path="/firesale" element={<ErrorBoundary><Firesale /></ErrorBoundary>} />
                       <Route path="/investor-dashboard" element={<InvestorRoute><ErrorBoundary><InvestorDashboard /></ErrorBoundary></InvestorRoute>} />
                       <Route path="/professionals" element={<ErrorBoundary><Professionals /></ErrorBoundary>} />
                       <Route path="/professionals/me" element={<ProtectedRoute><ErrorBoundary><ProfessionalProfileMe /></ErrorBoundary></ProtectedRoute>} />

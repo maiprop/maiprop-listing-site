@@ -49,7 +49,6 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "@lovable.dev/cloud-auth-js": "^1.1.2",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-aspect-ratio": "^1.1.8",
@@ -131,7 +130,6 @@
     "husky": "^9.1.7",
     "i18next-scanner": "^4.6.0",
     "jsdom": "^29.1.0",
-    "lovable-tagger": "^1.2.0",
     "postcss": "^8.5.6",
     "rollup-plugin-visualizer": "^7.0.1",
     "sharp": "^0.34.5",

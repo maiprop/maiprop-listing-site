@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect } from "react";
 import { useModal } from "@/hooks/useModal";
 import { useParams, Link } from "react-router-dom";
@@ -83,8 +82,8 @@ export default function ProfessionalProfile() {
     { owner_id: pro?.user_id, status: "active" },
     { enabled: !!pro?.user_id && pro?.category === "real_estate_agent" }
   );
-  const saleListings = agentListings.filter((l: any) => l.listing_type !== "rent");
-  const rentListings = agentListings.filter((l: any) => l.listing_type === "rent");
+  const saleListings = agentListings.filter((l) => l.listing_type !== "rent");
+  const rentListings = agentListings.filter((l) => l.listing_type === "rent");
 
   // Realtime: invalidate agent listings when any listing changes for this agent
   useEffect(() => {
@@ -469,9 +468,9 @@ export default function ProfessionalProfile() {
                 <h3 className="font-display font-semibold mb-3 text-sm">Similar Professionals</h3>
                 <div className="space-y-3">
                   {(Array.isArray(allProfessionals) ? allProfessionals : [])
-                    .filter((p: any) => p.category === pro.category && p.id !== pro.id)
+                    .filter((p) => p.category === pro.category && p.id !== pro.id)
                     .slice(0, 3)
-                    .map((peer: any) => {
+                    .map((peer) => {
                       const peerName = peer.display_name || "Professional";
                       return (
                         <Link key={peer.id} to={`/professionals/${peer.id}`} className="flex items-center gap-3 group">
@@ -486,7 +485,7 @@ export default function ProfessionalProfile() {
                         </Link>
                       );
                     })}
-                  {(Array.isArray(allProfessionals) ? allProfessionals : []).filter((p: any) => p.category === pro.category && p.id !== pro.id).length === 0 && (
+                  {(Array.isArray(allProfessionals) ? allProfessionals : []).filter((p) => p.category === pro.category && p.id !== pro.id).length === 0 && (
                     <p className="text-xs text-muted-foreground">No others in this category yet.</p>
                   )}
                 </div>

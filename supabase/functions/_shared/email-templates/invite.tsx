@@ -37,7 +37,7 @@ export const InviteEmail = ({ siteName: _siteName, siteUrl, confirmationUrl }: I
           <Section style={btnWrap}><Button style={button} href={confirmationUrl}>Accept Invitation</Button></Section>
         </Section>
         <Text style={footer}>If you weren't expecting this invitation, you can safely ignore this email.</Text>
-        <Text style={footerBrand}>© 2025 mAI Prop · <Link href="https://investmentsmai.lovable.app" style={footerLink}>investmentsmai.lovable.app</Link></Text>
+        <Text style={footerBrand}>© 2025 mAI Prop · <Link href="https://maiprop.co" style={footerLink}>maiprop.co</Link></Text>
       </Container>
     </Body>
   </Html>
