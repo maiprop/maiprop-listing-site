@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.3.1](https://github.com/maiprop/maiprop-listing-site/compare/v1.3.0...v1.3.1) (2026-05-05)
+
+
+### Bug Fixes
+
+* **ci:** skip Cloudflare preview deploy for Dependabot PRs ([2a98d99](https://github.com/maiprop/maiprop-listing-site/commit/2a98d9979e646f5df61f903ddacce139925b2786))
+* **coverage:** correct thresholds to reflect actual measured coverage ([38836c1](https://github.com/maiprop/maiprop-listing-site/commit/38836c1b95e3edebc777af33b17e0b6e01dd8243))
+* **e2e:** update /firesale tests to reflect public route change ([0d0bbb2](https://github.com/maiprop/maiprop-listing-site/commit/0d0bbb252041a7ffa5bd90f2e318f6605440cf0b))
+* **hooks:** guard SyntaxError correctly in useSubmitDataInput error handler ([521c6c4](https://github.com/maiprop/maiprop-listing-site/commit/521c6c4557223ad4fdf3f281d50d8e743d5408ac))
+* **lint:** move stale eslint-disable-next-line to inline form in agent-data-input ([768d562](https://github.com/maiprop/maiprop-listing-site/commit/768d56243c1684a45784dba9d590dfd841ca3ea4))
+* **lint:** remove stale eslint-disable comments in agent-data-input ([022de4f](https://github.com/maiprop/maiprop-listing-site/commit/022de4f78e42e6afbd2941301315c033932243eb))
+* **types:** resolve 22 TypeScript errors exposed by any-suppression removal ([463a4c8](https://github.com/maiprop/maiprop-listing-site/commit/463a4c866adf2049e753d4cc7a66234fd6b24ebb))
+
 ## [1.3.0](https://github.com/maiprop/maiprop-listing-site/compare/v1.2.0...v1.3.0) (2026-05-04)
 
 
