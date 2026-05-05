@@ -7,7 +7,7 @@ import { useNavigate } from "react-router-dom";
 import type { Tables } from "@/integrations/supabase/types";
 import type { Profile } from "@/contexts/AuthContext";
 
-type Viewing = Tables<"viewings"> & { listings?: { title: string; id: string } | null };
+type Viewing = Tables<"viewings"> & { listings?: { title: string; city: string | null; cover_image_url: string | null; address: string | null } | null };
 
 const FREE_VIEWING_CAP = 3;
 
@@ -58,7 +58,7 @@ function ViewingCard({ v, isOwner, profile, updateViewing }: { v: Viewing; isOwn
           </div>
         )}
         {isVideo && hasVideoLink && (
-          <a href={v.video_link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-2 text-xs text-primary hover:underline">
+          <a href={v.video_link ?? undefined} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-2 text-xs text-primary hover:underline">
             <ExternalLink className="w-3 h-3" /> Join video call
           </a>
         )}

@@ -15,7 +15,7 @@ import {
 } from "@/hooks/useProjects";
 import type { Tables } from "@/integrations/supabase/types";
 
-type Project = Tables<"projects">;
+type Project = Tables<"projects"> & { listings?: ProjectListing[] };
 type ProjectListing = { id: string; title: string; city: string | null; project_id: string | null };
 
 export default function ProjectsTab() {

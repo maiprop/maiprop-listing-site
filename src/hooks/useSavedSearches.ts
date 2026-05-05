@@ -10,6 +10,7 @@ export type SavedSearch = {
   name: string;
   filters: Record<string, unknown>;
   email_alerts: boolean;
+  last_alert_sent_at?: string | null;
   created_at: string;
   updated_at: string;
 };

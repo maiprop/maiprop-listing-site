@@ -13,6 +13,10 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
 import { ProGate } from "@/components/gates/ProGate";
+import type { Tables } from "@/integrations/supabase/types";
+
+type ProjectListing = { id: string; title: string; cover_image_url?: string | null; price?: number | null };
+type ProjectWithListings = Tables<"projects"> & { listings?: ProjectListing[] };
 
 function Projects() {
   const navigate = useNavigate();
@@ -187,7 +191,7 @@ function Projects() {
           </div>
         ) : (
           <div className="space-y-6">
-            {projects.map((p) => {
+            {(projects as ProjectWithListings[]).map((p) => {
               const listings = Array.isArray(p.listings) ? p.listings : [];
               const isEditing = editingId === p.id;
 

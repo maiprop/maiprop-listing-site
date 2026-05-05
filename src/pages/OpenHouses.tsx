@@ -99,7 +99,7 @@ export default function OpenHouses() {
         if (y < minY || y > maxY) return false;
       }
       for (const feat of selectedFeatures) {
-        if (!l[feat]) return false;
+        if (!(l as Record<string, unknown>)[feat]) return false;
       }
       return true;
     });
@@ -176,8 +176,8 @@ export default function OpenHouses() {
       title: card.title,
       price: card.price,
       sqm: card.sqm,
-      bedrooms: card.bedrooms,
-      bathrooms: card.bathrooms,
+      bedrooms: card.bedrooms ?? undefined,
+      bathrooms: card.bathrooms ?? undefined,
       latitude: card.latitude,
       longitude: card.longitude,
       images: card.images,

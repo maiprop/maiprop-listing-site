@@ -49,7 +49,7 @@ export default function SavedSearchesTab() {
             const filterCount = Object.keys(s.filters || {}).filter(
               (k) => s.filters[k]
             ).length;
-            const params = new URLSearchParams(s.filters || {});
+            const params = new URLSearchParams(s.filters as Record<string, string> || {});
             return (
               <div key={s.id} className="glass-card rounded-xl p-4 flex items-center gap-4">
                 <div className="flex-1 min-w-0">

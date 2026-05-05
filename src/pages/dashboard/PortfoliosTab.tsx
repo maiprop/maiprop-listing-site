@@ -19,7 +19,7 @@ import {
 import { useFavorites } from "@/hooks/useFavorites";
 
 type PortfolioItem = Portfolio & { listings?: PortfolioListing[] };
-type FavoriteWithListing = { listing_id: string; listings?: { id: string; title: string } | null };
+type FavoriteWithListing = { listing_id: string; listings?: { id: string; title: string; city?: string | null } | null };
 
 export default function PortfoliosTab() {
   const { data: portfolios = [], isLoading: portfoliosLoading } = usePortfolios();
@@ -251,10 +251,10 @@ export default function PortfoliosTab() {
                             )
                             .map((f: FavoriteWithListing) => (
                               <button
-                                key={f.listings.id}
+                                key={f.listings!.id}
                                 className="text-xs px-2.5 py-1.5 bg-secondary border border-border rounded-lg hover:border-primary/50 hover:bg-primary/10 transition-colors truncate max-w-[200px]"
                                 onClick={() => {
-                                  const newIds = [...listingIds, f.listings.id];
+                                  const newIds = [...listingIds, f.listings!.id];
                                   updatePortfolio.mutate(
                                     { id: p.id, updates: { listing_ids: newIds } },
                                     {
@@ -263,7 +263,7 @@ export default function PortfoliosTab() {
                                   );
                                 }}
                               >
-                                + {f.listings.title || f.listings.city}
+                                + {f.listings!.title || f.listings!.city}
                               </button>
                             ))}
                         </div>

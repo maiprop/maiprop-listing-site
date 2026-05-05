@@ -374,13 +374,13 @@ export default function CreateNewBuildingListing() {
         }
       }
 
-      const listingPayload: Record<string, unknown> = {
+      const listingPayload = {
         title: finalTitle,
         description: listing.description || undefined,
         city: project.city.trim(),
         address: project.address || undefined,
-        property_type: "apartment",
-        listing_type: "sale",
+        property_type: "apartment" as const,
+        listing_type: "sale" as const,
         price,
         sqm: internalSqm,
         bedrooms: parseInt(String(unit.bedrooms)),
@@ -392,7 +392,7 @@ export default function CreateNewBuildingListing() {
         cover_image_url: coverImageUrl,
         price_per_sqm: internalSqm > 0 ? Math.round(price / internalSqm) : undefined,
         owner_id: user.id,
-        status: "active",
+        status: "active" as const,
         project_id: createdProject.id,
         is_pre_sale: true,
       };

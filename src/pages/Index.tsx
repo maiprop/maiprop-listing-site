@@ -106,8 +106,8 @@ export default function Index() {
           if (fallback.error) throw fallback.error;
           const list = fallback.data || [];
           return list.sort((a, b) => {
-            const aHasImg = !!(a.cover_image_url || a.listing_images?.length);
-            const bHasImg = !!(b.cover_image_url || b.listing_images?.length);
+            const aHasImg = !!a.cover_image_url;
+            const bHasImg = !!b.cover_image_url;
             return (bHasImg ? 1 : 0) - (aHasImg ? 1 : 0);
           });
         }
