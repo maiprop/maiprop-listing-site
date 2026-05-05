@@ -232,6 +232,18 @@ test.describe("Public — Legal pages", () => {
   });
 });
 
+// ─── Quick Sales / Firesale (public since v1.3) ───────────────────────────────
+
+test.describe("Public — Firesale page", () => {
+  test("/firesale loads without login for unauthenticated users", async ({ page }) => {
+    await page.goto("/firesale");
+    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+    // Must NOT redirect to login
+    expect(page.url()).not.toContain("/login");
+    await expect(page.locator("header, main, nav").first()).toBeVisible({ timeout: 10_000 });
+  });
+});
+
 // ─── AI Assistant page ────────────────────────────────────────────────────────
 
 test.describe("Public — AI Assistant page", () => {
@@ -277,10 +289,6 @@ test.describe("Route guards — unauthenticated redirects", () => {
 
   test("/messages redirects unauthenticated user to /login", async ({ page }) => {
     await assertRedirectsToLogin(page, "/messages");
-  });
-
-  test("/firesale redirects unauthenticated user to /login", async ({ page }) => {
-    await assertRedirectsToLogin(page, "/firesale");
   });
 
   test("/listings/new redirects unauthenticated user to /login", async ({ page }) => {

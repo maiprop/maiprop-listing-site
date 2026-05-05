@@ -49,12 +49,6 @@ test.describe("Unauthenticated redirects", () => {
     await expect(page).toHaveURL(/\/login/);
   });
 
-  test("/firesale redirects to /login", async ({ page }) => {
-    await page.goto("/firesale");
-    await page.waitForURL(/\/login/, { timeout: 10_000 });
-    await expect(page).toHaveURL(/\/login/);
-  });
-
   test("/listings/new redirects to /login", async ({ page }) => {
     await page.goto("/listings/new");
     await page.waitForURL(/\/login/, { timeout: 10_000 });
