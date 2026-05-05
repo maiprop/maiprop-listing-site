@@ -176,8 +176,7 @@ Deno.serve(async (req) => {
     if (action === "status" || action === "list") {
       const [statusRes, entriesRes] = await Promise.all([
         supabase.rpc("get_agent_data_input_status", { p_user_id: user.id }),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (supabase.from as any)("agent_data_inputs")
+        (supabase.from as any)("agent_data_inputs") // eslint-disable-line @typescript-eslint/no-explicit-any
           .select(
             "id, property_address, city, postal_code, property_type, transaction_type, agent_side, sale_price, closing_date, status, rejection_reason, discount_applied, discount_applied_at, discount_invoice_id, created_at, reviewed_at",
           )
@@ -216,8 +215,7 @@ Deno.serve(async (req) => {
       const result = validateSubmitPayload(body.payload);
       if (!result.ok) return json({ error: result.error }, 400);
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase.from as any)("agent_data_inputs")
+      const { data, error } = await (supabase.from as any)("agent_data_inputs") // eslint-disable-line @typescript-eslint/no-explicit-any
         .insert({ ...result.value, user_id: user.id })
         .select(
           "id, property_address, city, property_type, transaction_type, agent_side, sale_price, closing_date, status, created_at",
