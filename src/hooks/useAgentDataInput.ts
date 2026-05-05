@@ -96,7 +96,11 @@ export function useSubmitDataInput(): ReturnType<typeof useMutation<DataInputSta
             const parsed = JSON.parse(body) as { message?: string; error?: string };
             throw new Error(parsed.message ?? parsed.error ?? error.message ?? "Submit failed");
           } catch (parseErr) {
-            if (parseErr instanceof Error && parseErr.message !== body) throw parseErr;
+            // Only re-throw the deliberately constructed Error from above.
+            // SyntaxErrors come from JSON.parse on a non-JSON body (e.g. an HTML
+            // gateway error page) — swallow those and fall through to the
+            // generic message below.
+            if (!(parseErr instanceof SyntaxError)) throw parseErr;
           }
         }
         throw new Error(error.message ?? "Submit failed");
