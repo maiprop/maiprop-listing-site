@@ -3047,6 +3047,13 @@ export type Database = {
         | "land"
         | "commercial"
         | "office"
+        | "studio"
+        | "maisonette"
+        | "warehouse"
+        | "hotel"
+        | "mixed_use"
+        | "parking"
+        | "storage"
       user_role:
         | "buyer"
         | "agent"
@@ -3260,6 +3267,13 @@ export const Constants = {
         "land",
         "commercial",
         "office",
+        "studio",
+        "maisonette",
+        "warehouse",
+        "hotel",
+        "mixed_use",
+        "parking",
+        "storage",
       ],
       user_role: [
         "buyer",

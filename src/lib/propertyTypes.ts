@@ -5,10 +5,23 @@
 import {
   Building2, Home, Castle, Landmark, Store, Briefcase, type LucideIcon,
   TreePine, Warehouse, Utensils, Hotel, Stethoscope, LayoutDashboard,
-  MonitorPlay, Layers, Wrench, Users2,
+  MonitorPlay, Layers, Wrench, Users2, BedDouble, ParkingCircle, Package,
 } from "lucide-react";
 
-export type PropertyTypeKey = "apartment" | "house" | "villa" | "land" | "commercial" | "office";
+export type PropertyTypeKey =
+  | "apartment"
+  | "house"
+  | "villa"
+  | "land"
+  | "commercial"
+  | "office"
+  | "studio"
+  | "maisonette"
+  | "warehouse"
+  | "hotel"
+  | "mixed_use"
+  | "parking"
+  | "storage";
 
 export interface PropertySubtype {
   value: string;
@@ -39,8 +52,8 @@ export interface PropertyGroup {
 }
 
 export const PROPERTY_GROUPS: PropertyGroup[] = [
-  { id: "residence", label: "Residence", emoji: "🏠", types: ["apartment", "house", "villa"] },
-  { id: "commercial", label: "Commercial", emoji: "🏪", types: ["commercial"] },
+  { id: "residence", label: "Residence", emoji: "🏠", types: ["apartment", "house", "villa", "studio", "maisonette"] },
+  { id: "commercial", label: "Commercial", emoji: "🏪", types: ["commercial", "office", "warehouse", "hotel", "mixed_use", "parking", "storage"] },
   { id: "land", label: "Land", emoji: "🌾", types: ["land"] },
 ];
 
@@ -170,6 +183,98 @@ export const PROPERTY_TYPES: PropertyTypeConfig[] = [
       { value: "office_floor",       label: "Whole Floor",          description: "Full building floor — prestige address",                      icon: Layers },
       { value: "other_commercial",   label: "Other",                description: "Other commercial property type (Λοιπές κατηγορίες)" },
     ],
+  },
+  // ── New typologies added 2026-07-04 ──────────────────────────────────────────
+  {
+    value: "studio",
+    label: "Studio",
+    labelPlural: "Studios",
+    emoji: "🛏️",
+    icon: BedDouble,
+    description: "Open-plan studio apartments — ideal for singles or short-term rental",
+    keywords: ["studio", "bedsit", "open-plan"],
+    accentClass: "text-primary",
+    bgClass: "bg-primary/10",
+    group: "residence",
+    subtypes: [],
+  },
+  {
+    value: "maisonette",
+    label: "Maisonette",
+    labelPlural: "Maisonettes",
+    emoji: "🏘️",
+    icon: Home,
+    description: "Split-level apartments spanning two floors",
+    keywords: ["maisonette", "duplex", "split-level"],
+    accentClass: "text-brand-emerald",
+    bgClass: "bg-brand-emerald/10",
+    group: "residence",
+    subtypes: [],
+  },
+  {
+    value: "warehouse",
+    label: "Warehouse",
+    labelPlural: "Warehouses",
+    emoji: "🏭",
+    icon: Warehouse,
+    description: "Industrial, storage, and logistics warehouse space",
+    keywords: ["warehouse", "logistics", "industrial"],
+    accentClass: "text-accent",
+    bgClass: "bg-accent/10",
+    group: "commercial",
+    subtypes: [],
+  },
+  {
+    value: "hotel",
+    label: "Hotel / B&B",
+    labelPlural: "Hotels & B&Bs",
+    emoji: "🏨",
+    icon: Hotel,
+    description: "Operational hotels, boutique properties, and B&Bs",
+    keywords: ["hotel", "boutique", "B&B", "hospitality"],
+    accentClass: "text-brand-gold",
+    bgClass: "bg-brand-gold/10",
+    group: "commercial",
+    subtypes: [],
+  },
+  {
+    value: "mixed_use",
+    label: "Mixed-Use",
+    labelPlural: "Mixed-Use Buildings",
+    emoji: "🏗️",
+    icon: Layers,
+    description: "Buildings combining residential and commercial uses",
+    keywords: ["mixed-use", "retail", "residential", "investment"],
+    accentClass: "text-brand-indigo",
+    bgClass: "bg-brand-indigo/10",
+    group: "commercial",
+    subtypes: [],
+  },
+  {
+    value: "parking",
+    label: "Parking",
+    labelPlural: "Parking Spaces",
+    emoji: "🅿️",
+    icon: ParkingCircle,
+    description: "Covered or open parking spaces and garages",
+    keywords: ["parking", "garage", "car space"],
+    accentClass: "text-brand-sky",
+    bgClass: "bg-brand-sky/10",
+    group: "commercial",
+    subtypes: [],
+  },
+  {
+    value: "storage",
+    label: "Storage",
+    labelPlural: "Storage Units",
+    emoji: "📦",
+    icon: Package,
+    description: "Storage units and cellar spaces",
+    keywords: ["storage", "cellar", "unit"],
+    accentClass: "text-brand-sky",
+    bgClass: "bg-brand-sky/10",
+    group: "commercial",
+    subtypes: [],
   },
   // "office" kept for DB compatibility but hidden from UI groups — maps to commercial
   {
