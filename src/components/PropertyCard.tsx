@@ -7,7 +7,7 @@ import {
   Home, Calendar, Layers, MessageCircle,
   Share2, Flag, Crown, Clock,
 } from "lucide-react";
-import { getSubtypeLabel } from "@/lib/propertyTypes";
+import { getSubtypeLabel, type PropertyTypeKey } from "@/lib/propertyTypes";
 import { useToggleFavorite, useIsFavorited } from "@/hooks/useFavorites";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -26,7 +26,7 @@ export interface Property {
   bathrooms?: number;
   sqm: number;
   images: string[];
-  type: "apartment" | "house" | "land" | "commercial" | "villa" | "office";
+  type: PropertyTypeKey;
   listingType: "sale" | "rent" | "auction" | "firesale" | "open_house" | "new_build";
   subtype?: string;
   auctionDate?: string;
