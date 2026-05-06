@@ -247,24 +247,32 @@ const getOwnershipTag = (auction: OsAuction, ownershipPct: number | undefined): 
   return ownershipPct >= 100 ? "ownership:full" : "ownership:common";
 };
 
+const getAuctionStatusTag = (auction: OsAuction): string =>
+  `auction_status:${auction.auctionStatus ?? "scheduled"}`;
+
+const getCurrentRoundTags = (auction: OsAuction): string[] =>
+  auction.currentRound != null ? [`round:${auction.currentRound}`] : [];
+
+const getOptionalTag = (tag: string | null): string[] => tag ? [tag] : [];
+
+const getOwnershipPercentageTags = (ownershipPct: number | undefined): string[] =>
+  ownershipPct != null ? [`ownership_pct:${ownershipPct}`] : [];
+
 const getAuctionTags = (
   auction: OsAuction,
   tagKey: string,
   ownershipTag: string | null,
   ownershipPct: number | undefined,
   subtypeTag: string | null,
-): string[] => {
-  const tags = [
+): string[] => [
     tagKey,
     "source:maiprop-os",
-    `auction_status:${auction.auctionStatus ?? "scheduled"}`,
+    getAuctionStatusTag(auction),
+    ...getCurrentRoundTags(auction),
+    ...getOptionalTag(ownershipTag),
+    ...getOwnershipPercentageTags(ownershipPct),
+    ...getOptionalTag(subtypeTag),
   ];
-  if (auction.currentRound != null) tags.push(`round:${auction.currentRound}`);
-  if (ownershipTag) tags.push(ownershipTag);
-  if (ownershipPct != null) tags.push(`ownership_pct:${ownershipPct}`);
-  if (subtypeTag) tags.push(subtypeTag);
-  return tags;
-};
 
 const mapAuction = (auction: OsAuction): MappedAuction => {
   const osId = String(auction.auctionListingId ?? "unknown");
