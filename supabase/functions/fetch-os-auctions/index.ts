@@ -1,4 +1,4 @@
-/* global Deno */
+/* global Deno:readonly */
 /**
  * fetch-os-auctions
  * ─────────────────────────────────────────────────────────────────────────────
@@ -42,89 +42,91 @@ type ProfilePlanRow = {
 
 // ── Category mapping (mirrors poll-os-auctions) ─────────────────────────────
 
-const CATEGORY_MAP: Record<string, string> = {
-  RESIDENCE: "apartment",
-  APARTMENT: "apartment",
-  HOUSE: "house",
-  VILLA: "villa",
-  LAND: "land",
-  PLOT: "land",
-  PLOT_WITH_BUILDING: "land",
-  LAND_WITH_BUILDING: "land",
-  COMMERCIAL: "commercial",
-  OFFICE: "office",
-  STORE: "commercial",
-  WAREHOUSE: "commercial",
-  INDUSTRIAL: "commercial",
-  STOREROOM: "commercial",
-  PARKING: "commercial",
-  HOTEL: "commercial",
-  OTHER_BUSINESS_SPACE: "commercial",
-};
+const CATEGORY_MAP = new Map<string, string>([
+  ["RESIDENCE", "apartment"],
+  ["APARTMENT", "apartment"],
+  ["HOUSE", "house"],
+  ["VILLA", "villa"],
+  ["LAND", "land"],
+  ["PLOT", "land"],
+  ["PLOT_WITH_BUILDING", "land"],
+  ["LAND_WITH_BUILDING", "land"],
+  ["COMMERCIAL", "commercial"],
+  ["OFFICE", "office"],
+  ["STORE", "commercial"],
+  ["WAREHOUSE", "commercial"],
+  ["INDUSTRIAL", "commercial"],
+  ["STOREROOM", "commercial"],
+  ["PARKING", "commercial"],
+  ["HOTEL", "commercial"],
+  ["OTHER_BUSINESS_SPACE", "commercial"],
+]);
 
-const LAND_TYPE_TAG: Record<string, string> = {
-  LAND: "land",
-  PLOT: "plot",
-  PLOT_WITH_BUILDING: "plot_with_building",
-  LAND_WITH_BUILDING: "land_with_building",
-};
+const LAND_TYPE_TAG = new Map<string, string>([
+  ["LAND", "land"],
+  ["PLOT", "plot"],
+  ["PLOT_WITH_BUILDING", "plot_with_building"],
+  ["LAND_WITH_BUILDING", "land_with_building"],
+]);
 
-const COMMERCIAL_TYPE_TAG: Record<string, string> = {
-  STORE: "store",
-  WAREHOUSE: "warehouse",
-  INDUSTRIAL: "industrial",
-  STOREROOM: "storeroom",
-  PARKING: "parking",
-  HOTEL: "hotel",
-  OFFICE: "office",
-  OTHER_BUSINESS_SPACE: "other_business_space",
-  COMMERCIAL: "other_business_space",
-};
+const COMMERCIAL_TYPE_TAG = new Map<string, string>([
+  ["STORE", "store"],
+  ["WAREHOUSE", "warehouse"],
+  ["INDUSTRIAL", "industrial"],
+  ["STOREROOM", "storeroom"],
+  ["PARKING", "parking"],
+  ["HOTEL", "hotel"],
+  ["OFFICE", "office"],
+  ["OTHER_BUSINESS_SPACE", "other_business_space"],
+  ["COMMERCIAL", "other_business_space"],
+]);
 
-const CATEGORY_GR: Record<string, string> = {
-  apartment: "Διαμέρισμα",
-  house: "Κατοικία",
-  villa: "Βίλα",
-  land: "Γη / Οικόπεδο",
-  commercial: "Επαγγελματικός Χώρος",
-  office: "Γραφείο",
-};
+const CATEGORY_GR = new Map<string, string>([
+  ["apartment", "Διαμέρισμα"],
+  ["house", "Κατοικία"],
+  ["villa", "Βίλα"],
+  ["land", "Γη / Οικόπεδο"],
+  ["commercial", "Επαγγελματικός Χώρος"],
+  ["office", "Γραφείο"],
+]);
 
-const OWNERSHIP_STATUS_TAGS: Record<string, string> = {
-  FULL: "ownership:full",
-  COMPLETE: "ownership:full",
-  FULL_OWNERSHIP: "ownership:full",
-  BARE: "ownership:bare",
-  BARE_OWNERSHIP: "ownership:bare",
-  COMMON: "ownership:common",
-  JOINT: "ownership:common",
-  SHARED: "ownership:common",
-  CO_OWNERSHIP: "ownership:common",
-  USUFRUCT: "ownership:usufruct",
-  PSILI_KYPHIOTITA: "ownership:usufruct",
-  VERTICAL: "ownership:vertical",
-  VERTICAL_OWNERSHIP: "ownership:vertical",
-  HORIZONTAL: "ownership:horizontal",
-  HORIZONTAL_OWNERSHIP: "ownership:horizontal",
-};
+const OWNERSHIP_STATUS_TAGS = new Map<string, string>([
+  ["FULL", "ownership:full"],
+  ["COMPLETE", "ownership:full"],
+  ["FULL_OWNERSHIP", "ownership:full"],
+  ["BARE", "ownership:bare"],
+  ["BARE_OWNERSHIP", "ownership:bare"],
+  ["COMMON", "ownership:common"],
+  ["JOINT", "ownership:common"],
+  ["SHARED", "ownership:common"],
+  ["CO_OWNERSHIP", "ownership:common"],
+  ["USUFRUCT", "ownership:usufruct"],
+  ["PSILI_KYPHIOTITA", "ownership:usufruct"],
+  ["VERTICAL", "ownership:vertical"],
+  ["VERTICAL_OWNERSHIP", "ownership:vertical"],
+  ["HORIZONTAL", "ownership:horizontal"],
+  ["HORIZONTAL_OWNERSHIP", "ownership:horizontal"],
+]);
 
 function mapCategory(category?: string): string {
   if (!category) return "apartment";
-  return CATEGORY_MAP[category.toUpperCase()] ?? "apartment";
+  return CATEGORY_MAP.get(category.toUpperCase()) ?? "apartment";
 }
 
 function getSubtypeTag(category?: string): string | null {
   if (!category) return null;
   const categoryKey = category.toUpperCase();
-  if (LAND_TYPE_TAG[categoryKey]) return `land_type:${LAND_TYPE_TAG[categoryKey]}`;
-  if (COMMERCIAL_TYPE_TAG[categoryKey]) return `commercial_type:${COMMERCIAL_TYPE_TAG[categoryKey]}`;
+  const landTag = LAND_TYPE_TAG.get(categoryKey);
+  if (landTag) return `land_type:${landTag}`;
+  const commercialTag = COMMERCIAL_TYPE_TAG.get(categoryKey);
+  if (commercialTag) return `commercial_type:${commercialTag}`;
   return null;
 }
 
 function mapOwnershipStatusToTag(raw?: string | null): string | null {
   if (!raw) return null;
   const ownershipStatus = raw.toUpperCase().trim();
-  return OWNERSHIP_STATUS_TAGS[ownershipStatus] ?? `ownership:${ownershipStatus.toLowerCase()}`;
+  return OWNERSHIP_STATUS_TAGS.get(ownershipStatus) ?? `ownership:${ownershipStatus.toLowerCase()}`;
 }
 
 // ── OS DTO type (same subset as poll-os-auctions) ───────────────────────────
@@ -222,7 +224,7 @@ const AMOUNT_FILTER_KEYS = ["auctionAmountFrom", "auctionAmountTo"] as const;
 
 function buildTitle(a: OsAuction): string {
   const catKey = mapCategory(a.propertyCategory);
-  const catGr = CATEGORY_GR[catKey] ?? "Ακίνητο";
+  const catGr = CATEGORY_GR.get(catKey) ?? "Ακίνητο";
   const city = a.propertyMunicipalityName ?? "Ελλάδα";
   const price = Number(a.firstPriceOffer ?? 0);
   const priceStr = price > 0 ? ` – €${price.toLocaleString("el-GR")}` : "";
@@ -350,6 +352,7 @@ async function fetchWithTimeout(
     controller.abort();
   }, timeoutMs);
   try {
+    // nosemgrep: javascript.lang.security.audit.detect-non-literal-url
     return await fetch(url, { ...options, signal: controller.signal });
   } finally {
     clearTimeout(timer);
