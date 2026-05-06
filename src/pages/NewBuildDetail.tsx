@@ -70,6 +70,39 @@ const fetchPublicProfile = async (ownerId?: string | null): Promise<PublicProfil
   return data ?? null;
 };
 
+const fetchNewBuildRow = async (listingId: string) => {
+  // listings.owner_id has no FK registered in the PostgREST schema cache,
+  // so we fetch the profile separately via profiles_public (same pattern as useListings.ts).
+  const { data, error } = await supabase
+    .from("listings")
+    .select("*, listing_images(url, sort_order)")
+    .eq("id", listingId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data;
+};
+
+type NewBuildRow = NonNullable<Awaited<ReturnType<typeof fetchNewBuildRow>>>;
+
+type NewBuildListing = NewBuildRow & {
+  profiles: PublicProfile | null;
+  walkability_score?: number | null;
+  safety_score?: number | null;
+  noise_score?: number | null;
+};
+
+const attachPublicProfile = async (listing: NewBuildRow): Promise<NewBuildListing> => {
+  const profiles = await fetchPublicProfile(listing.owner_id);
+  return { ...listing, profiles };
+};
+
+const fetchNewBuildListing = async (listingId?: string): Promise<NewBuildListing | null> => {
+  if (!listingId) return null;
+  const listing = await fetchNewBuildRow(listingId);
+  return listing ? attachPublicProfile(listing) : null;
+};
+
 const getInterestContactName = (
   form: RegisterInterestForm,
   profile?: InterestProfile | null,
@@ -139,27 +172,7 @@ export default function NewBuildDetail() {
 
   const { data: listing, isLoading, error } = useQuery({
     queryKey: ["listing", id],
-    queryFn: async () => {
-      if (!id) return null;
-      // listings.owner_id has no FK registered in the PostgREST schema cache,
-      // so we fetch the profile separately via profiles_public (same pattern as useListings.ts).
-      const { data, error } = await supabase
-        .from("listings")
-        .select("*, listing_images(url, sort_order)")
-        .eq("id", id)
-        .maybeSingle();
-      if (error) throw error;
-      if (!data) return null;
-
-      const profiles = await fetchPublicProfile(data.owner_id);
-
-      return { ...data, profiles } as typeof data & {
-        profiles: PublicProfile | null;
-        walkability_score?: number | null;
-        safety_score?: number | null;
-        noise_score?: number | null;
-      };
-    },
+    queryFn: () => fetchNewBuildListing(id),
     enabled: !!id,
   });
 
