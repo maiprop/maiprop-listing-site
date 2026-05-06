@@ -5,10 +5,13 @@
  * Used by the Auctions page to show real-time data without waiting for the
  * poll-os-auctions background sync to run.
  *
- * Plan caps (enforced server-side):
+ * Portal caps (enforced server-side):
  *   - anonymous / free : 60 auctions
- *   - authenticated    : 600 auctions
- *   - platform admin   : unlimited
+ *   - Pro/admin        : 600 auctions
+ *
+ * This function is a read-through proxy only. It does not write auction rows
+ * into Supabase; the portal intentionally avoids mirroring the full OS
+ * auction catalogue.
  *
  * Required Supabase secrets (shared with poll-os-auctions):
  *   MAIPROP_OS_URL      e.g. https://app.os.maiprop.co
@@ -27,6 +30,12 @@ const limiter = makeRateLimiter({ bucket: "fetch-os-auctions", maxRequests: 20, 
 const FREE_CAP = 60;
 const AUTH_CAP = 600;
 type SupabaseAdminClient = ReturnType<typeof createClient<Record<string, unknown>>>;
+type ProfilePlanRow = {
+  role?: string | null;
+  participant_type?: string | null;
+  subscription_product_id?: string | null;
+  force_pro_access?: boolean | null;
+};
 
 // ── Category mapping (mirrors poll-os-auctions) ─────────────────────────────
 
@@ -341,7 +350,46 @@ const getOsToken = async (baseUrl: string, email: string, password: string): Pro
   return token;
 };
 
-/** Determine plan cap from the request's JWT. Returns FREE_CAP if unauthenticated. */
+const isInvestorProfile = (profile: ProfilePlanRow | null): boolean =>
+  profile?.participant_type === "investor" ||
+  profile?.participant_type === "institutional" ||
+  profile?.role === "investor" ||
+  profile?.role === "institutional";
+
+const hasInvestorSubscription = async (
+  sb: SupabaseAdminClient,
+  userId: string,
+): Promise<boolean> => {
+  const { data } = await sb
+    .from("investor_subscriptions")
+    .select("status")
+    .eq("user_id", userId)
+    .in("status", ["active", "trial"])
+    .limit(1)
+    .maybeSingle();
+  const sub = data as { status?: string } | null;
+  return sub?.status === "active" || sub?.status === "trial";
+};
+
+const hasPortalProAccess = async (
+  sb: SupabaseAdminClient,
+  userId: string,
+): Promise<boolean> => {
+  const { data: profileRow } = await sb
+    .from("profiles")
+    .select("role, participant_type, subscription_product_id, force_pro_access")
+    .eq("user_id", userId)
+    .single();
+  const profile = profileRow as ProfilePlanRow | null;
+
+  if (profile?.role === "admin") return true;
+  if (profile?.force_pro_access) return true;
+  if (profile?.subscription_product_id) return true;
+  if (isInvestorProfile(profile)) return await hasInvestorSubscription(sb, userId);
+  return false;
+};
+
+/** Determine portal cap from the request's JWT. Returns FREE_CAP if unauthenticated/free. */
 const getPlanCap = async (
   req: Request,
   sb: SupabaseAdminClient,
@@ -352,15 +400,7 @@ const getPlanCap = async (
   const { data: { user }, error } = await sb.auth.getUser(authHeader.slice(7));
   if (error || !user) return FREE_CAP;
 
-  const { data: profileRow } = await sb
-    .from("profiles")
-    .select("role")
-    .eq("user_id", user.id)
-    .single();
-  const profile = profileRow as { role?: string } | null;
-
-  if (profile?.role === "admin") return Infinity;
-  return AUTH_CAP;
+  return await hasPortalProAccess(sb, user.id) ? AUTH_CAP : FREE_CAP;
 };
 
 const jsonResponse = (
@@ -395,8 +435,7 @@ const parseRequestBody = async (req: Request): Promise<Record<string, unknown>> 
     : {};
 };
 
-const getDefaultPageSize = (planCap: number): number =>
-  Number.isFinite(planCap) ? planCap : AUTH_CAP;
+const getDefaultPageSize = (planCap: number): number => planCap;
 
 const getRequestNumber = (
   body: Record<string, unknown>,
@@ -413,7 +452,7 @@ const getRequestedPageSize = (body: Record<string, unknown>, planCap: number): n
 };
 
 const getCappedPageSize = (requestedSize: number, planCap: number): number =>
-  Number.isFinite(planCap) ? Math.min(requestedSize, planCap) : requestedSize;
+  Math.min(requestedSize, planCap);
 
 const getPageSize = (body: Record<string, unknown>, planCap: number): number =>
   getCappedPageSize(getRequestedPageSize(body, planCap), planCap);
@@ -518,9 +557,6 @@ const getRuntimeConfig = (corsHeaders: Record<string, string>): RuntimeConfig | 
   return { osConfig, supabaseConfig };
 };
 
-const getSerializedPlanCap = (planCap: number): number | null =>
-  Number.isFinite(planCap) ? planCap : null;
-
 const buildAuctionResponsePayload = (
   mapped: MappedAuction[],
   total: number,
@@ -530,7 +566,7 @@ const buildAuctionResponsePayload = (
   data: mapped,
   total,
   page,
-  planCap: getSerializedPlanCap(planCap),
+  planCap,
 });
 
 const handleFetchError = (err: unknown, corsHeaders: Record<string, string>): Response => {

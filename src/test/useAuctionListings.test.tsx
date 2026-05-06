@@ -53,6 +53,9 @@ describe("useAuctionListings", () => {
     const { result } = renderHookWithQuery(() => useAuctionListings());
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.[0]).toMatchObject({ id: "os-a1" });
+    expect(invokeMock).toHaveBeenCalledWith("fetch-os-auctions", expect.objectContaining({
+      body: expect.objectContaining({ pageSize: 600 }),
+    }));
     expect(fromMock).not.toHaveBeenCalled();
   });
 
@@ -77,6 +80,24 @@ describe("useAuctionListings", () => {
     const { result } = renderHookWithQuery(() => useAuctionListings());
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.[0]).toMatchObject({ id: "a1" });
+  });
+
+  it("caps database fallback pagination to the portal limit", async () => {
+    invokeMock.mockRejectedValue(new Error("OS unavailable"));
+    const firstPage = Array.from({ length: 500 }, (_, i) => ({ id: `a${i}` }));
+    const secondPage = Array.from({ length: 100 }, (_, i) => ({ id: `b${i}` }));
+    const builder = makeBuilder(vi.fn()
+      .mockResolvedValueOnce({ data: firstPage, error: null })
+      .mockResolvedValueOnce({ data: secondPage, error: null }));
+    fromMock.mockReturnValue(builder);
+
+    const { result } = renderHookWithQuery(() => useAuctionListings());
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(result.current.data).toHaveLength(600);
+    expect(builder.range).toHaveBeenCalledTimes(2);
+    expect(builder.range).toHaveBeenNthCalledWith(1, 0, 499);
+    expect(builder.range).toHaveBeenNthCalledWith(2, 500, 599);
   });
 
   it("falls back to a no-images query when the joined version fails", async () => {

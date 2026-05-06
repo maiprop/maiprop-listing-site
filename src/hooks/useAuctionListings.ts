@@ -5,7 +5,7 @@ import type { Database } from "@/integrations/supabase/types";
 const AUCTION_SELECT_CORE = "id, title, city, address, price, auction_starting_bid, auction_date, auction_court, property_type, cover_image_url, sqm, bedrooms, bathrooms, latitude, longitude, tags, year_built, construction_status, website_url, region, is_featured, priority_placement";
 const QUERY_TIMEOUT_MS = 15_000;
 const AUCTION_FETCH_LIMIT = 500;
-const OS_AUCTION_FETCH_LIMIT = 600;
+const PORTAL_AUCTION_FETCH_LIMIT = 600;
 
 /**
  * Shape returned by the fetchAll helper. Columns are a Pick<> against the
@@ -48,13 +48,14 @@ const getTodayDate = (): string => new Date().toISOString().split("T")[0];
 const getAuctionSelect = (withImages: boolean): string =>
   withImages ? `${AUCTION_SELECT_CORE}, listing_images(url, sort_order)` : AUCTION_SELECT_CORE;
 
-const hasCompleteAuctionPage = (rows: AuctionListingRow[]): boolean =>
-  rows.length === AUCTION_FETCH_LIMIT;
+const hasCompleteAuctionPage = (rows: AuctionListingRow[], pageSize: number): boolean =>
+  rows.length === pageSize;
 
 const fetchAuctionPageFromDatabase = async (
   today: string,
   withImages: boolean,
   from: number,
+  pageSize: number,
 ): Promise<AuctionListingRow[]> => {
   const { data, error } = await supabase
     .from("listings")
@@ -65,7 +66,7 @@ const fetchAuctionPageFromDatabase = async (
     .order("is_featured", { ascending: false })
     .order("priority_placement", { ascending: false })
     .order("auction_date", { ascending: true, nullsFirst: false })
-    .range(from, from + AUCTION_FETCH_LIMIT - 1);
+    .range(from, from + pageSize - 1);
 
   if (error) throw error;
   return (data ?? []) as unknown as AuctionListingRow[];
@@ -74,16 +75,18 @@ const fetchAuctionPageFromDatabase = async (
 const fetchAuctionsFromDatabase = async (
   today: string,
   withImages: boolean,
+  maxRows = PORTAL_AUCTION_FETCH_LIMIT,
 ): Promise<AuctionListingRow[]> => {
   const allAuctions: AuctionListingRow[] = [];
   let from = 0;
-  let rows: AuctionListingRow[];
 
-  do {
-    rows = await fetchAuctionPageFromDatabase(today, withImages, from);
+  while (allAuctions.length < maxRows) {
+    const pageSize = Math.min(AUCTION_FETCH_LIMIT, maxRows - allAuctions.length);
+    const rows = await fetchAuctionPageFromDatabase(today, withImages, from, pageSize);
     allAuctions.push(...rows);
-    from += AUCTION_FETCH_LIMIT;
-  } while (hasCompleteAuctionPage(rows));
+    from += pageSize;
+    if (!hasCompleteAuctionPage(rows, pageSize)) break;
+  }
 
   return allAuctions;
 };
@@ -93,7 +96,7 @@ const fetchAuctionsFromOs = async (today: string): Promise<AuctionListingRow[]> 
     body: {
       auctionDateFrom: today,
       page: 0,
-      pageSize: OS_AUCTION_FETCH_LIMIT,
+      pageSize: PORTAL_AUCTION_FETCH_LIMIT,
       sortBy: "AUCTION_DATE",
       order: "ASC",
     },
