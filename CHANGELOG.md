@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.5.0](https://github.com/maiprop/maiprop-listing-site/compare/v1.4.0...v1.5.0) (2026-05-05)
+
+
+### Features
+
+* **data:** extend property types + production data re-seed ([e562a0d](https://github.com/maiprop/maiprop-listing-site/commit/e562a0d4c10cc0d1ab91230e5fe7e4b4f29f2046))
+
+
+### Bug Fixes
+
+* **types:** extend Property.type to include all new property_type enum values ([6a85519](https://github.com/maiprop/maiprop-listing-site/commit/6a85519a8fa323242491722ed59e3c01ee7d6285))
+
 ## [1.4.0](https://github.com/maiprop/maiprop-listing-site/compare/v1.3.1...v1.4.0) (2026-05-05)
 
 
