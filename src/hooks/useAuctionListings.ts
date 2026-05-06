@@ -5,6 +5,7 @@ import type { Database } from "@/integrations/supabase/types";
 const AUCTION_SELECT_CORE = "id, title, city, address, price, auction_starting_bid, auction_date, auction_court, property_type, cover_image_url, sqm, bedrooms, bathrooms, latitude, longitude, tags, year_built, construction_status, website_url, region, is_featured, priority_placement";
 const QUERY_TIMEOUT_MS = 15_000;
 const AUCTION_FETCH_LIMIT = 500;
+const OS_AUCTION_FETCH_LIMIT = 600;
 
 /**
  * Shape returned by the fetchAll helper. Columns are a Pick<> against the
@@ -48,7 +49,23 @@ export function useAuctionListings() {
     queryFn: async () => {
       const today = new Date().toISOString().split("T")[0];
 
-      const fetchAll = async (withImages: boolean): Promise<AuctionListingRow[]> => {
+      const fetchFromOs = async (): Promise<AuctionListingRow[]> => {
+        const { data, error } = await supabase.functions.invoke("fetch-os-auctions", {
+          body: {
+            auctionDateFrom: today,
+            page: 0,
+            pageSize: OS_AUCTION_FETCH_LIMIT,
+            sortBy: "AUCTION_DATE",
+            order: "ASC",
+          },
+        });
+        if (error) throw error;
+        const rows = data?.data;
+        if (!Array.isArray(rows)) throw new Error("Unexpected OS auctions response");
+        return rows as AuctionListingRow[];
+      };
+
+      const fetchFromDatabase = async (withImages: boolean): Promise<AuctionListingRow[]> => {
         let allAuctions: AuctionListingRow[] = [];
         let from = 0;
         while (true) {
@@ -76,9 +93,13 @@ export function useAuctionListings() {
 
       const run = async (): Promise<AuctionListingRow[]> => {
         try {
-          return await fetchAll(true);
-        } catch (_err: unknown) {
-          return await fetchAll(false);
+          return await fetchFromOs();
+        } catch (_osErr: unknown) {
+          try {
+            return await fetchFromDatabase(true);
+          } catch (_dbJoinErr: unknown) {
+            return await fetchFromDatabase(false);
+          }
         }
       };
 

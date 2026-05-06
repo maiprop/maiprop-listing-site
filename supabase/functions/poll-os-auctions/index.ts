@@ -16,6 +16,10 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 const log = createLogger("poll-os-auctions");
 const limiter = makeRateLimiter({ bucket: "poll-os-auctions", maxRequests: 3, windowMs: 60_000 });
 
+// Edge Functions use the service-role Supabase client with generated DB types
+// unavailable in Deno. Keep helper signatures aligned with the inferred client.
+type SupabaseAdminClient = ReturnType<typeof createClient<Record<string, unknown>>>;
+
 /** Maximum number of OS auctions to sync per UTC calendar day. */
 const DAILY_AUCTION_LIMIT = 200;
 
@@ -182,7 +186,7 @@ async function getOsToken(
 }
 
 async function logSync(
-  sb: ReturnType<typeof createClient>,
+  sb: SupabaseAdminClient,
   status: string,
   error_message?: string | null,
   payload?: unknown,
@@ -316,7 +320,7 @@ function mapAuctionToListing(a: OsAuction): MappedAuction {
 // ── Require agent role (JWT) to prevent unauthenticated PII/sync abuse ───────
 async function requireAgent(
   req: Request,
-  sb: ReturnType<typeof createClient>,
+  sb: SupabaseAdminClient,
   corsHeaders: Record<string, string>,
 ): Promise<Response | null> {
   const authHeader = req.headers.get("Authorization");
@@ -332,7 +336,8 @@ async function requireAgent(
       status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-  const { data: profile } = await sb.from("profiles").select("role").eq("user_id", user.id).single();
+  const { data: profileRow } = await sb.from("profiles").select("role").eq("user_id", user.id).single();
+  const profile = profileRow as { role?: string } | null;
   if (profile?.role !== "admin") {
     return new Response(JSON.stringify({ error: "Platform admin required" }), {
       status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -454,7 +459,7 @@ Deno.serve(async (req) => {
     log.info("authenticating against OS", { os_url: OS_URL });
     const token = await getOsToken(OS_URL, OS_EMAIL, OS_PASS);
 
-    const endpoint = `/api/v1/auctions/filter/details?page=${page}&size=${size}`;
+    const endpoint = `/api/v1/auctions/filter/details?page=${page}&pageSize=${size}`;
     log.info("requesting auctions page", { endpoint, filter: filterRequest });
 
     const auctRes = await fetchWithTimeout(
@@ -491,6 +496,7 @@ Deno.serve(async (req) => {
 
     type OsAuctionListResponse = {
       data?: OsAuction[];
+      responseMetadata?: { pagination?: { totalElements?: number } };
       pagination?: { totalElements?: number };
     };
     const auctJson = (await auctRes.json()) as OsAuctionListResponse | OsAuction[];
@@ -501,7 +507,9 @@ Deno.serve(async (req) => {
       : Array.isArray(auctJson.data)
       ? auctJson.data
       : [];
-    const pagination = (Array.isArray(auctJson) ? undefined : auctJson.pagination) ?? {};
+    const pagination = (Array.isArray(auctJson)
+      ? undefined
+      : auctJson.responseMetadata?.pagination ?? auctJson.pagination) ?? {};
     const totalAvailable = pagination.totalElements ?? auctions.length;
 
     log.info("received auctions", {

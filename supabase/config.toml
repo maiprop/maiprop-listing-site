@@ -124,6 +124,9 @@ verify_jwt = true
 [functions.fetch-auction-enrichment]
 verify_jwt = true
 
+[functions.fetch-os-auctions]
+verify_jwt = false
+
 [functions.transfer-platform-admin]
 verify_jwt = true
 

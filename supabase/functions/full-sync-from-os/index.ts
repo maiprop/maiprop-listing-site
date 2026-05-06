@@ -17,6 +17,8 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 const log = createLogger("full-sync-from-os");
 const limiter = makeRateLimiter({ bucket: "full-sync-from-os", maxRequests: 3, windowMs: 60_000 });
 
+type SupabaseAdminClient = ReturnType<typeof createClient<Record<string, unknown>>>;
+
 
 const CATEGORY_MAP: Record<string, string> = {
   RESIDENCE: "apartment",
@@ -234,7 +236,7 @@ const MAX_PAGES = 200; // safety cap
 
 async function requireAgent(
   req: Request,
-  sb: ReturnType<typeof createClient>,
+  sb: SupabaseAdminClient,
   corsHeaders: Record<string, string>,
 ): Promise<Response | null> {
   const authHeader = req.headers.get("Authorization");
@@ -250,7 +252,8 @@ async function requireAgent(
       status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-  const { data: profile } = await sb.from("profiles").select("role").eq("user_id", user.id).single();
+  const { data: profileRow } = await sb.from("profiles").select("role").eq("user_id", user.id).single();
+  const profile = profileRow as { role?: string } | null;
   if (profile?.role !== "admin") {
     return new Response(JSON.stringify({ error: "Platform admin required" }), {
       status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -368,7 +371,7 @@ Deno.serve(async (req) => {
 
     for (let page = startPage; page < startPage + maxPages; page++) {
       const filterRequest = { ...baseFilter };
-      const endpoint = `/api/v1/auctions/filter/details?page=${page}&size=${pageSize}`;
+      const endpoint = `/api/v1/auctions/filter/details?page=${page}&pageSize=${pageSize}`;
       const auctRes = await fetchWithTimeout(
         `${OS_URL}${endpoint}`,
         {
@@ -418,7 +421,7 @@ Deno.serve(async (req) => {
         : Array.isArray(auctJson.data)
         ? auctJson.data
         : [];
-      const pagination = auctJson.pagination ?? {};
+      const pagination = auctJson.responseMetadata?.pagination ?? auctJson.pagination ?? {};
       totalAvailableInOS = pagination.totalElements ?? totalAvailableInOS;
 
       if (auctions.length === 0) {
