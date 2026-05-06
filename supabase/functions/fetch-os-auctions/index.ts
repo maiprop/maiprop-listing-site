@@ -1,3 +1,4 @@
+/* global Deno */
 /**
  * fetch-os-auctions
  * ─────────────────────────────────────────────────────────────────────────────
@@ -29,6 +30,8 @@ const limiter = makeRateLimiter({ bucket: "fetch-os-auctions", maxRequests: 20, 
 
 const FREE_CAP = 60;
 const AUTH_CAP = 600;
+const TRAILING_SLASH_RE = /\/$/;
+const OS_ALLOWED_HOST_SUFFIX = ".maiprop.co";
 type SupabaseAdminClient = ReturnType<typeof createClient<Record<string, unknown>>>;
 type ProfilePlanRow = {
   role?: string | null;
@@ -105,24 +108,24 @@ const OWNERSHIP_STATUS_TAGS: Record<string, string> = {
   HORIZONTAL_OWNERSHIP: "ownership:horizontal",
 };
 
-const mapCategory = (category?: string): string => {
+function mapCategory(category?: string): string {
   if (!category) return "apartment";
   return CATEGORY_MAP[category.toUpperCase()] ?? "apartment";
-};
+}
 
-const getSubtypeTag = (category?: string): string | null => {
+function getSubtypeTag(category?: string): string | null {
   if (!category) return null;
   const categoryKey = category.toUpperCase();
   if (LAND_TYPE_TAG[categoryKey]) return `land_type:${LAND_TYPE_TAG[categoryKey]}`;
   if (COMMERCIAL_TYPE_TAG[categoryKey]) return `commercial_type:${COMMERCIAL_TYPE_TAG[categoryKey]}`;
   return null;
-};
+}
 
-const mapOwnershipStatusToTag = (raw?: string | null): string | null => {
+function mapOwnershipStatusToTag(raw?: string | null): string | null {
   if (!raw) return null;
   const ownershipStatus = raw.toUpperCase().trim();
   return OWNERSHIP_STATUS_TAGS[ownershipStatus] ?? `ownership:${ownershipStatus.toLowerCase()}`;
-};
+}
 
 // ── OS DTO type (same subset as poll-os-auctions) ───────────────────────────
 
@@ -217,64 +220,81 @@ const OPTIONAL_FILTER_KEYS = [
 
 const AMOUNT_FILTER_KEYS = ["auctionAmountFrom", "auctionAmountTo"] as const;
 
-const buildTitle = (a: OsAuction): string => {
+function buildTitle(a: OsAuction): string {
   const catKey = mapCategory(a.propertyCategory);
   const catGr = CATEGORY_GR[catKey] ?? "Ακίνητο";
   const city = a.propertyMunicipalityName ?? "Ελλάδα";
   const price = Number(a.firstPriceOffer ?? 0);
   const priceStr = price > 0 ? ` – €${price.toLocaleString("el-GR")}` : "";
   return `Πλειστηριασμός ${catGr} | ${city}${priceStr}`;
-};
+}
 
-const getNullableText = (value?: string | null): string | null => value ?? null;
+function getNullableText(value?: string | null): string | null {
+  return value ?? null;
+}
 
-const getAuctionCity = (auction: OsAuction): string => auction.propertyMunicipalityName ?? "Ελλάδα";
+function getAuctionCity(auction: OsAuction): string {
+  return auction.propertyMunicipalityName ?? "Ελλάδα";
+}
 
-const getAuctionUrl = (auction: OsAuction): string | null =>
-  auction.url ?? auction.auctionUrl ?? auction.listingUrl ?? auction.eAuctionUrl ?? null;
+function getAuctionUrl(auction: OsAuction): string | null {
+  return auction.url ?? auction.auctionUrl ?? auction.listingUrl ?? auction.eAuctionUrl ?? null;
+}
 
-const getNumberOrNull = (value?: number | string): number | null =>
-  value != null ? Number(value) : null;
+function getNumberOrNull(value?: number | string): number | null {
+  return value != null ? Number(value) : null;
+}
 
-const getNumberOrDefault = (value: number | string | undefined, fallback: number): number =>
-  value != null ? Number(value) : fallback;
+function getNumberOrDefault(value: number | string | undefined, fallback: number): number {
+  return value != null ? Number(value) : fallback;
+}
 
-const getStreetViewUrl = (lat: number | null, lng: number | null): string | null => {
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")?.replace(/\/$/, "");
+function getStreetViewUrl(lat: number | null, lng: number | null): string | null {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")?.replace(TRAILING_SLASH_RE, "");
   return supabaseUrl && lat != null && lng != null
     ? `${supabaseUrl}/functions/v1/streetview-proxy?size=800x450&lat=${lat}&lng=${lng}`
     : null;
-};
+}
 
-const getOwnershipPercentage = (auction: OsAuction): number | undefined =>
-  auction.ownershipPercentage != null ? Number(auction.ownershipPercentage) : undefined;
+function getOwnershipPercentage(auction: OsAuction): number | undefined {
+  return auction.ownershipPercentage != null ? Number(auction.ownershipPercentage) : undefined;
+}
 
-const getOwnershipTag = (auction: OsAuction, ownershipPct: number | undefined): string | null => {
+function getOwnershipTag(auction: OsAuction, ownershipPct: number | undefined): string | null {
   const ownershipTag = mapOwnershipStatusToTag(auction.ownershipStatus);
   if (ownershipTag) return ownershipTag;
   if (ownershipPct == null) return null;
   return ownershipPct >= 100 ? "ownership:full" : "ownership:common";
-};
+}
 
-const getAuctionStatusTag = (auction: OsAuction): string =>
-  `auction_status:${auction.auctionStatus ?? "scheduled"}`;
+function getAuctionStatusTag(auction: OsAuction): string {
+  return `auction_status:${auction.auctionStatus ?? "scheduled"}`;
+}
 
-const getCurrentRoundTag = (auction: OsAuction): string | null =>
-  auction.currentRound != null ? `round:${auction.currentRound}` : null;
+function getCurrentRoundTag(auction: OsAuction): string | null {
+  return auction.currentRound != null ? `round:${auction.currentRound}` : null;
+}
 
-const getOwnershipPercentageTag = (ownershipPct: number | undefined): string | null =>
-  ownershipPct != null ? `ownership_pct:${ownershipPct}` : null;
+function getOwnershipPercentageTag(ownershipPct: number | undefined): string | null {
+  return ownershipPct != null ? `ownership_pct:${ownershipPct}` : null;
+}
 
-const isPresentTag = (tag: string | null): tag is string => tag != null;
+function isPresentTag(tag: string | null): tag is string {
+  return tag != null;
+}
 
-const compactTags = (tags: (string | null)[]): string[] => tags.filter(isPresentTag);
+function compactTags(tags: (string | null)[]): string[] {
+  return tags.filter(isPresentTag);
+}
 
-const buildAuctionTags = (
+function buildAuctionTags(
   requiredTags: string[],
   optionalTags: (string | null)[],
-): string[] => requiredTags.concat(compactTags(optionalTags));
+): string[] {
+  return requiredTags.concat(compactTags(optionalTags));
+}
 
-const mapAuction = (auction: OsAuction): MappedAuction => {
+function mapAuction(auction: OsAuction): MappedAuction {
   const osId = String(auction.auctionListingId ?? "unknown");
   const tagKey = `os_auction:${osId}`;
   const catKey = mapCategory(auction.propertyCategory);
@@ -316,25 +336,27 @@ const mapAuction = (auction: OsAuction): MappedAuction => {
     is_featured: false,
     priority_placement: 0,
   };
-};
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-const fetchWithTimeout = async (
+async function fetchWithTimeout(
   url: string,
   options: RequestInit,
   timeoutMs: number,
-): Promise<Response> => {
+): Promise<Response> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const timer = setTimeout(function abortRequest() {
+    controller.abort();
+  }, timeoutMs);
   try {
     return await fetch(url, { ...options, signal: controller.signal });
   } finally {
     clearTimeout(timer);
   }
-};
+}
 
-const getOsToken = async (baseUrl: string, email: string, password: string): Promise<string> => {
+async function getOsToken(baseUrl: string, email: string, password: string): Promise<string> {
   const res = await fetchWithTimeout(
     `${baseUrl}/auth/login`,
     {
@@ -348,18 +370,19 @@ const getOsToken = async (baseUrl: string, email: string, password: string): Pro
   const token = json?.data?.token ?? json?.token ?? json?.accessToken;
   if (!token) throw new Error(`OS auth failed (${res.status}): ${JSON.stringify(json).slice(0, 200)}`);
   return token;
-};
+}
 
-const isInvestorProfile = (profile: ProfilePlanRow | null): boolean =>
-  profile?.participant_type === "investor" ||
-  profile?.participant_type === "institutional" ||
-  profile?.role === "investor" ||
-  profile?.role === "institutional";
+function isInvestorProfile(profile: ProfilePlanRow | null): boolean {
+  return profile?.participant_type === "investor" ||
+    profile?.participant_type === "institutional" ||
+    profile?.role === "investor" ||
+    profile?.role === "institutional";
+}
 
-const hasInvestorSubscription = async (
+async function hasInvestorSubscription(
   sb: SupabaseAdminClient,
   userId: string,
-): Promise<boolean> => {
+): Promise<boolean> {
   const { data } = await sb
     .from("investor_subscriptions")
     .select("status")
@@ -369,12 +392,12 @@ const hasInvestorSubscription = async (
     .maybeSingle();
   const sub = data as { status?: string } | null;
   return sub?.status === "active" || sub?.status === "trial";
-};
+}
 
-const hasPortalProAccess = async (
+async function hasPortalProAccess(
   sb: SupabaseAdminClient,
   userId: string,
-): Promise<boolean> => {
+): Promise<boolean> {
   const { data: profileRow } = await sb
     .from("profiles")
     .select("role, participant_type, subscription_product_id, force_pro_access")
@@ -387,13 +410,13 @@ const hasPortalProAccess = async (
   if (profile?.subscription_product_id) return true;
   if (isInvestorProfile(profile)) return await hasInvestorSubscription(sb, userId);
   return false;
-};
+}
 
 /** Determine portal cap from the request's JWT. Returns FREE_CAP if unauthenticated/free. */
-const getPlanCap = async (
+async function getPlanCap(
   req: Request,
   sb: SupabaseAdminClient,
-): Promise<number> => {
+): Promise<number> {
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) return FREE_CAP;
 
@@ -401,90 +424,118 @@ const getPlanCap = async (
   if (error || !user) return FREE_CAP;
 
   return await hasPortalProAccess(sb, user.id) ? AUTH_CAP : FREE_CAP;
-};
+}
 
-const jsonResponse = (
+function jsonResponse(
   payload: unknown,
   corsHeaders: Record<string, string>,
   status?: number,
-): Response => {
+): Response {
   const init: ResponseInit = {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   };
   if (status !== undefined) init.status = status;
   return new Response(JSON.stringify(payload), init);
-};
+}
 
-const getOsConfig = (): OsConfig | null => {
-  const url = Deno.env.get("MAIPROP_OS_URL")?.replace(/\/$/, "");
+function isAllowedOsApiUrl(url: URL): boolean {
+  return url.protocol === "https:" && (
+    url.hostname === "app.os.maiprop.co" ||
+    url.hostname.endsWith(OS_ALLOWED_HOST_SUFFIX)
+  );
+}
+
+function normalizeOsUrl(rawUrl: string | undefined): string | null {
+  if (!rawUrl) return null;
+  const url = new URL(rawUrl);
+  if (!isAllowedOsApiUrl(url)) return null;
+  return url.toString().replace(TRAILING_SLASH_RE, "");
+}
+
+function getOsConfig(): OsConfig | null {
+  const url = normalizeOsUrl(Deno.env.get("MAIPROP_OS_URL"));
   const email = Deno.env.get("MAIPROP_OS_EMAIL");
   const password = Deno.env.get("MAIPROP_OS_PASSWORD");
   return url && email && password ? { url, email, password } : null;
-};
+}
 
-const getSupabaseConfig = (): SupabaseConfig | null => {
+function getSupabaseConfig(): SupabaseConfig | null {
   const url = Deno.env.get("SUPABASE_URL");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   return url && serviceRoleKey ? { url, serviceRoleKey } : null;
-};
+}
 
-const parseRequestBody = async (req: Request): Promise<Record<string, unknown>> => {
-  const body = await req.json().catch(() => ({}));
+async function parseRequestBody(req: Request): Promise<Record<string, unknown>> {
+  const body = await req.json().catch(function getEmptyBody() {
+    return {};
+  });
   return body && typeof body === "object" && !Array.isArray(body)
     ? body as Record<string, unknown>
     : {};
-};
+}
 
-const getDefaultPageSize = (planCap: number): number => planCap;
+function getDefaultPageSize(planCap: number): number {
+  return planCap;
+}
 
-const getRequestNumber = (
+function getRequestNumber(
   body: Record<string, unknown>,
   key: string,
   fallback: number,
-): number => {
+): number {
   const value = body[key];
   return value == null ? fallback : Number(value);
-};
+}
 
-const getRequestedPageSize = (body: Record<string, unknown>, planCap: number): number => {
+function getRequestedPageSize(body: Record<string, unknown>, planCap: number): number {
   const sizeFallback = getRequestNumber(body, "size", getDefaultPageSize(planCap));
   return getRequestNumber(body, "pageSize", sizeFallback);
-};
+}
 
-const getCappedPageSize = (requestedSize: number, planCap: number): number =>
-  Math.min(requestedSize, planCap);
+function getCappedPageSize(requestedSize: number, planCap: number): number {
+  return Math.min(requestedSize, planCap);
+}
 
-const getPageSize = (body: Record<string, unknown>, planCap: number): number =>
-  getCappedPageSize(getRequestedPageSize(body, planCap), planCap);
+function getPageSize(body: Record<string, unknown>, planCap: number): number {
+  return getCappedPageSize(getRequestedPageSize(body, planCap), planCap);
+}
 
 type FilterEntry = readonly [string, unknown];
 
-const hasTruthyFilterValue = ([, value]: FilterEntry): boolean => Boolean(value);
+function hasTruthyFilterValue([, value]: FilterEntry): boolean {
+  return Boolean(value);
+}
 
-const getOptionalFilters = (body: Record<string, unknown>): Record<string, unknown> =>
-  Object.fromEntries(
+function getOptionalFilters(body: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
     OPTIONAL_FILTER_KEYS
-      .map((key) => [key, body[key]] as const)
+      .map(function getOptionalFilterEntry(key) {
+        return [key, body[key]] as const;
+      })
       .filter(hasTruthyFilterValue),
   );
+}
 
-const getAmountFilterEntries = (body: Record<string, unknown>): FilterEntry[] =>
-  AMOUNT_FILTER_KEYS.flatMap((key) =>
-    body[key] == null ? [] : [[key, body[key]] as const],
-  );
+function getAmountFilterEntries(body: Record<string, unknown>): FilterEntry[] {
+  return AMOUNT_FILTER_KEYS.flatMap(function getAmountFilterEntry(key) {
+    return body[key] == null ? [] : [[key, body[key]] as const];
+  });
+}
 
-const buildFilterRequest = (body: Record<string, unknown>): Record<string, unknown> => ({
-  auctionDateFrom: body.auctionDateFrom ?? new Date().toISOString().split("T")[0],
-  ...getOptionalFilters(body),
-  ...Object.fromEntries(getAmountFilterEntries(body)),
-});
+function buildFilterRequest(body: Record<string, unknown>): Record<string, unknown> {
+  return {
+    auctionDateFrom: body.auctionDateFrom ?? new Date().toISOString().split("T")[0],
+    ...getOptionalFilters(body),
+    ...Object.fromEntries(getAmountFilterEntries(body)),
+  };
+}
 
-const fetchOsAuctionDetails = async (
+async function fetchOsAuctionDetails(
   osConfig: OsConfig,
   page: number,
   size: number,
   filterRequest: Record<string, unknown>,
-): Promise<OsResponse | OsAuction[]> => {
+): Promise<OsResponse | OsAuction[]> {
   log.info("authenticating with OS API");
   const token = await getOsToken(osConfig.url, osConfig.email, osConfig.password);
 
@@ -511,11 +562,11 @@ const fetchOsAuctionDetails = async (
   }
 
   return (await auctionResponse.json()) as OsResponse | OsAuction[];
-};
+}
 
-const parseOsResponse = (
+function parseOsResponse(
   json: OsResponse | OsAuction[],
-): { auctions: OsAuction[]; total: number } => {
+): { auctions: OsAuction[]; total: number } {
   const auctions = Array.isArray(json)
     ? json
     : Array.isArray(json.data)
@@ -525,29 +576,31 @@ const parseOsResponse = (
     ? auctions.length
     : (json.responseMetadata?.pagination?.totalElements ?? auctions.length);
   return { auctions, total };
-};
+}
 
-const isOsApiFailure = (err: unknown): err is OsApiFailure =>
-  typeof err === "object" &&
-  err !== null &&
-  "kind" in err &&
-  (err as { kind?: unknown }).kind === "os-api";
+function isOsApiFailure(err: unknown): err is OsApiFailure {
+  return typeof err === "object" &&
+    err !== null &&
+    "kind" in err &&
+    (err as { kind?: unknown }).kind === "os-api";
+}
 
-const getClientIp = (req: Request): string =>
-  req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
+function getClientIp(req: Request): string {
+  return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
+}
 
-const getGuardResponse = async (
+async function getGuardResponse(
   req: Request,
   corsHeaders: Record<string, string>,
-): Promise<Response | null> => {
+): Promise<Response | null> {
   const preflight = handleCors(req);
   if (preflight) return preflight;
   return await limiter.isLimited(getClientIp(req))
     ? tooManyRequestsResponse(corsHeaders)
     : null;
-};
+}
 
-const getRuntimeConfig = (corsHeaders: Record<string, string>): RuntimeConfig | Response => {
+function getRuntimeConfig(corsHeaders: Record<string, string>): RuntimeConfig | Response {
   const osConfig = getOsConfig();
   if (!osConfig) return jsonResponse({ error: "OS credentials not configured" }, corsHeaders, 503);
 
@@ -555,21 +608,23 @@ const getRuntimeConfig = (corsHeaders: Record<string, string>): RuntimeConfig | 
   if (!supabaseConfig) return jsonResponse({ error: "Supabase credentials not configured" }, corsHeaders, 503);
 
   return { osConfig, supabaseConfig };
-};
+}
 
-const buildAuctionResponsePayload = (
+function buildAuctionResponsePayload(
   mapped: MappedAuction[],
   total: number,
   page: number,
   planCap: number,
-) => ({
-  data: mapped,
-  total,
-  page,
-  planCap,
-});
+): { data: MappedAuction[]; total: number; page: number; planCap: number } {
+  return {
+    data: mapped,
+    total,
+    page,
+    planCap,
+  };
+}
 
-const handleFetchError = (err: unknown, corsHeaders: Record<string, string>): Response => {
+function handleFetchError(err: unknown, corsHeaders: Record<string, string>): Response {
   if (isOsApiFailure(err)) {
     return jsonResponse({ error: `OS returned ${err.status}`, detail: err.detail }, corsHeaders, 502);
   }
@@ -577,13 +632,13 @@ const handleFetchError = (err: unknown, corsHeaders: Record<string, string>): Re
   const message = err instanceof Error ? err.message : String(err);
   log.error("fetch error", { err: message });
   return jsonResponse({ error: message }, corsHeaders, 500);
-};
+}
 
-const handleAuctionRequest = async (
+async function handleAuctionRequest(
   req: Request,
   corsHeaders: Record<string, string>,
   runtimeConfig: RuntimeConfig,
-): Promise<Response> => {
+): Promise<Response> {
   const sb = createClient(runtimeConfig.supabaseConfig.url, runtimeConfig.supabaseConfig.serviceRoleKey);
 
   try {
@@ -601,11 +656,11 @@ const handleAuctionRequest = async (
   } catch (err: unknown) {
     return handleFetchError(err, corsHeaders);
   }
-};
+}
 
 // ── Main handler ─────────────────────────────────────────────────────────────
 
-Deno.serve(async (req) => {
+async function handleRequest(req: Request): Promise<Response> {
   const corsHeaders = getCorsHeaders(req);
   const guardResponse = await getGuardResponse(req, corsHeaders);
   if (guardResponse) return guardResponse;
@@ -614,4 +669,6 @@ Deno.serve(async (req) => {
   if (runtimeConfig instanceof Response) return runtimeConfig;
 
   return await handleAuctionRequest(req, corsHeaders, runtimeConfig);
-});
+}
+
+Deno.serve(handleRequest);
