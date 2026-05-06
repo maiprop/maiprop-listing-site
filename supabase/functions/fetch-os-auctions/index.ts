@@ -78,29 +78,41 @@ const CATEGORY_GR: Record<string, string> = {
   office: "Γραφείο",
 };
 
-function mapCategory(cat?: string): string {
-  if (!cat) return "apartment";
-  return CATEGORY_MAP[cat.toUpperCase()] ?? "apartment";
+const OWNERSHIP_STATUS_TAGS: Record<string, string> = {
+  FULL: "ownership:full",
+  COMPLETE: "ownership:full",
+  FULL_OWNERSHIP: "ownership:full",
+  BARE: "ownership:bare",
+  BARE_OWNERSHIP: "ownership:bare",
+  COMMON: "ownership:common",
+  JOINT: "ownership:common",
+  SHARED: "ownership:common",
+  CO_OWNERSHIP: "ownership:common",
+  USUFRUCT: "ownership:usufruct",
+  PSILI_KYPHIOTITA: "ownership:usufruct",
+  VERTICAL: "ownership:vertical",
+  VERTICAL_OWNERSHIP: "ownership:vertical",
+  HORIZONTAL: "ownership:horizontal",
+  HORIZONTAL_OWNERSHIP: "ownership:horizontal",
+};
+
+function mapCategory(category?: string): string {
+  if (!category) return "apartment";
+  return CATEGORY_MAP[category.toUpperCase()] ?? "apartment";
 }
 
-function getSubtypeTag(cat?: string): string | null {
-  if (!cat) return null;
-  const u = cat.toUpperCase();
-  if (LAND_TYPE_TAG[u]) return `land_type:${LAND_TYPE_TAG[u]}`;
-  if (COMMERCIAL_TYPE_TAG[u]) return `commercial_type:${COMMERCIAL_TYPE_TAG[u]}`;
+function getSubtypeTag(category?: string): string | null {
+  if (!category) return null;
+  const categoryKey = category.toUpperCase();
+  if (LAND_TYPE_TAG[categoryKey]) return `land_type:${LAND_TYPE_TAG[categoryKey]}`;
+  if (COMMERCIAL_TYPE_TAG[categoryKey]) return `commercial_type:${COMMERCIAL_TYPE_TAG[categoryKey]}`;
   return null;
 }
 
 function mapOwnershipStatusToTag(raw?: string | null): string | null {
   if (!raw) return null;
-  const occ = raw.toUpperCase().trim();
-  if (occ === "FULL" || occ === "COMPLETE" || occ === "FULL_OWNERSHIP") return "ownership:full";
-  if (occ === "BARE" || occ === "BARE_OWNERSHIP") return "ownership:bare";
-  if (occ === "COMMON" || occ === "JOINT" || occ === "SHARED" || occ === "CO_OWNERSHIP") return "ownership:common";
-  if (occ === "USUFRUCT" || occ === "PSILI_KYPHIOTITA") return "ownership:usufruct";
-  if (occ === "VERTICAL" || occ === "VERTICAL_OWNERSHIP") return "ownership:vertical";
-  if (occ === "HORIZONTAL" || occ === "HORIZONTAL_OWNERSHIP") return "ownership:horizontal";
-  return `ownership:${occ.toLowerCase()}`;
+  const ownershipStatus = raw.toUpperCase().trim();
+  return OWNERSHIP_STATUS_TAGS[ownershipStatus] ?? `ownership:${ownershipStatus.toLowerCase()}`;
 }
 
 // ── OS DTO type (same subset as poll-os-auctions) ───────────────────────────
@@ -190,6 +202,7 @@ function mapAuction(a: OsAuction): MappedAuction {
   if (!ownershipTag && ownershipPct != null) {
     ownershipTag = ownershipPct >= 100 ? "ownership:full" : "ownership:common";
   }
+  const subtypeTag = getSubtypeTag(a.propertyCategory);
 
   return {
     id: osId,
@@ -214,7 +227,7 @@ function mapAuction(a: OsAuction): MappedAuction {
       ...(a.currentRound != null ? [`round:${a.currentRound}`] : []),
       ...(ownershipTag ? [ownershipTag] : []),
       ...(ownershipPct != null ? [`ownership_pct:${ownershipPct}`] : []),
-      ...(getSubtypeTag(a.propertyCategory) ? [getSubtypeTag(a.propertyCategory)!] : []),
+      ...(subtypeTag ? [subtypeTag] : []),
     ],
     year_built: a.constructionYear != null ? Number(a.constructionYear) : null,
     construction_status: null,
@@ -300,10 +313,16 @@ Deno.serve(async (req) => {
     );
   }
 
-  const sb = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-  );
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !supabaseServiceRoleKey) {
+    return new Response(
+      JSON.stringify({ error: "Supabase credentials not configured" }),
+      { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+
+  const sb = createClient(supabaseUrl, supabaseServiceRoleKey);
 
   try {
     const body = await req.json().catch(() => ({}));
