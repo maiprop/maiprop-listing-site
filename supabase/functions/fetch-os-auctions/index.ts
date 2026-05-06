@@ -186,6 +186,11 @@ type SupabaseConfig = {
   serviceRoleKey: string;
 };
 
+type RuntimeConfig = {
+  osConfig: OsConfig;
+  supabaseConfig: SupabaseConfig;
+};
+
 type OsApiFailure = {
   kind: "os-api";
   status: number;
@@ -201,6 +206,8 @@ const OPTIONAL_FILTER_KEYS = [
   "boundingBox",
 ] as const;
 
+const AMOUNT_FILTER_KEYS = ["auctionAmountFrom", "auctionAmountTo"] as const;
+
 const buildTitle = (a: OsAuction): string => {
   const catKey = mapCategory(a.propertyCategory);
   const catGr = CATEGORY_GR[catKey] ?? "Ακίνητο";
@@ -210,60 +217,87 @@ const buildTitle = (a: OsAuction): string => {
   return `Πλειστηριασμός ${catGr} | ${city}${priceStr}`;
 };
 
-const mapAuction = (a: OsAuction): MappedAuction => {
-  const osId = String(a.auctionListingId ?? "unknown");
-  const tagKey = `os_auction:${osId}`;
-  const catKey = mapCategory(a.propertyCategory);
-  const price = Number(a.firstPriceOffer ?? 0);
+const getNullableText = (value?: string | null): string | null => value ?? null;
 
-  const auctionUrl: string | null =
-    a.url ?? a.auctionUrl ?? a.listingUrl ?? a.eAuctionUrl ?? null;
+const getAuctionCity = (auction: OsAuction): string => auction.propertyMunicipalityName ?? "Ελλάδα";
 
+const getAuctionUrl = (auction: OsAuction): string | null =>
+  auction.url ?? auction.auctionUrl ?? auction.listingUrl ?? auction.eAuctionUrl ?? null;
+
+const getNumberOrNull = (value?: number | string): number | null =>
+  value != null ? Number(value) : null;
+
+const getNumberOrDefault = (value: number | string | undefined, fallback: number): number =>
+  value != null ? Number(value) : fallback;
+
+const getStreetViewUrl = (lat: number | null, lng: number | null): string | null => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")?.replace(/\/$/, "");
-  const lat = a.propertyLatitude != null ? Number(a.propertyLatitude) : null;
-  const lng = a.propertyLongitude != null ? Number(a.propertyLongitude) : null;
-  const streetViewUrl =
-    supabaseUrl && lat != null && lng != null
-      ? `${supabaseUrl}/functions/v1/streetview-proxy?size=800x450&lat=${lat}&lng=${lng}`
-      : null;
+  return supabaseUrl && lat != null && lng != null
+    ? `${supabaseUrl}/functions/v1/streetview-proxy?size=800x450&lat=${lat}&lng=${lng}`
+    : null;
+};
 
-  const ownershipPct =
-    a.ownershipPercentage != null ? Number(a.ownershipPercentage) : undefined;
-  let ownershipTag: string | null = mapOwnershipStatusToTag(a.ownershipStatus);
-  if (!ownershipTag && ownershipPct != null) {
-    ownershipTag = ownershipPct >= 100 ? "ownership:full" : "ownership:common";
-  }
-  const subtypeTag = getSubtypeTag(a.propertyCategory);
+const getOwnershipPercentage = (auction: OsAuction): number | undefined =>
+  auction.ownershipPercentage != null ? Number(auction.ownershipPercentage) : undefined;
+
+const getOwnershipTag = (auction: OsAuction, ownershipPct: number | undefined): string | null => {
+  const ownershipTag = mapOwnershipStatusToTag(auction.ownershipStatus);
+  if (ownershipTag) return ownershipTag;
+  if (ownershipPct == null) return null;
+  return ownershipPct >= 100 ? "ownership:full" : "ownership:common";
+};
+
+const getAuctionTags = (
+  auction: OsAuction,
+  tagKey: string,
+  ownershipTag: string | null,
+  ownershipPct: number | undefined,
+  subtypeTag: string | null,
+): string[] => {
+  const tags = [
+    tagKey,
+    "source:maiprop-os",
+    `auction_status:${auction.auctionStatus ?? "scheduled"}`,
+  ];
+  if (auction.currentRound != null) tags.push(`round:${auction.currentRound}`);
+  if (ownershipTag) tags.push(ownershipTag);
+  if (ownershipPct != null) tags.push(`ownership_pct:${ownershipPct}`);
+  if (subtypeTag) tags.push(subtypeTag);
+  return tags;
+};
+
+const mapAuction = (auction: OsAuction): MappedAuction => {
+  const osId = String(auction.auctionListingId ?? "unknown");
+  const tagKey = `os_auction:${osId}`;
+  const catKey = mapCategory(auction.propertyCategory);
+  const price = Number(auction.firstPriceOffer ?? 0);
+  const lat = getNumberOrNull(auction.propertyLatitude);
+  const lng = getNumberOrNull(auction.propertyLongitude);
+  const ownershipPct = getOwnershipPercentage(auction);
+  const ownershipTag = getOwnershipTag(auction, ownershipPct);
+  const subtypeTag = getSubtypeTag(auction.propertyCategory);
 
   return {
     id: osId,
-    title: buildTitle(a),
-    city: a.propertyMunicipalityName ?? "Ελλάδα",
-    address: a.propertyAddress ?? null,
+    title: buildTitle(auction),
+    city: getAuctionCity(auction),
+    address: getNullableText(auction.propertyAddress),
     price,
     auction_starting_bid: price,
-    auction_date: a.auctionDate ?? null,
-    auction_court: a.auctionStatus ?? null,
+    auction_date: getNullableText(auction.auctionDate),
+    auction_court: getNullableText(auction.auctionStatus),
     property_type: catKey,
-    cover_image_url: streetViewUrl,
-    sqm: a.propertySquareMeters != null ? Number(a.propertySquareMeters) : 1,
+    cover_image_url: getStreetViewUrl(lat, lng),
+    sqm: getNumberOrDefault(auction.propertySquareMeters, 1),
     bedrooms: null,
     bathrooms: null,
     latitude: lat,
     longitude: lng,
-    tags: [
-      tagKey,
-      "source:maiprop-os",
-      `auction_status:${a.auctionStatus ?? "scheduled"}`,
-      ...(a.currentRound != null ? [`round:${a.currentRound}`] : []),
-      ...(ownershipTag ? [ownershipTag] : []),
-      ...(ownershipPct != null ? [`ownership_pct:${ownershipPct}`] : []),
-      ...(subtypeTag ? [subtypeTag] : []),
-    ],
-    year_built: a.constructionYear != null ? Number(a.constructionYear) : null,
+    tags: getAuctionTags(auction, tagKey, ownershipTag, ownershipPct, subtypeTag),
+    year_built: getNumberOrNull(auction.constructionYear),
     construction_status: null,
-    website_url: auctionUrl,
-    region: a.propertyPrefectureName ?? null,
+    website_url: getAuctionUrl(auction),
+    region: getNullableText(auction.propertyPrefectureName),
     is_featured: false,
     priority_placement: 0,
   };
@@ -355,30 +389,44 @@ const parseRequestBody = async (req: Request): Promise<Record<string, unknown>> 
     : {};
 };
 
+const getDefaultPageSize = (planCap: number): number =>
+  Number.isFinite(planCap) ? planCap : AUTH_CAP;
+
+const getRequestedPageSize = (body: Record<string, unknown>, planCap: number): number =>
+  Number(body.pageSize ?? body.size ?? getDefaultPageSize(planCap));
+
+const getCappedPageSize = (requestedSize: number, planCap: number): number =>
+  Number.isFinite(planCap) ? Math.min(requestedSize, planCap) : requestedSize;
+
 const getPageRequest = (
   body: Record<string, unknown>,
   planCap: number,
 ): { page: number; size: number } => {
-  const requestedSize = Number(body.pageSize ?? body.size ?? (planCap === Infinity ? AUTH_CAP : planCap));
-  const size = planCap === Infinity ? requestedSize : Math.min(requestedSize, planCap);
-  return { page: Number(body.page ?? 0), size };
+  const requestedSize = getRequestedPageSize(body, planCap);
+  return { page: Number(body.page ?? 0), size: getCappedPageSize(requestedSize, planCap) };
 };
 
-const buildFilterRequest = (body: Record<string, unknown>): Record<string, unknown> => {
-  const today = new Date().toISOString().split("T")[0];
-  const filterRequest: Record<string, unknown> = {
-    auctionDateFrom: body.auctionDateFrom ?? today,
-  };
+type FilterEntry = readonly [string, unknown];
 
-  for (const key of OPTIONAL_FILTER_KEYS) {
-    const value = body[key];
-    if (value) filterRequest[key] = value;
-  }
+const hasTruthyFilterValue = ([, value]: FilterEntry): boolean => Boolean(value);
 
-  if (body.auctionAmountFrom != null) filterRequest.auctionAmountFrom = body.auctionAmountFrom;
-  if (body.auctionAmountTo != null) filterRequest.auctionAmountTo = body.auctionAmountTo;
-  return filterRequest;
-};
+const getOptionalFilters = (body: Record<string, unknown>): Record<string, unknown> =>
+  Object.fromEntries(
+    OPTIONAL_FILTER_KEYS
+      .map((key) => [key, body[key]] as const)
+      .filter(hasTruthyFilterValue),
+  );
+
+const getAmountFilterEntries = (body: Record<string, unknown>): FilterEntry[] =>
+  AMOUNT_FILTER_KEYS.flatMap((key) =>
+    body[key] == null ? [] : [[key, body[key]] as const],
+  );
+
+const buildFilterRequest = (body: Record<string, unknown>): Record<string, unknown> => ({
+  auctionDateFrom: body.auctionDateFrom ?? new Date().toISOString().split("T")[0],
+  ...getOptionalFilters(body),
+  ...Object.fromEntries(getAmountFilterEntries(body)),
+});
 
 const fetchOsAuctionDetails = async (
   osConfig: OsConfig,
@@ -434,56 +482,87 @@ const isOsApiFailure = (err: unknown): err is OsApiFailure =>
   "kind" in err &&
   (err as { kind?: unknown }).kind === "os-api";
 
-// ── Main handler ─────────────────────────────────────────────────────────────
+const getClientIp = (req: Request): string =>
+  req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
 
-Deno.serve(async (req) => {
-  const corsHeaders = getCorsHeaders(req);
+const getGuardResponse = async (
+  req: Request,
+  corsHeaders: Record<string, string>,
+): Promise<Response | null> => {
   const preflight = handleCors(req);
   if (preflight) return preflight;
+  return await limiter.isLimited(getClientIp(req))
+    ? tooManyRequestsResponse(corsHeaders)
+    : null;
+};
 
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
-  if (await limiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);
-
+const getRuntimeConfig = (corsHeaders: Record<string, string>): RuntimeConfig | Response => {
   const osConfig = getOsConfig();
   if (!osConfig) return jsonResponse({ error: "OS credentials not configured" }, corsHeaders, 503);
 
   const supabaseConfig = getSupabaseConfig();
   if (!supabaseConfig) return jsonResponse({ error: "Supabase credentials not configured" }, corsHeaders, 503);
 
-  const sb = createClient(supabaseConfig.url, supabaseConfig.serviceRoleKey);
+  return { osConfig, supabaseConfig };
+};
+
+const getSerializedPlanCap = (planCap: number): number | null =>
+  Number.isFinite(planCap) ? planCap : null;
+
+const buildAuctionResponsePayload = (
+  mapped: MappedAuction[],
+  total: number,
+  page: number,
+  planCap: number,
+) => ({
+  data: mapped,
+  total,
+  page,
+  planCap: getSerializedPlanCap(planCap),
+});
+
+const handleFetchError = (err: unknown, corsHeaders: Record<string, string>): Response => {
+  if (isOsApiFailure(err)) {
+    return jsonResponse({ error: `OS returned ${err.status}`, detail: err.detail }, corsHeaders, 502);
+  }
+
+  const message = err instanceof Error ? err.message : String(err);
+  log.error("fetch error", { err: message });
+  return jsonResponse({ error: message }, corsHeaders, 500);
+};
+
+const handleAuctionRequest = async (
+  req: Request,
+  corsHeaders: Record<string, string>,
+  runtimeConfig: RuntimeConfig,
+): Promise<Response> => {
+  const sb = createClient(runtimeConfig.supabaseConfig.url, runtimeConfig.supabaseConfig.serviceRoleKey);
 
   try {
     const body = await parseRequestBody(req);
     const planCap = await getPlanCap(req, sb);
-
     const { page, size } = getPageRequest(body, planCap);
-
-    // Build AuctionFilterRequest — only future auctions by default
     const filterRequest = buildFilterRequest(body);
-
-    const osResponse = await fetchOsAuctionDetails(osConfig, page, size, filterRequest);
+    const osResponse = await fetchOsAuctionDetails(runtimeConfig.osConfig, page, size, filterRequest);
     const { auctions, total } = parseOsResponse(osResponse);
-
     const mapped = auctions.map(mapAuction);
 
     log.info("returning auctions", { count: mapped.length, total, page });
-
-    return jsonResponse(
-      {
-        data: mapped,
-        total,
-        page,
-        planCap: planCap === Infinity ? null : planCap,
-      },
-      corsHeaders,
-    );
+    return jsonResponse(buildAuctionResponsePayload(mapped, total, page, planCap), corsHeaders);
   } catch (err: unknown) {
-    if (isOsApiFailure(err)) {
-      return jsonResponse({ error: `OS returned ${err.status}`, detail: err.detail }, corsHeaders, 502);
-    }
-
-    const message = err instanceof Error ? err.message : String(err);
-    log.error("fetch error", { err: message });
-    return jsonResponse({ error: message }, corsHeaders, 500);
+    return handleFetchError(err, corsHeaders);
   }
+};
+
+// ── Main handler ─────────────────────────────────────────────────────────────
+
+Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+  const guardResponse = await getGuardResponse(req, corsHeaders);
+  if (guardResponse) return guardResponse;
+
+  const runtimeConfig = getRuntimeConfig(corsHeaders);
+  if (runtimeConfig instanceof Response) return runtimeConfig;
+
+  return await handleAuctionRequest(req, corsHeaders, runtimeConfig);
 });
