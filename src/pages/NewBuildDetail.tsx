@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import {
   ArrowLeft, Building2, MapPin, Calendar, Home,
   Zap, Eye, Thermometer, Check,
-  ChevronDown, ChevronUp, Shield, Flame, Wifi, Car, TreePine, Phone,
+  ChevronDown, ChevronUp, Shield, Flame, Wifi, Car, TreePine,
   Loader2, Maximize2, BedDouble, Bath, Layers, FileImage,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -70,21 +70,32 @@ export default function NewBuildDetail() {
     queryKey: ["listing", id],
     queryFn: async () => {
       if (!id) return null;
+      // listings.owner_id has no FK registered in the PostgREST schema cache,
+      // so we fetch the profile separately via profiles_public (same pattern as useListings.ts).
       const { data, error } = await supabase
         .from("listings")
-        .select(`
-          *,
-          profiles:owner_id(user_id, display_name, avatar_url, phone),
-          listing_images(url, sort_order)
-        `)
+        .select(`*, listing_images(url, sort_order)`)
         .eq("id", id)
         .maybeSingle();
       if (error) throw error;
-      return (data ?? null) as typeof data & {
+      if (!data) return null;
+
+      let profiles: { user_id: string; display_name?: string | null; avatar_url?: string | null } | null = null;
+      if (data.owner_id) {
+        const { data: prof } = await supabase
+          .from("profiles_public")
+          .select("user_id, display_name, avatar_url")
+          .eq("user_id", data.owner_id)
+          .maybeSingle();
+        profiles = prof ?? null;
+      }
+
+      return { ...data, profiles } as typeof data & {
+        profiles: { user_id: string; display_name?: string | null; avatar_url?: string | null } | null;
         walkability_score?: number | null;
         safety_score?: number | null;
         noise_score?: number | null;
-      } | null;
+      };
     },
     enabled: !!id,
   });
@@ -199,7 +210,7 @@ export default function NewBuildDetail() {
     ? [listing.cover_image_url, ...sortedImages.filter((s: string) => s !== listing.cover_image_url)]
     : sortedImages;
 
-  const owner = listing.profiles as { display_name?: string; avatar_url?: string; phone?: string } | null;
+  const owner = listing.profiles as { display_name?: string | null; avatar_url?: string | null } | null;
 
   return (
     <div className="min-h-screen bg-background">
@@ -548,15 +559,6 @@ export default function NewBuildDetail() {
                   onLogin={() => navigate("/login")}
                   onContact={handleRegisterInterest}
                 />
-
-                {/* Call button (always accessible) */}
-                {owner?.phone && (
-                  <a href={`tel:${owner.phone}`} className="block">
-                    <Button variant="outline" className="w-full gap-2">
-                      <Phone className="w-4 h-4" /> Call developer
-                    </Button>
-                  </a>
-                )}
 
                 {/* Developer card */}
                 {owner && (

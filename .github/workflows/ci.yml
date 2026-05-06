@@ -71,6 +71,25 @@ jobs:
             echo "::warning file=$TYPES_FILE::Generated types file has grown to $LINES lines (threshold: 5000). Consider reviewing schema size."
           fi
 
+      - name: Verify types.ts matches live schema
+        # Runs only when a staging project is provisioned. Once STAGING_SUPABASE_PROJECT_ID
+        # and SUPABASE_ACCESS_TOKEN are added to repository secrets this step becomes a
+        # hard gate: any schema change applied outside migrations will fail CI.
+        if: ${{ secrets.STAGING_SUPABASE_PROJECT_ID != '' }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          npx supabase gen types typescript \
+            --project-id "${{ secrets.STAGING_SUPABASE_PROJECT_ID }}" \
+            > /tmp/fresh-types.ts
+          if ! diff -q src/integrations/supabase/types.ts /tmp/fresh-types.ts > /dev/null 2>&1; then
+            echo "::error file=src/integrations/supabase/types.ts::Generated types are out of sync with the live schema."
+            echo "Run: npx supabase gen types typescript --project-id <id> > src/integrations/supabase/types.ts"
+            diff src/integrations/supabase/types.ts /tmp/fresh-types.ts | head -60
+            exit 1
+          fi
+          echo "types.ts is in sync with the live schema."
+
       - name: SBOM generation
         run: npm sbom --sbom-format cyclonedx > /dev/null 2>&1 || echo "::notice::npm sbom not supported in this npm version — skipping"
 

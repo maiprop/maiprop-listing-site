@@ -10,7 +10,7 @@
  * See docs/ENTERPRISE_ASSESSMENT_2026-04-27.md (Quadrant I, circular deps).
  */
 
-export type PropertyType = "apartment" | "house" | "villa" | "land" | "commercial" | "office";
+export type PropertyType = "apartment" | "house" | "villa" | "land" | "commercial" | "office" | "studio" | "maisonette" | "warehouse" | "hotel" | "mixed_use" | "parking" | "storage";
 export type ListingType = "sale" | "rent" | "auction" | "open_house";
 export type WizardStep = "type" | "details" | "features" | "location" | "pricing" | "photos";
 

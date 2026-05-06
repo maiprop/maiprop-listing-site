@@ -45,7 +45,6 @@ export default defineConfig((_env) => ({
           if (!id.includes("node_modules")) return undefined;
           if (id.includes("@radix-ui/")) return "vendor-radix";
           if (id.includes("/recharts/") || /\/d3-[a-z-]+\//.test(id)) return "vendor-charts";
-          if (id.includes("/framer-motion/")) return "vendor-motion";
           if (id.includes("/lucide-react/")) return "vendor-icons";
           if (
             id.includes("/react-router") ||
