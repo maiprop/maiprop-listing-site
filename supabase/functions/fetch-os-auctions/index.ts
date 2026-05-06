@@ -96,24 +96,24 @@ const OWNERSHIP_STATUS_TAGS: Record<string, string> = {
   HORIZONTAL_OWNERSHIP: "ownership:horizontal",
 };
 
-function mapCategory(category?: string): string {
+const mapCategory = (category?: string): string => {
   if (!category) return "apartment";
   return CATEGORY_MAP[category.toUpperCase()] ?? "apartment";
-}
+};
 
-function getSubtypeTag(category?: string): string | null {
+const getSubtypeTag = (category?: string): string | null => {
   if (!category) return null;
   const categoryKey = category.toUpperCase();
   if (LAND_TYPE_TAG[categoryKey]) return `land_type:${LAND_TYPE_TAG[categoryKey]}`;
   if (COMMERCIAL_TYPE_TAG[categoryKey]) return `commercial_type:${COMMERCIAL_TYPE_TAG[categoryKey]}`;
   return null;
-}
+};
 
-function mapOwnershipStatusToTag(raw?: string | null): string | null {
+const mapOwnershipStatusToTag = (raw?: string | null): string | null => {
   if (!raw) return null;
   const ownershipStatus = raw.toUpperCase().trim();
   return OWNERSHIP_STATUS_TAGS[ownershipStatus] ?? `ownership:${ownershipStatus.toLowerCase()}`;
-}
+};
 
 // ── OS DTO type (same subset as poll-os-auctions) ───────────────────────────
 
@@ -170,16 +170,47 @@ type MappedAuction = {
   priority_placement: 0;
 };
 
-function buildTitle(a: OsAuction): string {
+type OsResponse = {
+  data?: OsAuction[];
+  responseMetadata?: { pagination?: { totalElements?: number } };
+};
+
+type OsConfig = {
+  url: string;
+  email: string;
+  password: string;
+};
+
+type SupabaseConfig = {
+  url: string;
+  serviceRoleKey: string;
+};
+
+type OsApiFailure = {
+  kind: "os-api";
+  status: number;
+  detail: string;
+};
+
+const OPTIONAL_FILTER_KEYS = [
+  "auctionDateTo",
+  "propertyCategories",
+  "prefectureId",
+  "propertyMunicipalityId",
+  "auctionStatuses",
+  "boundingBox",
+] as const;
+
+const buildTitle = (a: OsAuction): string => {
   const catKey = mapCategory(a.propertyCategory);
   const catGr = CATEGORY_GR[catKey] ?? "Ακίνητο";
   const city = a.propertyMunicipalityName ?? "Ελλάδα";
   const price = Number(a.firstPriceOffer ?? 0);
   const priceStr = price > 0 ? ` – €${price.toLocaleString("el-GR")}` : "";
   return `Πλειστηριασμός ${catGr} | ${city}${priceStr}`;
-}
+};
 
-function mapAuction(a: OsAuction): MappedAuction {
+const mapAuction = (a: OsAuction): MappedAuction => {
   const osId = String(a.auctionListingId ?? "unknown");
   const tagKey = `os_auction:${osId}`;
   const catKey = mapCategory(a.propertyCategory);
@@ -236,15 +267,15 @@ function mapAuction(a: OsAuction): MappedAuction {
     is_featured: false,
     priority_placement: 0,
   };
-}
+};
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-async function fetchWithTimeout(
+const fetchWithTimeout = async (
   url: string,
   options: RequestInit,
   timeoutMs: number,
-): Promise<Response> {
+): Promise<Response> => {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -252,9 +283,9 @@ async function fetchWithTimeout(
   } finally {
     clearTimeout(timer);
   }
-}
+};
 
-async function getOsToken(baseUrl: string, email: string, password: string): Promise<string> {
+const getOsToken = async (baseUrl: string, email: string, password: string): Promise<string> => {
   const res = await fetchWithTimeout(
     `${baseUrl}/auth/login`,
     {
@@ -268,13 +299,13 @@ async function getOsToken(baseUrl: string, email: string, password: string): Pro
   const token = json?.data?.token ?? json?.token ?? json?.accessToken;
   if (!token) throw new Error(`OS auth failed (${res.status}): ${JSON.stringify(json).slice(0, 200)}`);
   return token;
-}
+};
 
 /** Determine plan cap from the request's JWT. Returns FREE_CAP if unauthenticated. */
-async function getPlanCap(
+const getPlanCap = async (
   req: Request,
   sb: SupabaseAdminClient,
-): Promise<number> {
+): Promise<number> => {
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) return FREE_CAP;
 
@@ -290,7 +321,118 @@ async function getPlanCap(
 
   if (profile?.role === "admin") return Infinity;
   return AUTH_CAP;
-}
+};
+
+const jsonResponse = (
+  payload: unknown,
+  corsHeaders: Record<string, string>,
+  status?: number,
+): Response => {
+  const init: ResponseInit = {
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  };
+  if (status !== undefined) init.status = status;
+  return new Response(JSON.stringify(payload), init);
+};
+
+const getOsConfig = (): OsConfig | null => {
+  const url = Deno.env.get("MAIPROP_OS_URL")?.replace(/\/$/, "");
+  const email = Deno.env.get("MAIPROP_OS_EMAIL");
+  const password = Deno.env.get("MAIPROP_OS_PASSWORD");
+  return url && email && password ? { url, email, password } : null;
+};
+
+const getSupabaseConfig = (): SupabaseConfig | null => {
+  const url = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  return url && serviceRoleKey ? { url, serviceRoleKey } : null;
+};
+
+const parseRequestBody = async (req: Request): Promise<Record<string, unknown>> => {
+  const body = await req.json().catch(() => ({}));
+  return body && typeof body === "object" && !Array.isArray(body)
+    ? body as Record<string, unknown>
+    : {};
+};
+
+const getPageRequest = (
+  body: Record<string, unknown>,
+  planCap: number,
+): { page: number; size: number } => {
+  const requestedSize = Number(body.pageSize ?? body.size ?? (planCap === Infinity ? AUTH_CAP : planCap));
+  const size = planCap === Infinity ? requestedSize : Math.min(requestedSize, planCap);
+  return { page: Number(body.page ?? 0), size };
+};
+
+const buildFilterRequest = (body: Record<string, unknown>): Record<string, unknown> => {
+  const today = new Date().toISOString().split("T")[0];
+  const filterRequest: Record<string, unknown> = {
+    auctionDateFrom: body.auctionDateFrom ?? today,
+  };
+
+  for (const key of OPTIONAL_FILTER_KEYS) {
+    const value = body[key];
+    if (value) filterRequest[key] = value;
+  }
+
+  if (body.auctionAmountFrom != null) filterRequest.auctionAmountFrom = body.auctionAmountFrom;
+  if (body.auctionAmountTo != null) filterRequest.auctionAmountTo = body.auctionAmountTo;
+  return filterRequest;
+};
+
+const fetchOsAuctionDetails = async (
+  osConfig: OsConfig,
+  page: number,
+  size: number,
+  filterRequest: Record<string, unknown>,
+): Promise<OsResponse | OsAuction[]> => {
+  log.info("authenticating with OS API");
+  const token = await getOsToken(osConfig.url, osConfig.email, osConfig.password);
+
+  const endpoint = `${osConfig.url}/api/v1/auctions/filter/details?page=${page}&pageSize=${size}`;
+  log.info("fetching auctions", { page, size, filter: filterRequest });
+
+  const auctionResponse = await fetchWithTimeout(
+    endpoint,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(filterRequest),
+    },
+    20_000,
+  );
+
+  if (!auctionResponse.ok) {
+    const detail = (await auctionResponse.text()).slice(0, 300);
+    log.error("OS API error", { status: auctionResponse.status, detail });
+    throw { kind: "os-api", status: auctionResponse.status, detail } satisfies OsApiFailure;
+  }
+
+  return (await auctionResponse.json()) as OsResponse | OsAuction[];
+};
+
+const parseOsResponse = (
+  json: OsResponse | OsAuction[],
+): { auctions: OsAuction[]; total: number } => {
+  const auctions = Array.isArray(json)
+    ? json
+    : Array.isArray(json.data)
+    ? json.data
+    : [];
+  const total = Array.isArray(json)
+    ? auctions.length
+    : (json.responseMetadata?.pagination?.totalElements ?? auctions.length);
+  return { auctions, total };
+};
+
+const isOsApiFailure = (err: unknown): err is OsApiFailure =>
+  typeof err === "object" &&
+  err !== null &&
+  "kind" in err &&
+  (err as { kind?: unknown }).kind === "os-api";
 
 // ── Main handler ─────────────────────────────────────────────────────────────
 
@@ -302,113 +444,46 @@ Deno.serve(async (req) => {
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
   if (await limiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);
 
-  const OS_URL = Deno.env.get("MAIPROP_OS_URL")?.replace(/\/$/, "");
-  const OS_EMAIL = Deno.env.get("MAIPROP_OS_EMAIL");
-  const OS_PASS = Deno.env.get("MAIPROP_OS_PASSWORD");
+  const osConfig = getOsConfig();
+  if (!osConfig) return jsonResponse({ error: "OS credentials not configured" }, corsHeaders, 503);
 
-  if (!OS_URL || !OS_EMAIL || !OS_PASS) {
-    return new Response(
-      JSON.stringify({ error: "OS credentials not configured" }),
-      { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
-  }
+  const supabaseConfig = getSupabaseConfig();
+  if (!supabaseConfig) return jsonResponse({ error: "Supabase credentials not configured" }, corsHeaders, 503);
 
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!supabaseUrl || !supabaseServiceRoleKey) {
-    return new Response(
-      JSON.stringify({ error: "Supabase credentials not configured" }),
-      { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
-  }
-
-  const sb = createClient(supabaseUrl, supabaseServiceRoleKey);
+  const sb = createClient(supabaseConfig.url, supabaseConfig.serviceRoleKey);
 
   try {
-    const body = await req.json().catch(() => ({}));
+    const body = await parseRequestBody(req);
     const planCap = await getPlanCap(req, sb);
 
-    const requestedSize = Number(body.pageSize ?? body.size ?? (planCap === Infinity ? AUTH_CAP : planCap));
-    const size = planCap === Infinity ? requestedSize : Math.min(requestedSize, planCap);
-    const page = Number(body.page ?? 0);
+    const { page, size } = getPageRequest(body, planCap);
 
     // Build AuctionFilterRequest — only future auctions by default
-    const today = new Date().toISOString().split("T")[0];
-    const filterRequest: Record<string, unknown> = {
-      auctionDateFrom: body.auctionDateFrom ?? today,
-    };
-    if (body.auctionDateTo) filterRequest.auctionDateTo = body.auctionDateTo;
-    if (body.propertyCategories) filterRequest.propertyCategories = body.propertyCategories;
-    if (body.prefectureId) filterRequest.prefectureId = body.prefectureId;
-    if (body.propertyMunicipalityId) filterRequest.propertyMunicipalityId = body.propertyMunicipalityId;
-    if (body.auctionStatuses) filterRequest.auctionStatuses = body.auctionStatuses;
-    if (body.auctionAmountFrom != null) filterRequest.auctionAmountFrom = body.auctionAmountFrom;
-    if (body.auctionAmountTo != null) filterRequest.auctionAmountTo = body.auctionAmountTo;
-    if (body.boundingBox) filterRequest.boundingBox = body.boundingBox;
+    const filterRequest = buildFilterRequest(body);
 
-    log.info("authenticating with OS API");
-    const token = await getOsToken(OS_URL, OS_EMAIL, OS_PASS);
-
-    const endpoint = `${OS_URL}/api/v1/auctions/filter/details?page=${page}&pageSize=${size}`;
-    log.info("fetching auctions", { page, size, filter: filterRequest });
-
-    const auctRes = await fetchWithTimeout(
-      endpoint,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(filterRequest),
-      },
-      20_000,
-    );
-
-    if (!auctRes.ok) {
-      const errText = await auctRes.text();
-      log.error("OS API error", { status: auctRes.status, detail: errText.slice(0, 300) });
-      return new Response(
-        JSON.stringify({ error: `OS returned ${auctRes.status}`, detail: errText.slice(0, 300) }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
-    type OsResponse = {
-      data?: OsAuction[];
-      responseMetadata?: { pagination?: { totalElements?: number } };
-    };
-    const json = (await auctRes.json()) as OsResponse | OsAuction[];
-
-    const auctions: OsAuction[] = Array.isArray(json)
-      ? json
-      : Array.isArray(json.data)
-      ? json.data
-      : [];
-
-    const total = Array.isArray(json)
-      ? auctions.length
-      : (json.responseMetadata?.pagination?.totalElements ?? auctions.length);
+    const osResponse = await fetchOsAuctionDetails(osConfig, page, size, filterRequest);
+    const { auctions, total } = parseOsResponse(osResponse);
 
     const mapped = auctions.map(mapAuction);
 
     log.info("returning auctions", { count: mapped.length, total, page });
 
-    return new Response(
-      JSON.stringify({
+    return jsonResponse(
+      {
         data: mapped,
         total,
         page,
         planCap: planCap === Infinity ? null : planCap,
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      },
+      corsHeaders,
     );
   } catch (err: unknown) {
+    if (isOsApiFailure(err)) {
+      return jsonResponse({ error: `OS returned ${err.status}`, detail: err.detail }, corsHeaders, 502);
+    }
+
     const message = err instanceof Error ? err.message : String(err);
     log.error("fetch error", { err: message });
-    return new Response(
-      JSON.stringify({ error: message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return jsonResponse({ error: message }, corsHeaders, 500);
   }
 });
