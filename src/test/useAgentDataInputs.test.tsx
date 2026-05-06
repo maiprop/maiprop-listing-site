@@ -24,7 +24,7 @@ import {
   useSubmitAgentDataInput,
 } from "@/hooks/useAgentDataInputs";
 
-function makeWrapper() {
+const makeWrapper = () => {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   return {
     qc,
@@ -32,7 +32,7 @@ function makeWrapper() {
       <QueryClientProvider client={qc}>{children}</QueryClientProvider>
     ),
   };
-}
+};
 
 beforeEach(() => {
   vi.clearAllMocks();

@@ -40,15 +40,15 @@ vi.mock("@/contexts/AuthContext", () => ({
     user: { id: "u1" },
     profile: { role: "buyer" },
   }),
-  AuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  AuthProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-async function renderAuctionsTab() {
+const renderAuctionsTab = async () => {
   const { default: AuctionsTab } = await import("@/pages/dashboard/AuctionsTab");
   return renderWithProviders(<AuctionsTab />);
-}
+};
 
 beforeEach(() => {
   vi.clearAllMocks();

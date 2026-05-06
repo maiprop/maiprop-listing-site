@@ -18,7 +18,7 @@ vi.mock("@/contexts/AuthContext", () => ({ useAuth: vi.fn() }));
 import { useAuth } from "@/contexts/AuthContext";
 import { useAgentDataInputStatus, useSubmitDataInput } from "@/hooks/useAgentDataInput";
 
-function makeWrapper() {
+const makeWrapper = () => {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   return {
     qc,
@@ -26,7 +26,7 @@ function makeWrapper() {
       <QueryClientProvider client={qc}>{children}</QueryClientProvider>
     ),
   };
-}
+};
 
 beforeEach(() => vi.clearAllMocks());
 
