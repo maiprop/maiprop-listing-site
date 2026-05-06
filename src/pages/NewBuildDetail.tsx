@@ -43,6 +43,23 @@ type PublicProfile = {
   avatar_url?: string | null;
 };
 
+type RegisterInterestForm = {
+  name: string;
+  phone: string;
+  message: string;
+};
+
+type InterestProfile = {
+  display_name?: string | null;
+  first_name?: string | null;
+  phone?: string | null;
+};
+
+type InterestUser = {
+  id: string;
+  email?: string | null;
+};
+
 const fetchPublicProfile = async (ownerId?: string | null): Promise<PublicProfile | null> => {
   if (!ownerId) return null;
   const { data } = await supabase
@@ -52,6 +69,44 @@ const fetchPublicProfile = async (ownerId?: string | null): Promise<PublicProfil
     .maybeSingle();
   return data ?? null;
 };
+
+const getInterestContactName = (
+  form: RegisterInterestForm,
+  profile?: InterestProfile | null,
+): string => form.name || profile?.display_name || profile?.first_name || "Interested buyer";
+
+const buildInterestMessage = (listingTitle: string, form: RegisterInterestForm): string =>
+  [
+    `Hi, I'm interested in ${listingTitle}.`,
+    form.message ? `\n\n${form.message}` : "",
+    form.phone ? `\nContact: ${form.phone}` : "",
+  ].join("").trim();
+
+const buildLeadInsert = (
+  listingId: string,
+  user: InterestUser,
+  profile?: InterestProfile | null,
+) => ({
+  new_building_id: listingId,
+  user_id: user.id,
+  email: user.email ?? "",
+  full_name: profile?.display_name || "",
+  phone: profile?.phone || null,
+  investment_budget: 0,
+  notes: "",
+  utm_source: "newbuild_detail_register",
+});
+
+const buildInterestNotification = (
+  ownerId: string,
+  contactName: string,
+  listingTitle: string,
+) => ({
+  user_id: ownerId,
+  type: "new_interest",
+  title: "New interest registered",
+  body: `${contactName} registered interest in ${listingTitle}`,
+});
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function NewBuildDetail() {
@@ -108,34 +163,21 @@ export default function NewBuildDetail() {
     enabled: !!id,
   });
 
-  const handleRegisterInterest = async (form: { name: string; phone: string; message: string }) => {
-    if (!listing?.owner_id) return;
+  const handleRegisterInterest = async (form: RegisterInterestForm) => {
     if (!user) { navigate("/login"); return; }
-    if (!id) return;
-    const contactName = form.name || profile?.display_name || profile?.first_name || "Interested buyer";
-    const msg = [
-      `Hi, I'm interested in ${listing.title}.`,
-      form.message ? `\n\n${form.message}` : "",
-      form.phone ? `\nContact: ${form.phone}` : "",
-    ].join("").trim();
+    if (!listing?.owner_id || !id) return;
+
+    const contactName = getInterestContactName(form, profile);
+    const msg = buildInterestMessage(listing.title, form);
     void msg; // message constructed for future use
+
     await startConv.mutateAsync({ other_user_id: listing.owner_id, listing_id: id });
-    const { error: _leadInsertError } = await supabase.from("new_building_leads").insert({
-      new_building_id: id,
-      user_id: user.id,
-      email: user.email ?? "",
-      full_name: profile?.display_name || "",
-      phone: profile?.phone || null,
-      investment_budget: 0,
-      notes: "",
-      utm_source: "newbuild_detail_register",
-    });
-    await supabase.from("notifications").insert({
-      user_id: listing.owner_id,
-      type: "new_interest",
-      title: "New interest registered",
-      body: `${contactName} registered interest in ${listing.title}`,
-    });
+    const { error: _leadInsertError } = await supabase.from("new_building_leads").insert(
+      buildLeadInsert(id, user, profile),
+    );
+    await supabase.from("notifications").insert(
+      buildInterestNotification(listing.owner_id, contactName, listing.title),
+    );
     toast.success("Interest registered — the developer will be in touch");
   };
 
