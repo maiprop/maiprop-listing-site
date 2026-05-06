@@ -250,13 +250,15 @@ const getOwnershipTag = (auction: OsAuction, ownershipPct: number | undefined): 
 const getAuctionStatusTag = (auction: OsAuction): string =>
   `auction_status:${auction.auctionStatus ?? "scheduled"}`;
 
-const getCurrentRoundTags = (auction: OsAuction): string[] =>
-  auction.currentRound != null ? [`round:${auction.currentRound}`] : [];
+const getCurrentRoundTag = (auction: OsAuction): string | null =>
+  auction.currentRound != null ? `round:${auction.currentRound}` : null;
 
-const getOptionalTag = (tag: string | null): string[] => tag ? [tag] : [];
+const getOwnershipPercentageTag = (ownershipPct: number | undefined): string | null =>
+  ownershipPct != null ? `ownership_pct:${ownershipPct}` : null;
 
-const getOwnershipPercentageTags = (ownershipPct: number | undefined): string[] =>
-  ownershipPct != null ? [`ownership_pct:${ownershipPct}`] : [];
+const isPresentTag = (tag: string | null): tag is string => tag != null;
+
+const compactTags = (tags: (string | null)[]): string[] => tags.filter(isPresentTag);
 
 const getAuctionTags = (
   auction: OsAuction,
@@ -264,15 +266,15 @@ const getAuctionTags = (
   ownershipTag: string | null,
   ownershipPct: number | undefined,
   subtypeTag: string | null,
-): string[] => [
+): string[] => compactTags([
     tagKey,
     "source:maiprop-os",
     getAuctionStatusTag(auction),
-    ...getCurrentRoundTags(auction),
-    ...getOptionalTag(ownershipTag),
-    ...getOwnershipPercentageTags(ownershipPct),
-    ...getOptionalTag(subtypeTag),
-  ];
+    getCurrentRoundTag(auction),
+    ownershipTag,
+    getOwnershipPercentageTag(ownershipPct),
+    subtypeTag,
+  ]);
 
 const mapAuction = (auction: OsAuction): MappedAuction => {
   const osId = String(auction.auctionListingId ?? "unknown");
@@ -400,8 +402,19 @@ const parseRequestBody = async (req: Request): Promise<Record<string, unknown>> 
 const getDefaultPageSize = (planCap: number): number =>
   Number.isFinite(planCap) ? planCap : AUTH_CAP;
 
-const getRequestedPageSize = (body: Record<string, unknown>, planCap: number): number =>
-  Number(body.pageSize ?? body.size ?? getDefaultPageSize(planCap));
+const getRequestNumber = (
+  body: Record<string, unknown>,
+  key: string,
+  fallback: number,
+): number => {
+  const value = body[key];
+  return value == null ? fallback : Number(value);
+};
+
+const getRequestedPageSize = (body: Record<string, unknown>, planCap: number): number => {
+  const sizeFallback = getRequestNumber(body, "size", getDefaultPageSize(planCap));
+  return getRequestNumber(body, "pageSize", sizeFallback);
+};
 
 const getCappedPageSize = (requestedSize: number, planCap: number): number =>
   Number.isFinite(planCap) ? Math.min(requestedSize, planCap) : requestedSize;
@@ -409,10 +422,10 @@ const getCappedPageSize = (requestedSize: number, planCap: number): number =>
 const getPageRequest = (
   body: Record<string, unknown>,
   planCap: number,
-): { page: number; size: number } => {
-  const requestedSize = getRequestedPageSize(body, planCap);
-  return { page: Number(body.page ?? 0), size: getCappedPageSize(requestedSize, planCap) };
-};
+): { page: number; size: number } => ({
+  page: getRequestNumber(body, "page", 0),
+  size: getCappedPageSize(getRequestedPageSize(body, planCap), planCap),
+});
 
 type FilterEntry = readonly [string, unknown];
 
