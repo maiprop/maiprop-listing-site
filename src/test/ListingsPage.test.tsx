@@ -131,7 +131,7 @@ vi.mock("@/lib/listingUtils", () => ({
 
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: vi.fn().mockReturnValue({ user: null, profile: null }),
-  AuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  AuthProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
 vi.mock("@/components/Navbar", () => ({ Navbar: () => <nav data-testid="navbar" /> }));
@@ -176,11 +176,11 @@ vi.mock("@/components/listings/PropertyTypeButton", () => ({
   ),
 }));
 vi.mock("@/components/listings/MapGate", () => ({
-  MapGate: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  MapGate: ({ children }: { children: React.ReactNode }) => children,
 }));
 vi.mock("react-helmet-async", () => ({
-  Helmet: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  HelmetProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  Helmet: ({ children }: { children: React.ReactNode }) => children,
+  HelmetProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -214,7 +214,7 @@ describe("Listings page", () => {
     await waitFor(() => expect(screen.queryAllByTestId("property-card").length).toBeGreaterThan(0));
   });
 
-  it("toggles to split view on button click", async () => {
+  it("toggles to split view on button click", () => {
     renderWithProviders(<ListingsPage />);
     const splitBtn = screen.queryByRole("button", { name: /split view/i });
     if (splitBtn) fireEvent.click(splitBtn);
@@ -222,7 +222,7 @@ describe("Listings page", () => {
     expect(document.querySelector("[data-testid='navbar']")).toBeInTheDocument();
   });
 
-  it("toggles to map view on button click", async () => {
+  it("toggles to map view on button click", () => {
     renderWithProviders(<ListingsPage />);
     const mapBtn = screen.queryByRole("button", { name: /map view/i });
     if (mapBtn) fireEvent.click(mapBtn);
@@ -240,7 +240,7 @@ describe("Listings page", () => {
     }
   });
 
-  it("calls setParam when listing type changes", async () => {
+  it("calls setParam when listing type changes", () => {
     renderWithProviders(<ListingsPage />);
     const typeBtn = screen.queryByTestId("listing-type-btn");
     if (typeBtn) {
@@ -249,7 +249,7 @@ describe("Listings page", () => {
     }
   });
 
-  it("calls setParams when property type changes", async () => {
+  it("calls setParams when property type changes", () => {
     renderWithProviders(<ListingsPage />);
     const propBtn = screen.queryByTestId("property-type-btn");
     if (propBtn) {

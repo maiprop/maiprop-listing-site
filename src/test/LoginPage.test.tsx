@@ -38,7 +38,7 @@ vi.mock("@/contexts/AuthContext", () => ({
     signIn: (...a: unknown[]) => mockSignIn(...a),
     subscription: { subscribed: false, loading: false, productId: null, subscriptionEnd: null },
   }),
-  AuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  AuthProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
 vi.mock("@/components/Navbar", () => ({
@@ -56,10 +56,10 @@ vi.mock("@/lib/config", () => ({
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-async function renderLogin() {
+const renderLogin = async () => {
   const { default: Login } = await import("@/pages/Login");
   return renderWithProviders(<Login />);
-}
+};
 
 beforeEach(() => {
   vi.clearAllMocks();

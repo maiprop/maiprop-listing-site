@@ -36,7 +36,7 @@ vi.mock("@/contexts/AuthContext", () => ({
     signUp: (...a: unknown[]) => mockSignUp(...a),
     subscription: { subscribed: false, loading: false, productId: null, subscriptionEnd: null },
   }),
-  AuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  AuthProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
 vi.mock("@/components/Navbar", () => ({
@@ -62,12 +62,13 @@ vi.mock("@/assets/logo.png", () => ({ default: "logo.png" }));
 
 // Email input uses placeholder="you@example.com"; password uses "Min. 8 characters"
 const getEmailInput = () => document.querySelector("input[type='email']") as HTMLInputElement | null;
-const getPasswordInput = () => document.querySelector("input[type='password'], input[name='password']") as HTMLInputElement | null;
+const getPasswordInput = () =>
+  document.querySelector("input[type='password'], input[name='password']") as HTMLInputElement | null;
 
-async function renderSignup() {
+const renderSignup = async () => {
   const { default: Signup } = await import("@/pages/Signup");
   return renderWithProviders(<Signup />);
-}
+};
 
 beforeEach(() => {
   vi.clearAllMocks();

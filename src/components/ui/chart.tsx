@@ -4,13 +4,13 @@ import { useTheme } from "next-themes";
 
 import { cn } from "@/lib/utils";
 
-const THEMES = { light: "", dark: ".dark" } as const;
+type ChartTheme = "light" | "dark";
 
 export type ChartConfig = {
   [k in string]: {
     label?: React.ReactNode;
     icon?: React.ComponentType;
-  } & ({ color?: string; theme?: never } | { color?: never; theme: Record<keyof typeof THEMES, string> });
+  } & ({ color?: string; theme?: never } | { color?: never; theme: Record<ChartTheme, string> });
 };
 
 type ChartContextProps = {

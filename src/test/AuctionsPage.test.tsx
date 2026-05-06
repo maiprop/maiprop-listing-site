@@ -39,7 +39,7 @@ vi.mock("@/hooks/useFavorites", () => ({
 
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: vi.fn().mockReturnValue({ user: null, profile: null }),
-  AuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  AuthProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
 vi.mock("@/components/Navbar", () => ({
@@ -73,8 +73,8 @@ vi.mock("@/lib/authUtils", () => ({
   isPlatformAdmin: vi.fn().mockReturnValue(false),
 }));
 vi.mock("react-helmet-async", () => ({
-  Helmet: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  HelmetProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  Helmet: ({ children }: { children: React.ReactNode }) => children,
+  HelmetProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
 // ── Helpers ────────────────────────────────────────────────────────────────────

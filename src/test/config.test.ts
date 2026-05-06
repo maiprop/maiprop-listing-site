@@ -36,7 +36,7 @@ describe("getStreetViewProxyUrl", () => {
     vi.restoreAllMocks();
   });
 
-  it("returns null when SUPABASE_URL is empty", async () => {
+  it("returns null when SUPABASE_URL is empty", () => {
     vi.resetModules();
     vi.stubGlobal("import", {
       meta: {

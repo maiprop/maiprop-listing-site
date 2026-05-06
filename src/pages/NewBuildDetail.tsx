@@ -37,6 +37,22 @@ function EnergyBadge({ cls }: { cls: string }) {
   );
 }
 
+type PublicProfile = {
+  user_id: string;
+  display_name?: string | null;
+  avatar_url?: string | null;
+};
+
+const fetchPublicProfile = async (ownerId?: string | null): Promise<PublicProfile | null> => {
+  if (!ownerId) return null;
+  const { data } = await supabase
+    .from("profiles_public")
+    .select("user_id, display_name, avatar_url")
+    .eq("user_id", ownerId)
+    .maybeSingle();
+  return data ?? null;
+};
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function NewBuildDetail() {
   const { id } = useParams<{ id: string }>();
@@ -74,24 +90,16 @@ export default function NewBuildDetail() {
       // so we fetch the profile separately via profiles_public (same pattern as useListings.ts).
       const { data, error } = await supabase
         .from("listings")
-        .select(`*, listing_images(url, sort_order)`)
+        .select("*, listing_images(url, sort_order)")
         .eq("id", id)
         .maybeSingle();
       if (error) throw error;
       if (!data) return null;
 
-      let profiles: { user_id: string; display_name?: string | null; avatar_url?: string | null } | null = null;
-      if (data.owner_id) {
-        const { data: prof } = await supabase
-          .from("profiles_public")
-          .select("user_id, display_name, avatar_url")
-          .eq("user_id", data.owner_id)
-          .maybeSingle();
-        profiles = prof ?? null;
-      }
+      const profiles = await fetchPublicProfile(data.owner_id);
 
       return { ...data, profiles } as typeof data & {
-        profiles: { user_id: string; display_name?: string | null; avatar_url?: string | null } | null;
+        profiles: PublicProfile | null;
         walkability_score?: number | null;
         safety_score?: number | null;
         noise_score?: number | null;
@@ -103,6 +111,7 @@ export default function NewBuildDetail() {
   const handleRegisterInterest = async (form: { name: string; phone: string; message: string }) => {
     if (!listing?.owner_id) return;
     if (!user) { navigate("/login"); return; }
+    if (!id) return;
     const contactName = form.name || profile?.display_name || profile?.first_name || "Interested buyer";
     const msg = [
       `Hi, I'm interested in ${listing.title}.`,
@@ -112,7 +121,7 @@ export default function NewBuildDetail() {
     void msg; // message constructed for future use
     await startConv.mutateAsync({ other_user_id: listing.owner_id, listing_id: id });
     const { error: _leadInsertError } = await supabase.from("new_building_leads").insert({
-      new_building_id: id!,
+      new_building_id: id,
       user_id: user.id,
       email: user.email ?? "",
       full_name: profile?.display_name || "",
