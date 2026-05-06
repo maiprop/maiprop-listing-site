@@ -181,18 +181,22 @@ export default function NewBuildDetail() {
     toast.success("Interest registered — the developer will be in touch");
   };
 
-  const handleContact = async () => {
-    if (!user) { navigate("/login"); return; }
-    if (!listing?.owner_id) return;
+  const startContactConversation = async (ownerId: string) => {
     setContactLoading(true);
     try {
-      const convId = await startConv.mutateAsync({ other_user_id: listing.owner_id, listing_id: id });
+      const convId = await startConv.mutateAsync({ other_user_id: ownerId, listing_id: id });
       navigate(`/messages?conv=${convId}`);
     } catch (_err: unknown) {
       toast.error("Could not start conversation");
     } finally {
       setContactLoading(false);
     }
+  };
+
+  const handleContact = async () => {
+    if (!user) { navigate("/login"); return; }
+    if (!listing?.owner_id) return;
+    await startContactConversation(listing.owner_id);
   };
 
   useEffect(() => {
