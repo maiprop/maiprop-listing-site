@@ -131,10 +131,9 @@ const withAuctionTimeout = (
 ): Promise<AuctionListingRow[]> =>
   Promise.race([request, getTimeoutRejection()]);
 
-export function useAuctionListings() {
-  return useQuery({
+export const useAuctionListings = () =>
+  useQuery({
     queryKey: ["auction-listings-all"],
     queryFn: () => withAuctionTimeout(fetchAuctionListings()),
     staleTime: 30_000, // 30s — auction status changes frequently
   });
-}

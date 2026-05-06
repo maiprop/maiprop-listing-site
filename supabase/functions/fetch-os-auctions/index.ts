@@ -260,21 +260,10 @@ const isPresentTag = (tag: string | null): tag is string => tag != null;
 
 const compactTags = (tags: (string | null)[]): string[] => tags.filter(isPresentTag);
 
-const getAuctionTags = (
-  auction: OsAuction,
-  tagKey: string,
-  ownershipTag: string | null,
-  ownershipPct: number | undefined,
-  subtypeTag: string | null,
-): string[] => compactTags([
-    tagKey,
-    "source:maiprop-os",
-    getAuctionStatusTag(auction),
-    getCurrentRoundTag(auction),
-    ownershipTag,
-    getOwnershipPercentageTag(ownershipPct),
-    subtypeTag,
-  ]);
+const buildAuctionTags = (
+  requiredTags: string[],
+  optionalTags: (string | null)[],
+): string[] => requiredTags.concat(compactTags(optionalTags));
 
 const mapAuction = (auction: OsAuction): MappedAuction => {
   const osId = String(auction.auctionListingId ?? "unknown");
@@ -286,6 +275,13 @@ const mapAuction = (auction: OsAuction): MappedAuction => {
   const ownershipPct = getOwnershipPercentage(auction);
   const ownershipTag = getOwnershipTag(auction, ownershipPct);
   const subtypeTag = getSubtypeTag(auction.propertyCategory);
+  const requiredTags = [tagKey, "source:maiprop-os", getAuctionStatusTag(auction)];
+  const optionalTags = [
+    getCurrentRoundTag(auction),
+    ownershipTag,
+    getOwnershipPercentageTag(ownershipPct),
+    subtypeTag,
+  ];
 
   return {
     id: osId,
@@ -303,7 +299,7 @@ const mapAuction = (auction: OsAuction): MappedAuction => {
     bathrooms: null,
     latitude: lat,
     longitude: lng,
-    tags: getAuctionTags(auction, tagKey, ownershipTag, ownershipPct, subtypeTag),
+    tags: buildAuctionTags(requiredTags, optionalTags),
     year_built: getNumberOrNull(auction.constructionYear),
     construction_status: null,
     website_url: getAuctionUrl(auction),
@@ -419,13 +415,8 @@ const getRequestedPageSize = (body: Record<string, unknown>, planCap: number): n
 const getCappedPageSize = (requestedSize: number, planCap: number): number =>
   Number.isFinite(planCap) ? Math.min(requestedSize, planCap) : requestedSize;
 
-const getPageRequest = (
-  body: Record<string, unknown>,
-  planCap: number,
-): { page: number; size: number } => ({
-  page: getRequestNumber(body, "page", 0),
-  size: getCappedPageSize(getRequestedPageSize(body, planCap), planCap),
-});
+const getPageSize = (body: Record<string, unknown>, planCap: number): number =>
+  getCappedPageSize(getRequestedPageSize(body, planCap), planCap);
 
 type FilterEntry = readonly [string, unknown];
 
@@ -562,7 +553,8 @@ const handleAuctionRequest = async (
   try {
     const body = await parseRequestBody(req);
     const planCap = await getPlanCap(req, sb);
-    const { page, size } = getPageRequest(body, planCap);
+    const page = getRequestNumber(body, "page", 0);
+    const size = getPageSize(body, planCap);
     const filterRequest = buildFilterRequest(body);
     const osResponse = await fetchOsAuctionDetails(runtimeConfig.osConfig, page, size, filterRequest);
     const { auctions, total } = parseOsResponse(osResponse);
