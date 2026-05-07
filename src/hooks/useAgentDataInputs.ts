@@ -96,13 +96,19 @@ const edgeTransactionType = (value: EdgeEntry["transaction_type"]): "sale" | "re
 const edgeStatus = (value: EdgeEntry["status"]): AgentDataInputStatus =>
   value === "flagged" ? "rejected" : value;
 
+const entryUserId = (entry: EdgeEntry, fallbackUserId: string): string => entry.user_id ?? fallbackUserId;
+
+const entryCity = (entry: EdgeEntry): string => entry.city ?? "";
+
+const entryUpdatedAt = (entry: EdgeEntry): string => entry.reviewed_at ?? entry.created_at;
+
 const normalizeEntry = (entry: EdgeEntry, userId: string): AgentDataInput => {
   return {
     id: entry.id,
-    user_id: entry.user_id ?? userId,
+    user_id: entryUserId(entry, userId),
     closed_at: entry.closing_date,
     property_address: entry.property_address,
-    property_city: entry.city ?? "",
+    property_city: entryCity(entry),
     property_postal_code: nullable(entry.postal_code),
     property_type: nullable(entry.property_type),
     transaction_type: edgeTransactionType(entry.transaction_type),
@@ -116,12 +122,12 @@ const normalizeEntry = (entry: EdgeEntry, userId: string): AgentDataInput => {
     reviewed_at: entry.reviewed_at,
     reviewed_by: null,
     discount_pct: 0,
-    applied_to_invoice_at: entry.discount_applied_at ?? null,
-    stripe_credit_id: entry.discount_invoice_id ?? null,
+    applied_to_invoice_at: nullable(entry.discount_applied_at),
+    stripe_credit_id: nullable(entry.discount_invoice_id),
     stripe_credit_amount_cents: null,
     stripe_credit_currency: null,
     created_at: entry.created_at,
-    updated_at: entry.reviewed_at ?? entry.created_at,
+    updated_at: entryUpdatedAt(entry),
   };
 };
 
