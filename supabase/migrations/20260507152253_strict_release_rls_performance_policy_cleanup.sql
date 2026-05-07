@@ -155,26 +155,32 @@ WITH CHECK (
 );
 
 -- role switch history ------------------------------------------------------
-DROP POLICY IF EXISTS "Users can read own role switch history" ON public.role_switch_history;
-CREATE POLICY "Users can read own role switch history"
-ON public.role_switch_history
-FOR SELECT
-TO public
-USING ((SELECT auth.uid()) = user_id);
+DO $$
+BEGIN
+  IF to_regclass('public.role_switch_history') IS NOT NULL THEN
+    DROP POLICY IF EXISTS "Users can read own role switch history" ON public.role_switch_history;
+    CREATE POLICY "Users can read own role switch history"
+    ON public.role_switch_history
+    FOR SELECT
+    TO public
+    USING ((SELECT auth.uid()) = user_id);
 
-DROP POLICY IF EXISTS "Admins can read all role switch history" ON public.role_switch_history;
-CREATE POLICY "Admins can read all role switch history"
-ON public.role_switch_history
-FOR SELECT
-TO public
-USING (
-  EXISTS (
-    SELECT 1
-    FROM public.profiles
-    WHERE profiles.user_id = (SELECT auth.uid())
-      AND profiles.is_platform_admin = true
-  )
-);
+    DROP POLICY IF EXISTS "Admins can read all role switch history" ON public.role_switch_history;
+    CREATE POLICY "Admins can read all role switch history"
+    ON public.role_switch_history
+    FOR SELECT
+    TO public
+    USING (
+      EXISTS (
+        SELECT 1
+        FROM public.profiles
+        WHERE profiles.user_id = (SELECT auth.uid())
+          AND profiles.is_platform_admin = true
+      )
+    );
+  END IF;
+END;
+$$;
 
 -- private owner alerts and profiles ----------------------------------------
 DROP POLICY IF EXISTS "Users manage own private owner alerts" ON public.private_owner_ad_alerts;
