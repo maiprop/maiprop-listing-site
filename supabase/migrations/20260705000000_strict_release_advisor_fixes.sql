@@ -168,14 +168,41 @@ CREATE INDEX IF NOT EXISTS idx_leads_project_id
   ON public.leads (project_id);
 CREATE INDEX IF NOT EXISTS idx_listing_view_events_viewer_id
   ON public.listing_view_events (viewer_id);
-CREATE INDEX IF NOT EXISTS idx_marketing_leads_listing_id
-  ON public.marketing_leads (listing_id);
-CREATE INDEX IF NOT EXISTS idx_marketing_leads_owner_id
-  ON public.marketing_leads (owner_id);
-CREATE INDEX IF NOT EXISTS idx_marketing_leads_professional_id
-  ON public.marketing_leads (professional_id);
-CREATE INDEX IF NOT EXISTS idx_marketing_leads_project_id
-  ON public.marketing_leads (project_id);
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'marketing_leads' AND column_name = 'listing_id'
+  ) THEN
+    CREATE INDEX IF NOT EXISTS idx_marketing_leads_listing_id
+      ON public.marketing_leads (listing_id);
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'marketing_leads' AND column_name = 'owner_id'
+  ) THEN
+    CREATE INDEX IF NOT EXISTS idx_marketing_leads_owner_id
+      ON public.marketing_leads (owner_id);
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'marketing_leads' AND column_name = 'professional_id'
+  ) THEN
+    CREATE INDEX IF NOT EXISTS idx_marketing_leads_professional_id
+      ON public.marketing_leads (professional_id);
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'marketing_leads' AND column_name = 'project_id'
+  ) THEN
+    CREATE INDEX IF NOT EXISTS idx_marketing_leads_project_id
+      ON public.marketing_leads (project_id);
+  END IF;
+END;
+$$;
 CREATE INDEX IF NOT EXISTS idx_messages_receiver_id
   ON public.messages (receiver_id);
 CREATE INDEX IF NOT EXISTS idx_messages_sender_id

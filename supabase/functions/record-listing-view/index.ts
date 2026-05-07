@@ -59,16 +59,11 @@ Deno.serve(async (req) => {
       viewerId = data.user?.id ?? null;
     }
 
-    const [increment, event] = await Promise.all([
-      supabase.rpc("increment_listing_views", { p_listing_id: listingId }),
-      supabase.rpc("record_listing_view_event", {
-        p_listing_id: listingId,
-        p_viewer_id: viewerId,
-      }),
-    ]);
-
-    if (increment.error) throw increment.error;
-    if (event.error) throw event.error;
+    const { error } = await supabase.rpc("record_listing_view", {
+      p_listing_id: listingId,
+      p_viewer_id: viewerId,
+    });
+    if (error) throw error;
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200,

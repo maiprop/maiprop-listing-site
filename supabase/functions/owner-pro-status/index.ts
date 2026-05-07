@@ -11,14 +11,14 @@ const limiter = makeRateLimiter({
 });
 
 type StatusRequest = {
-  userId?: unknown;
+  listingId?: unknown;
 };
 
-function parseUserId(body: StatusRequest): string {
-  if (typeof body.userId !== "string" || !/^[0-9a-f-]{36}$/i.test(body.userId)) {
-    throw new Error("Invalid userId");
+function parseListingId(body: StatusRequest): string {
+  if (typeof body.listingId !== "string" || !/^[0-9a-f-]{36}$/i.test(body.listingId)) {
+    throw new Error("Invalid listingId");
   }
-  return body.userId;
+  return body.listingId;
 }
 
 Deno.serve(async (req) => {
@@ -47,11 +47,24 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({})) as StatusRequest;
-    const userId = parseUserId(body);
+    const listingId = parseListingId(body);
     const supabase = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false },
     });
-    const { data, error } = await supabase.rpc("is_pro", { p_user_id: userId });
+    const { data: listing, error: listingError } = await supabase
+      .from("listings")
+      .select("owner_id")
+      .eq("id", listingId)
+      .maybeSingle();
+    if (listingError) throw listingError;
+    if (!listing?.owner_id) {
+      return new Response(JSON.stringify({ isPro: false }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const { data, error } = await supabase.rpc("is_pro", { p_user_id: listing.owner_id });
     if (error) throw error;
 
     return new Response(JSON.stringify({ isPro: data === true }), {

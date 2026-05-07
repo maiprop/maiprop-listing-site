@@ -283,7 +283,7 @@ export function useListing(id: string) {
           const [{ data: profilePublic }, isProRpc] = await Promise.all([
             supabase.from("profiles_public").select("user_id, display_name, avatar_url, role").eq("user_id", data.owner_id).maybeSingle(),
             supabase.functions.invoke("owner-pro-status", {
-              body: { userId: data.owner_id },
+              body: { listingId: data.id },
             }),
           ]);
           profiles = profilePublic ?? null;

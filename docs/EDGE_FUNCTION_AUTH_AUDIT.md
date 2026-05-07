@@ -21,8 +21,8 @@ Every `verify_jwt = false` function must be either intentionally public, protect
 | `sitemap` | Public read-only endpoint. | Public SEO URLs. | Ready. |
 | `healthz` | Public read-only endpoint. | Health status only. | Ready. |
 | `csp-report` | Public write-only browser report receiver. | CSP violation reports. | Conditional: log-flood risk. |
-| `record-listing-view` | Public endpoint with body validation, CORS allowlist, and rate limiting; uses service role for the private RPC. | Listing view counters/events. | Ready: no private data returned. |
-| `owner-pro-status` | Public endpoint with UUID validation, CORS allowlist, and rate limiting; uses service role for the subscription helper RPC. | Boolean owner Pro status only. | Conditional: public boolean is intentional for listing contact/calendar UI. |
+| `record-listing-view` | Public endpoint with body validation, CORS allowlist, and rate limiting; uses service role for the service-role-only atomic RPC. | Listing view counters/events. | Ready: no private data returned. |
+| `owner-pro-status` | Public endpoint with listing UUID validation, CORS allowlist, and rate limiting; resolves the listing owner server-side before checking subscription status. | Boolean owner Pro status only. | Conditional: public boolean is intentional for listing contact/calendar UI. |
 | `stripe-webhook` | Stripe signature verification with webhook signing secret. | Stripe events and billing state. | Ready if signature tests stay green. |
 | `auth-email-hook` | Supabase Auth hook secret via `SEND_EMAIL_HOOK_SECRET`. | Auth email payloads. | Ready if secret is configured in prod. |
 | `sync-to-os` | Custom Bearer/user authorization in handler; not Supabase JWT-gated by platform config. | Listing sync data. | Conditional: keep tests for missing/invalid auth. |

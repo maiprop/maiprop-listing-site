@@ -18,6 +18,7 @@ export function ListingCompareButton<TListing extends ListingCard>({
 
   return (
     <button
+      type="button"
       onClick={() => onToggle(listing)}
       disabled={disabled}
       aria-pressed={isSelected}

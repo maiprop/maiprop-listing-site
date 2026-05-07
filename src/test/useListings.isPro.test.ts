@@ -23,7 +23,7 @@ vi.mock("@/integrations/supabase/client", () => ({
 import { supabase } from "@/integrations/supabase/client";
 import { useListing } from "@/hooks/useListings";
 
-const TEST_LISTING_ID = "listing-uuid-1";
+const TEST_LISTING_ID = "00000000-0000-4000-8000-000000000101";
 const TEST_OWNER_ID = "00000000-0000-4000-8000-000000000001";
 
 function wrapper({ children }: { children: React.ReactNode }) {
@@ -108,7 +108,7 @@ describe("useListing owner Pro status", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(supabase.functions.invoke).toHaveBeenCalledWith("owner-pro-status", {
-      body: { userId: TEST_OWNER_ID },
+      body: { listingId: TEST_LISTING_ID },
     });
     expect(result.current.data?.ownerIsPro).toBe(true);
   });

@@ -7,7 +7,7 @@
 
 | # | Action | Status | Evidence |
 | --- | --- | --- | --- |
-| 1 | Run live Supabase security/performance advisors. | Done | Advisors queried on active project `qvvicunqcrwpioqnvzxf` after live migrations through `20260507154337`. |
+| 1 | Run live Supabase security/performance advisors. | Done | Advisors queried on active project `qvvicunqcrwpioqnvzxf` after live migrations through `20260507200409`. |
 | 2 | Produce table-by-table RLS access matrix. | Done | See `docs/RLS_ACCESS_MATRIX.md`. |
 | 3 | Document every public Edge Function auth model. | Done | See `docs/EDGE_FUNCTION_AUTH_AUDIT.md`. |
 | 4 | Add owner filters to child-table mutations where possible. | Done | `project_units`, `project_leads`, `project_media`, `professional_services`, and `professional_availability` hooks now add client-side ownership preflights/payload checks. |
@@ -24,6 +24,7 @@
 - Fixed: direct browser execution was removed from role transfer, quota, AI usage, listing view tracking, owner Pro lookup, onboarding, and agent data-input SECURITY DEFINER RPCs that should run through authenticated hooks or Edge Functions.
 - Fixed: `pg_net` was recreated with extension registration in `extensions` after confirming `net.http_request_queue` was empty.
 - Fixed: authenticated users can no longer execute the public SECURITY DEFINER role/quota helper RPCs directly; RLS policies now call private-schema helper copies.
+- Fixed: listing view tracking now uses one service-role-only atomic RPC with least-privilege invoker execution.
 - Remaining: Auth leaked password protection is disabled and must be enabled in Supabase Auth settings.
 
 ## Live Supabase Performance Advisor Findings

@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { SUBSCRIPTION_STATUS_COLORS } from "@/lib/statusColors";
+import { logger } from "@/lib/logger";
 
 function TransferAdminForm({ onSuccess }: { onSuccess: () => Promise<void> }) {
   const [email, setEmail] = useState("");
@@ -25,7 +26,9 @@ function TransferAdminForm({ onSuccess }: { onSuccess: () => Promise<void> }) {
       });
       if (error) throw error;
       toast.success("Admin rights transferred. You will be redirected.");
-      await onSuccess();
+      Promise.resolve(onSuccess()).catch((err: unknown) => {
+        logger.warn("[AdminSubscribers] post-transfer refresh failed:", err instanceof Error ? err.message : err);
+      });
       window.location.href = "/dashboard";
     } catch (e: unknown) {
       toast.error((e as Error)?.message || "Transfer failed");

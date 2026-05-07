@@ -73,7 +73,7 @@ as $$
     select 1
     from public.user_roles
     where user_id = _user_id
-      and role = _role
+      and role::text = _role::text
   )
 $$;
 
@@ -315,6 +315,9 @@ begin
     where extname = 'pg_net'
       and extnamespace = 'public'::regnamespace
   ) then
+    -- Fail fast if downstream environments have pg_net dependents that need
+    -- a custom migration path. The live queue was verified empty before this
+    -- release migration was applied.
     drop extension pg_net;
     create extension pg_net schema extensions;
   elsif not exists (

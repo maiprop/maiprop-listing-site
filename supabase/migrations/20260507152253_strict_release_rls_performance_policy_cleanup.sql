@@ -18,42 +18,48 @@ DROP POLICY IF EXISTS "Users can send messages" ON public.messages;
 DROP POLICY IF EXISTS "Users can update received messages" ON public.messages;
 
 -- firesale_interest --------------------------------------------------------
-DROP POLICY IF EXISTS "Investors read own firesale interest" ON public.firesale_interest;
-CREATE POLICY "Investors read own firesale interest"
-ON public.firesale_interest
-FOR SELECT
-TO public
-USING ((SELECT auth.uid()) = investor_id);
+DO $$
+BEGIN
+  IF to_regclass('public.firesale_interest') IS NOT NULL THEN
+    DROP POLICY IF EXISTS "Investors read own firesale interest" ON public.firesale_interest;
+    CREATE POLICY "Investors read own firesale interest"
+    ON public.firesale_interest
+    FOR SELECT
+    TO public
+    USING ((SELECT auth.uid()) = investor_id);
 
-DROP POLICY IF EXISTS "Investors update own firesale interest" ON public.firesale_interest;
-CREATE POLICY "Investors update own firesale interest"
-ON public.firesale_interest
-FOR UPDATE
-TO public
-USING ((SELECT auth.uid()) = investor_id)
-WITH CHECK ((SELECT auth.uid()) = investor_id);
+    DROP POLICY IF EXISTS "Investors update own firesale interest" ON public.firesale_interest;
+    CREATE POLICY "Investors update own firesale interest"
+    ON public.firesale_interest
+    FOR UPDATE
+    TO public
+    USING ((SELECT auth.uid()) = investor_id)
+    WITH CHECK ((SELECT auth.uid()) = investor_id);
 
-DROP POLICY IF EXISTS "Investors delete own firesale interest" ON public.firesale_interest;
-CREATE POLICY "Investors delete own firesale interest"
-ON public.firesale_interest
-FOR DELETE
-TO public
-USING ((SELECT auth.uid()) = investor_id);
+    DROP POLICY IF EXISTS "Investors delete own firesale interest" ON public.firesale_interest;
+    CREATE POLICY "Investors delete own firesale interest"
+    ON public.firesale_interest
+    FOR DELETE
+    TO public
+    USING ((SELECT auth.uid()) = investor_id);
 
-DROP POLICY IF EXISTS "Investors with active subscription insert firesale interest" ON public.firesale_interest;
-CREATE POLICY "Investors with active subscription insert firesale interest"
-ON public.firesale_interest
-FOR INSERT
-TO public
-WITH CHECK (
-  (SELECT auth.uid()) = investor_id
-  AND EXISTS (
-    SELECT 1
-    FROM public.investor_subscriptions
-    WHERE investor_subscriptions.user_id = (SELECT auth.uid())
-      AND investor_subscriptions.status = ANY (ARRAY['active'::text, 'trial'::text])
-  )
-);
+    DROP POLICY IF EXISTS "Investors with active subscription insert firesale interest" ON public.firesale_interest;
+    CREATE POLICY "Investors with active subscription insert firesale interest"
+    ON public.firesale_interest
+    FOR INSERT
+    TO public
+    WITH CHECK (
+      (SELECT auth.uid()) = investor_id
+      AND EXISTS (
+        SELECT 1
+        FROM public.investor_subscriptions
+        WHERE investor_subscriptions.user_id = (SELECT auth.uid())
+          AND investor_subscriptions.status = ANY (ARRAY['active'::text, 'trial'::text])
+      )
+    );
+  END IF;
+END;
+$$;
 
 -- firesale_requests --------------------------------------------------------
 DROP POLICY IF EXISTS "Eligible buyers view published Quick Sale deals" ON public.firesale_requests;
@@ -246,4 +252,4 @@ CREATE POLICY sync_log_insert
 ON public.sync_log
 FOR INSERT
 TO public
-WITH CHECK ((SELECT auth.role()) = 'authenticated'::text);
+WITH CHECK ((SELECT auth.role()) = 'service_role'::text);

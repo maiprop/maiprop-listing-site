@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
 
     log.info("platform admin transferred", {
       caller_id: caller.id,
-      target_email: targetEmail,
+      target_domain: targetEmail.split("@")[1] ?? "unknown",
     });
 
     return new Response(JSON.stringify({ success: true }), {
