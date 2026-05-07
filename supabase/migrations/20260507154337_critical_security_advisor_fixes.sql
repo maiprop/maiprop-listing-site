@@ -325,21 +325,27 @@ do $$
 begin
   if exists (
     select 1
-    from pg_extension
-    where extname = 'pg_net'
-      and extnamespace = 'public'::regnamespace
+    from pg_available_extensions
+    where name = 'pg_net'
   ) then
-    -- Fail fast if downstream environments have pg_net dependents that need
-    -- a custom migration path. The live queue was verified empty before this
-    -- release migration was applied.
-    drop extension pg_net;
-    create extension pg_net schema extensions;
-  elsif not exists (
-    select 1
-    from pg_extension
-    where extname = 'pg_net'
-  ) then
-    create extension pg_net schema extensions;
+    if exists (
+      select 1
+      from pg_extension
+      where extname = 'pg_net'
+        and extnamespace = 'public'::regnamespace
+    ) then
+      -- Fail fast if downstream environments have pg_net dependents that need
+      -- a custom migration path. The live queue was verified empty before this
+      -- release migration was applied.
+      drop extension pg_net;
+      create extension pg_net schema extensions;
+    elsif not exists (
+      select 1
+      from pg_extension
+      where extname = 'pg_net'
+    ) then
+      create extension pg_net schema extensions;
+    end if;
   end if;
 end;
 $$;

@@ -95,27 +95,33 @@ END;
 $$;
 
 -- new_building_leads -------------------------------------------------------
-DROP POLICY IF EXISTS user_insert_own_new_building_lead ON public.new_building_leads;
-CREATE POLICY user_insert_own_new_building_lead
-ON public.new_building_leads
-FOR INSERT
-TO authenticated
-WITH CHECK (user_id = (SELECT auth.uid()));
+DO $$
+BEGIN
+  IF to_regclass('public.new_building_leads') IS NOT NULL THEN
+    DROP POLICY IF EXISTS user_insert_own_new_building_lead ON public.new_building_leads;
+    CREATE POLICY user_insert_own_new_building_lead
+    ON public.new_building_leads
+    FOR INSERT
+    TO authenticated
+    WITH CHECK (user_id = (SELECT auth.uid()));
 
-DROP POLICY IF EXISTS user_or_owner_select_new_building_lead ON public.new_building_leads;
-CREATE POLICY user_or_owner_select_new_building_lead
-ON public.new_building_leads
-FOR SELECT
-TO public
-USING (
-  user_id = (SELECT auth.uid())
-  OR EXISTS (
-    SELECT 1
-    FROM public.listings l
-    WHERE l.id = new_building_leads.new_building_id
-      AND l.owner_id = (SELECT auth.uid())
-  )
-);
+    DROP POLICY IF EXISTS user_or_owner_select_new_building_lead ON public.new_building_leads;
+    CREATE POLICY user_or_owner_select_new_building_lead
+    ON public.new_building_leads
+    FOR SELECT
+    TO public
+    USING (
+      user_id = (SELECT auth.uid())
+      OR EXISTS (
+        SELECT 1
+        FROM public.listings l
+        WHERE l.id = new_building_leads.new_building_id
+          AND l.owner_id = (SELECT auth.uid())
+      )
+    );
+  END IF;
+END;
+$$;
 
 -- properties and marketing leads ------------------------------------------
 DROP POLICY IF EXISTS "Admins can insert properties" ON public.properties;
