@@ -1,6 +1,7 @@
 ---
 exclude_paths:
   - "supabase/functions/fetch-os-auctions/index.ts"
+  - "supabase/functions/fetch-os-auctions/index.test.ts"
 engines:
   metric:
     exclude_paths:
