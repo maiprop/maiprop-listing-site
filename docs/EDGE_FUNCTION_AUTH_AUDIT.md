@@ -38,7 +38,7 @@ Every `verify_jwt = false` function must be either intentionally public, protect
 
 ## `verify_jwt = true` Functions
 
-These functions are platform JWT-gated in `supabase/config.toml`: `property-chat`, `pro-ai-tools`, `ai-service-match`, `fetch-report-from-os`, `listing-ai-assist`, `create-checkout`, `check-subscription`, `customer-portal`, `create-stripe-price`, `process-email-queue`, `sync-stripe-pricing`, `get-invoices`, `delete-account`, `fetch-past-deals-from-os`, `log-role-switch`, `agent-data-input`, `apply-data-input-credit`, `flag-auction-on-os`, `fetch-auction-enrichment`, `transfer-platform-admin`, and `complete-onboarding-role`.
+These functions are platform JWT-gated in `supabase/config.toml`: `property-chat`, `pro-ai-tools`, `ai-service-match`, `fetch-report-from-os`, `listing-ai-assist`, `create-checkout`, `check-subscription`, `customer-portal`, `create-stripe-price`, `process-email-queue`, `sync-stripe-pricing`, `get-invoices`, `delete-account`, `fetch-past-deals-from-os`, `log-role-switch`, `agent-data-input`, `apply-data-input-credit`, `flag-auction-on-os`, `fetch-auction-enrichment`, `transfer-platform-admin`, and `complete-onboarding-role`. The last two verify the caller JWT in the Edge Function and then call service-role-only RPCs that take the verified caller id explicitly.
 
 ## Blocking Follow-Ups
 

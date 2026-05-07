@@ -58,7 +58,8 @@ Deno.serve(async (req) => {
       throw new AuthError("Forbidden", 403);
     }
 
-    const { error } = await supabase.rpc("grant_platform_admin_by_email", {
+    const { error } = await supabase.rpc("grant_platform_admin_by_email_for_caller", {
+      caller_user_id: caller.id,
       target_email: targetEmail,
     });
     if (error) throw error;

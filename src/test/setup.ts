@@ -60,4 +60,4 @@ HTMLCanvasElement.prototype.toDataURL = () => "data:image/png;base64,test";
 
 // Download links created during export tests should not trigger jsdom's
 // "navigation to another Document" warning.
-HTMLAnchorElement.prototype.click = () => {};
+HTMLAnchorElement.prototype.click = vi.fn();

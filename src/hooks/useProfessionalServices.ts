@@ -29,15 +29,15 @@ export interface ProfessionalAvailability {
   is_active: boolean;
 }
 
-function requireSameProfessional<T extends { professional_id: string }>(
+const requireSameProfessional = <T extends { professional_id: string }>(
   professionalId: string,
   rows: T[],
   label: string,
-): void {
+): void => {
   if (rows.some((row) => row.professional_id !== professionalId)) {
     throw new Error(`Cannot update ${label} for another professional`);
   }
-}
+};
 
 export function useProfessionalServices(professionalId: string) {
   return useQuery({

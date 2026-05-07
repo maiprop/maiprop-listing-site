@@ -8,12 +8,12 @@ interface ListingCompareButtonProps<TListing extends ListingCard> {
   onToggle: (listing: TListing) => void;
 }
 
-export function ListingCompareButton<TListing extends ListingCard>({
+export const ListingCompareButton = <TListing extends ListingCard>({
   listing,
   isSelected,
   isLimitReached,
   onToggle,
-}: ListingCompareButtonProps<TListing>) {
+}: ListingCompareButtonProps<TListing>) => {
   const disabled = !isSelected && isLimitReached;
 
   return (
@@ -34,4 +34,4 @@ export function ListingCompareButton<TListing extends ListingCard>({
       Compare
     </button>
   );
-}
+};

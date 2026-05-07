@@ -9,13 +9,14 @@ const limiter = makeRateLimiter({
   maxRequests: 120,
   windowMs: 60_000,
 });
+const LISTING_ID_REGEX = /^[0-9a-f-]{36}$/i;
 
 type ViewRequest = {
   listingId?: unknown;
 };
 
 function parseListingId(body: ViewRequest): string {
-  if (typeof body.listingId !== "string" || !/^[0-9a-f-]{36}$/i.test(body.listingId)) {
+  if (typeof body.listingId !== "string" || !LISTING_ID_REGEX.test(body.listingId)) {
     throw new Error("Invalid listingId");
   }
   return body.listingId;

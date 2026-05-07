@@ -13,7 +13,7 @@ type OnboardingRequest = {
   phone?: unknown;
 };
 
-const ROLES = new Set(["buyer", "seller", "landlord", "agent", "developer", "investor", "institutional", "admin"]);
+const ROLES = new Set(["buyer", "seller", "agent", "developer", "professional"]);
 
 function optionalString(value: unknown, maxLength: number): string | null {
   if (typeof value !== "string") return null;
@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
   });
 
   try {
-    await verifyBearerToken(req, supabase);
+    const caller = await verifyBearerToken(req, supabase);
     const body = await req.json().catch(() => ({})) as OnboardingRequest;
     const role = typeof body.role === "string" ? body.role : "";
     const participantType = typeof body.participantType === "string" ? body.participantType : "";
@@ -55,7 +55,8 @@ Deno.serve(async (req) => {
       throw new AuthError("Invalid onboarding payload", 400);
     }
 
-    const { error } = await supabase.rpc("complete_onboarding_role", {
+    const { error } = await supabase.rpc("complete_onboarding_role_for_user", {
+      p_user_id: caller.id,
       p_role: role,
       p_participant_type: participantType,
       p_display_name: optionalString(body.displayName, 120),

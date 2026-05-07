@@ -88,22 +88,30 @@ type EdgeStatusResponse = {
   entries: EdgeEntry[];
 };
 
-function normalizeEntry(entry: EdgeEntry, userId: string): AgentDataInput {
+const nullable = <T>(value: T | null | undefined): T | null => value ?? null;
+
+const edgeTransactionType = (value: EdgeEntry["transaction_type"]): "sale" | "rent" =>
+  value === "rental" ? "rent" : "sale";
+
+const edgeStatus = (value: EdgeEntry["status"]): AgentDataInputStatus =>
+  value === "flagged" ? "rejected" : value;
+
+const normalizeEntry = (entry: EdgeEntry, userId: string): AgentDataInput => {
   return {
     id: entry.id,
     user_id: entry.user_id ?? userId,
     closed_at: entry.closing_date,
     property_address: entry.property_address,
     property_city: entry.city ?? "",
-    property_postal_code: entry.postal_code,
-    property_type: entry.property_type,
-    transaction_type: entry.transaction_type === "rental" ? "rent" : "sale",
-    closing_price: Number(entry.sale_price ?? 0),
+    property_postal_code: nullable(entry.postal_code),
+    property_type: nullable(entry.property_type),
+    transaction_type: edgeTransactionType(entry.transaction_type),
+    closing_price: Number(entry.sale_price),
     kaek: null,
     buyer_name: null,
     seller_name: null,
     notes: null,
-    status: entry.status === "flagged" ? "rejected" : entry.status,
+    status: edgeStatus(entry.status),
     rejection_reason: entry.rejection_reason,
     reviewed_at: entry.reviewed_at,
     reviewed_by: null,
@@ -115,16 +123,34 @@ function normalizeEntry(entry: EdgeEntry, userId: string): AgentDataInput {
     created_at: entry.created_at,
     updated_at: entry.reviewed_at ?? entry.created_at,
   };
-}
+};
 
-function normalizePropertyType(value: string | null | undefined): "apartment" | "house" | "commercial" | "land" | "other" {
+const normalizePropertyType = (value: string | null | undefined): "apartment" | "house" | "commercial" | "land" | "other" => {
   if (value === "apartment" || value === "house" || value === "commercial" || value === "land") {
     return value;
   }
   return "other";
-}
+};
 
-export function useAgentDataInputs() {
+const edgeSubmitTransactionType = (value: SubmitAgentDataInputArgs["transaction_type"]): "sale" | "rental" =>
+  value === "rent" ? "rental" : "sale";
+
+const buildSubmitPayload = (args: SubmitAgentDataInputArgs) => ({
+  property_address: args.property_address,
+  city: args.property_city,
+  postal_code: nullable(args.property_postal_code),
+  kaek: nullable(args.kaek),
+  property_type: normalizePropertyType(args.property_type),
+  transaction_type: edgeSubmitTransactionType(args.transaction_type),
+  agent_side: "seller",
+  sale_price: args.closing_price,
+  closing_date: args.closed_at,
+  buyer_name: nullable(args.buyer_name),
+  seller_name: nullable(args.seller_name),
+  notes: nullable(args.notes),
+});
+
+export const useAgentDataInputs = () => {
   const { user } = useAuth();
   return useQuery({
     queryKey: [QUERY_KEY_LIST, user?.id],
@@ -139,9 +165,9 @@ export function useAgentDataInputs() {
     },
     enabled: !!user,
   });
-}
+};
 
-export function useAgentDataInputQuota() {
+export const useAgentDataInputQuota = () => {
   const { user } = useAuth();
   return useQuery({
     queryKey: [QUERY_KEY_QUOTA, user?.id],
@@ -167,9 +193,9 @@ export function useAgentDataInputQuota() {
     enabled: !!user,
     staleTime: 30_000,
   });
-}
+};
 
-export function useSubmitAgentDataInput() {
+export const useSubmitAgentDataInput = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
@@ -179,20 +205,7 @@ export function useSubmitAgentDataInput() {
       const { data, error } = await supabase.functions.invoke("agent-data-input", {
         body: {
           action: "submit",
-          payload: {
-            property_address: args.property_address,
-            city: args.property_city,
-            postal_code: args.property_postal_code ?? null,
-            kaek: args.kaek ?? null,
-            property_type: normalizePropertyType(args.property_type),
-            transaction_type: args.transaction_type === "rent" ? "rental" : "sale",
-            agent_side: "seller",
-            sale_price: args.closing_price,
-            closing_date: args.closed_at,
-            buyer_name: args.buyer_name ?? null,
-            seller_name: args.seller_name ?? null,
-            notes: args.notes ?? null,
-          },
+          payload: buildSubmitPayload(args),
         },
       });
       if (error) throw error;
@@ -208,4 +221,4 @@ export function useSubmitAgentDataInput() {
       toast.error(message);
     },
   });
-}
+};
