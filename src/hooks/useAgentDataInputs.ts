@@ -102,6 +102,7 @@ const entryCity = (entry: EdgeEntry): string => entry.city ?? "";
 
 const entryUpdatedAt = (entry: EdgeEntry): string => entry.reviewed_at ?? entry.created_at;
 
+// skipcq: JS-R1005 - Keep the edge response adapter centralized so the legacy dashboard shape does not drift.
 const normalizeEntry = (entry: EdgeEntry, userId: string): AgentDataInput => {
   return {
     id: entry.id,
