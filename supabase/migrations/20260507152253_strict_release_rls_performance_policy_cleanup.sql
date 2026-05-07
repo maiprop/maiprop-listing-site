@@ -183,12 +183,18 @@ END;
 $$;
 
 -- private owner alerts and profiles ----------------------------------------
-DROP POLICY IF EXISTS "Users manage own private owner alerts" ON public.private_owner_ad_alerts;
-CREATE POLICY "Users manage own private owner alerts"
-ON public.private_owner_ad_alerts
-FOR ALL
-TO public
-USING ((SELECT auth.uid()) = user_id);
+DO $$
+BEGIN
+  IF to_regclass('public.private_owner_ad_alerts') IS NOT NULL THEN
+    DROP POLICY IF EXISTS "Users manage own private owner alerts" ON public.private_owner_ad_alerts;
+    CREATE POLICY "Users manage own private owner alerts"
+    ON public.private_owner_ad_alerts
+    FOR ALL
+    TO public
+    USING ((SELECT auth.uid()) = user_id);
+  END IF;
+END;
+$$;
 
 DROP POLICY IF EXISTS "Users update own participant_type" ON public.profiles;
 CREATE POLICY "Users update own participant_type"
