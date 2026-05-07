@@ -6,6 +6,7 @@
 
 -- Replace the subscribed-investors policy: eligibility = active subscription only
 DROP POLICY IF EXISTS "Subscribed investors view firesale deal feed" ON public.firesale_requests;
+DROP POLICY IF EXISTS "Eligible buyers view published Quick Sale deals" ON public.firesale_requests;
 
 CREATE POLICY "Eligible buyers view published Quick Sale deals"
   ON public.firesale_requests FOR SELECT

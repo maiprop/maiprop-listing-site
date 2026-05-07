@@ -822,6 +822,7 @@ CREATE POLICY "message_attachments_insert" ON public.message_attachments FOR INS
 -- ── sync_log ──────────────────────────────────────────────────────────────────
 DROP POLICY IF EXISTS "Admins can view sync logs" ON public.sync_log;
 DROP POLICY IF EXISTS "Allow sync log inserts"    ON public.sync_log;
+DROP POLICY IF EXISTS "sync_log_insert"           ON public.sync_log;
 
 CREATE POLICY "sync_log_select" ON public.sync_log FOR SELECT
   USING (public.has_role((select auth.uid()), 'agent'::public.user_role));

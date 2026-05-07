@@ -292,15 +292,29 @@ begin
 end;
 $$;
 
-revoke execute on function public.authoritative_role() from anon, authenticated, public;
-revoke execute on function public.authoritative_role(uuid) from anon, authenticated, public;
-revoke execute on function public.check_listing_quota() from anon, authenticated, public;
-revoke execute on function public.get_my_role() from anon, authenticated, public;
-revoke execute on function public.has_buy_side_role(uuid) from anon, authenticated, public;
-revoke execute on function public.has_platform_admin(uuid) from anon, authenticated, public;
-revoke execute on function public.has_role(uuid, public.app_role) from anon, authenticated, public;
-revoke execute on function public.has_role(uuid, public.user_role) from anon, authenticated, public;
-revoke execute on function public.has_sell_side_role(uuid) from anon, authenticated, public;
+do $$
+declare
+  sig text;
+  fn regprocedure;
+begin
+  foreach sig in array array[
+    'public.authoritative_role()',
+    'public.authoritative_role(uuid)',
+    'public.check_listing_quota()',
+    'public.get_my_role()',
+    'public.has_buy_side_role(uuid)',
+    'public.has_platform_admin(uuid)',
+    'public.has_role(uuid,public.app_role)',
+    'public.has_role(uuid,public.user_role)',
+    'public.has_sell_side_role(uuid)'
+  ] loop
+    fn := to_regprocedure(sig);
+    if fn is not null then
+      execute format('revoke execute on function %s from anon, authenticated, public', fn);
+    end if;
+  end loop;
+end;
+$$;
 
 alter default privileges in schema public
   revoke execute on functions from anon, authenticated, public;

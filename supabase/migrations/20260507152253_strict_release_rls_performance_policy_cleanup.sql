@@ -78,15 +78,21 @@ USING (
 );
 
 -- listings -----------------------------------------------------------------
-DROP POLICY IF EXISTS listing_insert_quota ON public.listings;
-CREATE POLICY listing_insert_quota
-ON public.listings
-FOR INSERT
-TO authenticated
-WITH CHECK (
-  owner_id = (SELECT auth.uid())
-  AND (SELECT public.check_listing_quota())
-);
+DO $$
+BEGIN
+  IF to_regprocedure('public.check_listing_quota()') IS NOT NULL THEN
+    DROP POLICY IF EXISTS listing_insert_quota ON public.listings;
+    CREATE POLICY listing_insert_quota
+    ON public.listings
+    FOR INSERT
+    TO authenticated
+    WITH CHECK (
+      owner_id = (SELECT auth.uid())
+      AND (SELECT public.check_listing_quota())
+    );
+  END IF;
+END;
+$$;
 
 -- new_building_leads -------------------------------------------------------
 DROP POLICY IF EXISTS user_insert_own_new_building_lead ON public.new_building_leads;
