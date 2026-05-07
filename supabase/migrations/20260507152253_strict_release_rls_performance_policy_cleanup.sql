@@ -131,28 +131,34 @@ FOR INSERT
 TO authenticated
 WITH CHECK ((SELECT public.has_role((SELECT auth.uid()), 'admin'::public.app_role)));
 
-DROP POLICY IF EXISTS "Admins can read all leads" ON public.marketing_leads;
-CREATE POLICY "Admins can read all leads"
-ON public.marketing_leads
-FOR SELECT
-TO authenticated
-USING ((SELECT public.has_role((SELECT auth.uid()), 'admin'::public.app_role)));
+DO $$
+BEGIN
+  IF to_regclass('public.marketing_leads') IS NOT NULL THEN
+    DROP POLICY IF EXISTS "Admins can read all leads" ON public.marketing_leads;
+    CREATE POLICY "Admins can read all leads"
+    ON public.marketing_leads
+    FOR SELECT
+    TO authenticated
+    USING ((SELECT public.has_role((SELECT auth.uid()), 'admin'::public.app_role)));
 
-DROP POLICY IF EXISTS "Authenticated users can submit leads" ON public.marketing_leads;
-CREATE POLICY "Authenticated users can submit leads"
-ON public.marketing_leads
-FOR INSERT
-TO authenticated
-WITH CHECK (
-  NOT (SELECT public.has_role((SELECT auth.uid()), 'admin'::public.app_role))
-  AND char_length(full_name) >= 2
-  AND char_length(full_name) <= 200
-  AND char_length(email) >= 5
-  AND char_length(email) <= 254
-  AND char_length(phone) >= 5
-  AND char_length(phone) <= 30
-  AND investment_budget >= 0
-);
+    DROP POLICY IF EXISTS "Authenticated users can submit leads" ON public.marketing_leads;
+    CREATE POLICY "Authenticated users can submit leads"
+    ON public.marketing_leads
+    FOR INSERT
+    TO authenticated
+    WITH CHECK (
+      NOT (SELECT public.has_role((SELECT auth.uid()), 'admin'::public.app_role))
+      AND char_length(full_name) >= 2
+      AND char_length(full_name) <= 200
+      AND char_length(email) >= 5
+      AND char_length(email) <= 254
+      AND char_length(phone) >= 5
+      AND char_length(phone) <= 30
+      AND investment_budget >= 0
+    );
+  END IF;
+END;
+$$;
 
 -- role switch history ------------------------------------------------------
 DO $$
