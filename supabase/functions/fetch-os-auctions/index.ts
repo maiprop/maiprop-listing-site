@@ -245,11 +245,15 @@ function getAuctionUrl(auction: OsAuction): string | null {
 }
 
 function getNumberOrNull(value?: number | string): number | null {
-  return value != null ? Number(value) : null;
+  if (value == null) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function getNumberOrDefault(value: number | string | undefined, fallback: number): number {
-  return value != null ? Number(value) : fallback;
+  if (value == null) return fallback;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 function getStreetViewUrl(lat: number | null, lng: number | null): string | null {
@@ -260,7 +264,7 @@ function getStreetViewUrl(lat: number | null, lng: number | null): string | null
 }
 
 function getOwnershipPercentage(auction: OsAuction): number | undefined {
-  return auction.ownershipPercentage != null ? Number(auction.ownershipPercentage) : undefined;
+  return getNumberOrNull(auction.ownershipPercentage) ?? undefined;
 }
 
 function getOwnershipTag(auction: OsAuction, ownershipPct: number | undefined): string | null {
@@ -297,11 +301,11 @@ function buildAuctionTags(
   return requiredTags.concat(compactTags(optionalTags));
 }
 
-function mapAuction(auction: OsAuction): MappedAuction {
+export function mapAuction(auction: OsAuction): MappedAuction {
   const osId = String(auction.auctionListingId ?? "unknown");
   const tagKey = `os_auction:${osId}`;
   const catKey = mapCategory(auction.propertyCategory);
-  const price = Number(auction.firstPriceOffer ?? 0);
+  const price = getNumberOrDefault(auction.firstPriceOffer, 0);
   const lat = getNumberOrNull(auction.propertyLatitude);
   const lng = getNumberOrNull(auction.propertyLongitude);
   const ownershipPct = getOwnershipPercentage(auction);

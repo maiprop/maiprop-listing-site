@@ -6,7 +6,7 @@ import { assertEquals, assertNotEquals } from "https://deno.land/std@0.224.0/ass
 import { captureHandler } from "../_shared/testUtils.ts";
 
 const { restore } = await captureHandler(import.meta.url, "./index.ts");
-const { buildFilterRequest, getRateLimitKey } = await import("./index.ts");
+const { buildFilterRequest, getRateLimitKey, mapAuction } = await import("./index.ts");
 
 Deno.test("buildFilterRequest forwards sort fields to OS", () => {
   const request = buildFilterRequest({
@@ -43,6 +43,26 @@ Deno.test("rate-limit key uses a stable token hash for authenticated callers", a
   const firstKey = await getRateLimitKey(first);
   assertEquals(firstKey, await getRateLimitKey(first));
   assertNotEquals(firstKey, await getRateLimitKey(second));
+});
+
+Deno.test("mapAuction drops malformed numeric fields", () => {
+  const mapped = mapAuction({
+    auctionListingId: 42,
+    propertyLatitude: "not-lat",
+    propertyLongitude: "23.7",
+    propertySquareMeters: "not-sqm",
+    constructionYear: "not-year",
+    firstPriceOffer: "not-price",
+    ownershipPercentage: "not-ownership",
+  });
+
+  assertEquals(mapped.price, 0);
+  assertEquals(mapped.cover_image_url, null);
+  assertEquals(mapped.sqm, 1);
+  assertEquals(mapped.latitude, null);
+  assertEquals(mapped.longitude, 23.7);
+  assertEquals(mapped.year_built, null);
+  assertEquals(mapped.tags.includes("ownership_pct:NaN"), false);
 });
 
 restore();
