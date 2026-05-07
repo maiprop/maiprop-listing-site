@@ -273,12 +273,8 @@ export function useListing(id: string) {
       if (error) throw error;
       if (!data) return null;
       // Fetch owner profile and Pro status (Pro owners can receive messages and calendar).
-      // Pro status is resolved via the public.is_pro(uuid) SECURITY DEFINER RPC,
-      // which consolidates the three subscription truth sources (admin role,
-      // profiles.subscription_product_id, investor_subscriptions.status). The
-      // previous client-side check compared investor_subscriptions.tier='pro'
-      // against the actual constraint values ('private','institutional','developer')
-      // and was therefore permanently false — see audit BUG A.
+      // Pro status is resolved server-side so subscription truth sources do not
+      // need direct browser RPC access.
       let profiles = null;
       let ownerIsPro = false;
       let ownerParticipantType: "agent" | "seller" | null = null;
@@ -286,15 +282,12 @@ export function useListing(id: string) {
         try {
           const [{ data: profilePublic }, isProRpc] = await Promise.all([
             supabase.from("profiles_public").select("user_id, display_name, avatar_url, role").eq("user_id", data.owner_id).maybeSingle(),
-            // Cast through unknown until `npm run generate-types` regenerates
-            // src/integrations/supabase/types.ts with the new is_pro RPC.
-            (supabase.rpc as unknown as (
-              fn: "is_pro",
-              args: { p_user_id: string },
-            ) => Promise<{ data: boolean | null; error: unknown }>)("is_pro", { p_user_id: data.owner_id }),
+            supabase.functions.invoke("owner-pro-status", {
+              body: { listingId: data.id },
+            }),
           ]);
           profiles = profilePublic ?? null;
-          ownerIsPro = isProRpc.data === true;
+          ownerIsPro = (isProRpc.data as { isPro?: boolean } | null)?.isPro === true;
           if (profilePublic) {
             ownerParticipantType = getOwnerParticipantType(profilePublic as { role?: string; bio?: string | null });
           }
@@ -311,8 +304,8 @@ export function useListing(id: string) {
 /**
  * Tracks a listing view — call from the detail page component, not inside a queryFn.
  * Deduplicates within the same browser session so refetches don't double-count.
- * Uses DB-side RPCs so the increment is atomic (single UPDATE, no read-modify-write race)
- * and the view event is a plain insert, both via migration 20260404140000.
+ * Uses an Edge Function wrapper so public page views do not require browser
+ * execute grants on SECURITY DEFINER database functions.
  */
 export function useTrackListingView() {
   return useMutation({
@@ -321,14 +314,9 @@ export function useTrackListingView() {
       if (sessionStorage.getItem(sessionKey)) return;
       sessionStorage.setItem(sessionKey, "1");
 
-      const { data: authData } = await supabase.auth.getUser();
-      await Promise.all([
-        supabase.rpc("increment_listing_views", { p_listing_id: listingId }),
-        supabase.rpc("record_listing_view_event", {
-          p_listing_id: listingId,
-          p_viewer_id: authData.user?.id ?? undefined,
-        }),
-      ]).catch((e: unknown) => logger.warn("View tracking failed:", e));
+      await supabase.functions.invoke("record-listing-view", {
+        body: { listingId },
+      }).catch((e: unknown) => logger.warn("View tracking failed:", e));
     },
   });
 }

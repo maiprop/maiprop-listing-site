@@ -57,6 +57,7 @@ function makeChainableMock(resolvedValue: { data: unknown; error: null } = { dat
     }),
     select: vi.fn().mockReturnThis(),
     single: vi.fn().mockResolvedValue(resolvedValue),
+    maybeSingle: vi.fn().mockResolvedValue(resolvedValue),
     // Thenable so the query builder can be awaited directly
     then: (resolve: (v: typeof resolvedValue) => void, _reject?: (e: unknown) => void) =>
       Promise.resolve(resolvedValue).then(resolve),
@@ -77,9 +78,11 @@ describe("IDOR ownership guards on project mutation hooks", () => {
   // ── useDeleteProjectMedia ───────────────────────────────────────────────
 
   it("useDeleteProjectMedia includes project_id filter", async () => {
+    const ownerChain = makeChainableMock({ data: { id: "proj-xyz" }, error: null });
     const chain = makeChainableMock();
-    vi.mocked(supabase).from = vi.fn().mockReturnValue({
-      delete: vi.fn().mockReturnValue(chain),
+    vi.mocked(supabase).from = vi.fn().mockImplementation((table: string) => {
+      if (table === "projects") return ownerChain;
+      return { delete: vi.fn().mockReturnValue(chain) };
     });
 
     const { result } = renderHook(() => useDeleteProjectMedia(), { wrapper });
@@ -90,14 +93,17 @@ describe("IDOR ownership guards on project mutation hooks", () => {
 
     expect(chain.eqCalls).toContainEqual(["id", "media-1"]);
     expect(chain.eqCalls).toContainEqual(["project_id", "proj-xyz"]);
+    expect(ownerChain.eqCalls).toContainEqual(["owner_id", TEST_USER_ID]);
   });
 
   // ── useDeleteProjectLead ────────────────────────────────────────────────
 
   it("useDeleteProjectLead includes project_id filter", async () => {
+    const ownerChain = makeChainableMock({ data: { id: "proj-xyz" }, error: null });
     const chain = makeChainableMock();
-    vi.mocked(supabase).from = vi.fn().mockReturnValue({
-      delete: vi.fn().mockReturnValue(chain),
+    vi.mocked(supabase).from = vi.fn().mockImplementation((table: string) => {
+      if (table === "projects") return ownerChain;
+      return { delete: vi.fn().mockReturnValue(chain) };
     });
 
     const { result } = renderHook(() => useDeleteProjectLead(), { wrapper });
@@ -108,14 +114,17 @@ describe("IDOR ownership guards on project mutation hooks", () => {
 
     expect(chain.eqCalls).toContainEqual(["id", "lead-1"]);
     expect(chain.eqCalls).toContainEqual(["project_id", "proj-xyz"]);
+    expect(ownerChain.eqCalls).toContainEqual(["owner_id", TEST_USER_ID]);
   });
 
   // ── useUpdateProjectLead ────────────────────────────────────────────────
 
   it("useUpdateProjectLead includes project_id filter", async () => {
+    const ownerChain = makeChainableMock({ data: { id: "proj-xyz" }, error: null });
     const chain = makeChainableMock({ data: { id: "lead-1" }, error: null });
-    vi.mocked(supabase).from = vi.fn().mockReturnValue({
-      update: vi.fn().mockReturnValue(chain),
+    vi.mocked(supabase).from = vi.fn().mockImplementation((table: string) => {
+      if (table === "projects") return ownerChain;
+      return { update: vi.fn().mockReturnValue(chain) };
     });
 
     const { result } = renderHook(() => useUpdateProjectLead(), { wrapper });
@@ -126,14 +135,17 @@ describe("IDOR ownership guards on project mutation hooks", () => {
 
     expect(chain.eqCalls).toContainEqual(["id", "lead-1"]);
     expect(chain.eqCalls).toContainEqual(["project_id", "proj-xyz"]);
+    expect(ownerChain.eqCalls).toContainEqual(["owner_id", TEST_USER_ID]);
   });
 
   // ── useDeleteProjectUnit ────────────────────────────────────────────────
 
   it("useDeleteProjectUnit includes project_id filter", async () => {
+    const ownerChain = makeChainableMock({ data: { id: "proj-xyz" }, error: null });
     const chain = makeChainableMock();
-    vi.mocked(supabase).from = vi.fn().mockReturnValue({
-      delete: vi.fn().mockReturnValue(chain),
+    vi.mocked(supabase).from = vi.fn().mockImplementation((table: string) => {
+      if (table === "projects") return ownerChain;
+      return { delete: vi.fn().mockReturnValue(chain) };
     });
 
     const { result } = renderHook(() => useDeleteProjectUnit(), { wrapper });
@@ -144,14 +156,17 @@ describe("IDOR ownership guards on project mutation hooks", () => {
 
     expect(chain.eqCalls).toContainEqual(["id", "unit-1"]);
     expect(chain.eqCalls).toContainEqual(["project_id", "proj-xyz"]);
+    expect(ownerChain.eqCalls).toContainEqual(["owner_id", TEST_USER_ID]);
   });
 
   // ── useUpdateProjectUnit ────────────────────────────────────────────────
 
   it("useUpdateProjectUnit includes project_id filter", async () => {
+    const ownerChain = makeChainableMock({ data: { id: "proj-xyz" }, error: null });
     const chain = makeChainableMock({ data: { id: "unit-1" }, error: null });
-    vi.mocked(supabase).from = vi.fn().mockReturnValue({
-      update: vi.fn().mockReturnValue(chain),
+    vi.mocked(supabase).from = vi.fn().mockImplementation((table: string) => {
+      if (table === "projects") return ownerChain;
+      return { update: vi.fn().mockReturnValue(chain) };
     });
 
     const { result } = renderHook(() => useUpdateProjectUnit(), { wrapper });
@@ -163,6 +178,7 @@ describe("IDOR ownership guards on project mutation hooks", () => {
 
     expect(chain.eqCalls).toContainEqual(["id", "unit-1"]);
     expect(chain.eqCalls).toContainEqual(["project_id", "proj-xyz"]);
+    expect(ownerChain.eqCalls).toContainEqual(["owner_id", TEST_USER_ID]);
   });
 });
 

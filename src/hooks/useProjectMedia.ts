@@ -1,5 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { requireOwnedProject } from "@/hooks/projectOwnership";
 import { toast } from "sonner";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -39,6 +41,7 @@ export function useProjectMedia(projectId: string | undefined) {
 
 export function useAddProjectMedia() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async ({
       project_id,
@@ -53,6 +56,7 @@ export function useAddProjectMedia() {
       title?: string;
       sort_order?: number;
     }) => {
+      await requireOwnedProject(project_id, user?.id);
       const { data, error } = await supabase
         .from("project_media")
         .insert({ project_id, url, media_type, title: title || null, sort_order: sort_order ?? 0 })
@@ -72,8 +76,10 @@ export function useAddProjectMedia() {
 
 export function useDeleteProjectMedia() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async ({ id, projectId }: { id: string; projectId: string }) => {
+      await requireOwnedProject(projectId, user?.id);
       const { error } = await supabase
         .from("project_media")
         .delete()

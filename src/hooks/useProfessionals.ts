@@ -6,17 +6,14 @@ export function useProfessionals(category?: string) {
   return useQuery({
     queryKey: ["professionals", category],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("get_professionals_with_priority", {
-        p_category: category ?? undefined,
-      });
-      if (error) {
-        // Fallback if RPC not yet migrated
-        let query = supabase.from("professionals").select("id, user_id, title, display_name, category, city, bio, avatar_url, rating, reviews_count, verified, hourly_rate, experience_years, specialties, languages, license_number, website_url, video_link, projects_count, average_deal_size, average_portfolio_asset_size, subscription_tier, calendar_notes, created_at, updated_at").order("rating", { ascending: false });
-        if (category) query = query.eq("category", category as Enums<"professional_category">);
-        const { data: fallback, error: fallbackErr } = await query;
-        if (fallbackErr) throw fallbackErr;
-        return fallback || [];
-      }
+      let query = supabase
+        .from("professionals")
+        .select("id, user_id, title, display_name, category, city, bio, avatar_url, rating, reviews_count, verified, hourly_rate, experience_years, specialties, languages, license_number, website_url, video_link, projects_count, average_deal_size, average_portfolio_asset_size, subscription_tier, calendar_notes, created_at, updated_at")
+        .order("subscription_tier", { ascending: false, nullsFirst: false })
+        .order("rating", { ascending: false, nullsFirst: false });
+      if (category) query = query.eq("category", category as Enums<"professional_category">);
+      const { data, error } = await query;
+      if (error) throw error;
       return data || [];
     },
   });

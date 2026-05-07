@@ -1,49 +1,48 @@
 # Edge Function Auth Audit
 
-> Last updated: 2026-04-27
+> Last updated: 2026-05-07
+> Source: `supabase/config.toml`, local function source, and Deno auth tests.
 
-## Functions with `verify_jwt = false`
+## Release Rule
 
-These functions do NOT require a valid Supabase JWT. Each must have an alternative authentication mechanism or a documented reason for being public.
+Every `verify_jwt = false` function must be either intentionally public, protected by custom authentication, or callable only by a trusted platform trigger. If it touches private user data and has neither JWT nor custom auth, it is a release blocker.
 
-| Function | Alt Auth | Justification |
-|----------|----------|---------------|
-| `ai-search` | Rate limiter | Public search — rate limited per IP |
-| `property-valuation` | Rate limiter | Public tool — rate limited per IP |
-| `neighbourhood-report` | Rate limiter | Public tool — rate limited per IP |
-| `property-pois` | Rate limiter | Public tool — rate limited per IP |
-| `smart-filters` | Rate limiter | Public UI helper — rate limited per IP |
-| `ai-translate` | Rate limiter | Public i18n helper — rate limited per IP |
-| `streetview-proxy` | Rate limiter | Proxies Google API — rate limited per IP |
-| `sitemap` | None (read-only) | Public SEO endpoint — serves XML sitemap |
-| `healthz` | None (read-only) | Public health check — returns `{ ok: true }` |
-| `csp-report` | None (write-only) | Receives CSP violation reports from browsers |
-| `stripe-webhook` | Stripe signature (`stripe.webhooks.constructEvent`) | Verified via `STRIPE_WEBHOOK_SIGNING_SECRET` |
-| `auth-email-hook` | Supabase hook secret (`SEND_EMAIL_HOOK_SECRET`) | Triggered by Supabase Auth system |
-| `sync-to-os` | Service role key check | Internal — called by admin dashboard |
-| `receive-from-os` | API key header (`X-OS-API-KEY`) | External webhook from mAI Prop OS |
-| `poll-os-auctions` | pg_cron (no external access) | Scheduled task — runs server-side only |
-| `sync-firesale-to-os` | Service role key check | Internal — called by admin dashboard |
-| `full-sync-from-os` | Service role key check | Internal — called by admin dashboard |
-| `fetch-report-from-os` | Service role key check | Internal — called by admin dashboard |
-| `os-diagnose` | Service role key check | Internal — called by admin dashboard |
-| `os-sales-coordinates` | Service role key check | Internal — called by admin dashboard |
-| `fetch-past-deals-from-os` | Service role key check | Internal — called by admin dashboard |
-| `send-saved-search-alerts` | pg_cron (no external access) | Scheduled task — runs server-side only |
-| `invitation-notify` | Database webhook (internal) | Triggered by DB insert, not externally callable |
-| `oh-registration-notify` | Database webhook (internal) | Triggered by DB insert, not externally callable |
-| `process-email-queue` | pg_cron (no external access) | Scheduled task — runs server-side only |
+## `verify_jwt = false` Functions
 
-## Risk Assessment
+| Function | Auth model | Data touched | Release status |
+| --- | --- | --- | --- |
+| `ai-search` | Public endpoint plus local rate limiter; tests reject missing/wrong `Authorization` where configured in handler. | Listing/search data and AI API. | Conditional: keep rate limit and abuse monitoring. |
+| `property-valuation` | Public endpoint plus rate limiter. | User-provided valuation inputs and AI/external data. | Conditional: monitor cost and abuse. |
+| `neighbourhood-report` | Public endpoint plus rate limiter. | Public location/report data and AI/external data. | Conditional: monitor cost and abuse. |
+| `property-pois` | Public endpoint plus rate limiter. | Public POI/location data. | Conditional: monitor cost and abuse. |
+| `smart-filters` | Public endpoint plus rate limiter. | Search/filter helper data. | Conditional: monitor cost and abuse. |
+| `ai-translate` | Public endpoint plus rate limiter. | User-provided text for translation. | Conditional: no private payloads. |
+| `streetview-proxy` | Public proxy plus rate limiter. | Google Street View requests. | Conditional: cost-control risk remains. |
+| `sitemap` | Public read-only endpoint. | Public SEO URLs. | Ready. |
+| `healthz` | Public read-only endpoint. | Health status only. | Ready. |
+| `csp-report` | Public write-only browser report receiver. | CSP violation reports. | Conditional: log-flood risk. |
+| `record-listing-view` | Public endpoint with body validation, CORS allowlist, and rate limiting; uses service role for the service-role-only atomic RPC. | Listing view counters/events. | Ready: no private data returned. |
+| `owner-pro-status` | Public endpoint with listing UUID validation, CORS allowlist, and rate limiting; resolves the listing owner server-side before checking subscription status. | Boolean owner Pro status only. | Conditional: public boolean is intentional for listing contact/calendar UI. |
+| `stripe-webhook` | Stripe signature verification with webhook signing secret. | Stripe events and billing state. | Ready if signature tests stay green. |
+| `auth-email-hook` | Supabase Auth hook secret via `SEND_EMAIL_HOOK_SECRET`. | Auth email payloads. | Ready if secret is configured in prod. |
+| `sync-to-os` | Custom Bearer/user authorization in handler; not Supabase JWT-gated by platform config. | Listing sync data. | Conditional: keep tests for missing/invalid auth. |
+| `receive-from-os` | External API key header (`X-OS-API-KEY`). | Incoming OS webhook data. | Conditional: rotate key and consider IP allowlist. |
+| `poll-os-auctions` | Scheduled/internal caller model plus rate limiter. | Auction sync data. | Conditional: do not expose as browser feature. |
+| `sync-firesale-to-os` | Custom Bearer/user authorization in handler. | Firesale sync data. | Conditional: keep tests for missing/invalid auth. |
+| `full-sync-from-os` | Custom `requireAgent` Bearer/user authorization in handler; tests reject missing auth. | Bulk OS sync data. | Conditional: high blast radius. |
+| `os-diagnose` | Internal diagnostic endpoint; not JWT-gated by config. | OS connectivity/config status. | Needs review: diagnostic output must not expose secrets. |
+| `os-sales-coordinates` | Custom auth/rate limit expected by handler. | Sales coordinates. | Needs review before release due location sensitivity. |
+| `send-saved-search-alerts` | Scheduled/internal caller model. | Saved search and email data. | Conditional: must not be browser-callable without custom secret. |
+| `invitation-notify` | Handler checks `Authorization`; tests reject missing auth. | Invitation notification data. | Conditional: document trigger secret/caller. |
+| `oh-registration-notify` | Handler checks `Authorization`; database trigger/webhook model. | Open-house registration data. | Conditional: document trigger secret/caller. |
 
-**No unprotected write endpoints found.** All `verify_jwt=false` functions either:
-1. Are rate-limited public read endpoints (AI tools, search, sitemap)
-2. Have alternative auth (Stripe signature, OS API key, hook secret)
-3. Are server-triggered only (pg_cron, database webhooks)
-4. Are write-only receivers with validation (CSP reports, OS webhooks)
+## `verify_jwt = true` Functions
 
-## Recommendations
+These functions are platform JWT-gated in `supabase/config.toml`: `property-chat`, `pro-ai-tools`, `ai-service-match`, `fetch-report-from-os`, `listing-ai-assist`, `create-checkout`, `check-subscription`, `customer-portal`, `create-stripe-price`, `process-email-queue`, `sync-stripe-pricing`, `get-invoices`, `delete-account`, `fetch-past-deals-from-os`, `log-role-switch`, `agent-data-input`, `apply-data-input-credit`, `flag-auction-on-os`, `fetch-auction-enrichment`, `transfer-platform-admin`, and `complete-onboarding-role`. The last two verify the caller JWT in the Edge Function and then call service-role-only RPCs that take the verified caller id explicitly.
 
-1. ~~Add rate limiting to `streetview-proxy`~~ — ✅ Already rate limited
-2. Monitor `csp-report` for abuse (high volume could be used for log flooding)
-3. Consider adding IP allowlisting for OS webhook functions if OS has static IPs
+## Blocking Follow-Ups
+
+1. Add or keep Deno tests for every `verify_jwt = false` function that writes, syncs, emails, diagnoses, or reads private data.
+2. Move scheduled/internal functions to a shared custom secret helper where they are not protected by Supabase JWT.
+3. Review `os-diagnose` and `os-sales-coordinates` output for secret, location, or private-data leakage.
+4. Keep public AI/proxy endpoints rate limited and cost monitored.

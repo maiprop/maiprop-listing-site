@@ -31,7 +31,9 @@ vi.mock("sonner", () => ({ toast: toastMock }));
 
 import ProjectsTab from "@/pages/dashboard/ProjectsTab";
 
-const wrap = ({ children }: { children: React.ReactNode }) => <MemoryRouter>{children}</MemoryRouter>;
+const wrap = ({ children }: { children: React.ReactNode }) => (
+  <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>{children}</MemoryRouter>
+);
 
 beforeEach(() => {
   useAuthMock.mockReset();

@@ -7,6 +7,7 @@ import { useState, useRef, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -372,6 +373,9 @@ export function LegalDocumentModal({ open, onClose, listingTitle = "Property", s
             <Stamp className="w-4 h-4 text-primary" />
             Legal Document Library
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Select a legal document template, preview it, and add a signature.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-1 overflow-hidden">

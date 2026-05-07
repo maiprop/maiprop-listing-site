@@ -9,7 +9,13 @@ import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { lintMigration, isInScope, run } from "./check-migration-idempotency.mjs";
+import {
+  lintMigration,
+  lintMigrationChronology,
+  loadAppliedFutureVersions,
+  isInScope,
+  run,
+} from "./check-migration-idempotency.mjs";
 
 // ---------------------------------------------------------------------------
 // lintMigration — per-rule unit tests
@@ -141,6 +147,62 @@ describe("isInScope", () => {
 });
 
 // ---------------------------------------------------------------------------
+// lintMigrationChronology - filename timestamp checks
+// ---------------------------------------------------------------------------
+
+describe("lintMigrationChronology", () => {
+  test("flags duplicate migration timestamps", () => {
+    const out = lintMigrationChronology(
+      [
+        "20260501000000_first.sql",
+        "20260501000000_second.sql",
+      ],
+      { now: new Date("2026-05-07T00:00:00Z") },
+    );
+
+    expect(out).toHaveLength(1);
+    expect(out[0].rule).toMatch(/Duplicate migration timestamp/);
+  });
+
+  test("flags future-dated migration timestamps", () => {
+    const out = lintMigrationChronology(
+      ["20260601000000_future.sql"],
+      { now: new Date("2026-05-07T00:00:00Z") },
+    );
+
+    expect(out).toHaveLength(1);
+    expect(out[0].rule).toMatch(/Future-dated migration timestamp/);
+  });
+
+  test("allows future-dated migrations recorded as already applied", () => {
+    const out = lintMigrationChronology(
+      ["20260601000000_future.sql"],
+      {
+        now: new Date("2026-05-07T00:00:00Z"),
+        appliedFutureVersions: ["20260601000000"],
+      },
+    );
+
+    expect(out).toHaveLength(0);
+  });
+
+  test("allows a one-day UTC grace window for local clock skew", () => {
+    const out = lintMigrationChronology(
+      ["20260508000000_next_day.sql"],
+      { now: new Date("2026-05-07T00:00:00Z") },
+    );
+
+    expect(out).toHaveLength(0);
+  });
+});
+
+describe("loadAppliedFutureVersions", () => {
+  test("loads the immutable applied-future allowlist", () => {
+    expect(loadAppliedFutureVersions()).toContain("20260704000000");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // run — directory walker
 // ---------------------------------------------------------------------------
 
@@ -161,7 +223,27 @@ describe("run", () => {
       const result = run({ dir, baseline: "20300101000000" });
       expect(result.scanned, "should ignore the pre-baseline file").toBe(2);
       expect(result.violations, "two violations in the new bad file").toHaveLength(2);
+      expect(result.chronologyViolations).toHaveLength(0);
       expect(result.violations.every((v) => v.file === "20300101000000_new_bad.sql")).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("can include chronology violations", () => {
+    const dir = mkdtempSync(join(tmpdir(), "migr-lint-"));
+    try {
+      writeFileSync(join(dir, "20260501000000_a.sql"), "SELECT 1;");
+      writeFileSync(join(dir, "20260501000000_b.sql"), "SELECT 1;");
+      writeFileSync(join(dir, "20260601000000_future.sql"), "SELECT 1;");
+
+      const result = run({
+        dir,
+        baseline: "20260501000000",
+        checkChronology: true,
+        now: new Date("2026-05-07T00:00:00Z"),
+      });
+      expect(result.chronologyViolations).toHaveLength(2);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

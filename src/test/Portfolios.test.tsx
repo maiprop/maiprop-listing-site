@@ -48,7 +48,9 @@ vi.mock("sonner", () => ({ toast: toastMock }));
 
 import Portfolios from "@/pages/Portfolios";
 
-const wrap = (ui: React.ReactNode) => <MemoryRouter>{ui}</MemoryRouter>;
+const wrap = (ui: React.ReactNode) => (
+  <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>{ui}</MemoryRouter>
+);
 
 beforeEach(() => {
   useAuthMock.mockReset();

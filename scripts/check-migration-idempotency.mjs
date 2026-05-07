@@ -26,11 +26,13 @@
  *   0 — all new migrations are idempotent
  *   1 — at least one violation found
  */
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, basename } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const MIGRATIONS_DIR = "supabase/migrations";
+const DEFAULT_FUTURE_GRACE_DAYS = 1;
+const APPLIED_FUTURE_MIGRATIONS_FILE = "scripts/applied-future-migrations.json";
 
 // Forward-only enforcement. Anything stamped at or after this timestamp must
 // satisfy the rules below; older migrations are out of scope (already applied
@@ -193,15 +195,101 @@ export function isInScope(filename, baseline = BASELINE_TIMESTAMP) {
   return m[1] >= baseline;
 }
 
+function toMigrationTimestamp(date) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return [
+    date.getUTCFullYear(),
+    pad(date.getUTCMonth() + 1),
+    pad(date.getUTCDate()),
+    pad(date.getUTCHours()),
+    pad(date.getUTCMinutes()),
+    pad(date.getUTCSeconds()),
+  ].join("");
+}
+
+/**
+ * Check migration filenames for duplicate timestamps and future-dated prefixes.
+ *
+ * @param {string[]} files Basenames or paths to migration files.
+ * @param {{ now?: Date; futureGraceDays?: number }} options
+ * @returns {Violation[]}
+ */
+export function lintMigrationChronology(
+  files,
+  {
+    now = new Date(),
+    futureGraceDays = DEFAULT_FUTURE_GRACE_DAYS,
+    appliedFutureVersions = [],
+  } = {},
+) {
+  /** @type {Violation[]} */
+  const violations = [];
+  const maxAllowed = new Date(now);
+  maxAllowed.setUTCDate(maxAllowed.getUTCDate() + futureGraceDays);
+  const maxAllowedTimestamp = toMigrationTimestamp(maxAllowed);
+  const seen = new Map();
+  const appliedFutureSet = new Set(appliedFutureVersions);
+
+  for (const file of files.filter((f) => f.endsWith(".sql")).sort()) {
+    const name = basename(file);
+    const match = /^(\d{14})_/.exec(name);
+    if (!match) {
+      violations.push({
+        file: name,
+        line: 1,
+        rule: "Migration filename missing 14-digit timestamp prefix",
+        snippet: "Use `<YYYYMMDDHHMMSS>_<description>.sql`.",
+      });
+      continue;
+    }
+
+    const timestamp = match[1];
+    const previous = seen.get(timestamp);
+    if (previous) {
+      violations.push({
+        file: name,
+        line: 1,
+        rule: `Duplicate migration timestamp ${timestamp}`,
+        snippet: `Use a unique timestamp; ${previous} already has this prefix.`,
+      });
+    }
+    seen.set(timestamp, name);
+
+    if (timestamp > maxAllowedTimestamp && !appliedFutureSet.has(timestamp)) {
+      violations.push({
+        file: name,
+        line: 1,
+        rule: `Future-dated migration timestamp ${timestamp}`,
+        snippet: `Migration timestamps must not be later than ${maxAllowedTimestamp} UTC.`,
+      });
+    }
+  }
+
+  return violations;
+}
+
+export function loadAppliedFutureVersions(file = APPLIED_FUTURE_MIGRATIONS_FILE) {
+  if (!existsSync(file)) return [];
+  const parsed = JSON.parse(readFileSync(file, "utf8"));
+  if (!Array.isArray(parsed) || parsed.some((value) => typeof value !== "string")) {
+    throw new Error(`${file} must be a JSON array of migration timestamp strings`);
+  }
+  return parsed;
+}
+
 /**
  * Programmatic entry point — exported for tests.
- * @returns {{ scanned: number; violations: Violation[] }}
+ * @returns {{ scanned: number; violations: Violation[]; chronologyViolations: Violation[] }}
  */
-export function run({ dir = MIGRATIONS_DIR, baseline = BASELINE_TIMESTAMP } = {}) {
-  const files = readdirSync(dir)
-    .filter((f) => f.endsWith(".sql"))
-    .filter((f) => isInScope(f, baseline))
-    .sort();
+export function run({
+  dir = MIGRATIONS_DIR,
+  baseline = BASELINE_TIMESTAMP,
+  checkChronology = false,
+  now = new Date(),
+  appliedFutureVersions = loadAppliedFutureVersions(),
+} = {}) {
+  const allFiles = readdirSync(dir).filter((f) => f.endsWith(".sql")).sort();
+  const files = allFiles.filter((f) => isInScope(f, baseline));
 
   /** @type {Violation[]} */
   const violations = [];
@@ -209,22 +297,27 @@ export function run({ dir = MIGRATIONS_DIR, baseline = BASELINE_TIMESTAMP } = {}
     const sql = readFileSync(join(dir, f), "utf8");
     violations.push(...lintMigration(basename(f), sql));
   }
-  return { scanned: files.length, violations };
+  const chronologyViolations = checkChronology
+    ? lintMigrationChronology(allFiles, { now, appliedFutureVersions })
+    : [];
+  return { scanned: files.length, violations, chronologyViolations };
 }
 
 // CLI entry — only when invoked directly, not on import.
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
-  const { scanned, violations } = run();
-  if (violations.length === 0) {
+  const checkChronology = process.argv.includes("--check-chronology");
+  const { scanned, violations, chronologyViolations } = run({ checkChronology });
+  const allViolations = [...chronologyViolations, ...violations];
+  if (allViolations.length === 0) {
     console.log(
       `[migration-idempotency] OK — ${scanned} new migration(s) inspected, no violations.`,
     );
     process.exit(0);
   }
   console.error(
-    `[migration-idempotency] FAIL — ${violations.length} violation(s) in ${scanned} new migration(s):\n`,
+    `[migration-idempotency] FAIL — ${allViolations.length} violation(s) in ${scanned} new migration(s):\n`,
   );
-  for (const v of violations) {
+  for (const v of allViolations) {
     console.error(`  ${v.file}:${v.line}  ${v.rule}`);
     console.error(`    ↳ ${v.snippet}`);
   }

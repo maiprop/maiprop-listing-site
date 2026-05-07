@@ -42,7 +42,7 @@ import { InvestorRoute } from "@/components/InvestorRoute";
  */
 function renderGuarded(guard: React.ReactElement, initial: string = "/private") {
   return render(
-    <MemoryRouter initialEntries={[initial]}>
+    <MemoryRouter initialEntries={[initial]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Routes>
         <Route path="/private" element={guard} />
         <Route path="/login" element={<div>at-login</div>} />
