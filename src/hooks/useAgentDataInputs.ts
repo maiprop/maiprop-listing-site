@@ -62,6 +62,12 @@ export interface SubmitAgentDataInputArgs {
 
 const QUERY_KEY_LIST = "agent-data-inputs";
 const QUERY_KEY_QUOTA = "agent-data-input-quota";
+const DEFAULT_AGENT_DATA_INPUT_QUOTA: AgentDataInputQuota = {
+  used: 0,
+  monthly_limit: 20,
+  remaining: 20,
+  is_banned: false,
+};
 
 type EdgeEntry = {
   id: string;
@@ -156,6 +162,19 @@ const buildSubmitPayload = (args: SubmitAgentDataInputArgs) => ({
   notes: nullable(args.notes),
 });
 
+const quotaFromResponse = (row: EdgeStatusResponse | null): AgentDataInputQuota => {
+  if (!row) return DEFAULT_AGENT_DATA_INPUT_QUOTA;
+
+  const used = Number(row.monthly_count ?? 0);
+  const monthlyLimit = Number(row.monthly_limit ?? DEFAULT_AGENT_DATA_INPUT_QUOTA.monthly_limit);
+  return {
+    used,
+    monthly_limit: monthlyLimit,
+    remaining: Math.max(monthlyLimit - used, 0),
+    is_banned: Boolean(row.lifetime_banned ?? false),
+  };
+};
+
 export const useAgentDataInputs = () => {
   const { user } = useAuth();
   return useQuery({
@@ -178,23 +197,13 @@ export const useAgentDataInputQuota = () => {
   return useQuery({
     queryKey: [QUERY_KEY_QUOTA, user?.id],
     queryFn: async (): Promise<AgentDataInputQuota> => {
-      if (!user) {
-        return { used: 0, monthly_limit: 20, remaining: 20, is_banned: false };
-      }
+      if (!user) return DEFAULT_AGENT_DATA_INPUT_QUOTA;
+
       const { data, error } = await supabase.functions.invoke("agent-data-input", {
         body: { action: "status" },
       });
       if (error) throw error;
-      const row = data as EdgeStatusResponse | null;
-      if (!row) return { used: 0, monthly_limit: 20, remaining: 20, is_banned: false };
-      const used = Number(row.monthly_count ?? 0);
-      const monthlyLimit = Number(row.monthly_limit ?? 20);
-      return {
-        used,
-        monthly_limit: monthlyLimit,
-        remaining: Math.max(monthlyLimit - used, 0),
-        is_banned: Boolean(row.lifetime_banned ?? false),
-      };
+      return quotaFromResponse(data as EdgeStatusResponse | null);
     },
     enabled: !!user,
     staleTime: 30_000,
