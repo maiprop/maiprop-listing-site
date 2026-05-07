@@ -323,7 +323,7 @@ function mapAuction(auction: OsAuction): MappedAuction {
     price,
     auction_starting_bid: price,
     auction_date: getNullableText(auction.auctionDate),
-    auction_court: getNullableText(auction.auctionStatus),
+    auction_court: null,
     property_type: catKey,
     cover_image_url: getStreetViewUrl(lat, lng),
     sqm: getNumberOrDefault(auction.propertySquareMeters, 1),
@@ -451,9 +451,13 @@ function isAllowedOsApiUrl(url: URL): boolean {
 
 function normalizeOsUrl(rawUrl: string | undefined): string | null {
   if (!rawUrl) return null;
-  const url = new URL(rawUrl);
-  if (!isAllowedOsApiUrl(url)) return null;
-  return url.toString().replace(TRAILING_SLASH_RE, "");
+  try {
+    const url = new URL(rawUrl);
+    if (!isAllowedOsApiUrl(url)) return null;
+    return url.toString().replace(TRAILING_SLASH_RE, "");
+  } catch {
+    return null;
+  }
 }
 
 function getOsConfig(): OsConfig | null {

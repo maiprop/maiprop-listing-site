@@ -1,3 +1,4 @@
+/* global Deno:readonly */
 /**
  * Unit coverage for fetch-os-auctions request shaping and public rate-limit keying.
  */
