@@ -137,18 +137,31 @@ async function fetchAuctionListings(): Promise<AuctionListingRow[]> {
   }
 }
 
-function getTimeoutRejection(): Promise<never> {
+function getTimeoutRejection(
+  setTimer: (timer: ReturnType<typeof setTimeout>) => void,
+): Promise<never> {
   return new Promise(function createTimeoutRejection(_, reject) {
-    setTimeout(function rejectTimeout() {
+    const timer = setTimeout(function rejectTimeout() {
       reject(new Error("Request timeout"));
     }, QUERY_TIMEOUT_MS);
+    setTimer(timer);
   });
 }
 
-function withAuctionTimeout(
+async function withAuctionTimeout(
   request: Promise<AuctionListingRow[]>,
 ): Promise<AuctionListingRow[]> {
-  return Promise.race([request, getTimeoutRejection()]);
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      request,
+      getTimeoutRejection(function setTimeoutHandle(timer) {
+        timeout = timer;
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
 }
 
 function getAuctionQuery(): Promise<AuctionListingRow[]> {

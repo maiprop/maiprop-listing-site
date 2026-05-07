@@ -221,6 +221,7 @@ const OPTIONAL_FILTER_KEYS = [
 ] as const;
 
 const AMOUNT_FILTER_KEYS = ["auctionAmountFrom", "auctionAmountTo"] as const;
+const SORT_FILTER_KEYS = ["sortBy", "order"] as const;
 
 function buildTitle(a: OsAuction): string {
   const catKey = mapCategory(a.propertyCategory);
@@ -525,11 +526,21 @@ function getAmountFilterEntries(body: Record<string, unknown>): FilterEntry[] {
   });
 }
 
-function buildFilterRequest(body: Record<string, unknown>): Record<string, unknown> {
+function getStringFilterEntries(
+  body: Record<string, unknown>,
+  keys: readonly string[],
+): FilterEntry[] {
+  return keys.flatMap(function getStringFilterEntry(key) {
+    return typeof body[key] === "string" ? [[key, body[key]] as const] : [];
+  });
+}
+
+export function buildFilterRequest(body: Record<string, unknown>): Record<string, unknown> {
   return {
     auctionDateFrom: body.auctionDateFrom ?? new Date().toISOString().split("T")[0],
     ...getOptionalFilters(body),
     ...Object.fromEntries(getAmountFilterEntries(body)),
+    ...Object.fromEntries(getStringFilterEntries(body, SORT_FILTER_KEYS)),
   };
 }
 
@@ -588,8 +599,21 @@ function isOsApiFailure(err: unknown): err is OsApiFailure {
     (err as { kind?: unknown }).kind === "os-api";
 }
 
-function getClientIp(req: Request): string {
-  return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
+function getBearerToken(req: Request): string | null {
+  const authHeader = req.headers.get("Authorization");
+  return authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest), function toHex(byte) {
+    return byte.toString(16).padStart(2, "0");
+  }).join("");
+}
+
+export async function getRateLimitKey(req: Request): Promise<string> {
+  const bearerToken = getBearerToken(req);
+  return bearerToken ? `auth:${await sha256Hex(bearerToken)}` : "anonymous";
 }
 
 async function getGuardResponse(
@@ -598,7 +622,7 @@ async function getGuardResponse(
 ): Promise<Response | null> {
   const preflight = handleCors(req);
   if (preflight) return preflight;
-  return await limiter.isLimited(getClientIp(req))
+  return await limiter.isLimited(await getRateLimitKey(req))
     ? tooManyRequestsResponse(corsHeaders)
     : null;
 }
