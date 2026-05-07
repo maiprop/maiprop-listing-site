@@ -47,7 +47,9 @@ vi.mock("react-router-dom", async () => {
 
 import CreateListing from "@/pages/CreateListing";
 
-const wrap = ({ children }: { children: React.ReactNode }) => <MemoryRouter>{children}</MemoryRouter>;
+const wrap = ({ children }: { children: React.ReactNode }) => (
+  <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>{children}</MemoryRouter>
+);
 
 const baseWizard = (overrides: Record<string, unknown> = {}) => ({
   step: "type",

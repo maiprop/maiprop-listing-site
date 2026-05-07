@@ -1,19 +1,17 @@
 /**
  * Tests for the useProfessionals / useProfessional / useProfessionalByUserId
- * hooks. Each hook drives a Supabase RPC or table read, so we mock the
- * client module and assert both the happy path and the RPC-fallback branch.
+ * hooks. Each hook drives Supabase table reads, so we mock the client module
+ * and assert happy/error paths.
  */
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
 
-const rpcMock = vi.fn();
 const fromMock = vi.fn();
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
-    rpc: (...args: unknown[]) => rpcMock(...args),
     from: (...args: unknown[]) => fromMock(...args),
   },
 }));
@@ -34,45 +32,32 @@ function renderHookWithQuery<T>(hook: () => T) {
 }
 
 beforeEach(() => {
-  rpcMock.mockReset();
   fromMock.mockReset();
 });
 
 describe("useProfessionals", () => {
-  it("returns the RPC result when available", async () => {
-    rpcMock.mockResolvedValue({
-      data: [{ id: "p1", display_name: "Alice" }],
-      error: null,
-    });
-    const { result } = renderHookWithQuery(() => useProfessionals("legal"));
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(rpcMock).toHaveBeenCalledWith("get_professionals_with_priority", {
-      p_category: "legal",
-    });
-    expect(result.current.data).toEqual([{ id: "p1", display_name: "Alice" }]);
-  });
-
-  it("falls back to a direct table query when the RPC returns an error", async () => {
-    rpcMock.mockResolvedValue({ data: null, error: { message: "rpc missing" } });
-    const fallbackQuery = {
+  it("returns professionals ordered by subscription tier and rating", async () => {
+    const query = {
       select: vi.fn().mockReturnThis(),
       order: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       then(resolve: (v: { data: unknown[]; error: null }) => unknown) {
-        resolve({ data: [{ id: "fallback" }], error: null });
+        resolve({ data: [{ id: "p1", display_name: "Alice" }], error: null });
         return this;
       },
     };
-    fromMock.mockReturnValue(fallbackQuery);
-    const { result } = renderHookWithQuery(() => useProfessionals());
+    fromMock.mockReturnValue(query);
+    const { result } = renderHookWithQuery(() => useProfessionals("legal"));
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(fromMock).toHaveBeenCalledWith("professionals");
-    expect(result.current.data).toEqual([{ id: "fallback" }]);
+    expect(query.order).toHaveBeenCalledWith("subscription_tier", { ascending: false, nullsFirst: false });
+    expect(query.order).toHaveBeenCalledWith("rating", { ascending: false, nullsFirst: false });
+    expect(query.eq).toHaveBeenCalledWith("category", "legal");
+    expect(result.current.data).toEqual([{ id: "p1", display_name: "Alice" }]);
   });
 
-  it("re-throws if the fallback also errors", async () => {
-    rpcMock.mockResolvedValue({ data: null, error: { message: "rpc missing" } });
-    const fallbackQuery = {
+  it("re-throws if the table query errors", async () => {
+    const query = {
       select: vi.fn().mockReturnThis(),
       order: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
@@ -81,7 +66,7 @@ describe("useProfessionals", () => {
         return this;
       },
     };
-    fromMock.mockReturnValue(fallbackQuery);
+    fromMock.mockReturnValue(query);
     const { result } = renderHookWithQuery(() => useProfessionals());
     await waitFor(() => expect(result.current.isError).toBe(true));
   });

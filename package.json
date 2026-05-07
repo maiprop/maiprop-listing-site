@@ -42,6 +42,7 @@
     "test:deno": "deno test --allow-env --allow-net --allow-read supabase/functions/",
     "check:bundle-size": "node scripts/check-bundle-size.mjs",
     "lint:migrations": "node scripts/check-migration-idempotency.mjs",
+    "lint:migrations:chronology": "node scripts/check-migration-idempotency.mjs --check-chronology",
     "lighthouse": "lhci autorun",
     "lighthouse:collect": "lhci collect",
     "lighthouse:assert": "lhci assert",

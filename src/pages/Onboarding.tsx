@@ -81,13 +81,15 @@ export default function Onboarding() {
     const displayName = typeof values.display_name === "string" ? values.display_name : null;
     const city = typeof values.city === "string" ? values.city : null;
     const phone = typeof values.phone === "string" ? values.phone : null;
-    const { error } = await supabase.rpc("complete_onboarding_role" as never, {
-      p_role: values.role,
-      p_participant_type: values.participant_type,
-      p_display_name: displayName,
-      p_city: city,
-      p_phone: phone,
-    } as never);
+    const { error } = await supabase.functions.invoke("complete-onboarding-role", {
+      body: {
+        role: values.role,
+        participantType: values.participant_type,
+        displayName,
+        city,
+        phone,
+      },
+    });
     if (error) {
       trackAnalyticsEvent("onboarding_error", {
         stage: "role_save",

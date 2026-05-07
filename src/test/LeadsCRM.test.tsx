@@ -42,7 +42,9 @@ const baseLead = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-const wrap = ({ children }: { children: React.ReactNode }) => <MemoryRouter>{children}</MemoryRouter>;
+const wrap = ({ children }: { children: React.ReactNode }) => (
+  <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>{children}</MemoryRouter>
+);
 
 beforeEach(() => {
   useLeadsMock.mockReset();

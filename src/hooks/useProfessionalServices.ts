@@ -29,6 +29,16 @@ export interface ProfessionalAvailability {
   is_active: boolean;
 }
 
+function requireSameProfessional<T extends { professional_id: string }>(
+  professionalId: string,
+  rows: T[],
+  label: string,
+): void {
+  if (rows.some((row) => row.professional_id !== professionalId)) {
+    throw new Error(`Cannot update ${label} for another professional`);
+  }
+}
+
 export function useProfessionalServices(professionalId: string) {
   return useQuery({
     queryKey: ["professional_services", professionalId],
@@ -88,6 +98,7 @@ export function useUpsertProfessionalServices() {
       if (!user) throw new Error("Must be logged in");
       const { data: prof } = await supabase.from("professionals").select("user_id").eq("id", professionalId).eq("user_id", user.id).maybeSingle();
       if (!prof) throw new Error("Unauthorized");
+      requireSameProfessional(professionalId, services, "services");
       if (services.length > 0) {
         // Upsert on (professional_id, service_key) — insert or update without gap
         const { error: upsertError } = await supabase
@@ -125,6 +136,7 @@ export function useUpsertProfessionalAvailability() {
       if (!user) throw new Error("Must be logged in");
       const { data: prof } = await supabase.from("professionals").select("user_id").eq("id", professionalId).eq("user_id", user.id).maybeSingle();
       if (!prof) throw new Error("Unauthorized");
+      requireSameProfessional(professionalId, availability, "availability");
       if (availability.length > 0) {
         // Upsert on (professional_id, day_of_week) — insert or update without gap
         const { error: upsertError } = await supabase

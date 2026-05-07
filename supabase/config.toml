@@ -123,3 +123,15 @@ verify_jwt = true
 
 [functions.fetch-auction-enrichment]
 verify_jwt = true
+
+[functions.transfer-platform-admin]
+verify_jwt = true
+
+[functions.record-listing-view]
+verify_jwt = false
+
+[functions.complete-onboarding-role]
+verify_jwt = true
+
+[functions.owner-pro-status]
+verify_jwt = false

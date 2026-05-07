@@ -1,0 +1,43 @@
+# RLS Access Matrix
+
+> Last updated: 2026-05-07
+> Source: live `pg_policies` query against project `qvvicunqcrwpioqnvzxf`, live Supabase advisors, and local migrations.
+
+## Critical User-Owned Tables
+
+| Table | Select | Insert | Update | Delete | Basis | Release note |
+| --- | --- | --- | --- | --- | --- | --- |
+| `profiles` | Authenticated own profile or platform admin. | Own buyer profile. | Authenticated own permitted participant fields or platform admin. | Not broadly allowed. | `auth.uid()`, private role helper, guarded profile triggers. | Public helper-based profile policies were tightened to authenticated only; public helper RPC execution is revoked for anon/authenticated. |
+| `listings` | Active public listings or owner. | Owner only. | Owner only. | Owner only. | `user_id = auth.uid()`. | Frontend mutations should always include `.eq("user_id", user.id)`. |
+| `listing_images` | Listing visibility/ownership. | Owner through listing. | Owner through listing. | Owner through listing. | Listing ownership join. | Advisor flags multiple permissive policies. |
+| `favorites` | Own favorites. | Own favorites. | Own favorites. | Own favorites. | `user_id = auth.uid()`. | Duplicate `(user_id, listing_id)` index was dropped; unique constraint remains. |
+| `projects` | Active projects public; owner/admin authenticated. | Owner only. | Owner only. | Owner only. | `owner_id = auth.uid()`. | Public and owner/admin reads are split to avoid anon helper execution. |
+| `project_units` | Active project public view or project owner. | Project owner. | Project owner. | Project owner. | Exists project where `projects.owner_id = auth.uid()`. | Frontend hooks now preflight project ownership before mutation. |
+| `project_media` | Active project public view or project owner. | Project owner. | Project owner. | Project owner. | Exists project where `projects.owner_id = auth.uid()`. | Frontend hooks now preflight project ownership before mutation. |
+| `project_leads` | Project owner or platform admin only. | Project owner. | Project owner. | Project owner. | Exists project where `projects.owner_id = auth.uid()`. | Public lead select was removed because rows can contain PII. |
+| `professionals` | Public active professional data plus owner/admin paths. | Authenticated owner. | Owner. | Owner/admin if policy exists. | `user_id = auth.uid()`. | Keep sensitive profile fields out of anon-readable views. |
+| `professional_services` | Active services public. | Authenticated professional owner. | Authenticated professional owner. | Authenticated professional owner. | Exists professional where `professionals.user_id = auth.uid()`. | Batch hooks now reject rows for another `professional_id`; owner write policy is authenticated only. |
+| `professional_availability` | Active availability public. | Authenticated professional owner. | Authenticated professional owner. | Authenticated professional owner. | Exists professional where `professionals.user_id = auth.uid()`. | Batch hooks now reject rows for another `professional_id`; owner write policy is authenticated only. |
+| `messages` | Sender/receiver participants. | Authenticated sender. | Participant-scoped where allowed. | Participant-scoped where allowed. | Sender/receiver ownership. | Advisor flags multiple permissive policies. |
+| `message_attachments` | Message participant. | Message participant. | Message participant. | Message participant. | Message ownership join. | Advisor flags multiple permissive policies. |
+| `auction_alerts` | Own alerts. | Own alerts. | Own alerts. | Own alerts. | `user_id = auth.uid()`. | Missing FK index was added. |
+| `open_house_registrations` | Owner/participant scoped. | Participant. | Owner/admin/participant scoped. | Scoped. | Listing/open-house ownership and user identity. | Advisor flags multiple permissive policies and missing indexes. |
+| `open_house_offers` | Owner/participant scoped. | Participant. | Owner/admin scoped. | Scoped. | Offer/open-house/listing ownership. | Advisor flags multiple permissive policies and missing index on `decided_by`. |
+| `contact_submissions` | Authenticated platform admin. | Public insert with bounded validation checks. | Admin only if policy exists. | Admin only if policy exists. | Public form + admin review. | Always-true insert policy was replaced with validation constraints. |
+| `agent_data_inputs` | Agent/admin scoped. | Authenticated agent RPC/policy. | Admin/reviewer scoped. | Admin/reviewer scoped. | Private role helpers and reviewer fields. | Public role-helper RPC execution is revoked for anon/authenticated; RLS uses private helper copies. |
+
+## Storage Buckets
+
+| Bucket | Select | Insert/update/delete | Release note |
+| --- | --- | --- | --- |
+| `property-images` | Public object read by direct path; broad bucket listing policy removed. | Owner-scoped policies expected. | Public listing was removed; keep direct image URLs non-sensitive. |
+| `project-media` | Public object read by direct path; broad bucket listing policy removed. | Project owner-scoped policies expected. | Public listing was removed; keep direct media URLs non-sensitive. |
+| `firesale-photos` | Public object read by direct path; broad bucket listing policy removed. | Owner/internal scoped policies expected. | Public listing was removed; confirm no private photos are uploaded. |
+| `email-assets` | Public object read by direct path; broad bucket listing policy removed. | Admin/internal scoped policies expected. | Public listing was removed; keep assets non-sensitive. |
+| `message-attachments` | Participant scoped. | Participant scoped. | Must not be public. |
+
+## Live Advisor Findings To Track
+
+1. Remaining security advisor warning: leaked password protection is disabled and must be enabled in Supabase Auth settings.
+2. Fixed: mutable `search_path` warnings, public storage listing policies, broad anon grants for non-public RPCs, authenticated public SECURITY DEFINER role-helper execution, `pg_net` extension registration in `public`, `project_leads` public select, `contact_submissions` always-true insert, missing FK indexes, and duplicate favorites index.
+3. Remaining performance advisor warnings: multiple permissive policies across messaging, open-house, project, lead, and media tables, plus unused-index INFO findings. `auth_rls_initplan` warnings were cleared in the strict release cleanup.

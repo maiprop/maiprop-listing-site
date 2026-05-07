@@ -1,5 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { requireOwnedProject } from "@/hooks/projectOwnership";
 import { toast } from "sonner";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -41,8 +43,10 @@ export function useProjectLeads(projectId: string | undefined) {
 
 export function useCreateProjectLead() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async (lead: ProjectLeadInsert) => {
+      await requireOwnedProject(lead.project_id, user?.id);
       const { data, error } = await supabase
         .from("project_leads")
         .insert(lead)
@@ -61,8 +65,10 @@ export function useCreateProjectLead() {
 
 export function useUpdateProjectLead() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async ({ id, projectId, updates }: { id: string; projectId: string; updates: ProjectLeadUpdate }) => {
+      await requireOwnedProject(projectId, user?.id);
       const { data, error } = await supabase
         .from("project_leads")
         .update(updates)
@@ -83,8 +89,10 @@ export function useUpdateProjectLead() {
 
 export function useDeleteProjectLead() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async ({ id, projectId }: { id: string; projectId: string }) => {
+      await requireOwnedProject(projectId, user?.id);
       const { error } = await supabase
         .from("project_leads")
         .delete()

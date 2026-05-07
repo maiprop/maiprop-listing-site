@@ -44,6 +44,9 @@ jobs:
       - name: Lint migrations (idempotency for new migrations)
         run: npm run lint:migrations
 
+      - name: Lint migrations (timestamp chronology)
+        run: npm run lint:migrations:chronology
+
       - name: Lint
         run: npm run lint
 

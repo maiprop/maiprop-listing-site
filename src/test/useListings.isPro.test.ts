@@ -1,17 +1,9 @@
 /**
- * Regression test for the BUG A audit fix in `useListing()`.
+ * Regression test for owner Pro status in useListing().
  *
- * Before the fix, ownerIsPro was computed by comparing
- * investor_subscriptions.tier === 'pro', but the DB CHECK constraint only
- * allows 'private' / 'institutional' / 'developer' so the comparison was
- * permanently false. Every Pro-owner UI surface was unreachable.
- *
- * After the fix, ownerIsPro is sourced from the public.is_pro(uuid) RPC.
- * These tests verify:
- *   - Listings with no owner_id → ownerIsPro = false
- *   - is_pro RPC returning true → ownerIsPro = true
- *   - is_pro RPC returning false → ownerIsPro = false
- *   - is_pro RPC returning null   → ownerIsPro = false
+ * The browser must not receive direct execute grants on subscription helper
+ * RPCs. The hook resolves the owner's status through the owner-pro-status Edge
+ * Function and treats any missing/false response as non-Pro.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -22,7 +14,9 @@ import React from "react";
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: vi.fn(),
-    rpc: vi.fn(),
+    functions: {
+      invoke: vi.fn(),
+    },
   },
 }));
 
@@ -30,7 +24,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useListing } from "@/hooks/useListings";
 
 const TEST_LISTING_ID = "listing-uuid-1";
-const TEST_OWNER_ID = "owner-uuid-1";
+const TEST_OWNER_ID = "00000000-0000-4000-8000-000000000001";
 
 function wrapper({ children }: { children: React.ReactNode }) {
   const qc = new QueryClient({
@@ -39,9 +33,6 @@ function wrapper({ children }: { children: React.ReactNode }) {
   return React.createElement(QueryClientProvider, { client: qc }, children);
 }
 
-/** Minimal supabase.from(...).select(...).eq(...).maybeSingle() mock.
- *  Methods explicitly return the builder rather than relying on mockReturnThis()
- *  whose `this` binding can be flaky when the chain is awaited via Promise.all. */
 type MockBuilder = {
   select: ReturnType<typeof vi.fn>;
   eq: ReturnType<typeof vi.fn>;
@@ -60,18 +51,16 @@ function mockTableQuery(resolved: { data: unknown; error: null }) {
   builder.limit = vi.fn(() => builder);
   builder.maybeSingle = vi.fn(() => Promise.resolve(resolved));
   builder.single = vi.fn(() => Promise.resolve(resolved));
-  // Make the builder thenable so `await builder` (without .maybeSingle/.single)
-  // also resolves to the same shape — matches Supabase's PostgrestQueryBuilder.
   builder.then = (resolve: (v: unknown) => void) => Promise.resolve(resolved).then(resolve);
   return builder;
 }
 
-describe("useListing — BUG A: ownerIsPro is sourced from is_pro RPC", () => {
+describe("useListing owner Pro status", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("returns ownerIsPro=false when listing has no owner_id (RPC not called)", async () => {
+  it("returns ownerIsPro=false when listing has no owner_id", async () => {
     const listingRow = {
       id: TEST_LISTING_ID,
       owner_id: null,
@@ -90,10 +79,10 @@ describe("useListing — BUG A: ownerIsPro is sourced from is_pro RPC", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(result.current.data?.ownerIsPro).toBe(false);
-    expect(supabase.rpc).not.toHaveBeenCalled();
+    expect(supabase.functions.invoke).not.toHaveBeenCalled();
   });
 
-  it("returns ownerIsPro=true when is_pro RPC returns true", async () => {
+  it("returns ownerIsPro=true when owner-pro-status returns true", async () => {
     const listingRow = {
       id: TEST_LISTING_ID,
       owner_id: TEST_OWNER_ID,
@@ -113,24 +102,18 @@ describe("useListing — BUG A: ownerIsPro is sourced from is_pro RPC", () => {
       }
       throw new Error(`unexpected table: ${table}`);
     });
-
-    // Set up rpc to resolve with data:true. Use mockImplementation directly on
-    // the vi.fn() — no `vi.mocked` wrapping needed at runtime.
-    const rpcSpy = supabase.rpc as unknown as {
-      mockImplementation: (f: (...a: unknown[]) => unknown) => void;
-      mock: { calls: unknown[][] };
-    };
-    rpcSpy.mockImplementation((..._args: unknown[]) => Promise.resolve({ data: true, error: null }));
+    vi.mocked(supabase.functions.invoke).mockResolvedValue({ data: { isPro: true }, error: null });
 
     const { result } = renderHook(() => useListing(TEST_LISTING_ID), { wrapper });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(rpcSpy.mock.calls.length).toBeGreaterThan(0);
-    expect(rpcSpy.mock.calls[0]).toEqual(["is_pro", { p_user_id: TEST_OWNER_ID }]);
+    expect(supabase.functions.invoke).toHaveBeenCalledWith("owner-pro-status", {
+      body: { userId: TEST_OWNER_ID },
+    });
     expect(result.current.data?.ownerIsPro).toBe(true);
   });
 
-  it("returns ownerIsPro=false when is_pro RPC returns false", async () => {
+  it("returns ownerIsPro=false when owner-pro-status returns false", async () => {
     const listingRow = {
       id: TEST_LISTING_ID,
       owner_id: TEST_OWNER_ID,
@@ -150,9 +133,7 @@ describe("useListing — BUG A: ownerIsPro is sourced from is_pro RPC", () => {
       }
       throw new Error(`unexpected table: ${table}`);
     });
-
-    (supabase.rpc as unknown as { mockImplementation: (f: () => unknown) => void })
-      .mockImplementation(() => Promise.resolve({ data: false, error: null }));
+    vi.mocked(supabase.functions.invoke).mockResolvedValue({ data: { isPro: false }, error: null });
 
     const { result } = renderHook(() => useListing(TEST_LISTING_ID), { wrapper });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -160,11 +141,11 @@ describe("useListing — BUG A: ownerIsPro is sourced from is_pro RPC", () => {
     expect(result.current.data?.ownerIsPro).toBe(false);
   });
 
-  it("returns ownerIsPro=false when is_pro RPC returns null (defensive)", async () => {
+  it("returns ownerIsPro=false when owner-pro-status returns null", async () => {
     const listingRow = {
       id: TEST_LISTING_ID,
       owner_id: TEST_OWNER_ID,
-      title: "Listing with RPC null result",
+      title: "Listing with null status result",
       listing_images: [],
     };
 
@@ -180,9 +161,7 @@ describe("useListing — BUG A: ownerIsPro is sourced from is_pro RPC", () => {
       }
       throw new Error(`unexpected table: ${table}`);
     });
-
-    (supabase.rpc as unknown as { mockImplementation: (f: () => unknown) => void })
-      .mockImplementation(() => Promise.resolve({ data: null, error: null }));
+    vi.mocked(supabase.functions.invoke).mockResolvedValue({ data: null, error: null });
 
     const { result } = renderHook(() => useListing(TEST_LISTING_ID), { wrapper });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -202,6 +181,6 @@ describe("useListing — BUG A: ownerIsPro is sourced from is_pro RPC", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(result.current.data).toBeNull();
-    expect(supabase.rpc).not.toHaveBeenCalled();
+    expect(supabase.functions.invoke).not.toHaveBeenCalled();
   });
 });

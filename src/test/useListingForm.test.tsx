@@ -50,7 +50,7 @@ vi.mock("@/lib/compressImage", () => ({
 import { useListingForm } from "@/hooks/useListingForm";
 
 const wrap = ({ children }: { children: React.ReactNode }) => (
-  <MemoryRouter>{children}</MemoryRouter>
+  <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>{children}</MemoryRouter>
 );
 
 beforeEach(() => {

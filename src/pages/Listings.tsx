@@ -21,6 +21,7 @@ import { ListingsAdvancedFilters } from "@/components/listings/ListingsAdvancedF
 import { ListingTypeButton } from "@/components/listings/ListingTypeButton";
 import { PropertyTypeButton } from "@/components/listings/PropertyTypeButton";
 import { MapGate } from "@/components/listings/MapGate";
+import { ListingCompareButton } from "@/components/listings/ListingCompareButton";
 
 import { useListings, useListingsPaginated, type ListingsFilters, type ListingWithJoins } from "@/hooks/useListings";
 import type { ListingCard } from "@/types";
@@ -602,20 +603,12 @@ export default function Listings() {
               splitDisplayList.map((property: ListingCardWithRaw) => (
                 <div key={property.id} className="relative group">
                   <PropertyCard property={property} />
-                  <button
-                    onClick={() => toggleCompare(property)}
-                    disabled={!isComparing(property.id) && compareList.length >= 3}
-                    className={`absolute bottom-[108px] right-2 z-10 flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold border transition-all shadow-card ${
-                      isComparing(property.id)
-                        ? "bg-accent/90 border-accent text-white"
-                        : compareList.length >= 3
-                        ? "bg-secondary/80 border-border text-muted-foreground opacity-50 cursor-not-allowed"
-                        : "bg-card/80 border-border text-muted-foreground hover:border-accent/60 hover:text-accent backdrop-blur-sm opacity-0 group-hover:opacity-100"
-                    }`}
-                  >
-                    <GitCompare className="w-3 h-3" />
-                    {isComparing(property.id) ? "✓" : "Compare"}
-                  </button>
+                  <ListingCompareButton
+                    listing={property}
+                    isSelected={isComparing(property.id)}
+                    isLimitReached={compareList.length >= 3}
+                    onToggle={toggleCompare}
+                  />
                 </div>
               ))
             );
@@ -701,20 +694,12 @@ export default function Listings() {
                   {filtered.map((property: ListingCardWithRaw) => (
                     <div key={property.id} className="relative group">
                       <PropertyCard property={property} />
-                      <button
-                        onClick={() => toggleCompare(property)}
-                        disabled={!isComparing(property.id) && compareList.length >= 3}
-                        className={`absolute bottom-[108px] right-2 z-10 flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold border transition-all shadow-card ${
-                          isComparing(property.id)
-                            ? "bg-accent/90 border-accent text-accent-foreground"
-                            : compareList.length >= 3
-                            ? "bg-secondary/80 border-border text-muted-foreground opacity-50 cursor-not-allowed"
-                            : "bg-card/80 border-border text-muted-foreground hover:border-accent/60 hover:text-accent backdrop-blur-sm opacity-0 group-hover:opacity-100"
-                        }`}
-                      >
-                        <GitCompare className="w-3 h-3" />
-                        {isComparing(property.id) ? "✓" : "Compare"}
-                      </button>
+                      <ListingCompareButton
+                        listing={property}
+                        isSelected={isComparing(property.id)}
+                        isLimitReached={compareList.length >= 3}
+                        onToggle={toggleCompare}
+                      />
                     </div>
                   ))}
                 </div>
