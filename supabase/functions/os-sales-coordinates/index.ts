@@ -66,40 +66,14 @@ const ALLOWED_SALE_FIELDS: readonly (keyof SaleRecord)[] = [
   "discount_pct", "source", "round",
 ] as const;
 
-function pickAllowedFields(record: Record<string, unknown>): Partial<SaleRecord> {
+const pickAllowedFields = (record: Record<string, unknown>): Partial<SaleRecord> => {
   const out: Record<string, unknown> = {};
   for (const key of ALLOWED_SALE_FIELDS) {
     if (key in record) out[key] = record[key];
   }
   return out as Partial<SaleRecord>;
-}
+};
 
-function generateMockSales(lat: number, lng: number, count: number): SaleRecord[] {
-  const types = ["apartment", "house", "commercial", "land"];
-  const statuses = ["sold", "sold", "sold", "withdrawn", "pending"];
-  return Array.from({ length: Math.min(count, 20) }, (_, i) => ({
-    id: `mock-${i}`,
-    address: `Sample Property ${i + 1}`,
-    lat: lat + (Math.random() - 0.5) * 0.02,
-    lng: lng + (Math.random() - 0.5) * 0.02,
-    sale_price: Math.round((80000 + Math.random() * 400000) / 1000) * 1000,
-    asking_price: Math.round((90000 + Math.random() * 450000) / 1000) * 1000,
-    sale_date: new Date(Date.now() - Math.random() * 365 * 2 * 24 * 3600000)
-      .toISOString()
-      .slice(0, 10),
-    property_type: types[Math.floor(Math.random() * types.length)],
-    sqm: Math.round(50 + Math.random() * 200),
-    bedrooms: Math.floor(Math.random() * 5) + 1,
-    status: statuses[Math.floor(Math.random() * statuses.length)],
-    discount_pct: Math.round(Math.random() * 20),
-    source: "court_auction",
-    round: Math.floor(Math.random() * 3) + 1,
-  }));
-}
-
-function _generateMockSalesDefault(): SaleRecord[] {
-  return generateMockSales(37.9838, 23.7275, 15);
-}
 
 Deno.serve(async (req) => {
   const corsPreflight = handleCors(req);
