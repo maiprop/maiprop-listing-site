@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.1](https://github.com/maiprop/maiprop-listing-site/compare/v1.6.0...v1.6.1) (2026-05-10)
+
+
+### Bug Fixes
+
+* **codacy:** reduce cyclomatic complexity + remove dead code ([#130](https://github.com/maiprop/maiprop-listing-site/issues/130)) ([e3b9b02](https://github.com/maiprop/maiprop-listing-site/commit/e3b9b021d8ae689db05ad9b86afff5acee499932))
+* **migrations:** resolve duplicate timestamp 20260706000000 ([#131](https://github.com/maiprop/maiprop-listing-site/issues/131)) ([a0686a1](https://github.com/maiprop/maiprop-listing-site/commit/a0686a1a9c41213c73a297a635ec88986f16bab6))
+
 ## [1.6.0](https://github.com/maiprop/maiprop-listing-site/compare/v1.5.0...v1.6.0) (2026-05-10)
 
 
