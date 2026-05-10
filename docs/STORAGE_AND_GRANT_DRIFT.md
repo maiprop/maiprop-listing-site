@@ -51,7 +51,7 @@ listing via the Supabase API.
   on `public.projects` for developers/sellers.
 - **Recovery:** Re-grant to `authenticated, service_role` (matching the
   intended final state from `20260705000000` — not `anon`) in
-  `20260706000000_restore_storage_grants_drift.sql`.
+  `20260706120000_restore_storage_grants_drift.sql`.
 
 ### 2. (FIXED in `20260706000000`) `public.has_role(uuid, public.user_role)` — EXECUTE grant missing
 
@@ -61,7 +61,7 @@ listing via the Supabase API.
   was not granted EXECUTE.
 - **Symptom:** Latent — RLS policies that call this helper would fail similarly.
 - **Recovery:** Re-grant to `authenticated, service_role` (no `anon`) in
-  `20260706000000_restore_storage_grants_drift.sql`.
+  `20260706120000_restore_storage_grants_drift.sql`.
 
 ### 3. (FIXED in `20260706000000`) `project_media_*` INSERT/DELETE policies missing
 
@@ -87,7 +87,7 @@ listing via the Supabase API.
   via the management API during testing.
 - **Symptom:** Step 5 (Photos) upload would fail with `Bucket not found`.
 - **Recovery:** Re-asserted via idempotent `INSERT … ON CONFLICT DO NOTHING`
-  in `20260706000000_restore_storage_grants_drift.sql`.
+  in `20260706120000_restore_storage_grants_drift.sql`.
 
 ### 5. (FIXED in `20260706000000`) `listing-images` bucket has stale `file_size_limit` / `allowed_mime_types`
 
@@ -108,7 +108,7 @@ listing via the Supabase API.
   `compressImage.ts` converts them to WebP/JPEG before upload, so dropping
   GIF is the only behavioral change.
 - **Recovery:** Re-INSERT (idempotent via `ON CONFLICT DO UPDATE`) with
-  the post-`20260522000000` state in `20260706000000_restore_storage_grants_drift.sql`.
+  the post-`20260522000000` state in `20260706120000_restore_storage_grants_drift.sql`.
 
 ### 6. (FIXED in `20260706000000`) `avatars` bucket and 3 storage policies entirely missing
 
@@ -123,7 +123,7 @@ listing via the Supabase API.
 - **Symptom:** Any avatar upload would have failed with `Bucket not found`.
 - **Recovery:** Re-INSERT bucket (idempotent via `ON CONFLICT DO UPDATE`)
   at the post-`20260522000000` state (2 MB, jpeg/webp/png) and recreate the
-  3 policies in `20260706000000_restore_storage_grants_drift.sql`.
+  3 policies in `20260706120000_restore_storage_grants_drift.sql`.
 
 ## Future drift detection
 
