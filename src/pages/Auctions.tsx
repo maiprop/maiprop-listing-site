@@ -1,34 +1,30 @@
-import { useState, useMemo, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { TrendingUp, AlertCircle, Loader2, Map, List, SlidersHorizontal, X, ChevronDown, Gavel, ExternalLink, Lock, MapPin } from "lucide-react";
 import { Helmet } from "react-helmet-async";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import type { MapListing } from "@/components/MapView";
 const MapView = lazy(() => import("@/components/MapView").then(m => ({ default: m.MapView })));
 import { AuctionAlertModal } from "@/components/AuctionAlertModal";
 import { useAuth } from "@/contexts/AuthContext";
-import { useSubscription } from "@/hooks/useSubscription";
 import { useToggleFavorite } from "@/hooks/useFavorites";
-import { useAuctionListings } from "@/hooks/useAuctionListings";
 import {
   PROPERTY_TYPES, BID_RANGES, YEAR_RANGES, OWNERSHIP_STATUSES,
-  ownershipMatches, getAuctionRound, estimateYield, yieldRange, streetViewImg,
   type ViewMode,
 } from "@/lib/auctionUtils";
 import { AuctionCard, PremiumBadge } from "@/components/auctions/AuctionCard";
 import { AuctionHero } from "@/components/auctions/AuctionHero";
 import { AuctionAlertBanner } from "@/components/auctions/AuctionAlertBanner";
-import { isPlatformAdmin } from "@/lib/authUtils";
-
-const PAGE_SIZE = 20;
-const MAX_PAGES_FREE = 3;  // free: up to 3 pages = 60 items
-const MAX_PAGES_PRO = 30;  // pro:  up to 30 pages = 600 items
+import {
+  useAuctionsPipeline,
+  AUCTIONS_PAGE_SIZE,
+  AUCTIONS_MAX_PAGES_FREE,
+  AUCTIONS_MAX_PAGES_PRO,
+} from "@/hooks/useAuctionsPipeline";
 
 export default function Auctions() {
-  const { user, profile } = useAuth();
-  const { isPro } = useSubscription();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [selectedCity, setSelectedCity] = useState(() => searchParams.get("city") || "All Cities");
@@ -55,25 +51,37 @@ export default function Auctions() {
     if (cityParam) setSelectedCity(cityParam);
   }, [searchParams]);
 
-  const { data: auctions = [], isLoading, error } = useAuctionListings();
   const toggleFav = useToggleFavorite();
-  const isMaiPropOsUser = isPlatformAdmin(profile);
-  // pageCap and maxItems computed below when cappedAuctions is built
 
-  // Dynamic city list from actual data
-  const cityOptions = useMemo(() => {
-    const cities = Array.from(new Set(auctions.map((a) => a.city).filter(Boolean))).sort();
-    return ["All Cities", ...cities];
-  }, [auctions]);
-
-  const roundOptions = useMemo(() => {
-    const rounds = auctions.map((a) => getAuctionRound(a.tags)).filter((n): n is number => n != null);
-    const opts: {value: string;label: string;}[] = [{ value: "", label: "All Rounds" }];
-    if (rounds.some((n) => n === 1)) opts.push({ value: "1", label: "1st Auction" });
-    if (rounds.some((n) => n === 2)) opts.push({ value: "2", label: "2nd Auction" });
-    if (rounds.some((n) => n >= 3)) opts.push({ value: "3plus", label: "3rd+ Auction" });
-    return opts;
-  }, [auctions]);
+  const {
+    isPro,
+    isMaiPropOsUser,
+    isLoading,
+    error,
+    cityOptions,
+    roundOptions,
+    visibleFiltered,
+    polygonFilteredCount,
+    paginated,
+    totalPages,
+    thisWeek,
+    avgBid,
+    activeFilterCount,
+    totalRaw,
+    mapListings,
+    mappableCount,
+  } = useAuctionsPipeline({
+    selectedCity,
+    filterType,
+    filterBidRange,
+    filterYearRange,
+    filterOwnership,
+    filterRound,
+    filterYield,
+    polygonFilterIds,
+    currentPage,
+    setCurrentPage,
+  });
 
   const handleToggleFav = (id: string, isFav: boolean) => {
     if (!user) {navigate("/login");return;}
@@ -85,95 +93,6 @@ export default function Auctions() {
     });
   };
 
-  // (filtering is applied inside visibleFiltered below, after the cap)
-
-  const pageCap = isMaiPropOsUser ? Infinity : isPro ? MAX_PAGES_PRO : MAX_PAGES_FREE;
-  const maxItems = Number.isFinite(pageCap) ? pageCap * PAGE_SIZE : Infinity;
-
-  // Cap is applied on the RAW auctions list BEFORE filtering so that
-  // narrowing filters cannot be used to bypass the page cap.
-  const cappedAuctions = useMemo(
-    () => Number.isFinite(maxItems) ? auctions.slice(0, maxItems) : auctions,
-    [auctions, maxItems]
-  );
-  const totalRaw = auctions.length; // full count for upsell copy
-
-  const visibleFiltered = useMemo(() => {
-    return cappedAuctions.filter((a) => {
-      if (selectedCity !== "All Cities" && !a.city?.toLowerCase().includes(selectedCity.toLowerCase())) return false;
-      if (filterType) {
-        const [base, subtype] = filterType.split(":");
-        // Base property_type must always match
-        if (base && a.property_type !== base) return false;
-        // For land/commercial subtypes, also require the corresponding tag
-        if (subtype && base === "land") {
-          const targetTag = `land_type:${subtype}`;
-          if (!a.tags?.includes(targetTag)) return false;
-        }
-        if (subtype && base === "commercial") {
-          const targetTag = `commercial_type:${subtype}`;
-          if (!a.tags?.includes(targetTag)) return false;
-        }
-      }
-      if (filterBidRange) {
-        const [min, max] = filterBidRange.split("-").map(Number);
-        const bid = a.auction_starting_bid ?? a.price ?? 0;
-        if (bid < min || bid > max) return false;
-      }
-      if (filterYearRange && a.year_built) {
-        const [min, max] = filterYearRange.split("-").map(Number);
-        if (a.year_built < min || a.year_built > max) return false;
-      }
-      // Premium filters: only apply when user is Pro
-      if (isPro || isMaiPropOsUser) {
-        if (filterOwnership && !ownershipMatches(filterOwnership, a.tags)) return false;
-        if (filterRound) {
-          const round = getAuctionRound(a.tags);
-          if (filterRound === "3plus") {
-            if (!round || round < 3) return false;
-          } else {
-            const target = Number(filterRound);
-            if (!round || round !== target) return false;
-          }
-        }
-        if (filterYield) {
-          const range = yieldRange(filterYield);
-          if (range) {
-            const est = estimateYield(a);
-            if (est === null || est < range[0] || est > range[1]) return false;
-          }
-        }
-      }
-      return true;
-    });
-  }, [cappedAuctions, selectedCity, filterType, filterBidRange, filterYearRange, filterOwnership, filterRound, filterYield, isPro, isMaiPropOsUser]);
-
-  const polygonFiltered = useMemo(() => {
-    if (!polygonFilterIds) return visibleFiltered;
-    return visibleFiltered.filter((a) => polygonFilterIds.has(a.id));
-  }, [visibleFiltered, polygonFilterIds]);
-
-  const totalPages = Math.max(1, Math.ceil(polygonFiltered.length / PAGE_SIZE));
-  const paginated = useMemo(() => {
-    const start = (currentPage - 1) * PAGE_SIZE;
-    return polygonFiltered.slice(start, start + PAGE_SIZE);
-  }, [polygonFiltered, currentPage]);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [selectedCity, filterType, filterBidRange, filterYearRange, filterOwnership, filterRound, filterYield, maxItems]);
-
-  useEffect(() => {
-    if (currentPage > totalPages) setCurrentPage(totalPages);
-  }, [currentPage, totalPages]);
-
-  const activeFilterCount = [
-    filterType,
-    filterBidRange,
-    filterYearRange,
-    ...(isPro || isMaiPropOsUser ? [filterOwnership, filterRound, filterYield] : []),
-  ].filter(Boolean).length;
-
   const clearFilters = () => {
     setFilterType("");
     setFilterBidRange("");
@@ -183,55 +102,10 @@ export default function Auctions() {
     setFilterYield("");
   };
 
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const weekEnd = new Date(todayStart);
-  weekEnd.setDate(weekEnd.getDate() + 7);
-  const thisWeek = visibleFiltered.filter((a) => {
-    if (!a.auction_date) return false;
-    const d = new Date(a.auction_date);
-    const dayOnly = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    return dayOnly >= todayStart && dayOnly <= weekEnd;
-  }).length;
-
-  const avgBid = visibleFiltered.length ?
-  Math.round(visibleFiltered.reduce((sum, a) => sum + (a.auction_starting_bid ?? a.price ?? 0), 0) / visibleFiltered.length) :
-  0;
-
-
   const auctionStats = [
   { value: isLoading ? "—" : String(thisWeek), label: "This Week", icon: Gavel },
   { value: isLoading ? "—" : visibleFiltered.length.toLocaleString(), label: "Visible Auctions", icon: TrendingUp },
   { value: isLoading ? "—" : avgBid > 0 ? `€${(avgBid / 1000).toFixed(0)}k` : "—", label: "Avg Starting Bid", icon: TrendingUp }];
-
-
-  const mapListings: MapListing[] = visibleFiltered.
-  filter((a) => a.latitude != null && a.longitude != null).
-  map((a) => ({
-    id: a.id,
-    title: a.title,
-    price: a.auction_starting_bid ?? a.price ?? 0,
-    sqm: a.sqm ?? 0,
-    latitude: a.latitude,
-    longitude: a.longitude,
-    images: (() => {
-      const imgs: string[] = a.cover_image_url ? [a.cover_image_url] : [];
-      if (!imgs.length && a.listing_images?.length) {
-        const sorted = [...a.listing_images].sort((x, y) => x.sort_order - y.sort_order);
-        sorted.forEach((img) => imgs.push(img.url));
-      }
-      if (!imgs.length) {
-        const sv = streetViewImg(a.latitude, a.longitude);
-        if (sv) imgs.push(sv);
-      }
-      return imgs;
-    })(),
-    listingType: "auction",
-    city: a.city,
-    _raw: a
-  }));
-
-  const mappableCount = mapListings.length;
 
   return (
     <div className="min-h-screen bg-background">
@@ -588,9 +462,9 @@ export default function Auctions() {
             {!isLoading && visibleFiltered.length > 0 &&
           <>
                  <p className="text-xs text-muted-foreground mb-4">
-                   Showing <span className="font-semibold text-foreground">{(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, polygonFiltered.length)}</span>
+                   Showing <span className="font-semibold text-foreground">{(currentPage - 1) * AUCTIONS_PAGE_SIZE + 1}–{Math.min(currentPage * AUCTIONS_PAGE_SIZE, polygonFilteredCount)}</span>
                    {" of "}
-                   <span className="font-semibold text-foreground">{polygonFiltered.length}</span> auctions
+                   <span className="font-semibold text-foreground">{polygonFilteredCount}</span> auctions
                    {polygonFilterIds && <span className="text-primary"> · area filter active</span>}
                    {selectedCity !== "All Cities" ? ` in ${selectedCity}` : ""}
                    {" · "}ordered by date
@@ -654,11 +528,11 @@ export default function Auctions() {
             </div>
                  }
                  {/* Banner when Pro user hits 10-page cap */}
-                 {isPro && !isMaiPropOsUser && totalRaw > MAX_PAGES_PRO * PAGE_SIZE &&
+                 {isPro && !isMaiPropOsUser && totalRaw > AUCTIONS_MAX_PAGES_PRO * AUCTIONS_PAGE_SIZE &&
                    <div className="mt-8 p-4 rounded-2xl bg-secondary border border-border flex flex-col sm:flex-row items-center gap-3 text-center sm:text-left">
                      <ExternalLink className="w-5 h-5 text-muted-foreground shrink-0" />
                      <div className="flex-1">
-                       <p className="text-sm font-medium text-foreground">Showing {MAX_PAGES_PRO * PAGE_SIZE} of {totalRaw} auctions</p>
+                       <p className="text-sm font-medium text-foreground">Showing {AUCTIONS_MAX_PAGES_PRO * AUCTIONS_PAGE_SIZE} of {totalRaw} auctions</p>
                        <p className="text-xs text-muted-foreground mt-0.5">Visit mAI Prop OS for the complete, unfiltered auction database.</p>
                      </div>
                      <Button size="sm" variant="outline" className="shrink-0 border-border" asChild>
@@ -669,7 +543,7 @@ export default function Auctions() {
                    </div>
                  }
                  {/* Upsell when free user hits page cap */}
-                 {!isPro && !isMaiPropOsUser && totalRaw > MAX_PAGES_FREE * PAGE_SIZE &&
+                 {!isPro && !isMaiPropOsUser && totalRaw > AUCTIONS_MAX_PAGES_FREE * AUCTIONS_PAGE_SIZE &&
                    <div className="mt-8 p-5 rounded-2xl bg-primary/8 border border-primary/25 flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">
                      <Gavel className="w-8 h-8 text-primary shrink-0" />
                      <div className="flex-1">
