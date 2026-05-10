@@ -102,6 +102,7 @@ export default function Listings() {
 
   const {
     filtered,
+    totalLoaded,
     isLoading,
     isError,
     hasNextPage,
@@ -449,7 +450,7 @@ export default function Listings() {
                     : `${filtered.length} properties`}
                 </span>
               )}
-              {filtered.length === 0 && !isLoading && (
+              {totalLoaded === 0 && !isLoading && (
                 <span className="text-muted-foreground text-sm">No listings matched your filters</span>
               )}
               {viewMode === "split" && polygonFilterIds !== null && (

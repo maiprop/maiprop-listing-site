@@ -168,6 +168,14 @@ export function useListingsPipeline(opts: UseListingsPipelineOptions) {
   return {
     /** Final post-filter, post-sort listings cards — what the UI iterates. */
     filtered,
+    /**
+     * Number of rows actually returned by the server *before* client-side
+     * post-filtering. Use this to distinguish "server returned nothing" from
+     * "server returned rows but client filters excluded all of them" — e.g.
+     * when deciding whether to show a "No listings matched your filters"
+     * empty-state vs. a "still searching, fetching more pages" state.
+     */
+    totalLoaded: dbListings.length,
     /** True while the active fetch (paginated or full) is loading its first page. */
     isLoading,
     /** True if the active fetch errored. */
