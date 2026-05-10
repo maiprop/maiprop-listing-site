@@ -374,3 +374,59 @@ REVOKE ALL ON FUNCTION public.complete_onboarding_role_for_user(uuid, public.use
   FROM public, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.complete_onboarding_role_for_user(uuid, public.user_role, text, text, text, text)
   TO service_role;
+
+-- ── 7. record_role_switch_audit() — caller-context audit RPC ──────────────────
+-- Inserts a row into role_switch_history on behalf of the authenticated user.
+-- Required because role_switch_history.INSERT is locked down with
+-- WITH CHECK (false) (see 20260607120001_role_switch_history.sql), so direct
+-- inserts from any non-service-role caller are rejected. Going through a
+-- SECURITY DEFINER RPC removes the dependency on the edge function having a
+-- correctly-shaped service-role JWT in its env (which we cannot rely on now
+-- that Supabase projects can be migrated to the new sb_secret_* key format).
+--
+-- The function reads auth.uid() rather than accepting a user_id argument so
+-- the audit row can never be forged for another user.
+CREATE OR REPLACE FUNCTION public.record_role_switch_audit(
+  _from_type     text,
+  _to_type       text,
+  _switch_kind   text,
+  _had_active_sub boolean,
+  _sub_cancelled boolean
+)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  _user_id uuid := auth.uid();
+  _id uuid;
+BEGIN
+  IF _user_id IS NULL THEN
+    RAISE EXCEPTION 'unauthenticated' USING ERRCODE = '28000';
+  END IF;
+
+  INSERT INTO public.role_switch_history(
+    user_id, from_type, to_type, switch_kind, had_active_sub, sub_cancelled
+  ) VALUES (
+    _user_id,
+    _from_type,
+    NULLIF(_to_type, ''),
+    _switch_kind,
+    _had_active_sub,
+    _sub_cancelled
+  )
+  RETURNING id INTO _id;
+
+  RETURN _id;
+END;
+$$;
+
+COMMENT ON FUNCTION public.record_role_switch_audit(text, text, text, boolean, boolean) IS
+  'Caller-context audit RPC. Records a row in role_switch_history under '
+  'auth.uid(). Used by the log-role-switch edge function so the insert does '
+  'not depend on the deployed function carrying a JWT-shaped service-role '
+  'key (project-level secret format can change with new Supabase keys).';
+
+GRANT EXECUTE ON FUNCTION public.record_role_switch_audit(text, text, text, boolean, boolean)
+  TO authenticated;
