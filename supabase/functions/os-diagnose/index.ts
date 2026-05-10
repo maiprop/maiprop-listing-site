@@ -73,6 +73,11 @@ async function getOsToken(baseUrl: string, email: string, password: string): Pro
     throw new Error(`OS auth returned non-JSON response (${res.status})`);
   }
 
+  if (!res.ok) {
+    log.warn("OS auth non-ok status", { status: res.status });
+    throw new Error(`OS auth failed (HTTP ${res.status})`);
+  }
+
   const obj = (typeof data === "object" && data !== null ? data : {}) as Record<string, unknown>;
   const nested = (typeof obj.data === "object" && obj.data !== null ? obj.data : {}) as Record<string, unknown>;
   const token = nested.token ?? obj.token ?? obj.accessToken ?? obj.access_token;
@@ -207,7 +212,10 @@ Deno.serve(async (req) => {
     const internal = err instanceof Error ? err.message : String(err);
     log.warn("os-diagnose probe failed", { err: internal });
 
-    const safe = internal.startsWith("OS auth")
+    const isSafeAuthMsg =
+      internal.startsWith("OS auth returned non-JSON response") ||
+      internal.startsWith("OS auth failed (HTTP");
+    const safe = isSafeAuthMsg
       ? internal
       : "OS probe failed — see server logs for details";
 
