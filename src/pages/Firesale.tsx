@@ -1,15 +1,15 @@
-﻿import { useState, useEffect } from "react";
+﻿import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { InvitationRequestModal } from "@/components/InvitationRequestModal";
 import { FiresaleInvestorPanel } from "@/components/firesale/FiresaleInvestorPanel";
 import { FiresaleQuickSaleForm } from "@/components/firesale/FiresaleQuickSaleForm";
 import { Flame, Check, ChevronRight } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEligibleForQuickSale } from "@/hooks/useEligibleForQuickSale";
+import { useInvitationRequestStatus } from "@/hooks/useInvitationRequests";
 import { toast } from "sonner";
-import { logger } from "@/lib/logger";
 
 const steps = [
   { step: "01", title: "Property Details", desc: "Address, KAEK, type, size — takes 2 minutes." },
@@ -21,26 +21,14 @@ const steps = [
 export default function Firesale() {
   const { user } = useAuth();
   const { eligible } = useEligibleForQuickSale();
+  const queryClient = useQueryClient();
 
   const [showInvitationModal, setShowInvitationModal] = useState(false);
-  const [invitationStatus, setInvitationStatus] = useState<"none" | "pending" | "rejected">("none");
-
-  // Load invitation status for logged-in non-eligible users
-  useEffect(() => {
-    if (!user || eligible) return;
-     
-    void supabase.from("invitation_requests")
-      .select("status")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .then(({ data, error }) => {
-        if (error) { logger.warn("[Firesale] invitation status fetch failed:", error.message); return; }
-        const latest = (data as Array<{ status: string }> | null)?.[0];
-        if (latest?.status === "pending") setInvitationStatus("pending");
-        else if (latest?.status === "rejected") setInvitationStatus("rejected");
-      });
-  }, [user, eligible]);
+  const { data: rawInvitationStatus = "none" } = useInvitationRequestStatus({ enabled: !!user && !eligible });
+  // The Firesale UI only renders three of the four states; "approved" users have already
+  // been routed to /investor-dashboard via the InvestorPanel branch above.
+  const invitationStatus: "none" | "pending" | "rejected" =
+    rawInvitationStatus === "pending" || rawInvitationStatus === "rejected" ? rawInvitationStatus : "none";
 
   return (
     <div className="min-h-screen bg-background pb-bottom-nav lg:pb-0">
@@ -152,7 +140,7 @@ export default function Firesale() {
           onClose={() => setShowInvitationModal(false)}
           onSuccess={() => {
             setShowInvitationModal(false);
-            setInvitationStatus("pending");
+            void queryClient.invalidateQueries({ queryKey: ["invitation-request-status", user?.id] });
             toast.success("Invitation request submitted — we'll be in touch within 48 hours.");
           }}
         />

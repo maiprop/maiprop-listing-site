@@ -8,12 +8,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Mail, Building2, Phone } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { useSubmitContactForm } from "@/hooks/useContactSubmissions";
 
 export default function Contact() {
   const { t } = useTranslation();
-  const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", company: "", message: "" });
+  const submitContactForm = useSubmitContactForm();
+  const loading = submitContactForm.isPending;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,23 +22,18 @@ export default function Contact() {
       toast.error(t("common.required"));
       return;
     }
-    setLoading(true);
     try {
-       
-      const { error } = await supabase.from("contact_submissions").insert({
+      await submitContactForm.mutateAsync({
         type: "contact",
         name: form.name,
         email: form.email,
         company: form.company || null,
         message: form.message,
       });
-      if (error) throw error;
       toast.success(t("contact.successMessage"));
       setForm({ name: "", email: "", company: "", message: "" });
     } catch (_err: unknown) {
       toast.error("Failed to send message. Please try again or email us directly.");
-    } finally {
-      setLoading(false);
     }
   };
 
