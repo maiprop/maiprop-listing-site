@@ -19,41 +19,65 @@ discovered by failing E2E tests rather than by tooling.
 
 ## Drift items
 
-### 1. (FIXED in `20260706000000`) `public.has_platform_admin(uuid)` — EXECUTE grant missing
+### Important context: `20260705000000` is in `main` but not yet applied to live DB
+
+The latest applied migration in live is `20260704000000_extend_property_types`.
+`20260705000000_strict_release_advisor_fixes.sql` is committed to `main` but
+has not yet been applied. That migration deliberately:
+
+- (Section 8) revokes EXECUTE on `has_platform_admin(uuid)` and
+  `has_role(uuid, public.user_role)` from `PUBLIC` and `anon`, granting only
+  to `authenticated` and `service_role`.
+- (Section 9) drops the `project_media_select` policy as part of "Remove
+  public bucket listing policies".
+
+Our recovery migration **must align with that intended final state** —
+otherwise it would revert deliberate hardening once `20260705000000`
+eventually runs (or worse, if our migration runs second, it would silently
+undo the hardening).
+
+### 1. (FIXED in `20260706000000`) `public.has_platform_admin(uuid)` — EXECUTE grant missing for `authenticated`
 
 - **Declared in:** `supabase/migrations/20260623130000_authoritative_role.sql:108`
-  ```sql
-  GRANT EXECUTE ON FUNCTION public.has_platform_admin(uuid)
-    TO anon, authenticated, service_role;
-  ```
-- **Observed live state:** `has_function_privilege('authenticated', 'public.has_platform_admin(uuid)', 'EXECUTE') = false`.
+  granted to `anon, authenticated, service_role`. Then
+  `20260705000000_strict_release_advisor_fixes.sql:564` revokes from
+  `PUBLIC, anon` and grants only to `authenticated, service_role`.
+- **Observed live state:** `has_function_privilege('authenticated', 'public.has_platform_admin(uuid)', 'EXECUTE') = false` (i.e. neither the original grant nor the post-`20260705000000` grant landed).
 - **Symptom:** The RLS policy `projects.projects_owner_admin_select` calls
   `has_platform_admin(auth.uid())` (unqualified), which resolves to the public
   schema function and fails with `42501: permission denied for function
   has_platform_admin` for any non-admin user. This blocks `INSERT … RETURNING`
   on `public.projects` for developers/sellers.
-- **Recovery:** Re-asserted in `20260706000000_restore_storage_grants_drift.sql`.
+- **Recovery:** Re-grant to `authenticated, service_role` (matching the
+  intended final state from `20260705000000` — not `anon`) in
+  `20260706000000_restore_storage_grants_drift.sql`.
 
 ### 2. (FIXED in `20260706000000`) `public.has_role(uuid, public.user_role)` — EXECUTE grant missing
 
 - **Declared in:** `supabase/migrations/20260623130000_authoritative_role.sql:107`
-- **Observed live state:** Granted only to `service_role`. `anon` and
-  `authenticated` were not granted EXECUTE.
+  (initial) and tightened in `20260705000000_strict_release_advisor_fixes.sql:566`.
+- **Observed live state:** Granted only to `service_role`. `authenticated`
+  was not granted EXECUTE.
 - **Symptom:** Latent — RLS policies that call this helper would fail similarly.
-- **Recovery:** Re-asserted in `20260706000000_restore_storage_grants_drift.sql`.
+- **Recovery:** Re-grant to `authenticated, service_role` (no `anon`) in
+  `20260706000000_restore_storage_grants_drift.sql`.
 
-### 3. (FIXED in `20260706000000`) `project_media_*` storage policies missing
+### 3. (FIXED in `20260706000000`) `project_media_*` INSERT/DELETE policies missing
 
-- **Declared in:** `supabase/migrations/20260328120000_developer_projects_full.sql:163-176`
-  (initial), tightened in `20260627000000_audit_remediations.sql:76-84`.
+- **Declared in:** `supabase/migrations/20260328120000_developer_projects_full.sql:168-176`
+  (initial — created `project_media_insert` and `project_media_delete`,
+  tightened with folder-name guard in `20260627000000_audit_remediations.sql:76-84`).
 - **Observed live state:** No policies for `bucket_id = 'project-media'`
   existed on `storage.objects`.
 - **Symptom:** Any authenticated upload to `project-media/<userId>/<...>`
   returned `403 row-level security policy`. This blocked Step 3 (Media) of
   the new-building wizard for every developer.
-- **Recovery:** Re-asserted (3 policies: `project_media_select`,
-  `project_media_insert` with folder-name guard, `project_media_delete`) in
-  `20260706000000_restore_storage_grants_drift.sql`.
+- **Recovery:** Re-create only `project_media_insert` and `project_media_delete`
+  in `20260706000000`. **`project_media_select` is intentionally NOT
+  recreated** — it was deliberately dropped in `20260705000000:360` ("Remove
+  public bucket listing policies"). The app reads via `getPublicUrl()` which
+  bypasses RLS, so the SELECT policy is unnecessary and recreating it would
+  re-enable bucket listing via the Supabase API.
 
 ### 4. (FIXED in `20260706000000`) `listing-images` bucket missing
 

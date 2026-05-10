@@ -34,27 +34,40 @@
 -- `listing-images` size_limit/MIME not updated per 20260522000000) which are
 -- tracked separately because they require deliberate decisions about whether
 -- the live state or the migration-declared state is correct.
+--
+-- IMPORTANT: this migration aligns with the deliberate hardening in the
+-- preceding migration `20260705000000_strict_release_advisor_fixes.sql`:
+--   • Section 8 of that migration revokes EXECUTE on these helpers from
+--     PUBLIC and `anon`, granting only to `authenticated` and `service_role`
+--     (the helpers are SECURITY DEFINER and read `private.profiles.role`).
+--     We keep the same grant set here.
+--   • Section 9 deliberately drops the `project_media_select` policy as part
+--     of "Remove public bucket listing policies". We do NOT recreate it —
+--     reads in the app go through `getPublicUrl()` (which bypasses RLS), so
+--     the SELECT policy is unnecessary and listing the bucket via the
+--     Supabase API would be a security regression.
 
 -- ── 1. Function grants ──────────────────────────────────────────────────────
 -- Re-grant EXECUTE on the role-check helpers used by RLS policies. These are
--- SECURITY DEFINER functions that read `private.profiles.role`, so granting
--- EXECUTE to `authenticated` does not leak the underlying table.
+-- SECURITY DEFINER functions that read `private.profiles.role`. Match the
+-- final intended state (no `anon`) from 20260705000000 section 8.
 GRANT EXECUTE ON FUNCTION public.has_platform_admin(uuid)
-  TO anon, authenticated, service_role;
+  TO authenticated, service_role;
 
 GRANT EXECUTE ON FUNCTION public.has_role(uuid, public.user_role)
-  TO anon, authenticated, service_role;
+  TO authenticated, service_role;
 
 
 -- ── 2. project-media storage policies ───────────────────────────────────────
--- Matches the tightened version from 20260627000000_audit_remediations.sql.
+-- Restore only `project_media_insert` and `project_media_delete` (declared
+-- in 20260328120000_developer_projects_full.sql, tightened to the
+-- folder-name guard in 20260627000000_audit_remediations.sql).
+-- `project_media_select` is intentionally NOT recreated — see header.
+-- Drop it defensively in case an earlier reasserting attempt added it back.
+--
 -- INSERT/DELETE require the path to be prefixed with the uploader's user.id
--- (e.g. `${user.id}/${project.id}/<file>`); SELECT is public because the
--- bucket is configured `public=true`.
+-- (e.g. `${user.id}/${project.id}/<file>`).
 DROP POLICY IF EXISTS "project_media_select" ON storage.objects;
-CREATE POLICY "project_media_select"
-  ON storage.objects FOR SELECT
-  USING (bucket_id = 'project-media');
 
 DROP POLICY IF EXISTS "project_media_insert" ON storage.objects;
 CREATE POLICY "project_media_insert"
@@ -98,8 +111,16 @@ BEGIN
     RAISE EXCEPTION 'expected authenticated to have EXECUTE on public.has_platform_admin(uuid)';
   END IF;
 
+  IF has_function_privilege('anon', 'public.has_platform_admin(uuid)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'anon must NOT have EXECUTE on public.has_platform_admin(uuid)';
+  END IF;
+
   IF NOT has_function_privilege('authenticated', 'public.has_role(uuid, public.user_role)', 'EXECUTE') THEN
     RAISE EXCEPTION 'expected authenticated to have EXECUTE on public.has_role(uuid, public.user_role)';
+  END IF;
+
+  IF has_function_privilege('anon', 'public.has_role(uuid, public.user_role)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'anon must NOT have EXECUTE on public.has_role(uuid, public.user_role)';
   END IF;
 
   IF NOT EXISTS (
@@ -108,6 +129,14 @@ BEGIN
       AND polname = 'project_media_insert'
   ) THEN
     RAISE EXCEPTION 'expected project_media_insert policy on storage.objects';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM pg_policy
+    WHERE polrelid = 'storage.objects'::regclass
+      AND polname = 'project_media_select'
+  ) THEN
+    RAISE EXCEPTION 'project_media_select must NOT exist (deliberately dropped in 20260705000000)';
   END IF;
 
   IF NOT EXISTS (
