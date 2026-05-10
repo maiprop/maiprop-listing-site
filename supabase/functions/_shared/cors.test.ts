@@ -61,6 +61,43 @@ Deno.test("getCorsHeaders: includes required CORS allow-headers string", () => {
   assertEquals(headers["Access-Control-Allow-Headers"].includes("content-type"), true);
 });
 
+Deno.test("getCorsHeaders: includes baggage and sentry-trace in allowed headers", () => {
+  const req = new Request("https://maiprop.co/api");
+  const headers = getCorsHeaders(req);
+  assertEquals(headers["Access-Control-Allow-Headers"].includes("baggage"), true);
+  assertEquals(headers["Access-Control-Allow-Headers"].includes("sentry-trace"), true);
+});
+
+Deno.test("getCorsHeaders: reflects Cloudflare Pages preview origin", () => {
+  const req = new Request("https://maiprop.co/api", {
+    headers: { origin: "https://fix-pr-review-findings.maiprop-listing-site.pages.dev" },
+  });
+  const headers = getCorsHeaders(req);
+  assertStrictEquals(
+    headers["Access-Control-Allow-Origin"],
+    "https://fix-pr-review-findings.maiprop-listing-site.pages.dev",
+  );
+});
+
+Deno.test("getCorsHeaders: reflects CF Pages preview with hash slug", () => {
+  const req = new Request("https://maiprop.co/api", {
+    headers: { origin: "https://abc123.maiprop-listing-site.pages.dev" },
+  });
+  const headers = getCorsHeaders(req);
+  assertStrictEquals(
+    headers["Access-Control-Allow-Origin"],
+    "https://abc123.maiprop-listing-site.pages.dev",
+  );
+});
+
+Deno.test("getCorsHeaders: rejects other .pages.dev projects", () => {
+  const req = new Request("https://maiprop.co/api", {
+    headers: { origin: "https://evil-project.pages.dev" },
+  });
+  const headers = getCorsHeaders(req);
+  assertStrictEquals(headers["Access-Control-Allow-Origin"], "https://maiprop.co");
+});
+
 // ── handleCors ────────────────────────────────────────────────────────────────
 
 Deno.test("handleCors: returns Response for OPTIONS request", () => {
