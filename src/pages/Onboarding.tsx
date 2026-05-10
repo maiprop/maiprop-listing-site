@@ -39,6 +39,33 @@ function extractStripeError(data: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
+/**
+ * Reads the role-switch billing context written by Dashboard SettingsSection
+ * before navigation. Returns null if the key is missing, malformed, or the
+ * environment lacks sessionStorage. Never throws.
+ *
+ * Called twice synchronously during render — once for `switchCtx`, once for
+ * `displaySwitchCtx` — so the role-switch context is available before any
+ * effect fires (in particular, before the `onboarding_started` analytics
+ * effect, which would otherwise always emit `source: "signup"`). The
+ * subsequent mount cleanup effect deletes the sessionStorage key.
+ */
+function readRoleSwitchCtx(): { fromType: ParticipantId; hadActiveSub: boolean } | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem("role_switch_ctx");
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { fromType?: unknown; hadActiveSub?: unknown };
+    if (typeof parsed.fromType !== "string") return null;
+    return {
+      fromType: parsed.fromType as ParticipantId,
+      hadActiveSub: parsed.hadActiveSub === true,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export default function Onboarding() {
   const navigate = useNavigate();
   const { user, profile, refreshProfile, loading: authLoading } = useAuth();
@@ -120,14 +147,26 @@ export default function Onboarding() {
   // ── Role-switch billing context ───────────────────────────────────────────────
   // Set by Dashboard SettingsSection before navigating here for a role switch.
   // Cleared after first use so it doesn't re-appear on subsequent visits.
-  const [switchCtx, setSwitchCtx] = useState<{ fromType: ParticipantId; hadActiveSub: boolean } | null>(null);
+  //
+  // Lazy-initialised from sessionStorage so the value is available during the
+  // first render. Without this, the on-mount `onboarding_started` analytics
+  // effect (below) would always emit `source: "signup"` because effects fire
+  // in declaration order — the analytics effect would run before the cleanup
+  // effect that previously did the sessionStorage read. The cleanup of the
+  // sessionStorage key and the stale onboarding_draft happens in a separate
+  // mount effect below.
+  const [switchCtx, setSwitchCtx] = useState<{ fromType: ParticipantId; hadActiveSub: boolean } | null>(() => readRoleSwitchCtx());
   // Mirrors switchCtx but is NOT cleared when the billing modal is confirmed.
   // switchCtx must be nulled in handleBillingModalConfirm to prevent the modal
   // from re-firing on subsequent step navigations, but the done screen and
   // analytics still need the original context to render the upgrade subtitle
   // and emit source: "role_switch". Use displaySwitchCtx for read-only
   // downstream consumers; use switchCtx for billing-modal gating.
-  const [displaySwitchCtx, setDisplaySwitchCtx] = useState<{ fromType: ParticipantId; hadActiveSub: boolean } | null>(null);
+  // No setter destructured: the value is initialised once from sessionStorage
+  // and intentionally never overwritten so downstream readers (DoneScreen,
+  // onboarding_completed analytics) keep the original context after
+  // handleBillingModalConfirm clears `switchCtx`.
+  const [displaySwitchCtx] = useState<{ fromType: ParticipantId; hadActiveSub: boolean } | null>(() => readRoleSwitchCtx());
   const [billingModalProceed, setBillingModalProceed] = useState<(() => void) | null>(null);
   const [billingModalToType, setBillingModalToType] = useState<ParticipantId | null>(null);
   const [billingConfirming, setBillingConfirming] = useState(false);
@@ -153,12 +192,13 @@ export default function Onboarding() {
   }, [step, selected, switchCtx, displaySwitchCtx]);
 
   useEffect(() => {
+    // Cleanup-only effect: switchCtx + displaySwitchCtx were already populated
+    // by their useState lazy initialisers (above) so analytics + UI see the
+    // role-switch context on first render. Here we only consume the
+    // sessionStorage key (so subsequent visits don't keep firing the modal)
+    // and drop any stale onboarding_draft from the previous role's flow.
     try {
-      const raw = sessionStorage.getItem("role_switch_ctx");
-      if (!raw) return;
-      const ctx = JSON.parse(raw) as { fromType: ParticipantId; hadActiveSub: boolean };
-      setSwitchCtx(ctx);
-      setDisplaySwitchCtx(ctx);
+      if (sessionStorage.getItem("role_switch_ctx") === null) return;
       sessionStorage.removeItem("role_switch_ctx");
       // Drop any stale draft from the previous role's onboarding. Without
       // this the draft-restore effect below would re-route the user into a
@@ -167,7 +207,7 @@ export default function Onboarding() {
       // draft-restore effect because it appears earlier in source order.
       localStorage.removeItem("onboarding_draft");
     } catch (err: unknown) {
-      logger.warn("[Onboarding] role_switch_ctx parse failed:", err instanceof Error ? err.message : err);
+      logger.warn("[Onboarding] role_switch_ctx cleanup failed:", err instanceof Error ? err.message : err);
     }
   }, []);
 
