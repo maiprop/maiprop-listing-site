@@ -26,6 +26,19 @@ npm run dev
 - `SUPABASE_SERVICE_ROLE_KEY` — Required for admin-level DB operations (user creation, profile updates). This is the `service_role` JWT from Supabase dashboard (Settings → API).
 - `SITE_LOCK_PASSWORD` — Required to access portal.maiprop.co (private preview gate). Not needed for localhost testing.
 
+## Production Portal Access (portal.maiprop.co)
+
+The production frontend is at `portal.maiprop.co` and is behind a **passcode gate**. To access:
+
+1. Navigate to `https://portal.maiprop.co`
+2. Enter the passcode (stored as `SITE_LOCK_PASSWORD` secret) and click Unlock
+3. The portal is now accessible for the browser session
+
+**When to use portal vs localhost:**
+- Use `portal.maiprop.co` when testing CORS fixes, edge function deployments, or anything that depends on the production origin
+- Use `localhost:8080` for general UI testing — it connects to the same Supabase backend
+- Cloudflare Pages preview URLs (`*.maiprop-listing-site.pages.dev`) may be behind Cloudflare Access — use portal or localhost instead
+
 ## Test Accounts
 
 All demo accounts use:
@@ -85,6 +98,17 @@ async def login_as(email, password="Demo2025!"):
 This is much faster than GUI login for multi-user test flows.
 
 ## Key Testing Flows
+
+### Data Input (Agent role)
+1. Log in as `agent.pro@maiprop.demo`
+2. Navigate to Dashboard → Data Input tab (sidebar)
+3. Note the current quota (X/20) — this is the precondition
+4. Fill form: Closing date, Closing price (€), Property address, City, Property type (dropdown), Transaction type
+5. Click "+ Submit closing"
+6. **Pass**: Form clears, quota increments by 1, new entry appears in Submission history with "Pending review" status
+7. **Fail**: "Failed to send a request to the Edge Function" error = CORS issue (see CORS debugging below)
+
+**What this tests:** The `agent-data-input` edge function RPC call via `supabase.functions.invoke()`. Both the status check (on page load) and form submission use this function.
 
 ### Listing Creation (Seller/Agent/Developer)
 1. Navigate to `/listings/new`
@@ -158,5 +182,6 @@ await supabase.from('open_house_registrations').delete().eq('requester_id', user
 - **Open house registration**: The `open_house_registrations` table has a UNIQUE(listing_id, requester_id) constraint. The mutation handles duplicates gracefully (catches error code 23505). RLS policies are correct — the `oh_regs_requester` policy allows buyers to insert their own registrations.
 - **Listing URL patterns**: User-created listings use `/property/{id}`, while seeded/new-build listings use `/new-build/{id}`. The listings grid links correctly based on type.
 - **Investor dashboard empty state**: If there are 0 deals in the pipeline, the "Express Interest" flow cannot be tested. Deals appear only after Quick Sale requests are approved by admin.
-- **Cloudflare Pages preview gate**: The branch preview deploys (`devin-XXX.maiprop-listing-site.pages.dev`) sit behind Cloudflare Access — `curl` returns a 302 to `cloudflareaccess.com`. For runtime testing, use local `npm run dev` at port 8080 (it talks to the same production Supabase the preview uses).
+- **Cloudflare Pages preview gate**: The branch preview deploys (`devin-XXX.maiprop-listing-site.pages.dev`) sit behind Cloudflare Access — `curl` returns a 302 to `cloudflareaccess.com`. For runtime testing, use local `npm run dev` at port 8080 or `portal.maiprop.co` with the passcode — both talk to the same production Supabase.
 - **Error messages in mutations**: All `onError` handlers in `useOpenHouseAssetControl.ts` now surface actual error messages (not generic "Something went wrong"). This applies to: create registration, update registration, upsert settings, create offer, update offer, accept offer, reveal offers.
+- **ONBOARDING_TEST_PASSWORD secret**: This secret may not match the demo account password (`Demo2025!`). If login fails with "Invalid email or password" when using the secret, try `Demo2025!` directly.
