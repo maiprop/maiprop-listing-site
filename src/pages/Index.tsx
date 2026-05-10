@@ -1,9 +1,14 @@
 import { lazy, Suspense, useMemo } from "react";
 import { Helmet } from "react-helmet-async";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
+import {
+  useHomepageTypeCounts,
+  useHomepageFeaturedListings,
+  useHomepageAuctionListings,
+  useHomepageOpenHouseListings,
+} from "@/hooks/useHomepageListings";
 import { Navbar } from "@/components/Navbar";
-import { supabase } from "@/integrations/supabase/client";
 import { HeroSection } from "@/components/index/HeroSection";
 import { BrowseByTypeSection } from "@/components/index/BrowseByTypeSection";
 import { FeaturedPropertiesSection } from "@/components/index/FeaturedPropertiesSection";
@@ -15,15 +20,6 @@ import { ProfessionalsCTASection } from "@/components/index/ProfessionalsCTASect
 import { OSSection } from "@/components/index/OSSection";
 
 const Footer = lazy(() => import("@/components/Footer").then(m => ({ default: m.Footer })));
-
-const featuredSelect =
-  "id, title, address, city, price, price_per_sqm, bedrooms, bathrooms, sqm, floor, total_floors, year_built, energy_class, cover_image_url, property_type, listing_type, ai_score, views_count, tags";
-
-const auctionSelect =
-  "id, title, address, city, price, price_per_sqm, bedrooms, bathrooms, sqm, floor, total_floors, year_built, energy_class, cover_image_url, property_type, listing_type, ai_score, views_count, tags, auction_date, auction_starting_bid, latitude, longitude";
-
-const queryTimeout = <T,>(p: Promise<T>, ms: number): Promise<T> =>
-  Promise.race([p, new Promise<T>((_, rej) => setTimeout(() => rej(new Error("Request timeout")), ms))]);
 
 export default function Index() {
   const queryClient = useQueryClient();
@@ -38,111 +34,21 @@ export default function Index() {
     },
   });
 
-  // Listing counts for Browse by Type section
-  const { data: typeCountsRaw } = useQuery({
-    queryKey: ["homepage-type-counts"],
-    staleTime: 10 * 60 * 1000,
-    queryFn: async () => {
-      const { data, error } = await supabase.from("listings").select("property_type").eq("status", "active");
-      if (error) throw error;
-      const counts: Record<string, number> = {};
-      (data ?? []).forEach((row) => {
-        const k = row.property_type as string;
-        counts[k] = (counts[k] || 0) + 1;
-      });
-      return counts;
-    },
-  });
+  const { data: typeCountsRaw } = useHomepageTypeCounts();
   const typeCounts = useMemo(() => typeCountsRaw ?? {}, [typeCountsRaw]);
-
-  const today = new Date().toISOString().split("T")[0];
 
   const {
     data: featuredListings = [],
     isLoading: featuredLoading,
     isError: featuredError,
-  } = useQuery({
-    queryKey: ["homepage-featured"],
-    queryFn: async () => {
-      const run = async () => {
-        const { data, error } = await supabase
-          .from("listings")
-          .select(`${featuredSelect}, listing_images(url, sort_order)`)
-          .eq("status", "active").eq("listing_type", "sale")
-          .order("created_at", { ascending: false }).limit(4);
-        if (error) {
-          const fallback = await supabase.from("listings").select(featuredSelect)
-            .eq("status", "active").eq("listing_type", "sale")
-            .order("created_at", { ascending: false }).limit(4);
-          if (fallback.error) throw fallback.error;
-          return fallback.data || [];
-        }
-        return data || [];
-      };
-      return queryTimeout(run(), 12_000);
-    },
-    staleTime: 5 * 60 * 1000,
-    retry: 1,
-  });
+  } = useHomepageFeaturedListings();
 
   const {
     data: auctionListings = [],
     isLoading: auctionsLoading,
-  } = useQuery({
-    queryKey: ["homepage-auctions"],
-    queryFn: async () => {
-      const run = async () => {
-        const { data, error } = await supabase
-          .from("listings")
-          .select(`${auctionSelect}, listing_images(url, sort_order)`)
-          .eq("status", "active").eq("listing_type", "auction")
-          .or(`auction_date.gte.${today},auction_date.is.null`)
-          .order("auction_date", { ascending: true, nullsFirst: false }).limit(6);
-        if (error) {
-          const fallback = await supabase.from("listings").select(auctionSelect)
-            .eq("status", "active").eq("listing_type", "auction")
-            .or(`auction_date.gte.${today},auction_date.is.null`)
-            .order("auction_date", { ascending: true, nullsFirst: false }).limit(6);
-          if (fallback.error) throw fallback.error;
-          const list = fallback.data || [];
-          return list.sort((a, b) => {
-            const aHasImg = !!a.cover_image_url;
-            const bHasImg = !!b.cover_image_url;
-            return (bHasImg ? 1 : 0) - (aHasImg ? 1 : 0);
-          });
-        }
-        return (data || []).sort((a, b) => {
-          const aHasImg = !!(a.cover_image_url || a.listing_images?.length);
-          const bHasImg = !!(b.cover_image_url || b.listing_images?.length);
-          return (bHasImg ? 1 : 0) - (aHasImg ? 1 : 0);
-        });
-      };
-      return queryTimeout(run(), 12_000);
-    },
-    staleTime: 5 * 60 * 1000,
-    retry: 1,
-  });
+  } = useHomepageAuctionListings();
 
-  const { data: openHouseListings = [] } = useQuery({
-    queryKey: ["homepage-open-houses"],
-    queryFn: async () => {
-      const now = new Date().toISOString();
-      const { data, error } = await supabase
-        .from("listings")
-        .select(
-          "id, title, address, city, price, price_per_sqm, bedrooms, bathrooms, sqm, floor, total_floors, year_built, energy_class, cover_image_url, property_type, listing_type, ai_score, views_count, tags, open_house_date, latitude, longitude, listing_images(url, sort_order)",
-        )
-        .eq("status", "active").eq("listing_type", "open_house")
-        .gte("open_house_date", now).order("open_house_date", { ascending: true }).limit(6);
-      if (error) return [];
-      return (data || []).sort((a, b) => {
-        const aHasImg = !!(a.cover_image_url || a.listing_images?.length);
-        const bHasImg = !!(b.cover_image_url || b.listing_images?.length);
-        return (bHasImg ? 1 : 0) - (aHasImg ? 1 : 0);
-      });
-    },
-    staleTime: 2 * 60 * 1000,
-  });
+  const { data: openHouseListings = [] } = useHomepageOpenHouseListings();
 
   return (
     <div className="min-h-screen bg-background pb-bottom-nav lg:pb-0">
