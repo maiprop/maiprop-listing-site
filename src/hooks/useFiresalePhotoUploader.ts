@@ -140,25 +140,25 @@ export function useFiresalePhotoUploader(): UseFiresalePhotoUploaderResult {
     if (valid.length < incoming.length) {
       toast.warning("Some files were skipped (must be images under 10MB).");
     }
-    setFiles((prev) => {
-      const next = [...prev, ...valid].slice(0, MAX_PHOTOS);
-      // Revoke any preview URLs we are about to throw away, then mint and
-      // track fresh ones for the new combined list.
-      previews.forEach(revokeBlobUrl);
-      const nextPreviews = next.map((f) => trackBlobUrl(URL.createObjectURL(f)));
-      setPreviews(nextPreviews);
-      return next;
-    });
+    // Compute next state and perform blob-URL side effects *outside* the
+    // React state setters — setters must be pure. Mirrors the pattern in
+    // `useListingForm.ts:167-186`. addFiles is only invoked from user-driven
+    // file-input change events, so the closure-captured `files`/`previews`
+    // are guaranteed to be the latest committed state.
+    const next = [...files, ...valid].slice(0, MAX_PHOTOS);
+    previews.forEach(revokeBlobUrl);
+    const nextPreviews = next.map((f) => trackBlobUrl(URL.createObjectURL(f)));
+    setFiles(next);
+    setPreviews(nextPreviews);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const removeAt = (idx: number) => {
+    // Side effect (revoke) outside the setter; pure update inside.
+    const removed = previews[idx];
+    if (removed) revokeBlobUrl(removed);
     setFiles((f) => f.filter((_, i) => i !== idx));
-    setPreviews((p) => {
-      const removed = p[idx];
-      if (removed) revokeBlobUrl(removed);
-      return p.filter((_, i) => i !== idx);
-    });
+    setPreviews((p) => p.filter((_, i) => i !== idx));
   };
 
   const reset = () => {
