@@ -97,19 +97,44 @@ const isFirstOnboardingFor = (
 ): boolean => resolvePresetType(profile) === null;
 
 /**
- * Resolves the active step list for a given selected participant. Each `if`
- * is +1 cyclomatic complexity, so keeping this in a module-level pure
- * function (instead of an inline IIFE in the Onboarding render body)
- * reduces the component's total complexity by ~5.
+ * Lookup map from participant id to its step list. Replaces the chain of
+ * `if (selected.id === "...")` branches in resolveStepsFor so the helper's
+ * own cyclomatic complexity drops below DeepSource's medium-risk threshold.
+ */
+const STEPS_BY_PARTICIPANT_ID: Readonly<Partial<Record<string, OnboardingStep[]>>> = {
+  participant: PARTICIPANT_STEPS,
+  market_pro: PRO_SIMPLE_STEPS,
+  developer: DEVELOPER_STEPS,
+  professional: PRO_FLAT_STEPS,
+};
+
+/**
+ * Resolves the active step list for a given selected participant. Pure
+ * module-level helper so the branching does not contribute to the
+ * Onboarding component's cyclomatic complexity.
  */
 const resolveStepsFor = (selected: ParticipantType | null): OnboardingStep[] => {
   if (!selected) return TOP_STEPS;
-  if (selected.id === "participant") return PARTICIPANT_STEPS;
-  if (selected.id === "market_pro") return PRO_SIMPLE_STEPS;
-  if (selected.id === "developer") return DEVELOPER_STEPS;
-  if (selected.id === "professional") return PRO_FLAT_STEPS;
-  if (selected.isPro) return PRO_FULL_STEPS;
-  return TOP_STEPS;
+  const byId = STEPS_BY_PARTICIPANT_ID[selected.id];
+  if (byId) return byId;
+  return selected.isPro ? PRO_FULL_STEPS : TOP_STEPS;
+};
+
+/**
+ * Lookup from the current onboarding step to the step the back button
+ * should navigate to. Replaces the chained ternary in the Onboarding
+ * component, removing ~7 cyclomatic-complexity points from its body.
+ * Steps not in this map have no back action (the back button hides).
+ */
+const BACK_STEP_BY_STEP: Readonly<Partial<Record<OnboardingStep, OnboardingStep>>> = {
+  "pick-participant-goal": "pick-type",
+  "pick-pro-type": "pick-type",
+  "developer-setup": "pick-type",
+  "pro-category": "pick-type",
+  "pro-verify": "pro-category",
+  "pro-services": "pro-verify",
+  "pro-availability": "pro-services",
+  "pro-video": "pro-availability",
 };
 
 export default function Onboarding() {
@@ -795,14 +820,8 @@ export default function Onboarding() {
   })();
 
   // Per-step back handler
-  const onBack = step === "pick-participant-goal" ? () => setStep("pick-type")
-    : step === "pick-pro-type" ? () => setStep("pick-type")
-    : step === "developer-setup" ? () => setStep("pick-type")
-    : step === "pro-category" ? () => setStep("pick-type")
-    : step === "pro-verify" ? () => setStep("pro-category")
-    : step === "pro-services" ? () => setStep("pro-verify")
-    : step === "pro-availability" ? () => setStep("pro-services")
-    : step === "pro-video" ? () => setStep("pro-availability")
+  const backStepTarget = BACK_STEP_BY_STEP[step];
+  const onBack = backStepTarget ? () => setStep(backStepTarget)
     : undefined;
 
   return (
