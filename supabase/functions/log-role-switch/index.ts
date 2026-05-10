@@ -80,11 +80,13 @@ Deno.serve(async (req) => {
 
     // ── Stripe: cancel subscription at period end ─────────────────────────────
     // Idempotent: skip the update if the active sub is already pending
-    // cancellation. Errors are surfaced (502) so the UI can warn the user
-    // their billing state didn't change — silent failures previously left
-    // users paying for a role they had switched away from.
+    // cancellation. Stripe failures are non-fatal so the audit insert below
+    // still runs (preserves the trail), but the error is surfaced in the
+    // response body so the UI can warn the user their billing state may not
+    // have changed.
     let subCancelled = false;
     let subAlreadyCancelling = false;
+    let stripeError: string | null = null;
     if (cancelSubscription) {
       const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
       if (stripeKey && user.email) {
@@ -112,15 +114,8 @@ Deno.serve(async (req) => {
             }
           }
         } catch (stripeErr: unknown) {
-          const message = stripeErr instanceof Error ? stripeErr.message : String(stripeErr);
-          logStep("Stripe cancellation failed", { error: message });
-          return new Response(
-            JSON.stringify({
-              error: "stripe_cancellation_failed",
-              detail: message,
-            }),
-            { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+          stripeError = stripeErr instanceof Error ? stripeErr.message : String(stripeErr);
+          logStep("Stripe cancellation failed", { error: stripeError });
         }
       }
     }
@@ -140,13 +135,14 @@ Deno.serve(async (req) => {
       // Non-fatal — return success to avoid blocking the UX
     }
 
-    logStep("Done", { fromType, toType, subCancelled, subAlreadyCancelling });
+    logStep("Done", { fromType, toType, subCancelled, subAlreadyCancelling, stripeError });
 
     return new Response(
       JSON.stringify({
         success: true,
         sub_cancelled: subCancelled,
         sub_already_cancelling: subAlreadyCancelling,
+        stripe_error: stripeError,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

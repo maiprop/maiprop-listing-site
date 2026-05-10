@@ -283,9 +283,13 @@ export default function Onboarding() {
 
   const handleBillingModalConfirm = async () => {
     if (!switchCtx || !billingModalToType) return;
-    // Log the switch via edge function (service role handles Stripe + DB insert)
+    // Log the switch via edge function (service role handles Stripe + DB insert).
+    // supabase.functions.invoke does NOT throw on non-2xx — surface failures via
+    // the { error } property and the body's stripe_error field. Audit-row
+    // failure is non-blocking; Stripe-cancellation failure surfaces as a
+    // toast warning so the user can manage the sub manually.
     try {
-      await supabase.functions.invoke("log-role-switch", {
+      const { data, error } = await supabase.functions.invoke("log-role-switch", {
         body: {
           from_type: switchCtx.fromType,
           to_type: billingModalToType,
@@ -294,7 +298,14 @@ export default function Onboarding() {
           cancel_subscription: switchCtx.hadActiveSub,
         },
       });
-    } catch (_err: unknown) { /* non-blocking — audit log failure must not block the user */ }
+      if (error) {
+        logger.warn("[Onboarding] log-role-switch invoke error:", error.message);
+      } else if (data && typeof data === "object" && "stripe_error" in data && data.stripe_error) {
+        toast.warning("We couldn't cancel your active subscription automatically. Please manage it from your billing settings.");
+      }
+    } catch (err: unknown) {
+      logger.warn("[Onboarding] log-role-switch threw:", err instanceof Error ? err.message : err);
+    }
     const proceed = billingModalProceed;
     setBillingModalProceed(null);
     setBillingModalToType(null);
