@@ -25,6 +25,25 @@
 -- the developer role can unarchive them).
 --
 -- Safe to re-apply: all CREATE/DROP statements use IF EXISTS guards.
+--
+-- IMPORTANT: also drop the two redundant SELECT policies created by
+-- 20260510120000 ("Projects are publicly viewable" + "Projects are viewable
+-- by owner or admin"). On a fresh CI DB these are dropped/replaced earlier in
+-- the chain by 20260604120000:437 (which DROPs the public one) and
+-- 20260705000000 (which restructures), but on real-world deployments —
+-- where 20260510120000 was previously unapplied and only runs as part of
+-- this PR's deploy — those drops have already executed against an empty
+-- target, leaving the 20260510120000-created policies in place. Without
+-- this cleanup, PostgreSQL OR's the lingering `"Projects are publicly
+-- viewable" USING (archived_at IS NULL)` with our new
+-- `projects_public_select USING (status = 'active' AND archived_at IS NULL)`,
+-- which simplifies to `(archived_at IS NULL)` — bypassing the
+-- `status = 'active'` filter and exposing draft/pending projects publicly.
+-- Dropping unconditionally is safe (IF EXISTS) and makes the post-state
+-- identical regardless of whether 20260510120000 ran before or after
+-- 20260604120000/20260705000000.
+DROP POLICY IF EXISTS "Projects are publicly viewable" ON public.projects;
+DROP POLICY IF EXISTS "Projects are viewable by owner or admin" ON public.projects;
 
 DROP POLICY IF EXISTS "projects_public_select" ON public.projects;
 CREATE POLICY "projects_public_select"
