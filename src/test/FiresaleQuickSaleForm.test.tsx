@@ -168,8 +168,10 @@ describe("FiresaleQuickSaleForm", () => {
   });
 
   it("filters out invalid file types + warns, then renders previews for the survivors", () => {
-    // Stub URL.createObjectURL so the preview map doesn't crash.
-    vi.stubGlobal("URL", { ...URL, createObjectURL: () => "blob:preview" });
+    // Stub URL.createObjectURL so the preview map doesn't crash. Also
+    // stub revokeObjectURL — the photo hook revokes blob URLs on
+    // unmount/replacement to avoid leaking image bytes.
+    vi.stubGlobal("URL", { ...URL, createObjectURL: () => "blob:preview", revokeObjectURL: () => {} });
     render(<FiresaleQuickSaleForm />);
     const fileInput = document.querySelector("input[type='file']") as HTMLInputElement;
     const validFile = new File(["x"], "ok.jpg", { type: "image/jpeg" });
@@ -181,7 +183,7 @@ describe("FiresaleQuickSaleForm", () => {
   });
 
   it("Continue button enables once 6 valid photos + every text field are populated, and clicking it fires generateEstimate", async () => {
-    vi.stubGlobal("URL", { ...URL, createObjectURL: (_: unknown) => `blob:p-${Math.random()}` });
+    vi.stubGlobal("URL", { ...URL, createObjectURL: (_: unknown) => `blob:p-${Math.random()}`, revokeObjectURL: () => {} });
     render(<FiresaleQuickSaleForm />);
 
     // Fill every required text field.
@@ -223,7 +225,7 @@ describe("FiresaleQuickSaleForm", () => {
   });
 
   it("Back from step 2 returns to step 1 (1/2) without losing form data", async () => {
-    vi.stubGlobal("URL", { ...URL, createObjectURL: (_: unknown) => `blob:p-${Math.random()}` });
+    vi.stubGlobal("URL", { ...URL, createObjectURL: (_: unknown) => `blob:p-${Math.random()}`, revokeObjectURL: () => {} });
     render(<FiresaleQuickSaleForm />);
     fireEvent.change(screen.getByPlaceholderText(/Kifisia, Dekelia/i), {
       target: { value: "Kolonaki 12, Athens" },
