@@ -359,10 +359,17 @@ async function applyAgentDataInputDiscount(
       err: stripeErr instanceof Error ? stripeErr.message : String(stripeErr),
     });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase.from as any)("agent_data_inputs")
+    const { error: rollbackErr } = await (supabase.from as any)("agent_data_inputs")
       .update({ discount_applied: false, discount_applied_at: null, discount_invoice_id: null })
       .eq("user_id", userId)
       .eq("discount_invoice_id", invoice.id);
+    if (rollbackErr) {
+      log.error("CRITICAL: rollback of discount rows failed — credits permanently lost", {
+        user_id: userId,
+        invoice_id: invoice.id,
+        err: String(rollbackErr.message ?? rollbackErr),
+      });
+    }
     return;
   }
 
