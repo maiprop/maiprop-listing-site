@@ -121,13 +121,19 @@ Deno.serve(async (req) => {
     }
 
     // ── Audit log insert (service role bypasses RLS) ──────────────────────────
+    // sub_cancelled in the audit row = "the subscription is configured to cancel
+    // at period end after this call". True when we just made the change AND when
+    // a previous call already did. False only when Stripe failed or we found no
+    // active sub. This preserves the pre-PR semantic (which always re-issued the
+    // update and recorded true) while keeping the Stripe call idempotent.
+    const subPendingCancellation = subCancelled || subAlreadyCancelling;
     const { error: insertError } = await supabase.from("role_switch_history").insert({
       user_id: user.id,
       from_type: fromType,
       to_type: toType || null,
       switch_kind: switchKind,
       had_active_sub: hadActiveSub,
-      sub_cancelled: subCancelled,
+      sub_cancelled: subPendingCancellation,
     });
 
     if (insertError) {
