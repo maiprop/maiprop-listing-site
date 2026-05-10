@@ -146,7 +146,7 @@ Deno.serve(async (req) => {
     });
   }
 
-  const radius_km = Math.min(Number(body.radius_km) || 2, MAX_RADIUS_KM);
+  const radius_km = Math.min(Math.max(Number(body.radius_km) || 2, 0.1), MAX_RADIUS_KM);
   const limit = Math.min(Math.max(Math.floor(Number(body.limit) || 50), 1), MAX_LIMIT);
 
   const osUrl = "http://app.os.maiprop.co:8080/api/v1/sales/filter/coordinates";

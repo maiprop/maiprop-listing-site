@@ -42,6 +42,22 @@ async function requireAgent(
   return null;
 }
 
+async function safeCount(
+  url: string,
+  body: Record<string, unknown>,
+  headers: Record<string, string>,
+): Promise<{ status: number; count: number | null }> {
+  const response = await fetchWithTimeout(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  });
+  const json = await response.json().catch(() => null) as Record<string, unknown> | null;
+  const raw = json?.count ?? json?.total ?? json?.data;
+  const count = typeof raw === "number" ? raw : null;
+  return { status: response.status, count };
+}
+
 async function getOsToken(baseUrl: string, email: string, password: string): Promise<string> {
   const res = await fetchWithTimeout(`${baseUrl}/auth/login`, {
     method: "POST",
@@ -119,35 +135,21 @@ Deno.serve(async (req) => {
       has_lng: a.lng != null,
     }));
 
-    // ── Probe helper: extract only numeric count from upstream JSON ─────────
-    async function safeCount(
-      url: string,
-      body: Record<string, unknown>,
-    ): Promise<{ status: number; count: number | null }> {
-      const r = await fetchWithTimeout(url, {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify(body),
-      });
-      const j = await r.json().catch(() => null) as Record<string, unknown> | null;
-      const raw = j?.count ?? j?.total ?? j?.data;
-      const count = typeof raw === "number" ? raw : null;
-      return { status: r.status, count };
-    }
-
     // ── Probe 2: count all via /api/v1/auctions/filter/count ──────────────────
-    const countAll = await safeCount(`${OS_URL}/api/v1/auctions/filter/count`, {});
+    const countAll = await safeCount(`${OS_URL}/api/v1/auctions/filter/count`, {}, authHeaders);
 
     // ── Probe 3: count PENDING auctions ───────────────────────────────────────
     const countPending = await safeCount(
       `${OS_URL}/api/v1/auctions/filter/count`,
       { auctionStatus: "PENDING" },
+      authHeaders,
     );
 
     // ── Probe 4: count COMPLETED auctions ─────────────────────────────────────
     const countCompleted = await safeCount(
       `${OS_URL}/api/v1/auctions/filter/count`,
       { auctionStatus: "COMPLETED" },
+      authHeaders,
     );
 
     // ── Probe 5: count-comparison endpoint ────────────────────────────────────
@@ -156,6 +158,7 @@ Deno.serve(async (req) => {
       comp = await safeCount(
         `${OS_URL}/api/v1/auctions/filter/count-comparison`,
         { sortBy: "AUCTION_DATE" },
+        authHeaders,
       );
     } catch {
       comp = { note: "count-comparison endpoint unavailable on OS API (server-side bug)" };

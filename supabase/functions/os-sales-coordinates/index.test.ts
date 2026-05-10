@@ -12,8 +12,8 @@ Deno.test("OPTIONS preflight returns 200", async () => {
 });
 
 Deno.test("GET returns 405 Method Not Allowed", async () => {
-  const r = new Request("https://functions.supabase.co/fn", { method: "GET" });
-  const res = await handler(r);
+  const request = new Request("https://functions.supabase.co/fn", { method: "GET" });
+  const res = await handler(request);
   assertEquals(res.status, 405);
 });
 
@@ -31,45 +31,45 @@ Deno.test("POST with lat/lng returns 200 or 503 (OS may be unavailable in test)"
 });
 
 Deno.test("unknown origin falls back to production CORS origin", async () => {
-  const r = new Request("https://functions.supabase.co/fn", {
+  const request = new Request("https://functions.supabase.co/fn", {
     method: "OPTIONS",
     headers: { origin: "https://hacker.io" },
   });
-  const res = await handler(r);
+  const res = await handler(request);
   assertEquals(res.headers.get("Access-Control-Allow-Origin"), "https://maiprop.co");
 });
 
 Deno.test("POST with invalid JSON returns 400", async () => {
-  const r = new Request("https://functions.supabase.co/fn", {
+  const request = new Request("https://functions.supabase.co/fn", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: "not-json",
   });
-  const res = await handler(r);
+  const res = await handler(request);
   assertEquals(res.status, 400);
 });
 
 // ── New hardening tests ─────────────────────────────────────────────────────
 
 Deno.test("POST with array body returns 400", async () => {
-  const r = new Request("https://functions.supabase.co/fn", {
+  const request = new Request("https://functions.supabase.co/fn", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify([{ lat: 37, lng: 23 }]),
   });
-  const res = await handler(r);
+  const res = await handler(request);
   assertEquals(res.status, 400);
   const body = await res.json();
   assertStringIncludes(body.error, "JSON object");
 });
 
 Deno.test("POST with null body returns 400", async () => {
-  const r = new Request("https://functions.supabase.co/fn", {
+  const request = new Request("https://functions.supabase.co/fn", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: "null",
   });
-  const res = await handler(r);
+  const res = await handler(request);
   assertEquals(res.status, 400);
   const body = await res.json();
   assertStringIncludes(body.error, "JSON object");
@@ -83,12 +83,12 @@ Deno.test("POST with non-numeric lat/lng returns 400", async () => {
 });
 
 Deno.test("POST with NaN lat returns 400", async () => {
-  const r = new Request("https://functions.supabase.co/fn", {
+  const request = new Request("https://functions.supabase.co/fn", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ lat: null, lng: 23.7275 }),
   });
-  const res = await handler(r);
+  const res = await handler(request);
   assertEquals(res.status, 400);
 });
 
