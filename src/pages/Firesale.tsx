@@ -140,6 +140,12 @@ export default function Firesale() {
           onClose={() => setShowInvitationModal(false)}
           onSuccess={() => {
             setShowInvitationModal(false);
+            // Optimistic update — write "pending" into the cache immediately so the
+            // FiresaleInvestorPanel re-renders the "request received" banner without
+            // waiting for the background refetch. The invalidate that follows still
+            // confirms the server state in case the row landed differently (e.g.
+            // straight to "approved" via an admin auto-approve).
+            queryClient.setQueryData(["invitation-request-status", user?.id], "pending");
             void queryClient.invalidateQueries({ queryKey: ["invitation-request-status", user?.id] });
             toast.success("Invitation request submitted — we'll be in touch within 48 hours.");
           }}
