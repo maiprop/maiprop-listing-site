@@ -6,10 +6,15 @@
  * Responsibilities:
  *   1. Authenticate the caller (Bearer token → Supabase user)
  *   2. If cancel_subscription=true, cancel active Stripe subscription at period end
- *   3. Insert an audit row into role_switch_history (via service role — bypasses RLS)
+ *   3. Record an audit row in role_switch_history via the SECURITY DEFINER RPC
+ *      `record_role_switch_audit` (caller-context, granted to authenticated)
  *
- * The service role key is required to write to role_switch_history because the table's
- * INSERT policy is `WITH CHECK (false)` (no direct client writes allowed).
+ * We deliberately do NOT do a direct INSERT into role_switch_history. The table's
+ * INSERT policy is `WITH CHECK (false)` so any client without a verified service-role
+ * JWT is rejected, and Supabase projects can be migrated to the new sb_secret_*
+ * key format under the same `SUPABASE_SERVICE_ROLE_KEY` env name — in which case
+ * supabase-js does not produce a service_role JWT for PostgREST and the insert
+ * silently fails. Going through the RPC removes that dependency entirely.
  */
 
 import Stripe from "https://esm.sh/stripe@18.5.0";
@@ -34,15 +39,14 @@ Deno.serve(async (req) => {
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
   if (await limiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);
 
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!serviceRoleKey) {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+  if (!supabaseUrl || !anonKey) {
     return new Response(JSON.stringify({ error: "Service unavailable" }), {
       status: 503,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-
-  const supabase = createClient(Deno.env.get("SUPABASE_URL") ?? "", serviceRoleKey);
 
   // ── Auth ──────────────────────────────────────────────────────────────────
   // Authentication errors return 401 directly (rather than being caught by
@@ -55,6 +59,15 @@ Deno.serve(async (req) => {
     });
   }
   const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+
+  // Caller-context client — forwards the user's JWT to PostgREST so the audit
+  // RPC's auth.uid() resolves to this user. Used both for getUser() and the
+  // record_role_switch_audit RPC call.
+  const supabase = createClient(supabaseUrl, anonKey, {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+    auth: { persistSession: false },
+  });
+
   const { data: userData, error: userError } = await supabase.auth.getUser(token);
   if (userError || !userData.user) {
     return new Response(JSON.stringify({ error: "Unauthenticated" }), {
@@ -79,7 +92,14 @@ Deno.serve(async (req) => {
     const cancelSubscription: boolean = body.cancel_subscription === true;
 
     // ── Stripe: cancel subscription at period end ─────────────────────────────
+    // Idempotent: skip the update if the active sub is already pending
+    // cancellation. Stripe failures are non-fatal so the audit insert below
+    // still runs (preserves the trail), but the error is surfaced in the
+    // response body so the UI can warn the user their billing state may not
+    // have changed.
     let subCancelled = false;
+    let subAlreadyCancelling = false;
+    let stripeError: string | null = null;
     if (cancelSubscription) {
       const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
       if (stripeKey && user.email) {
@@ -87,34 +107,65 @@ Deno.serve(async (req) => {
           const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
           const customers = await stripe.customers.list({ email: user.email, limit: 1 });
           if (customers.data.length > 0) {
-            const subs = await stripe.subscriptions.list({
+            // Stripe's `status` filter only accepts a single value per call. To
+            // cancel the user's subscription regardless of which billable state
+            // it's in, fetch with status="all" and filter client-side.
+            //
+            // Billable states (the user is being / will be charged):
+            //   - active     : current period paid, will renew
+            //   - trialing   : in trial period, will renew at end
+            //   - past_due   : payment failed but sub not yet canceled
+            //
+            // Non-billable states are intentionally skipped:
+            //   - canceled / ended / incomplete / incomplete_expired
+            //   - paused / unpaid (Stripe stops billing on these)
+            const billableStatuses: ReadonlySet<string> = new Set([
+              "active",
+              "trialing",
+              "past_due",
+            ]);
+            const allSubs = await stripe.subscriptions.list({
               customer: customers.data[0].id,
-              status: "active",
-              limit: 1,
+              status: "all",
+              limit: 100,
             });
-            if (subs.data.length > 0) {
-              await stripe.subscriptions.update(subs.data[0].id, { cancel_at_period_end: true });
-              subCancelled = true;
-              logStep("Subscription set to cancel at period end", { subId: subs.data[0].id });
+            const billableSubs = allSubs.data.filter(
+              (s: Stripe.Subscription) => billableStatuses.has(s.status),
+            );
+            if (billableSubs.length > 0) {
+              const sub = billableSubs[0];
+              if (sub.cancel_at_period_end === true) {
+                subAlreadyCancelling = true;
+                logStep("Subscription already pending cancellation — skipping update", {
+                  subId: sub.id,
+                });
+              } else {
+                await stripe.subscriptions.update(sub.id, { cancel_at_period_end: true });
+                subCancelled = true;
+                logStep("Subscription set to cancel at period end", { subId: sub.id });
+              }
             }
           }
         } catch (stripeErr: unknown) {
-          // Non-fatal — log but don't block the audit record
-          logStep("Stripe cancellation failed (non-fatal)", {
-            error: stripeErr instanceof Error ? stripeErr.message : String(stripeErr),
-          });
+          stripeError = stripeErr instanceof Error ? stripeErr.message : String(stripeErr);
+          logStep("Stripe cancellation failed", { error: stripeError });
         }
       }
     }
 
-    // ── Audit log insert (service role bypasses RLS) ──────────────────────────
-    const { error: insertError } = await supabase.from("role_switch_history").insert({
-      user_id: user.id,
-      from_type: fromType,
-      to_type: toType || null,
-      switch_kind: switchKind,
-      had_active_sub: hadActiveSub,
-      sub_cancelled: subCancelled,
+    // ── Audit log insert (via SECURITY DEFINER RPC) ──────────────────────────
+    // sub_cancelled in the audit row = "the subscription is configured to cancel
+    // at period end after this call". True when we just made the change AND when
+    // a previous call already did. False only when Stripe failed or we found no
+    // active sub. This preserves the pre-PR semantic (which always re-issued the
+    // update and recorded true) while keeping the Stripe call idempotent.
+    const subPendingCancellation = subCancelled || subAlreadyCancelling;
+    const { error: insertError } = await supabase.rpc("record_role_switch_audit", {
+      _from_type: fromType,
+      _to_type: toType || "",
+      _switch_kind: switchKind,
+      _had_active_sub: hadActiveSub,
+      _sub_cancelled: subPendingCancellation,
     });
 
     if (insertError) {
@@ -122,10 +173,15 @@ Deno.serve(async (req) => {
       // Non-fatal — return success to avoid blocking the UX
     }
 
-    logStep("Done", { fromType, toType, subCancelled });
+    logStep("Done", { fromType, toType, subCancelled, subAlreadyCancelling, stripeError });
 
     return new Response(
-      JSON.stringify({ success: true, sub_cancelled: subCancelled }),
+      JSON.stringify({
+        success: true,
+        sub_cancelled: subCancelled,
+        sub_already_cancelling: subAlreadyCancelling,
+        stripe_error: stripeError,
+      }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err: unknown) {

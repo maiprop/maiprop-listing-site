@@ -192,7 +192,13 @@ export function RoleSwitchModal({
             <Notice
               icon={<AlertTriangle className="w-3.5 h-3.5 text-muted-foreground" />}
               title="Your data is safe"
-              body="Listings, saved properties, messages, and contacts are not deleted when switching roles."
+              body={
+                fromType === "professional"
+                  ? "Saved properties, messages, and contacts stay attached to your account. Your professional profile and services are archived (hidden from the public directory) and will be restored if you switch back to this role later."
+                  : fromType === "developer"
+                    ? "Saved properties, messages, and contacts stay attached to your account. Your projects are archived (hidden from the public directory) and will be restored if you switch back to this role later."
+                    : "Listings, saved properties, messages, and contacts are not deleted when switching roles."
+              }
               color="neutral"
             />
           </div>

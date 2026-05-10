@@ -29,15 +29,120 @@ import { ProAvailabilityStep } from "@/components/onboarding/ProAvailabilityStep
 import { ProVideoStep } from "@/components/onboarding/ProVideoStep";
 
 
+/**
+ * Extracts a non-empty stripe_error string from log-role-switch's response body.
+ * Returns null when the body is shaped unexpectedly or has no error.
+ *
+ * Defined as a `const` arrow function so DeepSource's `no-implicit-globals`
+ * rule (which mis-fires on top-level `function` declarations in ES modules)
+ * does not flag it as a global scope declaration.
+ */
+const extractStripeError = (data: unknown): string | null => {
+  if (!data || typeof data !== "object") return null;
+  const value = (data as { stripe_error?: unknown }).stripe_error;
+  return typeof value === "string" && value.length > 0 ? value : null;
+};
+
+/**
+ * Reads the role-switch billing context written by Dashboard SettingsSection
+ * before navigation. Returns null if the key is missing, malformed, or the
+ * environment lacks sessionStorage. Never throws.
+ *
+ * Called twice synchronously during render — once for `switchCtx`, once for
+ * `displaySwitchCtx` — so the role-switch context is available before any
+ * effect fires (in particular, before the `onboarding_started` analytics
+ * effect, which would otherwise always emit `source: "signup"`). The
+ * subsequent mount cleanup effect deletes the sessionStorage key.
+ *
+ * Defined as a `const` arrow function so DeepSource's `no-implicit-globals`
+ * rule does not flag it as a global scope declaration.
+ */
+const readRoleSwitchCtx = (): { fromType: ParticipantId; hadActiveSub: boolean } | null => {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem("role_switch_ctx");
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { fromType?: unknown; hadActiveSub?: unknown };
+    if (typeof parsed.fromType !== "string") return null;
+    return {
+      fromType: parsed.fromType as ParticipantId,
+      hadActiveSub: parsed.hadActiveSub === true,
+    };
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Returns the participant_type when role and participant_type already agree
+ * (i.e. the user has finished onboarding once and we should auto-skip the
+ * pick-type step). Defined as a pure module-level helper so the inline
+ * branching does not contribute to the Onboarding component's cyclomatic
+ * complexity.
+ */
+const resolvePresetType = (
+  profile: { participant_type?: string | null; role?: string | null } | null | undefined
+): string | null => {
+  if (!profile?.participant_type || !profile?.role) return null;
+  return profile.participant_type === String(profile.role) ? profile.participant_type : null;
+};
+
+/**
+ * The user is in their FIRST onboarding when role and participant_type are
+ * not yet aligned. Pure module-level helper for the same reason as
+ * `resolvePresetType` — keeps the branching out of the React component.
+ */
+const isFirstOnboardingFor = (
+  profile: { participant_type?: string | null; role?: string | null } | null | undefined
+): boolean => resolvePresetType(profile) === null;
+
+/**
+ * Lookup map from participant id to its step list. Replaces the chain of
+ * `if (selected.id === "...")` branches in resolveStepsFor so the helper's
+ * own cyclomatic complexity drops below DeepSource's medium-risk threshold.
+ */
+const STEPS_BY_PARTICIPANT_ID: Readonly<Partial<Record<string, OnboardingStep[]>>> = {
+  participant: PARTICIPANT_STEPS,
+  market_pro: PRO_SIMPLE_STEPS,
+  developer: DEVELOPER_STEPS,
+  professional: PRO_FLAT_STEPS,
+};
+
+/**
+ * Resolves the active step list for a given selected participant. Pure
+ * module-level helper so the branching does not contribute to the
+ * Onboarding component's cyclomatic complexity.
+ */
+const resolveStepsFor = (selected: ParticipantType | null): OnboardingStep[] => {
+  if (!selected) return TOP_STEPS;
+  const byId = STEPS_BY_PARTICIPANT_ID[selected.id];
+  if (byId) return byId;
+  return selected.isPro ? PRO_FULL_STEPS : TOP_STEPS;
+};
+
+/**
+ * Lookup from the current onboarding step to the step the back button
+ * should navigate to. Replaces the chained ternary in the Onboarding
+ * component, removing ~7 cyclomatic-complexity points from its body.
+ * Steps not in this map have no back action (the back button hides).
+ */
+const BACK_STEP_BY_STEP: Readonly<Partial<Record<OnboardingStep, OnboardingStep>>> = {
+  "pick-participant-goal": "pick-type",
+  "pick-pro-type": "pick-type",
+  "developer-setup": "pick-type",
+  "pro-category": "pick-type",
+  "pro-verify": "pro-category",
+  "pro-services": "pro-verify",
+  "pro-availability": "pro-services",
+  "pro-video": "pro-availability",
+};
+
 export default function Onboarding() {
   const navigate = useNavigate();
   const { user, profile, refreshProfile, loading: authLoading } = useAuth();
 
   // participant_type is the authoritative onboarding signal (set since migration 20260522100000)
-  const presetType =
-    profile?.participant_type && profile?.role && profile.participant_type === String(profile.role)
-      ? profile.participant_type
-      : null;
+  const presetType = resolvePresetType(profile);
 
   const [step, setStep] = useState<OnboardingStep>("pick-type");
   const [selected, setSelected] = useState<ParticipantType | null>(null);
@@ -110,10 +215,30 @@ export default function Onboarding() {
   // ── Role-switch billing context ───────────────────────────────────────────────
   // Set by Dashboard SettingsSection before navigating here for a role switch.
   // Cleared after first use so it doesn't re-appear on subsequent visits.
-  const [switchCtx, setSwitchCtx] = useState<{ fromType: ParticipantId; hadActiveSub: boolean } | null>(null);
+  //
+  // Lazy-initialised from sessionStorage so the value is available during the
+  // first render. Without this, the on-mount `onboarding_started` analytics
+  // effect (below) would always emit `source: "signup"` because effects fire
+  // in declaration order — the analytics effect would run before the cleanup
+  // effect that previously did the sessionStorage read. The cleanup of the
+  // sessionStorage key and the stale onboarding_draft happens in a separate
+  // mount effect below.
+  const [switchCtx, setSwitchCtx] = useState<{ fromType: ParticipantId; hadActiveSub: boolean } | null>(() => readRoleSwitchCtx());
+  // Mirrors switchCtx but is NOT cleared when the billing modal is confirmed.
+  // switchCtx must be nulled in handleBillingModalConfirm to prevent the modal
+  // from re-firing on subsequent step navigations, but the done screen and
+  // analytics still need the original context to render the upgrade subtitle
+  // and emit source: "role_switch". Use displaySwitchCtx for read-only
+  // downstream consumers; use switchCtx for billing-modal gating.
+  // No setter destructured: the value is initialised once from sessionStorage
+  // and intentionally never overwritten so downstream readers (DoneScreen,
+  // onboarding_completed analytics) keep the original context after
+  // handleBillingModalConfirm clears `switchCtx`.
+  const [displaySwitchCtx] = useState<{ fromType: ParticipantId; hadActiveSub: boolean } | null>(() => readRoleSwitchCtx());
   const [billingModalProceed, setBillingModalProceed] = useState<(() => void) | null>(null);
   const [billingModalToType, setBillingModalToType] = useState<ParticipantId | null>(null);
-  const isFirstOnboarding = !(profile?.participant_type && profile?.role && profile.participant_type === String(profile.role));
+  const [billingConfirming, setBillingConfirming] = useState(false);
+  const isFirstOnboarding = isFirstOnboardingFor(profile);
   const startedTrackedRef = useRef(false);
   const completedTrackedRef = useRef(false);
 
@@ -130,31 +255,31 @@ export default function Onboarding() {
     completedTrackedRef.current = true;
     trackAnalyticsEvent("onboarding_completed", {
       participant_type: selected.id,
-      source: switchCtx ? "role_switch" : "signup",
+      source: (displaySwitchCtx ?? switchCtx) ? "role_switch" : "signup",
     });
-  }, [step, selected, switchCtx]);
+  }, [step, selected, switchCtx, displaySwitchCtx]);
 
   useEffect(() => {
+    // Cleanup-only effect: switchCtx + displaySwitchCtx were already populated
+    // by their useState lazy initialisers (above) so analytics + UI see the
+    // role-switch context on first render. Here we only consume the
+    // sessionStorage key (so subsequent visits don't keep firing the modal)
+    // and drop any stale onboarding_draft from the previous role's flow.
     try {
-      const raw = sessionStorage.getItem("role_switch_ctx");
-      if (!raw) return;
-      const ctx = JSON.parse(raw) as { fromType: ParticipantId; hadActiveSub: boolean };
-      setSwitchCtx(ctx);
+      if (sessionStorage.getItem("role_switch_ctx") === null) return;
       sessionStorage.removeItem("role_switch_ctx");
+      // Drop any stale draft from the previous role's onboarding. Without
+      // this the draft-restore effect below would re-route the user into a
+      // mid-flow step for the role they're leaving (e.g. "pro-availability")
+      // before they ever pick the new typology. This effect runs before the
+      // draft-restore effect because it appears earlier in source order.
+      localStorage.removeItem("onboarding_draft");
     } catch (err: unknown) {
-      logger.warn("[Onboarding] role_switch_ctx parse failed:", err instanceof Error ? err.message : err);
+      logger.warn("[Onboarding] role_switch_ctx cleanup failed:", err instanceof Error ? err.message : err);
     }
   }, []);
 
-  const steps: OnboardingStep[] = (() => {
-    if (!selected) return TOP_STEPS;
-    if (selected.id === "participant") return PARTICIPANT_STEPS;
-    if (selected.id === "market_pro") return PRO_SIMPLE_STEPS;
-    if (selected.id === "developer") return DEVELOPER_STEPS;
-    if (selected.id === "professional") return PRO_FLAT_STEPS;
-    if (selected.isPro) return PRO_FULL_STEPS;
-    return TOP_STEPS;
-  })();
+  const steps: OnboardingStep[] = resolveStepsFor(selected);
   const stepIndex = steps.indexOf(step);
   const totalSteps = steps.length - 1;
 
@@ -267,7 +392,11 @@ export default function Onboarding() {
    * For fresh signups (no switchCtx), calls proceed() directly.
    */
   const maybeBillingGate = (toType: ParticipantId, proceed: () => void) => {
-    if (isFirstOnboarding || !switchCtx) { proceed(); return; }
+    // switchCtx (set by SettingsSection before begin_role_switch nulls participant_type)
+    // is the authoritative signal for a role switch. Don't gate on isFirstOnboarding —
+    // begin_role_switch makes participant_type null, so isFirstOnboarding is true even
+    // for a real switch. Gating on it here would skip the Stripe cancel + audit insert.
+    if (!switchCtx) { proceed(); return; }
     const kind = classifySwitch(switchCtx.fromType, toType);
     if (kind === "same-tier") { proceed(); return; }
     // Show modal — store the proceed callback and target type
@@ -275,25 +404,63 @@ export default function Onboarding() {
     setBillingModalProceed(() => proceed);
   };
 
-  const handleBillingModalConfirm = async () => {
-    if (!switchCtx || !billingModalToType) return;
-    // Log the switch via edge function (service role handles Stripe + DB insert)
+  // Extracted to keep handleBillingModalConfirm's cyclomatic complexity low.
+  // supabase.functions.invoke does NOT throw on non-2xx — surface failures via
+  // the { error } property and the body's stripe_error field.
+  const invokeLogRoleSwitch = async (
+    ctx: { fromType: ParticipantId; hadActiveSub: boolean },
+    toType: ParticipantId,
+  ): Promise<void> => {
     try {
-      await supabase.functions.invoke("log-role-switch", {
+      const { data, error } = await supabase.functions.invoke("log-role-switch", {
         body: {
-          from_type: switchCtx.fromType,
-          to_type: billingModalToType,
-          switch_kind: classifySwitch(switchCtx.fromType, billingModalToType),
-          had_active_sub: switchCtx.hadActiveSub,
-          cancel_subscription: switchCtx.hadActiveSub,
+          from_type: ctx.fromType,
+          to_type: toType,
+          switch_kind: classifySwitch(ctx.fromType, toType),
+          had_active_sub: ctx.hadActiveSub,
+          cancel_subscription: ctx.hadActiveSub,
         },
       });
-    } catch (_err: unknown) { /* non-blocking — audit log failure must not block the user */ }
-    const proceed = billingModalProceed;
+      if (error) {
+        logger.warn("[Onboarding] log-role-switch invoke error:", error.message);
+        return;
+      }
+      const stripeError = extractStripeError(data);
+      if (stripeError) {
+        toast.warning("We couldn't cancel your active subscription automatically. Please manage it from your billing settings.");
+      }
+    } catch (err: unknown) {
+      logger.warn("[Onboarding] log-role-switch threw:", err instanceof Error ? err.message : err);
+    }
+  };
+
+  // Inner body of handleBillingModalConfirm extracted into a helper so the
+  // outer handler stays under DeepSource's cyclomatic-complexity threshold.
+  // Audit-row failure is non-blocking; Stripe-cancellation failure surfaces
+  // as a toast warning so the user can manage the sub manually.
+  // Note: displaySwitchCtx is intentionally NOT cleared here. The done
+  // screen + onboarding_completed analytics need to read the original
+  // switch context after switchCtx has been consumed.
+  const performBillingConfirm = async (
+    ctx: { fromType: ParticipantId; hadActiveSub: boolean },
+    toType: ParticipantId,
+    proceed: (() => void) | null,
+  ): Promise<void> => {
+    setBillingConfirming(true);
+    try {
+      await invokeLogRoleSwitch(ctx, toType);
+    } finally {
+      setBillingConfirming(false);
+    }
     setBillingModalProceed(null);
     setBillingModalToType(null);
-    setSwitchCtx(null); // consume context — only fire once
-    proceed?.();
+    setSwitchCtx(null);
+    if (proceed) proceed();
+  };
+
+  const handleBillingModalConfirm = async () => {
+    if (!switchCtx || !billingModalToType || billingConfirming) return;
+    await performBillingConfirm(switchCtx, billingModalToType, billingModalProceed);
   };
 
   const handleBillingModalCancel = () => {
@@ -606,10 +773,13 @@ export default function Onboarding() {
 
     // Detect upgrade-from-paid: user was on a paid plan, switched to a pricier role, and the
     // old subscription was cancelled. switchCtx is only set from the Dashboard role-switch flow.
-    const switchKind = switchCtx
-      ? classifySwitch(switchCtx.fromType, participantId as ParticipantId)
+    // Use displaySwitchCtx (preserved post-modal) so the upgrade subtitle still renders after
+    // handleBillingModalConfirm clears switchCtx.
+    const ctx = displaySwitchCtx ?? switchCtx;
+    const switchKind = ctx
+      ? classifySwitch(ctx.fromType, participantId as ParticipantId)
       : null;
-    const wasUpgrade = switchKind === "upgrade" && switchCtx?.hadActiveSub === true;
+    const wasUpgrade = switchKind === "upgrade" && ctx?.hadActiveSub === true;
 
     const upgradedPlanName = wasUpgrade
       ? getPlanForParticipant(participantId as ParticipantId).planName
@@ -650,14 +820,8 @@ export default function Onboarding() {
   })();
 
   // Per-step back handler
-  const onBack = step === "pick-participant-goal" ? () => setStep("pick-type")
-    : step === "pick-pro-type" ? () => setStep("pick-type")
-    : step === "developer-setup" ? () => setStep("pick-type")
-    : step === "pro-category" ? () => setStep("pick-type")
-    : step === "pro-verify" ? () => setStep("pro-category")
-    : step === "pro-services" ? () => setStep("pro-verify")
-    : step === "pro-availability" ? () => setStep("pro-services")
-    : step === "pro-video" ? () => setStep("pro-availability")
+  const backStepTarget = BACK_STEP_BY_STEP[step];
+  const onBack = backStepTarget ? () => setStep(backStepTarget)
     : undefined;
 
   return (
@@ -667,13 +831,14 @@ export default function Onboarding() {
       </Shell>
 
       {/* Role-switch billing modal — only visible when switching from a paid role */}
-      {billingModalProceed && billingModalToType && switchCtx && !isFirstOnboarding && (
+      {billingModalProceed && billingModalToType && switchCtx && (
         <RoleSwitchModal
           fromType={switchCtx.fromType}
           toType={billingModalToType}
           hasActiveSub={switchCtx.hadActiveSub}
           onConfirm={() => void handleBillingModalConfirm()}
           onCancel={handleBillingModalCancel}
+          confirming={billingConfirming}
         />
       )}
     </>
