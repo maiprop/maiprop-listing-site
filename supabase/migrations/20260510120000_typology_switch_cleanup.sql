@@ -80,62 +80,109 @@ CREATE INDEX IF NOT EXISTS idx_projects_archived_at
   ON public.projects (owner_id) WHERE archived_at IS NOT NULL;
 
 -- ── 3. Public SELECT policies — hide archived rows ────────────────────────────
--- professionals: public can see non-archived rows; owner + admin always.
+-- Each table gets a PAIR of SELECT policies (PostgreSQL OR's them together):
+--
+--   1. "<table> are publicly viewable"        TO public        — non-archived only,
+--                                              calls NO functions, so anon never
+--                                              hits a permission-denied error.
+--   2. "<table> are viewable by owner/admin"  TO authenticated — owner + admin
+--                                              access (including archived rows),
+--                                              uses private.has_platform_admin.
+--
+-- Why split? `private.has_platform_admin` requires USAGE on the private schema,
+-- which is granted to authenticated but NOT anon. If we put that function call
+-- in a single policy USING-clause, every anon SELECT on the table fails with
+-- "permission denied for function has_platform_admin" before it can reach the
+-- archived_at IS NULL branch — even for non-archived rows. Splitting the policy
+-- ensures anon evaluates only the function-free policy.
+
+-- professionals
 DROP POLICY IF EXISTS "Professionals are publicly viewable" ON public.professionals;
+DROP POLICY IF EXISTS "Professionals are viewable by owner or admin" ON public.professionals;
 CREATE POLICY "Professionals are publicly viewable"
   ON public.professionals FOR SELECT
+  TO public
+  USING (archived_at IS NULL);
+CREATE POLICY "Professionals are viewable by owner or admin"
+  ON public.professionals FOR SELECT
+  TO authenticated
   USING (
-    archived_at IS NULL
-    OR (select auth.uid()) = user_id
-    OR public.has_platform_admin((select auth.uid()))
+    (select auth.uid()) = user_id
+    OR private.has_platform_admin((select auth.uid()))
   );
 
--- professional_services: filter via parent. Existing public SELECT policy was
--- defined in the original 20260309194824 migration as "Professional services
--- are publicly viewable". Tighten it now to exclude services owned by
--- archived professionals.
+-- professional_services: filter via parent. Same split shape.
 DROP POLICY IF EXISTS "Professional services are publicly viewable" ON public.professional_services;
+DROP POLICY IF EXISTS "Professional services are viewable by owner or admin" ON public.professional_services;
 DROP POLICY IF EXISTS "Services are publicly viewable" ON public.professional_services;
 CREATE POLICY "Professional services are publicly viewable"
   ON public.professional_services FOR SELECT
+  TO public
+  USING (
+    is_active = true
+    AND EXISTS (
+      SELECT 1 FROM public.professionals p
+      WHERE p.id = professional_services.professional_id
+        AND p.archived_at IS NULL
+    )
+  );
+CREATE POLICY "Professional services are viewable by owner or admin"
+  ON public.professional_services FOR SELECT
+  TO authenticated
   USING (
     is_active = true
     AND EXISTS (
       SELECT 1 FROM public.professionals p
       WHERE p.id = professional_services.professional_id
         AND (
-          p.archived_at IS NULL
-          OR p.user_id = (select auth.uid())
-          OR public.has_platform_admin((select auth.uid()))
+          p.user_id = (select auth.uid())
+          OR private.has_platform_admin((select auth.uid()))
         )
     )
   );
 
 -- professional_availability: same shape.
 DROP POLICY IF EXISTS "Availability is publicly viewable" ON public.professional_availability;
+DROP POLICY IF EXISTS "Availability is viewable by owner or admin" ON public.professional_availability;
 CREATE POLICY "Availability is publicly viewable"
   ON public.professional_availability FOR SELECT
+  TO public
+  USING (
+    is_active = true
+    AND EXISTS (
+      SELECT 1 FROM public.professionals p
+      WHERE p.id = professional_availability.professional_id
+        AND p.archived_at IS NULL
+    )
+  );
+CREATE POLICY "Availability is viewable by owner or admin"
+  ON public.professional_availability FOR SELECT
+  TO authenticated
   USING (
     is_active = true
     AND EXISTS (
       SELECT 1 FROM public.professionals p
       WHERE p.id = professional_availability.professional_id
         AND (
-          p.archived_at IS NULL
-          OR p.user_id = (select auth.uid())
-          OR public.has_platform_admin((select auth.uid()))
+          p.user_id = (select auth.uid())
+          OR private.has_platform_admin((select auth.uid()))
         )
     )
   );
 
 -- projects: hide archived rows from the public.
 DROP POLICY IF EXISTS "Projects are publicly viewable" ON public.projects;
+DROP POLICY IF EXISTS "Projects are viewable by owner or admin" ON public.projects;
 CREATE POLICY "Projects are publicly viewable"
   ON public.projects FOR SELECT
+  TO public
+  USING (archived_at IS NULL);
+CREATE POLICY "Projects are viewable by owner or admin"
+  ON public.projects FOR SELECT
+  TO authenticated
   USING (
-    archived_at IS NULL
-    OR (select auth.uid()) = owner_id
-    OR public.has_platform_admin((select auth.uid()))
+    (select auth.uid()) = owner_id
+    OR private.has_platform_admin((select auth.uid()))
   );
 
 -- ── 4. begin_role_switch() — caller-context RPC ───────────────────────────────
@@ -428,5 +475,7 @@ COMMENT ON FUNCTION public.record_role_switch_audit(text, text, text, boolean, b
   'not depend on the deployed function carrying a JWT-shaped service-role '
   'key (project-level secret format can change with new Supabase keys).';
 
+REVOKE ALL ON FUNCTION public.record_role_switch_audit(text, text, text, boolean, boolean)
+  FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.record_role_switch_audit(text, text, text, boolean, boolean)
   TO authenticated;
