@@ -1,3 +1,8 @@
+---
+name: testing-supabase
+description: Test Supabase RLS policies, edge functions, CORS configuration, and RPC calls. Use when verifying database security, edge function behavior, or CORS changes.
+---
+
 # Testing Supabase RLS & Edge Functions
 
 ## Devin Secrets Needed
@@ -75,7 +80,7 @@ export SUPABASE_ACCESS_TOKEN="..."
 curl -s -X POST "https://api.supabase.com/v1/projects/qvvicunqcrwpioqnvzxf/database/query" \
   -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
   -H "Content-Type: application/json" \
-  -d '{"query": "SELECT tablename, policyname, cmd, qual FROM pg_policies WHERE schemaname = '\''public'\'' AND cmd IN ('\''UPDATE'\'', '\''DELETE'\'') AND (qual ILIKE '\''%has_platform_admin%'\'' OR qual ILIKE '\''%has_role%'\'') ORDER BY tablename;"}'
+  -d '{"query": "SELECT tablename, policyname, cmd, qual FROM pg_policies WHERE schemaname = '\''public'\'' AND cmd IN ('\''UPDATE'\'',' \''DELETE'\''') AND (qual ILIKE '\''%has_platform_admin%'\'' OR qual ILIKE '\''%has_role%'\'') ORDER BY tablename;"}'
 ```
 
 ## Deploying Migrations
@@ -102,20 +107,88 @@ After deploying, mark the migration as applied:
 npx supabase migration repair TIMESTAMP --status applied --linked
 ```
 
-## Edge Function Testing
+## Edge Function Deployment
 
-- Edge functions are NOT auto-deployed from git. After code changes, run `supabase functions deploy FUNCTION_NAME` to deploy.
+### Auto-Deploy (on merge)
+Edge functions auto-deploy via `.github/workflows/deploy-edge-functions.yml` on push to `main` when `supabase/functions/**` changes.
+
+### Manual Deploy (for testing)
+```bash
+# Deploy ALL functions
+npx supabase functions deploy --project-ref qvvicunqcrwpioqnvzxf
+
+# Deploy a SPECIFIC function (more reliable)
+npx supabase functions deploy FUNCTION_NAME --project-ref qvvicunqcrwpioqnvzxf
+```
+
+> **CRITICAL GOTCHA**: The bulk `supabase functions deploy` (no function name) can **silently skip functions**. Always verify critical functions were deployed by testing them afterward. For important changes, deploy each affected function individually by name — this is more reliable than bulk deploy. Discovered during PR #117 testing: `agent-data-input` was silently skipped by the bulk deploy command but worked fine when deployed individually.
+
+### General Edge Function Notes
 - Rate limiting and timeouts only take effect after deployment.
 - Functions with `verify_jwt = false` in `supabase/config.toml` are publicly accessible.
 - Webhook/cron functions (`process-email-queue`, `oh-registration-notify`, `receive-from-os`, `stripe-webhook`) should NOT have IP-based rate limiting — they're called from infrastructure with shared IPs.
 
+### CORS Testing
+
+The shared CORS config is at `supabase/functions/_shared/cors.ts`. When adding new headers that the frontend sends (e.g., from Sentry tracing, analytics SDKs), they must be added to `BASE_ALLOWED_HEADERS`.
+
+**Common CORS issue**: Sentry's performance tracing automatically adds `baggage` and `sentry-trace` headers to all fetch requests. If these aren't in the edge function CORS allowlist, ALL browser-to-edge-function calls fail with a preflight error. The error appears as "Failed to send a request to the Edge Function" in the UI — check browser DevTools Network tab for the specific CORS preflight failure.
+
+```bash
+# Run CORS unit tests
+cd supabase/functions && deno test --allow-env --allow-net --allow-read _shared/cors.test.ts
+```
+
+Key assertions in CORS tests:
+- `baggage` and `sentry-trace` are in allowed headers
+- Production origins are reflected
+- Localhost dev origins are allowed in non-production mode
+- Unknown origins fall back to first production origin
+
+### RPC Testing With All 3 Available Keys
+
+The project has 3 available keys with different formats. All work as the `apikey` header when paired with a user JWT in the `Authorization` header:
+
+```bash
+# Step 1: Get a user JWT
+USER_JWT=$(curl -s "${VITE_SUPABASE_URL}/auth/v1/token?grant_type=password" \
+  -H "apikey: ${VITE_SUPABASE_PUBLISHABLE_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{"email": "agent.pro@maiprop.demo", "password": "Demo2025!"}' | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+# Step 2: Test each key with an edge function
+for KEY_NAME in SUPABASE_SERVICE_ROLE_KEY SUPABASE_ANON_KEY VITE_SUPABASE_PUBLISHABLE_KEY; do
+  KEY_VAL=$(printenv $KEY_NAME)
+  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+    "${VITE_SUPABASE_URL}/functions/v1/agent-data-input/status" \
+    -H "apikey: ${KEY_VAL}" \
+    -H "Authorization: Bearer ${USER_JWT}" \
+    -H "Content-Type: application/json")
+  echo "${KEY_NAME}: HTTP ${HTTP_CODE}"
+done
+```
+
+**Pass**: All 3 keys return HTTP 200 with JSON containing `quota` and `submissions`
+**Fail**: Any key returns HTTP 401/403/500
+
+### Data Input Form Testing (UI)
+
+The Data Input form (`/dashboard` → Data Input tab) calls the `agent-data-input` edge function via RPC.
+
+1. Log in as `agent.pro@maiprop.demo` / `Demo2025!`
+2. Navigate to Dashboard → Data Input tab
+3. Verify: quota display (X/20 or current count), form fields (closing date, price, address, city, property type dropdown, transaction type, KAEK, buyer/seller names, notes)
+4. Fill required fields and click "Submit closing"
+5. **Pre-deploy**: Expect "Failed to send a request to the Edge Function" (CORS error if fix not deployed)
+6. **Post-deploy**: Should succeed — form clears, quota increments, entry appears in "Submission history"
+
 ## Running Tests
 
 ```bash
-# Vitest (frontend unit tests) — ~1179 tests
+# Vitest (frontend unit tests) — ~1138+ tests
 npm test
 
-# Deno tests (edge function tests) — ~238 tests
+# Deno tests (edge function tests) — ~260+ tests
 export PATH="$HOME/.deno/bin:$PATH"
 cd supabase/functions && deno test --allow-env --allow-net --allow-read .
 
@@ -149,6 +222,43 @@ The database has two `has_role` function signatures with different behavior:
 
 Existing policies use `app_role`. Changing to `user_role` changes behavior — should be done as a dedicated migration, not bundled with other fixes.
 
+## DB State Verification via Management API
+
+Useful queries to verify migration state without applying them:
+
+```bash
+# Check if a specific RLS policy exists
+curl -s -X POST "https://api.supabase.com/v1/projects/qvvicunqcrwpioqnvzxf/database/query" \
+  -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "SELECT policyname FROM pg_policies WHERE schemaname='\''public'\'' AND policyname='\''POLICY_NAME'\'';"}'
+
+# Check if a CHECK constraint exists
+curl -s -X POST "https://api.supabase.com/v1/projects/qvvicunqcrwpioqnvzxf/database/query" \
+  -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "SELECT constraint_name FROM information_schema.table_constraints WHERE table_name='\''TABLE_NAME'\'' AND constraint_type='\''CHECK'\'';"}'
+
+# Check if a trigger exists
+curl -s -X POST "https://api.supabase.com/v1/projects/qvvicunqcrwpioqnvzxf/database/query" \
+  -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "SELECT tgname FROM pg_trigger WHERE tgname='\''TRIGGER_NAME'\'';"}'
+```
+
+## Migration Testing Gotchas
+
+- **Never edit already-applied production migrations** — `supabase db push` validates hashes. If a migration was already applied, its content is immutable.
+- **Conditional migration pattern**: Use `schema_migrations` table detection to differentiate CI (fresh DB) from production:
+  ```sql
+  DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='supabase_migrations' AND table_name='schema_migrations') THEN
+      -- CI/fresh build: safe to drop/recreate
+    END IF;
+  END $$;
+  ```
+- **Migration ordering**: Ensure migrations that reference tables run AFTER the migration that creates those tables. Split migrations if needed.
+
 ## UI Navigation for Testing
 
 | Page | Route | Auth Required | Notes |
@@ -158,6 +268,7 @@ Existing policies use `app_role`. Changing to `user_role` changes behavior — s
 | Auctions | `/auctions` | No | Uses `useAuctionListings` hook with staleTime |
 | Login | `/login` | No | Email + password form |
 | Dashboard | `/dashboard` | Yes (any user) | Sidebar with Overview, Saved, Messages, etc. |
+| Data Input | `/dashboard` → Data Input tab | Yes (agent) | Form + quota + submission history |
 | Admin | `/admin` | Yes (admin role) | Tabs: pipeline, subscribers, pricing, etc. |
 | CRM Contacts | `/dashboard` → Contacts tab | Yes | Uses `useContacts` hook |
 | Firesale Admin | `/admin?tab=pipeline` | Yes (admin) | Uses `AdminFiresalePipeline` |
