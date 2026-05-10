@@ -130,6 +130,7 @@ export default function Onboarding() {
   const [displaySwitchCtx, setDisplaySwitchCtx] = useState<{ fromType: ParticipantId; hadActiveSub: boolean } | null>(null);
   const [billingModalProceed, setBillingModalProceed] = useState<(() => void) | null>(null);
   const [billingModalToType, setBillingModalToType] = useState<ParticipantId | null>(null);
+  const [billingConfirming, setBillingConfirming] = useState(false);
   const isFirstOnboarding = !(profile?.participant_type && profile?.role && profile.participant_type === String(profile.role));
   const startedTrackedRef = useRef(false);
   const completedTrackedRef = useRef(false);
@@ -334,10 +335,15 @@ export default function Onboarding() {
   };
 
   const handleBillingModalConfirm = async () => {
-    if (!switchCtx || !billingModalToType) return;
-    // Audit-row failure is non-blocking; Stripe-cancellation failure surfaces
-    // as a toast warning so the user can manage the sub manually.
-    await invokeLogRoleSwitch(switchCtx, billingModalToType);
+    if (!switchCtx || !billingModalToType || billingConfirming) return;
+    setBillingConfirming(true);
+    try {
+      // Audit-row failure is non-blocking; Stripe-cancellation failure surfaces
+      // as a toast warning so the user can manage the sub manually.
+      await invokeLogRoleSwitch(switchCtx, billingModalToType);
+    } finally {
+      setBillingConfirming(false);
+    }
     const proceed = billingModalProceed;
     setBillingModalProceed(null);
     setBillingModalToType(null);
@@ -729,6 +735,7 @@ export default function Onboarding() {
           hasActiveSub={switchCtx.hadActiveSub}
           onConfirm={() => void handleBillingModalConfirm()}
           onCancel={handleBillingModalCancel}
+          confirming={billingConfirming}
         />
       )}
     </>

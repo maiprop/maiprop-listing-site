@@ -58,7 +58,7 @@ export function SettingsSection({
       }));
     } catch (_err: unknown) { /* ignore storage errors */ }
 
-    // begin_role_switch was added in migration 20260710120000; the generated
+    // begin_role_switch was added in migration 20260510120000; the generated
     // types.ts does not yet include it, so cast through `any` to call it.
     const { error } = await (supabase.rpc as any)("begin_role_switch");
     if (error) {
