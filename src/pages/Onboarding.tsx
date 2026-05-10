@@ -29,6 +29,16 @@ import { ProAvailabilityStep } from "@/components/onboarding/ProAvailabilityStep
 import { ProVideoStep } from "@/components/onboarding/ProVideoStep";
 
 
+/**
+ * Extracts a non-empty stripe_error string from log-role-switch's response body.
+ * Returns null when the body is shaped unexpectedly or has no error.
+ */
+function extractStripeError(data: unknown): string | null {
+  if (!data || typeof data !== "object") return null;
+  const value = (data as { stripe_error?: unknown }).stripe_error;
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
 export default function Onboarding() {
   const navigate = useNavigate();
   const { user, profile, refreshProfile, loading: authLoading } = useAuth();
@@ -281,31 +291,41 @@ export default function Onboarding() {
     setBillingModalProceed(() => proceed);
   };
 
-  const handleBillingModalConfirm = async () => {
-    if (!switchCtx || !billingModalToType) return;
-    // Log the switch via edge function (service role handles Stripe + DB insert).
-    // supabase.functions.invoke does NOT throw on non-2xx — surface failures via
-    // the { error } property and the body's stripe_error field. Audit-row
-    // failure is non-blocking; Stripe-cancellation failure surfaces as a
-    // toast warning so the user can manage the sub manually.
+  // Extracted to keep handleBillingModalConfirm's cyclomatic complexity low.
+  // supabase.functions.invoke does NOT throw on non-2xx — surface failures via
+  // the { error } property and the body's stripe_error field.
+  const invokeLogRoleSwitch = async (
+    ctx: { fromType: ParticipantId; hadActiveSub: boolean },
+    toType: ParticipantId,
+  ): Promise<void> => {
     try {
       const { data, error } = await supabase.functions.invoke("log-role-switch", {
         body: {
-          from_type: switchCtx.fromType,
-          to_type: billingModalToType,
-          switch_kind: classifySwitch(switchCtx.fromType, billingModalToType),
-          had_active_sub: switchCtx.hadActiveSub,
-          cancel_subscription: switchCtx.hadActiveSub,
+          from_type: ctx.fromType,
+          to_type: toType,
+          switch_kind: classifySwitch(ctx.fromType, toType),
+          had_active_sub: ctx.hadActiveSub,
+          cancel_subscription: ctx.hadActiveSub,
         },
       });
       if (error) {
         logger.warn("[Onboarding] log-role-switch invoke error:", error.message);
-      } else if (data && typeof data === "object" && "stripe_error" in data && data.stripe_error) {
+        return;
+      }
+      const stripeError = extractStripeError(data);
+      if (stripeError) {
         toast.warning("We couldn't cancel your active subscription automatically. Please manage it from your billing settings.");
       }
     } catch (err: unknown) {
       logger.warn("[Onboarding] log-role-switch threw:", err instanceof Error ? err.message : err);
     }
+  };
+
+  const handleBillingModalConfirm = async () => {
+    if (!switchCtx || !billingModalToType) return;
+    // Audit-row failure is non-blocking; Stripe-cancellation failure surfaces
+    // as a toast warning so the user can manage the sub manually.
+    await invokeLogRoleSwitch(switchCtx, billingModalToType);
     const proceed = billingModalProceed;
     setBillingModalProceed(null);
     setBillingModalToType(null);
