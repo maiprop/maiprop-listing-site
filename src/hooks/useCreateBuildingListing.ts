@@ -202,20 +202,28 @@ export function useCreateBuildingListing() {
 
         // 5. Bulk-insert listing_images for non-cover photos
         if (additionalImageUrls.length > 0) {
-          await supabase.from("listing_images").insert(
+          const { error: imgErr } = await supabase.from("listing_images").insert(
             additionalImageUrls.map((url, idx) => ({
               listing_id: createdListing.id,
               url,
               sort_order: idx + 1,
             })),
           );
+          if (imgErr) throw imgErr;
         }
 
         return { listingId: createdListing.id };
       } catch (err: unknown) {
         // Rollback: avoid leaving an orphaned project with no unit/listing.
+        // Per CLAUDE.md / CONTRIBUTING.md: every UPDATE/DELETE must filter by
+        // both record id AND the current user's ownership column — RLS is
+        // a defence in depth, not a substitute for the explicit guard.
         if (createdProjectId) {
-          await supabase.from("projects").delete().eq("id", createdProjectId);
+          await supabase
+            .from("projects")
+            .delete()
+            .eq("id", createdProjectId)
+            .eq("owner_id", userId);
         }
         throw err;
       }
