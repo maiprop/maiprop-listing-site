@@ -15,7 +15,7 @@
  * and delete-account tests for the same convention.
  */
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { captureHandler, req } from "../_shared/testUtils.ts";
+import { captureHandler, req, authedReq } from "../_shared/testUtils.ts";
 
 const { handler, restore } = await captureHandler(import.meta.url, "./index.ts");
 
@@ -32,8 +32,8 @@ Deno.test("POST without auth returns 401 or 503", async () => {
   assertEquals(typeof body.error, "string");
 });
 
-Deno.test("missing Authorization header returns 401 or 503", async () => {
-  const res = await handler(req("POST"));
+Deno.test("fake Bearer token returns 401 (not 500)", async () => {
+  const res = await handler(authedReq("POST"));
   assertEquals([401, 503].includes(res.status), true);
 });
 
