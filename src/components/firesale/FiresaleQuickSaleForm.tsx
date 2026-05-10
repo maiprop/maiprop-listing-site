@@ -3,11 +3,10 @@
  * Manages all form state, validation, photo upload, and AI estimate internally.
  */
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Flame,
-  Check,
   MapPin,
   Shield,
   Euro,
@@ -17,7 +16,6 @@ import {
   Upload,
   X,
   ImageIcon,
-  BarChart2,
   Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -25,9 +23,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { isSellSideRole } from "@/lib/authUtils";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useNominatimAddressSuggestions } from "@/hooks/useNominatimAddressSuggestions";
+import { useFiresalePhotoUploader } from "@/hooks/useFiresalePhotoUploader";
 import { isAiUsageLimitError } from "@/lib/aiErrorUtils";
 import { toast } from "sonner";
-import { logger } from "@/lib/logger";
+import { QuickSaleSubmittedView } from "@/components/firesale/QuickSaleSubmittedView";
 
 const propertyTypeOptions = [
   { value: "apartment", label: "🏢 Apartment" },
@@ -52,7 +52,6 @@ export function FiresaleQuickSaleForm() {
   const { user, profile } = useAuth();
   const { isPro: _isPro } = useSubscription();
   const navigate = useNavigate();
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
@@ -60,12 +59,18 @@ export function FiresaleQuickSaleForm() {
   const [aiEstimate, setAiEstimate] = useState<number | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [requestId, setRequestId] = useState<string | null>(null);
-  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
-  const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
-  const [uploadingPhotos, setUploadingPhotos] = useState(false);
-  const [addressSuggestions, setAddressSuggestions] = useState<string[]>([]);
-  const [addressLoading, setAddressLoading] = useState(false);
-  const addressAbortRef = useRef<AbortController | null>(null);
+
+  const photoUploader = useFiresalePhotoUploader();
+  const {
+    files: photoFiles,
+    previews: photoPreviews,
+    uploading: uploadingPhotos,
+    fileInputRef,
+    addFiles: handlePhotoSelect,
+    removeAt: removePhoto,
+    reset: resetPhotos,
+    upload: uploadPhotos,
+  } = photoUploader;
 
   const canSubmitQuickSale = !!user && isSellSideRole(profile);
 
@@ -96,6 +101,13 @@ export function FiresaleQuickSaleForm() {
 
   const upd = (k: string, v: string) => setForm((prev) => ({ ...prev, [k]: v }));
   const normalizeKaek = (raw: string) => raw.replace(/\s+/g, "").trim();
+
+  // Address autocomplete delegated to a typed hook (debounced + abortable).
+  const {
+    suggestions: addressSuggestions,
+    loading: addressLoading,
+    clear: clearAddressSuggestions,
+  } = useNominatimAddressSuggestions(form.address);
 
   const validateStep1 = () => {
     const next: Record<string, string> = {};
@@ -134,128 +146,6 @@ export function FiresaleQuickSaleForm() {
     else if (!/^\+?[0-9]{8,15}$/.test(phone))
       next.contactPhone = "Phone number looks invalid (use digits, optionally starting with +).";
     return next;
-  };
-
-  // Address autocomplete via Nominatim
-  useEffect(() => {
-    const q = form.address.trim();
-    if (addressAbortRef.current) {
-      addressAbortRef.current.abort();
-      addressAbortRef.current = null;
-    }
-    if (q.length < 3) {
-      setAddressSuggestions([]);
-      setAddressLoading(false);
-      return;
-    }
-    const controller = new AbortController();
-    addressAbortRef.current = controller;
-    setAddressLoading(true);
-    const timeout = setTimeout(async () => {
-      try {
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&q=${encodeURIComponent(q)}`,
-          {
-            headers: {
-              "Accept-Language": "el,en",
-              "User-Agent": "maiprop-listing-site-firesale-autocomplete",
-            },
-            signal: controller.signal,
-          },
-        );
-        const json = await res.json().catch(() => []);
-        if (Array.isArray(json)) {
-          setAddressSuggestions(json.map((r: { display_name: string }) => r.display_name));
-        } else {
-          setAddressSuggestions([]);
-        }
-      } catch (_err: unknown) {
-        setAddressSuggestions([]);
-      } finally {
-        setAddressLoading(false);
-      }
-    }, 400);
-    return () => {
-      clearTimeout(timeout);
-      controller.abort();
-    };
-  }, [form.address]);
-
-  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
-    const valid = files.filter((f) => ALLOWED_MIME.has(f.type) && f.size < 10 * 1024 * 1024);
-    if (valid.length < files.length) toast.warning("Some files were skipped (must be images under 10MB).");
-    const newFiles = [...photoFiles, ...valid].slice(0, 10);
-    setPhotoFiles(newFiles);
-    setPhotoPreviews(newFiles.map((f) => URL.createObjectURL(f)));
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  };
-
-  const removePhoto = (idx: number) => {
-    setPhotoFiles((f) => f.filter((_, i) => i !== idx));
-    setPhotoPreviews((p) => p.filter((_, i) => i !== idx));
-  };
-
-  const compressImage = (file: File, maxDim = 1600, quality = 0.75): Promise<Blob> =>
-    new Promise((resolve) => {
-      const img = new Image();
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (typeof reader.result !== "string") { resolve(file); return; }
-        img.onload = () => {
-          try {
-            const canvas = document.createElement("canvas");
-            let { width, height } = img;
-            if (width > height && width > maxDim) { height = (height * maxDim) / width; width = maxDim; }
-            else if (height > maxDim) { width = (width * maxDim) / height; height = maxDim; }
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext("2d");
-            if (!ctx) { resolve(file); return; }
-            ctx.drawImage(img, 0, 0, width, height);
-            const CANVAS_ALLOWED = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
-            const type = file.type && CANVAS_ALLOWED.has(file.type) ? file.type : "image/jpeg";
-            canvas.toBlob((blob) => { if (blob) resolve(blob); else resolve(file); }, type, quality);
-          } catch (_err: unknown) { resolve(file); }
-        };
-        img.onerror = () => resolve(file);
-        img.src = reader.result;
-      };
-      reader.onerror = () => resolve(file);
-      reader.readAsDataURL(file);
-    });
-
-  const SAFE_PHOTO_EXTS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
-  const MIME_TO_EXT: Record<string, string> = {
-    "image/jpeg": "jpg",
-    "image/png": "png",
-    "image/webp": "webp",
-    "image/gif": "gif",
-  };
-
-  const uploadPhotos = async (rid: string): Promise<string[]> => {
-    const urls: string[] = [];
-    for (const file of photoFiles) {
-      const compressed = await compressImage(file);
-      // Validate extension against an allowlist — never trust raw `file.name`.
-      // The MIME allowlist is enforced earlier (handlePhotoFiles), so the
-      // compressed blob's type is the source of truth here. `file.name` is
-      // only consulted as a fallback when MIME is missing/unknown.
-      const fromMime = MIME_TO_EXT[compressed.type];
-      const fromName = (file.name.split(".").pop() ?? "").toLowerCase();
-      const ext = fromMime ?? (SAFE_PHOTO_EXTS.has(fromName) ? fromName : "jpg");
-      const path = `${rid}/${crypto.randomUUID()}.${ext}`;
-      const { error } = await supabase.storage.from("firesale-photos").upload(path, compressed);
-      if (error) {
-        logger.warn("[Firesale] photo upload failed:", error.message);
-        toast.warning("One photo could not be uploaded and was skipped.");
-      } else {
-        const { data } = supabase.storage.from("firesale-photos").getPublicUrl(path);
-        urls.push(data.publicUrl);
-      }
-    }
-    return urls;
   };
 
   const step1Valid = Object.keys(validateStep1()).length === 0;
@@ -349,8 +239,7 @@ export function FiresaleQuickSaleForm() {
       if (error) throw error;
 
       if (photoFiles.length > 0 && data?.id) {
-        setUploadingPhotos(true);
-        try { await uploadPhotos(data.id); } catch (_err: unknown) { /* non-blocking */ } finally { setUploadingPhotos(false); }
+        try { await uploadPhotos(data.id); } catch (_err: unknown) { /* non-blocking */ }
       }
 
       setAiEstimate(estimate);
@@ -369,81 +258,17 @@ export function FiresaleQuickSaleForm() {
     setStep(1);
     setAiEstimate(null);
     setRequestId(null);
-    setPhotoFiles([]);
-    setPhotoPreviews([]);
+    resetPhotos();
     setForm((f) => ({ ...f, address: "", kaek: "", propertyType: "", sqm: "", askingPrice: "", notes: "" }));
   };
 
   if (submitted) {
     return (
-      <div className="glass-card rounded-2xl border border-primary/30 p-8 text-center shadow-elevated">
-        <div className="relative w-20 h-20 mx-auto mb-6">
-          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary/20 to-accent/10 flex items-center justify-center">
-            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary to-accent/80 flex items-center justify-center shadow-lg">
-              <Check className="w-7 h-7 text-primary-foreground" strokeWidth={3} />
-            </div>
-          </div>
-        </div>
-        <h3 className="font-display font-black text-2xl mb-2">Request Submitted! 🎉</h3>
-        <p className="text-muted-foreground text-sm mb-2 leading-relaxed">
-          Your Quick Sale™ request is live in our investor deal flow.
-        </p>
-        {requestId && (
-          <p className="text-[11px] text-muted-foreground mb-6 font-mono bg-secondary border border-border rounded-lg px-3 py-1.5 inline-block">
-            Ref: <span className="text-primary font-semibold">{requestId.slice(0, 8).toUpperCase()}</span>
-          </p>
-        )}
-        <div className="grid grid-cols-3 gap-3 mb-6">
-          {[
-            { time: "Now", label: "Request live", color: "text-primary", icon: "✅" },
-            { time: "~2h", label: "Advisor assigned", color: "text-primary", icon: "👤" },
-            { time: "24h", label: "Cash offer sent", color: "text-brand-gold", icon: "💰" },
-          ].map((s) => (
-            <div key={s.label} className="rounded-xl bg-secondary border border-border p-3 text-center">
-              <div className="text-lg mb-1">{s.icon}</div>
-              <p className={`font-display font-black text-sm ${s.color}`}>{s.time}</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">{s.label}</p>
-            </div>
-          ))}
-        </div>
-        <div className="rounded-xl bg-gradient-to-r from-primary/10 to-accent/5 border border-primary/20 p-5 mb-6">
-          <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1.5">AI Offer Estimate</p>
-          <p className="font-display font-black text-4xl text-primary mb-1">€{aiEstimate?.toLocaleString()}</p>
-          <p className="text-xs text-muted-foreground">Indicative · Subject to final due diligence</p>
-          <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-primary/10">
-            {[
-              { label: "Est. Market", value: `€${Math.round((aiEstimate || 0) / 0.95).toLocaleString()}` },
-              { label: "Discount", value: "~5%" },
-              { label: "Close", value: "48–72h" },
-            ].map((s) => (
-              <div key={s.label} className="text-center">
-                <p className="font-bold text-sm">{s.value}</p>
-                <p className="text-[10px] text-muted-foreground mt-0.5">{s.label}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="space-y-2 text-xs text-muted-foreground text-left mb-6">
-          {[
-            "Deal added to private investor dashboard",
-            "NDA-protected distribution to professional investors",
-            "Dedicated advisor assigned within 2h",
-          ].map((t) => (
-            <div key={t} className="flex items-center gap-2">
-              <Check className="w-3 h-3 text-primary shrink-0" /> {t}
-            </div>
-          ))}
-        </div>
-        <div className="flex gap-3">
-          <Button variant="outline" className="flex-1 border-border" onClick={handleReset}>Submit another</Button>
-          <Button
-            className="flex-1 bg-gradient-primary border-0 text-primary-foreground gap-2"
-            onClick={() => navigate("/investor-dashboard")}
-          >
-            <BarChart2 className="w-3.5 h-3.5" /> Track Status
-          </Button>
-        </div>
-      </div>
+      <QuickSaleSubmittedView
+        requestId={requestId}
+        aiEstimate={aiEstimate}
+        onReset={handleReset}
+      />
     );
   }
 
@@ -518,7 +343,7 @@ export function FiresaleQuickSaleForm() {
               {!addressLoading && addressSuggestions.length > 0 && (
                 <div className="mt-1 bg-background border border-border rounded-xl shadow-md text-sm max-h-40 overflow-auto">
                   {addressSuggestions.map((s) => (
-                    <button key={s} type="button" onClick={() => { upd("address", s); setAddressSuggestions([]); }}
+                    <button key={s} type="button" onClick={() => { upd("address", s); clearAddressSuggestions(); }}
                       className="w-full text-left px-3 py-1.5 hover:bg-muted/80">
                       {s}
                     </button>
