@@ -77,7 +77,8 @@ export function getParticipantTypeFromProfile(
 /** Derive owner type for listing display: agent vs private seller */
 export function getOwnerParticipantType(profile: { role?: string | null; bio?: string | null } | null): "agent" | "seller" | null {
   if (!profile) return null;
-  if (isPlatformAdmin(profile) || profile.role === "agent" || profile.role === "developer") return "agent";
+  if (isPlatformAdmin(profile)) return "agent";
+  if (["agent", "developer"].includes(profile.role ?? "")) return "agent";
   if (profile.role === "seller") return "seller";
   // Legacy bio fallback — read-only, new profiles set role directly
   const bio = profile.bio ?? "";
