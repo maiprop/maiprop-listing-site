@@ -32,12 +32,16 @@ import { ProVideoStep } from "@/components/onboarding/ProVideoStep";
 /**
  * Extracts a non-empty stripe_error string from log-role-switch's response body.
  * Returns null when the body is shaped unexpectedly or has no error.
+ *
+ * Defined as a `const` arrow function so DeepSource's `no-implicit-globals`
+ * rule (which mis-fires on top-level `function` declarations in ES modules)
+ * does not flag it as a global scope declaration.
  */
-function extractStripeError(data: unknown): string | null {
+const extractStripeError = (data: unknown): string | null => {
   if (!data || typeof data !== "object") return null;
   const value = (data as { stripe_error?: unknown }).stripe_error;
   return typeof value === "string" && value.length > 0 ? value : null;
-}
+};
 
 /**
  * Reads the role-switch billing context written by Dashboard SettingsSection
@@ -49,8 +53,11 @@ function extractStripeError(data: unknown): string | null {
  * effect fires (in particular, before the `onboarding_started` analytics
  * effect, which would otherwise always emit `source: "signup"`). The
  * subsequent mount cleanup effect deletes the sessionStorage key.
+ *
+ * Defined as a `const` arrow function so DeepSource's `no-implicit-globals`
+ * rule does not flag it as a global scope declaration.
  */
-function readRoleSwitchCtx(): { fromType: ParticipantId; hadActiveSub: boolean } | null {
+const readRoleSwitchCtx = (): { fromType: ParticipantId; hadActiveSub: boolean } | null => {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.sessionStorage.getItem("role_switch_ctx");
@@ -64,7 +71,7 @@ function readRoleSwitchCtx(): { fromType: ParticipantId; hadActiveSub: boolean }
   } catch {
     return null;
   }
-}
+};
 
 export default function Onboarding() {
   const navigate = useNavigate();
@@ -374,24 +381,33 @@ export default function Onboarding() {
     }
   };
 
-  const handleBillingModalConfirm = async () => {
-    if (!switchCtx || !billingModalToType || billingConfirming) return;
+  // Inner body of handleBillingModalConfirm extracted into a helper so the
+  // outer handler stays under DeepSource's cyclomatic-complexity threshold.
+  // Audit-row failure is non-blocking; Stripe-cancellation failure surfaces
+  // as a toast warning so the user can manage the sub manually.
+  // Note: displaySwitchCtx is intentionally NOT cleared here. The done
+  // screen + onboarding_completed analytics need to read the original
+  // switch context after switchCtx has been consumed.
+  const performBillingConfirm = async (
+    ctx: { fromType: ParticipantId; hadActiveSub: boolean },
+    toType: ParticipantId,
+    proceed: (() => void) | null,
+  ): Promise<void> => {
     setBillingConfirming(true);
     try {
-      // Audit-row failure is non-blocking; Stripe-cancellation failure surfaces
-      // as a toast warning so the user can manage the sub manually.
-      await invokeLogRoleSwitch(switchCtx, billingModalToType);
+      await invokeLogRoleSwitch(ctx, toType);
     } finally {
       setBillingConfirming(false);
     }
-    const proceed = billingModalProceed;
     setBillingModalProceed(null);
     setBillingModalToType(null);
-    setSwitchCtx(null); // consume context — only fire once
-    // Note: displaySwitchCtx is intentionally NOT cleared here. The done
-    // screen + onboarding_completed analytics need to read the original
-    // switch context after switchCtx has been consumed.
-    proceed?.();
+    setSwitchCtx(null);
+    if (proceed) proceed();
+  };
+
+  const handleBillingModalConfirm = async () => {
+    if (!switchCtx || !billingModalToType || billingConfirming) return;
+    await performBillingConfirm(switchCtx, billingModalToType, billingModalProceed);
   };
 
   const handleBillingModalCancel = () => {
