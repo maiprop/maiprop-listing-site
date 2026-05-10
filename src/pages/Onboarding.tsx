@@ -121,6 +121,13 @@ export default function Onboarding() {
   // Set by Dashboard SettingsSection before navigating here for a role switch.
   // Cleared after first use so it doesn't re-appear on subsequent visits.
   const [switchCtx, setSwitchCtx] = useState<{ fromType: ParticipantId; hadActiveSub: boolean } | null>(null);
+  // Mirrors switchCtx but is NOT cleared when the billing modal is confirmed.
+  // switchCtx must be nulled in handleBillingModalConfirm to prevent the modal
+  // from re-firing on subsequent step navigations, but the done screen and
+  // analytics still need the original context to render the upgrade subtitle
+  // and emit source: "role_switch". Use displaySwitchCtx for read-only
+  // downstream consumers; use switchCtx for billing-modal gating.
+  const [displaySwitchCtx, setDisplaySwitchCtx] = useState<{ fromType: ParticipantId; hadActiveSub: boolean } | null>(null);
   const [billingModalProceed, setBillingModalProceed] = useState<(() => void) | null>(null);
   const [billingModalToType, setBillingModalToType] = useState<ParticipantId | null>(null);
   const isFirstOnboarding = !(profile?.participant_type && profile?.role && profile.participant_type === String(profile.role));
@@ -140,9 +147,9 @@ export default function Onboarding() {
     completedTrackedRef.current = true;
     trackAnalyticsEvent("onboarding_completed", {
       participant_type: selected.id,
-      source: switchCtx ? "role_switch" : "signup",
+      source: (displaySwitchCtx ?? switchCtx) ? "role_switch" : "signup",
     });
-  }, [step, selected, switchCtx]);
+  }, [step, selected, switchCtx, displaySwitchCtx]);
 
   useEffect(() => {
     try {
@@ -150,6 +157,7 @@ export default function Onboarding() {
       if (!raw) return;
       const ctx = JSON.parse(raw) as { fromType: ParticipantId; hadActiveSub: boolean };
       setSwitchCtx(ctx);
+      setDisplaySwitchCtx(ctx);
       sessionStorage.removeItem("role_switch_ctx");
       // Drop any stale draft from the previous role's onboarding. Without
       // this the draft-restore effect below would re-route the user into a
@@ -334,6 +342,9 @@ export default function Onboarding() {
     setBillingModalProceed(null);
     setBillingModalToType(null);
     setSwitchCtx(null); // consume context — only fire once
+    // Note: displaySwitchCtx is intentionally NOT cleared here. The done
+    // screen + onboarding_completed analytics need to read the original
+    // switch context after switchCtx has been consumed.
     proceed?.();
   };
 
@@ -647,10 +658,13 @@ export default function Onboarding() {
 
     // Detect upgrade-from-paid: user was on a paid plan, switched to a pricier role, and the
     // old subscription was cancelled. switchCtx is only set from the Dashboard role-switch flow.
-    const switchKind = switchCtx
-      ? classifySwitch(switchCtx.fromType, participantId as ParticipantId)
+    // Use displaySwitchCtx (preserved post-modal) so the upgrade subtitle still renders after
+    // handleBillingModalConfirm clears switchCtx.
+    const ctx = displaySwitchCtx ?? switchCtx;
+    const switchKind = ctx
+      ? classifySwitch(ctx.fromType, participantId as ParticipantId)
       : null;
-    const wasUpgrade = switchKind === "upgrade" && switchCtx?.hadActiveSub === true;
+    const wasUpgrade = switchKind === "upgrade" && ctx?.hadActiveSub === true;
 
     const upgradedPlanName = wasUpgrade
       ? getPlanForParticipant(participantId as ParticipantId).planName
