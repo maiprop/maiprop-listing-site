@@ -26,7 +26,7 @@
 - Fixed: authenticated users can no longer execute the public SECURITY DEFINER role/quota helper RPCs directly; RLS policies now call private-schema helper copies.
 - Fixed: listing view tracking now uses one service-role-only atomic RPC with least-privilege invoker execution.
 - Fixed: Edge-only onboarding and platform-admin transfer RPCs now receive the verified caller explicitly instead of relying on `auth.uid()` in service-role calls.
-- Remaining: Auth leaked password protection is disabled and must be enabled in Supabase Auth settings.
+- **Accepted risk** (2026-05-10): Auth leaked password protection (HIBP) is disabled. The live project `qvvicunqcrwpioqnvzxf` is on the Supabase Free plan and HIBP is gated behind Pro+. Org-level decision is to **not upgrade for HIBP alone**. Mitigations in place: `password_min_length=8`, rate limiting on repeated failures via Supabase Auth defaults, all sensitive RPCs run via Edge Functions with rate limiting (see `docs/EDGE_FUNCTION_AUTH_AUDIT.md`). Re-evaluate when an unrelated business need pushes the org onto Pro.
 
 ## Live Supabase Performance Advisor Findings
 
@@ -50,6 +50,6 @@
 
 ## Current Release Blockers
 
-1. Live security advisor warning remains for leaked password protection, which must be enabled in Supabase Auth settings.
+1. ~~Live security advisor warning remains for leaked password protection~~ — accepted risk; project on Free plan, HIBP requires Pro. See "Live Supabase Security Advisor Findings" above.
 2. Large page component extraction is still not complete.
 3. Performance advisor still reports multiple-permissive-policy warnings and unused-index INFO findings that need telemetry-backed consolidation/removal.
