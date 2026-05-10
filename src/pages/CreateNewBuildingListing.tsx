@@ -9,16 +9,15 @@ import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { useAuth } from "@/contexts/AuthContext";
-import { type ProjectUnitInsert } from "@/hooks/useProjectUnits";
-import { useAddProjectMedia, type ProjectMediaType } from "@/hooks/useProjectMedia";
-import { supabase } from "@/integrations/supabase/client";
+import { type ProjectMediaType } from "@/hooks/useProjectMedia";
 import { toast } from "sonner";
 import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
 import { useSubscription } from "@/hooks/useSubscription";
 import { getPlanLimits } from "@/hooks/usePlanLimits";
 import { useMyListings } from "@/hooks/useListings";
+import { uploadListingImage } from "@/lib/buildingListingUploads";
+import { useCreateBuildingListing } from "@/hooks/useCreateBuildingListing";
 import {
-  IMAGE_MIME_TYPES,
   IMAGE_AND_VIDEO_MIME_TYPES,
   PDF_MIME_TYPES,
   assertAllowedUpload,
@@ -56,7 +55,7 @@ const STEPS = [
 export default function CreateNewBuildingListing() {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
-  const addMedia = useAddProjectMedia();
+  const submitNewBuildingListing = useCreateBuildingListing();
 
   const participantType = getParticipantTypeFromProfile(profile);
   const canCreateListing = participantType === "developer" || participantType === "agent";
@@ -140,33 +139,9 @@ export default function CreateNewBuildingListing() {
   const setUnitField = (key: string, value: string | number | boolean) =>
     setUnit(u => ({ ...u, [key]: value }));
 
-  const uploadListingImage = useCallback(async (file: File): Promise<UploadedImage> => {
+  const handleListingImageUpload = useCallback(async (file: File): Promise<UploadedImage> => {
     if (!user) throw new Error("Must be logged in");
-    // Reject anything that isn't a recognised image MIME type before it
-    // hits the bucket — the <input accept="..."> attribute is only a UX hint.
-    assertAllowedUpload(file, IMAGE_MIME_TYPES, { label: "image" });
-    const ext = file.name.split(".").pop();
-    const id = crypto.randomUUID();
-    const path = `${user.id}/${id}.${ext}`;
-    const { error } = await supabase.storage.from("listing-images").upload(path, file, { upsert: true });
-    if (error) throw error;
-    const { data } = supabase.storage.from("listing-images").getPublicUrl(path);
-    return { id, url: data.publicUrl };
-  }, [user]);
-
-  const uploadProjectMedia = useCallback(async (file: File, projectId: string, mediaType: ProjectMediaType): Promise<string> => {
-    if (!user) throw new Error("Not authenticated");
-    const allowed = mediaType === "brochure_pdf" ? PDF_MIME_TYPES : IMAGE_AND_VIDEO_MIME_TYPES;
-    assertAllowedUpload(file, allowed, {
-      label: mediaType === "brochure_pdf" ? "PDF brochure" : "media file",
-      maxBytes: 50 * 1024 * 1024, // 50 MB — videos/brochures can be larger than photos
-    });
-    const ext = file.name.split(".").pop() || "jpg";
-    const path = `${user.id}/${projectId}/media-${crypto.randomUUID()}.${ext}`;
-    const { error } = await supabase.storage.from("project-media").upload(path, file, { upsert: true });
-    if (error) throw error;
-    const { data } = supabase.storage.from("project-media").getPublicUrl(path);
-    return data.publicUrl;
+    return uploadListingImage(file, user.id);
   }, [user]);
 
   // Guard: listing count limit reached
@@ -223,7 +198,7 @@ export default function CreateNewBuildingListing() {
     for (let i = 0; i < newFiles.length; i++) {
       const placeholder = placeholders[i];
       try {
-        const uploaded = await uploadListingImage(newFiles[i]);
+        const uploaded = await handleListingImageUpload(newFiles[i]);
         setImages(prev => prev.map(img =>
           img.id === placeholder.id ? { ...uploaded, uploading: false } : img
         ));
@@ -300,128 +275,25 @@ export default function CreateNewBuildingListing() {
       toast.error("Set a cover photo");
       return;
     }
+    const additionalImageUrls = validImages
+      .filter(img => img.url !== coverImageUrl)
+      .map(img => img.url);
 
     setSubmitting(true);
-    let createdProjectId: string | null = null;
     try {
-      const projectPayload = {
-        name: project.name.trim(),
-        building_permit_number: project.building_permit_number.trim(),
-        developer_company: project.developer_company || undefined,
-        architect_group: project.architect_group || undefined,
-        construction_company: project.construction_company || undefined,
-        description: project.description || undefined,
-        address: project.address || undefined,
-        city: project.city.trim(),
-        municipality: project.municipality || undefined,
-        area_description: project.area_description || undefined,
-        latitude: project.latitude ? parseFloat(String(project.latitude)) : undefined,
-        longitude: project.longitude ? parseFloat(String(project.longitude)) : undefined,
-        permit_approval_date: project.permit_approval_date || undefined,
-        construction_start_date: project.construction_start_date || undefined,
-        structural_completion_date: project.structural_completion_date || undefined,
-        delivery_date: project.delivery_date || undefined,
-      };
-
-      const { data: createdProject, error: projErr } = await supabase
-        .from("projects")
-        .insert({ ...projectPayload, owner_id: user.id })
-        .select()
-        .single();
-      if (projErr) throw projErr;
-      createdProjectId = createdProject.id;
-
-      const internalSqm = parseFloat(String(unit.internal_sqm));
-      const price = parseFloat(String(unit.price));
-      const unitPayload: ProjectUnitInsert = {
-        project_id: createdProject.id,
-        unit_id: unit.unit_id || undefined,
-        floor: unit.floor ? parseInt(String(unit.floor)) : undefined,
-        unit_number: unit.unit_number || undefined,
-        availability_status: "available",
-        internal_sqm: internalSqm,
-        balcony_sqm: unit.balcony_sqm ? parseFloat(String(unit.balcony_sqm)) : undefined,
-        storage_sqm: unit.storage_sqm ? parseFloat(String(unit.storage_sqm)) : undefined,
-        parking_sqm: unit.parking_sqm ? parseFloat(String(unit.parking_sqm)) : undefined,
-        bedrooms: parseInt(String(unit.bedrooms)),
-        bathrooms: parseInt(String(unit.bathrooms)),
-        kitchen_type: unit.kitchen_type || undefined,
-        living_rooms: unit.living_rooms ? parseInt(String(unit.living_rooms)) : undefined,
-        price,
-        price_per_sqm: internalSqm > 0 ? price / internalSqm : undefined,
-        vat_included: unit.vat_included,
-        parking_price: unit.parking_price ? parseFloat(String(unit.parking_price)) : undefined,
-        storage_price: unit.storage_price ? parseFloat(String(unit.storage_price)) : undefined,
-        sea_view: unit.sea_view,
-        city_view: unit.city_view,
-        mountain_view: unit.mountain_view,
-        energy_class: unit.energy_class || undefined,
-        heating_system: unit.heating_system || undefined,
-        cooling_system: unit.cooling_system || undefined,
-      };
-
-       
-      const { data: _createdUnit, error: unitErr } = await supabase.from("project_units")
-        .insert(unitPayload)
-        .select()
-        .single();
-      if (unitErr) throw unitErr;
-
-      for (const [mediaType, file] of Object.entries(projectMedia)) {
-        if (file) {
-          const url = await uploadProjectMedia(file, createdProject.id, mediaType as ProjectMediaType);
-          await addMedia.mutateAsync({ project_id: createdProject.id, url, media_type: mediaType as ProjectMediaType });
-        }
-      }
-
-      const listingPayload = {
-        title: finalTitle,
-        description: listing.description || undefined,
-        city: project.city.trim(),
-        address: project.address || undefined,
-        property_type: "apartment" as const,
-        listing_type: "sale" as const,
-        price,
-        sqm: internalSqm,
-        bedrooms: parseInt(String(unit.bedrooms)),
-        bathrooms: parseInt(String(unit.bathrooms)),
-        living_rooms: unit.living_rooms ? parseInt(String(unit.living_rooms)) : undefined,
-        floor: unit.floor ? parseInt(String(unit.floor)) : undefined,
-        energy_class: unit.energy_class || undefined,
-        heating_system: unit.heating_system || undefined,
-        cover_image_url: coverImageUrl,
-        price_per_sqm: internalSqm > 0 ? Math.round(price / internalSqm) : undefined,
-        owner_id: user.id,
-        status: "active" as const,
-        project_id: createdProject.id,
-        is_pre_sale: true,
-      };
-
-      const { data: createdListing, error: listErr } = await supabase
-        .from("listings")
-        .insert(listingPayload)
-        .select()
-        .single();
-      if (listErr) throw listErr;
-
-      const additionalImages = validImages.filter(img => img.url !== coverImageUrl);
-      if (additionalImages.length > 0) {
-        await supabase.from("listing_images").insert(
-          additionalImages.map((img, idx) => ({
-            listing_id: createdListing.id,
-            url: img.url,
-            sort_order: idx + 1,
-          }))
-        );
-      }
-
+      const { listingId } = await submitNewBuildingListing({
+        userId: user.id,
+        project,
+        unit,
+        projectMedia,
+        listing,
+        finalTitle,
+        coverImageUrl,
+        additionalImageUrls,
+      });
       toast.success("New building listing created!");
-      navigate(`/new-build/${createdListing.id}`);
+      navigate(`/new-build/${listingId}`);
     } catch (_err: unknown) {
-      // Clean up orphaned project record if unit or listing creation failed
-      if (createdProjectId) {
-        await supabase.from("projects").delete().eq("id", createdProjectId);
-      }
       toast.error("Failed to create new building listing. Please try again.");
     } finally {
       setSubmitting(false);
