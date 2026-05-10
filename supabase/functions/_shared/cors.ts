@@ -29,7 +29,7 @@ const ALLOWED_ORIGINS = isProduction
   : [...PRODUCTION_ORIGINS, ...LOCAL_DEV_ORIGINS];
 
 const BASE_ALLOWED_HEADERS =
-  "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version";
+  "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, baggage, sentry-trace";
 
 export function getCorsHeaders(
   req: Request,
