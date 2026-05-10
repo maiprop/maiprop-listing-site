@@ -1,4 +1,4 @@
-import { SlidersHorizontal, X, Lock } from "lucide-react";
+import { SlidersHorizontal, X, Lock, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { PremiumBadge } from "@/components/auctions/AuctionCard";
@@ -31,6 +31,40 @@ interface AuctionFiltersPanelProps {
   isMaiPropOsUser: boolean;
   activeFilterCount: number;
   clearFilters: () => void;
+}
+
+/** Shared wrapper that gives every select the same chevron indicator + a11y association. */
+function FilterSelect({
+  id,
+  label,
+  value,
+  onChange,
+  children,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label htmlFor={id} className="text-xs text-muted-foreground font-medium block mb-1.5">
+        {label}
+      </label>
+      <div className="relative">
+        <select
+          id={id}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full appearance-none bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary cursor-pointer pr-8"
+        >
+          {children}
+        </select>
+        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" aria-hidden="true" />
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -78,56 +112,22 @@ export function AuctionFiltersPanel({
           {/* Standard filters */}
           <div>
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Standard Filters</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-              {/* City */}
-              <div>
-                <label className="text-xs text-muted-foreground font-medium block mb-1.5">City</label>
-                <div className="relative">
-                  <select
-                    value={selectedCity}
-                    onChange={(e) => setSelectedCity(e.target.value)}
-                    className="w-full appearance-none bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary cursor-pointer"
-                  >
-                    {cityOptions.map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-              </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <FilterSelect id="filter-city" label="City" value={selectedCity} onChange={setSelectedCity}>
+                {cityOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+              </FilterSelect>
 
-              {/* Property type */}
-              <div>
-                <label className="text-xs text-muted-foreground font-medium block mb-1.5">Property Type</label>
-                <select
-                  value={filterType}
-                  onChange={(e) => setFilterType(e.target.value)}
-                  className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none"
-                >
-                  {PROPERTY_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                </select>
-              </div>
+              <FilterSelect id="filter-type" label="Property Type" value={filterType} onChange={setFilterType}>
+                {PROPERTY_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </FilterSelect>
 
-              {/* Starting bid */}
-              <div>
-                <label className="text-xs text-muted-foreground font-medium block mb-1.5">Starting Bid</label>
-                <select
-                  value={filterBidRange}
-                  onChange={(e) => setFilterBidRange(e.target.value)}
-                  className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none"
-                >
-                  {BID_RANGES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-                </select>
-              </div>
+              <FilterSelect id="filter-bid" label="Starting Bid" value={filterBidRange} onChange={setFilterBidRange}>
+                {BID_RANGES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+              </FilterSelect>
 
-              {/* Construction year */}
-              <div>
-                <label className="text-xs text-muted-foreground font-medium block mb-1.5">Construction Year</label>
-                <select
-                  value={filterYearRange}
-                  onChange={(e) => setFilterYearRange(e.target.value)}
-                  className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none"
-                >
-                  {YEAR_RANGES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-                </select>
-              </div>
+              <FilterSelect id="filter-year" label="Construction Year" value={filterYearRange} onChange={setFilterYearRange}>
+                {YEAR_RANGES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+              </FilterSelect>
             </div>
           </div>
 
@@ -139,49 +139,41 @@ export function AuctionFiltersPanel({
             </p>
             {isPro || isMaiPropOsUser ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <FilterSelect id="filter-ownership" label="Ownership Status" value={filterOwnership} onChange={setFilterOwnership}>
+                  {OWNERSHIP_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                </FilterSelect>
+
+                <FilterSelect id="filter-round" label="Auction Round" value={filterRound} onChange={setFilterRound}>
+                  {roundOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </FilterSelect>
+
                 <div>
-                  <label className="text-xs text-muted-foreground font-medium block mb-1.5">Ownership Status</label>
-                  <select
-                    value={filterOwnership}
-                    onChange={(e) => setFilterOwnership(e.target.value)}
-                    className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none"
-                  >
-                    {OWNERSHIP_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground font-medium block mb-1.5">Auction Round</label>
-                  <select
-                    value={filterRound}
-                    onChange={(e) => setFilterRound(e.target.value)}
-                    className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none"
-                  >
-                    {roundOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground font-medium block mb-1.5">
+                  <label htmlFor="filter-yield" className="text-xs text-muted-foreground font-medium block mb-1.5">
                     Est. Rental Yield
                     <span className="ml-1.5 text-[10px] text-muted-foreground/60">(city benchmark × sqm / bid)</span>
                   </label>
-                  <select
-                    value={filterYield}
-                    onChange={(e) => setFilterYield(e.target.value)}
-                    className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none"
-                  >
-                    <option value="">Any Yield</option>
-                    <option value="low">Under 3% — Low yield</option>
-                    <option value="medium">3% – 6% — Average</option>
-                    <option value="high">6% – 9% — Good</option>
-                    <option value="very_high">9%+ — High yield opportunity</option>
-                  </select>
+                  <div className="relative">
+                    <select
+                      id="filter-yield"
+                      value={filterYield}
+                      onChange={(e) => setFilterYield(e.target.value)}
+                      className="w-full appearance-none bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary cursor-pointer pr-8"
+                    >
+                      <option value="">Any Yield</option>
+                      <option value="low">Under 3% — Low yield</option>
+                      <option value="medium">3% – 6% — Average</option>
+                      <option value="high">6% – 9% — Good</option>
+                      <option value="very_high">9%+ — High yield opportunity</option>
+                    </select>
+                    <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" aria-hidden="true" />
+                  </div>
                 </div>
               </div>
             ) : (
               <div className="flex items-center gap-3 p-4 rounded-xl bg-secondary/50 border border-border">
                 <Lock className="w-5 h-5 text-muted-foreground shrink-0" />
                 <div>
-                  <p className="text-sm font-medium">Ownership Status, Auction Round & Est. Rental Yield</p>
+                  <p className="text-sm font-medium">Ownership Status, Auction Round &amp; Est. Rental Yield</p>
                   <p className="text-xs text-muted-foreground mt-0.5">Upgrade to Pro to unlock these filters.</p>
                 </div>
                 <Button size="sm" variant="outline" className="border-primary/40 text-primary hover:bg-primary/10 shrink-0" asChild>
