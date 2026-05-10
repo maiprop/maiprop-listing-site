@@ -73,15 +73,51 @@ const readRoleSwitchCtx = (): { fromType: ParticipantId; hadActiveSub: boolean }
   }
 };
 
+/**
+ * Returns the participant_type when role and participant_type already agree
+ * (i.e. the user has finished onboarding once and we should auto-skip the
+ * pick-type step). Defined as a pure module-level helper so the inline
+ * branching does not contribute to the Onboarding component's cyclomatic
+ * complexity.
+ */
+const resolvePresetType = (
+  profile: { participant_type?: string | null; role?: string | null } | null | undefined
+): string | null => {
+  if (!profile?.participant_type || !profile?.role) return null;
+  return profile.participant_type === String(profile.role) ? profile.participant_type : null;
+};
+
+/**
+ * The user is in their FIRST onboarding when role and participant_type are
+ * not yet aligned. Pure module-level helper for the same reason as
+ * `resolvePresetType` — keeps the branching out of the React component.
+ */
+const isFirstOnboardingFor = (
+  profile: { participant_type?: string | null; role?: string | null } | null | undefined
+): boolean => resolvePresetType(profile) === null;
+
+/**
+ * Resolves the active step list for a given selected participant. Each `if`
+ * is +1 cyclomatic complexity, so keeping this in a module-level pure
+ * function (instead of an inline IIFE in the Onboarding render body)
+ * reduces the component's total complexity by ~5.
+ */
+const resolveStepsFor = (selected: ParticipantType | null): OnboardingStep[] => {
+  if (!selected) return TOP_STEPS;
+  if (selected.id === "participant") return PARTICIPANT_STEPS;
+  if (selected.id === "market_pro") return PRO_SIMPLE_STEPS;
+  if (selected.id === "developer") return DEVELOPER_STEPS;
+  if (selected.id === "professional") return PRO_FLAT_STEPS;
+  if (selected.isPro) return PRO_FULL_STEPS;
+  return TOP_STEPS;
+};
+
 export default function Onboarding() {
   const navigate = useNavigate();
   const { user, profile, refreshProfile, loading: authLoading } = useAuth();
 
   // participant_type is the authoritative onboarding signal (set since migration 20260522100000)
-  const presetType =
-    profile?.participant_type && profile?.role && profile.participant_type === String(profile.role)
-      ? profile.participant_type
-      : null;
+  const presetType = resolvePresetType(profile);
 
   const [step, setStep] = useState<OnboardingStep>("pick-type");
   const [selected, setSelected] = useState<ParticipantType | null>(null);
@@ -177,7 +213,7 @@ export default function Onboarding() {
   const [billingModalProceed, setBillingModalProceed] = useState<(() => void) | null>(null);
   const [billingModalToType, setBillingModalToType] = useState<ParticipantId | null>(null);
   const [billingConfirming, setBillingConfirming] = useState(false);
-  const isFirstOnboarding = !(profile?.participant_type && profile?.role && profile.participant_type === String(profile.role));
+  const isFirstOnboarding = isFirstOnboardingFor(profile);
   const startedTrackedRef = useRef(false);
   const completedTrackedRef = useRef(false);
 
@@ -218,15 +254,7 @@ export default function Onboarding() {
     }
   }, []);
 
-  const steps: OnboardingStep[] = (() => {
-    if (!selected) return TOP_STEPS;
-    if (selected.id === "participant") return PARTICIPANT_STEPS;
-    if (selected.id === "market_pro") return PRO_SIMPLE_STEPS;
-    if (selected.id === "developer") return DEVELOPER_STEPS;
-    if (selected.id === "professional") return PRO_FLAT_STEPS;
-    if (selected.isPro) return PRO_FULL_STEPS;
-    return TOP_STEPS;
-  })();
+  const steps: OnboardingStep[] = resolveStepsFor(selected);
   const stepIndex = steps.indexOf(step);
   const totalSteps = steps.length - 1;
 
