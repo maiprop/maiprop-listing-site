@@ -23,6 +23,7 @@ npm run dev
 
 ## Devin Secrets Needed
 
+- `SUPABASE_ACCESS_TOKEN` — Required for Supabase Management API queries (DB state verification, migration status checks). Get from Supabase dashboard → Account → Access Tokens.
 - `SUPABASE_SERVICE_ROLE_KEY` — Required for admin-level DB operations (user creation, profile updates). This is the `service_role` JWT from Supabase dashboard (Settings → API).
 - `SITE_LOCK_PASSWORD` — Required to access portal.maiprop.co (private preview gate). Not needed for localhost testing.
 
@@ -93,6 +94,15 @@ This is much faster than GUI login for multi-user test flows.
 4. Submit → should see success toast
 5. Verify listing appears on `/listings` page
 
+### Data Input (Agent only)
+1. Log in as `agent.pro@maiprop.demo`
+2. Navigate to Dashboard → "Data Input" tab in sidebar
+3. Form shows: Closing date, Closing price (€), Property address, City, Postal code, Property type (dropdown), Transaction type, KAEK, Buyer/Seller names, Notes
+4. Quota display shows "X / 20" submissions this month, verified closings count, and earned credit percentage
+5. Warning banner: "All submissions are continuously verified..."
+6. **Limitation**: Submission calls the `agent-data-input` edge function via `supabase.functions.invoke()`. This works on production/Cloudflare preview but **fails on localhost** with "Failed to send a request to the Edge Function". The form UI and validation can still be tested locally.
+7. The `agent_data_inputs` table has a `closing_date` constraint — after PR #117 merges, this becomes an INSERT-only trigger instead of a table-level CHECK (allows admin UPDATEs without date drift failures).
+
 ### Messaging
 1. As buyer, find a listing and click "Contact Agent"
 2. Redirects to `/messages` with new conversation
@@ -152,6 +162,55 @@ await supabase.from('open_house_registrations').delete().eq('requester_id', user
    - `investor` / `institutional` → green "Invitation-only access" banner above the add-ons grid
 3. Source: `src/pages/dashboard/BillingTab.tsx` — `ADDONS_BY_ROLE[participantType]` is keyed off `getParticipantTypeFromProfile(profile)`.
 
+## Testing Backend-Only PRs (Migrations, Edge Functions, Env Vars)
+
+For PRs that only change migrations, edge functions, or environment config (no UI components), use this approach:
+
+### 1. Automated Test Suites
+```bash
+npm test                    # Vitest — 89 files, 1254+ tests
+npm run lint                # ESLint
+npm run typecheck           # TypeScript strict checks (if available)
+
+# Deno edge function tests (from supabase/functions/)
+export PATH="$HOME/.deno/bin:$PATH"
+cd supabase/functions && deno test --allow-env --allow-net --allow-read .
+```
+
+### 2. DB State Verification via Supabase Management API
+Query production DB without deploying migrations:
+```bash
+# Check RLS policies
+curl -s -X POST "https://api.supabase.com/v1/projects/qvvicunqcrwpioqnvzxf/database/query" \
+  -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "SELECT tablename, policyname FROM pg_policies WHERE schemaname = '\''public'\'' ORDER BY tablename;"}' | python3 -m json.tool
+
+# Check constraints on a table
+curl -s -X POST "https://api.supabase.com/v1/projects/qvvicunqcrwpioqnvzxf/database/query" \
+  -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "SELECT conname, contype FROM pg_constraint WHERE conrelid = '\''public.TABLE_NAME'\''::regclass;"}' | python3 -m json.tool
+
+# Check if specific migrations have been applied
+curl -s -X POST "https://api.supabase.com/v1/projects/qvvicunqcrwpioqnvzxf/database/query" \
+  -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "SELECT version FROM supabase_migrations.schema_migrations ORDER BY version DESC LIMIT 10;"}' | python3 -m json.tool
+```
+
+### 3. Migration Verification Checklist
+- Verify migrations in `scripts/applied-future-migrations.json` match what's in `schema_migrations`
+- Confirm reverted migrations have no unintended changes (check `git diff`)
+- For conditional migrations (CI vs production), verify the `information_schema.tables` detection pattern works
+- CI's "Validate Supabase Migrations" check confirms fresh-DB replay is correct
+
+### 4. Edge Function Testing Limitations
+- Edge functions with `verify_jwt = false` can be curled directly against production
+- Edge functions invoked via `supabase.functions.invoke()` from the frontend **fail on localhost** — the function URL resolves to the project's edge function endpoint which may not have the PR's changes deployed
+- Stripe webhook functions require valid HMAC signatures — can only be tested via Deno unit tests or Stripe CLI's test webhook feature
+- The Deno test suite mocks Supabase and Stripe clients, so it covers logic without needing real API access
+
 ## Known Gotchas
 
 - **Quick Sale form requires 5+ photos**: The "Get AI Estimate & Continue" button stays disabled until at least 5 photos are uploaded. There's no way to bypass this in the UI.
@@ -160,3 +219,6 @@ await supabase.from('open_house_registrations').delete().eq('requester_id', user
 - **Investor dashboard empty state**: If there are 0 deals in the pipeline, the "Express Interest" flow cannot be tested. Deals appear only after Quick Sale requests are approved by admin.
 - **Cloudflare Pages preview gate**: The branch preview deploys (`devin-XXX.maiprop-listing-site.pages.dev`) sit behind Cloudflare Access — `curl` returns a 302 to `cloudflareaccess.com`. For runtime testing, use local `npm run dev` at port 8080 (it talks to the same production Supabase the preview uses).
 - **Error messages in mutations**: All `onError` handlers in `useOpenHouseAssetControl.ts` now surface actual error messages (not generic "Something went wrong"). This applies to: create registration, update registration, upsert settings, create offer, update offer, accept offer, reveal offers.
+- **`lsof` not available**: The `lsof` command might not be installed on some Devin VMs. Use `fuser 8080/tcp` or `ss -tlnp | grep 8080` as alternatives to check port usage.
+- **Cookie consent banner**: On first load, a cookie consent banner appears at the bottom of the page. Click "Accept all" to dismiss it before interacting with the login form or other UI elements.
+- **SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY swap**: The org secrets might have these two values swapped. If admin queries fail with the service role key, try using the anon key value instead (and vice versa). Check by decoding the JWT — `service_role` JWTs have `"role": "service_role"` in the payload.
