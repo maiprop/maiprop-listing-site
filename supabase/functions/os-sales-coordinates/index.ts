@@ -45,6 +45,29 @@ interface SaleRecord {
   round: number;
 }
 
+/* ── Server-side caps ─────────────────────────────────────────────────────── */
+const MAX_RADIUS_KM = 50;
+const MAX_LIMIT = 100;
+const LAT_MIN = -90;
+const LAT_MAX = 90;
+const LNG_MIN = -180;
+const LNG_MAX = 180;
+
+/** Fields we expose to callers — prevents upstream additions from leaking PII. */
+const ALLOWED_SALE_FIELDS: readonly (keyof SaleRecord)[] = [
+  "id", "address", "lat", "lng", "sale_price", "asking_price",
+  "sale_date", "property_type", "sqm", "bedrooms", "status",
+  "discount_pct", "source", "round",
+] as const;
+
+function pickAllowedFields(record: Record<string, unknown>): Partial<SaleRecord> {
+  const out: Record<string, unknown> = {};
+  for (const key of ALLOWED_SALE_FIELDS) {
+    if (key in record) out[key] = record[key];
+  }
+  return out as Partial<SaleRecord>;
+}
+
 function generateMockSales(lat: number, lng: number, count: number): SaleRecord[] {
   const types = ["apartment", "house", "commercial", "land"];
   const statuses = ["sold", "sold", "sold", "withdrawn", "pending"];
@@ -87,21 +110,44 @@ Deno.serve(async (req) => {
     });
   }
 
-  let body: RequestBody;
+  let raw: unknown;
   try {
-    body = await req.json();
+    raw = await req.json();
   } catch {
     return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
       status: 400, headers: { ...hdrs, "Content-Type": "application/json" },
     });
   }
 
-  const { lat, lng, radius_km = 2, limit = 50 } = body;
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+    return new Response(JSON.stringify({ error: "Request body must be a JSON object" }), {
+      status: 400, headers: { ...hdrs, "Content-Type": "application/json" },
+    });
+  }
+
+  const body = raw as RequestBody;
+  const { lat, lng } = body;
+
   if (lat === undefined || lat === null || lng === undefined || lng === null) {
     return new Response(JSON.stringify({ error: "lat and lng are required" }), {
       status: 400, headers: { ...hdrs, "Content-Type": "application/json" },
     });
   }
+
+  if (typeof lat !== "number" || typeof lng !== "number" || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return new Response(JSON.stringify({ error: "lat and lng must be finite numbers" }), {
+      status: 400, headers: { ...hdrs, "Content-Type": "application/json" },
+    });
+  }
+
+  if (lat < LAT_MIN || lat > LAT_MAX || lng < LNG_MIN || lng > LNG_MAX) {
+    return new Response(JSON.stringify({ error: `lat must be ${LAT_MIN}–${LAT_MAX}, lng must be ${LNG_MIN}–${LNG_MAX}` }), {
+      status: 400, headers: { ...hdrs, "Content-Type": "application/json" },
+    });
+  }
+
+  const radius_km = Math.min(Number(body.radius_km) || 2, MAX_RADIUS_KM);
+  const limit = Math.min(Math.max(Math.floor(Number(body.limit) || 50), 1), MAX_LIMIT);
 
   const osUrl = "http://app.os.maiprop.co:8080/api/v1/sales/filter/coordinates";
 
@@ -129,9 +175,24 @@ Deno.serve(async (req) => {
       );
     }
 
-    const data = await response.json();
+    let data: unknown;
+    try {
+      data = await response.json();
+    } catch {
+      log.warn("Unparseable upstream JSON");
+      return new Response(
+        JSON.stringify({ available: false, reason: "upstream_bad_response" }),
+        { status: 502, headers: { ...hdrs, "Content-Type": "application/json" } },
+      );
+    }
+
+    const rows = Array.isArray(data) ? data : (data as Record<string, unknown>)?.data;
+    const sanitised = Array.isArray(rows)
+      ? (rows as Record<string, unknown>[]).map(pickAllowedFields)
+      : [];
+
     return new Response(
-      JSON.stringify({ data, source: "os" }),
+      JSON.stringify({ data: sanitised, source: "os" }),
       { headers: { ...hdrs, "Content-Type": "application/json" } },
     );
   } catch (error) {
