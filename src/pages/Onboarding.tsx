@@ -283,7 +283,11 @@ export default function Onboarding() {
    * For fresh signups (no switchCtx), calls proceed() directly.
    */
   const maybeBillingGate = (toType: ParticipantId, proceed: () => void) => {
-    if (isFirstOnboarding || !switchCtx) { proceed(); return; }
+    // switchCtx (set by SettingsSection before begin_role_switch nulls participant_type)
+    // is the authoritative signal for a role switch. Don't gate on isFirstOnboarding —
+    // begin_role_switch makes participant_type null, so isFirstOnboarding is true even
+    // for a real switch. Gating on it here would skip the Stripe cancel + audit insert.
+    if (!switchCtx) { proceed(); return; }
     const kind = classifySwitch(switchCtx.fromType, toType);
     if (kind === "same-tier") { proceed(); return; }
     // Show modal — store the proceed callback and target type
@@ -704,7 +708,7 @@ export default function Onboarding() {
       </Shell>
 
       {/* Role-switch billing modal — only visible when switching from a paid role */}
-      {billingModalProceed && billingModalToType && switchCtx && !isFirstOnboarding && (
+      {billingModalProceed && billingModalToType && switchCtx && (
         <RoleSwitchModal
           fromType={switchCtx.fromType}
           toType={billingModalToType}
