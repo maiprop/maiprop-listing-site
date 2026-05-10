@@ -11,6 +11,7 @@
   },
   "type": "module",
   "overrides": {
+    "basic-ftp": "5.3.1",
     "tmp": "^0.2.4",
     "uuid": "^14.0.0"
   },
