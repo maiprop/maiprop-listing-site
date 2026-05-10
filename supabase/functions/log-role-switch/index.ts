@@ -94,13 +94,33 @@ Deno.serve(async (req) => {
           const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
           const customers = await stripe.customers.list({ email: user.email, limit: 1 });
           if (customers.data.length > 0) {
-            const subs = await stripe.subscriptions.list({
+            // Stripe's `status` filter only accepts a single value per call. To
+            // cancel the user's subscription regardless of which billable state
+            // it's in, fetch with status="all" and filter client-side.
+            //
+            // Billable states (the user is being / will be charged):
+            //   - active     : current period paid, will renew
+            //   - trialing   : in trial period, will renew at end
+            //   - past_due   : payment failed but sub not yet canceled
+            //
+            // Non-billable states are intentionally skipped:
+            //   - canceled / ended / incomplete / incomplete_expired
+            //   - paused / unpaid (Stripe stops billing on these)
+            const billableStatuses: ReadonlySet<string> = new Set([
+              "active",
+              "trialing",
+              "past_due",
+            ]);
+            const allSubs = await stripe.subscriptions.list({
               customer: customers.data[0].id,
-              status: "active",
-              limit: 1,
+              status: "all",
+              limit: 100,
             });
-            if (subs.data.length > 0) {
-              const sub = subs.data[0];
+            const billableSubs = allSubs.data.filter((s) =>
+              billableStatuses.has(s.status),
+            );
+            if (billableSubs.length > 0) {
+              const sub = billableSubs[0];
               if (sub.cancel_at_period_end === true) {
                 subAlreadyCancelling = true;
                 logStep("Subscription already pending cancellation — skipping update", {
