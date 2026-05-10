@@ -1,5 +1,5 @@
 import { useState, useEffect, lazy, Suspense } from "react";
-import { TrendingUp, AlertCircle, Loader2, Map, List, SlidersHorizontal, X, ChevronDown, Gavel, ExternalLink, Lock, MapPin } from "lucide-react";
+import { TrendingUp, AlertCircle, Loader2, Map, List, SlidersHorizontal, X, ChevronDown, Gavel, ExternalLink, MapPin } from "lucide-react";
 import { Helmet } from "react-helmet-async";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -10,12 +10,14 @@ import { AuctionAlertModal } from "@/components/AuctionAlertModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToggleFavorite } from "@/hooks/useFavorites";
 import {
-  PROPERTY_TYPES, BID_RANGES, YEAR_RANGES, OWNERSHIP_STATUSES,
+  BID_RANGES, YEAR_RANGES,
   type ViewMode,
 } from "@/lib/auctionUtils";
-import { AuctionCard, PremiumBadge } from "@/components/auctions/AuctionCard";
+import { AuctionCard } from "@/components/auctions/AuctionCard";
 import { AuctionHero } from "@/components/auctions/AuctionHero";
 import { AuctionAlertBanner } from "@/components/auctions/AuctionAlertBanner";
+import { AuctionFiltersPanel } from "@/components/auctions/AuctionFiltersPanel";
+import { AuctionPagination } from "@/components/auctions/AuctionPagination";
 import {
   useAuctionsPipeline,
   AUCTIONS_PAGE_SIZE,
@@ -254,145 +256,29 @@ export default function Auctions() {
             </div>
           </div>
 
-          {/* Advanced Filters Panel */}
-          {showFilters &&
-          <div className="mt-4 p-5 bg-card/95 border border-border rounded-2xl space-y-5 backdrop-blur-sm">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold flex items-center gap-2">
-                  <SlidersHorizontal className="w-4 h-4 text-primary" /> Auction Filters
-                </span>
-                {activeFilterCount > 0 &&
-              <button onClick={clearFilters} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
-                    <X className="w-3 h-3" /> Clear all
-                  </button>
-              }
-              </div>
-
-              {/* Standard filters */}
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Standard Filters</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                  {/* City */}
-                  <div>
-                    <label className="text-xs text-muted-foreground font-medium block mb-1.5">City</label>
-                    <div className="relative">
-                      <select
-                      value={selectedCity}
-                      onChange={(e) => setSelectedCity(e.target.value)}
-                      className="w-full appearance-none bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary cursor-pointer">
-                      
-                        {cityOptions.map((c) =>
-                      <option key={c} value={c}>{c}</option>
-                      )}
-                      </select>
-                      <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                    </div>
-                  </div>
-
-                  {/* Typology */}
-                  <div>
-                    <label className="text-xs text-muted-foreground font-medium block mb-1.5">Property Type</label>
-                    <select
-                    value={filterType}
-                    onChange={(e) => setFilterType(e.target.value)}
-                    className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none">
-                    
-                      {PROPERTY_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                    </select>
-                  </div>
-
-                  {/* Starting bid */}
-                  <div>
-                    <label className="text-xs text-muted-foreground font-medium block mb-1.5">Starting Bid</label>
-                    <select
-                    value={filterBidRange}
-                    onChange={(e) => setFilterBidRange(e.target.value)}
-                    className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none">
-                    
-                      {BID_RANGES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-                    </select>
-                  </div>
-
-                  {/* Construction year */}
-                  <div>
-                    <label className="text-xs text-muted-foreground font-medium block mb-1.5">Construction Year</label>
-                    <select
-                    value={filterYearRange}
-                    onChange={(e) => setFilterYearRange(e.target.value)}
-                    className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none">
-                    
-                      {YEAR_RANGES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-                    </select>
-                  </div>
-                </div>{/* end grid */}
-              </div>{/* end standard filters */}
-
-              {/* Auction filters: Ownership, Round, Yield — Pro only */}
-              <div className="pt-4 border-t border-border -mx-5 px-5 pb-1 rounded-b-2xl">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
-                  More Filters
-                  {!isPro && !isMaiPropOsUser && <PremiumBadge />}
-                </p>
-                {isPro || isMaiPropOsUser ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <div>
-                      <label className="text-xs text-muted-foreground font-medium block mb-1.5">Ownership Status</label>
-                      <select value={filterOwnership} onChange={(e) => setFilterOwnership(e.target.value)} className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none">
-                        {OWNERSHIP_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs text-muted-foreground font-medium block mb-1.5">Auction Round</label>
-                      <select value={filterRound} onChange={(e) => setFilterRound(e.target.value)} className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none">
-                        {roundOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs text-muted-foreground font-medium block mb-1.5">
-                        Est. Rental Yield
-                        <span className="ml-1.5 text-[10px] text-muted-foreground/60">(city benchmark × sqm / bid)</span>
-                      </label>
-                      <select
-                        value={filterYield}
-                        onChange={(e) => setFilterYield(e.target.value)}
-                        className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none">
-                        <option value="">Any Yield</option>
-                        <option value="low">Under 3% — Low yield</option>
-                        <option value="medium">3% – 6% — Average</option>
-                        <option value="high">6% – 9% — Good</option>
-                        <option value="very_high">9%+ — High yield opportunity</option>
-                      </select>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-3 p-4 rounded-xl bg-secondary/50 border border-border">
-                    <Lock className="w-5 h-5 text-muted-foreground shrink-0" />
-                    <div>
-                      <p className="text-sm font-medium">Ownership Status, Auction Round & Est. Rental Yield</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">Upgrade to Pro to unlock these filters.</p>
-                    </div>
-                    <Button size="sm" variant="outline" className="border-primary/40 text-primary hover:bg-primary/10 shrink-0" asChild>
-                      <Link to="/pricing">Upgrade to Pro</Link>
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </div>
-          }
-
-          {/* Active filter chips */}
-          {activeFilterCount > 0 && !showFilters &&
-          <div className="flex items-center gap-2 mt-3 flex-wrap">
-              <span className="text-xs text-muted-foreground">Active:</span>
-              {filterType && <button onClick={() => setFilterType("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors capitalize">{filterType} <X className="w-3 h-3" /></button>}
-              {filterBidRange && <button onClick={() => setFilterBidRange("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{BID_RANGES.find((r) => r.value === filterBidRange)?.label} <X className="w-3 h-3" /></button>}
-              {filterYearRange && <button onClick={() => setFilterYearRange("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{YEAR_RANGES.find((r) => r.value === filterYearRange)?.label} <X className="w-3 h-3" /></button>}
-              {(isPro || isMaiPropOsUser) && filterOwnership && <button onClick={() => setFilterOwnership("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent hover:bg-accent/20 transition-colors">{OWNERSHIP_STATUSES.find((s) => s.value === filterOwnership)?.label} <X className="w-3 h-3" /></button>}
-              {(isPro || isMaiPropOsUser) && filterRound && <button onClick={() => setFilterRound("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">{roundOptions.find((o) => o.value === filterRound)?.label || `Round ${filterRound}`} <X className="w-3 h-3" /></button>}
-              {(isPro || isMaiPropOsUser) && filterYield && <button onClick={() => setFilterYield("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">Yield: {filterYield.replace("_", " ")} <X className="w-3 h-3" /></button>}
-              <button onClick={clearFilters} className="text-xs text-muted-foreground hover:text-foreground ml-1">Clear all</button>
-            </div>
-          }
+          <AuctionFiltersPanel
+            showFilters={showFilters}
+            selectedCity={selectedCity}
+            setSelectedCity={setSelectedCity}
+            cityOptions={cityOptions}
+            filterType={filterType}
+            setFilterType={setFilterType}
+            filterBidRange={filterBidRange}
+            setFilterBidRange={setFilterBidRange}
+            filterYearRange={filterYearRange}
+            setFilterYearRange={setFilterYearRange}
+            filterOwnership={filterOwnership}
+            setFilterOwnership={setFilterOwnership}
+            filterRound={filterRound}
+            setFilterRound={setFilterRound}
+            filterYield={filterYield}
+            setFilterYield={setFilterYield}
+            roundOptions={roundOptions}
+            isPro={isPro}
+            isMaiPropOsUser={isMaiPropOsUser}
+            activeFilterCount={activeFilterCount}
+            clearFilters={clearFilters}
+          />
         </div>
 
         {/* ── MAP VIEW ── */}
@@ -479,54 +365,12 @@ export default function Auctions() {
 
               )}
                  </div>
-                 {totalPages > 1 &&
-            <div className="flex items-center justify-center gap-2 mt-8 flex-wrap">
-                     <Button
-                variant="outline"
-                size="sm"
-                className="border-border"
-                disabled={currentPage === 1}
-                onClick={() => {setCurrentPage((p) => Math.max(1, p - 1));window.scrollTo({ top: 0, behavior: "smooth" });}}>
-                ← Previous
-              </Button>
-              {(() => {
-                const pages: (number | "…")[] = [];
-                if (totalPages <= 7) {
-                  for (let i = 1; i <= totalPages; i++) pages.push(i);
-                } else {
-                  pages.push(1);
-                  if (currentPage > 4) pages.push("…");
-                  const start = Math.max(2, currentPage - 2);
-                  const end = Math.min(totalPages - 1, currentPage + 2);
-                  for (let i = start; i <= end; i++) pages.push(i);
-                  if (currentPage < totalPages - 3) pages.push("…");
-                  pages.push(totalPages);
-                }
-                return pages.map((p, idx) =>
-                  p === "…" ? (
-                    <span key={`ellipsis-${idx}`} className="text-sm text-muted-foreground px-1 select-none">…</span>
-                  ) : (
-                       <Button
-                  key={p}
-                  variant={p === currentPage ? "default" : "outline"}
-                  size="sm"
-                  className={p === currentPage ? "bg-gradient-primary border-0 text-primary-foreground font-bold" : "border-border"}
-                  onClick={() => {setCurrentPage(p as number);window.scrollTo({ top: 0, behavior: "smooth" });}}>
-                       {p}
-                     </Button>
-                  )
-                );
-              })()}
-              <Button
-                size="sm"
-                className="border-border"
-                variant="outline"
-                disabled={currentPage === totalPages}
-                onClick={() => {setCurrentPage((p) => Math.min(totalPages, p + 1));window.scrollTo({ top: 0, behavior: "smooth" });}}>
-                Next →
-              </Button>
-            </div>
-                 }
+                 <AuctionPagination
+                   currentPage={currentPage}
+                   totalPages={totalPages}
+                   polygonFilteredCount={polygonFilteredCount}
+                   setCurrentPage={setCurrentPage}
+                 />
                  {/* Banner when Pro user hits 10-page cap */}
                  {isPro && !isMaiPropOsUser && totalRaw > AUCTIONS_MAX_PAGES_PRO * AUCTIONS_PAGE_SIZE &&
                    <div className="mt-8 p-4 rounded-2xl bg-secondary border border-border flex flex-col sm:flex-row items-center gap-3 text-center sm:text-left">
