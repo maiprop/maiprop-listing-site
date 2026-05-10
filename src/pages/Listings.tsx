@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, lazy, Suspense } from "react";
+import { useState, useMemo, lazy, Suspense } from "react";
 import { Helmet } from "react-helmet-async";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
@@ -23,42 +23,18 @@ import { PropertyTypeButton } from "@/components/listings/PropertyTypeButton";
 import { MapGate } from "@/components/listings/MapGate";
 import { ListingCompareButton } from "@/components/listings/ListingCompareButton";
 
-import { useListings, useListingsPaginated, type ListingsFilters, type ListingWithJoins } from "@/hooks/useListings";
-import type { ListingCard } from "@/types";
+import type { ListingsFilters } from "@/hooks/useListings";
 import { useListingsFilters } from "@/hooks/useListingsFilters";
+import { useListingsPipeline } from "@/hooks/useListingsPipeline";
+import type { ListingCardWithRaw } from "@/lib/listingsCardUtils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCookieConsent } from "@/hooks/useCookieConsent";
 import { getTypeLabel, getSubtypeLabel, PROPERTY_TYPE_MAP, type PropertyTypeKey } from "@/lib/propertyTypes";
 import { HEATING_TYPES, CONSTRUCTION_STATUSES } from "@/lib/filterConfig";
 import { useSmartFilters } from "@/hooks/useSmartFilters";
-import { dbListingToCard } from "@/lib/listingUtils";
 import {
   buyPriceRanges, rentPriceRanges, listingTypeOptions, sortOptions,
 } from "@/lib/listingsConfig";
-import { toast } from "sonner";
-
-/** Subset of the raw DB listing fields the listings page reads through `_raw` for client-side filtering. */
-type RawListingFields = Pick<
-  ListingWithJoins,
-  | "created_at"
-  | "has_video_tour"
-  | "has_virtual_tour"
-  | "ai_score"
-  | "walkability_score"
->;
-
-/** Card type with the typed `_raw` payload that listingToCard() actually attaches. */
-type ListingCardWithRaw = ListingCard & { _raw?: RawListingFields };
-
-function listingToCard(l: ListingWithJoins): ListingCardWithRaw {
-  return dbListingToCard(l, {
-    includeOwnership: true,
-    includeCoordinates: true,
-    filterDisplayTags: true,
-    includeRaw: true,
-    maxImages: 3,
-  }) as ListingCardWithRaw;
-}
 
 export default function Listings() {
   const { t } = useTranslation();
@@ -124,107 +100,23 @@ export default function Listings() {
     selectedSubtype, selectedFeatures, selectedSort,
   ]);
 
-  // Grid view paginates 24 at a time (infinite scroll). Map / split views need
-  // every visible marker at once, so they use the bounded full-fetch (200 cap).
-  // Only one query is enabled at a time to avoid wasting bandwidth.
-  const isGrid = viewMode === "grid";
-  const paginated = useListingsPaginated(filters, { enabled: isGrid });
-  const fullFetch = useListings(filters, { enabled: !isGrid });
-
-  const dbListings = useMemo<ListingWithJoins[]>(() => {
-    // Both paths produce rows with the same shape that listingToCard() reads.
-    // The type cast matches how useListings() casts its enriched rows internally
-    // (ownerIsPro / ownerParticipantType are only set by the single-listing path).
-    if (isGrid) return (paginated.data?.pages.flatMap((p) => p.data) ?? []) as ListingWithJoins[];
-    return fullFetch.data ?? [];
-  }, [isGrid, paginated.data, fullFetch.data]);
-
-  const isLoading = isGrid ? paginated.isLoading : fullFetch.isLoading;
-  const isError = isGrid ? paginated.isError : fullFetch.isError;
-  const error = isGrid ? paginated.error : fullFetch.error;
-
-  // Infinite-scroll sentinel — load the next 24 when the user nears it.
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    if (!isGrid) return;
-    const el = sentinelRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting && paginated.hasNextPage && !paginated.isFetchingNextPage) {
-          paginated.fetchNextPage();
-        }
-      },
-      { rootMargin: "400px 0px" },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [isGrid, paginated]);
-
-  useEffect(() => {
-    if (isError && error) {
-      toast.error("Could not load listings. Please try again.");
-    }
-  }, [isError, error]);
-
-  const sourceListings = useMemo(() => dbListings.map(listingToCard), [dbListings]);
-
-  const filtered = useMemo(() => {
-    // Client-side filtering — only for fields not supported server-side
-    const afterFilter = sourceListings.filter((p: ListingCardWithRaw) => {
-      const raw = p._raw;
-      if (hasVideoViewing && !raw?.has_video_tour) return false;
-      if (hasVirtualTour && !raw?.has_virtual_tour) return false;
-      // The `hasMessaging` filter previously checked `raw.messaging_disabled`,
-      // a field that doesn't exist on the listings schema — it was always
-      // undefined and the predicate never excluded anything. Removed when
-      // tightening types; revisit when a real "messaging disabled" column
-      // ships (or move to an opt-out flag on profiles).
-      if (minAiScore > 0 && !(Number(raw?.ai_score) >= minAiScore)) return false;
-      if (minWalkability > 0 && !(Number(raw?.walkability_score) >= minWalkability)) return false;
-      return true;
-    });
-
-    // User sort must NOT override paid prioritization unless "featured" is explicitly chosen.
-    // "featured" sort: featured → priority → rest. All other sorts: promoted always lead.
-    const isPromoted = (p: ListingCardWithRaw) => !!(p.isFeatured || (p.priorityPlacement ?? 0) > 0);
-    const byUserSort = (a: ListingCardWithRaw, b: ListingCardWithRaw) => {
-      if (selectedSort === "featured") {
-        const aF = a.isFeatured ? 1 : 0;
-        const bF = b.isFeatured ? 1 : 0;
-        if (bF !== aF) return bF - aF;
-        const aPri = Number(a.priorityPlacement ?? 0);
-        const bPri = Number(b.priorityPlacement ?? 0);
-        if (bPri !== aPri) return bPri - aPri;
-        return new Date(b._raw?.created_at || 0).getTime() - new Date(a._raw?.created_at || 0).getTime();
-      }
-      if (selectedSort === "price-asc") return a.price - b.price;
-      if (selectedSort === "price-desc") return b.price - a.price;
-      if (selectedSort === "newest") return new Date(b._raw?.created_at || 0).getTime() - new Date(a._raw?.created_at || 0).getTime();
-      if (selectedSort === "ai-score") return (b.aiScore || 0) - (a.aiScore || 0);
-      if (selectedSort === "views") return (b.views || 0) - (a.views || 0);
-      return 0;
-    };
-    return [...afterFilter].sort((a, b) => {
-      // "Featured First" sort: explicit featured ordering, skip automatic promo-first
-      if (selectedSort === "featured") return byUserSort(a, b);
-      const aPromo = isPromoted(a);
-      const bPromo = isPromoted(b);
-      if (aPromo && !bPromo) return -1;
-      if (!aPromo && bPromo) return 1;
-      if (aPromo && bPromo) {
-        const pri = (b.priorityPlacement ?? 0) - (a.priorityPlacement ?? 0);
-        if (pri !== 0) return pri;
-        // Same priority bucket: featured beats non-featured. Mirrors the
-        // server ORDER BY tiebreak in buildListingsQuery so that the client's
-        // re-sort is a no-op on already-paginated server output.
-        const aF = a.isFeatured ? 1 : 0;
-        const bF = b.isFeatured ? 1 : 0;
-        if (bF !== aF) return bF - aF;
-      }
-      return byUserSort(a, b);
-    });
-  }, [sourceListings, hasVideoViewing, hasVirtualTour, minAiScore, minWalkability, selectedSort]);
+  const {
+    filtered,
+    totalLoaded,
+    isLoading,
+    isError,
+    hasNextPage,
+    isFetchingNextPage,
+    sentinelRef,
+  } = useListingsPipeline({
+    filters,
+    viewMode,
+    selectedSort,
+    hasVideoViewing,
+    hasVirtualTour,
+    minAiScore,
+    minWalkability,
+  });
 
   // Compare helpers
   const toggleCompare = (listing: ListingCardWithRaw) => {
@@ -558,7 +450,7 @@ export default function Listings() {
                     : `${filtered.length} properties`}
                 </span>
               )}
-              {dbListings.length === 0 && (
+              {totalLoaded === 0 && !isLoading && (
                 <span className="text-muted-foreground text-sm">No listings matched your filters</span>
               )}
               {viewMode === "split" && polygonFilterIds !== null && (
@@ -672,7 +564,7 @@ export default function Listings() {
                 action={{ label: "Retry", onClick: () => window.location.reload() }}
                 testId="empty-listings"
               />
-            ) : filtered.length === 0 && !paginated.hasNextPage ? (
+            ) : filtered.length === 0 && !hasNextPage ? (
               /* Show "no results" only when we have actually exhausted the
                * paginated source. Client-side filters (hasVideoViewing,
                * hasVirtualTour, minAiScore, minWalkability) may exclude every
@@ -708,20 +600,20 @@ export default function Listings() {
                  * client-side filters but more pages exist. Render a few
                  * skeletons so the user sees progress while the sentinel
                  * keeps fetching pages. */}
-                {filtered.length === 0 && paginated.hasNextPage && (
+                {filtered.length === 0 && hasNextPage && (
                   <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
                     {Array.from({ length: 4 }).map((_, i) => <PropertyCardSkeleton key={`searching-${i}`} />)}
                   </div>
                 )}
-                {paginated.isFetchingNextPage && filtered.length > 0 && (
+                {isFetchingNextPage && filtered.length > 0 && (
                   <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 mt-3 sm:mt-4">
                     {Array.from({ length: 4 }).map((_, i) => <PropertyCardSkeleton key={`more-${i}`} />)}
                   </div>
                 )}
-                {paginated.hasNextPage && !paginated.isFetchingNextPage && (
+                {hasNextPage && !isFetchingNextPage && (
                   <div ref={sentinelRef} aria-hidden="true" className="h-8 mt-2" />
                 )}
-                {!paginated.hasNextPage && filtered.length > 0 && (
+                {!hasNextPage && filtered.length > 0 && (
                   <div className="text-center text-xs text-muted-foreground mt-6 pb-2">
                     {t("listings.endOfResults", "No more results")}
                   </div>
