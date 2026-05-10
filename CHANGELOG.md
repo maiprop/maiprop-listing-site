@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.6.0](https://github.com/maiprop/maiprop-listing-site/compare/v1.5.0...v1.6.0) (2026-05-10)
+
+
+### Features
+
+* **typology:** atomic role-switch with archive of role-specific data (Slice 1) ([#121](https://github.com/maiprop/maiprop-listing-site/issues/121)) ([9ea74e8](https://github.com/maiprop/maiprop-listing-site/commit/9ea74e89c5eea45ad40415997821e05955ccfdf5))
+
+
+### Bug Fixes
+
+* address PR review findings — migration hashes, stripe-webhook safety, closing_date CHECK ([#117](https://github.com/maiprop/maiprop-listing-site/issues/117)) ([716a8e2](https://github.com/maiprop/maiprop-listing-site/commit/716a8e2c104f150a31401db4701687c1155f99a7))
+* **ci:** accept 401 or 503 in data-input-credit Deno test ([#113](https://github.com/maiprop/maiprop-listing-site/issues/113)) ([59ae522](https://github.com/maiprop/maiprop-listing-site/commit/59ae5220c343de00127bfde4f7b09652697302b5))
+* **security:** harden os-sales-coordinates and os-diagnose edge functions ([#111](https://github.com/maiprop/maiprop-listing-site/issues/111)) ([f7e9ef0](https://github.com/maiprop/maiprop-listing-site/commit/f7e9ef08b83a3def2ef08aab82d093a110990864))
+* strict release security hardening ([db9deba](https://github.com/maiprop/maiprop-listing-site/commit/db9deba6f079500ccd6cbc6bc8731b1833935e16))
+
+
+### Performance Improvements
+
+* **db:** drop strictly-redundant unused indexes + triage doc ([#120](https://github.com/maiprop/maiprop-listing-site/issues/120)) ([0eac3de](https://github.com/maiprop/maiprop-listing-site/commit/0eac3ded21888282f5792c2e8823a2e1e58212e7))
+
 ## [1.5.0](https://github.com/maiprop/maiprop-listing-site/compare/v1.4.0...v1.5.0) (2026-05-05)
 
 
