@@ -6,6 +6,8 @@
  *   buyer | seller | agent | developer | professional | investor | institutional | admin
  */
 
+import { isPlatformAdmin } from "@/lib/authUtils";
+
 /** Internal participant type — used by Dashboard nav and plan limits */
 export type ParticipantId =
   | "buyer"
@@ -46,7 +48,7 @@ export function getExplicitParticipantTypeFromProfile(
  *      existed; no new code writes this prefix — safe to remove once all rows are migrated)
  */
 export function getParticipantTypeFromProfile(
-  profile: { role?: string; bio?: string | null; participant_type?: string | null } | null
+  profile: { role?: string | null; bio?: string | null; participant_type?: string | null } | null
 ): ParticipantId {
   if (!profile) return "buyer";
 
@@ -59,7 +61,7 @@ export function getParticipantTypeFromProfile(
   if (profile.role && isValidParticipantId(profile.role)) {
     return profile.role as ParticipantId;
   }
-  if (profile.role === "admin") return "agent"; // admin uses agent dashboard tabs
+  if (isPlatformAdmin(profile)) return "agent"; // admin uses agent dashboard tabs
 
   // Legacy fallback: bio __type: prefix (pre-migration rows only)
   const bio = profile.bio ?? "";
@@ -73,9 +75,10 @@ export function getParticipantTypeFromProfile(
 }
 
 /** Derive owner type for listing display: agent vs private seller */
-export function getOwnerParticipantType(profile: { role?: string; bio?: string | null } | null): "agent" | "seller" | null {
+export function getOwnerParticipantType(profile: { role?: string | null; bio?: string | null } | null): "agent" | "seller" | null {
   if (!profile) return null;
-  if (["admin", "agent", "developer"].includes(profile.role || "")) return "agent";
+  if (isPlatformAdmin(profile)) return "agent";
+  if (["agent", "developer"].includes(profile.role ?? "")) return "agent";
   if (profile.role === "seller") return "seller";
   // Legacy bio fallback — read-only, new profiles set role directly
   const bio = profile.bio ?? "";
@@ -99,7 +102,7 @@ export const PARTICIPANT_LABELS: Record<ParticipantId, string> = {
  * Buyers and sellers are both "participant" on the pricing page.
  */
 export function getPricingAudienceFromProfile(
-  profile: { role?: string; bio?: string | null; participant_type?: string | null } | null
+  profile: { role?: string | null; bio?: string | null; participant_type?: string | null } | null
 ): PricingAudienceId {
   const pt = getParticipantTypeFromProfile(profile);
   if (pt === "buyer" || pt === "seller") return "participant";

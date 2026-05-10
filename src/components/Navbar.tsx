@@ -45,10 +45,11 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
   const { data: unreadNotifCount = 0 } = useQuery({
     queryKey: ["notifications_unread", user?.id],
     queryFn: async (): Promise<number> => {
+      if (!user) return 0;
       const { count } = await supabase
         .from("notifications")
         .select("*", { count: "exact", head: true })
-        .eq("user_id", user!.id)
+        .eq("user_id", user.id)
         .eq("read", false);
       return count ?? 0;
     },
@@ -60,10 +61,11 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
   const { data: notifItems = [] } = useQuery<NotifItem[]>({
     queryKey: ["notifications_list", user?.id],
     queryFn: async () => {
+      if (!user) return [];
       const { data } = await supabase
         .from("notifications")
         .select("id, title, body, type, read, created_at")
-        .eq("user_id", user!.id)
+        .eq("user_id", user.id)
         .order("created_at", { ascending: false })
         .limit(10);
       return (data ?? []) as NotifItem[];
@@ -84,9 +86,10 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
   };
 
   const markAllRead = async () => {
-    await supabase.from("notifications").update({ read: true }).eq("user_id", user!.id).eq("read", false);
-    queryClient.invalidateQueries({ queryKey: ["notifications_unread", user?.id] });
-    queryClient.invalidateQueries({ queryKey: ["notifications_list", user?.id] });
+    if (!user) return;
+    await supabase.from("notifications").update({ read: true }).eq("user_id", user.id).eq("read", false);
+    queryClient.invalidateQueries({ queryKey: ["notifications_unread", user.id] });
+    queryClient.invalidateQueries({ queryKey: ["notifications_list", user.id] });
   };
 
   const hasDarkHero = DARK_HERO_ROUTES.includes(location.pathname);

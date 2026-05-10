@@ -30,10 +30,11 @@ export function useValuationUsage() {
     queryKey: ["usage_ai_calls", "property-valuation", user?.id, monthStart],
     enabled: !!user,
     queryFn: async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase.from as any)("usage_ai_calls")
+      if (!user) return 0;
+      const { data, error } = await supabase
+        .from("usage_ai_calls")
         .select("id")
-        .eq("user_id", user!.id)
+        .eq("user_id", user.id)
         .eq("bucket", "property-valuation")
         .gte("created_at", monthStart);
       if (error) throw error;
@@ -73,10 +74,11 @@ export function useReportUsage() {
     queryKey: ["usage_ai_calls", "report-usage", user?.id, monthStart],
     enabled: !!user,
     queryFn: async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase.from as any)("usage_ai_calls")
+      if (!user) return 0;
+      const { data, error } = await supabase
+        .from("usage_ai_calls")
         .select("id")
-        .eq("user_id", user!.id)
+        .eq("user_id", user.id)
         .eq("bucket", "property-valuation")
         .gte("created_at", monthStart);
       if (error) throw error;
@@ -113,10 +115,11 @@ export function usePriorityAdsUsage() {
     queryKey: ["usage_priority_ads", user?.id, monthStart],
     enabled: !!user,
     queryFn: async () => {
+      if (!user) return 0;
       const { data, error } = await supabase
         .from("usage_priority_ads")
         .select("id")
-        .eq("user_id", user!.id)
+        .eq("user_id", user.id)
         .gte("created_at", monthStart);
       if (error) throw error;
       return (data ?? []).length;

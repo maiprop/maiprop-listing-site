@@ -24,10 +24,11 @@ export function usePortfolios() {
   return useQuery({
     queryKey: ["portfolios", user?.id],
     queryFn: async () => {
+      if (!user) return [];
       const { data, error } = await supabase
         .from("portfolios")
         .select("id, name, listing_ids, user_id, created_at, updated_at")
-        .eq("user_id", user!.id)
+        .eq("user_id", user.id)
         .order("updated_at", { ascending: false });
       if (error) throw error;
       return data || [];
@@ -71,9 +72,10 @@ export function useCreatePortfolio() {
   const { user } = useAuth();
   return useMutation({
     mutationFn: async (name: string) => {
+      if (!user) throw new Error("Not authenticated");
       const { data, error } = await supabase
         .from("portfolios")
-        .insert({ name, user_id: user!.id })
+        .insert({ name, user_id: user.id })
         .select()
         .single();
       if (error) throw error;

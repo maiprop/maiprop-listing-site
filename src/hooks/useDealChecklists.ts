@@ -8,10 +8,11 @@ export function useDealChecklists() {
   return useQuery({
     queryKey: ["deal-checklists", user?.id],
     queryFn: async () => {
+      if (!user) return [];
       const { data, error } = await supabase
         .from("deal_checklists")
         .select("id, user_id, entity_type, entity_id, items, title, status, created_at, updated_at")
-        .eq("user_id", user!.id)
+        .eq("user_id", user.id)
         .order("updated_at", { ascending: false });
       if (error) throw error;
       return data || [];
@@ -25,11 +26,11 @@ export function useDealChecklist(entityType: string, entityId: string | undefine
   return useQuery({
     queryKey: ["deal-checklist", entityType, entityId, user?.id],
     queryFn: async () => {
-      if (!entityId) return null;
+      if (!user || !entityId) return null;
       const { data, error } = await supabase
         .from("deal_checklists")
         .select("id, user_id, entity_type, entity_id, items, title, status, created_at, updated_at")
-        .eq("user_id", user!.id)
+        .eq("user_id", user.id)
         .eq("entity_type", entityType)
         .eq("entity_id", entityId)
         .maybeSingle();
@@ -57,11 +58,12 @@ export function useUpsertDealChecklist() {
       items?: { label: string; done: boolean }[];
       status?: string;
     }) => {
+      if (!user) throw new Error("Not authenticated");
       const { data, error } = await supabase
         .from("deal_checklists")
         .upsert(
           {
-            user_id: user!.id,
+            user_id: user.id,
             entity_type,
             entity_id,
             title: title ?? "Due diligence",

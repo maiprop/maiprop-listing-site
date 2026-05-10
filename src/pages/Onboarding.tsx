@@ -535,6 +535,10 @@ export default function Onboarding() {
 
   const handleProVerify = async () => {
     if (requireAuth("professional")) return;
+    // requireAuth() above redirects to /login when there is no user, so the
+    // remainder of this handler can never run with `user === null`. The
+    // explicit guard satisfies the type checker without changing behaviour.
+    if (!user) return;
     const errs: Record<string, string> = {};
     if (!proForm.businessName.trim()) errs.businessName = "Business name is required";
     if (!proForm.phone.trim()) errs.phone = "Phone number is required";
@@ -546,10 +550,10 @@ export default function Onboarding() {
     const { data: proData, error } = await supabase
       .from("professionals")
       .upsert({
-        user_id: user!.id,
+        user_id: user.id,
         title: proForm.businessName,
         category: proCategory as never,
-        display_name: user!.user_metadata?.full_name || proForm.businessName,
+        display_name: user.user_metadata?.full_name || proForm.businessName,
         city: "",
         // AFM (Greek tax ID) stored in license_number when no dedicated field exists.
         // licenseNumber field takes priority if the user filled it in.

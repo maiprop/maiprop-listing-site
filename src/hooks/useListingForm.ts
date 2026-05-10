@@ -268,6 +268,10 @@ export function useListingForm() {
       toast.error("Open house date & time is required");
       return;
     }
+    if (!user) {
+      toast.error("You must be signed in to publish a listing");
+      return;
+    }
     setSubmitting(true);
     const pt = form.property_type;
     const lt = form.listing_type;
@@ -372,7 +376,7 @@ export function useListingForm() {
 
       const { data, error } = await supabase
         .from("listings")
-        .insert({ ...payload, owner_id: user!.id, status: asDraft ? "draft" : "active" } as never)
+        .insert({ ...payload, owner_id: user.id, status: asDraft ? "draft" : "active" } as never)
         .select()
         .single();
       if (error) throw error;
