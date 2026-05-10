@@ -9,6 +9,9 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { createLogger } from "../_shared/logger.ts";
+
+const log = createLogger("os-diagnose");
 
 const limiter = makeRateLimiter({ bucket: "os-diagnose", maxRequests: 5, windowMs: 60_000 });
 
@@ -39,15 +42,49 @@ async function requireAgent(
   return null;
 }
 
+async function safeCount(
+  url: string,
+  body: Record<string, unknown>,
+  headers: Record<string, string>,
+): Promise<{ status: number; count: number | null }> {
+  const response = await fetchWithTimeout(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  });
+  const json = await response.json().catch(() => null) as Record<string, unknown> | null;
+  const raw = json?.count ?? json?.total ?? json?.data;
+  const count = typeof raw === "number" ? raw : null;
+  return { status: response.status, count };
+}
+
 async function getOsToken(baseUrl: string, email: string, password: string): Promise<string> {
   const res = await fetchWithTimeout(`${baseUrl}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
-  const data = await res.json();
-  const token = data?.data?.token ?? data.token ?? data.accessToken ?? data.access_token;
-  if (!token) throw new Error(`Auth failed (${res.status}): ${JSON.stringify(data).slice(0, 300)}`);
+
+  let data: unknown;
+  try {
+    data = await res.json();
+  } catch {
+    log.warn("OS auth response not JSON", { status: res.status });
+    throw new Error(`OS auth returned non-JSON response (${res.status})`);
+  }
+
+  if (!res.ok) {
+    log.warn("OS auth non-ok status", { status: res.status });
+    throw new Error(`OS auth failed (HTTP ${res.status})`);
+  }
+
+  const obj = (typeof data === "object" && data !== null ? data : {}) as Record<string, unknown>;
+  const nested = (typeof obj.data === "object" && obj.data !== null ? obj.data : {}) as Record<string, unknown>;
+  const token = nested.token ?? obj.token ?? obj.accessToken ?? obj.access_token;
+  if (typeof token !== "string" || !token) {
+    log.warn("OS auth: no token in response", { status: res.status });
+    throw new Error(`OS auth failed (HTTP ${res.status}) — no token in response`);
+  }
   return token;
 }
 
@@ -104,39 +141,30 @@ Deno.serve(async (req) => {
     }));
 
     // ── Probe 2: count all via /api/v1/auctions/filter/count ──────────────────
-    const countAllRes = await fetchWithTimeout(`${OS_URL}/api/v1/auctions/filter/count`, {
-      method: "POST",
-      headers: authHeaders,
-      body: JSON.stringify({}),
-    });
-    const countAll = await countAllRes.json().catch(() => null);
+    const countAll = await safeCount(`${OS_URL}/api/v1/auctions/filter/count`, {}, authHeaders);
 
     // ── Probe 3: count PENDING auctions ───────────────────────────────────────
-    const countPendingRes = await fetchWithTimeout(`${OS_URL}/api/v1/auctions/filter/count`, {
-      method: "POST",
-      headers: authHeaders,
-      body: JSON.stringify({ auctionStatus: "PENDING" }),
-    });
-    const countPending = await countPendingRes.json().catch(() => null);
+    const countPending = await safeCount(
+      `${OS_URL}/api/v1/auctions/filter/count`,
+      { auctionStatus: "PENDING" },
+      authHeaders,
+    );
 
     // ── Probe 4: count COMPLETED auctions ─────────────────────────────────────
-    const countCompletedRes = await fetchWithTimeout(`${OS_URL}/api/v1/auctions/filter/count`, {
-      method: "POST",
-      headers: authHeaders,
-      body: JSON.stringify({ auctionStatus: "COMPLETED" }),
-    });
-    const countCompleted = await countCompletedRes.json().catch(() => null);
+    const countCompleted = await safeCount(
+      `${OS_URL}/api/v1/auctions/filter/count`,
+      { auctionStatus: "COMPLETED" },
+      authHeaders,
+    );
 
     // ── Probe 5: count-comparison endpoint ────────────────────────────────────
-    // This endpoint has a server-side NullPointerException bug in the OS API — captured for awareness
-    let comp: unknown = null;
+    let comp: { status: number; count: number | null } | { note: string };
     try {
-      const compRes = await fetchWithTimeout(`${OS_URL}/api/v1/auctions/filter/count-comparison`, {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({ sortBy: "AUCTION_DATE" }),
-      });
-      comp = await compRes.json().catch(() => null);
+      comp = await safeCount(
+        `${OS_URL}/api/v1/auctions/filter/count-comparison`,
+        { sortBy: "AUCTION_DATE" },
+        authHeaders,
+      );
     } catch {
       comp = { note: "count-comparison endpoint unavailable on OS API (server-side bug)" };
     }
@@ -181,12 +209,20 @@ Deno.serve(async (req) => {
       },
     );
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
+    const internal = err instanceof Error ? err.message : String(err);
+    log.warn("os-diagnose probe failed", { err: internal });
+
+    const isSafeAuthMsg =
+      internal.startsWith("OS auth returned non-JSON response") ||
+      internal.startsWith("OS auth failed (HTTP");
+    const safe = isSafeAuthMsg
+      ? internal
+      : "OS probe failed — see server logs for details";
+
     return new Response(
       JSON.stringify({
-        error: message,
+        error: safe,
         osReachable: false,
-        detail: message,
       }),
       {
         status: 500,

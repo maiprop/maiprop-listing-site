@@ -30,8 +30,8 @@ Every `verify_jwt = false` function must be either intentionally public, protect
 | `poll-os-auctions` | Scheduled/internal caller model plus rate limiter. | Auction sync data. | Conditional: do not expose as browser feature. |
 | `sync-firesale-to-os` | Custom Bearer/user authorization in handler. | Firesale sync data. | Conditional: keep tests for missing/invalid auth. |
 | `full-sync-from-os` | Custom `requireAgent` Bearer/user authorization in handler; tests reject missing auth. | Bulk OS sync data. | Conditional: high blast radius. |
-| `os-diagnose` | Internal diagnostic endpoint; not JWT-gated by config. | OS connectivity/config status. | Needs review: diagnostic output must not expose secrets. |
-| `os-sales-coordinates` | Custom auth/rate limit expected by handler. | Sales coordinates. | Needs review before release due location sensitivity. |
+| `os-diagnose` | Admin-only (`requireAgent` Bearer + `profiles.role = 'admin'`); rate limited. | OS connectivity/config status. | Hardened: error responses sanitised, upstream auth bodies never echoed, count probes extract numeric values only. |
+| `os-sales-coordinates` | Public endpoint plus rate limiter; CORS allowlist. | Sales coordinates (allowlisted fields only). | Hardened: lat/lng bounds validated, radius\_km/limit capped server-side, response fields allowlisted to prevent PII leakage, body-shape validated. |
 | `send-saved-search-alerts` | Scheduled/internal caller model. | Saved search and email data. | Conditional: must not be browser-callable without custom secret. |
 | `invitation-notify` | Handler checks `Authorization`; tests reject missing auth. | Invitation notification data. | Conditional: document trigger secret/caller. |
 | `oh-registration-notify` | Handler checks `Authorization`; database trigger/webhook model. | Open-house registration data. | Conditional: document trigger secret/caller. |
