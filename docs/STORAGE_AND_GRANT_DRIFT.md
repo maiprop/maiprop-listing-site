@@ -19,11 +19,10 @@ discovered by failing E2E tests rather than by tooling.
 
 ## Drift items
 
-### Important context: `20260705000000` is in `main` but not yet applied to live DB
+### Important context: alignment with `20260705000000_strict_release_advisor_fixes`
 
-The latest applied migration in live is `20260704000000_extend_property_types`.
-`20260705000000_strict_release_advisor_fixes.sql` is committed to `main` but
-has not yet been applied. That migration deliberately:
+The immediately-preceding migration `20260705000000_strict_release_advisor_fixes.sql`
+deliberately:
 
 - (Section 8) revokes EXECUTE on `has_platform_admin(uuid)` and
   `has_role(uuid, public.user_role)` from `PUBLIC` and `anon`, granting only
@@ -31,10 +30,12 @@ has not yet been applied. That migration deliberately:
 - (Section 9) drops the `project_media_select` policy as part of "Remove
   public bucket listing policies".
 
-Our recovery migration **must align with that intended final state** —
-otherwise it would revert deliberate hardening once `20260705000000`
-eventually runs (or worse, if our migration runs second, it would silently
-undo the hardening).
+Our recovery migration **aligns with that intended final state** —
+function grants are only re-asserted to `authenticated, service_role` (not
+`anon`), and `project_media_select` is dropped (not recreated). The app
+reads `project-media` files via `getPublicUrl()` which bypasses RLS, so the
+SELECT policy is unnecessary and recreating it would re-enable bucket
+listing via the Supabase API.
 
 ### 1. (FIXED in `20260706000000`) `public.has_platform_admin(uuid)` — EXECUTE grant missing for `authenticated`
 
@@ -88,44 +89,54 @@ undo the hardening).
 - **Recovery:** Re-asserted via idempotent `INSERT … ON CONFLICT DO NOTHING`
   in `20260706000000_restore_storage_grants_drift.sql`.
 
-## Drift items intentionally **not** in 20260706000000
+### 5. (FIXED in `20260706000000`) `listing-images` bucket has stale `file_size_limit` / `allowed_mime_types`
 
-These are tracked here for follow-up. Each requires a deliberate decision
-about whether the migration-declared state or the live state is correct.
+- **Declared in:** `supabase/migrations/20260306223545_*.sql:445-447`
+  initial INSERT with `10485760` (10 MB) and
+  `['image/jpeg','image/png','image/webp','image/gif']`. Tightened in
+  `supabase/migrations/20260522000000_performance_optimizations.sql:163-167`
+  to `5242880` (5 MB) and `['image/jpeg','image/webp','image/png']` (drop
+  GIF).
+- **Observed live state:** `20260522000000` is recorded as applied in
+  `supabase_migrations.schema_migrations`, and its index changes did land,
+  but the bucket UPDATE did not — bucket was still 10 MB with `image/gif`.
+  Likely cause: the bucket UPDATE was reverted out-of-band after the
+  migration ran.
+- **Symptom:** Bucket-level enforcement was looser than declared; HEIC/HEIF/
+  AVIF uploads still get rejected by the bucket allowlist (those formats
+  are not in either the original or tightened allowlist), but the app's
+  `compressImage.ts` converts them to WebP/JPEG before upload, so dropping
+  GIF is the only behavioral change.
+- **Recovery:** Re-INSERT (idempotent via `ON CONFLICT DO UPDATE`) with
+  the post-`20260522000000` state in `20260706000000_restore_storage_grants_drift.sql`.
 
-### A. `avatars` bucket entirely missing
+### 6. (FIXED in `20260706000000`) `avatars` bucket and 3 storage policies entirely missing
 
-- **Declared in:** `20260306223545_*.sql:448`
-- **Live state:** Bucket does not exist; the 3 declared `avatars` storage
-  policies (SELECT/INSERT/UPDATE) are absent.
-- **Decision needed:** Does the product still need user avatars? If yes,
-  recreate the bucket and policies; if no, deprecate the migration code path.
+- **Declared in:** `supabase/migrations/20260306223545_*.sql:448` (initial
+  bucket INSERT, 5 MB, jpeg/png/webp) and `:462-472` (3 storage policies:
+  `Avatars are publicly accessible`, `Users can upload their own avatar`,
+  `Users can update their own avatar`). Tightened in
+  `supabase/migrations/20260522000000_performance_optimizations.sql:170-174`
+  to `2097152` (2 MB).
+- **Observed live state:** Bucket entirely absent from `storage.buckets`;
+  no avatar-related policies on `storage.objects`.
+- **Symptom:** Any avatar upload would have failed with `Bucket not found`.
+- **Recovery:** Re-INSERT bucket (idempotent via `ON CONFLICT DO UPDATE`)
+  at the post-`20260522000000` state (2 MB, jpeg/webp/png) and recreate the
+  3 policies in `20260706000000_restore_storage_grants_drift.sql`.
 
-### B. `listing-images` bucket has stale `file_size_limit` / `allowed_mime_types`
+## Future drift detection
 
-- **Migration `20260306223545_*.sql`:** creates with `10485760` (10 MB) and
-  `['image/jpeg','image/png','image/webp','image/gif']`.
-- **Migration `20260522000000_performance_optimizations.sql:163-167`:** UPDATEs
-  to `5242880` (5 MB) and removes `image/gif`.
-- **Live state:** Still 10 MB and includes `image/gif`. The performance
-  migration's UPDATE never landed.
-- **Decision needed:** The perf migration tightened the limit and dropped GIF
-  support. If we want that, run the UPDATE again. If we want to keep current
-  behavior (current uploaders rely on it; the listing-images allowlist still
-  matches the app code's `IMAGE_MIME_TYPES` constant), consider adjusting
-  the migration instead so future fresh applies match production.
+The drift listed above was discovered via E2E test failures rather than by
+tooling. We should add automated drift detection so future regressions
+surface in CI rather than at runtime.
 
-### C. Other recent migrations — needs full audit
-
-A bucket-by-bucket and grant-by-grant comparison against every migration's
-declared post-state is out of scope for this PR. Recommended follow-up:
-
-- Add a CI job that snapshots the live DB's declarative state (function
-  grants, RLS policies, storage buckets, indexes) and diffs it against the
-  expected state from `supabase db dump --schema=public,private,storage` on
-  a fresh migration replay.
-- Or: adopt `supabase db diff` as part of the deploy pipeline, comparing
-  live to a fresh `db reset`.
+- **Short-term:** Add a CI job that snapshots the live DB's declarative
+  state (function grants, RLS policies, storage buckets, indexes) and diffs
+  it against the expected state from `supabase db dump --schema=public,private,storage`
+  on a fresh migration replay.
+- **Or:** adopt `supabase db diff` as part of the deploy pipeline,
+  comparing live to a fresh `db reset`.
 
 ## Why this happened
 
