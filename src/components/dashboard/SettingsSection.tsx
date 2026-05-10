@@ -24,7 +24,7 @@ function toRoleKey(label: string): string {
 
 export function SettingsSection({
   roleLabel,
-  onUpdate,
+  onUpdate: _onUpdate,
   refreshProfile,
   currentType,
   hasActiveSub,
@@ -41,6 +41,14 @@ export function SettingsSection({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  // Role switch is initiated via the begin_role_switch RPC, which atomically:
+  //   - clears participant_type + bio,
+  //   - stamps profiles.role_switch_in_progress_at,
+  //   - soft-archives role-specific public-facing rows (professionals, projects)
+  //     so the user disappears from the public directory immediately.
+  // The subsequent /onboarding flow finalises the switch with
+  // complete_onboarding_role_for_user(), which clears the sentinel and
+  // unarchives the destination role's rows (idempotent).
   const handleSwitchRole = async () => {
     setSwitching(true);
     try {
@@ -50,15 +58,18 @@ export function SettingsSection({
       }));
     } catch (_err: unknown) { /* ignore storage errors */ }
 
-    const { error } = await onUpdate({ bio: null, participant_type: null } as never);
+    // begin_role_switch was added in migration 20260710120000; the generated
+    // types.ts does not yet include it, so cast through `any` to call it.
+    const { error } = await (supabase.rpc as any)("begin_role_switch");
     if (error) {
-      toast.error("Could not reset participant type: " + error.message);
+      toast.error("Could not start role switch: " + error.message);
+      try { sessionStorage.removeItem("role_switch_ctx"); } catch { /* ignore */ }
       setSwitching(false);
       return;
     }
     await refreshProfile();
     setSwitching(false);
-    toast.success("Participant type cleared — redirecting to setup…");
+    toast.success("Account type cleared — redirecting to setup…");
     navigate("/onboarding");
   };
 

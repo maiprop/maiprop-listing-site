@@ -141,6 +141,12 @@ export default function Onboarding() {
       const ctx = JSON.parse(raw) as { fromType: ParticipantId; hadActiveSub: boolean };
       setSwitchCtx(ctx);
       sessionStorage.removeItem("role_switch_ctx");
+      // Drop any stale draft from the previous role's onboarding. Without
+      // this the draft-restore effect below would re-route the user into a
+      // mid-flow step for the role they're leaving (e.g. "pro-availability")
+      // before they ever pick the new typology. This effect runs before the
+      // draft-restore effect because it appears earlier in source order.
+      localStorage.removeItem("onboarding_draft");
     } catch (err: unknown) {
       logger.warn("[Onboarding] role_switch_ctx parse failed:", err instanceof Error ? err.message : err);
     }

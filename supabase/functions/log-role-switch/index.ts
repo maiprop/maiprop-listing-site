@@ -79,7 +79,12 @@ Deno.serve(async (req) => {
     const cancelSubscription: boolean = body.cancel_subscription === true;
 
     // ── Stripe: cancel subscription at period end ─────────────────────────────
+    // Idempotent: skip the update if the active sub is already pending
+    // cancellation. Errors are surfaced (502) so the UI can warn the user
+    // their billing state didn't change — silent failures previously left
+    // users paying for a role they had switched away from.
     let subCancelled = false;
+    let subAlreadyCancelling = false;
     if (cancelSubscription) {
       const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
       if (stripeKey && user.email) {
@@ -93,16 +98,29 @@ Deno.serve(async (req) => {
               limit: 1,
             });
             if (subs.data.length > 0) {
-              await stripe.subscriptions.update(subs.data[0].id, { cancel_at_period_end: true });
-              subCancelled = true;
-              logStep("Subscription set to cancel at period end", { subId: subs.data[0].id });
+              const sub = subs.data[0];
+              if (sub.cancel_at_period_end === true) {
+                subAlreadyCancelling = true;
+                logStep("Subscription already pending cancellation — skipping update", {
+                  subId: sub.id,
+                });
+              } else {
+                await stripe.subscriptions.update(sub.id, { cancel_at_period_end: true });
+                subCancelled = true;
+                logStep("Subscription set to cancel at period end", { subId: sub.id });
+              }
             }
           }
         } catch (stripeErr: unknown) {
-          // Non-fatal — log but don't block the audit record
-          logStep("Stripe cancellation failed (non-fatal)", {
-            error: stripeErr instanceof Error ? stripeErr.message : String(stripeErr),
-          });
+          const message = stripeErr instanceof Error ? stripeErr.message : String(stripeErr);
+          logStep("Stripe cancellation failed", { error: message });
+          return new Response(
+            JSON.stringify({
+              error: "stripe_cancellation_failed",
+              detail: message,
+            }),
+            { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
         }
       }
     }
@@ -122,10 +140,14 @@ Deno.serve(async (req) => {
       // Non-fatal — return success to avoid blocking the UX
     }
 
-    logStep("Done", { fromType, toType, subCancelled });
+    logStep("Done", { fromType, toType, subCancelled, subAlreadyCancelling });
 
     return new Response(
-      JSON.stringify({ success: true, sub_cancelled: subCancelled }),
+      JSON.stringify({
+        success: true,
+        sub_cancelled: subCancelled,
+        sub_already_cancelling: subAlreadyCancelling,
+      }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err: unknown) {
