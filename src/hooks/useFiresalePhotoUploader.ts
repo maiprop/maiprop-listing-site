@@ -1,24 +1,26 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { logger } from "@/lib/logger";
+import { IMAGE_MIME_TYPES, assertAllowedUpload } from "@/lib/uploadValidation";
 
 const MAX_PHOTOS = 10;
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024; // 10 MB
 
-const ALLOWED_MIME = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/gif",
-]);
-
-const SAFE_PHOTO_EXTS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
+/**
+ * Extension fallback for image MIME types. Used when picking the storage
+ * object's path suffix — we never trust raw `file.name` here. Includes the
+ * iPhone-native HEIC/HEIF/AVIF formats supported by `IMAGE_MIME_TYPES`.
+ */
+const SAFE_PHOTO_EXTS = new Set(["jpg", "jpeg", "png", "webp", "gif", "heic", "heif", "avif"]);
 const MIME_TO_EXT: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/png": "png",
   "image/webp": "webp",
   "image/gif": "gif",
+  "image/heic": "heic",
+  "image/heif": "heif",
+  "image/avif": "avif",
 };
 
 /**
@@ -27,9 +29,9 @@ const MIME_TO_EXT: Record<string, string> = {
  * this hook to avoid changing the bytes uploaded by the existing flow when
  * pulling logic out of `FiresaleQuickSaleForm`.
  *
- * NOTE: This is a *processing* helper, not a security check. The caller has
- * already filtered files by MIME type before calling `compress()` (see the
- * `ALLOWED_MIME` set used in `addFiles()`).
+ * NOTE: This is a *processing* helper, not a security check. The actual MIME
+ * allowlist enforcement is `assertAllowedUpload(file, IMAGE_MIME_TYPES, ...)`
+ * called at the upload site (see `upload()` below).
  */
 const compress = (file: File, maxDim = 1600, quality = 0.75): Promise<Blob> =>
   new Promise((resolve) => {
@@ -96,24 +98,58 @@ export function useFiresalePhotoUploader(): UseFiresalePhotoUploaderResult {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Track every blob URL we hand out via `URL.createObjectURL` so we can
+  // revoke them on unmount, removal, or wholesale replacement — leaking
+  // these on a long form session keeps raw image bytes alive for the page
+  // lifetime. Pattern mirrors `useListingForm.ts:84-93`.
+  const blobUrlsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const urls = blobUrlsRef.current;
+    return () => {
+      urls.forEach((u) => URL.revokeObjectURL(u));
+      urls.clear();
+    };
+  }, []);
+
+  const trackBlobUrl = (url: string): string => {
+    blobUrlsRef.current.add(url);
+    return url;
+  };
+  const revokeBlobUrl = (url: string) => {
+    if (blobUrlsRef.current.delete(url)) {
+      URL.revokeObjectURL(url);
+    }
+  };
+
   const addFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     const incoming = Array.from(e.target.files || []);
-    const valid = incoming.filter((f) => ALLOWED_MIME.has(f.type) && f.size < MAX_PHOTO_BYTES);
+    const valid = incoming.filter((f) => IMAGE_MIME_TYPES.has(f.type) && f.size < MAX_PHOTO_BYTES);
     if (valid.length < incoming.length) {
       toast.warning("Some files were skipped (must be images under 10MB).");
     }
-    const next = [...files, ...valid].slice(0, MAX_PHOTOS);
-    setFiles(next);
-    setPreviews(next.map((f) => URL.createObjectURL(f)));
+    setFiles((prev) => {
+      const next = [...prev, ...valid].slice(0, MAX_PHOTOS);
+      // Revoke any preview URLs we are about to throw away, then mint and
+      // track fresh ones for the new combined list.
+      previews.forEach(revokeBlobUrl);
+      const nextPreviews = next.map((f) => trackBlobUrl(URL.createObjectURL(f)));
+      setPreviews(nextPreviews);
+      return next;
+    });
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const removeAt = (idx: number) => {
     setFiles((f) => f.filter((_, i) => i !== idx));
-    setPreviews((p) => p.filter((_, i) => i !== idx));
+    setPreviews((p) => {
+      const removed = p[idx];
+      if (removed) revokeBlobUrl(removed);
+      return p.filter((_, i) => i !== idx);
+    });
   };
 
   const reset = () => {
+    previews.forEach(revokeBlobUrl);
     setFiles([]);
     setPreviews([]);
   };
@@ -123,11 +159,24 @@ export function useFiresalePhotoUploader(): UseFiresalePhotoUploaderResult {
     try {
       const urls: string[] = [];
       for (const file of files) {
+        // Mandatory client-side validation per CLAUDE.md — must run
+        // immediately before each `supabase.storage.from(...).upload(...)`.
+        // The pre-filter in `addFiles()` is a UX hint, not a security boundary.
+        try {
+          assertAllowedUpload(file, IMAGE_MIME_TYPES, {
+            label: "photo",
+            maxBytes: MAX_PHOTO_BYTES,
+          });
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : "Invalid photo";
+          logger.warn("[Firesale] photo rejected:", msg);
+          toast.warning(`One photo was rejected: ${msg}`);
+          continue;
+        }
         const compressed = await compress(file);
         // Validate extension against an allowlist — never trust raw `file.name`.
-        // The MIME allowlist is enforced in `addFiles()`, so the compressed
-        // blob's type is the source of truth here. `file.name` is only
-        // consulted as a fallback when MIME is missing/unknown.
+        // The compressed blob's type is the source of truth; `file.name` is
+        // only consulted as a fallback when MIME is missing/unknown.
         const fromMime = MIME_TO_EXT[compressed.type];
         const fromName = (file.name.split(".").pop() ?? "").toLowerCase();
         const ext = fromMime ?? (SAFE_PHOTO_EXTS.has(fromName) ? fromName : "jpg");
