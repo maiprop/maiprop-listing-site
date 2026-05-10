@@ -14,6 +14,132 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_data_input_bans: {
+        Row: {
+          banned_at: string
+          banned_by: string | null
+          reason: string | null
+          user_id: string
+        }
+        Insert: {
+          banned_at?: string
+          banned_by?: string | null
+          reason?: string | null
+          user_id: string
+        }
+        Update: {
+          banned_at?: string
+          banned_by?: string | null
+          reason?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      agent_data_inputs: {
+        Row: {
+          agent_side: string
+          buyer_name: string | null
+          city: string | null
+          closing_date: string
+          created_at: string
+          discount_applied: boolean
+          discount_applied_at: string | null
+          discount_invoice_id: string | null
+          id: string
+          kaek: string | null
+          notes: string | null
+          postal_code: string | null
+          property_address: string
+          property_type: string
+          rejection_reason: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          sale_price: number
+          seller_name: string | null
+          status: string
+          transaction_type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          agent_side: string
+          buyer_name?: string | null
+          city?: string | null
+          closing_date: string
+          created_at?: string
+          discount_applied?: boolean
+          discount_applied_at?: string | null
+          discount_invoice_id?: string | null
+          id?: string
+          kaek?: string | null
+          notes?: string | null
+          postal_code?: string | null
+          property_address: string
+          property_type: string
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          sale_price: number
+          seller_name?: string | null
+          status?: string
+          transaction_type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          agent_side?: string
+          buyer_name?: string | null
+          city?: string | null
+          closing_date?: string
+          created_at?: string
+          discount_applied?: boolean
+          discount_applied_at?: string | null
+          discount_invoice_id?: string | null
+          id?: string
+          kaek?: string | null
+          notes?: string | null
+          postal_code?: string | null
+          property_address?: string
+          property_type?: string
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          sale_price?: number
+          seller_name?: string | null
+          status?: string
+          transaction_type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      ai_usage_limits: {
+        Row: {
+          bucket: string
+          description: string | null
+          free_monthly: number
+          is_pro_only: boolean
+          pro_monthly: number
+          updated_at: string
+        }
+        Insert: {
+          bucket: string
+          description?: string | null
+          free_monthly?: number
+          is_pro_only?: boolean
+          pro_monthly?: number
+          updated_at?: string
+        }
+        Update: {
+          bucket?: string
+          description?: string | null
+          free_monthly?: number
+          is_pro_only?: boolean
+          pro_monthly?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       articles: {
         Row: {
           category: string
@@ -1604,6 +1730,7 @@ export type Database = {
           listing_id: string
           mortgage_status: string | null
           note: string | null
+          pof_verified_status: string | null
           proof_amount: number | null
           proof_of_funds_url: string | null
           rejection_reason: string | null
@@ -1631,6 +1758,7 @@ export type Database = {
           listing_id: string
           mortgage_status?: string | null
           note?: string | null
+          pof_verified_status?: string | null
           proof_amount?: number | null
           proof_of_funds_url?: string | null
           rejection_reason?: string | null
@@ -1658,6 +1786,7 @@ export type Database = {
           listing_id?: string
           mortgage_status?: string | null
           note?: string | null
+          pof_verified_status?: string | null
           proof_amount?: number | null
           proof_of_funds_url?: string | null
           rejection_reason?: string | null
@@ -2088,13 +2217,14 @@ export type Database = {
           created_at: string
           display_name: string | null
           first_name: string | null
+          force_pro_access: boolean | null
           id: string
           investor_mode: boolean
           is_platform_admin: boolean
           last_name: string | null
           participant_type: string | null
           phone: string | null
-          role: Database["public"]["Enums"]["user_role"]
+          role: Database["public"]["Enums"]["user_role"] | null
           subscription_product_id: string | null
           updated_at: string
           user_id: string
@@ -2110,13 +2240,14 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           first_name?: string | null
+          force_pro_access?: boolean | null
           id?: string
           investor_mode?: boolean
           is_platform_admin?: boolean
           last_name?: string | null
           participant_type?: string | null
           phone?: string | null
-          role?: Database["public"]["Enums"]["user_role"]
+          role?: Database["public"]["Enums"]["user_role"] | null
           subscription_product_id?: string | null
           updated_at?: string
           user_id: string
@@ -2132,13 +2263,14 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           first_name?: string | null
+          force_pro_access?: boolean | null
           id?: string
           investor_mode?: boolean
           is_platform_admin?: boolean
           last_name?: string | null
           participant_type?: string | null
           phone?: string | null
-          role?: Database["public"]["Enums"]["user_role"]
+          role?: Database["public"]["Enums"]["user_role"] | null
           subscription_product_id?: string | null
           updated_at?: string
           user_id?: string
@@ -2559,6 +2691,24 @@ export type Database = {
         }
         Relationships: []
       }
+      rate_limit_counters: {
+        Row: {
+          bucket: string
+          count: number
+          window_start: string
+        }
+        Insert: {
+          bucket: string
+          count?: number
+          window_start: string
+        }
+        Update: {
+          bucket?: string
+          count?: number
+          window_start?: string
+        }
+        Relationships: []
+      }
       role_switch_history: {
         Row: {
           from_plan_key: string | null
@@ -2691,6 +2841,27 @@ export type Database = {
           payload?: Json | null
           records_affected?: number | null
           status?: string
+        }
+        Relationships: []
+      }
+      usage_ai_calls: {
+        Row: {
+          bucket: string
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          id?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -2854,7 +3025,97 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_review_agent_data_input: {
+        Args: {
+          p_decision: string
+          p_input_id: string
+          p_lifetime_ban?: boolean
+          p_reason?: string
+          p_reviewer_id?: string
+        }
+        Returns: {
+          agent_side: string
+          buyer_name: string | null
+          city: string | null
+          closing_date: string
+          created_at: string
+          discount_applied: boolean
+          discount_applied_at: string | null
+          discount_invoice_id: string | null
+          id: string
+          kaek: string | null
+          notes: string | null
+          postal_code: string | null
+          property_address: string
+          property_type: string
+          rejection_reason: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          sale_price: number
+          seller_name: string | null
+          status: string
+          transaction_type: string
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "agent_data_inputs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      agent_data_input_discount_pct_per_input: { Args: never; Returns: number }
+      agent_data_input_max_per_month: { Args: never; Returns: number }
+      agent_data_input_quota: {
+        Args: { p_user_id?: string }
+        Returns: {
+          is_banned: boolean
+          monthly_limit: number
+          remaining: number
+          used: number
+        }[]
+      }
+      apply_verified_data_input_discount: {
+        Args: { p_invoice_id: string; p_user_id: string }
+        Returns: {
+          applied_count: number
+          applied_pct: number
+        }[]
+      }
+      authoritative_role:
+        | { Args: never; Returns: Database["public"]["Enums"]["user_role"] }
+        | {
+            Args: { _user_id: string }
+            Returns: Database["public"]["Enums"]["user_role"]
+          }
+      check_ai_quota: { Args: { p_bucket: string }; Returns: Json }
+      check_and_increment_rate_limit: {
+        Args: { p_bucket: string; p_limit: number; p_window_seconds: number }
+        Returns: Json
+      }
       check_listing_quota: { Args: never; Returns: boolean }
+      complete_onboarding_role: {
+        Args: {
+          p_city?: string
+          p_display_name?: string
+          p_participant_type: string
+          p_phone?: string
+          p_role: Database["public"]["Enums"]["user_role"]
+        }
+        Returns: undefined
+      }
+      complete_onboarding_role_for_user: {
+        Args: {
+          p_city?: string
+          p_display_name?: string
+          p_participant_type: string
+          p_phone?: string
+          p_role: Database["public"]["Enums"]["user_role"]
+          p_user_id: string
+        }
+        Returns: undefined
+      }
       delete_email: {
         Args: { message_id: number; queue_name: string }
         Returns: boolean
@@ -2864,6 +3125,31 @@ export type Database = {
         Returns: number
       }
       expire_featured_listings: { Args: never; Returns: undefined }
+      expire_past_auctions: { Args: never; Returns: number }
+      get_agent_data_input_status: {
+        Args: { p_user_id?: string }
+        Returns: {
+          ban_reason: string
+          banned_at: string
+          discount_pct_per_input: number
+          lifetime_banned: boolean
+          monthly_count: number
+          monthly_limit: number
+          pending_discount_count: number
+          pending_discount_pct: number
+          total_pending: number
+          total_rejected: number
+          total_verified: number
+        }[]
+      }
+      get_agent_monthly_input_count: {
+        Args: { p_user_id: string }
+        Returns: number
+      }
+      get_ai_call_monthly_limit: {
+        Args: { p_bucket: string; p_user_id: string }
+        Returns: number
+      }
       get_auction_alert_limit: { Args: { p_user_id: string }; Returns: number }
       get_listing_limit:
         | { Args: { p_is_pro: boolean; p_role: string }; Returns: number }
@@ -2871,6 +3157,10 @@ export type Database = {
       get_my_role: {
         Args: never
         Returns: Database["public"]["Enums"]["user_role"]
+      }
+      get_priority_ad_monthly_limit: {
+        Args: { p_user_id: string }
+        Returns: number
       }
       get_professionals_with_priority: {
         Args: { p_category?: string }
@@ -2909,8 +3199,13 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_report_monthly_limit: { Args: { p_user_id: string }; Returns: number }
       get_saved_search_limit: { Args: { p_user_id: string }; Returns: number }
       get_search_alert_limit: { Args: { p_user_id: string }; Returns: number }
+      get_valuation_monthly_limit: {
+        Args: { p_user_id: string }
+        Returns: number
+      }
       get_viewing_limit: {
         Args: { p_is_requester: boolean; p_user_id: string }
         Returns: number
@@ -2921,6 +3216,10 @@ export type Database = {
       }
       grant_platform_admin_by_email: {
         Args: { target_email: string }
+        Returns: undefined
+      }
+      grant_platform_admin_by_email_for_caller: {
+        Args: { caller_user_id: string; target_email: string }
         Returns: undefined
       }
       has_buy_side_role: { Args: { _user_id: string }; Returns: boolean }
@@ -2945,6 +3244,7 @@ export type Database = {
         Args: { p_listing_id: string }
         Returns: undefined
       }
+      is_pro: { Args: { p_user_id: string }; Returns: boolean }
       move_to_dlq: {
         Args: {
           dlq_name: string
@@ -2962,6 +3262,11 @@ export type Database = {
           read_ct: number
         }[]
       }
+      record_ai_call: { Args: { p_bucket: string }; Returns: Json }
+      record_listing_view: {
+        Args: { p_listing_id: string; p_viewer_id?: string }
+        Returns: undefined
+      }
       record_listing_view_event: {
         Args: { p_listing_id: string; p_viewer_id?: string }
         Returns: undefined
@@ -2974,6 +3279,22 @@ export type Database = {
         Args: { target_role: string; user_ids: string[] }
         Returns: undefined
       }
+      submit_agent_data_input: {
+        Args: {
+          p_buyer_name?: string
+          p_closed_at: string
+          p_closing_price: number
+          p_kaek?: string
+          p_notes?: string
+          p_property_address: string
+          p_property_city: string
+          p_property_postal_code?: string
+          p_property_type?: string
+          p_seller_name?: string
+          p_transaction_type: string
+        }
+        Returns: string
+      }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"
@@ -2985,7 +3306,13 @@ export type Database = {
         | "sold"
         | "rented"
         | "expired"
-      listing_type: "sale" | "rent" | "auction" | "firesale" | "open_house"
+      listing_type:
+        | "sale"
+        | "rent"
+        | "auction"
+        | "firesale"
+        | "open_house"
+        | "new_build"
       message_status: "sent" | "read"
       oh_id_doc_type: "id_card" | "passport"
       oh_offer_status:
@@ -3202,7 +3529,14 @@ export const Constants = {
         "rented",
         "expired",
       ],
-      listing_type: ["sale", "rent", "auction", "firesale", "open_house"],
+      listing_type: [
+        "sale",
+        "rent",
+        "auction",
+        "firesale",
+        "open_house",
+        "new_build",
+      ],
       message_status: ["sent", "read"],
       oh_id_doc_type: ["id_card", "passport"],
       oh_offer_status: [

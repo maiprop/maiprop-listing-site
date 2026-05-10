@@ -66,6 +66,7 @@ export function useCreateContact() {
       follow_up_at?: string | null;
       listing_id?: string | null;
     }) => {
+      if (!user) throw new Error("Not authenticated");
       const { data, error } = await supabase
         .from("contacts")
         .insert({
@@ -77,7 +78,7 @@ export function useCreateContact() {
           deal_stage: contact.deal_stage || "new",
           follow_up_at: contact.follow_up_at,
           listing_id: contact.listing_id,
-          user_id: user!.id,
+          user_id: user.id,
         })
         .select()
         .single();

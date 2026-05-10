@@ -101,10 +101,10 @@ export default function Dashboard() {
   const { data: invitationRequestStatus = "none" } = useQuery<"none" | "pending" | "approved" | "rejected">({
     queryKey: ["invitation-request-status", user?.id],
     queryFn: async () => {
-       
+      if (!user) return "none";
       const { data } = await supabase.from("invitation_requests")
         .select("status")
-        .eq("user_id", user!.id)
+        .eq("user_id", user.id)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();

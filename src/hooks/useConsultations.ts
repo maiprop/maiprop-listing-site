@@ -90,11 +90,12 @@ export function useMyConsultationRequests() {
   return useQuery({
     queryKey: ["consultation-requests", user?.id],
     queryFn: async () => {
+      if (!user) return [];
       // Professionals see requests directed at them
       const { data: pro } = await supabase
         .from("professionals")
         .select("id")
-        .eq("user_id", user!.id)
+        .eq("user_id", user.id)
         .maybeSingle();
       if (!pro) return [];
 

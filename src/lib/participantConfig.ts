@@ -46,7 +46,7 @@ export function getExplicitParticipantTypeFromProfile(
  *      existed; no new code writes this prefix — safe to remove once all rows are migrated)
  */
 export function getParticipantTypeFromProfile(
-  profile: { role?: string; bio?: string | null; participant_type?: string | null } | null
+  profile: { role?: string | null; bio?: string | null; participant_type?: string | null } | null
 ): ParticipantId {
   if (!profile) return "buyer";
 
@@ -73,7 +73,7 @@ export function getParticipantTypeFromProfile(
 }
 
 /** Derive owner type for listing display: agent vs private seller */
-export function getOwnerParticipantType(profile: { role?: string; bio?: string | null } | null): "agent" | "seller" | null {
+export function getOwnerParticipantType(profile: { role?: string | null; bio?: string | null } | null): "agent" | "seller" | null {
   if (!profile) return null;
   if (["admin", "agent", "developer"].includes(profile.role || "")) return "agent";
   if (profile.role === "seller") return "seller";
@@ -99,7 +99,7 @@ export const PARTICIPANT_LABELS: Record<ParticipantId, string> = {
  * Buyers and sellers are both "participant" on the pricing page.
  */
 export function getPricingAudienceFromProfile(
-  profile: { role?: string; bio?: string | null; participant_type?: string | null } | null
+  profile: { role?: string | null; bio?: string | null; participant_type?: string | null } | null
 ): PricingAudienceId {
   const pt = getParticipantTypeFromProfile(profile);
   if (pt === "buyer" || pt === "seller") return "participant";
