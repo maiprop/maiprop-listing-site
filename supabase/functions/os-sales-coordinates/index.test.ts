@@ -127,6 +127,7 @@ Deno.test("limit is capped at 100", async () => {
 Deno.test("upstream URL honours MAIPROP_OS_URL env var", async () => {
   const calls: string[] = [];
   const originalFetch = globalThis.fetch;
+  const previousOsUrl = Deno.env.get("MAIPROP_OS_URL");
   globalThis.fetch = ((input: Request | string | URL) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     calls.push(url);
@@ -147,13 +148,15 @@ Deno.test("upstream URL honours MAIPROP_OS_URL env var", async () => {
     assertStringIncludes(upstreamCall, "https://staging-os.example.test/api/v1/sales/filter/coordinates");
   } finally {
     globalThis.fetch = originalFetch;
-    Deno.env.set("MAIPROP_OS_URL", "https://os.test");
+    if (previousOsUrl === undefined) Deno.env.delete("MAIPROP_OS_URL");
+    else Deno.env.set("MAIPROP_OS_URL", previousOsUrl);
   }
 });
 
 Deno.test("upstream URL falls back to default when MAIPROP_OS_URL is unset", async () => {
   const calls: string[] = [];
   const originalFetch = globalThis.fetch;
+  const previousOsUrl = Deno.env.get("MAIPROP_OS_URL");
   globalThis.fetch = ((input: Request | string | URL) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     calls.push(url);
@@ -170,7 +173,8 @@ Deno.test("upstream URL falls back to default when MAIPROP_OS_URL is unset", asy
     assertStringIncludes(upstreamCall, "http://app.os.maiprop.co:8080/api/v1/sales/filter/coordinates");
   } finally {
     globalThis.fetch = originalFetch;
-    Deno.env.set("MAIPROP_OS_URL", "https://os.test");
+    if (previousOsUrl === undefined) Deno.env.delete("MAIPROP_OS_URL");
+    else Deno.env.set("MAIPROP_OS_URL", previousOsUrl);
   }
 });
 

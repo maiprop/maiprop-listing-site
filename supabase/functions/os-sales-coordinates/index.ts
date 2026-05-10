@@ -155,7 +155,7 @@ Deno.serve(async (req) => {
   const radius_km = Math.min(Math.max(Number(body.radius_km) || 2, 0.1), MAX_RADIUS_KM);
   const limit = Math.min(Math.max(Math.floor(Number(body.limit) || 50), 1), MAX_LIMIT);
 
-  const osBase = (Deno.env.get("MAIPROP_OS_URL") ?? DEFAULT_OS_URL).replace(/\/$/, "");
+  const osBase = (Deno.env.get("MAIPROP_OS_URL")?.trim() || DEFAULT_OS_URL).replace(/\/$/, "");
   const osUrl = `${osBase}/api/v1/sales/filter/coordinates`;
 
   try {
