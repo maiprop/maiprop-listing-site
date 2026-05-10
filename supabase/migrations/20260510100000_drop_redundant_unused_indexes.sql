@@ -10,13 +10,16 @@
 -- would create the risk of slow JOINs, slow cascade deletes, or sequential
 -- scans the moment those features see real usage.
 --
--- This migration drops ONLY the subset of unused indexes that are strictly
+-- This migration drops the subset of unused indexes that are strictly
 -- redundant — i.e. another index on the same table already covers the same
 -- (or a superset of) columns under the same WHERE predicate. PostgreSQL can
 -- always answer the same queries from the wider/duplicate index, so dropping
 -- these is genuinely free.
 --
--- Each DROP below cites the index that covers the same lookups.
+-- Each DROP below cites the index that covers the same lookups, and the
+-- last CREATE timestamp for that index — confirming that this migration's
+-- timestamp is later than every CREATE so the DROPs are not no-ops on
+-- fresh replay.
 --
 -- See `docs/SUPABASE_PERFORMANCE_ADVISOR_TRIAGE.md` for the full triage
 -- analysis and category-by-category rationale for what was kept.
@@ -39,15 +42,18 @@ DROP INDEX IF EXISTS public.idx_deal_checklists_user_id;
 --    index email_unsubscribe_tokens_token_key.
 DROP INDEX IF EXISTS public.idx_unsubscribe_tokens_token;
 
--- 5. firesale_interest.deal_id — single-column index covered by the unique
---    constraint firesale_interest_deal_id_investor_id_key whose backing
---    index leads with deal_id.
-DROP INDEX IF EXISTS public.idx_firesale_interest_deal_id;
-
--- 6. listing_view_events.listing_id — single-column index covered by the
+-- 5. listing_view_events.listing_id — single-column index covered by the
 --    composite idx_listing_view_events_listing_date (listing_id, viewed_at DESC).
 DROP INDEX IF EXISTS public.idx_listing_view_events_listing;
 
--- 7. suppressed_emails.email — duplicate of the unique-constraint index
+-- 6. suppressed_emails.email — duplicate of the unique-constraint index
 --    suppressed_emails_email_key.
 DROP INDEX IF EXISTS public.idx_suppressed_emails_email;
+
+-- NOTE: idx_firesale_interest_deal_id was originally part of this drop list
+-- (covered by firesale_interest_deal_id_investor_id_key unique constraint),
+-- but deferred. Its CREATE migration is timestamped 20260529000000, while
+-- this migration is 20260510100000 — on fresh replay the DROP would run
+-- before the CREATE, leaving the index in place after the chain finishes.
+-- Will be dropped in a follow-up migration once the chronology lint
+-- accepts a timestamp later than 20260529000000.

@@ -46,15 +46,40 @@ We categorised the 85 unused indexes into four buckets:
 
 | Bucket | Count | Action |
 | --- | --- | --- |
-| Strictly redundant | 7 | **Drop** in `20260801000000_drop_redundant_unused_indexes.sql` |
+| Strictly redundant | 6 | **Drop** in `20260510100000_drop_redundant_unused_indexes.sql` |
+| Strictly redundant but DROP deferred | 1 | Keep until a future migration (see note below) |
 | FK-supporting | 27 | Keep (needed for cascade deletes / joins) |
 | Filter / feature scaffolding | 48 | Keep (will be hit when feature traffic ramps) |
 | BRIN partial-redundant | 3 | Keep (intentional BRIN choice for time-series scans) |
 | **Total** | **85** | |
 
-### Strictly redundant (dropped)
+### One redundant index could not be dropped in this migration
 
-These 7 indexes are covered by another index on the same table that already
+`idx_firesale_interest_deal_id` is also strictly redundant (covered by
+`firesale_interest_deal_id_investor_id_key`, the unique-constraint backing
+index on `(deal_id, investor_id)`). It belongs in the drop list.
+
+However, the table `firesale_interest` and this index are first created in
+`supabase/migrations/20260529000000_firesale_interest_queue.sql`, while
+this migration is timestamped `20260510100000`. On a fresh-DB replay
+(CI's migration replay, new dev environments, staging rebuilds), Postgres
+runs migrations in chronological order — so a `DROP INDEX IF EXISTS` at
+this timestamp would execute before the index ever gets created, ending up
+as a no-op. Production would then diverge from fresh-replay state.
+
+The migration chronology linter (`scripts/check-migration-idempotency.mjs`)
+rejects new timestamps later than `now + 1 day`, so we cannot simply pick
+a timestamp after `20260529000000` until the calendar clock catches up to
+late-May 2026. The DROP for this index will be added in a follow-up
+migration when the chronology lint allows a timestamp later than
+`20260529000000`.
+
+Until then, the live unused-index count drops from 85 to **79** (85 − 6),
+not to 78 as originally targeted.
+
+### Strictly redundant (dropped in this migration)
+
+These 6 indexes are covered by another index on the same table that already
 indexes the same column as its leading column under the same WHERE predicate
 (or no predicate). Postgres uses the wider index for any query the narrow
 one could answer.
@@ -65,9 +90,14 @@ one could answer.
 | `idx_conversations_participant_b` | `idx_conversations_participant_b_last (participant_b, last_message_at)` | Wider btree, leading column matches. |
 | `idx_deal_checklists_user_id` | `deal_checklists_user_id_entity_type_entity_id_key (user_id, entity_type, entity_id)` | Unique-constraint backing index, leading column matches. |
 | `idx_unsubscribe_tokens_token` | `email_unsubscribe_tokens_token_key (token)` | Pure duplicate of the unique-constraint index. |
-| `idx_firesale_interest_deal_id` | `firesale_interest_deal_id_investor_id_key (deal_id, investor_id)` | Unique-constraint backing index, leading column matches. |
 | `idx_listing_view_events_listing` | `idx_listing_view_events_listing_date (listing_id, viewed_at DESC)` | Wider btree, leading column matches. |
 | `idx_suppressed_emails_email` | `suppressed_emails_email_key (email)` | Pure duplicate of the unique-constraint index. |
+
+### Strictly redundant but DROP deferred
+
+| Index | Covering index | Reason for deferral |
+| --- | --- | --- |
+| `idx_firesale_interest_deal_id` | `firesale_interest_deal_id_investor_id_key (deal_id, investor_id)` | Index is created in migration `20260529000000`, later than this migration's `20260510100000` timestamp. See note above. |
 
 ### FK-supporting (kept)
 
@@ -226,11 +256,13 @@ This PR ships exactly one migration:
 
 - `supabase/migrations/20260510100000_drop_redundant_unused_indexes.sql`
 
-It drops the 7 strictly-redundant indexes listed above. No policy changes,
-no FK-index changes, no feature-scaffolding-index changes.
+It drops 6 of the 7 strictly-redundant indexes identified during triage
+(the 7th — `idx_firesale_interest_deal_id` — is deferred for the chronology
+reason explained above). No policy changes, no FK-index changes, no
+feature-scaffolding-index changes.
 
 After this migration, the unused-index advisor count should drop from 85 to
-**78** (85 − 7).
+**79** (85 − 6).
 
 The `multiple_permissive_policies` count is unchanged at **91** by design;
 those are tracked here for future work.
