@@ -5,6 +5,7 @@ import type { Database } from "@/integrations/supabase/types";
 const AUCTION_SELECT_CORE = "id, title, city, address, price, auction_starting_bid, auction_date, auction_court, property_type, cover_image_url, sqm, bedrooms, bathrooms, latitude, longitude, tags, year_built, construction_status, website_url, region, is_featured, priority_placement";
 const QUERY_TIMEOUT_MS = 15_000;
 const AUCTION_FETCH_LIMIT = 500;
+const PORTAL_AUCTION_FETCH_LIMIT = 600;
 
 /**
  * Shape returned by the fetchAll helper. Columns are a Pick<> against the
@@ -42,51 +43,135 @@ type AuctionListingRow = Pick<
   listing_images?: { url: string; sort_order: number }[];
 };
 
+function getTodayDate(): string {
+  return new Date().toISOString().split("T")[0];
+}
+
+function getAuctionSelect(withImages: boolean): string {
+  return withImages ? `${AUCTION_SELECT_CORE}, listing_images(url, sort_order)` : AUCTION_SELECT_CORE;
+}
+
+function hasCompleteAuctionPage(rows: AuctionListingRow[], pageSize: number): boolean {
+  return rows.length === pageSize;
+}
+
+async function fetchAuctionPageFromDatabase(
+  today: string,
+  withImages: boolean,
+  from: number,
+  pageSize: number,
+): Promise<AuctionListingRow[]> {
+  const { data, error } = await supabase
+    .from("listings")
+    .select(getAuctionSelect(withImages))
+    .eq("listing_type", "auction")
+    .eq("status", "active")
+    .or(`auction_date.gte.${today},auction_date.is.null`)
+    .order("is_featured", { ascending: false })
+    .order("priority_placement", { ascending: false })
+    .order("auction_date", { ascending: true, nullsFirst: false })
+    .range(from, from + pageSize - 1);
+
+  if (error) throw error;
+  return (data ?? []) as unknown as AuctionListingRow[];
+}
+
+async function fetchAuctionFallbackPageRange(
+  today: string,
+  withImages: boolean,
+  from: number,
+  remainingRows: number,
+  allAuctions: AuctionListingRow[],
+): Promise<AuctionListingRow[]> {
+  if (remainingRows <= 0) return allAuctions;
+
+  const pageSize = Math.min(AUCTION_FETCH_LIMIT, remainingRows);
+  const rows = await fetchAuctionPageFromDatabase(today, withImages, from, pageSize);
+  const nextAuctions = allAuctions.concat(rows);
+
+  return hasCompleteAuctionPage(rows, pageSize)
+    ? fetchAuctionFallbackPageRange(today, withImages, from + pageSize, remainingRows - rows.length, nextAuctions)
+    : nextAuctions;
+}
+
+function fetchAuctionsFromDatabase(
+  today: string,
+  withImages: boolean,
+  maxRows = PORTAL_AUCTION_FETCH_LIMIT,
+): Promise<AuctionListingRow[]> {
+  return fetchAuctionFallbackPageRange(today, withImages, 0, maxRows, []);
+}
+
+async function fetchAuctionsFromOs(today: string): Promise<AuctionListingRow[]> {
+  const { data, error } = await supabase.functions.invoke("fetch-os-auctions", {
+    body: {
+      auctionDateFrom: today,
+      page: 0,
+      pageSize: PORTAL_AUCTION_FETCH_LIMIT,
+      sortBy: "AUCTION_DATE",
+      order: "ASC",
+    },
+  });
+
+  if (error) throw error;
+
+  const rows = data?.data;
+  if (!Array.isArray(rows)) throw new Error("Unexpected OS auctions response");
+  return rows as AuctionListingRow[];
+}
+
+async function fetchFallbackAuctions(today: string): Promise<AuctionListingRow[]> {
+  try {
+    return await fetchAuctionsFromDatabase(today, true);
+  } catch (_dbJoinErr: unknown) {
+    return fetchAuctionsFromDatabase(today, false);
+  }
+}
+
+async function fetchAuctionListings(): Promise<AuctionListingRow[]> {
+  const today = getTodayDate();
+  try {
+    return await fetchAuctionsFromOs(today);
+  } catch (_osErr: unknown) {
+    return fetchFallbackAuctions(today);
+  }
+}
+
+function getTimeoutRejection(
+  setTimer: (timer: ReturnType<typeof setTimeout>) => void,
+): Promise<never> {
+  return new Promise(function createTimeoutRejection(_, reject) {
+    const timer = setTimeout(function rejectTimeout() {
+      reject(new Error("Request timeout"));
+    }, QUERY_TIMEOUT_MS);
+    setTimer(timer);
+  });
+}
+
+async function withAuctionTimeout(
+  request: Promise<AuctionListingRow[]>,
+): Promise<AuctionListingRow[]> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      request,
+      getTimeoutRejection(function setTimeoutHandle(timer) {
+        timeout = timer;
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
+function getAuctionQuery(): Promise<AuctionListingRow[]> {
+  return withAuctionTimeout(fetchAuctionListings());
+}
+
 export function useAuctionListings() {
   return useQuery({
     queryKey: ["auction-listings-all"],
-    queryFn: async () => {
-      const today = new Date().toISOString().split("T")[0];
-
-      const fetchAll = async (withImages: boolean): Promise<AuctionListingRow[]> => {
-        let allAuctions: AuctionListingRow[] = [];
-        let from = 0;
-        while (true) {
-          const select = withImages
-            ? `${AUCTION_SELECT_CORE}, listing_images(url, sort_order)`
-            : AUCTION_SELECT_CORE;
-          const { data, error } = await supabase
-            .from("listings")
-            .select(select)
-            .eq("listing_type", "auction")
-            .eq("status", "active")
-            .or(`auction_date.gte.${today},auction_date.is.null`)
-            .order("is_featured", { ascending: false })
-            .order("priority_placement", { ascending: false })
-            .order("auction_date", { ascending: true, nullsFirst: false })
-            .range(from, from + AUCTION_FETCH_LIMIT - 1);
-          if (error) throw error;
-          if (!data || data.length === 0) break;
-          allAuctions = allAuctions.concat(data as unknown as AuctionListingRow[]);
-          if (data.length < AUCTION_FETCH_LIMIT) break;
-          from += AUCTION_FETCH_LIMIT;
-        }
-        return allAuctions;
-      };
-
-      const run = async (): Promise<AuctionListingRow[]> => {
-        try {
-          return await fetchAll(true);
-        } catch (_err: unknown) {
-          return await fetchAll(false);
-        }
-      };
-
-      return Promise.race([
-        run(),
-        new Promise<never>((_, rej) => setTimeout(() => rej(new Error("Request timeout")), QUERY_TIMEOUT_MS)),
-      ]);
-    },
+    queryFn: getAuctionQuery,
     staleTime: 30_000, // 30s — auction status changes frequently
   });
 }

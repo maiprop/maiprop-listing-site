@@ -1,7 +1,7 @@
 /**
- * Tests for the useAuctionListings hook. The hook paginates via .range() and
- * has a graceful fallback path: if the join on listing_images fails we retry
- * without the join. We drive both branches with mocked builders.
+ * Tests for the useAuctionListings hook. The hook prefers the live OS auction
+ * proxy and falls back to DB pagination. If the listing_images join fails, it
+ * retries without the join.
  */
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -9,9 +9,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
 
 const fromMock = vi.fn();
+const invokeMock = vi.fn();
 
 vi.mock("@/integrations/supabase/client", () => ({
-  supabase: { from: (...args: unknown[]) => fromMock(...args) },
+  supabase: {
+    from: (...args: unknown[]) => fromMock(...args),
+    functions: { invoke: (...args: unknown[]) => invokeMock(...args) },
+  },
 }));
 
 import { useAuctionListings } from "@/hooks/useAuctionListings";
@@ -28,6 +32,7 @@ function renderHookWithQuery<T>(hook: () => T) {
 
 beforeEach(() => {
   fromMock.mockReset();
+  invokeMock.mockReset();
 });
 
 /**
@@ -43,7 +48,19 @@ function makeBuilder(rangeImpl: () => Promise<{ data: unknown[] | null; error: u
 }
 
 describe("useAuctionListings", () => {
+  it("returns live OS auctions when the proxy succeeds", async () => {
+    invokeMock.mockResolvedValue({ data: { data: [{ id: "os-a1", title: "OS auction" }] }, error: null });
+    const { result } = renderHookWithQuery(() => useAuctionListings());
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.[0]).toMatchObject({ id: "os-a1" });
+    expect(invokeMock).toHaveBeenCalledWith("fetch-os-auctions", expect.objectContaining({
+      body: expect.objectContaining({ pageSize: 600 }),
+    }));
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
   it("returns an empty array when the first page is empty", async () => {
+    invokeMock.mockRejectedValue(new Error("OS unavailable"));
     fromMock.mockReturnValue(makeBuilder(() => Promise.resolve({ data: [], error: null })));
     const { result } = renderHookWithQuery(() => useAuctionListings());
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -51,6 +68,7 @@ describe("useAuctionListings", () => {
   });
 
   it("returns the joined-image rows when the first attempt succeeds", async () => {
+    invokeMock.mockRejectedValue(new Error("OS unavailable"));
     fromMock.mockReturnValue(
       makeBuilder(() =>
         Promise.resolve({
@@ -64,7 +82,26 @@ describe("useAuctionListings", () => {
     expect(result.current.data?.[0]).toMatchObject({ id: "a1" });
   });
 
+  it("caps database fallback pagination to the portal limit", async () => {
+    invokeMock.mockRejectedValue(new Error("OS unavailable"));
+    const firstPage = Array.from({ length: 500 }, (_, i) => ({ id: `a${i}` }));
+    const secondPage = Array.from({ length: 100 }, (_, i) => ({ id: `b${i}` }));
+    const builder = makeBuilder(vi.fn()
+      .mockResolvedValueOnce({ data: firstPage, error: null })
+      .mockResolvedValueOnce({ data: secondPage, error: null }));
+    fromMock.mockReturnValue(builder);
+
+    const { result } = renderHookWithQuery(() => useAuctionListings());
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(result.current.data).toHaveLength(600);
+    expect(builder.range).toHaveBeenCalledTimes(2);
+    expect(builder.range).toHaveBeenNthCalledWith(1, 0, 499);
+    expect(builder.range).toHaveBeenNthCalledWith(2, 500, 599);
+  });
+
   it("falls back to a no-images query when the joined version fails", async () => {
+    invokeMock.mockRejectedValue(new Error("OS unavailable"));
     // First call: every range invocation rejects with a join error.
     let call = 0;
     fromMock.mockImplementation(() => {
@@ -80,6 +117,7 @@ describe("useAuctionListings", () => {
   });
 
   it("propagates a non-join Supabase error", async () => {
+    invokeMock.mockRejectedValue(new Error("OS unavailable"));
     fromMock.mockReturnValue(
       makeBuilder(() => Promise.resolve({ data: null, error: new Error("rls denied") })),
     );

@@ -1,6 +1,6 @@
 # maiProp OS ↔ Listing Site Integration
 
-The **listing site** (this repo) integrates with **maiProp OS** ([app.os.maiprop.co:8080](https://app.os.maiprop.co:8080)) for:
+The **listing site** (this repo) integrates with **maiProp OS** ([app.os.maiprop.co](https://app.os.maiprop.co)) for:
 
 **If you see "Edge Function unreachable" or "Failed to send a request to the Edge Function" when running Full sync:**  
 The Edge Functions must be deployed to the **same** Supabase project as your app. Deploy them via Supabase Dashboard → Edge Functions (or `supabase functions deploy full-sync-from-os`). Ensure `VITE_SUPABASE_URL` in your app points to that project.
@@ -9,7 +9,7 @@ The Edge Functions must be deployed to the **same** Supabase project as your app
 - **Firesale → OS** – Left as-is: listing site **sends** Quick Sale™ requests to OS via `sync-firesale-to-os`.
 - **Reports & ML** – OS holds the database; the listing site consumes it via the OS API (full sync covers auctions; more APIs can be added when available).
 
-API reference: **[OS Swagger UI](https://app.os.maiprop.co:8080/swagger-ui/index.html#/)**
+API reference: **[OS Swagger UI](https://app.os.maiprop.co/swagger-ui/index.html#/)**
 
 ---
 
@@ -30,7 +30,7 @@ API reference: **[OS Swagger UI](https://app.os.maiprop.co:8080/swagger-ui/index
 
 **Purpose:** One-shot sync of **all relevant** OS data into the Hub. Currently syncs **auctions** (all pages); designed to be extended with reports, professionals, or other OS APIs when available. **Firesale → OS is unchanged** (use `sync-firesale-to-os` for that).
 
-**OS API:** Same as poll: `POST /api/v1/auctions/filter/details?page={page}&size={size}` in a loop until an empty page or `maxPages` is reached.
+**OS API:** Same as poll: `POST /api/v1/auctions/filter/details?page={page}&pageSize={pageSize}` in a loop until an empty page or `maxPages` is reached.
 
 **Auth:** `POST /auth/login` → Bearer token (reused for all requests).
 
@@ -53,7 +53,7 @@ API reference: **[OS Swagger UI](https://app.os.maiprop.co:8080/swagger-ui/index
 **Purpose:** Import future auctions from OS into the Hub `listings` table (`listing_type='auction'`, `status='active'`).
 
 **OS API:**  
-`POST /api/v1/auctions/filter/details?page={page}&size={size}`  
+`POST /api/v1/auctions/filter/details?page={page}&pageSize={pageSize}`
 Body: `AuctionFilterRequest` (e.g. `auctionDateFrom`, `auctionDateTo`, `propertyCategories`, `prefectureId`, …).
 
 **Auth:** `POST /auth/login` with `email` / `password` → use returned token as `Authorization: Bearer <token>`.

@@ -1,0 +1,41 @@
+version = 1
+
+exclude_patterns = [
+  "supabase/functions/fetch-os-auctions/index.ts"
+]
+
+test_patterns = [
+  "src/test/**",
+  "**/*.test.ts",
+  "**/*.test.tsx"
+]
+
+[[analyzers]]
+name = "javascript"
+enabled = true
+
+  [analyzers.meta]
+  plugins = ["react"]
+  environment = ["browser", "nodejs", "vitest"]
+  module_system = "es-modules"
+  dialect = "typescript"
+
+[[analyzers]]
+name = "docker"
+enabled = true
+
+[[analyzers]]
+name = "python"
+enabled = true
+
+[[analyzers]]
+name = "rust"
+enabled = true
+
+[[analyzers]]
+name = "sql"
+enabled = true
+
+[[analyzers]]
+name = "secrets"
+enabled = true
