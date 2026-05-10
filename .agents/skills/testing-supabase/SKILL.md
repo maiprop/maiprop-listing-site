@@ -1,3 +1,8 @@
+---
+name: testing-supabase
+description: Testing Supabase RLS policies, edge functions, and security hardening. Covers local dev setup, key swaps, Deno test runner, and curl-based adversarial testing patterns.
+---
+
 # Testing Supabase RLS & Edge Functions
 
 ## Devin Secrets Needed
@@ -109,13 +114,56 @@ npx supabase migration repair TIMESTAMP --status applied --linked
 - Functions with `verify_jwt = false` in `supabase/config.toml` are publicly accessible.
 - Webhook/cron functions (`process-email-queue`, `oh-registration-notify`, `receive-from-os`, `stripe-webhook`) should NOT have IP-based rate limiting — they're called from infrastructure with shared IPs.
 
+### Testing Undeployed Edge Function Changes (PR Code)
+
+When testing edge function changes that haven't been deployed yet (e.g., in a PR branch), use the **Deno test runner** which exercises the handler directly:
+
+```bash
+export PATH="$HOME/.deno/bin:$PATH"
+cd /home/ubuntu/repos/maiprop-listing-site
+deno test --allow-net --allow-env --allow-read supabase/functions/FUNCTION_NAME/index.test.ts
+```
+
+The test harness uses `captureHandler` from `supabase/functions/_shared/testUtils.ts` to intercept the `Deno.serve` call and invoke the handler directly. This lets you test the full request/response cycle without deploying.
+
+### Before/After Contrast Pattern
+
+When hardening edge functions, test both the **live deployed (unhardened)** and **local (hardened)** code to show the gap:
+
+```bash
+# Live endpoint (deployed from main — may have old code)
+curl -s -w "\nHTTP: %{http_code}" -X POST \
+  "https://qvvicunqcrwpioqnvzxf.supabase.co/functions/v1/FUNCTION_NAME" \
+  -H "Content-Type: application/json" \
+  -d 'MALICIOUS_PAYLOAD'
+
+# Then compare with Deno handler test results for the same payload
+```
+
+This proves: (a) the vulnerability exists in production, and (b) the PR code fixes it.
+
+### Adversarial Payloads for Input Validation
+
+When testing edge function input validation, use these payload categories:
+
+| Category | Example Payload | Expected Behavior |
+|----------|----------------|-------------------|
+| Null body | `null` | 400 "Request body must be a JSON object" |
+| Array body | `[{"lat":37}]` | 400 "Request body must be a JSON object" |
+| Non-numeric fields | `{"lat":"abc"}` | 400 with type error message |
+| Out-of-range values | `{"lat":91}` | 400 with bounds error |
+| Negative numeric caps | `{"radius_km":-5}` | Clamped to positive minimum |
+| Excessive values | `{"limit":99999}` | Clamped to server-side max |
+| Boolean type confusion | `{"lat":true}` | 400 with type error |
+| Invalid JSON | `not-json` | 400 "Invalid JSON body" |
+
 ## Running Tests
 
 ```bash
-# Vitest (frontend unit tests) — ~1179 tests
+# Vitest (frontend unit tests) — ~1254 tests
 npm test
 
-# Deno tests (edge function tests) — ~238 tests
+# Deno tests (edge function tests)
 export PATH="$HOME/.deno/bin:$PATH"
 cd supabase/functions && deno test --allow-env --allow-net --allow-read .
 
@@ -162,3 +210,9 @@ Existing policies use `app_role`. Changing to `user_role` changes behavior — s
 | CRM Contacts | `/dashboard` → Contacts tab | Yes | Uses `useContacts` hook |
 | Firesale Admin | `/admin?tab=pipeline` | Yes (admin) | Uses `AdminFiresalePipeline` |
 | Pro Verification | `/admin?tab=pro-verification` | Yes (admin) | Uses `AdminProfessionalVerification` |
+
+## CI Notes
+
+- **DeepSource: JavaScript** and **Codacy** may fail on PRs even when code is correct — both flag Deno globals as unrecognized and may have pre-existing failures on `main`. Check if the failure exists on the base branch before investigating.
+- **Build · Lint · Test** is the primary CI gate — this runs ESLint + Vitest.
+- All CI checks are marked `[optional]` but Build · Lint · Test should always pass.
