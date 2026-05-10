@@ -85,19 +85,39 @@ function clamp(value: number, min: number, max: number): number {
 /**
  * Whitelist the fields we expose to public callers. Anything the OS API may
  * add later (internal notes, owner names, raw URLs, etc.) is dropped here.
+ *
+ * Rows missing one of the required fields (`id`, finite/in-range `lat`/`lng`,
+ * finite `sale_price`/`asking_price`) are dropped entirely rather than
+ * substituted with placeholder values — a partial upstream payload should
+ * never surface to clients as a fake sale at (0, 0).
  */
 function sanitizeSaleRecord(raw: unknown): SaleRecord | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
   const id = typeof r.id === "string" || typeof r.id === "number" ? String(r.id) : null;
   if (!id) return null;
+
+  const lat = toFiniteNumber(r.lat, NaN);
+  const lng = toFiniteNumber(r.lng, NaN);
+  const sale_price = toFiniteNumber(r.sale_price, NaN);
+  const asking_price = toFiniteNumber(r.asking_price, NaN);
+
+  if (
+    !Number.isFinite(lat) || lat < -90 || lat > 90 ||
+    !Number.isFinite(lng) || lng < -180 || lng > 180 ||
+    !Number.isFinite(sale_price) ||
+    !Number.isFinite(asking_price)
+  ) {
+    return null;
+  }
+
   return {
     id,
     address: typeof r.address === "string" ? r.address : "",
-    lat: toFiniteNumber(r.lat, 0),
-    lng: toFiniteNumber(r.lng, 0),
-    sale_price: toFiniteNumber(r.sale_price, 0),
-    asking_price: toFiniteNumber(r.asking_price, 0),
+    lat,
+    lng,
+    sale_price,
+    asking_price,
     sale_date: typeof r.sale_date === "string" ? r.sale_date : "",
     property_type: typeof r.property_type === "string" ? r.property_type : "",
     sqm: toFiniteNumber(r.sqm, 0),
@@ -176,6 +196,12 @@ Deno.serve(async (req) => {
     });
   }
 
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return new Response(JSON.stringify({ error: "Body must be a JSON object" }), {
+      status: 400, headers: { ...hdrs, "Content-Type": "application/json" },
+    });
+  }
+
   if (
     body.lat === undefined || body.lat === null ||
     body.lng === undefined || body.lng === null
@@ -237,6 +263,13 @@ Deno.serve(async (req) => {
     }
 
     const raw = await response.json().catch(() => null);
+    if (raw === null) {
+      log.warn("OS API returned unparseable body", { status: response.status });
+      return new Response(
+        JSON.stringify({ available: false, reason: "upstream_unavailable" }),
+        { status: 503, headers: { ...hdrs, "Content-Type": "application/json" } },
+      );
+    }
     const sanitized = sanitizeUpstreamPayload(raw);
     return new Response(
       JSON.stringify({ data: sanitized, source: "os" }),

@@ -78,17 +78,136 @@ Deno.test("POST with NaN lat returns 400", async () => {
   assertEquals(res.status, 400);
 });
 
-Deno.test("POST clamps oversized radius_km and limit (does not 400)", async () => {
-  // Even when the OS API is unreachable in the test env we should not get a
-  // 400 — the function silently clamps the values and proxies upstream, so
-  // the response is 200 (success) or 503 (upstream_unavailable), never 400.
-  const res = await handler(
-    req("POST", { lat: 37.9, lng: 23.7, radius_km: 99999, limit: 99999 }),
-  );
-  assertEquals([200, 503].includes(res.status), true);
+Deno.test("POST clamps oversized radius_km and limit before forwarding upstream", async () => {
+  const origFetch = globalThis.fetch;
+  const forwarded: { body: Record<string, unknown> | null } = { body: null };
+  globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : (input as Request).url ?? String(input);
+    if (url.includes("os.maiprop.co") || url.includes("/sales/filter/coordinates")) {
+      try {
+        forwarded.body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+      } catch {
+        forwarded.body = null;
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ data: [] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    }
+    return origFetch(input as Request, init);
+  };
+  try {
+    const res = await handler(
+      req("POST", { lat: 37.9, lng: 23.7, radius_km: 99999, limit: 99999 }),
+    );
+    assertEquals(res.status, 200);
+    // Server-side caps must be applied to the upstream request body so a
+    // caller cannot bulk-enumerate the OS dataset by sending huge inputs.
+    assertEquals(forwarded.body?.radius_km, 5);
+    assertEquals(forwarded.body?.limit, 50);
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+});
+
+Deno.test("POST with JSON null body returns 400 (not a 500)", async () => {
+  const r = new Request("https://functions.supabase.co/fn", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: "null",
+  });
+  const res = await handler(r);
+  assertEquals(res.status, 400);
+});
+
+Deno.test("POST with JSON array body returns 400", async () => {
+  const res = await handler(req("POST", [1, 2, 3] as unknown as Record<string, unknown>));
+  assertEquals(res.status, 400);
 });
 
 // ── Hardening: response field allowlist ──────────────────────────────────────
+
+Deno.test("upstream HTTP 200 with unparseable JSON body returns 503", async () => {
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : (input as Request).url ?? String(input);
+    if (url.includes("os.maiprop.co") || url.includes("/sales/filter/coordinates")) {
+      // HTTP 200, but the body is not JSON — the proxy must surface this as
+      // 503 so clients can show an error/retry state instead of an empty list.
+      return Promise.resolve(
+        new Response("<html>oops</html>", {
+          status: 200,
+          headers: { "Content-Type": "text/html" },
+        }),
+      );
+    }
+    return origFetch(input as Request, init);
+  };
+  try {
+    const res = await handler(req("POST", { lat: 37.9, lng: 23.7 }));
+    assertEquals(res.status, 503);
+    const body = await res.json();
+    assertEquals(body.available, false);
+    assertEquals(body.reason, "upstream_unavailable");
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+});
+
+Deno.test("upstream rows missing lat/lng/sale_price are dropped, not zero-filled", async () => {
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : (input as Request).url ?? String(input);
+    if (url.includes("os.maiprop.co") || url.includes("/sales/filter/coordinates")) {
+      const body = JSON.stringify({
+        data: [
+          // Valid row — should be kept.
+          {
+            id: "good-1",
+            address: "OK Street",
+            lat: 37.9,
+            lng: 23.7,
+            sale_price: 100000,
+            asking_price: 110000,
+          },
+          // Missing lat — must be dropped (not zero-filled).
+          { id: "bad-no-lat", lng: 23.7, sale_price: 1, asking_price: 1 },
+          // Missing sale_price — must be dropped.
+          { id: "bad-no-price", lat: 37.9, lng: 23.7, asking_price: 1 },
+          // lat out of range — must be dropped.
+          { id: "bad-lat-range", lat: 999, lng: 23.7, sale_price: 1, asking_price: 1 },
+          // Non-finite price — must be dropped.
+          {
+            id: "bad-price-inf",
+            lat: 37.9,
+            lng: 23.7,
+            sale_price: "not-a-number",
+            asking_price: 1,
+          },
+        ],
+      });
+      return Promise.resolve(
+        new Response(body, {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    }
+    return origFetch(input as Request, init);
+  };
+  try {
+    const res = await handler(req("POST", { lat: 37.9, lng: 23.7 }));
+    assertEquals(res.status, 200);
+    const body = await res.json();
+    assertEquals(Array.isArray(body.data), true);
+    assertEquals(body.data.length, 1);
+    assertEquals(body.data[0].id, "good-1");
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+});
 
 Deno.test("response strips fields outside the SaleRecord allowlist", async () => {
   const origFetch = globalThis.fetch;

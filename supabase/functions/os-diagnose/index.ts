@@ -69,10 +69,40 @@ async function getOsToken(baseUrl: string, email: string, password: string): Pro
     (data as Record<string, unknown> | null)?.accessToken ??
     (data as Record<string, unknown> | null)?.access_token;
   if (typeof token !== "string" || token.length === 0) {
-    log.warn("OS auth failed", { status: res.status });
+    // Log a sanitized snapshot of the upstream body server-side so operators
+    // can debug, without exposing it to callers. Anything resembling a token
+    // (`token`, `accessToken`, `access_token`) is redacted.
+    const sanitizedBody = sanitizeAuthErrorBody(data);
+    log.warn("OS auth failed", { status: res.status, body: sanitizedBody });
     throw new Error(`OS auth failed (status=${res.status})`);
   }
   return token;
+}
+
+/**
+ * Strip token-like fields out of an OS auth error payload before it is logged
+ * server-side. Returns a short string snapshot, never echoed to callers.
+ */
+function sanitizeAuthErrorBody(data: unknown): string {
+  if (data === null || data === undefined) return "<empty>";
+  if (typeof data !== "object") return String(data).slice(0, 200);
+  const TOKEN_KEYS = new Set(["token", "accessToken", "access_token", "refresh_token"]);
+  const redact = (val: unknown): unknown => {
+    if (Array.isArray(val)) return val.map(redact);
+    if (val && typeof val === "object") {
+      const out: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(val)) {
+        out[k] = TOKEN_KEYS.has(k) ? "<redacted>" : redact(v);
+      }
+      return out;
+    }
+    return val;
+  };
+  try {
+    return JSON.stringify(redact(data)).slice(0, 300);
+  } catch {
+    return "<unserializable>";
+  }
 }
 
 Deno.serve(async (req) => {
