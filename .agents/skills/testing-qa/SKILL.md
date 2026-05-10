@@ -132,6 +132,18 @@ const { data: { user } } = await supabase.auth.getUser();
 await supabase.from('open_house_registrations').delete().eq('requester_id', user.id).eq('listing_id', LISTING_ID);
 ```
 
+### Data Input (Agent only)
+1. Log in as `agent.pro@maiprop.demo` / `Demo2025!`
+2. Navigate to Dashboard → Data Input tab (sidebar)
+3. Verify quota display: "THIS MONTH: 0/20", "VERIFIED CLOSINGS: 0", "EARNED CREDIT: 0.0%"
+4. Fill required fields: Closing date (past date), Closing price (numeric), Property address, City
+5. Select Property type from dropdown (apartment, house, villa, land, commercial, office)
+6. Transaction type defaults to "Sale"
+7. Click "+ Submit closing"
+8. The form calls the `agent-data-input` edge function via RPC
+9. **If edge functions have CORS issues**: Toast shows "Failed to send a request to the Edge Function" — check `supabase/functions/_shared/cors.ts` for missing headers
+10. On success: toast confirmation, quota increments, entry appears in "Submission history"
+
 ### Quick Sale (Fire Sale)
 1. Navigate to `/firesale` as a seller
 2. Fill form: address, KAEK, property type, size, price, year, notes
@@ -160,3 +172,5 @@ await supabase.from('open_house_registrations').delete().eq('requester_id', user
 - **Investor dashboard empty state**: If there are 0 deals in the pipeline, the "Express Interest" flow cannot be tested. Deals appear only after Quick Sale requests are approved by admin.
 - **Cloudflare Pages preview gate**: The branch preview deploys (`devin-XXX.maiprop-listing-site.pages.dev`) sit behind Cloudflare Access — `curl` returns a 302 to `cloudflareaccess.com`. For runtime testing, use local `npm run dev` at port 8080 (it talks to the same production Supabase the preview uses).
 - **Error messages in mutations**: All `onError` handlers in `useOpenHouseAssetControl.ts` now surface actual error messages (not generic "Something went wrong"). This applies to: create registration, update registration, upsert settings, create offer, update offer, accept offer, reveal offers.
+- **Edge function CORS errors**: If ANY browser-to-edge-function call fails with "Failed to send a request to the Edge Function", check `supabase/functions/_shared/cors.ts`. Sentry tracing adds `baggage` and `sentry-trace` headers that must be in `BASE_ALLOWED_HEADERS`. The error is a CORS preflight failure, not an auth issue.
+- **Edge function changes require redeployment**: Edge function code changes only take effect after merge to main (auto-deployed via `.github/workflows/deploy-edge-functions.yml`). Cannot test CORS/edge function fixes in browser pre-merge — verify via Deno test suite instead.
