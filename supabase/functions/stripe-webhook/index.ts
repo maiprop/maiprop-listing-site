@@ -299,6 +299,8 @@ async function applyAgentDataInputDiscount(
 ): Promise<void> {
   if (invoice.status && invoice.status !== "draft") return;
   if (!invoice.id || !invoice.customer) return;
+  // Skip initial signup invoices — no prior verified inputs are possible yet.
+  if ((invoice as Record<string, unknown>).billing_reason === "subscription_create") return;
 
   const customer = await stripe.customers.retrieve(invoice.customer as string) as Stripe.Customer;
   const userId = customer.metadata?.user_id ?? await resolveUserIdByEmail(supabase, customer.email ?? null);
@@ -334,19 +336,35 @@ async function applyAgentDataInputDiscount(
   const discountMinor = Math.round((subtotalMinor * appliedPct) / 100);
   if (discountMinor <= 0) return;
 
-  await stripe.invoiceItems.create({
-    customer: invoice.customer as string,
-    invoice: invoice.id,
-    amount: -discountMinor, // negative = credit
-    currency: invoice.currency,
-    description: `Data Input reward — ${appliedCount} verified closing(s) × 0.5% (${appliedPct}% off)`,
-    metadata: {
-      type: "agent_data_input_discount",
+  try {
+    await stripe.invoiceItems.create({
+      customer: invoice.customer as string,
+      invoice: invoice.id,
+      amount: -discountMinor, // negative = credit
+      currency: invoice.currency,
+      description: `Data Input reward — ${appliedCount} verified closing(s) × 0.5% (${appliedPct}% off)`,
+      metadata: {
+        type: "agent_data_input_discount",
+        user_id: userId,
+        applied_count: String(appliedCount),
+        applied_pct: String(appliedPct),
+      },
+    });
+  } catch (stripeErr: unknown) {
+    // Stripe call failed — roll back the DB rows so they remain eligible
+    // for the next invoice cycle instead of being permanently lost.
+    log.error("stripe invoiceItem create failed, rolling back DB", {
       user_id: userId,
-      applied_count: String(appliedCount),
-      applied_pct: String(appliedPct),
-    },
-  });
+      invoice_id: invoice.id,
+      err: stripeErr instanceof Error ? stripeErr.message : String(stripeErr),
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase.from as any)("agent_data_inputs")
+      .update({ discount_applied: false, discount_applied_at: null, discount_invoice_id: null })
+      .eq("user_id", userId)
+      .eq("discount_invoice_id", invoice.id);
+    return;
+  }
 
   log.info("applied agent data input discount", {
     user_id: userId,
