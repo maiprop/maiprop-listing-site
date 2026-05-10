@@ -34,7 +34,7 @@ Deno.test("POST without auth returns 401 or 503", async () => {
 
 Deno.test("fake Bearer token returns 401 (not 500)", async () => {
   const res = await handler(authedReq("POST"));
-  assertEquals([401, 503].includes(res.status), true);
+  assertEquals(res.status, 401);
 });
 
 restore();
