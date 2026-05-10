@@ -3,12 +3,21 @@
  * how many PENDING (future) auctions are available.
  * Also probes the new GET /api/auctions/future endpoint directly.
  * Requires platform admin (role='admin').
+ *
+ * Hardening note: even though this function is admin-only and rate-limited,
+ * the diagnostic output is intentionally kept terse and free of upstream
+ * response bodies / credentials. Failures are logged server-side but the
+ * response only carries a stable, non-secret status string so we never
+ * accidentally echo back tokens or upstream debug payloads.
  */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { createLogger } from "../_shared/logger.ts";
+
+const log = createLogger("os-diagnose");
 
 const limiter = makeRateLimiter({ bucket: "os-diagnose", maxRequests: 5, windowMs: 60_000 });
 
@@ -39,15 +48,30 @@ async function requireAgent(
   return null;
 }
 
+/**
+ * Authenticate against the OS API and return the bearer token.
+ *
+ * On failure, throws an Error whose message contains ONLY the upstream HTTP
+ * status code — never the response body. The body is logged server-side via
+ * `log.warn` so operators can debug, but is not echoed back to callers.
+ */
 async function getOsToken(baseUrl: string, email: string, password: string): Promise<string> {
   const res = await fetchWithTimeout(`${baseUrl}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
-  const data = await res.json();
-  const token = data?.data?.token ?? data.token ?? data.accessToken ?? data.access_token;
-  if (!token) throw new Error(`Auth failed (${res.status}): ${JSON.stringify(data).slice(0, 300)}`);
+  const data = await res.json().catch(() => null);
+  const token =
+    (data && typeof data === "object" &&
+      ((data as Record<string, unknown>).data as Record<string, unknown> | undefined)?.token) ??
+    (data as Record<string, unknown> | null)?.token ??
+    (data as Record<string, unknown> | null)?.accessToken ??
+    (data as Record<string, unknown> | null)?.access_token;
+  if (typeof token !== "string" || token.length === 0) {
+    log.warn("OS auth failed", { status: res.status });
+    throw new Error(`OS auth failed (status=${res.status})`);
+  }
   return token;
 }
 
@@ -181,12 +205,17 @@ Deno.serve(async (req) => {
       },
     );
   } catch (err: unknown) {
+    // Log full error server-side, return only a stable diagnostic string to
+    // the caller. Concrete error messages are useful to operators in logs but
+    // could theoretically include OS endpoint paths/params, so they don't
+    // belong in the response body — even for admin-only endpoints.
     const message = err instanceof Error ? err.message : String(err);
+    log.warn("os-diagnose failed", { err: message });
     return new Response(
       JSON.stringify({
-        error: message,
         osReachable: false,
-        detail: message,
+        error: "os_unreachable",
+        detail: "OS API probe failed; see server logs for details.",
       }),
       {
         status: 500,

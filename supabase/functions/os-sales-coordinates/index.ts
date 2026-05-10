@@ -6,6 +6,15 @@
  *
  * Falls back to mock data if the OS API is unavailable so the UI never breaks.
  * verify_jwt = false — callable without auth (used on public property pages).
+ *
+ * Hardening (public surface):
+ *   - Strict numeric validation on lat/lng/radius_km/limit so the upstream
+ *     OS API only ever sees bounded values.
+ *   - Server-side caps on radius_km and limit so a caller cannot bulk-enumerate
+ *     comparable-sales data by passing huge values.
+ *   - Response field allowlist so any new/internal fields the OS API may
+ *     start returning (owner names, internal notes, etc.) are stripped before
+ *     leaving this public endpoint.
  */
 
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
@@ -20,12 +29,21 @@ const limiter = makeRateLimiter({
   windowMs: 60_000,
 });
 
+// ── Input bounds ─────────────────────────────────────────────────────────────
+// Greece's bounding box is roughly lat 34..42, lng 19..30, but we accept the
+// global valid range so the function still works for diaspora/edge cases.
+const MIN_RADIUS_KM = 0.1;
+const MAX_RADIUS_KM = 5;
+const DEFAULT_RADIUS_KM = 2;
+const MIN_LIMIT = 1;
+const MAX_LIMIT = 50;
+const DEFAULT_LIMIT = 50;
 
 interface RequestBody {
-  lat?: number;
-  lng?: number;
-  radius_km?: number;
-  limit?: number;
+  lat?: unknown;
+  lng?: unknown;
+  radius_km?: unknown;
+  limit?: unknown;
 }
 
 interface SaleRecord {
@@ -43,6 +61,68 @@ interface SaleRecord {
   discount_pct: number;
   source: string;
   round: number;
+}
+
+/**
+ * Coerce an upstream value to a finite number, falling back to a default.
+ * Strings like "42" are accepted; NaN/Infinity/null/undefined fall back.
+ */
+function toFiniteNumber(value: unknown, fallback: number): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return fallback;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  if (value < min) return min;
+  if (value > max) return max;
+  return value;
+}
+
+/**
+ * Whitelist the fields we expose to public callers. Anything the OS API may
+ * add later (internal notes, owner names, raw URLs, etc.) is dropped here.
+ */
+function sanitizeSaleRecord(raw: unknown): SaleRecord | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const id = typeof r.id === "string" || typeof r.id === "number" ? String(r.id) : null;
+  if (!id) return null;
+  return {
+    id,
+    address: typeof r.address === "string" ? r.address : "",
+    lat: toFiniteNumber(r.lat, 0),
+    lng: toFiniteNumber(r.lng, 0),
+    sale_price: toFiniteNumber(r.sale_price, 0),
+    asking_price: toFiniteNumber(r.asking_price, 0),
+    sale_date: typeof r.sale_date === "string" ? r.sale_date : "",
+    property_type: typeof r.property_type === "string" ? r.property_type : "",
+    sqm: toFiniteNumber(r.sqm, 0),
+    bedrooms: toFiniteNumber(r.bedrooms, 0),
+    status: typeof r.status === "string" ? r.status : "",
+    discount_pct: toFiniteNumber(r.discount_pct, 0),
+    source: typeof r.source === "string" ? r.source : "",
+    round: toFiniteNumber(r.round, 0),
+  };
+}
+
+function sanitizeUpstreamPayload(raw: unknown): SaleRecord[] {
+  // OS API has historically returned either a bare array or { data: [...] }.
+  let items: unknown[] = [];
+  if (Array.isArray(raw)) {
+    items = raw;
+  } else if (raw && typeof raw === "object" && Array.isArray((raw as { data?: unknown }).data)) {
+    items = (raw as { data: unknown[] }).data;
+  }
+  const out: SaleRecord[] = [];
+  for (const item of items) {
+    const sanitized = sanitizeSaleRecord(item);
+    if (sanitized) out.push(sanitized);
+  }
+  return out;
 }
 
 function generateMockSales(lat: number, lng: number, count: number): SaleRecord[] {
@@ -96,12 +176,39 @@ Deno.serve(async (req) => {
     });
   }
 
-  const { lat, lng, radius_km = 2, limit = 50 } = body;
-  if (lat === undefined || lat === null || lng === undefined || lng === null) {
+  if (
+    body.lat === undefined || body.lat === null ||
+    body.lng === undefined || body.lng === null
+  ) {
     return new Response(JSON.stringify({ error: "lat and lng are required" }), {
       status: 400, headers: { ...hdrs, "Content-Type": "application/json" },
     });
   }
+
+  const lat = toFiniteNumber(body.lat, NaN);
+  const lng = toFiniteNumber(body.lng, NaN);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return new Response(JSON.stringify({ error: "lat and lng must be finite numbers" }), {
+      status: 400, headers: { ...hdrs, "Content-Type": "application/json" },
+    });
+  }
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    return new Response(
+      JSON.stringify({ error: "lat must be in [-90, 90] and lng must be in [-180, 180]" }),
+      { status: 400, headers: { ...hdrs, "Content-Type": "application/json" } },
+    );
+  }
+
+  const radius_km = clamp(
+    toFiniteNumber(body.radius_km, DEFAULT_RADIUS_KM),
+    MIN_RADIUS_KM,
+    MAX_RADIUS_KM,
+  );
+  const limit = clamp(
+    Math.floor(toFiniteNumber(body.limit, DEFAULT_LIMIT)),
+    MIN_LIMIT,
+    MAX_LIMIT,
+  );
 
   const osUrl = "http://app.os.maiprop.co:8080/api/v1/sales/filter/coordinates";
 
@@ -129,9 +236,10 @@ Deno.serve(async (req) => {
       );
     }
 
-    const data = await response.json();
+    const raw = await response.json().catch(() => null);
+    const sanitized = sanitizeUpstreamPayload(raw);
     return new Response(
-      JSON.stringify({ data, source: "os" }),
+      JSON.stringify({ data: sanitized, source: "os" }),
       { headers: { ...hdrs, "Content-Type": "application/json" } },
     );
   } catch (error) {

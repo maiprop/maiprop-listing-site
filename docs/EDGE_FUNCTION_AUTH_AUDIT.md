@@ -1,6 +1,6 @@
 # Edge Function Auth Audit
 
-> Last updated: 2026-05-07
+> Last updated: 2026-05-10
 > Source: `supabase/config.toml`, local function source, and Deno auth tests.
 
 ## Release Rule
@@ -30,8 +30,8 @@ Every `verify_jwt = false` function must be either intentionally public, protect
 | `poll-os-auctions` | Scheduled/internal caller model plus rate limiter. | Auction sync data. | Conditional: do not expose as browser feature. |
 | `sync-firesale-to-os` | Custom Bearer/user authorization in handler. | Firesale sync data. | Conditional: keep tests for missing/invalid auth. |
 | `full-sync-from-os` | Custom `requireAgent` Bearer/user authorization in handler; tests reject missing auth. | Bulk OS sync data. | Conditional: high blast radius. |
-| `os-diagnose` | Internal diagnostic endpoint; not JWT-gated by config. | OS connectivity/config status. | Needs review: diagnostic output must not expose secrets. |
-| `os-sales-coordinates` | Custom auth/rate limit expected by handler. | Sales coordinates. | Needs review before release due location sensitivity. |
+| `os-diagnose` | Admin-only via custom Bearer + role check; rate-limited (5/min). Failures return a stable, non-secret status string; upstream response bodies are logged server-side only. | OS connectivity/config status. | Ready: admin-only, output sanitized, no secrets in failure responses. |
+| `os-sales-coordinates` | Public proxy; rate-limited (30/min/IP); strict numeric validation on `lat`/`lng`/`radius_km`/`limit`; server-side caps so a caller cannot bulk-enumerate; response field allowlist strips any fields outside `SaleRecord`. | Sales coordinates (public comparable-sale data only). | Ready: input bounded, response field-allowlisted, upstream echo eliminated. |
 | `send-saved-search-alerts` | Scheduled/internal caller model. | Saved search and email data. | Conditional: must not be browser-callable without custom secret. |
 | `invitation-notify` | Handler checks `Authorization`; tests reject missing auth. | Invitation notification data. | Conditional: document trigger secret/caller. |
 | `oh-registration-notify` | Handler checks `Authorization`; database trigger/webhook model. | Open-house registration data. | Conditional: document trigger secret/caller. |
@@ -44,5 +44,5 @@ These functions are platform JWT-gated in `supabase/config.toml`: `property-chat
 
 1. Add or keep Deno tests for every `verify_jwt = false` function that writes, syncs, emails, diagnoses, or reads private data.
 2. Move scheduled/internal functions to a shared custom secret helper where they are not protected by Supabase JWT.
-3. Review `os-diagnose` and `os-sales-coordinates` output for secret, location, or private-data leakage.
+3. ~~Review `os-diagnose` and `os-sales-coordinates` output for secret, location, or private-data leakage.~~ Done (2026-05-10): `os-diagnose` failures no longer echo upstream bodies; `os-sales-coordinates` validates and bounds inputs and applies a response field allowlist.
 4. Keep public AI/proxy endpoints rate limited and cost monitored.
