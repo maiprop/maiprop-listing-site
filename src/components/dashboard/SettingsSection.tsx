@@ -62,7 +62,7 @@ export function SettingsSection({
     // types.ts does not yet include it, so cast through `any` to call it.
     const { error } = await (supabase.rpc as any)("begin_role_switch");
     if (error) {
-      toast.error("Could not start role switch: " + error.message);
+      toast.error(`Could not start role switch: ${error.message}`);
       try { sessionStorage.removeItem("role_switch_ctx"); } catch { /* ignore */ }
       setSwitching(false);
       return;
