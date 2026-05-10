@@ -17,6 +17,11 @@ import { getPlanLimits } from "@/hooks/usePlanLimits";
 import { useMyListings } from "@/hooks/useListings";
 import { uploadListingImage } from "@/lib/buildingListingUploads";
 import { useCreateBuildingListing } from "@/hooks/useCreateBuildingListing";
+import {
+  IMAGE_AND_VIDEO_MIME_TYPES,
+  PDF_MIME_TYPES,
+  assertAllowedUpload,
+} from "@/lib/uploadValidation";
 
 const INPUT_CLS = "w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors";
 const LABEL_CLS = "text-xs text-muted-foreground block mb-1.5 font-medium";
