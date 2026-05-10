@@ -8,6 +8,19 @@ const MAX_PHOTOS = 10;
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024; // 10 MB
 
 /**
+ * Firesale-form-specific allowlist: the canonical `IMAGE_MIME_TYPES` set
+ * (jpeg/png/webp/heic/heif/avif) PLUS `image/gif` — the original inline
+ * `ALLOWED_MIME` set in `FiresaleQuickSaleForm.tsx` accepted GIFs and we
+ * preserve that behaviour here. Property photos are very rarely GIFs but
+ * users have historically been allowed to upload them, so we don't silently
+ * regress.
+ */
+const FIRESALE_PHOTO_MIME_TYPES: ReadonlySet<string> = new Set([
+  ...IMAGE_MIME_TYPES,
+  "image/gif",
+]);
+
+/**
  * Extension fallback for image MIME types. Used when picking the storage
  * object's path suffix — we never trust raw `file.name` here. Includes the
  * iPhone-native HEIC/HEIF/AVIF formats supported by `IMAGE_MIME_TYPES`.
@@ -30,7 +43,7 @@ const MIME_TO_EXT: Record<string, string> = {
  * pulling logic out of `FiresaleQuickSaleForm`.
  *
  * NOTE: This is a *processing* helper, not a security check. The actual MIME
- * allowlist enforcement is `assertAllowedUpload(file, IMAGE_MIME_TYPES, ...)`
+ * allowlist enforcement is `assertAllowedUpload(file, FIRESALE_PHOTO_MIME_TYPES, ...)`
  * called at the upload site (see `upload()` below).
  */
 const compress = (file: File, maxDim = 1600, quality = 0.75): Promise<Blob> =>
@@ -123,7 +136,7 @@ export function useFiresalePhotoUploader(): UseFiresalePhotoUploaderResult {
 
   const addFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     const incoming = Array.from(e.target.files || []);
-    const valid = incoming.filter((f) => IMAGE_MIME_TYPES.has(f.type) && f.size < MAX_PHOTO_BYTES);
+    const valid = incoming.filter((f) => FIRESALE_PHOTO_MIME_TYPES.has(f.type) && f.size < MAX_PHOTO_BYTES);
     if (valid.length < incoming.length) {
       toast.warning("Some files were skipped (must be images under 10MB).");
     }
@@ -163,7 +176,7 @@ export function useFiresalePhotoUploader(): UseFiresalePhotoUploaderResult {
         // immediately before each `supabase.storage.from(...).upload(...)`.
         // The pre-filter in `addFiles()` is a UX hint, not a security boundary.
         try {
-          assertAllowedUpload(file, IMAGE_MIME_TYPES, {
+          assertAllowedUpload(file, FIRESALE_PHOTO_MIME_TYPES, {
             label: "photo",
             maxBytes: MAX_PHOTO_BYTES,
           });
