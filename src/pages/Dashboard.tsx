@@ -108,8 +108,11 @@ export default function Dashboard() {
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
-      const row = data as { status?: "pending" | "approved" | "rejected" } | null;
-      return row?.status ?? "none";
+      const row = data as { status?: string } | null;
+      if (row?.status === "pending") return "pending";
+      if (row?.status === "approved") return "approved";
+      if (row?.status === "rejected") return "rejected";
+      return "none";
     },
     enabled: !!user && role !== "admin",
   });
