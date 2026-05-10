@@ -223,7 +223,7 @@ admin path needs different `WITH CHECK`).
 near-duplicates with subtly different WITH CHECK clauses. Consolidating
 requires careful diff against the actual production state.
 
-### Triage outcome
+### Policy triage outcome
 
 **No policy consolidation in this PR.** Each of the three patterns above
 needs:

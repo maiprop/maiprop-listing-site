@@ -23,6 +23,14 @@
 --
 -- See `docs/SUPABASE_PERFORMANCE_ADVISOR_TRIAGE.md` for the full triage
 -- analysis and category-by-category rationale for what was kept.
+--
+-- NOTE on locking: `DROP INDEX CONCURRENTLY` avoids locking writers but cannot
+-- run inside a transaction block. Supabase migrations are transactional, so we
+-- use plain DROP INDEX here. The affected tables (conversations,
+-- listing_view_events) are low-write during off-peak deploys; accept the brief
+-- share lock in exchange for transactional safety. This migration was already
+-- applied to the live DB during a maintenance window (see
+-- scripts/applied-future-migrations.json).
 -- =============================================================================
 
 -- 1. conversations.participant_a — single-column index covered by the wider
