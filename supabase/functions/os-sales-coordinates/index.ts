@@ -2,7 +2,11 @@
  * os-sales-coordinates
  * ─────────────────────────────────────────────────────────────────────────────
  * Proxies coordinate-based sales queries to the maiProp OS API:
- *   POST http://app.os.maiprop.co:8080/api/v1/sales/filter/coordinates
+ *   POST $MAIPROP_OS_URL/api/v1/sales/filter/coordinates
+ *
+ * Reads `MAIPROP_OS_URL` from env (same secret consumed by os-diagnose,
+ * sync-to-os, poll-os-auctions, etc.) and falls back to the production OS
+ * URL if unset, matching the previous hardcoded behaviour.
  *
  * Falls back to mock data if the OS API is unavailable so the UI never breaks.
  * verify_jwt = false — callable without auth (used on public property pages).
@@ -13,6 +17,8 @@ import { createLogger } from "../_shared/logger.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 
 const log = createLogger("os-sales-coordinates");
+
+const DEFAULT_OS_URL = "http://app.os.maiprop.co:8080";
 
 const limiter = makeRateLimiter({
   bucket: "os-sales-coordinates",
@@ -149,7 +155,8 @@ Deno.serve(async (req) => {
   const radius_km = Math.min(Math.max(Number(body.radius_km) || 2, 0.1), MAX_RADIUS_KM);
   const limit = Math.min(Math.max(Math.floor(Number(body.limit) || 50), 1), MAX_LIMIT);
 
-  const osUrl = "http://app.os.maiprop.co:8080/api/v1/sales/filter/coordinates";
+  const osBase = (Deno.env.get("MAIPROP_OS_URL")?.trim() || DEFAULT_OS_URL).replace(/\/$/, "");
+  const osUrl = `${osBase}/api/v1/sales/filter/coordinates`;
 
   try {
     const controller = new AbortController();

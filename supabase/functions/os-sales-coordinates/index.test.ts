@@ -124,4 +124,58 @@ Deno.test("limit is capped at 100", async () => {
   assertEquals([200, 502, 503].includes(res.status), true);
 });
 
+Deno.test("upstream URL honours MAIPROP_OS_URL env var", async () => {
+  const calls: string[] = [];
+  const originalFetch = globalThis.fetch;
+  const previousOsUrl = Deno.env.get("MAIPROP_OS_URL");
+  globalThis.fetch = ((input: Request | string | URL) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    calls.push(url);
+    // Return a 503 so the handler falls through to mock data and the test
+    // doesn't need a real upstream.
+    return Promise.resolve(new Response(null, { status: 503 }));
+  }) as typeof fetch;
+  try {
+    Deno.env.set("MAIPROP_OS_URL", "https://staging-os.example.test");
+    const res = await handler(req("POST", { lat: 37.98, lng: 23.72, radius_km: 1, limit: 5 }));
+    // Status doesn't matter (we expect a fallback path), only that we
+    // attempted to call the staging URL we configured.
+    assertEquals([200, 502, 503].includes(res.status), true);
+    const upstreamCall = calls.find((u) => u.includes("/api/v1/sales/filter/coordinates"));
+    if (!upstreamCall) {
+      throw new Error(`expected an upstream call to /api/v1/sales/filter/coordinates, got: ${calls.join(", ") || "<none>"}`);
+    }
+    assertStringIncludes(upstreamCall, "https://staging-os.example.test/api/v1/sales/filter/coordinates");
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (previousOsUrl === undefined) Deno.env.delete("MAIPROP_OS_URL");
+    else Deno.env.set("MAIPROP_OS_URL", previousOsUrl);
+  }
+});
+
+Deno.test("upstream URL falls back to default when MAIPROP_OS_URL is unset", async () => {
+  const calls: string[] = [];
+  const originalFetch = globalThis.fetch;
+  const previousOsUrl = Deno.env.get("MAIPROP_OS_URL");
+  globalThis.fetch = ((input: Request | string | URL) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    calls.push(url);
+    return Promise.resolve(new Response(null, { status: 503 }));
+  }) as typeof fetch;
+  try {
+    Deno.env.delete("MAIPROP_OS_URL");
+    const res = await handler(req("POST", { lat: 37.98, lng: 23.72, radius_km: 1, limit: 5 }));
+    assertEquals([200, 502, 503].includes(res.status), true);
+    const upstreamCall = calls.find((u) => u.includes("/api/v1/sales/filter/coordinates"));
+    if (!upstreamCall) {
+      throw new Error(`expected an upstream call to /api/v1/sales/filter/coordinates, got: ${calls.join(", ") || "<none>"}`);
+    }
+    assertStringIncludes(upstreamCall, "http://app.os.maiprop.co:8080/api/v1/sales/filter/coordinates");
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (previousOsUrl === undefined) Deno.env.delete("MAIPROP_OS_URL");
+    else Deno.env.set("MAIPROP_OS_URL", previousOsUrl);
+  }
+});
+
 restore();
