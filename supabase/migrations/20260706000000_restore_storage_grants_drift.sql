@@ -131,6 +131,14 @@ BEGIN
     RAISE EXCEPTION 'expected project_media_insert policy on storage.objects';
   END IF;
 
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policy
+    WHERE polrelid = 'storage.objects'::regclass
+      AND polname = 'project_media_delete'
+  ) THEN
+    RAISE EXCEPTION 'expected project_media_delete policy on storage.objects';
+  END IF;
+
   IF EXISTS (
     SELECT 1 FROM pg_policy
     WHERE polrelid = 'storage.objects'::regclass
