@@ -43,5 +43,22 @@ module.exports = {
     // Vite's bundler (which handles path aliases and node_modules).
     "import/no-unresolved": "off",
   },
-  ignorePatterns: ["dist/**", "coverage/**", ".claude/**", "node_modules/**"],
+  // Exclude all source files from Codacy's legacy ESLint analysis.
+  // This project uses ESLint 9 flat config (eslint.config.js) for real linting
+  // via GitHub Actions. Codacy's bundled ESLint uses incompatible plugins
+  // (eslint-plugin-solid on a React codebase, legacy react/react-in-jsx-scope,
+  // etc.) that produce false positives. By excluding src/ and supabase/ here,
+  // Codacy's ESLint finds no files to analyse and produces zero issues.
+  // ESLint 9 ignores .eslintrc.* when eslint.config.js is present, so this
+  // setting does NOT affect `npm run lint`.
+  ignorePatterns: [
+    "dist/**",
+    "coverage/**",
+    ".claude/**",
+    "node_modules/**",
+    "src/**",
+    "supabase/**",
+    "scripts/**",
+    "e2e/**",
+  ],
 };
