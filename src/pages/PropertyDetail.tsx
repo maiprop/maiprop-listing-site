@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Helmet } from "react-helmet-async";
 import { useModal } from "@/hooks/useModal";
 import { supabase as supabaseClient } from "@/integrations/supabase/client";
-import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import {
   ChevronRight,
   ExternalLink,
@@ -51,7 +51,6 @@ import { usePropertyAIInsights } from "@/hooks/usePropertyAIInsights";
 export default function PropertyDetail() {
   const { id } = useParams<{id: string;}>();
   const navigate = useNavigate();
-  const location = useLocation();
   const { t } = useTranslation();
   const { user, profile } = useAuth();
   const { isPro } = useSubscription();
@@ -76,17 +75,17 @@ export default function PropertyDetail() {
     if (id && dbListing) trackViewMutate(id);
   }, [id, dbListing, trackViewMutate]);
 
-  // Redirect: if auction opened via /property/:id, send to /auction/:id
   // Redirect: if new build listing, send to /new-build/:id
+  // NOTE: auction listings are intentionally kept on /property/:id so they render
+  // the full PropertyDetail UI (gallery, AI insights, valuation, PropertyAuctionSection).
+  // AuctionDetail (/auction/:id) is reserved for OS-only (non-UUID) auction IDs.
   useEffect(() => {
     if (!dbListing) return;
     const _db = dbListing as ListingWithJoins;
-    if (_db.listing_type === "auction" && location.pathname.startsWith("/property/")) {
-      navigate(`/auction/${id}`, { replace: true });
-    } else if (_db.is_pre_sale || _db.construction_status) {
+    if (_db.is_pre_sale || _db.construction_status) {
       navigate(`/new-build/${id}`, { replace: true });
     }
-  }, [dbListing, location.pathname, id, navigate]);
+  }, [dbListing, id, navigate]);
 
   const modal = useModal<"viewing" | "auctionAlert">();
   const [walkScore, setWalkScore] = useState<number | null>(null);

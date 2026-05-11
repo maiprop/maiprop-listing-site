@@ -8,18 +8,15 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import type { ParticipantId } from "@/lib/participantConfig";
 import { logger } from "@/lib/logger";
 
-const ROLE_PERMISSIONS: Record<string, { label: string; can: string[] }> = {
-  buyer_renter:  { label: "Buyer / Renter",   can: ["Browse listings", "Save properties", "Request viewings", "Auction alerts"] },
-  seller:        { label: "Seller / Landlord", can: ["Create & manage listings", "Receive viewing requests", "AI listing assist"] },
-  agent:         { label: "Agent",             can: ["Unlimited listings", "Lead management", "Analytics"] },
-  admin:         { label: "Admin",             can: ["Platform admin", "Subscribers", "Pricing", "OS sync", "All dashboards"] },
-  developer:     { label: "Developer",         can: ["Listings", "Projects", "Portfolios", "Analytics"] },
-  professional:  { label: "Professional",      can: ["Professional directory", "Service catalog", "Client leads", "Verified badge"] },
+const ROLE_PERMISSIONS: Record<ParticipantId, { label: string; can: string[] }> = {
+  buyer:         { label: "Buyer / Renter",      can: ["Browse listings", "Save properties", "Request viewings", "Auction alerts"] },
+  seller:        { label: "Seller / Landlord",   can: ["Create & manage listings", "Receive viewing requests", "AI listing assist"] },
+  agent:         { label: "Agent",               can: ["Unlimited listings", "Lead management", "Analytics"] },
+  developer:     { label: "Developer",           can: ["Listings", "Projects", "Portfolios", "Analytics"] },
+  professional:  { label: "Professional",        can: ["Professional directory", "Service catalog", "Client leads", "Verified badge"] },
+  investor:      { label: "Investor",            can: ["Deal flow access", "Auction bidding", "Portfolio tracking", "Market analytics"] },
+  institutional: { label: "Institutional",       can: ["Bulk listings", "Portfolio management", "Institutional deal flow", "Dedicated support"] },
 };
-
-function toRoleKey(label: string): string {
-  return label.toLowerCase().replace(/ \/ /g, "_").replace(/ /g, "_").replace(/\s+/g, "_");
-}
 
 export function SettingsSection({
   roleLabel,
@@ -104,7 +101,7 @@ export function SettingsSection({
     }
   };
 
-  const perm = ROLE_PERMISSIONS[toRoleKey(roleLabel)];
+  const perm = ROLE_PERMISSIONS[currentType];
 
   return (
     <div className="space-y-6 max-w-xl">
@@ -149,9 +146,10 @@ export function SettingsSection({
           <div>
             <p className="font-semibold text-sm text-brand-gold">Security Notice</p>
             <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-              Switching your participant type <strong>only changes how your dashboard is organised</strong> — it does not
-              affect your actual account permissions or data access rights.
-              Those are enforced server-side and cannot be changed from the app.
+              Switching your participant type <strong>changes both your dashboard layout and which features are available to you</strong> —
+              for example, listing creation requires a sell-side type (Seller, Agent, Developer, Institutional) and
+              some routes are restricted to specific roles. Admin access is granted only by platform administrators
+              and cannot be obtained by switching types.
             </p>
           </div>
         </div>

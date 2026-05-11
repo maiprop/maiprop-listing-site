@@ -8,8 +8,8 @@
  *     fallback when the ID is not found in the auctions cache.
  */
 
-import { Suspense, lazy, useMemo } from "react";
-import { useParams, useLocation, Link } from "react-router-dom";
+import { Suspense, lazy, useMemo, useEffect } from "react";
+import { useParams, useLocation, Link, useNavigate } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import {
   Gavel,
@@ -158,6 +158,15 @@ const AuctionStatRow = ({
 const AuctionDetail = () => {
   const { id = "" } = useParams<{ id: string }>();
   const { state } = useLocation() as { state?: { auction?: Record<string, unknown> } };
+  const navigate = useNavigate();
+
+  // UUID IDs are DB-stored listings — send them to PropertyDetail which renders
+  // the full UI (gallery, AI insights, valuation, PropertyAuctionSection).
+  // This page is for OS-only auctions whose IDs are never in the DB.
+  const isUUID = UUID_RE.test(id);
+  useEffect(() => {
+    if (isUUID) navigate(`/property/${id}`, { replace: true });
+  }, [isUUID, id, navigate]);
 
   // 1. Route state — instant data when navigating from AuctionCard
   const auctionFromState = state?.auction ?? null;
@@ -170,7 +179,6 @@ const AuctionDetail = () => {
   );
 
   // 3. DB listing fallback (for UUID IDs stored in listings table)
-  const isUUID = UUID_RE.test(id);
   const { data: dbListing, isLoading: dbLoading } = useListing(isUUID && !auctionFromCache ? id : "");
 
   // Resolve the best available data source — state wins (instant on navigation),
