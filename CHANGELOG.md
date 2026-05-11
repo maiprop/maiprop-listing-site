@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.6.2](https://github.com/maiprop/maiprop-listing-site/compare/v1.6.1...v1.6.2) (2026-05-11)
+
+
+### Bug Fixes
+
+* **codacy/deepsource:** resolve Codacy false positives and DeepSource issues ([74ec7b7](https://github.com/maiprop/maiprop-listing-site/commit/74ec7b7aacbdd30a7bfb870a82974cd26874242b))
+* **pr135:** resolve 4 critical bugs — role switch, open house, auction pages, AI tools ([b9d0ec1](https://github.com/maiprop/maiprop-listing-site/commit/b9d0ec10c1fdb8975ba07e3b5c2c654eac696832))
+* **test:** restore double-cast in buildAuctionFilter stub (TS2352 regression) ([64ddb1d](https://github.com/maiprop/maiprop-listing-site/commit/64ddb1d1cae18b09bb667eaf43f29936979ef7aa))
+* typology system — permissions, routing, errors ([#138](https://github.com/maiprop/maiprop-listing-site/issues/138)) ([902ff5c](https://github.com/maiprop/maiprop-listing-site/commit/902ff5c789d740178268677fd7132aa05bbb418f))
+
 ## [1.6.1](https://github.com/maiprop/maiprop-listing-site/compare/v1.6.0...v1.6.1) (2026-05-10)
 
 
