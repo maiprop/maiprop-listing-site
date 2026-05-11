@@ -53,7 +53,7 @@ export const AuctionCard = memo(function AuctionCard({
 
   return (
     <div className="glass-card rounded-xl overflow-hidden border border-border hover:border-brand-gold/40 transition-all group flex flex-col">
-      <Link to={`/auction/${a.id}`} className="relative h-44 bg-secondary overflow-hidden block">
+      <Link to={`/auction/${a.id}`} state={{ auction: a }} className="relative h-44 bg-secondary overflow-hidden block">
         {imgSrc ? (
           <img
             src={imgSrc}
@@ -94,7 +94,7 @@ export const AuctionCard = memo(function AuctionCard({
       </Link>
 
       <div className="p-4 space-y-2 flex-1 flex flex-col">
-        <Link to={`/auction/${a.id}`}>
+        <Link to={`/auction/${a.id}`} state={{ auction: a }}>
           <h3 className="font-semibold text-sm line-clamp-2 group-hover:text-brand-gold transition-colors">{a.title}</h3>
         </Link>
         <div className="flex items-center gap-1 text-xs text-muted-foreground">
