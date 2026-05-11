@@ -249,7 +249,7 @@ const AuctionDetail = () => { // skipcq: JS-W1044
                 src={coverImage}
                 alt={title}
                 className="w-full h-full object-cover"
-                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                onError={(e) => { if (e.target instanceof HTMLImageElement) e.target.style.display = "none"; }}
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
