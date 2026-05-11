@@ -39,6 +39,11 @@ END;
 $$;
 
 -- ── 3. handle_new_user() trigger function ────────────────────────────────────
+-- NOTE: We intentionally omit the `role` column so the INSERT uses the column
+-- DEFAULT. At this migration timestamp (20260511) the default is 'individual';
+-- migration 20260608 renames that value to 'buyer' and updates the column
+-- default accordingly. Hard-coding either label here would break one of the
+-- two orderings (CI fresh-apply vs live DB where 'buyer' already exists).
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -46,22 +51,18 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
-  INSERT INTO public.profiles (user_id, role, created_at, updated_at)
-  VALUES (
-    NEW.id,
-    'buyer'::public.user_role,
-    now(),
-    now()
-  )
+  INSERT INTO public.profiles (user_id, created_at, updated_at)
+  VALUES (NEW.id, now(), now())
   ON CONFLICT (user_id) DO NOTHING;   -- idempotent: skip if row already exists
   RETURN NEW;
 END;
 $$;
 
 COMMENT ON FUNCTION public.handle_new_user() IS
-  'Creates a minimal profiles row (role=buyer) whenever a new row is inserted '
-  'into auth.users. Runs before on_auth_user_created_owner (alphabetical order) '
-  'so the owner-elevation trigger finds the row it needs to UPDATE.';
+  'Creates a minimal profiles row (role=column-default) whenever a new row is '
+  'inserted into auth.users. Role defaults to ''individual'' pre-20260608, then '
+  '''buyer'' after the rename migration. Runs before on_auth_user_created_owner '
+  '(alphabetical order) so the owner-elevation trigger finds the row it needs to UPDATE.';
 
 -- ── 4. Attach trigger to auth.users ──────────────────────────────────────────
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
@@ -71,14 +72,17 @@ CREATE TRIGGER on_auth_user_created
 
 -- ── 5. Backfill missing profiles ─────────────────────────────────────────────
 -- Assigns meaningful roles to the owner accounts; all other missing profiles
--- default to 'buyer'. The ON CONFLICT guard makes this idempotent.
+-- get the column default ('individual' at this timestamp, renamed 'buyer' by
+-- migration 20260608). Uses 'individual' here because 'buyer' does not yet
+-- exist in the enum when this migration runs in a fresh-apply sequence.
+-- The ON CONFLICT guard makes this idempotent.
 INSERT INTO public.profiles (user_id, role, created_at, updated_at)
 SELECT
   u.id,
   CASE
     WHEN LOWER(u.email) IN ('kr@maiprop.co', 'k@maiprop.co') THEN 'admin'::public.user_role
     WHEN u.email = 'kostisrenios@gmail.com'                   THEN 'agent'::public.user_role
-    ELSE 'buyer'::public.user_role
+    ELSE 'individual'::public.user_role
   END,
   COALESCE(u.created_at, now()),
   now()
