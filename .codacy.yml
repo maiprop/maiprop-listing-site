@@ -7,6 +7,12 @@ engines:
   # The project uses ESLint 9 (flat config) — linting is enforced via GitHub Actions.
   jshint:
     enabled: false
+  # Codacy's bundled ESLint uses eslint-plugin-solid (SolidJS rules) on a React 18
+  # codebase, generating false positives (solid/reactivity, solid/no-react-specific-props,
+  # etc.). Disabling Codacy's ESLint engine prevents these false positives.
+  # Real ESLint linting (ESLint 9 flat config) is enforced via GitHub Actions.
+  eslint:
+    enabled: false
   metric:
     exclude_paths:
       - "supabase/functions/fetch-os-auctions/index.ts"
