@@ -3,7 +3,6 @@
  * Covers: hidden state, filter panel visibility, accessibility (htmlFor/id),
  * ChevronDown icons, premium locked vs unlocked states, and active filter chips.
  */
-import React from "react";
 import { describe, it, expect, vi } from "vitest";
 import { screen, fireEvent } from "@testing-library/react";
 import { renderWithProviders } from "@/test/utils";
@@ -19,15 +18,23 @@ const ROUND_OPTIONS = [
 interface PanelProps {
   showFilters?: boolean;
   selectedCity?: string;
+  setSelectedCity?: (v: string) => void;
   filterType?: string;
+  setFilterType?: (v: string) => void;
   filterBidRange?: string;
+  setFilterBidRange?: (v: string) => void;
   filterYearRange?: string;
+  setFilterYearRange?: (v: string) => void;
   filterOwnership?: string;
+  setFilterOwnership?: (v: string) => void;
   filterRound?: string;
+  setFilterRound?: (v: string) => void;
   filterYield?: string;
+  setFilterYield?: (v: string) => void;
   isPro?: boolean;
   isMaiPropOsUser?: boolean;
   activeFilterCount?: number;
+  clearFilters?: () => void;
 }
 
 function renderPanel(overrides: PanelProps = {}) {
