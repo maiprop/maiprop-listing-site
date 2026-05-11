@@ -26,7 +26,7 @@ const makeAuction = (overrides: Partial<Record<string, unknown>> = {}): Auction_
     cover_image_url: null,
     listing_images: [],
     ...overrides,
-  } as unknown as Auction_;
+  } as Auction_;
 };
 
 const defaultOpts = {
