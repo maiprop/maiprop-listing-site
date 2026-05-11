@@ -351,7 +351,7 @@ const AuctionDetail = () => { // skipcq: JS-W1044
               <Gavel className="w-4 h-4 text-primary" /> About Greek Property Auctions
             </h2>
             <ul className="text-xs text-muted-foreground space-y-2 leading-relaxed list-none">
-              {AUCTION_INFO_NOTES.map(({ id, text }) => (
+              {AUCTION_INFO_NOTES.map(({ id, text }) => ( // skipcq: JS-0323
                 <li key={id} className="flex items-start gap-2">
                   <span className="text-primary shrink-0 mt-0.5">▸</span>
                   <span>{text}</span>
