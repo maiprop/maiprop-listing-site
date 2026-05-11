@@ -42,7 +42,7 @@ function FilterSelect({
   children,
 }: {
   id: string;
-  label: string;
+  label: React.ReactNode;
   value: string;
   onChange: (v: string) => void;
   children: React.ReactNode;
@@ -147,27 +147,18 @@ export function AuctionFiltersPanel({
                   {roundOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </FilterSelect>
 
-                <div>
-                  <label htmlFor="filter-yield" className="text-xs text-muted-foreground font-medium block mb-1.5">
-                    Est. Rental Yield
-                    <span className="ml-1.5 text-[10px] text-muted-foreground/60">(city benchmark × sqm / bid)</span>
-                  </label>
-                  <div className="relative">
-                    <select
-                      id="filter-yield"
-                      value={filterYield}
-                      onChange={(e) => setFilterYield(e.target.value)}
-                      className="w-full appearance-none bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary cursor-pointer pr-8"
-                    >
-                      <option value="">Any Yield</option>
-                      <option value="low">Under 3% — Low yield</option>
-                      <option value="medium">3% – 6% — Average</option>
-                      <option value="high">6% – 9% — Good</option>
-                      <option value="very_high">9%+ — High yield opportunity</option>
-                    </select>
-                    <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" aria-hidden="true" />
-                  </div>
-                </div>
+                <FilterSelect
+                  id="filter-yield"
+                  label={<>Est. Rental Yield <span className="ml-1.5 text-[10px] text-muted-foreground/60">(city benchmark × sqm / bid)</span></>}
+                  value={filterYield}
+                  onChange={setFilterYield}
+                >
+                  <option value="">Any Yield</option>
+                  <option value="low">Under 3% — Low yield</option>
+                  <option value="medium">3% – 6% — Average</option>
+                  <option value="high">6% – 9% — Good</option>
+                  <option value="very_high">9%+ — High yield opportunity</option>
+                </FilterSelect>
               </div>
             ) : (
               <div className="flex items-center gap-3 p-4 rounded-xl bg-secondary/50 border border-border">

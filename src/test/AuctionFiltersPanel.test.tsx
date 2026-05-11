@@ -211,7 +211,7 @@ describe("AuctionFiltersPanel — active filter chips", () => {
     const chips = screen.getAllByRole("button");
     const typeChip = chips.find((b) => b.textContent?.includes("house"));
     expect(typeChip).toBeInTheDocument();
-    fireEvent.click(typeChip!);
+    fireEvent.click(typeChip as HTMLElement);
     expect(setFilterType).toHaveBeenCalledWith("");
   });
 
