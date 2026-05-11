@@ -26,7 +26,7 @@ const makeAuction = (overrides: Partial<Record<string, unknown>> = {}): Auction_
     cover_image_url: null,
     listing_images: [],
     ...overrides,
-  } as Auction_;
+  } as unknown as Auction_; // stub omits required DB fields — needs double-cast
 };
 
 const defaultOpts = {
