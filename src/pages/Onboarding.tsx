@@ -196,12 +196,35 @@ export default function Onboarding() {
       },
     });
     if (error) {
+      // Extract the RPC error code from the FunctionsHttpError response body.
+      // supabase-js sets error.context to the raw Response on non-2xx replies.
+      let errorCode: string | null = null;
+      if ("context" in error && error.context instanceof Response) {
+        try {
+          const body = await (error.context as Response).json() as { error?: string };
+          errorCode = body.error ?? null;
+        } catch { /* ignore parse failures — fall through to generic message */ }
+      }
+      const ONBOARDING_ERROR_MESSAGES: Record<string, string> = {
+        professional_phone_required:   "Please add your phone number before selecting the Professional account type.",
+        professional_profile_required: "You need to create a Professional profile first. Visit your dashboard to set one up.",
+        developer_display_name_required: "Please enter a company or display name for your developer account.",
+        developer_city_required:       "Please enter your city to complete the developer account setup.",
+        role_participant_mismatch:     "Account type selection was inconsistent. Please refresh and try again.",
+        role_not_allowed:              "This account type is not available. Please choose another.",
+        profile_not_found:             "Your profile could not be found. Please sign out and back in.",
+        not_authenticated:             "Your session has expired. Please sign in again.",
+        invalid_participant_type:      "Invalid account type selected. Please choose again.",
+      };
+      const msg = (errorCode && ONBOARDING_ERROR_MESSAGES[errorCode])
+        ?? "Could not save account type. Please try again.";
       trackAnalyticsEvent("onboarding_error", {
         stage: "role_save",
         role: values.role,
         participant_type: values.participant_type,
+        error_code: errorCode ?? "unknown",
       });
-      toast.error("Could not save account type. Please try again.");
+      toast.error(msg);
       return false;
     }
     trackAnalyticsEvent("onboarding_role_selected", {

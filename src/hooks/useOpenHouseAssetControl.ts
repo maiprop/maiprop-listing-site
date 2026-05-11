@@ -225,6 +225,10 @@ export function useCreateOpenHouseRegistration() {
           if (fetchErr || !existing) throw new Error("You already have a registration for this open house.");
           return existing;
         }
+        // FK violation (23503): requester_id not found in auth.users — stale session
+        if (error.code === "23503") {
+          throw new Error("Your account could not be verified. Please sign out and sign back in, then try again.");
+        }
         // PostgrestError has a `.message` but does not extend Error — wrap it so
         // the onError handler always receives a true Error instance.
         throw new Error(error.message || "Registration failed. Please try again.");

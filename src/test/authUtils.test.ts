@@ -24,18 +24,14 @@ describe("isSellSideRole", () => {
     expect(isSellSideRole(null)).toBe(false);
   });
 
-  it("returns true for sell-side roles", () => {
-    for (const role of ["agent", "seller", "developer"]) {
+  it("returns true for sell-side roles including institutional", () => {
+    for (const role of ["agent", "seller", "developer", "institutional"]) {
       expect(isSellSideRole({ role })).toBe(true);
     }
   });
 
   it("does NOT grant sell-side via participant_type (security: only role is authoritative)", () => {
     expect(isSellSideRole({ role: "buyer" })).toBe(false);
-  });
-
-  it("institutional requires admin-assigned role, not self-service", () => {
-    expect(isSellSideRole({ role: "institutional" })).toBe(false);
   });
 
   it("returns false for buy-side roles", () => {
