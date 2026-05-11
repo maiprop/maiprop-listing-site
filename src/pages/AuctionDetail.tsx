@@ -126,7 +126,36 @@ const AuctionTitleRow = ({
 );
 
 // ── Main component ────────────────────────────────────────────────────────────
-const AuctionDetail = () => { // skipcq: JS-W1044
+const AuctionStatRow = ({
+  sqm, yearBuilt, auctionDate, days,
+}: {
+  sqm?: number | null; yearBuilt?: number | null;
+  auctionDate?: string | null; days: number;
+}) => (
+  <div className="flex flex-wrap gap-2">
+    {sqm && sqm > 1 && (
+      <StatChip icon={<Square className="w-4 h-4" />} label={`${sqm} m²`} />
+    )}
+    {yearBuilt && (
+      <StatChip icon={<Home className="w-4 h-4" />} label={`Built ${yearBuilt}`} />
+    )}
+    {auctionDate && (
+      <StatChip
+        icon={<Calendar className="w-4 h-4" />}
+        label={`Auction: ${formatDate(auctionDate)}`}
+      />
+    )}
+    {/* daysUntil returns 999 sentinel when no date — exclude it */}
+    {days < 999 && (
+      <StatChip
+        icon={<Clock className="w-4 h-4" />}
+        label={days === 0 ? "Today" : `${days} day${days !== 1 ? "s" : ""} to go`}
+      />
+    )}
+  </div>
+);
+
+const AuctionDetail = () => {
   const { id = "" } = useParams<{ id: string }>();
   const { state } = useLocation() as { state?: { auction?: Record<string, unknown> } };
 
@@ -286,27 +315,7 @@ const AuctionDetail = () => { // skipcq: JS-W1044
           />
 
           {/* ── Stat chips ── */}
-          <div className="flex flex-wrap gap-2">
-            {sqm && sqm > 1 && (
-              <StatChip icon={<Square className="w-4 h-4" />} label={`${sqm} m²`} />
-            )}
-            {yearBuilt && (
-              <StatChip icon={<Home className="w-4 h-4" />} label={`Built ${yearBuilt}`} />
-            )}
-            {auctionDate && (
-              <StatChip
-                icon={<Calendar className="w-4 h-4" />}
-                label={`Auction: ${formatDate(auctionDate)}`}
-              />
-            )}
-            {/* daysUntil returns 999 sentinel when no date — exclude it */}
-            {days < 999 && (
-              <StatChip
-                icon={<Clock className="w-4 h-4" />}
-                label={days === 0 ? "Today" : `${days} day${days !== 1 ? "s" : ""} to go`}
-              />
-            )}
-          </div>
+          <AuctionStatRow sqm={sqm} yearBuilt={yearBuilt} auctionDate={auctionDate} days={days} />
 
           {/* ── External link CTA ── */}
           {safeUrl(websiteUrl) && (
