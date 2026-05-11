@@ -192,10 +192,17 @@ const AIAssistantWidget = forwardRef<HTMLDivElement, AIAssistantWidgetProps>(fun
       setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, streaming: false } : m));
     } catch (e: unknown) {
       if (e instanceof Error && e.name === "AbortError") return;
+      const rawMsg = e instanceof Error ? e.message : "Something went wrong.";
+      // Use substring matching so minor backend message variations still resolve
+      const friendlyMsg =
+        rawMsg.includes("OPENAI_API_KEY") ? "AI assistant is temporarily unavailable. Please try again later." :
+        rawMsg.includes("quota exceeded")  ? "You've reached your AI usage limit for this month. Upgrade your plan to continue." :
+        rawMsg.includes("Unauthorized")    ? "Please sign in to use the AI assistant." :
+        "Something went wrong. Please try again.";
       setMessages(prev =>
         prev.map(m =>
           m.id === assistantId
-            ? { ...m, content: `⚠️ ${e instanceof Error ? e.message : "Something went wrong."}`, streaming: false }
+            ? { ...m, content: `⚠️ ${friendlyMsg}`, streaming: false }
             : m
         )
       );
