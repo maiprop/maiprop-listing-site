@@ -46,7 +46,12 @@ const AIAssistantWidget = lazy(() => import("@/components/AIAssistantWidget"));
 // ── UUID detection ────────────────────────────────────────────────────────────
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// ── Shared stat chip ─────────────────────────────────────────────────────────
+/** Only allow http/https URLs in external auction links to prevent javascript: injection. */
+const safeUrl = (url: string | null | undefined): string | null =>
+  url && /^https?:\/\//i.test(url) ? url : null;
+
+// ── Sub-components (extracted to limit JSX nesting depth) ────────────────────
+
 const StatChip = ({ icon, label }: { icon: React.ReactNode; label: string }) => (
   <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-secondary border border-border text-sm">
     <span className="text-primary shrink-0">{icon}</span>
@@ -54,11 +59,65 @@ const StatChip = ({ icon, label }: { icon: React.ReactNode; label: string }) => 
   </div>
 );
 
-/** Only allow http/https URLs in external auction links to prevent javascript: injection. */
-const safeUrl = (url: string | null | undefined): string | null =>
-  url && /^https?:\/\//i.test(url) ? url : null;
+const AuctionBreadcrumb = ({ title }: { title: string }) => (
+  <div className="border-b border-border bg-card/50">
+    <div className="max-w-5xl mx-auto px-4 py-3">
+      <nav aria-label="breadcrumb">
+        <ol className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <li><Link to="/auctions" className="hover:text-foreground transition-colors">Auctions</Link></li>
+          <li aria-hidden="true">/</li>
+          <li aria-current="page" className="text-foreground truncate max-w-xs">{title}</li>
+        </ol>
+      </nav>
+    </div>
+  </div>
+);
+
+const AuctionTitleRow = ({
+  title, city, address, region, bid, auctionDate,
+  ownershipBadge, ownershipPct,
+}: {
+  title: string; city: string; address?: string | null; region?: string | null;
+  bid: number; auctionDate?: string | null;
+  ownershipBadge: { cls: string; label: string } | null; ownershipPct: number | null;
+}) => (
+  <div className="flex flex-col sm:flex-row sm:items-start gap-4 justify-between">
+    <div className="space-y-1.5 flex-1">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-brand-gold/15 text-brand-gold border border-brand-gold/30">
+          <Gavel className="w-3 h-3" /> AUCTION
+        </span>
+        {ownershipBadge && (
+          <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border ${ownershipBadge.cls}`}>
+            <Building2 className="w-2.5 h-2.5" />
+            {ownershipBadge.label}
+            {ownershipPct != null && ownershipPct < 100 && <span className="opacity-80">({ownershipPct}%)</span>}
+          </span>
+        )}
+      </div>
+      <h1 className="font-display text-xl sm:text-2xl font-bold leading-snug">{title}</h1>
+      <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+        <MapPin className="w-4 h-4 shrink-0 text-primary" />
+        <span>{address ? `${address}, ` : ""}{city}{region && region !== city ? `, ${region}` : ""}</span>
+      </div>
+    </div>
+    <div className="glass-card rounded-2xl px-5 py-4 border border-brand-gold/30 bg-brand-gold/5 shrink-0 text-center sm:text-right">
+      <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Starting Bid</p>
+      <p className="font-display text-2xl font-black bg-gradient-primary bg-clip-text text-transparent">
+        €{bid.toLocaleString("el-GR")}
+      </p>
+      {auctionDate && (
+        <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1 justify-center sm:justify-end">
+          <Calendar className="w-3 h-3" />
+          {formatDate(auctionDate)}
+        </p>
+      )}
+    </div>
+  </div>
+);
 
 // ── Main component ────────────────────────────────────────────────────────────
+// skipcq: JS-W1044
 const AuctionDetail = () => {
   const { id = "" } = useParams<{ id: string }>();
   const { state } = useLocation() as { state?: { auction?: Record<string, unknown> } };
@@ -171,17 +230,7 @@ const AuctionDetail = () => {
 
       <main id="main-content" className="min-h-screen bg-background pb-24">
         {/* ── Breadcrumb ── */}
-        <div className="border-b border-border bg-card/50">
-          <div className="max-w-5xl mx-auto px-4 py-3">
-            <nav aria-label="breadcrumb">
-              <ol className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <li><Link to="/auctions" className="hover:text-foreground transition-colors">Auctions</Link></li>
-                <li aria-hidden="true">/</li>
-                <li aria-current="page" className="text-foreground truncate max-w-xs">{title}</li>
-              </ol>
-            </nav>
-          </div>
-        </div>
+        <AuctionBreadcrumb title={title} />
 
         <div className="max-w-5xl mx-auto px-4 pt-6 space-y-6">
 
@@ -217,43 +266,16 @@ const AuctionDetail = () => {
           </div>
 
           {/* ── Title row ── */}
-          <div className="flex flex-col sm:flex-row sm:items-start gap-4 justify-between">
-            <div className="space-y-1.5 flex-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-brand-gold/15 text-brand-gold border border-brand-gold/30">
-                  <Gavel className="w-3 h-3" /> AUCTION
-                </span>
-                {ownershipBadge && (
-                  <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border ${ownershipBadge.cls}`}>
-                    <Building2 className="w-2.5 h-2.5" />
-                    {ownershipBadge.label}
-                    {ownershipPct != null && ownershipPct < 100 && <span className="opacity-80">({ownershipPct}%)</span>}
-                  </span>
-                )}
-              </div>
-
-              <h1 className="font-display text-xl sm:text-2xl font-bold leading-snug">{title}</h1>
-
-              <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                <MapPin className="w-4 h-4 shrink-0 text-primary" />
-                <span>{address ? `${address}, ` : ""}{city}{region && region !== city ? `, ${region}` : ""}</span>
-              </div>
-            </div>
-
-            {/* Starting bid */}
-            <div className="glass-card rounded-2xl px-5 py-4 border border-brand-gold/30 bg-brand-gold/5 shrink-0 text-center sm:text-right">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Starting Bid</p>
-              <p className="font-display text-2xl font-black bg-gradient-primary bg-clip-text text-transparent">
-                €{bid.toLocaleString("el-GR")}
-              </p>
-              {auctionDate && (
-                <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1 justify-center sm:justify-end">
-                  <Calendar className="w-3 h-3" />
-                  {formatDate(auctionDate)}
-                </p>
-              )}
-            </div>
-          </div>
+          <AuctionTitleRow
+            title={title}
+            city={city}
+            address={address}
+            region={region}
+            bid={bid}
+            auctionDate={auctionDate}
+            ownershipBadge={ownershipBadge}
+            ownershipPct={ownershipPct}
+          />
 
           {/* ── Stat chips ── */}
           <div className="flex flex-wrap gap-2">
