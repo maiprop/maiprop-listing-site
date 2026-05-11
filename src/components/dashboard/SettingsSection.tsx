@@ -70,7 +70,7 @@ export function SettingsSection({
         profile_update_failed: "Failed to update your profile. Please try again in a moment.",
       };
       const friendlyMsg = ROLE_SWITCH_ERROR_MESSAGES[error.message]
-        ?? `Could not start role switch: ${error.message}`;
+        ?? "Could not start role switch. Please try again or contact support.";
       toast.error(friendlyMsg);
       try { sessionStorage.removeItem("role_switch_ctx"); } catch { /* ignore */ }
       setSwitching(false);

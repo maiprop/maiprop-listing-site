@@ -24,7 +24,7 @@ import {
   AlertCircle,
   Loader2,
 } from "lucide-react";
-import { format } from "date-fns";
+import { formatDate, formatPrice } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
@@ -75,11 +75,12 @@ export default function AuctionDetail() {
   const isUUID = UUID_RE.test(id);
   const { data: dbListing, isLoading: dbLoading } = useListing(isUUID && !auctionFromCache ? id : "");
 
-  // Resolve the best available data source
+  // Resolve the best available data source — state wins (instant on navigation),
+  // then the live cache, then the DB fallback for UUID-based listings.
   const auction =
+    auctionFromState ??
     (auctionFromCache as Record<string, unknown> | null) ??
-    (dbListing as Record<string, unknown> | null) ??
-    auctionFromState;
+    (dbListing as Record<string, unknown> | null);
 
   const isLoading = !auction && (auctionsLoading || (isUUID && dbLoading));
 
@@ -161,7 +162,7 @@ export default function AuctionDetail() {
     <>
       <Helmet>
         <title>{title} | maiProp Auctions</title>
-        <meta name="description" content={`Auction: ${title}. Starting bid €${bid.toLocaleString()}. City: ${city}.`} />
+        <meta name="description" content={`Auction: ${title}. Starting bid ${formatPrice(bid)}. City: ${city}.`} />
       </Helmet>
 
       <Navbar />
@@ -246,7 +247,7 @@ export default function AuctionDetail() {
               {auctionDate && (
                 <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1 justify-center sm:justify-end">
                   <Calendar className="w-3 h-3" />
-                  {format(new Date(auctionDate), "dd MMM yyyy")}
+                  {formatDate(auctionDate)}
                 </p>
               )}
             </div>
@@ -263,10 +264,11 @@ export default function AuctionDetail() {
             {auctionDate && (
               <StatChip
                 icon={<Calendar className="w-4 h-4" />}
-                label={`Auction: ${format(new Date(auctionDate), "dd MMM yyyy")}`}
+                label={`Auction: ${formatDate(auctionDate)}`}
               />
             )}
-            {days !== null && days >= 0 && (
+            {/* daysUntil returns 999 sentinel when no date — exclude it */}
+            {days < 999 && (
               <StatChip
                 icon={<Clock className="w-4 h-4" />}
                 label={days === 0 ? "Today" : `${days} day${days !== 1 ? "s" : ""} to go`}
@@ -323,8 +325,8 @@ export default function AuctionDetail() {
                 "A 10% deposit of the winning bid is required immediately after the auction.",
                 "Due diligence (cadastre, encumbrances, planning status) is the buyer's responsibility. Consult a notary and lawyer before bidding.",
                 "Transfer tax (3% FMA) and notary fees apply on top of the winning bid.",
-              ].map((note, i) => (
-                <li key={i} className="flex items-start gap-2">
+              ].map((note) => (
+                <li key={note.slice(0, 40)} className="flex items-start gap-2">
                   <span className="text-primary shrink-0 mt-0.5">▸</span>
                   <span>{note}</span>
                 </li>
