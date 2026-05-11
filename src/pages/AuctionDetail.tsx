@@ -47,17 +47,19 @@ const AIAssistantWidget = lazy(() => import("@/components/AIAssistantWidget"));
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // ── Shared stat chip ─────────────────────────────────────────────────────────
-function StatChip({ icon, label }: { icon: React.ReactNode; label: string }) {
-  return (
-    <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-secondary border border-border text-sm">
-      <span className="text-primary shrink-0">{icon}</span>
-      <span className="text-foreground font-medium">{label}</span>
-    </div>
-  );
-}
+const StatChip = ({ icon, label }: { icon: React.ReactNode; label: string }) => (
+  <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-secondary border border-border text-sm">
+    <span className="text-primary shrink-0">{icon}</span>
+    <span className="text-foreground font-medium">{label}</span>
+  </div>
+);
+
+/** Only allow http/https URLs in external auction links to prevent javascript: injection. */
+const safeUrl = (url: string | null | undefined): string | null =>
+  url && /^https?:\/\//i.test(url) ? url : null;
 
 // ── Main component ────────────────────────────────────────────────────────────
-export default function AuctionDetail() {
+const AuctionDetail = () => {
   const { id = "" } = useParams<{ id: string }>();
   const { state } = useLocation() as { state?: { auction?: Record<string, unknown> } };
 
@@ -277,7 +279,7 @@ export default function AuctionDetail() {
           </div>
 
           {/* ── External link CTA ── */}
-          {websiteUrl && (
+          {safeUrl(websiteUrl) && (
             <div className="glass-card rounded-2xl p-5 border border-primary/20 bg-primary/5 flex items-center justify-between gap-4 flex-wrap">
               <div>
                 <p className="text-sm font-semibold">View on eAuction platform</p>
@@ -286,7 +288,7 @@ export default function AuctionDetail() {
                 </p>
               </div>
               <Button asChild className="shrink-0 gap-2">
-                <a href={websiteUrl} target="_blank" rel="noreferrer noopener">
+                <a href={safeUrl(websiteUrl)!} target="_blank" rel="noreferrer noopener">
                   <ExternalLink className="w-4 h-4" /> Open eAuction
                 </a>
               </Button>
@@ -344,4 +346,6 @@ export default function AuctionDetail() {
       <Footer />
     </>
   );
-}
+};
+
+export default AuctionDetail;
