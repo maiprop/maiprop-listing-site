@@ -174,9 +174,8 @@ describe("AuctionFiltersPanel — select interaction", () => {
     const setSelectedCity = vi.fn();
     renderPanel({ showFilters: true, setSelectedCity });
     const el = document.getElementById("filter-city");
-    expect(el).toBeInTheDocument();
-    const select = el as HTMLSelectElement;
-    fireEvent.change(select, { target: { value: "Athens" } });
+    if (!(el instanceof HTMLSelectElement)) throw new Error("filter-city select not found");
+    fireEvent.change(el, { target: { value: "Athens" } });
     expect(setSelectedCity).toHaveBeenCalledWith("Athens");
   });
 
@@ -184,9 +183,8 @@ describe("AuctionFiltersPanel — select interaction", () => {
     const setFilterType = vi.fn();
     renderPanel({ showFilters: true, setFilterType });
     const el = document.getElementById("filter-type");
-    expect(el).toBeInTheDocument();
-    const select = el as HTMLSelectElement;
-    fireEvent.change(select, { target: { value: "house" } });
+    if (!(el instanceof HTMLSelectElement)) throw new Error("filter-type select not found");
+    fireEvent.change(el, { target: { value: "house" } });
     expect(setFilterType).toHaveBeenCalledWith("house");
   });
 
@@ -194,9 +192,8 @@ describe("AuctionFiltersPanel — select interaction", () => {
     const setFilterOwnership = vi.fn();
     renderPanel({ showFilters: true, isPro: true, setFilterOwnership });
     const el = document.getElementById("filter-ownership");
-    expect(el).toBeInTheDocument();
-    const select = el as HTMLSelectElement;
-    fireEvent.change(select, { target: { value: "full" } });
+    if (!(el instanceof HTMLSelectElement)) throw new Error("filter-ownership select not found");
+    fireEvent.change(el, { target: { value: "full" } });
     expect(setFilterOwnership).toHaveBeenCalledWith("full");
   });
 });
