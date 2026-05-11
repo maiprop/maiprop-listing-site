@@ -37,7 +37,7 @@ interface PanelProps {
   clearFilters?: () => void;
 }
 
-function renderPanel(overrides: PanelProps = {}) {
+const renderPanel = (overrides: PanelProps = {}) => {
   const props = {
     showFilters: false,
     selectedCity: "All Cities",

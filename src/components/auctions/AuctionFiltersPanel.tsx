@@ -34,7 +34,7 @@ interface AuctionFiltersPanelProps {
 }
 
 /** Shared wrapper that gives every select the same chevron indicator + a11y association. */
-function FilterSelect({
+const FilterSelect = ({
   id,
   label,
   value,
@@ -46,26 +46,24 @@ function FilterSelect({
   value: string;
   onChange: (v: string) => void;
   children: React.ReactNode;
-}) {
-  return (
-    <div>
-      <label htmlFor={id} className="text-xs text-muted-foreground font-medium block mb-1.5">
-        {label}
-      </label>
-      <div className="relative">
-        <select
-          id={id}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-full appearance-none bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary cursor-pointer pr-8"
-        >
-          {children}
-        </select>
-        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" aria-hidden="true" />
-      </div>
+}) => (
+  <div>
+    <label htmlFor={id} className="text-xs text-muted-foreground font-medium block mb-1.5">
+      {label}
+    </label>
+    <div className="relative">
+      <select
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full appearance-none bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary cursor-pointer pr-8"
+      >
+        {children}
+      </select>
+      <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" aria-hidden="true" />
     </div>
-  );
-}
+  </div>
+);
 
 /**
  * Desktop advanced filters panel (shown when showFilters=true) plus the

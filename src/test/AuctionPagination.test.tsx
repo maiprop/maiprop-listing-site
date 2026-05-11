@@ -3,7 +3,6 @@
  * Verifies: null render guard, ellipsis window logic, prev/next navigation,
  * footer text, and page boundary behaviour.
  */
-import React from "react";
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { AuctionPagination } from "@/components/auctions/AuctionPagination";
@@ -12,7 +11,7 @@ import { AUCTIONS_PAGE_SIZE } from "@/hooks/useAuctionsPipeline";
 // AuctionPagination uses Button from @/components/ui/button which is a plain
 // Radix/Tailwind component — no provider needed.
 
-function renderPagination(props: Partial<React.ComponentProps<typeof AuctionPagination>> = {}) {
+const renderPagination = (props: Partial<React.ComponentProps<typeof AuctionPagination>> = {}) => {
   const defaults = {
     currentPage: 1,
     totalPages: 3,

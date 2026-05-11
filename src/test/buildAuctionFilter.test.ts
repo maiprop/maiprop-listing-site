@@ -9,7 +9,7 @@ import { buildAuctionFilter, type Auction_ } from "@/hooks/useAuctionsPipeline";
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 /** Build a minimal auction stub. All optional fields default to undefined/null. */
-function makeAuction(overrides: Partial<Record<string, unknown>> = {}): Auction_ {
+const makeAuction = (overrides: Partial<Record<string, unknown>> = {}): Auction_ => {
   return {
     id: "a1",
     title: "Test Auction",
