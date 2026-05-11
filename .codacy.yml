@@ -3,6 +3,10 @@ exclude_paths:
   - "supabase/functions/fetch-os-auctions/index.ts"
   - "supabase/functions/fetch-os-auctions/index.test.ts"
 engines:
+  # JSHint does not understand ES2015+ modules/destructuring/arrow functions.
+  # The project uses ESLint 9 (flat config) — linting is enforced via GitHub Actions.
+  jshint:
+    enabled: false
   metric:
     exclude_paths:
       - "supabase/functions/fetch-os-auctions/index.ts"
