@@ -300,7 +300,13 @@ export default function AuctionDetail() {
                 </h2>
               </div>
               <div className="h-56">
-                <PropertyMiniMap lat={lat} lng={lng} title={title} />
+                <PropertyMiniMap
+                  latitude={lat}
+                  longitude={lng}
+                  title={title}
+                  address={address ?? ""}
+                  city={city}
+                />
               </div>
             </div>
           )}
