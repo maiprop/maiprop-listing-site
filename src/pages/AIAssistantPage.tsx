@@ -1,10 +1,12 @@
 import { lazy, Suspense, useState } from "react";
 import { Sparkles, Briefcase, Lock } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
-import AIAssistantWidget from "@/components/AIAssistantWidget";
 import { useSubscription } from "@/hooks/useSubscription";
 import { Link } from "react-router-dom";
 
+// Lazy-import both widgets so neither 127 kB chunk is bundled into this
+// page's chunk — they load in parallel when the user lands on this route.
+const AIAssistantWidget = lazy(() => import("@/components/AIAssistantWidget"));
 const ProAIToolsWidget = lazy(() => import("@/components/ProAIToolsWidget"));
 
 type Tab = "general" | "pro";
@@ -52,7 +54,9 @@ export default function AIAssistantPage() {
           {/* Content */}
           <div className="flex-1 flex flex-col min-h-0 rounded-2xl border border-border bg-card overflow-hidden">
             {tab === "general" ? (
-              <AIAssistantWidget variant="embedded" />
+              <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Sparkles className="w-5 h-5 animate-pulse text-primary" /></div>}>
+                <AIAssistantWidget variant="embedded" />
+              </Suspense>
             ) : isPro ? (
               <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Sparkles className="w-5 h-5 animate-pulse text-primary" /></div>}>
                 <ProAIToolsWidget />

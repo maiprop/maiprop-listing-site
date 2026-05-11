@@ -44,7 +44,12 @@ export default defineConfig((_env) => ({
         manualChunks(id) {
           if (!id.includes("node_modules")) return undefined;
           if (id.includes("@radix-ui/")) return "vendor-radix";
-          if (id.includes("/recharts/") || /\/d3-[a-z-]+\//.test(id)) return "vendor-charts";
+          // recharts / d3 are intentionally NOT chunked here — they're only
+          // imported by lazy-loaded routes (AnalyticsTab, AdminReports), so
+          // Rollup places them in shared lazy auto-chunks that are NOT listed
+          // in the initial HTML modulepreload. Forcing them into a named chunk
+          // causes clsx (a shared dep) to be statically imported into the entry
+          // bundle, adding ~106 kB gzip to every page load unnecessarily.
           if (id.includes("/framer-motion/")) return "vendor-motion";
           if (id.includes("/lucide-react/")) return "vendor-icons";
           if (
@@ -55,6 +60,19 @@ export default defineConfig((_env) => ({
             id.includes("/scheduler/")
           ) {
             return "vendor-react";
+          }
+          // Supabase client — large but needed everywhere; isolated chunk for
+          // cache stability (changes only on SDK upgrades, not on app deploys).
+          if (id.includes("/@supabase/") || id.includes("/supabase-js/")) {
+            return "vendor-supabase";
+          }
+          // i18n — translation libraries, isolated for cache stability.
+          if (id.includes("/i18next") || id.includes("/react-i18next/")) {
+            return "vendor-i18n";
+          }
+          // Sentry — error tracking, isolated so app code changes don't bust it.
+          if (id.includes("/@sentry/")) {
+            return "vendor-sentry";
           }
           if (
             id.includes("/cmdk/") ||
@@ -72,6 +90,6 @@ export default defineConfig((_env) => ({
         },
       },
     },
-    chunkSizeWarningLimit: 1050, // mapbox-gl lazy chunk is inherently large (~275 kB gzip)
+    chunkSizeWarningLimit: 1050, // mapbox-gl lazy chunk (~276 kB gzip) and vendor-supabase are inherently large
   },
 }));
