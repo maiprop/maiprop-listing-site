@@ -192,18 +192,10 @@ const AIAssistantWidget = forwardRef<HTMLDivElement, AIAssistantWidgetProps>(fun
       setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, streaming: false } : m));
     } catch (e: unknown) {
       if (e instanceof Error && e.name === "AbortError") return;
-      const rawMsg = e instanceof Error ? e.message : "Something went wrong.";
-      // Map technical server errors to user-friendly messages
-      const AI_ERROR_MESSAGES: Record<string, string> = {
-        "OPENAI_API_KEY not configured": "AI assistant is temporarily unavailable. Please try again later.",
-        "AI quota exceeded": "You've reached your AI usage limit for this month. Upgrade your plan to continue.",
-        "Unauthorized": "Please sign in to use the AI assistant.",
-      };
-      const friendlyMsg = AI_ERROR_MESSAGES[rawMsg] ?? rawMsg;
       setMessages(prev =>
         prev.map(m =>
           m.id === assistantId
-            ? { ...m, content: `⚠️ ${friendlyMsg}`, streaming: false }
+            ? { ...m, content: `⚠️ ${e instanceof Error ? e.message : "Something went wrong."}`, streaming: false }
             : m
         )
       );

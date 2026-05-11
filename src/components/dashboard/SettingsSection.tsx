@@ -64,14 +64,7 @@ export function SettingsSection({
     type RpcCaller = (name: "begin_role_switch") => Promise<{ error: { message: string } | null }>;
     const { error } = await (supabase.rpc as unknown as RpcCaller)("begin_role_switch");
     if (error) {
-      const ROLE_SWITCH_ERROR_MESSAGES: Record<string, string> = {
-        profile_not_found:   "Your profile record was not found. Please sign out, sign back in, and try again. If the problem persists, contact support.",
-        not_authenticated:   "Your session has expired. Please sign in again.",
-        profile_update_failed: "Failed to update your profile. Please try again in a moment.",
-      };
-      const friendlyMsg = ROLE_SWITCH_ERROR_MESSAGES[error.message]
-        ?? `Could not start role switch: ${error.message}`;
-      toast.error(friendlyMsg);
+      toast.error(`Could not start role switch: ${error.message}`);
       try { sessionStorage.removeItem("role_switch_ctx"); } catch { /* ignore */ }
       setSwitching(false);
       return;

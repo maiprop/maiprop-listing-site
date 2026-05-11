@@ -225,9 +225,7 @@ export function useCreateOpenHouseRegistration() {
           if (fetchErr || !existing) throw new Error("You already have a registration for this open house.");
           return existing;
         }
-        // PostgrestError has a `.message` but does not extend Error — wrap it so
-        // the onError handler always receives a true Error instance.
-        throw new Error(error.message || "Registration failed. Please try again.");
+        throw error;
       }
       return data;
     },

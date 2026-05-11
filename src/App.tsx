@@ -20,7 +20,6 @@ const AIAssistantWidget = lazy(() => import("@/components/AIAssistantWidget"));
 const Listings = lazy(() => import("./pages/Listings"));
 const PropertyDetail = lazy(() => import("./pages/PropertyDetail"));
 const Auctions = lazy(() => import("./pages/Auctions"));
-const AuctionDetail = lazy(() => import("./pages/AuctionDetail"));
 const Firesale = lazy(() => import("./pages/Firesale"));
 const InvestorDashboard = lazy(() => import("./pages/InvestorDashboard"));
 const Professionals = lazy(() => import("./pages/Professionals"));
@@ -102,7 +101,7 @@ const App = () => (
                       <Route path="/listings/new-building" element={<SellerRoute><ErrorBoundary><CreateNewBuildingListing /></ErrorBoundary></SellerRoute>} />
                       <Route path="/listings" element={<ErrorBoundary><Listings /></ErrorBoundary>} />
                       <Route path="/property/:id" element={<ErrorBoundary><PropertyDetail /></ErrorBoundary>} />
-                      <Route path="/auction/:id" element={<ErrorBoundary><AuctionDetail /></ErrorBoundary>} />
+                      <Route path="/auction/:id" element={<ErrorBoundary><PropertyDetail /></ErrorBoundary>} />
                       <Route path="/auctions" element={<ErrorBoundary><Auctions /></ErrorBoundary>} />
                       <Route path="/firesale" element={<ErrorBoundary><Firesale /></ErrorBoundary>} />
                       <Route path="/investor-dashboard" element={<InvestorRoute><ErrorBoundary><InvestorDashboard /></ErrorBoundary></InvestorRoute>} />
