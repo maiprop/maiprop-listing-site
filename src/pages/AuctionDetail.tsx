@@ -126,8 +126,7 @@ const AuctionTitleRow = ({
 );
 
 // ── Main component ────────────────────────────────────────────────────────────
-// skipcq: JS-W1044
-const AuctionDetail = () => {
+const AuctionDetail = () => { // skipcq: JS-W1044
   const { id = "" } = useParams<{ id: string }>();
   const { state } = useLocation() as { state?: { auction?: Record<string, unknown> } };
 
