@@ -65,6 +65,39 @@ const FilterSelect = ({
   </div>
 );
 
+/** Unlocked premium filter selects (ownership, round, yield) shown to Pro/OS users. */
+const PremiumFiltersGrid = ({
+  filterOwnership, setFilterOwnership,
+  filterRound, setFilterRound, roundOptions,
+  filterYield, setFilterYield,
+}: {
+  filterOwnership: string; setFilterOwnership: (v: string) => void;
+  filterRound: string; setFilterRound: (v: string) => void;
+  roundOptions: { value: string; label: string }[];
+  filterYield: string; setFilterYield: (v: string) => void;
+}) => (
+  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    <FilterSelect id="filter-ownership" label="Ownership Status" value={filterOwnership} onChange={setFilterOwnership}>
+      {OWNERSHIP_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+    </FilterSelect>
+    <FilterSelect id="filter-round" label="Auction Round" value={filterRound} onChange={setFilterRound}>
+      {roundOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+    </FilterSelect>
+    <FilterSelect
+      id="filter-yield"
+      label={<>Est. Rental Yield <span className="ml-1.5 text-[10px] text-muted-foreground/60">(city benchmark × sqm / bid)</span></>}
+      value={filterYield}
+      onChange={setFilterYield}
+    >
+      <option value="">Any Yield</option>
+      <option value="low">Under 3% — Low yield</option>
+      <option value="medium">3% – 6% — Average</option>
+      <option value="high">6% – 9% — Good</option>
+      <option value="very_high">9%+ — High yield opportunity</option>
+    </FilterSelect>
+  </div>
+);
+
 /**
  * Desktop advanced filters panel (shown when showFilters=true) plus the
  * active-filter chips row shown beneath the toolbar when filters are active.
@@ -136,28 +169,15 @@ export function AuctionFiltersPanel({
               {!isPro && !isMaiPropOsUser && <PremiumBadge />}
             </p>
             {isPro || isMaiPropOsUser ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                <FilterSelect id="filter-ownership" label="Ownership Status" value={filterOwnership} onChange={setFilterOwnership}>
-                  {OWNERSHIP_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-                </FilterSelect>
-
-                <FilterSelect id="filter-round" label="Auction Round" value={filterRound} onChange={setFilterRound}>
-                  {roundOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </FilterSelect>
-
-                <FilterSelect
-                  id="filter-yield"
-                  label={<>Est. Rental Yield <span className="ml-1.5 text-[10px] text-muted-foreground/60">(city benchmark × sqm / bid)</span></>}
-                  value={filterYield}
-                  onChange={setFilterYield}
-                >
-                  <option value="">Any Yield</option>
-                  <option value="low">Under 3% — Low yield</option>
-                  <option value="medium">3% – 6% — Average</option>
-                  <option value="high">6% – 9% — Good</option>
-                  <option value="very_high">9%+ — High yield opportunity</option>
-                </FilterSelect>
-              </div>
+              <PremiumFiltersGrid
+                filterOwnership={filterOwnership}
+                setFilterOwnership={setFilterOwnership}
+                filterRound={filterRound}
+                setFilterRound={setFilterRound}
+                roundOptions={roundOptions}
+                filterYield={filterYield}
+                setFilterYield={setFilterYield}
+              />
             ) : (
               <div className="flex items-center gap-3 p-4 rounded-xl bg-secondary/50 border border-border">
                 <Lock className="w-5 h-5 text-muted-foreground shrink-0" />
