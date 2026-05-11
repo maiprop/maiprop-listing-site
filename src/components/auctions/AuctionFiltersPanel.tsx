@@ -118,8 +118,7 @@ const PremiumFiltersGrid = ({
  * Desktop advanced filters panel (shown when showFilters=true) plus the
  * active-filter chips row shown beneath the toolbar when filters are active.
  */
-// skipcq: JS-W1044
-export const AuctionFiltersPanel = ({
+export const AuctionFiltersPanel = ({ // skipcq: JS-W1044
   showFilters,
   selectedCity,
   setSelectedCity,

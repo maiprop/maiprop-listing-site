@@ -27,7 +27,7 @@ const makeAuction = (overrides: Partial<Record<string, unknown>> = {}): Auction_
     listing_images: [],
     ...overrides,
   } as unknown as Auction_;
-}
+};
 
 const defaultOpts = {
   selectedCity: "All Cities",

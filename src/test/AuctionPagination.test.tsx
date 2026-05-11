@@ -19,7 +19,7 @@ const renderPagination = (props: Partial<React.ComponentProps<typeof AuctionPagi
     setCurrentPage: vi.fn(),
   };
   return render(<AuctionPagination {...defaults} {...props} />);
-}
+};
 
 // ── null render guard ─────────────────────────────────────────────────────────
 

@@ -63,7 +63,7 @@ const renderPanel = (overrides: PanelProps = {}) => {
     ...overrides,
   };
   return renderWithProviders(<AuctionFiltersPanel {...props} />);
-}
+};
 
 // ── hidden state ──────────────────────────────────────────────────────────────
 
