@@ -1,4 +1,4 @@
-import { SlidersHorizontal, X, Lock } from "lucide-react";
+import { SlidersHorizontal, X, Lock, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { PremiumBadge } from "@/components/auctions/AuctionCard";
@@ -33,11 +33,150 @@ interface AuctionFiltersPanelProps {
   clearFilters: () => void;
 }
 
+type SelectOption = { value: string; label: string };
+
+const YIELD_OPTIONS: SelectOption[] = [
+  { value: "", label: "Any Yield" },
+  { value: "low", label: "Under 3% — Low yield" },
+  { value: "medium", label: "3% – 6% — Average" },
+  { value: "high", label: "6% – 9% — Good" },
+  { value: "very_high", label: "9%+ — High yield opportunity" },
+];
+
+/**
+ * Shared wrapper: chevron indicator + a11y label association.
+ * Accepts `options` as a prop (not children) to keep JSX nesting depth ≤ 4.
+ */
+const FilterSelect = ({
+  id,
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  id: string;
+  label: React.ReactNode;
+  value: string;
+  onChange: (v: string) => void;
+  options: SelectOption[];
+}) => (
+  <div>
+    <label htmlFor={id} className="text-xs text-muted-foreground font-medium block mb-1.5">
+      {label}
+    </label>
+    <div className="relative">
+      <select
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full appearance-none bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary cursor-pointer pr-8"
+      >
+        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+      <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" aria-hidden="true" />
+    </div>
+  </div>
+);
+
+/** Unlocked premium filter selects (ownership, round, yield) shown to Pro/OS users. */
+const PremiumFiltersGrid = ({
+  filterOwnership, setFilterOwnership,
+  filterRound, setFilterRound, roundOptions,
+  filterYield, setFilterYield,
+}: {
+  filterOwnership: string; setFilterOwnership: (v: string) => void;
+  filterRound: string; setFilterRound: (v: string) => void;
+  roundOptions: SelectOption[];
+  filterYield: string; setFilterYield: (v: string) => void;
+}) => (
+  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    <FilterSelect
+      id="filter-ownership"
+      label="Ownership Status"
+      value={filterOwnership}
+      onChange={setFilterOwnership}
+      options={OWNERSHIP_STATUSES}
+    />
+    <FilterSelect
+      id="filter-round"
+      label="Auction Round"
+      value={filterRound}
+      onChange={setFilterRound}
+      options={roundOptions}
+    />
+    <FilterSelect
+      id="filter-yield"
+      label={<>Est. Rental Yield <span className="ml-1.5 text-[10px] text-muted-foreground/60">(city benchmark × sqm / bid)</span></>}
+      value={filterYield}
+      onChange={setFilterYield}
+      options={YIELD_OPTIONS}
+    />
+  </div>
+);
+
+/** Chip row shown beneath the toolbar when the panel is closed and filters are active. */
+const ActiveFilterChips = ({
+  filterType, setFilterType,
+  filterBidRange, setFilterBidRange,
+  filterYearRange, setFilterYearRange,
+  filterOwnership, setFilterOwnership,
+  filterRound, setFilterRound,
+  filterYield, setFilterYield,
+  roundOptions,
+  isPro, isMaiPropOsUser,
+  clearFilters,
+}: {
+  filterType: string; setFilterType: (v: string) => void;
+  filterBidRange: string; setFilterBidRange: (v: string) => void;
+  filterYearRange: string; setFilterYearRange: (v: string) => void;
+  filterOwnership: string; setFilterOwnership: (v: string) => void;
+  filterRound: string; setFilterRound: (v: string) => void;
+  filterYield: string; setFilterYield: (v: string) => void;
+  roundOptions: { value: string; label: string }[];
+  isPro: boolean; isMaiPropOsUser: boolean;
+  clearFilters: () => void;
+}) => (
+  <div className="flex items-center gap-2 mt-3 flex-wrap">
+    <span className="text-xs text-muted-foreground">Active:</span>
+    {filterType && (
+      <button onClick={() => setFilterType("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors capitalize">
+        {filterType} <X className="w-3 h-3" />
+      </button>
+    )}
+    {filterBidRange && (
+      <button onClick={() => setFilterBidRange("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">
+        {BID_RANGES.find((r) => r.value === filterBidRange)?.label} <X className="w-3 h-3" />
+      </button>
+    )}
+    {filterYearRange && (
+      <button onClick={() => setFilterYearRange("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">
+        {YEAR_RANGES.find((r) => r.value === filterYearRange)?.label} <X className="w-3 h-3" />
+      </button>
+    )}
+    {(isPro || isMaiPropOsUser) && filterOwnership && (
+      <button onClick={() => setFilterOwnership("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent hover:bg-accent/20 transition-colors">
+        {OWNERSHIP_STATUSES.find((s) => s.value === filterOwnership)?.label} <X className="w-3 h-3" />
+      </button>
+    )}
+    {(isPro || isMaiPropOsUser) && filterRound && (
+      <button onClick={() => setFilterRound("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">
+        {roundOptions.find((o) => o.value === filterRound)?.label || `Round ${filterRound}`} <X className="w-3 h-3" />
+      </button>
+    )}
+    {(isPro || isMaiPropOsUser) && filterYield && (
+      <button onClick={() => setFilterYield("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">
+        Yield: {filterYield.replace("_", " ")} <X className="w-3 h-3" />
+      </button>
+    )}
+    <button onClick={clearFilters} className="text-xs text-muted-foreground hover:text-foreground ml-1">Clear all</button>
+  </div>
+);
+
 /**
  * Desktop advanced filters panel (shown when showFilters=true) plus the
  * active-filter chips row shown beneath the toolbar when filters are active.
  */
-export function AuctionFiltersPanel({
+export const AuctionFiltersPanel = ({ // skipcq: JS-W1044
   showFilters,
   selectedCity,
   setSelectedCity,
@@ -59,177 +198,101 @@ export function AuctionFiltersPanel({
   isMaiPropOsUser,
   activeFilterCount,
   clearFilters,
-}: AuctionFiltersPanelProps) {
-  return (
-    <>
-      {showFilters && (
-        <div className="mt-4 p-5 bg-card/95 border border-border rounded-2xl space-y-5 backdrop-blur-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold flex items-center gap-2">
-              <SlidersHorizontal className="w-4 h-4 text-primary" /> Auction Filters
-            </span>
-            {activeFilterCount > 0 && (
-              <button onClick={clearFilters} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
-                <X className="w-3 h-3" /> Clear all
-              </button>
-            )}
+}: AuctionFiltersPanelProps) => (
+  <>
+    {showFilters && (
+      <div className="mt-4 p-5 bg-card/95 border border-border rounded-2xl space-y-5 backdrop-blur-sm">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-semibold flex items-center gap-2">
+            <SlidersHorizontal className="w-4 h-4 text-primary" /> Auction Filters
+          </span>
+          {activeFilterCount > 0 && (
+            <button onClick={clearFilters} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+              <X className="w-3 h-3" /> Clear all
+            </button>
+          )}
+        </div>
+
+        {/* Standard filters */}
+        <div>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Standard Filters</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <FilterSelect
+              id="filter-city"
+              label="City"
+              value={selectedCity}
+              onChange={setSelectedCity}
+              options={cityOptions.map((c) => ({ value: c, label: c }))}
+            />
+            <FilterSelect
+              id="filter-type"
+              label="Property Type"
+              value={filterType}
+              onChange={setFilterType}
+              options={PROPERTY_TYPES}
+            />
+            <FilterSelect
+              id="filter-bid"
+              label="Starting Bid"
+              value={filterBidRange}
+              onChange={setFilterBidRange}
+              options={BID_RANGES}
+            />
+            <FilterSelect
+              id="filter-year"
+              label="Construction Year"
+              value={filterYearRange}
+              onChange={setFilterYearRange}
+              options={YEAR_RANGES}
+            />
           </div>
+        </div>
 
-          {/* Standard filters */}
-          <div>
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Standard Filters</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-              {/* City */}
+        {/* Premium filters: Ownership, Round, Yield */}
+        <div className="pt-4 border-t border-border -mx-5 px-5 pb-1 rounded-b-2xl">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
+            More Filters
+            {!isPro && !isMaiPropOsUser && <PremiumBadge />}
+          </p>
+          {isPro || isMaiPropOsUser ? (
+            <PremiumFiltersGrid
+              filterOwnership={filterOwnership}
+              setFilterOwnership={setFilterOwnership}
+              filterRound={filterRound}
+              setFilterRound={setFilterRound}
+              roundOptions={roundOptions}
+              filterYield={filterYield}
+              setFilterYield={setFilterYield}
+            />
+          ) : (
+            <div className="flex items-center gap-3 p-4 rounded-xl bg-secondary/50 border border-border">
+              <Lock className="w-5 h-5 text-muted-foreground shrink-0" />
               <div>
-                <label className="text-xs text-muted-foreground font-medium block mb-1.5">City</label>
-                <div className="relative">
-                  <select
-                    value={selectedCity}
-                    onChange={(e) => setSelectedCity(e.target.value)}
-                    className="w-full appearance-none bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary cursor-pointer"
-                  >
-                    {cityOptions.map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
+                <p className="text-sm font-medium">Ownership Status, Auction Round &amp; Est. Rental Yield</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Upgrade to Pro to unlock these filters.</p>
               </div>
-
-              {/* Property type */}
-              <div>
-                <label className="text-xs text-muted-foreground font-medium block mb-1.5">Property Type</label>
-                <select
-                  value={filterType}
-                  onChange={(e) => setFilterType(e.target.value)}
-                  className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none"
-                >
-                  {PROPERTY_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                </select>
-              </div>
-
-              {/* Starting bid */}
-              <div>
-                <label className="text-xs text-muted-foreground font-medium block mb-1.5">Starting Bid</label>
-                <select
-                  value={filterBidRange}
-                  onChange={(e) => setFilterBidRange(e.target.value)}
-                  className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none"
-                >
-                  {BID_RANGES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-                </select>
-              </div>
-
-              {/* Construction year */}
-              <div>
-                <label className="text-xs text-muted-foreground font-medium block mb-1.5">Construction Year</label>
-                <select
-                  value={filterYearRange}
-                  onChange={(e) => setFilterYearRange(e.target.value)}
-                  className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none"
-                >
-                  {YEAR_RANGES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-                </select>
-              </div>
+              <Button size="sm" variant="outline" className="border-primary/40 text-primary hover:bg-primary/10 shrink-0" asChild>
+                <Link to="/pricing">Upgrade to Pro</Link>
+              </Button>
             </div>
-          </div>
-
-          {/* Premium filters: Ownership, Round, Yield */}
-          <div className="pt-4 border-t border-border -mx-5 px-5 pb-1 rounded-b-2xl">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
-              More Filters
-              {!isPro && !isMaiPropOsUser && <PremiumBadge />}
-            </p>
-            {isPro || isMaiPropOsUser ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div>
-                  <label className="text-xs text-muted-foreground font-medium block mb-1.5">Ownership Status</label>
-                  <select
-                    value={filterOwnership}
-                    onChange={(e) => setFilterOwnership(e.target.value)}
-                    className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none"
-                  >
-                    {OWNERSHIP_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground font-medium block mb-1.5">Auction Round</label>
-                  <select
-                    value={filterRound}
-                    onChange={(e) => setFilterRound(e.target.value)}
-                    className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none"
-                  >
-                    {roundOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground font-medium block mb-1.5">
-                    Est. Rental Yield
-                    <span className="ml-1.5 text-[10px] text-muted-foreground/60">(city benchmark × sqm / bid)</span>
-                  </label>
-                  <select
-                    value={filterYield}
-                    onChange={(e) => setFilterYield(e.target.value)}
-                    className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none"
-                  >
-                    <option value="">Any Yield</option>
-                    <option value="low">Under 3% — Low yield</option>
-                    <option value="medium">3% – 6% — Average</option>
-                    <option value="high">6% – 9% — Good</option>
-                    <option value="very_high">9%+ — High yield opportunity</option>
-                  </select>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-3 p-4 rounded-xl bg-secondary/50 border border-border">
-                <Lock className="w-5 h-5 text-muted-foreground shrink-0" />
-                <div>
-                  <p className="text-sm font-medium">Ownership Status, Auction Round & Est. Rental Yield</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Upgrade to Pro to unlock these filters.</p>
-                </div>
-                <Button size="sm" variant="outline" className="border-primary/40 text-primary hover:bg-primary/10 shrink-0" asChild>
-                  <Link to="/pricing">Upgrade to Pro</Link>
-                </Button>
-              </div>
-            )}
-          </div>
+          )}
         </div>
-      )}
+      </div>
+    )}
 
-      {/* Active filter chips — shown when panel is closed */}
-      {activeFilterCount > 0 && !showFilters && (
-        <div className="flex items-center gap-2 mt-3 flex-wrap">
-          <span className="text-xs text-muted-foreground">Active:</span>
-          {filterType && (
-            <button onClick={() => setFilterType("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors capitalize">
-              {filterType} <X className="w-3 h-3" />
-            </button>
-          )}
-          {filterBidRange && (
-            <button onClick={() => setFilterBidRange("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">
-              {BID_RANGES.find((r) => r.value === filterBidRange)?.label} <X className="w-3 h-3" />
-            </button>
-          )}
-          {filterYearRange && (
-            <button onClick={() => setFilterYearRange("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">
-              {YEAR_RANGES.find((r) => r.value === filterYearRange)?.label} <X className="w-3 h-3" />
-            </button>
-          )}
-          {(isPro || isMaiPropOsUser) && filterOwnership && (
-            <button onClick={() => setFilterOwnership("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent hover:bg-accent/20 transition-colors">
-              {OWNERSHIP_STATUSES.find((s) => s.value === filterOwnership)?.label} <X className="w-3 h-3" />
-            </button>
-          )}
-          {(isPro || isMaiPropOsUser) && filterRound && (
-            <button onClick={() => setFilterRound("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">
-              {roundOptions.find((o) => o.value === filterRound)?.label || `Round ${filterRound}`} <X className="w-3 h-3" />
-            </button>
-          )}
-          {(isPro || isMaiPropOsUser) && filterYield && (
-            <button onClick={() => setFilterYield("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">
-              Yield: {filterYield.replace("_", " ")} <X className="w-3 h-3" />
-            </button>
-          )}
-          <button onClick={clearFilters} className="text-xs text-muted-foreground hover:text-foreground ml-1">Clear all</button>
-        </div>
-      )}
-    </>
-  );
-}
+    {/* Active filter chips — shown when panel is closed */}
+    {activeFilterCount > 0 && !showFilters && (
+      <ActiveFilterChips
+        filterType={filterType} setFilterType={setFilterType}
+        filterBidRange={filterBidRange} setFilterBidRange={setFilterBidRange}
+        filterYearRange={filterYearRange} setFilterYearRange={setFilterYearRange}
+        filterOwnership={filterOwnership} setFilterOwnership={setFilterOwnership}
+        filterRound={filterRound} setFilterRound={setFilterRound}
+        filterYield={filterYield} setFilterYield={setFilterYield}
+        roundOptions={roundOptions}
+        isPro={isPro} isMaiPropOsUser={isMaiPropOsUser}
+        clearFilters={clearFilters}
+      />
+    )}
+  </>
+);

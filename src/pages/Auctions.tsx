@@ -1,5 +1,5 @@
 import { useState, useEffect, lazy, Suspense } from "react";
-import { TrendingUp, AlertCircle, Loader2, Map, List, SlidersHorizontal, X, ChevronDown, Gavel, ExternalLink, MapPin } from "lucide-react";
+import { TrendingUp, AlertCircle, Loader2, Map as MapIcon, List, SlidersHorizontal, X, ChevronDown, Gavel, ExternalLink, MapPin } from "lucide-react";
 import { Helmet } from "react-helmet-async";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -166,7 +166,7 @@ export default function Auctions() {
                 </button>
                 <button onClick={() => setViewMode("map")} aria-label="Map view" aria-pressed={viewMode === "map"}
                   className={`px-2.5 py-1.5 rounded-lg transition-all ${viewMode === "map" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}>
-                  <Map className="w-4 h-4" />
+                  <MapIcon className="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -250,7 +250,7 @@ export default function Auctions() {
               </button>
               <button onClick={() => setViewMode("map")} aria-pressed={viewMode === "map"}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === "map" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
-                <Map className="w-3.5 h-3.5" aria-hidden="true" /> Map
+                <MapIcon className="w-3.5 h-3.5" aria-hidden="true" /> Map
                 {!isLoading && mappableCount > 0 && <span className="ml-0.5 text-[10px] bg-primary/15 text-primary px-1.5 py-0.5 rounded-full font-bold" aria-label={`${mappableCount} mappable`}>{mappableCount}</span>}
               </button>
             </div>
