@@ -90,11 +90,12 @@ export default function PropertyDetail() {
   const modal = useModal<"viewing" | "auctionAlert">();
   const [walkScore, setWalkScore] = useState<number | null>(null);
 
-  // AI Market Insights — delegated to custom hook
+  // AI Market Insights — delegated to custom hook; skips API call for non-Pro users
   const { aiInsightsData, aiInsightsLoading } = usePropertyAIInsights(
     dbListing as ListingWithJoins | null,
     user,
     id,
+    isPro,
   );
 
   const { data: favorites = [] } = useFavorites();
@@ -338,6 +339,7 @@ export default function PropertyDetail() {
               {/* ── AI Market Insights — dynamic from property-valuation ── */}
               <PropertyAIInsightsSection
                 user={user}
+                isPro={isPro}
                 loading={aiInsightsLoading}
                 data={aiInsightsData}
               />
@@ -396,7 +398,8 @@ export default function PropertyDetail() {
                   propertyType={propertyType}
                   lat={db?.latitude ? Number(db.latitude) : undefined}
                   lng={db?.longitude ? Number(db.longitude) : undefined}
-                  listingId={id ?? undefined} />
+                  listingId={id ?? undefined}
+                  isPro={isPro} />
               </Suspense>
 
             </div>

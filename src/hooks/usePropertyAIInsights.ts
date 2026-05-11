@@ -17,13 +17,14 @@ export function usePropertyAIInsights(
   dbListing: ListingWithJoins | null | undefined,
   user: User | null,
   id: string | undefined,
+  isPro: boolean,
 ) {
   const [aiInsightsData, setAiInsightsData] = useState<AIInsightsData | null>(null);
   const [aiInsightsLoading, setAiInsightsLoading] = useState(false);
   const [aiInsightsLoaded, setAiInsightsLoaded] = useState(false);
 
   useEffect(() => {
-    if (!dbListing || aiInsightsLoaded || !user) return;
+    if (!dbListing || aiInsightsLoaded || !user || !isPro) return;
     setAiInsightsLoaded(true);
     setAiInsightsLoading(true);
     const snapshot = dbListing;
@@ -102,7 +103,7 @@ export function usePropertyAIInsights(
       }
     };
     invokeValuation();
-  }, [dbListing, aiInsightsLoaded, user, id]);
+  }, [dbListing, aiInsightsLoaded, user, id, isPro]);
 
   return { aiInsightsData, aiInsightsLoading };
 }

@@ -10,6 +10,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 
 const { useAuthMock, invokeMock, toastMock } = vi.hoisted(() => ({
   useAuthMock: vi.fn(),
@@ -39,6 +40,7 @@ const baseProps = {
   propertyType: "apartment",
   lat: 37.97,
   lng: 23.74,
+  isPro: true, // default to Pro so tests exercise the load/fetch flows
 };
 
 const fullData = {
@@ -90,6 +92,13 @@ describe("NeighbourhoodReport — gates", () => {
     useAuthMock.mockReturnValue({ user: null });
     render(<NeighbourhoodReport {...baseProps} />);
     expect(screen.getByText(/Sign in for Neighbourhood Report/i)).toBeInTheDocument();
+  });
+
+  it("renders the upgrade CTA when the user is logged in but not Pro", () => {
+    render(<MemoryRouter><NeighbourhoodReport {...baseProps} isPro={false} /></MemoryRouter>);
+    expect(screen.getByText(/Upgrade to Pro/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Load Neighbourhood Report/i })).toBeNull();
+    expect(invokeMock).not.toHaveBeenCalled();
   });
 
   it("renders the Load CTA when user is logged in but data hasn't been fetched", () => {

@@ -59,14 +59,21 @@ beforeEach(() => {
 
 describe("usePropertyAIInsights", () => {
   it("does nothing when there is no listing", () => {
-    const { result } = renderHook(() => usePropertyAIInsights(null, baseUser, "L-1"));
+    const { result } = renderHook(() => usePropertyAIInsights(null, baseUser, "L-1", true));
     expect(result.current.aiInsightsData).toBeNull();
     expect(invokeMock).not.toHaveBeenCalled();
   });
 
   it("does nothing when the user is not authenticated", () => {
-    const { result } = renderHook(() => usePropertyAIInsights(baseListing, null, "L-1"));
+    const { result } = renderHook(() => usePropertyAIInsights(baseListing, null, "L-1", true));
     expect(invokeMock).not.toHaveBeenCalled();
+    expect(result.current.aiInsightsLoading).toBe(false);
+  });
+
+  it("does nothing when isPro is false (non-Pro users are not charged)", () => {
+    const { result } = renderHook(() => usePropertyAIInsights(baseListing, baseUser, "L-1", false));
+    expect(invokeMock).not.toHaveBeenCalled();
+    expect(result.current.aiInsightsData).toBeNull();
     expect(result.current.aiInsightsLoading).toBe(false);
   });
 
@@ -84,7 +91,7 @@ describe("usePropertyAIInsights", () => {
       },
     });
     const { result } = renderHook(() =>
-      usePropertyAIInsights(baseListing, baseUser, "L-1"),
+      usePropertyAIInsights(baseListing, baseUser, "L-1", true),
     );
     await waitFor(() => expect(result.current.aiInsightsData).not.toBeNull());
     expect(result.current.aiInsightsData).toEqual({
@@ -111,7 +118,7 @@ describe("usePropertyAIInsights", () => {
       },
     });
     const { result } = renderHook(() =>
-      usePropertyAIInsights(baseListing, baseUser, "L-1"),
+      usePropertyAIInsights(baseListing, baseUser, "L-1", true),
     );
     await waitFor(() => expect(result.current.aiInsightsData).not.toBeNull());
     expect(invokeMock).toHaveBeenCalledTimes(2);
@@ -122,7 +129,7 @@ describe("usePropertyAIInsights", () => {
   it("uses snapshot.id when the explicit id arg is undefined", async () => {
     invokeMock.mockResolvedValueOnce({ data: { ok: false } });
     invokeMock.mockResolvedValueOnce({ data: { estimatedValue: 200_000 } });
-    renderHook(() => usePropertyAIInsights(baseListing, baseUser, undefined));
+    renderHook(() => usePropertyAIInsights(baseListing, baseUser, undefined, true));
     await waitFor(() => expect(invokeMock).toHaveBeenCalledTimes(2));
     expect(invokeMock.mock.calls[0][1]).toMatchObject({
       body: { listing_id: "L-1", report_type: "valuation" },
@@ -132,7 +139,7 @@ describe("usePropertyAIInsights", () => {
   it("populates ownershipStatus and ownershipPercentage from tags", async () => {
     invokeMock.mockResolvedValueOnce({ data: { ok: false } });
     invokeMock.mockResolvedValueOnce({ data: { estimatedValue: 100 } });
-    renderHook(() => usePropertyAIInsights(baseListing, baseUser, "L-1"));
+    renderHook(() => usePropertyAIInsights(baseListing, baseUser, "L-1", true));
     await waitFor(() => expect(invokeMock).toHaveBeenCalledTimes(2));
     const valuationBody = (invokeMock.mock.calls[1][1] as { body: Record<string, unknown> }).body;
     expect(valuationBody.ownershipStatus).toBe("private");
@@ -143,7 +150,7 @@ describe("usePropertyAIInsights", () => {
     invokeMock.mockResolvedValueOnce({ data: null });
     invokeMock.mockResolvedValueOnce({ data: {} });
     const { result } = renderHook(() =>
-      usePropertyAIInsights(baseListing, baseUser, "L-1"),
+      usePropertyAIInsights(baseListing, baseUser, "L-1", true),
     );
     await waitFor(() => expect(result.current.aiInsightsData).not.toBeNull());
     expect(result.current.aiInsightsData).toEqual({
@@ -159,7 +166,7 @@ describe("usePropertyAIInsights", () => {
     invokeMock.mockResolvedValueOnce({ data: null });
     invokeMock.mockResolvedValueOnce({ data: { error: "limit reached" }, error: { message: "limit" } });
     isAiLimitMock.mockReturnValue(true);
-    renderHook(() => usePropertyAIInsights(baseListing, baseUser, "L-1"));
+    renderHook(() => usePropertyAIInsights(baseListing, baseUser, "L-1", true));
     await waitFor(() => expect(toastErrorMock).toHaveBeenCalled());
     expect(toastErrorMock.mock.calls[0][0]).toMatch(/usage limits/);
   });
@@ -167,7 +174,7 @@ describe("usePropertyAIInsights", () => {
   it("surfaces a toast.error when invoke throws and isAiUsageLimitError reports true", async () => {
     invokeMock.mockRejectedValueOnce(new Error("network"));
     isAiLimitMock.mockReturnValue(true);
-    renderHook(() => usePropertyAIInsights(baseListing, baseUser, "L-1"));
+    renderHook(() => usePropertyAIInsights(baseListing, baseUser, "L-1", true));
     await waitFor(() => expect(toastErrorMock).toHaveBeenCalled());
   });
 
@@ -176,7 +183,7 @@ describe("usePropertyAIInsights", () => {
       data: { ok: true, report: { estimatedValue: 500_000 } },
     });
     const { rerender } = renderHook(
-      ({ l }: { l: ListingWithJoins | null }) => usePropertyAIInsights(l, baseUser, "L-1"),
+      ({ l }: { l: ListingWithJoins | null }) => usePropertyAIInsights(l, baseUser, "L-1", true),
       { initialProps: { l: baseListing } },
     );
     await waitFor(() => expect(invokeMock).toHaveBeenCalledTimes(1));
