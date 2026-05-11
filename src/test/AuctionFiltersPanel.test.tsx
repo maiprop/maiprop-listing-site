@@ -173,7 +173,9 @@ describe("AuctionFiltersPanel — select interaction", () => {
   it("calls setSelectedCity when city dropdown changes", () => {
     const setSelectedCity = vi.fn();
     renderPanel({ showFilters: true, setSelectedCity });
-    const select = document.getElementById("filter-city") as HTMLSelectElement;
+    const el = document.getElementById("filter-city");
+    expect(el).toBeInTheDocument();
+    const select = el as HTMLSelectElement;
     fireEvent.change(select, { target: { value: "Athens" } });
     expect(setSelectedCity).toHaveBeenCalledWith("Athens");
   });
@@ -181,7 +183,9 @@ describe("AuctionFiltersPanel — select interaction", () => {
   it("calls setFilterType when property type dropdown changes", () => {
     const setFilterType = vi.fn();
     renderPanel({ showFilters: true, setFilterType });
-    const select = document.getElementById("filter-type") as HTMLSelectElement;
+    const el = document.getElementById("filter-type");
+    expect(el).toBeInTheDocument();
+    const select = el as HTMLSelectElement;
     fireEvent.change(select, { target: { value: "house" } });
     expect(setFilterType).toHaveBeenCalledWith("house");
   });
@@ -189,7 +193,9 @@ describe("AuctionFiltersPanel — select interaction", () => {
   it("calls setFilterOwnership for Pro user", () => {
     const setFilterOwnership = vi.fn();
     renderPanel({ showFilters: true, isPro: true, setFilterOwnership });
-    const select = document.getElementById("filter-ownership") as HTMLSelectElement;
+    const el = document.getElementById("filter-ownership");
+    expect(el).toBeInTheDocument();
+    const select = el as HTMLSelectElement;
     fireEvent.change(select, { target: { value: "full" } });
     expect(setFilterOwnership).toHaveBeenCalledWith("full");
   });
