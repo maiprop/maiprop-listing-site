@@ -50,6 +50,15 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const safeUrl = (url: string | null | undefined): string | null =>
   url && /^https?:\/\//i.test(url) ? url : null;
 
+// ── Static content arrays ─────────────────────────────────────────────────────
+const AUCTION_INFO_NOTES: { id: string; text: string }[] = [
+  { id: "platform",     text: "Auctions are conducted through the certified eAuction platform. You must register and obtain a bidding code before the auction date." },
+  { id: "starting-bid", text: "The starting bid shown is the first-round price. Subsequent rounds may have lower bids if the property is unsold." },
+  { id: "deposit",      text: "A 10% deposit of the winning bid is required immediately after the auction." },
+  { id: "diligence",    text: "Due diligence (cadastre, encumbrances, planning status) is the buyer's responsibility. Consult a notary and lawyer before bidding." },
+  { id: "transfer-tax", text: "Transfer tax (3% FMA) and notary fees apply on top of the winning bid." },
+];
+
 // ── Sub-components (extracted to limit JSX nesting depth) ────────────────────
 
 const StatChip = ({ icon, label }: { icon: React.ReactNode; label: string }) => (
@@ -343,16 +352,10 @@ const AuctionDetail = () => {
               <Gavel className="w-4 h-4 text-primary" /> About Greek Property Auctions
             </h2>
             <ul className="text-xs text-muted-foreground space-y-2 leading-relaxed list-none">
-              {[
-                "Auctions are conducted through the certified eAuction platform. You must register and obtain a bidding code before the auction date.",
-                "The starting bid shown is the first-round price. Subsequent rounds may have lower bids if the property is unsold.",
-                "A 10% deposit of the winning bid is required immediately after the auction.",
-                "Due diligence (cadastre, encumbrances, planning status) is the buyer's responsibility. Consult a notary and lawyer before bidding.",
-                "Transfer tax (3% FMA) and notary fees apply on top of the winning bid.",
-              ].map((note) => (
-                <li key={note.slice(0, 40)} className="flex items-start gap-2">
+              {AUCTION_INFO_NOTES.map(({ id, text }) => (
+                <li key={id} className="flex items-start gap-2">
                   <span className="text-primary shrink-0 mt-0.5">▸</span>
-                  <span>{note}</span>
+                  <span>{text}</span>
                 </li>
               ))}
             </ul>
