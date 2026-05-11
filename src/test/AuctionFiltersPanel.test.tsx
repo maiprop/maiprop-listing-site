@@ -210,8 +210,8 @@ describe("AuctionFiltersPanel — active filter chips", () => {
     // The chip button contains "house" text and an X icon
     const chips = screen.getAllByRole("button");
     const typeChip = chips.find((b) => b.textContent?.includes("house"));
-    expect(typeChip).toBeInTheDocument();
-    fireEvent.click(typeChip as HTMLElement);
+    if (!typeChip) throw new Error("house chip button not found");
+    fireEvent.click(typeChip);
     expect(setFilterType).toHaveBeenCalledWith("");
   });
 
