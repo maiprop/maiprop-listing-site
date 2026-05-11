@@ -319,7 +319,7 @@ const AuctionDetail = () => {
                 </p>
               </div>
               <Button asChild className="shrink-0 gap-2">
-                <a href={safeUrl(websiteUrl)!} target="_blank" rel="noreferrer noopener">
+                <a href={safeUrl(websiteUrl) ?? ""} target="_blank" rel="noreferrer noopener">
                   <ExternalLink className="w-4 h-4" /> Open eAuction
                 </a>
               </Button>

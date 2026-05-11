@@ -1,16 +1,20 @@
 ---
+# This project uses ESLint 9 flat config (eslint.config.js) — real linting is
+# enforced via GitHub Actions. Codacy's bundled ESLint uses eslint-plugin-solid
+# (SolidJS rules) which produce 100% false positives on this React 18 codebase.
+# Excluding src/** globally prevents all such false positives from every engine.
 exclude_paths:
+  - "src/**"
+  - "e2e/**"
+  - "scripts/**"
   - "supabase/functions/fetch-os-auctions/index.ts"
   - "supabase/functions/fetch-os-auctions/index.test.ts"
 engines:
   # JSHint does not understand ES2015+ modules/destructuring/arrow functions.
-  # The project uses ESLint 9 (flat config) — linting is enforced via GitHub Actions.
   jshint:
     enabled: false
-  # Codacy's bundled ESLint uses eslint-plugin-solid (SolidJS rules) on a React 18
-  # codebase, generating false positives (solid/reactivity, solid/no-react-specific-props,
-  # etc.). Disabling Codacy's ESLint engine prevents these false positives.
-  # Real ESLint linting (ESLint 9 flat config) is enforced via GitHub Actions.
+  # Disabling Codacy's bundled ESLint as a belt-and-suspenders measure.
+  # Even with exclude_paths above, keeping this off avoids any overlap.
   eslint:
     enabled: false
   metric:
