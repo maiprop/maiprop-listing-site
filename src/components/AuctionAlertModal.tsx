@@ -44,8 +44,8 @@ export function AuctionAlertModal({ open, onClose, editAlert }: Props) {
       max_price: maxPrice ? Number(maxPrice) : null,
       email_notify: emailNotify,
     };
-    if (isEdit) {
-      update.mutate({ id: editAlert!.id, updates: payload }, { onSuccess: onClose });
+    if (editAlert) {
+      update.mutate({ id: editAlert.id, updates: payload }, { onSuccess: onClose });
     } else {
       create.mutate(payload, { onSuccess: onClose });
     }

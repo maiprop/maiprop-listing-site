@@ -103,6 +103,37 @@ export function useUpdateProjectUnit() {
   });
 }
 
+export function useBulkUpdateProjectUnitPrices() {
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  return useMutation({
+    mutationFn: async ({ projectId, units, percentage }: { projectId: string; units: ProjectUnit[]; percentage: number }) => {
+      await requireOwnedProject(projectId, user?.id);
+
+      for (const unit of units) {
+        if (!unit.price) continue;
+
+        const price = Math.round(Number(unit.price) * (1 + percentage / 100));
+        const price_per_sqm = unit.internal_sqm ? price / Number(unit.internal_sqm) : null;
+        const { error } = await supabase
+          .from("project_units")
+          .update({ price, price_per_sqm })
+          .eq("id", unit.id)
+          .eq("project_id", projectId);
+
+        if (error) throw error;
+      }
+
+      return { updatedCount: units.filter((unit) => !!unit.price).length };
+    },
+    onSuccess: (_data, { projectId }) => {
+      qc.invalidateQueries({ queryKey: ["project_units", projectId] });
+      qc.invalidateQueries({ queryKey: ["projects"] });
+    },
+    onError: () => toast.error("Failed to update unit prices. Please try again."),
+  });
+}
+
 export function useDeleteProjectUnit() {
   const qc = useQueryClient();
   const { user } = useAuth();

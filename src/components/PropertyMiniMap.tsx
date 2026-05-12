@@ -340,7 +340,24 @@ export default function PropertyMiniMap({
             {uniqueCategories.map(cat => {
               const isAll = cat === "all";
               const meta = isAll ? null : CATEGORY_META[cat as POI["category"]];
-              const Icon = isAll ? MapPin : meta!.icon;
+              if (isAll) {
+                return (
+                  <button
+                    key={cat}
+                    onClick={() => setActiveCategory(cat)}
+                    className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-all border ${
+                      activeCategory === cat
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-secondary border-border text-muted-foreground hover:border-primary/40"
+                    }`}
+                  >
+                    <MapPin className="w-3 h-3" />
+                    All
+                  </button>
+                );
+              }
+              if (!meta) return null;
+              const Icon = meta.icon;
               return (
                 <button
                   key={cat}
@@ -352,7 +369,7 @@ export default function PropertyMiniMap({
                   }`}
                 >
                   <Icon className="w-3 h-3" />
-                  {isAll ? "All" : meta!.label}
+                  {meta.label}
                 </button>
               );
             })}

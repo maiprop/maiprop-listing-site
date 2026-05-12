@@ -239,25 +239,28 @@ function SignatureCanvas({ onSign }: { onSign: (dataUrl: string) => void }) {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d")!;
-    ctx.strokeStyle = "hsl(var(--foreground))";
-    ctx.lineWidth = 2;
-    ctx.lineCap = "round";
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const drawingCanvas = canvas;
+    const drawingContext = ctx;
+    drawingContext.strokeStyle = "hsl(var(--foreground))";
+    drawingContext.lineWidth = 2;
+    drawingContext.lineCap = "round";
 
     function start(e: MouseEvent | TouchEvent) {
       drawing.current = true;
-      lastPos.current = getPos(e, canvas!);
+      lastPos.current = getPos(e, drawingCanvas);
     }
     function move(e: MouseEvent | TouchEvent) {
-      if (!drawing.current) return;
+      if (!drawing.current || !lastPos.current) return;
       e.preventDefault();
-      const pos = getPos(e, canvas!);
-      ctx.beginPath();
-      ctx.moveTo(lastPos.current!.x, lastPos.current!.y);
-      ctx.lineTo(pos.x, pos.y);
-      ctx.stroke();
+      const pos = getPos(e, drawingCanvas);
+      drawingContext.beginPath();
+      drawingContext.moveTo(lastPos.current.x, lastPos.current.y);
+      drawingContext.lineTo(pos.x, pos.y);
+      drawingContext.stroke();
       lastPos.current = pos;
-      onSign(canvas!.toDataURL());
+      onSign(drawingCanvas.toDataURL());
     }
     function stop() { drawing.current = false; }
 

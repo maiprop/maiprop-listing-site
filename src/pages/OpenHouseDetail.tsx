@@ -30,6 +30,7 @@ import { Section, SectionHeader, FeatureSection } from "@/components/property/De
 import { buildPropertyFeatureGroups, buildDetailRows } from "@/lib/propertyFeatures";
 import { PropertyDetailsAndEnergy } from "@/components/property/PropertyDetailsAndEnergy";
 import { PropertyDescriptionSection } from "@/components/property/PropertyDescriptionSection";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 export default function OpenHouseDetail() {
   const { id } = useParams();
@@ -44,6 +45,7 @@ export default function OpenHouseDetail() {
   const [dateInput, setDateInput] = useState("");
   const [currentImage, setCurrentImage] = useState(0);
   const [walkScore, setWalkScore] = useState<number | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   const { data: assetSettings } = useOpenHouseSettings(id || undefined);
   const { data: registrations = [] } = useOpenHouseRegistrations(id || undefined, false);
@@ -162,10 +164,7 @@ export default function OpenHouseDetail() {
   };
 
   const handleDelete = () => {
-    if (!id || !confirm("Delete this open house listing?")) return;
-    deleteListing.mutate(id);
-    toast.success("Listing deleted");
-    navigate("/open-houses");
+    setDeleteConfirmOpen(true);
   };
 
   if (isLoading) {
@@ -662,6 +661,23 @@ export default function OpenHouseDetail() {
           myReg.status !== "attended" ? "Attend the open house to unlock offer submission" :
           !ohDatePassed ? `Offers open after ${openHouseDate?.toLocaleString("en-GB")}` : undefined
         }
+      />
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        title="Delete open house listing"
+        description="Delete this open house listing and remove it from open house discovery?"
+        confirmLabel="Delete"
+        onConfirm={() => {
+          if (!id) return;
+          deleteListing.mutate(id, {
+            onSuccess: () => {
+              toast.success("Listing deleted");
+              navigate("/open-houses");
+            },
+          });
+          setDeleteConfirmOpen(false);
+        }}
+        onCancel={() => setDeleteConfirmOpen(false)}
       />
 
       <Footer />

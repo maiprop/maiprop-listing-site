@@ -24,7 +24,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useDeleteProjectMedia } from "@/hooks/useProjectMedia";
 import { useDeleteProjectLead, useUpdateProjectLead } from "@/hooks/useProjectLeads";
-import { useDeleteProjectUnit, useUpdateProjectUnit } from "@/hooks/useProjectUnits";
+import { useBulkUpdateProjectUnitPrices, useDeleteProjectUnit, useUpdateProjectUnit } from "@/hooks/useProjectUnits";
 import { useUpdateContactTask } from "@/hooks/useContacts";
 import { useUpdateLead, useDeleteLead } from "@/hooks/useLeads";
 import { useToggleFavorite } from "@/hooks/useFavorites";
@@ -179,6 +179,35 @@ describe("IDOR ownership guards on project mutation hooks", () => {
     expect(chain.eqCalls).toContainEqual(["id", "unit-1"]);
     expect(chain.eqCalls).toContainEqual(["project_id", "proj-xyz"]);
     expect(ownerChain.eqCalls).toContainEqual(["owner_id", TEST_USER_ID]);
+  });
+
+  it("useBulkUpdateProjectUnitPrices ownership-checks the project and scopes each update", async () => {
+    const ownerChain = makeChainableMock({ data: { id: "proj-xyz" }, error: null });
+    const chain = makeChainableMock();
+    vi.mocked(supabase).from = vi.fn().mockImplementation((table: string) => {
+      if (table === "projects") return ownerChain;
+      return { update: vi.fn().mockReturnValue(chain) };
+    });
+
+    const { result } = renderHook(() => useBulkUpdateProjectUnitPrices(), { wrapper });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        projectId: "proj-xyz",
+        percentage: 5,
+        units: [
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          { id: "unit-1", project_id: "proj-xyz", price: 100000, internal_sqm: 50 } as any,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          { id: "unit-2", project_id: "proj-xyz", price: 150000, internal_sqm: 75 } as any,
+        ],
+      });
+    });
+
+    expect(ownerChain.eqCalls).toContainEqual(["owner_id", TEST_USER_ID]);
+    expect(chain.eqCalls).toContainEqual(["id", "unit-1"]);
+    expect(chain.eqCalls).toContainEqual(["id", "unit-2"]);
+    expect(chain.eqCalls.filter(([col, val]) => col === "project_id" && val === "proj-xyz")).toHaveLength(2);
   });
 });
 

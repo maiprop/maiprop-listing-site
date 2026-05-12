@@ -9,10 +9,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
-import { useQueryClient } from "@tanstack/react-query";
 import { useProject, useUpdateProject } from "@/hooks/useProjects";
 import {
-  useProjectUnits, useCreateProjectUnit, useUpdateProjectUnit, useDeleteProjectUnit,
+  useProjectUnits, useCreateProjectUnit, useUpdateProjectUnit, useBulkUpdateProjectUnitPrices, useDeleteProjectUnit,
   type ProjectUnitInsert, type ProjectUnit,
 } from "@/hooks/useProjectUnits";
 import {
@@ -63,7 +62,6 @@ function Section({ title, icon: Icon, children, defaultOpen = true }: { title: s
 
 export default function ProjectDetail() {
   const { id } = useParams();
-  const qc = useQueryClient();
   const { user, profile } = useAuth();
   const participantType = getParticipantTypeFromProfile(profile);
   const isDeveloper = participantType === "developer";
@@ -79,6 +77,7 @@ export default function ProjectDetail() {
   const updateProject = useUpdateProject();
   const createUnit = useCreateProjectUnit();
   const updateUnit = useUpdateProjectUnit();
+  const bulkUpdateUnitPrices = useBulkUpdateProjectUnitPrices();
   const deleteUnit = useDeleteProjectUnit();
   const addMedia = useAddProjectMedia();
   const deleteMedia = useDeleteProjectMedia();
@@ -92,6 +91,8 @@ export default function ProjectDetail() {
   const [leadForm, setLeadForm] = useState<Partial<ProjectLeadInsert>>({});
   const [bulkPricePct, setBulkPricePct] = useState("");
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
+  const [unitToDelete, setUnitToDelete] = useState<string | null>(null);
+  const [leadToDelete, setLeadToDelete] = useState<string | null>(null);
 
   useEffect(() => {
     if (project) {
@@ -169,8 +170,7 @@ export default function ProjectDetail() {
   };
 
   const handleDeleteUnit = (unitId: string) => {
-    if (!confirm("Remove this unit?")) return;
-    deleteUnit.mutate({ id: unitId, projectId: id! });
+    setUnitToDelete(unitId);
   };
 
   const handleLinkListing = (listingId: string) => {
@@ -203,28 +203,22 @@ export default function ProjectDetail() {
     setBulkConfirmOpen(true);
   };
 
-  const executeBulkPriceUpdate = async () => {
+  const executeBulkPriceUpdate = () => {
     setBulkConfirmOpen(false);
     if (!id) return;
     const pct = parseFloat(bulkPricePct);
      
     const availableUnits = units.filter((u: ProjectUnit) => u.availability_status === "available" && u.price);
-    try {
-      for (const u of availableUnits) {
-        const newPrice = Math.round(Number(u.price) * (1 + pct / 100));
-        const newPricePerSqm = u.internal_sqm ? newPrice / Number(u.internal_sqm) : undefined;
-         
-        const { error } = await supabase.from("project_units").update({ price: newPrice, price_per_sqm: newPricePerSqm }).eq("id", u.id);
-        if (error) throw error;
+    bulkUpdateUnitPrices.mutate(
+      { projectId: id, units: availableUnits, percentage: pct },
+      {
+        onSuccess: ({ updatedCount }) => {
+          modal.close();
+          setBulkPricePct("");
+          toast.success(`Updated ${updatedCount} unit(s)`);
+        },
       }
-      qc.invalidateQueries({ queryKey: ["project_units", id] });
-      qc.invalidateQueries({ queryKey: ["projects"] });
-      modal.close();
-      setBulkPricePct("");
-      toast.success(`Updated ${availableUnits.length} unit(s)`);
-    } catch (e: unknown) {
-      toast.error((e instanceof Error ? e.message : null) || "Update failed");
-    }
+    );
   };
 
   if (!user) {
@@ -454,7 +448,7 @@ export default function ProjectDetail() {
                       <option value="converted">Converted</option>
                       <option value="lost">Lost</option>
                     </select>
-                    <Button variant="ghost" size="icon" className="text-destructive h-8 w-8" onClick={() => { if (confirm("Remove lead?")) deleteLead.mutate({ id: l.id, projectId: id! }); }}><Trash2 className="w-3 h-3" /></Button>
+                    <Button variant="ghost" size="icon" className="text-destructive h-8 w-8" onClick={() => setLeadToDelete(l.id)}><Trash2 className="w-3 h-3" /></Button>
                   </div>
                 </div>
               ))}
@@ -496,8 +490,31 @@ export default function ProjectDetail() {
         title="Apply bulk price change"
         description={`Apply ${bulkPricePct}% price change to all available units? This cannot be undone.`}
         confirmLabel="Apply"
+        destructive={false}
         onConfirm={executeBulkPriceUpdate}
         onCancel={() => setBulkConfirmOpen(false)}
+      />
+      <ConfirmDialog
+        open={!!unitToDelete}
+        title="Remove unit"
+        description="Remove this unit from the project inventory?"
+        confirmLabel="Remove"
+        onConfirm={() => {
+          if (id && unitToDelete) deleteUnit.mutate({ id: unitToDelete, projectId: id });
+          setUnitToDelete(null);
+        }}
+        onCancel={() => setUnitToDelete(null)}
+      />
+      <ConfirmDialog
+        open={!!leadToDelete}
+        title="Remove lead"
+        description="Remove this lead from the project CRM?"
+        confirmLabel="Remove"
+        onConfirm={() => {
+          if (id && leadToDelete) deleteLead.mutate({ id: leadToDelete, projectId: id });
+          setLeadToDelete(null);
+        }}
+        onCancel={() => setLeadToDelete(null)}
       />
     </div>
   );

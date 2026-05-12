@@ -249,12 +249,15 @@ export default function PortfoliosTab() {
                             .filter(
                               (f: FavoriteWithListing) => f.listings && !listingIds.includes(f.listings.id)
                             )
-                            .map((f: FavoriteWithListing) => (
+                            .map((f: FavoriteWithListing) => {
+                              const listing = f.listings;
+                              if (!listing) return null;
+                              return (
                               <button
-                                key={f.listings!.id}
+                                key={listing.id}
                                 className="text-xs px-2.5 py-1.5 bg-secondary border border-border rounded-lg hover:border-primary/50 hover:bg-primary/10 transition-colors truncate max-w-[200px]"
                                 onClick={() => {
-                                  const newIds = [...listingIds, f.listings!.id];
+                                  const newIds = [...listingIds, listing.id];
                                   updatePortfolio.mutate(
                                     { id: p.id, updates: { listing_ids: newIds } },
                                     {
@@ -263,9 +266,10 @@ export default function PortfoliosTab() {
                                   );
                                 }}
                               >
-                                + {f.listings!.title || f.listings!.city}
+                                + {listing.title || listing.city}
                               </button>
-                            ))}
+                            );
+                            })}
                         </div>
                       )}
                       <button
