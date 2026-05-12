@@ -11,9 +11,9 @@ import { usePricingConfigs, formatPrice, PRICING_KEYS } from "@/hooks/usePricing
 import { RoleSwitchModal } from "@/components/RoleSwitchModal";
 import { classifySwitch, getPlanForParticipant } from "@/lib/rolePlanMap";
 import type { ParticipantId } from "@/lib/participantConfig";
+import { canRestoreDraftStep, isOnboardingStep, resolveStepsFor } from "@/lib/onboardingFlow";
 import {
   participants, DEFAULT_AVAILABILITY, colorMap,
-  PRO_FULL_STEPS, PRO_FLAT_STEPS, PRO_SIMPLE_STEPS, DEVELOPER_STEPS, PARTICIPANT_STEPS, TOP_STEPS,
   type OnboardingStep, type ParticipantType, type SelectedService, type DayAvailability, type RoleKey,
 } from "@/lib/onboardingConfig";
 import { OnboardingShell as Shell } from "@/components/onboarding/OnboardingShell";
@@ -95,30 +95,6 @@ const resolvePresetType = (
 const isFirstOnboardingFor = (
   profile: { participant_type?: string | null; role?: string | null } | null | undefined
 ): boolean => resolvePresetType(profile) === null;
-
-/**
- * Lookup map from participant id to its step list. Replaces the chain of
- * `if (selected.id === "...")` branches in resolveStepsFor so the helper's
- * own cyclomatic complexity drops below DeepSource's medium-risk threshold.
- */
-const STEPS_BY_PARTICIPANT_ID: Readonly<Partial<Record<string, OnboardingStep[]>>> = {
-  participant: PARTICIPANT_STEPS,
-  market_pro: PRO_SIMPLE_STEPS,
-  developer: DEVELOPER_STEPS,
-  professional: PRO_FLAT_STEPS,
-};
-
-/**
- * Resolves the active step list for a given selected participant. Pure
- * module-level helper so the branching does not contribute to the
- * Onboarding component's cyclomatic complexity.
- */
-const resolveStepsFor = (selected: ParticipantType | null): OnboardingStep[] => {
-  if (!selected) return TOP_STEPS;
-  const byId = STEPS_BY_PARTICIPANT_ID[selected.id];
-  if (byId) return byId;
-  return selected.isPro ? PRO_FULL_STEPS : TOP_STEPS;
-};
 
 /**
  * Lookup from the current onboarding step to the step the back button
@@ -315,13 +291,18 @@ export default function Onboarding() {
     try {
       const raw = localStorage.getItem(DRAFT_KEY);
       if (!raw) return;
-      const draft = JSON.parse(raw) as { userId: string; step: OnboardingStep; selectedId?: string; proCategory?: string };
-      if (draft.userId !== user.id) return;
+      const draft = JSON.parse(raw) as { userId?: unknown; step?: unknown; selectedId?: unknown; proCategory?: unknown };
+      if (draft.userId !== user.id || !isOnboardingStep(draft.step)) return;
       draftRestoredRef.current = true;
-      const p = draft.selectedId ? participants.find(x => x.id === draft.selectedId) : null;
+      const selectedId = typeof draft.selectedId === "string" ? draft.selectedId : null;
+      const p = selectedId ? participants.find(x => x.id === selectedId) ?? null : null;
+      if (!canRestoreDraftStep(draft.step, p)) {
+        localStorage.removeItem(DRAFT_KEY);
+        return;
+      }
       setSelected(p ?? null);
       setStep(draft.step);
-      if (draft.proCategory) setProCategory(draft.proCategory);
+      if (typeof draft.proCategory === "string") setProCategory(draft.proCategory);
     } catch (err: unknown) {
       logger.warn("[Onboarding] draft restore failed:", err instanceof Error ? err.message : err);
       localStorage.removeItem(DRAFT_KEY);
@@ -497,7 +478,12 @@ export default function Onboarding() {
     if (requireAuth(goal)) return;
     const role: RoleKey = goal === "seller" ? "seller" : "buyer";
     setLoading(true);
-    const p = participants.find(x => x.id === goal)!;
+    const p = participants.find(x => x.id === goal);
+    if (!p) {
+      toast.error("Account type is unavailable. Please refresh and try again.");
+      setLoading(false);
+      return;
+    }
     setSelected(p);
     const ok = await saveRoleSelection({ role, participant_type: goal });
     if (!ok) { setLoading(false); return; }
@@ -509,19 +495,31 @@ export default function Onboarding() {
   const handleProSubType = async (type: "agent" | "developer" | "service_pro") => {
     if (requireAuth(type)) return;
     if (type === "service_pro") {
-      const p = participants.find(x => x.id === "professional")!;
+      const p = participants.find(x => x.id === "professional");
+      if (!p) {
+        toast.error("Professional account type is unavailable. Please refresh and try again.");
+        return;
+      }
       setSelected(p);
       setStep("pro-category");
       return;
     }
     if (type === "developer") {
-      const p = participants.find(x => x.id === "developer")!;
+      const p = participants.find(x => x.id === "developer");
+      if (!p) {
+        toast.error("Developer account type is unavailable. Please refresh and try again.");
+        return;
+      }
       setSelected(p);
       setStep("developer-setup");
       return;
     }
     // agent — save role and go to done
-    const p = participants.find(x => x.id === type)!;
+    const p = participants.find(x => x.id === type);
+    if (!p) {
+      toast.error("Agent account type is unavailable. Please refresh and try again.");
+      return;
+    }
     setSelected(p);
     setLoading(true);
     const ok = await saveRoleSelection({ role: p.role, participant_type: type });
@@ -598,7 +596,7 @@ export default function Onboarding() {
     if (Object.keys(selectedServices).length === 0) { toast.error("Please select at least one service you offer"); return; }
     setLoading(true);
     const rows = Object.values(selectedServices).map(s => ({
-      professional_id: professionalId!,
+      professional_id: professionalId,
       service_key: s.template.key,
       service_name: s.template.name,
       description: s.template.description,
@@ -621,14 +619,21 @@ export default function Onboarding() {
     if (!professionalId) { toast.error("Verification step incomplete — please go back and try again."); setStep("pro-verify"); return; }
     setLoading(true);
     const rows = availability.map((day, i) => ({ ...day, dayIndex: i })).filter(d => d.enabled).map(d => ({
-      professional_id: professionalId!,
+      professional_id: professionalId,
       day_of_week: d.dayIndex,
       start_time: d.start,
       end_time: d.end,
       is_active: true,
     }));
      
-    if (rows.length > 0) await supabase.from("professional_availability").insert(rows);
+    if (rows.length > 0) {
+      const { error } = await supabase.from("professional_availability").insert(rows);
+      if (error) {
+        toast.error("Could not save availability. Please try again.");
+        setLoading(false);
+        return;
+      }
+    }
     setLoading(false);
     setStep("pro-video");
   };
@@ -636,9 +641,14 @@ export default function Onboarding() {
   const handleSaveVideo = async () => {
     setLoading(true);
     if (professionalId) {
-      await supabase.from("professionals")
+      const { error } = await supabase.from("professionals")
         .update({ video_link: videoLink || null, calendar_notes: calendarNotes || null } as never)
         .eq("id", professionalId);
+      if (error) {
+        toast.error("Could not save video settings. Please try again.");
+        setLoading(false);
+        return;
+      }
     }
     setLoading(false);
     setStep("done");
@@ -665,8 +675,9 @@ export default function Onboarding() {
 
     // ── Pick type (top-level — flat selection across all role types) ──
     if (step === "pick-type") {
-      const devParticipant = participants.find(x => x.id === "developer")!;
-      const proParticipant = participants.find(x => x.id === "professional")!;
+      const devParticipant = participants.find(x => x.id === "developer");
+      const proParticipant = participants.find(x => x.id === "professional");
+      if (!devParticipant || !proParticipant) return null;
       return (
         <PickTypeStep
           pendingCardId={pendingCardId}

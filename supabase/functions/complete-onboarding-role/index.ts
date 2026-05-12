@@ -21,6 +21,10 @@ function optionalString(value: unknown, maxLength: number): string | null {
   return trimmed.length === 0 ? null : trimmed.slice(0, maxLength);
 }
 
+function requiredString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
 Deno.serve(async (req) => {
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
@@ -49,8 +53,8 @@ Deno.serve(async (req) => {
   try {
     const caller = await verifyBearerToken(req, supabase);
     const body = await req.json().catch(() => ({})) as OnboardingRequest;
-    const role = typeof body.role === "string" ? body.role : "";
-    const participantType = typeof body.participantType === "string" ? body.participantType : "";
+    const role = requiredString(body.role);
+    const participantType = requiredString(body.participantType);
     if (!ROLES.has(role) || participantType.length === 0 || participantType.length > 80) {
       throw new AuthError("Invalid onboarding payload", 400);
     }
