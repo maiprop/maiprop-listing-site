@@ -37,6 +37,12 @@ export type ProjectUnitInsert = {
 
 export type ProjectUnitUpdate = Partial<Omit<ProjectUnitInsert, "project_id">>;
 
+export type BulkUpdateProjectUnitPricesInput = {
+  projectId: string;
+  units: Array<Pick<ProjectUnit, "id" | "internal_sqm" | "price" | "project_id">>;
+  percentage: number;
+};
+
 export function useProjectUnits(projectId: string | undefined) {
   return useQuery({
     queryKey: ["project_units", projectId],
@@ -107,11 +113,11 @@ export function useBulkUpdateProjectUnitPrices() {
   const qc = useQueryClient();
   const { user } = useAuth();
   return useMutation({
-    mutationFn: async ({ projectId, units, percentage }: { projectId: string; units: ProjectUnit[]; percentage: number }) => {
+    mutationFn: async ({ projectId, units, percentage }: BulkUpdateProjectUnitPricesInput) => {
       await requireOwnedProject(projectId, user?.id);
 
       for (const unit of units) {
-        if (!unit.price) continue;
+        if (unit.price == null) continue;
 
         const price = Math.round(Number(unit.price) * (1 + percentage / 100));
         const price_per_sqm = unit.internal_sqm ? price / Number(unit.internal_sqm) : null;
@@ -124,7 +130,7 @@ export function useBulkUpdateProjectUnitPrices() {
         if (error) throw error;
       }
 
-      return { updatedCount: units.filter((unit) => !!unit.price).length };
+      return { updatedCount: units.filter((unit) => unit.price != null).length };
     },
     onSuccess: (_data, { projectId }) => {
       qc.invalidateQueries({ queryKey: ["project_units", projectId] });

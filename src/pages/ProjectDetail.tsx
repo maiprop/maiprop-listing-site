@@ -207,8 +207,12 @@ export default function ProjectDetail() {
     setBulkConfirmOpen(false);
     if (!id) return;
     const pct = parseFloat(bulkPricePct);
+    if (!Number.isFinite(pct) || pct === 0) {
+      toast.error("Enter a non-zero percentage change.");
+      return;
+    }
      
-    const availableUnits = units.filter((u: ProjectUnit) => u.availability_status === "available" && u.price);
+    const availableUnits = units.filter((u: ProjectUnit) => u.availability_status === "available" && u.price != null);
     bulkUpdateUnitPrices.mutate(
       { projectId: id, units: availableUnits, percentage: pct },
       {
