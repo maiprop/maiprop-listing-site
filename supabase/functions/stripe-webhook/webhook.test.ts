@@ -10,7 +10,7 @@
  * assertion for webhook security.
  */
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import Stripe from "https://esm.sh/stripe@18.5.0";
+import Stripe from "npm:stripe@18.5.0";
 
 const TEST_SECRET = "whsec_test_secret_deterministic_for_tests_only";
 

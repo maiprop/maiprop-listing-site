@@ -1,4 +1,4 @@
-import Stripe from "https://esm.sh/stripe@18.5.0";
+import Stripe from "npm:stripe@18.5.0";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";

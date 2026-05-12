@@ -2,7 +2,7 @@
  * Admin-only: Create a Stripe Price from a pricing_configs row and save the price ID.
  * Used when admin changes amount and needs a new Stripe price (prices are immutable).
  */
-import Stripe from "https://esm.sh/stripe@18.5.0";
+import Stripe from "npm:stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { createLogger } from "../_shared/logger.ts";
