@@ -57,8 +57,23 @@ async function fetchPOIs(
   const { data, error } = await supabase.functions.invoke("property-pois", {
     body: { address, city, lat, lng },
   });
-  if (error) throw new Error(error.message);
-  if (!Array.isArray(data?.pois)) throw new Error("Invalid response");
+  if (error) {
+    // FunctionsHttpError.message is always the generic SDK string.
+    // The real error (quota exceeded, rate limit, auth failure) is in
+    // error.context — the raw Response object from the edge function.
+    let msg: string = error.message;
+    try {
+      const ctx = (error as { context?: Response }).context;
+      if (ctx instanceof Response) {
+        const body = await ctx.clone().json() as { error?: string };
+        if (typeof body?.error === "string") msg = body.error;
+      }
+    } catch { /* ignore extraction failure — fall back to SDK message */ }
+    throw new Error(msg);
+  }
+  // Some usage-limit paths return HTTP 200 with { error: "..." } in the body.
+  if (typeof data?.error === "string") throw new Error(data.error);
+  if (!Array.isArray(data?.pois)) throw new Error("Failed to load nearby places");
   return data.pois as POI[];
 }
 

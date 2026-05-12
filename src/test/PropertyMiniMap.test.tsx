@@ -110,15 +110,34 @@ describe("PropertyMiniMap", () => {
     expect(screen.getByText("Athens Metro")).toBeInTheDocument();
   });
 
-  it("renders an inline error message when property-pois fails", async () => {
+  it("renders an inline error message when property-pois fails (message via error.message)", async () => {
     invokeMock.mockResolvedValue({ data: null, error: { message: "rate limited" } });
     render(<PropertyMiniMap {...baseProps} />);
     await waitFor(() => expect(invokeMock).toHaveBeenCalled());
-    // The component surfaces the message via getAiErrorMessage; assert that
-    // *some* error UI surfaced (refresh button + error text).
     await waitFor(() => {
       const card = document.body.textContent ?? "";
       expect(card).toMatch(/rate limited|Failed to load nearby/i);
+    });
+  });
+
+  it("extracts the real error from error.context (FunctionsHttpError pattern) instead of showing the generic SDK string", async () => {
+    // Simulate a FunctionsHttpError where .message is the generic SDK string
+    // but the real message lives in error.context (the raw Response body).
+    const contextResponse = new Response(
+      JSON.stringify({ error: "Monthly AI usage limit reached. Resets on the 1st of next month." }),
+      { status: 429, headers: { "Content-Type": "application/json" } },
+    );
+    invokeMock.mockResolvedValue({
+      data: null,
+      error: { message: "Edge Function returned a non-2xx status code", context: contextResponse },
+    });
+    render(<PropertyMiniMap {...baseProps} />);
+    await waitFor(() => expect(invokeMock).toHaveBeenCalled());
+    await waitFor(() => {
+      const card = document.body.textContent ?? "";
+      // Should show the REAL message, not the generic SDK string
+      expect(card).toMatch(/usage limit|Monthly AI/i);
+      expect(card).not.toMatch(/Edge Function returned a non-2xx/i);
     });
   });
 
