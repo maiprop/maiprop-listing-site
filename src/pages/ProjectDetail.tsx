@@ -547,8 +547,7 @@ export default function ProjectDetail() {
   );
 }
 
-// skipcq: JS-R1005 - UnitEditForm intentionally maps one dense project-unit schema into a single editor.
-const UnitEditForm = ({ unit, onSave, onCancel, isCreate }: { unit?: ProjectUnit | null; onSave: (u: Partial<ProjectUnitInsert>) => void; onCancel: () => void; isCreate?: boolean }) => {
+const UnitEditForm = ({ unit, onSave, onCancel, isCreate }: { unit?: ProjectUnit | null; onSave: (u: Partial<ProjectUnitInsert>) => void; onCancel: () => void; isCreate?: boolean }) => { // skipcq: JS-R1005 - UnitEditForm intentionally maps one dense project-unit schema into a single editor.
   const [f, setF] = useState({
     unit_id: unit?.unit_id || "",
     floor: unit?.floor ?? "",
