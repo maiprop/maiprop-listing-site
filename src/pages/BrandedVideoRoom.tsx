@@ -83,7 +83,7 @@ export default function BrandedVideoRoom() {
       if (qErr) throw qErr;
       return data;
     },
-    enabled: !!professionalId,
+    enabled: Boolean(professionalId),
   });
 
   // ── Derived values ───────────────────────────────────────────────────────

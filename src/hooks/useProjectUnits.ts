@@ -43,7 +43,7 @@ export type BulkUpdateProjectUnitPricesInput = {
   percentage: number;
 };
 
-export function useProjectUnits(projectId: string | undefined) {
+export const useProjectUnits = (projectId: string | undefined) => {
   return useQuery({
     queryKey: ["project_units", projectId],
     queryFn: async () => {
@@ -57,11 +57,11 @@ export function useProjectUnits(projectId: string | undefined) {
       if (error) throw error;
       return data || [];
     },
-    enabled: !!projectId,
+    enabled: Boolean(projectId),
   });
-}
+};
 
-export function useCreateProjectUnit() {
+export const useCreateProjectUnit = () => {
   const qc = useQueryClient();
   const { user } = useAuth();
   return useMutation({
@@ -82,9 +82,9 @@ export function useCreateProjectUnit() {
     },
     onError: () => toast.error("Failed to add unit. Please try again."),
   });
-}
+};
 
-export function useUpdateProjectUnit() {
+export const useUpdateProjectUnit = () => {
   const qc = useQueryClient();
   const { user } = useAuth();
   return useMutation({
@@ -107,7 +107,7 @@ export function useUpdateProjectUnit() {
     },
     onError: () => toast.error("Failed to update unit. Please try again."),
   });
-}
+};
 
 export const useBulkUpdateProjectUnitPrices = () => {
   const qc = useQueryClient();
@@ -136,7 +136,7 @@ export const useBulkUpdateProjectUnitPrices = () => {
   });
 };
 
-export function useDeleteProjectUnit() {
+export const useDeleteProjectUnit = () => {
   const qc = useQueryClient();
   const { user } = useAuth();
   return useMutation({
@@ -156,4 +156,4 @@ export function useDeleteProjectUnit() {
     },
     onError: () => toast.error("Failed to remove unit. Please try again."),
   });
-}
+};

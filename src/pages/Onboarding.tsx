@@ -875,7 +875,7 @@ export default function Onboarding() {
         selected={selected}
         selectedColor={selectedColor}
         SelectedIcon={SelectedIcon}
-        isPro={!!isPro}
+        isPro={Boolean(isPro)}
         proCategory={proCategory}
         selectedServicesCount={Object.keys(selectedServices).length}
         actions={actions}
