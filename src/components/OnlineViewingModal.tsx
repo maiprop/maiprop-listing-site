@@ -16,7 +16,7 @@ const platforms = [
   { id: "whatsapp", label: "WhatsApp Video", icon: "📱" },
 ];
 
-function getNextDays(count: number) {
+const getNextDays = (count: number) => {
   const days = [];
   const d = new Date();
   d.setDate(d.getDate() + 1);
@@ -32,7 +32,7 @@ function getNextDays(count: number) {
     d.setDate(d.getDate() + 1);
   }
   return days;
-}
+};
 
 interface OnlineViewingModalProps {
   open: boolean;
@@ -53,7 +53,7 @@ interface OnlineViewingModalProps {
   };
 }
 
-export default function OnlineViewingModal({ open, onClose, listing, professional }: OnlineViewingModalProps) {
+const OnlineViewingModal = ({ open, onClose, listing, professional }: OnlineViewingModalProps) => {
   const { user, profile } = useAuth();
   const bookViewing = useBookViewing();
   const submitConsultation = useSubmitConsultation();
@@ -283,4 +283,6 @@ export default function OnlineViewingModal({ open, onClose, listing, professiona
       </DialogContent>
     </Dialog>
   );
-}
+};
+
+export default OnlineViewingModal;
