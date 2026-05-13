@@ -14,7 +14,7 @@ import React from "react";
 
 // ── Module mocks (hoisted above imports) ──────────────────────────────────
 vi.mock("@/integrations/supabase/client", () => ({
-  supabase: { from: vi.fn(), auth: { getUser: vi.fn() } },
+  supabase: { from: vi.fn(), rpc: vi.fn(), auth: { getUser: vi.fn() } },
 }));
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: vi.fn(),
@@ -181,12 +181,14 @@ describe("IDOR ownership guards on project mutation hooks", () => {
     expect(ownerChain.eqCalls).toContainEqual(["owner_id", TEST_USER_ID]);
   });
 
-  it("useBulkUpdateProjectUnitPrices ownership-checks the project and scopes each update", async () => {
-    const ownerChain = makeChainableMock({ data: { id: "proj-xyz" }, error: null });
-    const chain = makeChainableMock();
-    vi.mocked(supabase).from = vi.fn().mockImplementation((table: string) => {
-      if (table === "projects") return ownerChain;
-      return { update: vi.fn().mockReturnValue(chain) };
+  it("useBulkUpdateProjectUnitPrices delegates available-unit ownership checks to the bulk RPC", async () => {
+    vi.mocked(supabase.rpc).mockResolvedValue({
+      data: 2,
+      error: null,
+      success: true,
+      count: null,
+      status: 200,
+      statusText: "OK",
     });
 
     const { result } = renderHook(() => useBulkUpdateProjectUnitPrices(), { wrapper });
@@ -195,18 +197,20 @@ describe("IDOR ownership guards on project mutation hooks", () => {
       { id: "unit-2", project_id: "proj-xyz", price: 150000, internal_sqm: 75 },
     ];
 
+    let response: { updatedCount: number } | undefined;
     await act(async () => {
-      await result.current.mutateAsync({
+      response = await result.current.mutateAsync({
         projectId: "proj-xyz",
         percentage: 5,
         units,
       });
     });
 
-    expect(ownerChain.eqCalls).toContainEqual(["owner_id", TEST_USER_ID]);
-    expect(chain.eqCalls).toContainEqual(["id", "unit-1"]);
-    expect(chain.eqCalls).toContainEqual(["id", "unit-2"]);
-    expect(chain.eqCalls.filter(([col, val]) => col === "project_id" && val === "proj-xyz")).toHaveLength(2);
+    expect(supabase.rpc).toHaveBeenCalledWith("bulk_update_project_unit_prices", {
+      p_project_id: "proj-xyz",
+      p_percentage: 5,
+    });
+    expect(response?.updatedCount).toBe(2);
   });
 });
 

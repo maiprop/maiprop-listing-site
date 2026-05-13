@@ -223,3 +223,57 @@ REVOKE ALL ON FUNCTION public.submit_agent_data_input(
 GRANT EXECUTE ON FUNCTION public.submit_agent_data_input(
   DATE, TEXT, TEXT, TEXT, NUMERIC, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT
 ) TO authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION public.bulk_update_project_unit_prices(
+  p_project_id UUID,
+  p_percentage NUMERIC
+)
+RETURNS INTEGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_user UUID := auth.uid();
+  v_updated INTEGER;
+BEGIN
+  IF v_user IS NULL THEN
+    RAISE EXCEPTION 'Not authenticated' USING ERRCODE = '42501';
+  END IF;
+
+  IF p_project_id IS NULL THEN
+    RAISE EXCEPTION 'project_id is required' USING ERRCODE = '22023';
+  END IF;
+
+  IF p_percentage IS NULL OR p_percentage::TEXT = 'NaN' OR p_percentage = 0 THEN
+    RAISE EXCEPTION 'percentage must be a finite non-zero value' USING ERRCODE = '22023';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.projects p
+    WHERE p.id = p_project_id
+      AND p.owner_id = v_user
+  ) THEN
+    RAISE EXCEPTION 'Project not found' USING ERRCODE = '42501';
+  END IF;
+
+  UPDATE public.project_units pu
+  SET
+    price = ROUND(pu.price * (1 + p_percentage / 100)),
+    price_per_sqm = CASE
+      WHEN pu.internal_sqm IS NULL OR pu.internal_sqm = 0 THEN NULL
+      ELSE ROUND(pu.price * (1 + p_percentage / 100)) / pu.internal_sqm
+    END,
+    updated_at = now()
+  WHERE pu.project_id = p_project_id
+    AND pu.availability_status = 'available'
+    AND pu.price IS NOT NULL;
+
+  GET DIAGNOSTICS v_updated = ROW_COUNT;
+  RETURN v_updated;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.bulk_update_project_unit_prices(UUID, NUMERIC) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.bulk_update_project_unit_prices(UUID, NUMERIC) TO authenticated;

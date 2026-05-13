@@ -82,6 +82,12 @@ export default function OnlineViewingModal({ open, onClose, listing, professiona
     if (!user && (!resolvedName.trim() || !resolvedEmail.trim())) { toast.error("Please fill in your name and email"); return; }
 
     try {
+      if (listing && !user) {
+        // Guest property bookings cannot be persisted safely without auth.
+        toast.error("Please sign in to book a video viewing");
+        return;
+      }
+
       if (listing && user) {
         // Real viewing booking into viewings table
         await bookViewing.mutateAsync({

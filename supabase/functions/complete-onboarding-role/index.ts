@@ -25,61 +25,72 @@ const requiredString = (value: unknown): string => {
   return typeof value === "string" ? value.trim() : "";
 };
 
+const jsonResponse = (req: Request, body: Record<string, unknown>, status = 200): Response => {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+  });
+};
+
+const getServiceConfig = (): { supabaseUrl: string; serviceRoleKey: string } | null => {
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  return serviceRoleKey && supabaseUrl ? { supabaseUrl, serviceRoleKey } : null;
+};
+
+const parseOnboardingBody = (body: OnboardingRequest) => {
+  const role = requiredString(body.role);
+  const participantType = requiredString(body.participantType);
+  if (!ROLES.has(role) || participantType.length === 0 || participantType.length > 80) {
+    throw new AuthError("Invalid onboarding payload", 400);
+  }
+
+  return {
+    role,
+    participantType,
+    displayName: optionalString(body.displayName, 120),
+    city: optionalString(body.city, 120),
+    phone: optionalString(body.phone, 40),
+  };
+};
+
 Deno.serve(async (req) => {
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
-  const corsHeaders = getCorsHeaders(req);
 
   if (req.method !== "POST") {
-    return new Response(JSON.stringify({ error: "Method not allowed" }), {
-      status: 405,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return jsonResponse(req, { error: "Method not allowed" }, 405);
   }
 
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  if (!serviceRoleKey || !supabaseUrl) {
-    return new Response(JSON.stringify({ error: "Service unavailable" }), {
-      status: 503,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+  const config = getServiceConfig();
+  if (!config) {
+    return jsonResponse(req, { error: "Service unavailable" }, 503);
   }
 
-  const supabase = createClient(supabaseUrl, serviceRoleKey, {
+  const supabase = createClient(config.supabaseUrl, config.serviceRoleKey, {
     auth: { persistSession: false },
   });
 
   try {
     const caller = await verifyBearerToken(req, supabase);
     const body = await req.json().catch(() => ({})) as OnboardingRequest;
-    const role = requiredString(body.role);
-    const participantType = requiredString(body.participantType);
-    if (!ROLES.has(role) || participantType.length === 0 || participantType.length > 80) {
-      throw new AuthError("Invalid onboarding payload", 400);
-    }
+    const payload = parseOnboardingBody(body);
 
     const { error } = await supabase.rpc("complete_onboarding_role_for_user", {
       p_user_id: caller.id,
-      p_role: role,
-      p_participant_type: participantType,
-      p_display_name: optionalString(body.displayName, 120),
-      p_city: optionalString(body.city, 120),
-      p_phone: optionalString(body.phone, 40),
+      p_role: payload.role,
+      p_participant_type: payload.participantType,
+      p_display_name: payload.displayName,
+      p_city: payload.city,
+      p_phone: payload.phone,
     });
     if (error) throw error;
 
-    return new Response(JSON.stringify({ success: true }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return jsonResponse(req, { success: true });
   } catch (err: unknown) {
     const status = err instanceof AuthError ? err.status : 500;
     const message = err instanceof Error ? err.message : "Onboarding failed";
     log.warn("complete failed", { status, err: message });
-    return new Response(JSON.stringify({ error: message }), {
-      status,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return jsonResponse(req, { error: message }, status);
   }
 });

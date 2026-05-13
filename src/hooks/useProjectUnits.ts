@@ -111,26 +111,22 @@ export function useUpdateProjectUnit() {
 
 export const useBulkUpdateProjectUnitPrices = () => {
   const qc = useQueryClient();
-  const { user } = useAuth();
   return useMutation({
     mutationFn: async ({ projectId, units, percentage }: BulkUpdateProjectUnitPricesInput) => {
-      await requireOwnedProject(projectId, user?.id);
+      if (units.length === 0) return { updatedCount: 0 };
 
-      for (const unit of units) {
-        if (unit.price == null) continue;
+      // Localized escape hatch: generated Supabase types can lag new migrations in PR CI.
+      const rpc = supabase.rpc as unknown as (
+        fn: "bulk_update_project_unit_prices",
+        args: { p_project_id: string; p_percentage: number },
+      ) => Promise<{ data: number | null; error: Error | null }>;
+      const { data, error } = await rpc("bulk_update_project_unit_prices", {
+        p_project_id: projectId,
+        p_percentage: percentage,
+      });
 
-        const price = Math.round(Number(unit.price) * (1 + percentage / 100));
-        const price_per_sqm = unit.internal_sqm ? price / Number(unit.internal_sqm) : null;
-        const { error } = await supabase
-          .from("project_units")
-          .update({ price, price_per_sqm })
-          .eq("id", unit.id)
-          .eq("project_id", projectId);
-
-        if (error) throw error;
-      }
-
-      return { updatedCount: units.filter((unit) => unit.price != null).length };
+      if (error) throw error;
+      return { updatedCount: data ?? 0 };
     },
     onSuccess: (_data, { projectId }) => {
       qc.invalidateQueries({ queryKey: ["project_units", projectId] });

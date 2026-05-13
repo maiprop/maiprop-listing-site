@@ -502,6 +502,19 @@ export default function Onboarding() {
     return true;
   };
 
+  const saveAgentSelection = async () => {
+    const agentParticipant = participants.find((participant) => participant.id === "agent");
+    if (!agentParticipant) {
+      toast.error("Agent account type is unavailable. Please refresh and try again.");
+      return;
+    }
+    setSelected(agentParticipant);
+    setLoading(true);
+    const ok = await saveRoleSelection({ role: agentParticipant.role, participant_type: "agent" });
+    setLoading(false);
+    if (ok) setStep("done");
+  };
+
   /** Handler for professional sub-type selection */
   const handleProSubType = async (type: "agent" | "developer" | "service_pro") => {
     if (requireAuth(type)) return;
@@ -513,18 +526,7 @@ export default function Onboarding() {
       selectParticipantStep("developer", "developer-setup", "Developer");
       return;
     }
-    // agent — save role and go to done
-    const agentParticipant = participants.find((participant) => participant.id === type);
-    if (!agentParticipant) {
-      toast.error("Agent account type is unavailable. Please refresh and try again.");
-      return;
-    }
-    setSelected(agentParticipant);
-    setLoading(true);
-    const ok = await saveRoleSelection({ role: agentParticipant.role, participant_type: type });
-    if (!ok) { setLoading(false); return; }
-    setLoading(false);
-    setStep("done");
+    await saveAgentSelection();
   };
 
   const handleDeveloperSetup = async () => {

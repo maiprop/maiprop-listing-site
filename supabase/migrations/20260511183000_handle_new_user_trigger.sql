@@ -82,7 +82,7 @@ SELECT
   (
     CASE
     WHEN LOWER(u.email) IN ('kr@maiprop.co', 'k@maiprop.co') THEN 'admin'::public.user_role
-    WHEN u.email = 'kostisrenios@gmail.com'                   THEN 'agent'::public.user_role
+    WHEN LOWER(u.email) = 'kostisrenios@gmail.com'            THEN 'agent'::public.user_role
       ELSE (
         CASE
           WHEN EXISTS (

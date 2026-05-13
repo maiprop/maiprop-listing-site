@@ -260,9 +260,12 @@ function SignatureCanvas({ onSign }: { onSign: (dataUrl: string) => void }) {
       drawingContext.lineTo(pos.x, pos.y);
       drawingContext.stroke();
       lastPos.current = pos;
+    }
+    function stop() {
+      if (!drawing.current) return;
+      drawing.current = false;
       onSign(drawingCanvas.toDataURL());
     }
-    function stop() { drawing.current = false; }
 
     canvas.addEventListener("mousedown", start);
     canvas.addEventListener("mousemove", move);
