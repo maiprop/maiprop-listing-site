@@ -321,7 +321,7 @@ export function LegalDocumentModal({ open, onClose, listingTitle = "Property", s
   const [signed, setSigned] = useState(false);
 
   const today = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
-  const tpl = TEMPLATES.find((t) => t.id === selected)!;
+  const tpl = TEMPLATES.find((t) => t.id === selected) ?? TEMPLATES[0];
   const body = getDocumentBody(tpl, sellerName, buyerName, listingTitle, price, today);
   const hasSig = signMode === "type" ? typedSig.trim().length > 2 : drawnSig.length > 100;
 

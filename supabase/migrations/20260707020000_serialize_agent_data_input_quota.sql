@@ -26,6 +26,7 @@ DECLARE
   v_id UUID;
   v_transaction_type TEXT;
   v_month_start TIMESTAMPTZ;
+  v_month_bucket DATE;
 BEGIN
   IF v_user IS NULL THEN
     RAISE EXCEPTION 'Not authenticated' USING ERRCODE = '42501';
@@ -62,7 +63,8 @@ BEGIN
   END IF;
 
   v_month_start := date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC';
-  PERFORM pg_advisory_xact_lock(hashtextextended(v_user::TEXT || ':' || v_month_start::DATE::TEXT, 0));
+  v_month_bucket := (v_month_start AT TIME ZONE 'UTC')::DATE;
+  PERFORM pg_advisory_xact_lock(hashtextextended(v_user::TEXT || ':' || v_month_bucket::TEXT, 0));
 
   SELECT COUNT(*)
   INTO v_used

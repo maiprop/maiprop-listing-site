@@ -174,7 +174,8 @@ export default function ProjectDetail() {
   };
 
   const handleLinkListing = (listingId: string) => {
-    updateListing.mutate({ id: listingId, updates: { project_id: id! } });
+    if (!id) return;
+    updateListing.mutate({ id: listingId, updates: { project_id: id } });
   };
 
   const handleUnlinkListing = (listingId: string) => {
@@ -213,6 +214,10 @@ export default function ProjectDetail() {
     }
      
     const availableUnits = units.filter((u: ProjectUnit) => u.availability_status === "available" && u.price != null);
+    if (availableUnits.length === 0) {
+      toast.error("No available units to update.");
+      return;
+    }
     bulkUpdateUnitPrices.mutate(
       { projectId: id, units: availableUnits, percentage: pct },
       {
@@ -357,7 +362,17 @@ export default function ProjectDetail() {
                       {items.map((m: ProjectMedia) => (
                         <div key={m.id} className="flex items-center gap-1 bg-secondary rounded-lg px-2 py-1">
                           {m.media_type === "brochure_pdf" ? <FileText className="w-4 h-4" /> : <img src={m.url} alt="" className="w-10 h-10 rounded object-cover" />}
-                          <button type="button" onClick={() => deleteMedia.mutate({ id: m.id, projectId: id! })} className="p-1 rounded hover:bg-destructive/10 text-destructive"><Trash2 className="w-3 h-3" /></button>
+                          <button
+                            type="button"
+                            aria-label={`Delete ${m.media_type.replace(/_/g, " ")}`}
+                            onClick={() => {
+                              if (!id) return;
+                              deleteMedia.mutate({ id: m.id, projectId: id });
+                            }}
+                            className="p-1 rounded hover:bg-destructive/10 text-destructive"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
                         </div>
                       ))}
                       <label className="cursor-pointer">
@@ -452,7 +467,15 @@ export default function ProjectDetail() {
                       <option value="converted">Converted</option>
                       <option value="lost">Lost</option>
                     </select>
-                    <Button variant="ghost" size="icon" className="text-destructive h-8 w-8" onClick={() => setLeadToDelete(l.id)}><Trash2 className="w-3 h-3" /></Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Delete lead ${l.name}`}
+                      className="text-destructive h-8 w-8"
+                      onClick={() => setLeadToDelete(l.id)}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
                   </div>
                 </div>
               ))}
