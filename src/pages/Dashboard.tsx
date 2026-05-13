@@ -122,6 +122,15 @@ export default function Dashboard() {
     if (!validForRole && sectionNavItems.length) setActiveSection(sectionNavItems[0].key as NavKey);
   }, [role, bioType, activeSection, navItems, sectionNavItems]);
 
+  useEffect(() => {
+    if (!section) return;
+    const routeSection = section as NavKey;
+    const routeSectionIsAvailable = sectionNavItems.some((item) => item.key === routeSection);
+    if (routeSectionIsAvailable && activeSection !== routeSection) {
+      setActiveSection(routeSection);
+    }
+  }, [activeSection, section, sectionNavItems]);
+
   const { data: myListings = [] } = useMyListings();
   const { data: favorites = [], isLoading: favLoading } = useFavorites();
   const { data: viewings = [] } = useViewings("requester");
