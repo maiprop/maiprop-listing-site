@@ -47,6 +47,15 @@ test.describe("GDPR — account deletion", () => {
     const userId = created!.user!.id;
 
     try {
+      await admin.from("profiles").upsert({
+        user_id: userId,
+        role: "buyer",
+        participant_type: "buyer",
+        display_name: "GDPR E2E User",
+        email,
+        updated_at: new Date().toISOString(),
+      } as never, { onConflict: "user_id" });
+
       // Proxy delete-account calls through Node.js to bypass browser CORS when
       // running against localhost:4173 (Vite preview). The edge function's CORS
       // allowlist may not include the CI preview port.
