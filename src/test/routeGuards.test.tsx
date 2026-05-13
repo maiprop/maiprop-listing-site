@@ -45,10 +45,10 @@ function renderGuarded(guard: React.ReactElement, initial: string = "/private") 
     <MemoryRouter initialEntries={[initial]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Routes>
         <Route path="/private" element={guard} />
+        <Route path="/dashboard/settings" element={guard} />
         <Route path="/login" element={<div>at-login</div>} />
         <Route path="/onboarding" element={<div>at-onboarding</div>} />
         <Route path="/dashboard" element={<div>at-dashboard</div>} />
-        <Route path="/dashboard/settings" element={<div>at-settings</div>} />
         <Route path="/pricing" element={<div>at-pricing</div>} />
       </Routes>
     </MemoryRouter>,
@@ -135,14 +135,37 @@ describe("ProtectedRoute", () => {
       profileLoading: false,
       needsOnboarding: true,
     });
+    render(
+      <MemoryRouter initialEntries={["/onboarding"]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <Routes>
+          <Route
+            path="/onboarding"
+            element={
+              <ProtectedRoute>
+                <div>ONBOARDING-CHILD</div>
+              </ProtectedRoute>
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(screen.getByText("ONBOARDING-CHILD")).toBeInTheDocument();
+  });
+
+  it("allows account settings while needsOnboarding=true so account deletion remains reachable", () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "u-1" },
+      loading: false,
+      profileLoading: false,
+      needsOnboarding: true,
+    });
     renderGuarded(
       <ProtectedRoute>
-        <div>ONBOARDING-CHILD</div>
+        <div>ACCOUNT-SETTINGS</div>
       </ProtectedRoute>,
-      "/onboarding",
+      "/dashboard/settings",
     );
-    // Fallback: route table doesn't include `/onboarding` as the guarded
-    // path; mount a tiny router specifically to hit this branch.
+    expect(screen.getByText("ACCOUNT-SETTINGS")).toBeInTheDocument();
   });
 
   it("renders children when authenticated and not in onboarding", () => {
