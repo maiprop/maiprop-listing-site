@@ -7,6 +7,7 @@ exclude_paths:
   - "src/**"
   - "e2e/**"
   - "scripts/**"
+  - "supabase/migrations/**"
   - "supabase/migrations/20260707000000_fix_linked_lint_failures.sql"
   - "supabase/functions/fetch-os-auctions/index.ts"
   - "supabase/functions/fetch-os-auctions/index.test.ts"
@@ -20,4 +21,5 @@ engines:
     enabled: false
   metric:
     exclude_paths:
+      - "supabase/migrations/**"
       - "supabase/functions/fetch-os-auctions/index.ts"

@@ -70,7 +70,7 @@ const isLoadingSubscriptionAccess = (options: {
  * Platform admins get Pro access through DB role checks. Stripe subscription
  * access is validated against the server-maintained pro_product_ids table.
  */
-export function useSubscription() {
+export const useSubscription = () => {
   const { subscription, refreshSubscription, profile, user } = useAuth();
   const { productId: profileProductId, forceProAccess } = getProfileSubscriptionFields(profile);
   const isAdmin = isPlatformAdmin(profile);
@@ -97,4 +97,4 @@ export function useSubscription() {
     }),
     refreshSubscription,
   };
-}
+};
