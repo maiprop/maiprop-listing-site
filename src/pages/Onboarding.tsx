@@ -11,11 +11,11 @@ import { usePricingConfigs, formatPrice, PRICING_KEYS } from "@/hooks/usePricing
 import { RoleSwitchModal } from "@/components/RoleSwitchModal";
 import { classifySwitch, getPlanForParticipant } from "@/lib/rolePlanMap";
 import type { ParticipantId } from "@/lib/participantConfig";
-import { canRestoreDraftStep, isOnboardingStep, resolveStepsFor } from "@/lib/onboardingFlow";
 import {
   participants, DEFAULT_AVAILABILITY, colorMap,
   type OnboardingStep, type ParticipantType, type SelectedService, type DayAvailability, type RoleKey,
 } from "@/lib/onboardingConfig";
+import { canRestoreDraftStep, isOnboardingStep, resolveStepsFor } from "@/lib/onboardingFlow";
 import { OnboardingShell as Shell } from "@/components/onboarding/OnboardingShell";
 import { DoneScreen } from "@/components/onboarding/DoneScreen";
 import { PickTypeStep } from "@/components/onboarding/PickTypeStep";
@@ -41,6 +41,12 @@ const extractStripeError = (data: unknown): string | null => {
   if (!data || typeof data !== "object") return null;
   const value = (data as { stripe_error?: unknown }).stripe_error;
   return typeof value === "string" && value.length > 0 ? value : null;
+};
+
+const parseServiceRate = (rate: string): number | null => {
+  if (rate.trim() === "") return null;
+  const parsed = Number(rate);
+  return Number.isFinite(parsed) ? parsed : null;
 };
 
 /**
@@ -127,15 +133,15 @@ export default function Onboarding() {
   // Auto-advance past pick-type when type already set from Signup
   useEffect(() => {
     if (!presetType) return;
-    const presetParticipant = participants.find((participant) => participant.id === presetType);
-    if (!presetParticipant) return;
-    setSelected(presetParticipant);
-    if (presetParticipant.id === "developer") {
+    const p = participants.find(x => x.id === presetType);
+    if (!p) return;
+    setSelected(p);
+    if (p.id === "developer") {
       setStep("developer-setup");
-    } else if (presetParticipant.isPro) {
+    } else if (p.isPro) {
       setStep("pro-category");
-    } else if (presetParticipant.nextStep) {
-      setStep(presetParticipant.nextStep);
+    } else if (p.nextStep) {
+      setStep(p.nextStep);
     } else {
       setStep("done");
     }
@@ -280,6 +286,7 @@ export default function Onboarding() {
 
   const steps: OnboardingStep[] = resolveStepsFor(selected);
   const stepIndex = steps.indexOf(step);
+  const displayStepIndex = Math.max(stepIndex, 0);
   const totalSteps = steps.length - 1;
 
   const DRAFT_KEY = "onboarding_draft";
@@ -292,11 +299,20 @@ export default function Onboarding() {
       const raw = localStorage.getItem(DRAFT_KEY);
       if (!raw) return;
       const draft = JSON.parse(raw) as { userId?: unknown; step?: unknown; selectedId?: unknown; proCategory?: unknown };
-      if (draft.userId !== user.id || !isOnboardingStep(draft.step)) return;
+      if (draft.userId !== user.id) return;
+      if (!isOnboardingStep(draft.step)) {
+        localStorage.removeItem(DRAFT_KEY);
+        return;
+      }
+      if (draft.step === "done") {
+        localStorage.removeItem(DRAFT_KEY);
+        return;
+      }
       draftRestoredRef.current = true;
-      const selectedId = typeof draft.selectedId === "string" ? draft.selectedId : null;
-      const draftParticipant = selectedId ? participants.find((participant) => participant.id === selectedId) ?? null : null;
-      if (!canRestoreDraftStep(draft.step, draftParticipant)) {
+      const draftParticipant = typeof draft.selectedId === "string"
+        ? participants.find((participant) => participant.id === draft.selectedId) ?? null
+        : null;
+      if (!canRestoreDraftStep(draftParticipant, draft.step)) {
         localStorage.removeItem(DRAFT_KEY);
         return;
       }
@@ -477,13 +493,12 @@ export default function Onboarding() {
   const handleParticipantGoal = async (goal: "buyer" | "seller") => {
     if (requireAuth(goal)) return;
     const role: RoleKey = goal === "seller" ? "seller" : "buyer";
-    setLoading(true);
     const goalParticipant = participants.find((participant) => participant.id === goal);
     if (!goalParticipant) {
-      toast.error("Account type is unavailable. Please refresh and try again.");
-      setLoading(false);
+      toast.error("Could not resolve that account type. Please try again.");
       return;
     }
+    setLoading(true);
     setSelected(goalParticipant);
     const ok = await saveRoleSelection({ role, participant_type: goal });
     if (!ok) { setLoading(false); return; }
@@ -491,10 +506,10 @@ export default function Onboarding() {
     setStep("done");
   };
 
-  const selectParticipantStep = (participantId: string, nextStep: OnboardingStep, label: string): boolean => {
+  const selectParticipantStep = (participantId: string, nextStep: OnboardingStep): boolean => {
     const participant = participants.find((option) => option.id === participantId);
     if (!participant) {
-      toast.error(`${label} account type is unavailable. Please refresh and try again.`);
+      toast.error("Could not resolve that account type. Please try again.");
       return false;
     }
     setSelected(participant);
@@ -502,31 +517,23 @@ export default function Onboarding() {
     return true;
   };
 
-  const saveAgentSelection = async () => {
-    const agentParticipant = participants.find((participant) => participant.id === "agent");
-    if (!agentParticipant) {
-      toast.error("Agent account type is unavailable. Please refresh and try again.");
-      return;
-    }
+  const saveAgentSelection = async (type: "agent") => {
+    const agentParticipant = participants.find((participant) => participant.id === type);
+    if (!agentParticipant) { toast.error("Could not resolve that account type. Please try again."); return; }
     setSelected(agentParticipant);
     setLoading(true);
-    const ok = await saveRoleSelection({ role: agentParticipant.role, participant_type: "agent" });
+    const ok = await saveRoleSelection({ role: agentParticipant.role, participant_type: type });
+    if (!ok) { setLoading(false); return; }
     setLoading(false);
-    if (ok) setStep("done");
+    setStep("done");
   };
 
-  const proSubTypeHandlers = {
-    service_pro: () => selectParticipantStep("professional", "pro-category", "Professional"),
-    developer: () => selectParticipantStep("developer", "developer-setup", "Developer"),
-    agent: saveAgentSelection,
-  } satisfies Record<"agent" | "developer" | "service_pro", () => boolean | Promise<void>>;
-
   /** Handler for professional sub-type selection */
-  const handleProSubType = (type: "agent" | "developer" | "service_pro") => {
+  const handleProSubType = async (type: "agent" | "developer" | "service_pro") => {
     if (requireAuth(type)) return;
-    Promise.resolve(proSubTypeHandlers[type]()).catch(() => {
-      toast.error("Could not save your selection. Please try again.");
-    });
+    if (type === "service_pro") { selectParticipantStep("professional", "pro-category"); return; }
+    if (type === "developer") { selectParticipantStep("developer", "developer-setup"); return; }
+    await saveAgentSelection(type);
   };
 
   const handleDeveloperSetup = async () => {
@@ -603,13 +610,19 @@ export default function Onboarding() {
       description: s.template.description,
       category: proCategory,
       pricing_model: s.pricingModel,
-      rate_amount: parseFloat(s.rate) || null,
+      rate_amount: parseServiceRate(s.rate),
       currency: "EUR",
       video_enabled: s.videoEnabled,
       is_premium: s.template.isPremiumFeature,
       is_active: true,
     }));
-     
+
+    const { error: deleteError } = await supabase
+      .from("professional_services")
+      .delete()
+      .eq("professional_id", professionalId);
+    if (deleteError) { toast.error("Could not update services. Please try again."); setLoading(false); return; }
+
     const { error } = await supabase.from("professional_services").insert(rows);
     if (error) { toast.error("Could not save services. Please try again."); setLoading(false); return; }
     setLoading(false);
@@ -627,13 +640,15 @@ export default function Onboarding() {
       is_active: true,
     }));
      
+    const { error: deleteError } = await supabase
+      .from("professional_availability")
+      .delete()
+      .eq("professional_id", professionalId);
+    if (deleteError) { toast.error("Could not update availability. Please try again."); setLoading(false); return; }
+
     if (rows.length > 0) {
       const { error } = await supabase.from("professional_availability").insert(rows);
-      if (error) {
-        toast.error("Could not save availability. Please try again.");
-        setLoading(false);
-        return;
-      }
+      if (error) { toast.error("Could not save availability. Please try again."); setLoading(false); return; }
     }
     setLoading(false);
     setStep("pro-video");
@@ -704,9 +719,8 @@ export default function Onboarding() {
 
     // ── Pick type (top-level — flat selection across all role types) ──
     if (step === "pick-type") {
-      const devParticipant = participants.find((participant) => participant.id === "developer");
-      const proParticipant = participants.find((participant) => participant.id === "professional");
-      if (!devParticipant || !proParticipant) return null;
+      const devParticipant = participants.find(x => x.id === "developer")!;
+      const proParticipant = participants.find(x => x.id === "professional")!;
       return (
         <PickTypeStep
           pendingCardId={pendingCardId}
@@ -893,7 +907,7 @@ export default function Onboarding() {
 
   return (
     <>
-      <Shell stepIndex={stepIndex + 1} totalSteps={totalSteps} step={step} onBack={onBack}>
+      <Shell stepIndex={displayStepIndex + 1} totalSteps={totalSteps} step={step} onBack={onBack}>
         {stepContent}
       </Shell>
 

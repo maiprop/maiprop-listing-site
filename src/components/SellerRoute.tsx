@@ -1,7 +1,6 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { isSellSideRole, isPlatformAdmin } from "@/lib/authUtils";
-import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
 import { useSubscription } from "@/hooks/useSubscription";
 import { ProtectedRoute } from "./ProtectedRoute";
 import { Button } from "@/components/ui/button";
@@ -54,8 +53,7 @@ function SellerGate({ children }: { children: React.ReactNode }) {
   }
 
   // Developer role requires an active Pro subscription — listing creation is Pro-only for developers.
-  const participantType = getParticipantTypeFromProfile(profile);
-  if (participantType === "developer" && !isPro && !isPlatformAdmin(profile)) {
+  if (profile.role === "developer" && !isPro && !isPlatformAdmin(profile)) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center px-4">
         <div className="max-w-md w-full text-center space-y-5">

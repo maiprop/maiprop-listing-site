@@ -64,6 +64,16 @@ const isLoadingSubscriptionAccess = (options: {
   [options.subscribed, options.hasEffectiveProduct, options.proProductLoading].every(Boolean)
 );
 
+const hasDeveloperEntitlement = (options: {
+  isAdmin: boolean;
+  forceProAccess: boolean;
+  hasValidatedProProduct: boolean;
+}) => (
+  options.isAdmin ||
+  options.forceProAccess ||
+  options.hasValidatedProProduct
+);
+
 /**
  * Thin wrapper around AuthContext.subscription.
  *
@@ -79,12 +89,19 @@ export const useSubscription = () => {
   const hasEffectiveProduct = typeof effectiveProductId === "string" && effectiveProductId.length > 0;
   const { data: validatedProProduct, isLoading: validatedProProductLoading } = useValidatedProProduct(effectiveProductId);
   const { data: investorSubStatus, isLoading: investorStatusLoading } = useInvestorProStatus(user?.id, isInvestorRole);
-  const hasStripePro = subscription.subscribed && Boolean(validatedProProduct);
+  const hasValidatedProProduct = subscription.subscribed && Boolean(validatedProProduct);
+  const hasStripePro = hasValidatedProProduct;
   const hasInvestorPro = isInvestorRole && isActiveInvestorStatus(investorSubStatus?.status);
   const isPro = hasAnyProAccess([isAdmin, hasStripePro, hasInvestorPro, forceProAccess]);
+  const hasDeveloperPro = hasDeveloperEntitlement({
+    isAdmin,
+    forceProAccess,
+    hasValidatedProProduct,
+  });
 
   return {
     isPro,
+    hasDeveloperPro,
     subscribed: subscription.subscribed,
     productId: effectiveProductId,
     subscriptionEnd: subscription.subscriptionEnd,
