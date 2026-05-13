@@ -5,74 +5,87 @@ import { PRICING_KEYS, usePricingConfigs } from "@/hooks/usePricingConfigs";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
-/**
- * useSubscription — thin wrapper around AuthContext.subscription.
- *
- * Returns:
- *   isPro       — true when the user has any active subscription, or is admin,
- *                 or is an investor/institutional with an active investor_subscription.
- *   subscribed  — raw subscribed boolean from Stripe
- *   productId   — current Stripe product ID (null if unsubscribed)
- *   subscriptionEnd — ISO date string of renewal/expiry
- *   loading     — true while the subscription status is being fetched
- *   refreshSubscription — force-refresh from Stripe
- *
- * Platform admins (role="admin" in DB) always get Pro access.
- * Access is controlled server-side via DB role — never via hardcoded emails.
- * Any active Stripe subscription grants Pro, regardless of which plan was purchased.
- */
-export function useSubscription() {
-  const { subscription, refreshSubscription, profile, user } = useAuth();
-  const { data: pricingConfigs, isLoading: pricingConfigsLoading } = usePricingConfigs();
+const getProfileSubscriptionFields = (profile: ReturnType<typeof useAuth>["profile"]) => ({
+  productId: (profile as { subscription_product_id?: string | null } | null)?.subscription_product_id ?? null,
+  forceProAccess: Boolean((profile as { force_pro_access?: boolean | null } | null)?.force_pro_access),
+});
 
-  const isAdmin = isPlatformAdmin(profile);
+const isInvestorParticipant = (profile: ReturnType<typeof useAuth>["profile"]) => {
   const participantType = getParticipantTypeFromProfile(profile);
-  const isInvestorRole = participantType === "investor" || participantType === "institutional";
+  return participantType === "investor" || participantType === "institutional";
+};
 
-  const profileProductId = (profile as { subscription_product_id?: string | null } | null)?.subscription_product_id ?? null;
-  const forceProAccess = Boolean((profile as { force_pro_access?: boolean | null } | null)?.force_pro_access);
-  const effectiveProductId = subscription.productId ?? profileProductId;
-
-  // Any active Stripe subscription grants Pro access — plan key doesn't matter.
-  const hasStripePro = subscription.subscribed && Boolean(effectiveProductId);
-
-  // Investors/institutional with an admin-approved investor_subscriptions record also get Pro features,
-  // since they pay €490–€1490/month for the deal-flow tier.
-  const { data: investorSubStatus } = useQuery({
-    queryKey: ["investor-sub-pro", user?.id],
+const useInvestorProStatus = (userId: string | undefined, enabled: boolean) => {
+  return useQuery({
+    queryKey: ["investor-sub-pro", userId],
     queryFn: async () => {
-      if (!user?.id) return null;
+      if (!userId) return null;
       const { data } = await supabase
         .from("investor_subscriptions")
         .select("status")
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .in("status", ["active", "trial"])
         .limit(1)
         .maybeSingle();
       return (data as unknown as { status: string } | null);
     },
-    enabled: !!user?.id && isInvestorRole,
+    enabled: Boolean(userId) && enabled,
     staleTime: 30_000,
   });
+};
 
-  const hasInvestorPro =
-    isInvestorRole &&
-    (investorSubStatus?.status === "active" || investorSubStatus?.status === "trial");
+const isActiveInvestorStatus = (status: string | undefined) => status === "active" || status === "trial";
+
+const getDeveloperProductIds = (pricingConfigs: ReturnType<typeof usePricingConfigs>["data"]) => [
+  pricingConfigs?.[PRICING_KEYS.developer_pro]?.stripeProductId,
+  import.meta.env.VITE_STRIPE_PRODUCT_DEVELOPER,
+  import.meta.env.VITE_STRIPE_PRODUCT_DEVELOPER_MONTHLY,
+  import.meta.env.VITE_STRIPE_PRODUCT_DEVELOPER_ANNUAL,
+].filter((value): value is string => typeof value === "string" && value.length > 0);
+
+const hasDeveloperEntitlement = (options: {
+  isAdmin: boolean;
+  forceProAccess: boolean;
+  subscribed: boolean;
+  effectiveProductId: string | null;
+  developerProductIds: string[];
+}) => (
+  options.isAdmin ||
+  options.forceProAccess ||
+  (
+    options.subscribed &&
+    typeof options.effectiveProductId === "string" &&
+    options.developerProductIds.includes(options.effectiveProductId)
+  )
+);
+
+/**
+ * Thin wrapper around AuthContext.subscription.
+ *
+ * Platform admins get Pro access through DB role checks. Any active Stripe
+ * subscription grants broad Pro access, while developer modules require a
+ * Developer Pro product or explicit platform/admin entitlement.
+ */
+export function useSubscription() {
+  const { subscription, refreshSubscription, profile, user } = useAuth();
+  const { data: pricingConfigs, isLoading: pricingConfigsLoading } = usePricingConfigs();
+  const { productId: profileProductId, forceProAccess } = getProfileSubscriptionFields(profile);
+  const isAdmin = isPlatformAdmin(profile);
+  const isInvestorRole = isInvestorParticipant(profile);
+  const effectiveProductId = subscription.productId ?? profileProductId;
+  const hasEffectiveProduct = typeof effectiveProductId === "string" && effectiveProductId.length > 0;
+  const hasStripePro = subscription.subscribed && hasEffectiveProduct;
+  const { data: investorSubStatus } = useInvestorProStatus(user?.id, isInvestorRole);
+  const hasInvestorPro = isInvestorRole && isActiveInvestorStatus(investorSubStatus?.status);
 
   const isPro = isAdmin || hasStripePro || hasInvestorPro || forceProAccess;
-  const hasEffectiveProduct = typeof effectiveProductId === "string" && effectiveProductId.length > 0;
-  const developerProductIds = [
-    pricingConfigs?.[PRICING_KEYS.developer_pro]?.stripeProductId,
-    import.meta.env.VITE_STRIPE_PRODUCT_DEVELOPER,
-    import.meta.env.VITE_STRIPE_PRODUCT_DEVELOPER_MONTHLY,
-    import.meta.env.VITE_STRIPE_PRODUCT_DEVELOPER_ANNUAL,
-  ].filter((value): value is string => typeof value === "string" && value.length > 0);
-  const hasDeveloperPro =
-    isAdmin ||
-    forceProAccess ||
-    (subscription.subscribed &&
-      hasEffectiveProduct &&
-      developerProductIds.includes(effectiveProductId));
+  const hasDeveloperPro = hasDeveloperEntitlement({
+    isAdmin,
+    forceProAccess,
+    subscribed: subscription.subscribed,
+    effectiveProductId,
+    developerProductIds: getDeveloperProductIds(pricingConfigs),
+  });
 
   return {
     isPro,

@@ -43,6 +43,12 @@ const extractStripeError = (data: unknown): string | null => {
   return typeof value === "string" && value.length > 0 ? value : null;
 };
 
+const parseServiceRate = (rate: string): number | null => {
+  if (rate.trim() === "") return null;
+  const parsed = Number(rate);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
 /**
  * Reads the role-switch billing context written by Dashboard SettingsSection
  * before navigation. Returns null if the key is missing, malformed, or the
@@ -604,13 +610,19 @@ export default function Onboarding() {
       description: s.template.description,
       category: proCategory,
       pricing_model: s.pricingModel,
-      rate_amount: parseFloat(s.rate) || null,
+      rate_amount: parseServiceRate(s.rate),
       currency: "EUR",
       video_enabled: s.videoEnabled,
       is_premium: s.template.isPremiumFeature,
       is_active: true,
     }));
-     
+
+    const { error: deleteError } = await supabase
+      .from("professional_services")
+      .delete()
+      .eq("professional_id", professionalId);
+    if (deleteError) { toast.error("Could not update services. Please try again."); setLoading(false); return; }
+
     const { error } = await supabase.from("professional_services").insert(rows);
     if (error) { toast.error("Could not save services. Please try again."); setLoading(false); return; }
     setLoading(false);
@@ -642,15 +654,21 @@ export default function Onboarding() {
     setStep("pro-video");
   };
 
-  const saveVideoSettings = async (): Promise<boolean> => {
-    if (!user || !professionalId) return true;
+  const canSaveVideoSettings = () => Boolean(user && professionalId);
+
+  const persistVideoSettings = async (targetUserId: string, targetProfessionalId: string): Promise<boolean> => {
     const { error } = await supabase.from("professionals")
       .update({ video_link: videoLink || null, calendar_notes: calendarNotes || null } as never)
-      .eq("id", professionalId)
-      .eq("user_id", user.id);
+      .eq("id", targetProfessionalId)
+      .eq("user_id", targetUserId);
     if (!error) return true;
     toast.error("Could not save video settings. Please try again.");
     return false;
+  };
+
+  const saveVideoSettings = async (): Promise<boolean> => {
+    if (!canSaveVideoSettings() || !user || !professionalId) return true;
+    return persistVideoSettings(user.id, professionalId);
   };
 
   const handleSaveVideo = async () => {

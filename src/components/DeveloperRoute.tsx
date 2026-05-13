@@ -7,6 +7,10 @@ import { Button } from "@/components/ui/button";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 type GateStatus = "loading" | "missing-profile" | "admin" | "wrong-role" | "missing-plan" | "allowed";
+type GateCheck = {
+  when: boolean;
+  status: GateStatus;
+};
 
 type GateMessageProps = {
   tone: "muted" | "orange";
@@ -86,11 +90,14 @@ const getGateStatus = (
   subLoading: boolean,
   hasDeveloperPro: boolean,
 ): GateStatus => {
-  if (loading || subLoading) return "loading";
-  if (!profile) return "missing-profile";
-  if (isPlatformAdmin(profile)) return "admin";
-  if (profile.role !== "developer") return "wrong-role";
-  return hasDeveloperPro ? "allowed" : "missing-plan";
+  const checks: GateCheck[] = [
+    { when: loading || subLoading, status: "loading" },
+    { when: !profile, status: "missing-profile" },
+    { when: isPlatformAdmin(profile), status: "admin" },
+    { when: profile?.role !== "developer", status: "wrong-role" },
+    { when: hasDeveloperPro, status: "allowed" },
+  ];
+  return checks.find((check) => check.when)?.status ?? "missing-plan";
 };
 
 const DeveloperGate = ({ children }: { children: React.ReactNode }) => {
