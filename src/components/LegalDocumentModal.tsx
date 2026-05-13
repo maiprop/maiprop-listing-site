@@ -95,7 +95,7 @@ const TEMPLATES: Template[] = [
 const fmt = (n: number) =>
   new Intl.NumberFormat("el-GR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
 
-const getDocumentBody = (tpl: Template, seller: string, buyer: string, listing: string, price: number, date: string) => {
+const getDocumentBody = (tpl: Template, seller: string, buyer: string, listing: string, price: number, date: string) => { // skipcq: JS-R1005 - Template-specific legal copy is intentionally centralized for review.
   const priceTxt = fmt(price);
   switch (tpl.id) {
     case "preliminary":
@@ -220,6 +220,7 @@ MEMORANDUM OF UNDERSTANDING — QUICK SALE
 Î—Î¼ÎµÏÎ¿Î¼Î·Î½Î¯Î± / Date: ${date}
       `;
   }
+  return "";
 };
 
 // ── Canvas draw signature ────────────────────────────────────────────────────
@@ -324,7 +325,7 @@ const SignatureCanvas = ({ onSign }: { onSign: (dataUrl: string) => void }) => {
 
 // ── Main component ───────────────────────────────────────────────────────────
 
-export const LegalDocumentModal = ({ open, onClose, listingTitle = "Property", sellerName = "Seller Name", buyerName = "Buyer Name", price = 250000 }: Props) => {
+export const LegalDocumentModal = ({ open, onClose, listingTitle = "Property", sellerName = "Seller Name", buyerName = "Buyer Name", price = 250000 }: Props) => { // skipcq: JS-R1005 - This modal coordinates several small UI states around one document preview.
   const [selected, setSelected] = useState<TemplateId>("preliminary");
   const [signMode, setSignMode] = useState<SignMode>("type");
   const [typedSig, setTypedSig] = useState("");

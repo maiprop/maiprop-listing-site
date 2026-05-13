@@ -53,7 +53,7 @@ interface OnlineViewingModalProps {
   };
 }
 
-const OnlineViewingModal = ({ open, onClose, listing, professional }: OnlineViewingModalProps) => {
+const OnlineViewingModal = ({ open, onClose, listing, professional }: OnlineViewingModalProps) => { // skipcq: JS-R1005 - Booking mode branches stay together so property and professional submissions cannot drift.
   const { user, profile } = useAuth();
   const bookViewing = useBookViewing();
   const submitConsultation = useSubmitConsultation();
