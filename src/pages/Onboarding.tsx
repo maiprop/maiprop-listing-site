@@ -303,12 +303,14 @@ export default function Onboarding() {
         return;
       }
       draftRestoredRef.current = true;
-      const p = typeof draft.selectedId === "string" ? participants.find(x => x.id === draft.selectedId) ?? null : null;
-      if (!canRestoreDraftStep(p, draft.step)) {
+      const draftParticipant = typeof draft.selectedId === "string"
+        ? participants.find((participant) => participant.id === draft.selectedId) ?? null
+        : null;
+      if (!canRestoreDraftStep(draftParticipant, draft.step)) {
         localStorage.removeItem(DRAFT_KEY);
         return;
       }
-      setSelected(p ?? null);
+      setSelected(draftParticipant ?? null);
       setStep(draft.step);
       if (typeof draft.proCategory === "string") setProCategory(draft.proCategory);
     } catch (err: unknown) {
@@ -344,33 +346,33 @@ export default function Onboarding() {
         const stored = sessionStorage.getItem("signup_participant_type") || localStorage.getItem("signup_participant_type");
         if (!stored) return;
         restoredRef.current = true;
-        const p = participants.find(x => x.id === stored);
-        if (!p) {
+        const storedParticipant = participants.find((participant) => participant.id === stored);
+        if (!storedParticipant) {
           // Unknown type stored — clean up and let user pick
           sessionStorage.removeItem("signup_participant_type");
           localStorage.removeItem("signup_participant_type");
           return;
         }
-        setSelected(p);
-        if (p.id === "developer") {
+        setSelected(storedParticipant);
+        if (storedParticipant.id === "developer") {
           // Multi-step: clear storage but preserve any draft, navigate to next step
           sessionStorage.removeItem("signup_participant_type");
           localStorage.removeItem("signup_participant_type");
           setStep("developer-setup");
-        } else if (p.isPro) {
+        } else if (storedParticipant.isPro) {
           sessionStorage.removeItem("signup_participant_type");
           localStorage.removeItem("signup_participant_type");
           setStep("pro-category");
-        } else if (p.nextStep) {
+        } else if (storedParticipant.nextStep) {
           sessionStorage.removeItem("signup_participant_type");
           localStorage.removeItem("signup_participant_type");
-          setStep(p.nextStep);
+          setStep(storedParticipant.nextStep);
         } else {
           // Simple type (e.g. participant): write to DB first, then clean up
           setLoading(true);
           const ok = await saveRoleSelection({
-            role: p.role,
-            participant_type: p.id as ParticipantId,
+            role: storedParticipant.role,
+            participant_type: storedParticipant.id as ParticipantId,
           });
           setLoading(false);
           if (!ok) return;
@@ -485,14 +487,36 @@ export default function Onboarding() {
   const handleParticipantGoal = async (goal: "buyer" | "seller") => {
     if (requireAuth(goal)) return;
     const role: RoleKey = goal === "seller" ? "seller" : "buyer";
-    const p = participants.find(x => x.id === goal);
-    if (!p) {
+    const goalParticipant = participants.find((participant) => participant.id === goal);
+    if (!goalParticipant) {
       toast.error("Could not resolve that account type. Please try again.");
       return;
     }
     setLoading(true);
-    setSelected(p);
+    setSelected(goalParticipant);
     const ok = await saveRoleSelection({ role, participant_type: goal });
+    if (!ok) { setLoading(false); return; }
+    setLoading(false);
+    setStep("done");
+  };
+
+  const selectParticipantStep = (participantId: string, nextStep: OnboardingStep): boolean => {
+    const participant = participants.find((option) => option.id === participantId);
+    if (!participant) {
+      toast.error("Could not resolve that account type. Please try again.");
+      return false;
+    }
+    setSelected(participant);
+    setStep(nextStep);
+    return true;
+  };
+
+  const saveAgentSelection = async (type: "agent") => {
+    const agentParticipant = participants.find((participant) => participant.id === type);
+    if (!agentParticipant) { toast.error("Could not resolve that account type. Please try again."); return; }
+    setSelected(agentParticipant);
+    setLoading(true);
+    const ok = await saveRoleSelection({ role: agentParticipant.role, participant_type: type });
     if (!ok) { setLoading(false); return; }
     setLoading(false);
     setStep("done");
@@ -501,29 +525,9 @@ export default function Onboarding() {
   /** Handler for professional sub-type selection */
   const handleProSubType = async (type: "agent" | "developer" | "service_pro") => {
     if (requireAuth(type)) return;
-    if (type === "service_pro") {
-      const p = participants.find(x => x.id === "professional");
-      if (!p) { toast.error("Could not resolve that account type. Please try again."); return; }
-      setSelected(p);
-      setStep("pro-category");
-      return;
-    }
-    if (type === "developer") {
-      const p = participants.find(x => x.id === "developer");
-      if (!p) { toast.error("Could not resolve that account type. Please try again."); return; }
-      setSelected(p);
-      setStep("developer-setup");
-      return;
-    }
-    // agent — save role and go to done
-    const p = participants.find(x => x.id === type);
-    if (!p) { toast.error("Could not resolve that account type. Please try again."); return; }
-    setSelected(p);
-    setLoading(true);
-    const ok = await saveRoleSelection({ role: p.role, participant_type: type });
-    if (!ok) { setLoading(false); return; }
-    setLoading(false);
-    setStep("done");
+    if (type === "service_pro") { selectParticipantStep("professional", "pro-category"); return; }
+    if (type === "developer") { selectParticipantStep("developer", "developer-setup"); return; }
+    await saveAgentSelection(type);
   };
 
   const handleDeveloperSetup = async () => {
@@ -638,18 +642,26 @@ export default function Onboarding() {
     setStep("pro-video");
   };
 
+  const saveVideoSettings = async (): Promise<boolean> => {
+    if (!user || !professionalId) return true;
+    const { error } = await supabase.from("professionals")
+      .update({ video_link: videoLink || null, calendar_notes: calendarNotes || null } as never)
+      .eq("id", professionalId)
+      .eq("user_id", user.id);
+    if (!error) return true;
+    toast.error("Could not save video settings. Please try again.");
+    return false;
+  };
+
   const handleSaveVideo = async () => {
-    if (!user) { toast.error("Please sign in to finish onboarding."); return; }
-    setLoading(true);
-    if (professionalId) {
-      const { error } = await supabase.from("professionals")
-        .update({ video_link: videoLink || null, calendar_notes: calendarNotes || null } as never)
-        .eq("id", professionalId)
-        .eq("user_id", user.id);
-      if (error) { toast.error("Could not save video settings. Please try again."); setLoading(false); return; }
+    if (!user) {
+      toast.error("Please sign in to finish onboarding.");
+      return;
     }
+    setLoading(true);
+    const saved = await saveVideoSettings();
     setLoading(false);
-    setStep("done");
+    if (saved) setStep("done");
   };
 
   const { data: pricingConfigs = {} } = usePricingConfigs();

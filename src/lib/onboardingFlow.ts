@@ -26,16 +26,16 @@ const ALL_ONBOARDING_STEPS = new Set<OnboardingStep>([
   ...PRO_FLAT_STEPS,
 ]);
 
-export function resolveStepsFor(selected: ParticipantType | null): OnboardingStep[] {
+export const resolveStepsFor = (selected: ParticipantType | null): OnboardingStep[] => {
   if (!selected) return TOP_STEPS;
   return [...(STEPS_BY_PARTICIPANT_ID[selected.id] ?? TOP_STEPS)];
-}
+};
 
-export function isOnboardingStep(value: unknown): value is OnboardingStep {
+export const isOnboardingStep = (value: unknown): value is OnboardingStep => {
   return typeof value === "string" && ALL_ONBOARDING_STEPS.has(value as OnboardingStep);
-}
+};
 
-export function canRestoreDraftStep(selected: ParticipantType | null, step: OnboardingStep): boolean {
+export const canRestoreDraftStep = (selected: ParticipantType | null, step: OnboardingStep): boolean => {
   if (!selected) return step === "pick-type";
   return resolveStepsFor(selected).includes(step);
-}
+};

@@ -44,8 +44,7 @@ export function profileNeedsOnboarding(p: Profile | null): boolean {
   const roleText = p.role ? String(p.role) : null;
   // Onboarding is complete only when both role + participant_type are explicitly set.
   // This prevents implicit defaults from being treated as intentional role choice.
-  if (explicitType && roleText && explicitType === roleText) return false;
-  return true;
+  return !(explicitType && roleText && explicitType === roleText);
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {

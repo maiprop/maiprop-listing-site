@@ -30,11 +30,11 @@ export function useSubscription() {
   const isInvestorRole = participantType === "investor" || participantType === "institutional";
 
   const profileProductId = (profile as { subscription_product_id?: string | null } | null)?.subscription_product_id ?? null;
-  const forceProAccess = !!(profile as { force_pro_access?: boolean | null } | null)?.force_pro_access;
+  const forceProAccess = Boolean((profile as { force_pro_access?: boolean | null } | null)?.force_pro_access);
   const effectiveProductId = subscription.productId ?? profileProductId;
 
   // Any active Stripe subscription grants Pro access — plan key doesn't matter.
-  const hasStripePro = subscription.subscribed && !!effectiveProductId;
+  const hasStripePro = subscription.subscribed && Boolean(effectiveProductId);
 
   // Investors/institutional with an admin-approved investor_subscriptions record also get Pro features,
   // since they pay €490–€1490/month for the deal-flow tier.
@@ -60,6 +60,7 @@ export function useSubscription() {
     (investorSubStatus?.status === "active" || investorSubStatus?.status === "trial");
 
   const isPro = isAdmin || hasStripePro || hasInvestorPro || forceProAccess;
+  const hasEffectiveProduct = typeof effectiveProductId === "string" && effectiveProductId.length > 0;
   const developerProductIds = [
     pricingConfigs?.[PRICING_KEYS.developer_pro]?.stripeProductId,
     import.meta.env.VITE_STRIPE_PRODUCT_DEVELOPER,
@@ -70,7 +71,7 @@ export function useSubscription() {
     isAdmin ||
     forceProAccess ||
     (subscription.subscribed &&
-      !!effectiveProductId &&
+      hasEffectiveProduct &&
       developerProductIds.includes(effectiveProductId));
 
   return {
@@ -79,7 +80,7 @@ export function useSubscription() {
     subscribed: subscription.subscribed,
     productId: effectiveProductId,
     subscriptionEnd: subscription.subscriptionEnd,
-    loading: subscription.loading || (subscription.subscribed && !!effectiveProductId && pricingConfigsLoading),
+    loading: subscription.loading || (subscription.subscribed && hasEffectiveProduct && pricingConfigsLoading),
     refreshSubscription,
   };
 }
