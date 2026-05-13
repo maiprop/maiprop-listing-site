@@ -36,5 +36,6 @@ export function isOnboardingStep(value: unknown): value is OnboardingStep {
 }
 
 export function canRestoreDraftStep(selected: ParticipantType | null, step: OnboardingStep): boolean {
+  if (!selected) return step === "pick-type";
   return resolveStepsFor(selected).includes(step);
 }

@@ -1,6 +1,7 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { isPlatformAdmin } from "@/lib/authUtils";
 import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
+import { PRICING_KEYS, usePricingConfigs } from "@/hooks/usePricingConfigs";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -22,6 +23,7 @@ import { supabase } from "@/integrations/supabase/client";
  */
 export function useSubscription() {
   const { subscription, refreshSubscription, profile, user } = useAuth();
+  const { data: pricingConfigs, isLoading: pricingConfigsLoading } = usePricingConfigs();
 
   const isAdmin = isPlatformAdmin(profile);
   const participantType = getParticipantTypeFromProfile(profile);
@@ -58,13 +60,26 @@ export function useSubscription() {
     (investorSubStatus?.status === "active" || investorSubStatus?.status === "trial");
 
   const isPro = isAdmin || hasStripePro || hasInvestorPro || forceProAccess;
+  const developerProductIds = [
+    pricingConfigs?.[PRICING_KEYS.developer_pro]?.stripeProductId,
+    import.meta.env.VITE_STRIPE_PRODUCT_DEVELOPER,
+    import.meta.env.VITE_STRIPE_PRODUCT_DEVELOPER_MONTHLY,
+    import.meta.env.VITE_STRIPE_PRODUCT_DEVELOPER_ANNUAL,
+  ].filter((value): value is string => typeof value === "string" && value.length > 0);
+  const hasDeveloperPro =
+    isAdmin ||
+    forceProAccess ||
+    (subscription.subscribed &&
+      !!effectiveProductId &&
+      developerProductIds.includes(effectiveProductId));
 
   return {
     isPro,
+    hasDeveloperPro,
     subscribed: subscription.subscribed,
-    productId: subscription.productId,
+    productId: effectiveProductId,
     subscriptionEnd: subscription.subscriptionEnd,
-    loading: subscription.loading,
+    loading: subscription.loading || (subscription.subscribed && !!effectiveProductId && pricingConfigsLoading),
     refreshSubscription,
   };
 }

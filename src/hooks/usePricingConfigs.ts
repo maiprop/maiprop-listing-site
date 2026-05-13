@@ -12,12 +12,20 @@ export type PricingConfigRow = {
   amount: number;
   currency: string;
   unit: string;
-  metadata?: { stripe_price_id?: string } | null;
+  metadata?: { stripe_price_id?: string; stripe_product_id?: string } | null;
 };
 
 export type PricingConfigMap = Record<
   string,
-  { amount: number; currency: string; label: string; description: string | null; unit: string; stripePriceId?: string }
+  {
+    amount: number;
+    currency: string;
+    label: string;
+    description: string | null;
+    unit: string;
+    stripePriceId?: string;
+    stripeProductId?: string;
+  }
 >;
 
 /** Plan keys used across the app — keep in sync with AdminPricing DEFAULT_SEED */
@@ -54,7 +62,7 @@ export function usePricingConfigs() {
       const map: PricingConfigMap = {};
       for (const row of data ?? []) {
         const rawMeta = row.metadata as Record<string, unknown> | null;
-        const meta: { stripe_price_id?: string } = rawMeta ?? {};
+        const meta: { stripe_price_id?: string; stripe_product_id?: string } = rawMeta ?? {};
         map[row.key] = {
           amount: Number(row.amount ?? 0),
           currency: row.currency ?? "EUR",
@@ -62,6 +70,7 @@ export function usePricingConfigs() {
           description: row.description ?? null,
           unit: row.unit ?? "monthly",
           stripePriceId: typeof meta?.stripe_price_id === "string" ? meta.stripe_price_id : undefined,
+          stripeProductId: typeof meta?.stripe_product_id === "string" ? meta.stripe_product_id : undefined,
         };
       }
       return map;

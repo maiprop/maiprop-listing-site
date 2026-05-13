@@ -13,6 +13,12 @@ describe("onboardingFlow", () => {
     expect(isOnboardingStep(null)).toBe(false);
   });
 
+  it("only restores the safe initial step without a participant selection", () => {
+    expect(resolveStepsFor(null)).toEqual(["pick-type", "done"]);
+    expect(canRestoreDraftStep(null, "pick-type")).toBe(true);
+    expect(canRestoreDraftStep(null, "done")).toBe(false);
+  });
+
   it("keeps buyer and seller drafts on the participant path", () => {
     expect(resolveStepsFor(findParticipant("buyer"))).toEqual(["pick-participant-goal", "done"]);
     expect(resolveStepsFor(findParticipant("seller"))).toEqual(["pick-participant-goal", "done"]);

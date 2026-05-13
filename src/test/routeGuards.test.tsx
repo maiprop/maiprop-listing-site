@@ -62,7 +62,7 @@ beforeEach(() => {
   useSubscriptionMock.mockReset();
   useEligibleMock.mockReset();
   // Conservative defaults — every guard test overrides what it needs.
-  useSubscriptionMock.mockReturnValue({ isPro: false, loading: false });
+  useSubscriptionMock.mockReturnValue({ isPro: false, hasDeveloperPro: false, loading: false });
   useEligibleMock.mockReturnValue({ eligible: false, loading: false });
 });
 
@@ -405,7 +405,7 @@ describe("DeveloperRoute", () => {
       profileLoading: false,
       needsOnboarding: false,
     });
-    useSubscriptionMock.mockReturnValue({ isPro: true, loading: false });
+    useSubscriptionMock.mockReturnValue({ isPro: true, hasDeveloperPro: false, loading: false });
     renderDeveloperRoute();
     expect(screen.getByText(/Developer Access Required/i)).toBeInTheDocument();
     expect(screen.queryByText("PROJECTS")).toBeNull();
@@ -419,13 +419,13 @@ describe("DeveloperRoute", () => {
       profileLoading: false,
       needsOnboarding: false,
     });
-    useSubscriptionMock.mockReturnValue({ isPro: false, loading: false });
+    useSubscriptionMock.mockReturnValue({ isPro: false, hasDeveloperPro: false, loading: false });
     renderDeveloperRoute();
     expect(screen.getByText(/Developer Pro Required/i)).toBeInTheDocument();
     expect(screen.queryByText("PROJECTS")).toBeNull();
   });
 
-  it("admits Developer accounts with an active Pro subscription", () => {
+  it("blocks Developer accounts with a non-developer Pro subscription", () => {
     useAuthMock.mockReturnValue({
       user: { id: "u-1" },
       profile: { user_id: "u-1", role: "developer", participant_type: "developer" },
@@ -433,7 +433,21 @@ describe("DeveloperRoute", () => {
       profileLoading: false,
       needsOnboarding: false,
     });
-    useSubscriptionMock.mockReturnValue({ isPro: true, loading: false });
+    useSubscriptionMock.mockReturnValue({ isPro: true, hasDeveloperPro: false, loading: false });
+    renderDeveloperRoute();
+    expect(screen.getByText(/Developer Pro Required/i)).toBeInTheDocument();
+    expect(screen.queryByText("PROJECTS")).toBeNull();
+  });
+
+  it("admits Developer accounts with an active Developer Pro subscription", () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "u-1" },
+      profile: { user_id: "u-1", role: "developer", participant_type: "developer" },
+      loading: false,
+      profileLoading: false,
+      needsOnboarding: false,
+    });
+    useSubscriptionMock.mockReturnValue({ isPro: true, hasDeveloperPro: true, loading: false });
     renderDeveloperRoute();
     expect(screen.getByText("PROJECTS")).toBeInTheDocument();
   });
