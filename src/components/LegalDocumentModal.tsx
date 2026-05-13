@@ -92,11 +92,10 @@ const TEMPLATES: Template[] = [
 
 // ── Document body generator ───────────────────────────────────────────────────
 
-function fmt(n: number) {
-  return new Intl.NumberFormat("el-GR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
-}
+const fmt = (n: number) =>
+  new Intl.NumberFormat("el-GR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
 
-function getDocumentBody(tpl: Template, seller: string, buyer: string, listing: string, price: number, date: string) {
+const getDocumentBody = (tpl: Template, seller: string, buyer: string, listing: string, price: number, date: string) => {
   const priceTxt = fmt(price);
   switch (tpl.id) {
     case "preliminary":
@@ -221,11 +220,11 @@ MEMORANDUM OF UNDERSTANDING — QUICK SALE
 Î—Î¼ÎµÏÎ¿Î¼Î·Î½Î¯Î± / Date: ${date}
       `;
   }
-}
+};
 
 // ── Canvas draw signature ────────────────────────────────────────────────────
 
-function SignatureCanvas({ onSign }: { onSign: (dataUrl: string) => void }) {
+const SignatureCanvas = ({ onSign }: { onSign: (dataUrl: string) => void }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
   const lastPos = useRef<{ x: number; y: number } | null>(null);
@@ -320,11 +319,11 @@ function SignatureCanvas({ onSign }: { onSign: (dataUrl: string) => void }) {
       <p className="text-xs text-muted-foreground text-center mt-1">Draw your signature above</p>
     </div>
   );
-}
+};
 
 // ── Main component ───────────────────────────────────────────────────────────
 
-export function LegalDocumentModal({ open, onClose, listingTitle = "Property", sellerName = "Seller Name", buyerName = "Buyer Name", price = 250000 }: Props) {
+export const LegalDocumentModal = ({ open, onClose, listingTitle = "Property", sellerName = "Seller Name", buyerName = "Buyer Name", price = 250000 }: Props) => {
   const [selected, setSelected] = useState<TemplateId>("preliminary");
   const [signMode, setSignMode] = useState<SignMode>("type");
   const [typedSig, setTypedSig] = useState("");
@@ -570,4 +569,4 @@ export function LegalDocumentModal({ open, onClose, listingTitle = "Property", s
       </DialogContent>
     </Dialog>
   );
-}
+};
