@@ -682,13 +682,17 @@ export default function Onboarding() {
     if (saved) setStep("done");
   };
 
-  const handleSaveVideo = async () => {
-    if (!requireVideoSaveUser()) {
-      return;
-    }
+  const runVideoSave = async () => {
     setLoading(true);
     const saved = await saveVideoSettings();
     handleSavedVideoSettings(saved);
+  };
+
+  const handleSaveVideo = () => {
+    if (!requireVideoSaveUser()) {
+      return;
+    }
+    void runVideoSave();
   };
 
   const { data: pricingConfigs = {} } = usePricingConfigs();
