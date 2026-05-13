@@ -54,16 +54,17 @@ const parseOnboardingBody = (body: OnboardingRequest) => {
   };
 };
 
-const handlePost = async (req: Request): Promise<Response> => {
+const rejectUnsupportedMethod = (req: Request): Response | null => {
   if (req.method !== "POST") {
     return jsonResponse(req, { error: "Method not allowed" }, 405);
   }
+  return null;
+};
 
-  const config = getServiceConfig();
-  if (!config) {
-    return jsonResponse(req, { error: "Service unavailable" }, 503);
-  }
-
+const completeOnboarding = async (
+  req: Request,
+  config: { supabaseUrl: string; serviceRoleKey: string },
+): Promise<Response> => {
   const supabase = createClient(config.supabaseUrl, config.serviceRoleKey, {
     auth: { persistSession: false },
   });
@@ -92,7 +93,17 @@ const handlePost = async (req: Request): Promise<Response> => {
   }
 };
 
-Deno.serve(async (req) => {
+const handlePost = (req: Request): Response | Promise<Response> => {
+  const methodResponse = rejectUnsupportedMethod(req);
+  if (methodResponse) return methodResponse;
+
+  const config = getServiceConfig();
+  if (!config) return jsonResponse(req, { error: "Service unavailable" }, 503);
+
+  return completeOnboarding(req, config);
+};
+
+Deno.serve((req) => {
   const corsPreflightResponse = handleCors(req);
   return corsPreflightResponse ?? handlePost(req);
 });

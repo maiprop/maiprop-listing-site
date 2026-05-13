@@ -522,9 +522,9 @@ export default function Onboarding() {
   } satisfies Record<"agent" | "developer" | "service_pro", () => boolean | Promise<void>>;
 
   /** Handler for professional sub-type selection */
-  const handleProSubType = async (type: "agent" | "developer" | "service_pro") => {
+  const handleProSubType = (type: "agent" | "developer" | "service_pro") => {
     if (requireAuth(type)) return;
-    await proSubTypeHandlers[type]();
+    void proSubTypeHandlers[type]();
   };
 
   const handleDeveloperSetup = async () => {
