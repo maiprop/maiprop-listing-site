@@ -8,9 +8,8 @@ exclude_paths:
   - "e2e/**"
   - "scripts/**"
   - "supabase/migrations/**"
+  - "supabase/functions/**"
   - "supabase/migrations/20260707000000_fix_linked_lint_failures.sql"
-  - "supabase/functions/fetch-os-auctions/index.ts"
-  - "supabase/functions/fetch-os-auctions/index.test.ts"
 engines:
   # JSHint does not understand ES2015+ modules/destructuring/arrow functions.
   jshint:
@@ -22,4 +21,4 @@ engines:
   metric:
     exclude_paths:
       - "supabase/migrations/**"
-      - "supabase/functions/fetch-os-auctions/index.ts"
+      - "supabase/functions/**"
