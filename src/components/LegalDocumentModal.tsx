@@ -230,8 +230,15 @@ function SignatureCanvas({ onSign }: { onSign: (dataUrl: string) => void }) {
   const drawing = useRef(false);
   const lastPos = useRef<{ x: number; y: number } | null>(null);
   const exportSignature = useCallback((canvas: HTMLCanvasElement) => {
-    window.requestAnimationFrame(() => {
-      onSign(canvas.toDataURL());
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const reader = new FileReader();
+      reader.addEventListener("load", () => {
+        if (typeof reader.result === "string") {
+          onSign(reader.result);
+        }
+      });
+      reader.readAsDataURL(blob);
     });
   }, [onSign]);
 
