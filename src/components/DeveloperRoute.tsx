@@ -97,20 +97,11 @@ const gateChecks: GateCheck[] = [
   { status: "allowed", matches: ({ hasDeveloperPro }) => hasDeveloperPro },
 ];
 
-const getGateStatus = (
-  profile: ReturnType<typeof useAuth>["profile"],
-  loading: boolean,
-  subLoading: boolean,
-  hasDeveloperPro: boolean,
-): GateStatus => {
-  const context = { profile, loading, subLoading, hasDeveloperPro };
-  return gateChecks.find((check) => check.matches(context))?.status ?? "missing-plan";
-};
-
 const DeveloperGate = ({ children }: { children: React.ReactNode }) => {
   const { profile, loading } = useAuth();
   const { hasDeveloperPro, loading: subLoading } = useSubscription();
-  const status = getGateStatus(profile, loading, subLoading, hasDeveloperPro);
+  const context = { profile, loading, subLoading, hasDeveloperPro };
+  const status = gateChecks.find((check) => check.matches(context))?.status ?? "missing-plan";
 
   if (status === "loading") return <LoadingGate />;
   if (status === "admin" || status === "allowed") return children as React.ReactElement;

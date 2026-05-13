@@ -671,15 +671,24 @@ export default function Onboarding() {
     return persistVideoSettings(user.id, professionalId);
   };
 
+  const requireVideoSaveUser = () => {
+    if (user) return true;
+    toast.error("Please sign in to finish onboarding.");
+    return false;
+  };
+
+  const handleSavedVideoSettings = (saved: boolean) => {
+    setLoading(false);
+    if (saved) setStep("done");
+  };
+
   const handleSaveVideo = async () => {
-    if (!user) {
-      toast.error("Please sign in to finish onboarding.");
+    if (!requireVideoSaveUser()) {
       return;
     }
     setLoading(true);
     const saved = await saveVideoSettings();
-    setLoading(false);
-    if (saved) setStep("done");
+    handleSavedVideoSettings(saved);
   };
 
   const { data: pricingConfigs = {} } = usePricingConfigs();

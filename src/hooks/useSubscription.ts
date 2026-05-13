@@ -38,19 +38,18 @@ const isActiveInvestorStatus = (status: string | undefined) => status === "activ
 const hasAnyProAccess = (flags: boolean[]) => flags.includes(true);
 const isLoadingSubscriptionAccess = (options: {
   subscriptionLoading: boolean;
+  investorLoading: boolean;
   subscribed: boolean;
   hasEffectiveProduct: boolean;
   pricingConfigsLoading: boolean;
 }) => (
   options.subscriptionLoading ||
+  options.investorLoading ||
   [options.subscribed, options.hasEffectiveProduct, options.pricingConfigsLoading].every(Boolean)
 );
 
 const getDeveloperProductIds = (pricingConfigs: ReturnType<typeof usePricingConfigs>["data"]) => [
   pricingConfigs?.[PRICING_KEYS.developer_pro]?.stripeProductId,
-  import.meta.env.VITE_STRIPE_PRODUCT_DEVELOPER,
-  import.meta.env.VITE_STRIPE_PRODUCT_DEVELOPER_MONTHLY,
-  import.meta.env.VITE_STRIPE_PRODUCT_DEVELOPER_ANNUAL,
 ].filter((value): value is string => typeof value === "string" && value.length > 0);
 
 const hasDeveloperEntitlement = (options: {
@@ -85,7 +84,7 @@ export const useSubscription = () => {
   const effectiveProductId = subscription.productId ?? profileProductId;
   const hasEffectiveProduct = typeof effectiveProductId === "string" && effectiveProductId.length > 0;
   const hasStripePro = subscription.subscribed && hasEffectiveProduct;
-  const { data: investorSubStatus } = useInvestorProStatus(user?.id, isInvestorRole);
+  const { data: investorSubStatus, isLoading: investorStatusLoading } = useInvestorProStatus(user?.id, isInvestorRole);
   const hasInvestorPro = isInvestorRole && isActiveInvestorStatus(investorSubStatus?.status);
 
   const isPro = hasAnyProAccess([isAdmin, hasStripePro, hasInvestorPro, forceProAccess]);
@@ -105,6 +104,7 @@ export const useSubscription = () => {
     subscriptionEnd: subscription.subscriptionEnd,
     loading: isLoadingSubscriptionAccess({
       subscriptionLoading: subscription.loading,
+      investorLoading: investorStatusLoading,
       subscribed: subscription.subscribed,
       hasEffectiveProduct,
       pricingConfigsLoading,
