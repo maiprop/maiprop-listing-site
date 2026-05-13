@@ -4,7 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { queryCache, mutationCache } from "@/lib/queryObserver";
-import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation, Navigate, useParams } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { HelmetProvider } from "react-helmet-async";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -74,6 +74,20 @@ function I18nLoader() {
   return null;
 }
 
+/**
+ * Routes /auction/:id to the correct detail page:
+ *   - UUID  → PropertyDetail  (DB-stored listing with full gallery / AI features)
+ *   - other → AuctionDetail   (OS-synced auction, lean page)
+ *
+ * Keeping both at /auction/:id gives a single canonical URL for all auctions.
+ */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function AuctionRouter() {
+  const { id = "" } = useParams<{ id: string }>();
+  if (UUID_RE.test(id)) return <PropertyDetail />;
+  return <AuctionDetail />;
+}
+
 // Routes that render their own embedded AI widget or have no need for the floating one
 const HIDE_WIDGET_PREFIXES = [
   "/login", "/signup", "/onboarding", "/dashboard", "/messages", "/ai-assistant",
@@ -103,7 +117,7 @@ const App = () => (
                       <Route path="/listings/new-building" element={<SellerRoute><ErrorBoundary><CreateNewBuildingListing /></ErrorBoundary></SellerRoute>} />
                       <Route path="/listings" element={<ErrorBoundary><Listings /></ErrorBoundary>} />
                       <Route path="/property/:id" element={<ErrorBoundary><PropertyDetail /></ErrorBoundary>} />
-                      <Route path="/auction/:id" element={<ErrorBoundary><AuctionDetail /></ErrorBoundary>} />
+                      <Route path="/auction/:id" element={<ErrorBoundary><AuctionRouter /></ErrorBoundary>} />
                       <Route path="/auctions" element={<ErrorBoundary><Auctions /></ErrorBoundary>} />
                       <Route path="/firesale" element={<ErrorBoundary><Firesale /></ErrorBoundary>} />
                       <Route path="/investor-dashboard" element={<InvestorRoute><ErrorBoundary><InvestorDashboard /></ErrorBoundary></InvestorRoute>} />

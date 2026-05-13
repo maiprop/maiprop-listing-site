@@ -1,15 +1,15 @@
 /**
- * AuctionDetail — detail page for auction listings.
+ * AuctionDetail — detail page for OS-synced auction listings.
  *
- * Handles two ID formats:
- *   - OS auction IDs (e.g. "uePMM0riww") — fetched from the live auctions
- *     cache via useAuctionListings(), or passed directly in route state.
- *   - UUID IDs (database-stored auctions) — fetched via useListing() as a
- *     fallback when the ID is not found in the auctions cache.
+ * Only handles OS auction IDs (e.g. "uePMM0riww") — fetched from the live
+ * auctions cache via useAuctionListings(), or passed directly in route state.
+ *
+ * UUID IDs (DB-stored listings) are handled by AuctionRouter in App.tsx which
+ * renders PropertyDetail directly, so this component never sees them.
  */
 
-import { Suspense, lazy, useMemo, useEffect } from "react";
-import { useParams, useLocation, Link, useNavigate } from "react-router-dom";
+import { Suspense, lazy, useMemo } from "react";
+import { useParams, useLocation, Link } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import {
   Gavel,
@@ -29,7 +29,6 @@ import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { useAuctionListings } from "@/hooks/useAuctionListings";
-import { useListing } from "@/hooks/useListings";
 import PropertyMiniMap from "@/components/PropertyMiniMap";
 import {
   daysUntil,
@@ -42,9 +41,6 @@ import {
 } from "@/lib/auctionUtils";
 
 const AIAssistantWidget = lazy(() => import("@/components/AIAssistantWidget"));
-
-// ── UUID detection ────────────────────────────────────────────────────────────
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Only allow http/https URLs in external auction links to prevent javascript: injection. */
 const safeUrl = (url: string | null | undefined): string | null =>
@@ -158,37 +154,24 @@ const AuctionStatRow = ({
 const AuctionDetail = () => {
   const { id = "" } = useParams<{ id: string }>();
   const { state } = useLocation() as { state?: { auction?: Record<string, unknown> } };
-  const navigate = useNavigate();
-
-  // UUID IDs are DB-stored listings — send them to PropertyDetail which renders
-  // the full UI (gallery, AI insights, valuation, PropertyAuctionSection).
-  // This page is for OS-only auctions whose IDs are never in the DB.
-  const isUUID = UUID_RE.test(id);
-  useEffect(() => {
-    if (isUUID) navigate(`/property/${id}`, { replace: true });
-  }, [isUUID, id, navigate]);
 
   // 1. Route state — instant data when navigating from AuctionCard
   const auctionFromState = state?.auction ?? null;
 
-  // 2. Live auctions cache (OS + DB fallback)
+  // 2. Live auctions cache
   const { data: allAuctions = [], isLoading: auctionsLoading } = useAuctionListings();
   const auctionFromCache = useMemo(
     () => allAuctions.find((a) => a.id === id) ?? null,
     [allAuctions, id],
   );
 
-  // 3. DB listing fallback (for UUID IDs stored in listings table)
-  const { data: dbListing, isLoading: dbLoading } = useListing(isUUID && !auctionFromCache ? id : "");
-
   // Resolve the best available data source — state wins (instant on navigation),
-  // then the live cache, then the DB fallback for UUID-based listings.
+  // then the live cache.
   const auction =
     auctionFromState ??
-    (auctionFromCache as Record<string, unknown> | null) ??
-    (dbListing as Record<string, unknown> | null);
+    (auctionFromCache as Record<string, unknown> | null);
 
-  const isLoading = !auction && (auctionsLoading || (isUUID && dbLoading));
+  const isLoading = !auction && auctionsLoading;
 
   // ── Derived display values ─────────────────────────────────────────────────
   const bid = (auction?.auction_starting_bid ?? auction?.price ?? 0) as number;

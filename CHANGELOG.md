@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.7.0](https://github.com/maiprop/maiprop-listing-site/compare/v1.6.2...v1.7.0) (2026-05-12)
+
+
+### Features
+
+* unify auction routes — all auctions under /auction/:id ([#153](https://github.com/maiprop/maiprop-listing-site/issues/153)) ([1edd1e9](https://github.com/maiprop/maiprop-listing-site/commit/1edd1e9a927c0fce461cbf3dda36574d2cb7e006))
+
+
+### Bug Fixes
+
+* add handle_new_user trigger + backfill 14 missing profile rows ([b86ac6b](https://github.com/maiprop/maiprop-listing-site/commit/b86ac6bb08864a582e7b5cb63dc181ed34274afc))
+* **ci:** rename future-dated migration 20260707 → 20260511183000 ([66773a2](https://github.com/maiprop/maiprop-listing-site/commit/66773a2d5490dae29e8b5637bbafe91ca5b88d90))
+* extract real error message from FunctionsHttpError in PropertyMiniMap ([#152](https://github.com/maiprop/maiprop-listing-site/issues/152)) ([9fc759b](https://github.com/maiprop/maiprop-listing-site/commit/9fc759be50e9c0b65055ece0422efa22531d9ae6))
+* gate AI market insights + neighbourhood reports behind Pro subscription ([#141](https://github.com/maiprop/maiprop-listing-site/issues/141)) ([8166c01](https://github.com/maiprop/maiprop-listing-site/commit/8166c0154e6404e7718a65ecb88dd797486316fa))
+* **migration:** use column default for role in handle_new_user trigger ([2df3213](https://github.com/maiprop/maiprop-listing-site/commit/2df32139d1fe39629b3674ccb7850214ddf5a331))
+
+
+### Performance Improvements
+
+* remove recharts from initial bundle, lazy AIAssistantWidget, isolate vendor chunks ([d2d767c](https://github.com/maiprop/maiprop-listing-site/commit/d2d767c9547669a5f76229d8efe26de645afa1e6))
+
 ## [1.6.2](https://github.com/maiprop/maiprop-listing-site/compare/v1.6.1...v1.6.2) (2026-05-11)
 
 

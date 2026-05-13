@@ -75,15 +75,19 @@ export default function PropertyDetail() {
     if (id && dbListing) trackViewMutate(id);
   }, [id, dbListing, trackViewMutate]);
 
-  // Redirect: if new build listing, send to /new-build/:id
-  // NOTE: auction listings are intentionally kept on /property/:id so they render
-  // the full PropertyDetail UI (gallery, AI insights, valuation, PropertyAuctionSection).
-  // AuctionDetail (/auction/:id) is reserved for OS-only (non-UUID) auction IDs.
+  // Redirect: canonical routes per listing type
+  // - new build  → /new-build/:id
+  // - auction    → /auction/:id  (AuctionRouter renders PropertyDetail there too,
+  //                so UI is identical; this just keeps the URL canonical)
   useEffect(() => {
     if (!dbListing) return;
     const _db = dbListing as ListingWithJoins;
     if (_db.is_pre_sale || _db.construction_status) {
       navigate(`/new-build/${id}`, { replace: true });
+      return;
+    }
+    if (_db.listing_type === "auction" && window.location.pathname.startsWith("/property/")) {
+      navigate(`/auction/${id}`, { replace: true });
     }
   }, [dbListing, id, navigate]);
 
