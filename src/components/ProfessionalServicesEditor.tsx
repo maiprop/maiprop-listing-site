@@ -28,6 +28,12 @@ const PRICING_OPTIONS: { value: PricingModel; label: string }[] = [
   { value: "fixed", label: "Fixed Price" },
 ];
 
+const parseServiceRate = (rate: string): number | null => {
+  if (rate.trim() === "") return null;
+  const parsed = Number(rate);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
 interface SelectedService {
   template: ServiceTemplate;
   pricingModel: PricingModel;
@@ -113,6 +119,8 @@ export default function ProfessionalServicesEditor() {
   );
 
   const catalog = getServicesForCategory(pro.category);
+  const professionalId = pro.id;
+  const professionalCategory = pro.category;
 
   const toggleService = (svc: ServiceTemplate) => {
     setSelectedServices(prev => {
@@ -132,21 +140,23 @@ export default function ProfessionalServicesEditor() {
     setSelectedServices(prev => ({ ...prev, [key]: { ...prev[key], [field]: value } }));
   };
 
+  const buildServiceRows = (services: Record<string, SelectedService>) => Object.values(services).map(s => ({
+    professional_id: professionalId,
+    service_key: s.template.key,
+    service_name: s.template.name,
+    description: s.template.description,
+    category: professionalCategory,
+    pricing_model: s.pricingModel,
+    rate_amount: parseServiceRate(s.rate),
+    currency: "EUR",
+    video_enabled: s.videoEnabled,
+    is_premium: s.template.isPremiumFeature,
+    is_active: true,
+  }));
+
   const handleSaveServices = async () => {
     if (!pro) return;
-    const rows = Object.values(selectedServices).map(s => ({
-      professional_id: pro.id,
-      service_key: s.template.key,
-      service_name: s.template.name,
-      description: s.template.description,
-      category: pro.category,
-      pricing_model: s.pricingModel,
-      rate_amount: parseFloat(s.rate) || null,
-      currency: "EUR",
-      video_enabled: s.videoEnabled,
-      is_premium: s.template.isPremiumFeature,
-      is_active: true,
-    }));
+    const rows = buildServiceRows(selectedServices);
     await upsertServices.mutateAsync({ professionalId: pro.id, services: rows as Omit<ProfessionalService, "id">[] });
   };
 
@@ -298,10 +308,10 @@ export default function ProfessionalServicesEditor() {
                   <span className="font-semibold text-sm">{config.template.name}</span>
                   <p className="text-xs text-muted-foreground mt-0.5">{config.rate ? `€${config.rate}` : "—"}{PRICING_DISPLAY[config.pricingModel]} {config.videoEnabled && "· Video"}</p>
                 </div>
-                <Button size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10" onClick={() => {
+                <Button size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10" disabled={upsertServices.isPending} onClick={async () => {
                   const next = { ...selectedServices }; delete next[key]; setSelectedServices(next);
-                  const rows = Object.values(next).map(s => ({ professional_id: pro!.id, service_key: s.template.key, service_name: s.template.name, description: s.template.description, category: pro!.category, pricing_model: s.pricingModel, rate_amount: parseFloat(s.rate) || null, currency: "EUR", video_enabled: s.videoEnabled, is_premium: s.template.isPremiumFeature, is_active: true }));
-                  upsertServices.mutate({ professionalId: pro!.id, services: rows as Omit<ProfessionalService, "id">[] });
+                  const rows = buildServiceRows(next);
+                  await upsertServices.mutateAsync({ professionalId, services: rows as Omit<ProfessionalService, "id">[] });
                 }}><Trash2 className="w-4 h-4" /></Button>
               </div>
             ))}
@@ -347,13 +357,13 @@ export default function ProfessionalServicesEditor() {
                 <Button size="sm" className="bg-primary text-primary-foreground gap-1.5" disabled={!customService.name.trim() || upsertServices.isPending}
                   onClick={async () => {
                     const key = `custom_${Date.now()}`;
-                    const template = { key, name: customService.name.trim(), description: customService.description.trim(), defaultPricing: customService.pricingModel, suggestedRate: parseFloat(customService.rate) || 0, videoAvailable: customService.videoEnabled, isPremiumFeature: false };
+                    const template = { key, name: customService.name.trim(), description: customService.description.trim(), defaultPricing: customService.pricingModel, suggestedRate: parseServiceRate(customService.rate) ?? 0, videoAvailable: customService.videoEnabled, isPremiumFeature: false };
                     const newSelected = { ...selectedServices, [key]: { template, pricingModel: customService.pricingModel, rate: customService.rate, videoEnabled: customService.videoEnabled } };
                     setSelectedServices(newSelected);
                     setCustomService({ name: "", description: "", pricingModel: "hourly", rate: "", videoEnabled: false });
                     setShowCustomService(false);
-                    const rows = Object.values(newSelected).map(s => ({ professional_id: pro!.id, service_key: s.template.key, service_name: s.template.name, description: s.template.description, category: pro!.category, pricing_model: s.pricingModel, rate_amount: parseFloat(s.rate) || null, currency: "EUR", video_enabled: s.videoEnabled, is_premium: s.template.isPremiumFeature, is_active: true }));
-                    await upsertServices.mutateAsync({ professionalId: pro!.id, services: rows as Omit<ProfessionalService, "id">[] });
+                    const rows = buildServiceRows(newSelected);
+                    await upsertServices.mutateAsync({ professionalId, services: rows as Omit<ProfessionalService, "id">[] });
                   }}>
                   {upsertServices.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />} Add & Save
                 </Button>

@@ -2,13 +2,14 @@ import {
   DEVELOPER_STEPS,
   PARTICIPANT_STEPS,
   PRO_FLAT_STEPS,
+  PRO_FULL_STEPS,
   PRO_SIMPLE_STEPS,
   TOP_STEPS,
   type OnboardingStep,
   type ParticipantType,
 } from "@/lib/onboardingConfig";
 
-const STEPS_BY_PARTICIPANT_ID: Readonly<Record<string, readonly OnboardingStep[]>> = {
+const STEPS_BY_PARTICIPANT_ID: Readonly<Partial<Record<string, readonly OnboardingStep[]>>> = {
   participant: PARTICIPANT_STEPS,
   buyer: PARTICIPANT_STEPS,
   seller: PARTICIPANT_STEPS,
@@ -18,24 +19,26 @@ const STEPS_BY_PARTICIPANT_ID: Readonly<Record<string, readonly OnboardingStep[]
   professional: PRO_FLAT_STEPS,
 };
 
-const ALL_ONBOARDING_STEPS = new Set<OnboardingStep>([
+const ALL_ONBOARDING_STEPS: ReadonlySet<OnboardingStep> = new Set([
   ...TOP_STEPS,
   ...PARTICIPANT_STEPS,
   ...PRO_SIMPLE_STEPS,
+  ...PRO_FULL_STEPS,
   ...DEVELOPER_STEPS,
   ...PRO_FLAT_STEPS,
 ]);
 
 export const resolveStepsFor = (selected: ParticipantType | null): OnboardingStep[] => {
   if (!selected) return TOP_STEPS;
-  return [...(STEPS_BY_PARTICIPANT_ID[selected.id] ?? TOP_STEPS)];
+  const byId = STEPS_BY_PARTICIPANT_ID[selected.id];
+  if (byId) return [...byId];
+  return selected.isPro ? [...PRO_FULL_STEPS] : [...TOP_STEPS];
 };
 
-export const isOnboardingStep = (value: unknown): value is OnboardingStep => {
-  return typeof value === "string" && ALL_ONBOARDING_STEPS.has(value as OnboardingStep);
-};
+export const isOnboardingStep = (value: unknown): value is OnboardingStep => (
+  typeof value === "string" && ALL_ONBOARDING_STEPS.has(value as OnboardingStep)
+);
 
-export const canRestoreDraftStep = (selected: ParticipantType | null, step: OnboardingStep): boolean => {
-  if (!selected) return step === "pick-type";
-  return resolveStepsFor(selected).includes(step);
-};
+export const canRestoreDraftStep = (selectedParticipant: ParticipantType | null, draftStep: OnboardingStep): boolean => (
+  selectedParticipant ? resolveStepsFor(selectedParticipant).includes(draftStep) : draftStep === "pick-type"
+);

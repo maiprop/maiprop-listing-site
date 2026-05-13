@@ -33,20 +33,6 @@ const useInvestorProStatus = (userId: string | undefined, enabled: boolean) => {
   });
 };
 
-const isActiveInvestorStatus = (status: string | undefined) => status === "active" || status === "trial";
-const hasAnyProAccess = (flags: boolean[]) => flags.includes(true);
-const isLoadingSubscriptionAccess = (options: {
-  subscriptionLoading: boolean;
-  investorLoading: boolean;
-  subscribed: boolean;
-  hasEffectiveProduct: boolean;
-  proProductLoading: boolean;
-}) => (
-  options.subscriptionLoading ||
-  options.investorLoading ||
-  [options.subscribed, options.hasEffectiveProduct, options.proProductLoading].every(Boolean)
-);
-
 const useValidatedProProduct = (productId: string | null) => {
   return useQuery({
     queryKey: ["validated-pro-product", productId],
@@ -63,6 +49,20 @@ const useValidatedProProduct = (productId: string | null) => {
     staleTime: 60_000,
   });
 };
+
+const isActiveInvestorStatus = (status: string | undefined) => status === "active" || status === "trial";
+const hasAnyProAccess = (flags: boolean[]) => flags.includes(true);
+const isLoadingSubscriptionAccess = (options: {
+  subscriptionLoading: boolean;
+  investorLoading: boolean;
+  subscribed: boolean;
+  hasEffectiveProduct: boolean;
+  proProductLoading: boolean;
+}) => (
+  options.subscriptionLoading ||
+  options.investorLoading ||
+  [options.subscribed, options.hasEffectiveProduct, options.proProductLoading].every(Boolean)
+);
 
 const hasDeveloperEntitlement = (options: {
   isAdmin: boolean;
@@ -88,11 +88,10 @@ export const useSubscription = () => {
   const effectiveProductId = subscription.productId ?? profileProductId;
   const hasEffectiveProduct = typeof effectiveProductId === "string" && effectiveProductId.length > 0;
   const { data: validatedProProduct, isLoading: validatedProProductLoading } = useValidatedProProduct(effectiveProductId);
+  const { data: investorSubStatus, isLoading: investorStatusLoading } = useInvestorProStatus(user?.id, isInvestorRole);
   const hasValidatedProProduct = subscription.subscribed && Boolean(validatedProProduct);
   const hasStripePro = hasValidatedProProduct;
-  const { data: investorSubStatus, isLoading: investorStatusLoading } = useInvestorProStatus(user?.id, isInvestorRole);
   const hasInvestorPro = isInvestorRole && isActiveInvestorStatus(investorSubStatus?.status);
-
   const isPro = hasAnyProAccess([isAdmin, hasStripePro, hasInvestorPro, forceProAccess]);
   const hasDeveloperPro = hasDeveloperEntitlement({
     isAdmin,

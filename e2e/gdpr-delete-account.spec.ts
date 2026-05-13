@@ -11,6 +11,7 @@
  */
 import { test, expect } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
+import WebSocket from "ws";
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL ?? "";
 const ANON_KEY = process.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "";
@@ -31,6 +32,7 @@ test.describe("GDPR — account deletion", () => {
   test("deleting an account removes the auth user and scrubs profile PII", async ({ page }) => {
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE, {
       auth: { persistSession: false, autoRefreshToken: false },
+      realtime: { transport: WebSocket },
     });
 
     // 1. Create a throwaway user.
@@ -45,6 +47,15 @@ test.describe("GDPR — account deletion", () => {
     const userId = created!.user!.id;
 
     try {
+      await admin.from("profiles").upsert({
+        user_id: userId,
+        role: "buyer",
+        participant_type: "buyer",
+        display_name: "GDPR E2E User",
+        email,
+        updated_at: new Date().toISOString(),
+      } as never, { onConflict: "user_id" });
+
       // Proxy delete-account calls through Node.js to bypass browser CORS when
       // running against localhost:4173 (Vite preview). The edge function's CORS
       // allowlist may not include the CI preview port.

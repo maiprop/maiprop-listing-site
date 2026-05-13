@@ -68,7 +68,7 @@ const OnlineViewingModal = ({ open, onClose, listing, professional }: OnlineView
 
   const days = getNextDays(6);
   const isProperty = !!listing;
-  const entityName = isProperty ? listing!.title : (professional?.display_name || "Professional");
+  const entityName = listing?.title ?? professional?.display_name ?? "Professional";
   const isLoading = bookViewing.isPending || submitConsultation.isPending;
 
   const handleClose = () => {
@@ -89,8 +89,8 @@ const OnlineViewingModal = ({ open, onClose, listing, professional }: OnlineView
         }
         // Real viewing booking into viewings table
         await bookViewing.mutateAsync({
-          listing_id: listing!.id,
-          owner_id: listing!.owner_id,
+          listing_id: listing.id,
+          owner_id: listing.owner_id,
           viewing_type: "video",
           scheduled_at: `${selectedDate}T${selectedTime}:00.000Z`,
           note: note || undefined,

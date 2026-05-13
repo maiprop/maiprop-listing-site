@@ -89,7 +89,9 @@ export default function BrandedVideoRoom() {
   // ── Derived values ───────────────────────────────────────────────────────
   const EXTERNAL_PATTERNS = ["zoom.us", "whereby.com", "meet.google.com", "teams.microsoft.com"];
   const videoLink = pro?.video_link ?? "";
-  const isExternalLink = Boolean(videoLink) && EXTERNAL_PATTERNS.some((p) => videoLink.includes(p));
+  const isExternalLink =
+    Boolean(videoLink) &&
+    EXTERNAL_PATTERNS.some((p) => videoLink.includes(p));
 
   const jitsiRoom = `maiprop-${professionalId}`;
   const jitsiUrl = `https://meet.jit.si/${jitsiRoom}`;

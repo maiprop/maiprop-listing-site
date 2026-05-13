@@ -18,6 +18,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { dbListingToCard } from "@/lib/listingUtils";
 import { toast } from "sonner";
 import { ProGate } from "@/components/gates/ProGate";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 /** Shape returned by useFavorites(): a favorites row with the joined listing. */
 type FavoriteRow = Database["public"]["Tables"]["favorites"]["Row"] & {
@@ -36,6 +37,7 @@ const Portfolios = () => { // skipcq: JS-R1005 - Portfolio list actions share on
   const [newName, setNewName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
+  const [portfolioToDelete, setPortfolioToDelete] = useState<string | null>(null);
 
   const handleCreate = () => {
     if (!newName.trim()) {
@@ -51,8 +53,7 @@ const Portfolios = () => { // skipcq: JS-R1005 - Portfolio list actions share on
   };
 
   const handleDelete = (id: string) => {
-    if (!confirm("Delete this portfolio?")) return;
-    deletePortfolio.mutate(id);
+    setPortfolioToDelete(id);
   };
 
   const handleRename = (id: string) => {
@@ -166,6 +167,17 @@ const Portfolios = () => { // skipcq: JS-R1005 - Portfolio list actions share on
         </ProGate>
       </main>
       <Footer />
+      <ConfirmDialog
+        open={Boolean(portfolioToDelete)}
+        title="Delete portfolio"
+        description="Delete this portfolio and remove its listing groupings?"
+        confirmLabel="Delete"
+        onConfirm={() => {
+          if (portfolioToDelete) deletePortfolio.mutate(portfolioToDelete);
+          setPortfolioToDelete(null);
+        }}
+        onCancel={() => setPortfolioToDelete(null)}
+      />
     </div>
   );
 };

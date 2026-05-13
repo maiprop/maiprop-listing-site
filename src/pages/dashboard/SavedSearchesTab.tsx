@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { Loader2, Bookmark, Bell, BellOff, Search, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import {
   useSavedSearches,
   useDeleteSavedSearch,
@@ -12,6 +14,7 @@ export default function SavedSearchesTab() {
   const { data: savedSearches = [], isLoading: savedSearchesLoading } = useSavedSearches();
   const deleteSavedSearch = useDeleteSavedSearch();
   const toggleAlert = useToggleSavedSearchAlert();
+  const [savedSearchToDelete, setSavedSearchToDelete] = useState<string | null>(null);
 
   return (
     <div className="space-y-6">
@@ -107,10 +110,8 @@ export default function SavedSearchesTab() {
                     </Link>
                   </Button>
                   <button
-                    onClick={() => {
-                      if (confirm("Delete this saved search?"))
-                        deleteSavedSearch.mutate(s.id);
-                    }}
+                    type="button"
+                    onClick={() => setSavedSearchToDelete(s.id)}
                     className="p-2 rounded-lg hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -121,6 +122,17 @@ export default function SavedSearchesTab() {
           })}
         </div>
       )}
+      <ConfirmDialog
+        open={Boolean(savedSearchToDelete)}
+        title="Delete saved search"
+        description="Delete this saved search and stop its email alerts?"
+        confirmLabel="Delete"
+        onConfirm={() => {
+          if (savedSearchToDelete) deleteSavedSearch.mutate(savedSearchToDelete);
+          setSavedSearchToDelete(null);
+        }}
+        onCancel={() => setSavedSearchToDelete(null)}
+      />
     </div>
   );
 }

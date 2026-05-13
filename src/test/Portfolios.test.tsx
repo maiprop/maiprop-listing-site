@@ -10,7 +10,7 @@ import { MemoryRouter } from "react-router-dom";
 
 const {
   useAuthMock, usePortfoliosMock, usePortfolioMock, useFavoritesMock,
-  createMutMock, updateMutMock, deleteMutMock, toastMock, confirmMock,
+  createMutMock, updateMutMock, deleteMutMock, toastMock,
 } = vi.hoisted(() => ({
   useAuthMock: vi.fn(),
   usePortfoliosMock: vi.fn(),
@@ -20,7 +20,6 @@ const {
   updateMutMock: vi.fn(),
   deleteMutMock: vi.fn(),
   toastMock: { success: vi.fn(), error: vi.fn() },
-  confirmMock: vi.fn(),
 }));
 
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => useAuthMock() }));
@@ -62,7 +61,6 @@ beforeEach(() => {
   deleteMutMock.mockReset();
   toastMock.success.mockReset();
   toastMock.error.mockReset();
-  confirmMock.mockReset();
 
   useAuthMock.mockReturnValue({ user: { id: "u-1" } });
   useFavoritesMock.mockReturnValue({ data: [] });
@@ -70,9 +68,6 @@ beforeEach(() => {
   createMutMock.mockReturnValue({ mutate: vi.fn(), isPending: false });
   updateMutMock.mockReturnValue({ mutate: vi.fn(), isPending: false });
   deleteMutMock.mockReturnValue({ mutate: vi.fn(), isPending: false });
-
-  // Stub window.confirm
-  vi.stubGlobal("confirm", confirmMock);
 });
 
 describe("Portfolios — auth gate", () => {
@@ -166,25 +161,25 @@ describe("Portfolios — portfolio cards", () => {
     );
   });
 
-  it("Delete → confirm yes calls deletePortfolio.mutate", () => {
-    confirmMock.mockReturnValue(true);
+  it("Delete opens the confirmation dialog and then calls deletePortfolio.mutate", () => {
     const del = vi.fn();
     deleteMutMock.mockReturnValue({ mutate: del, isPending: false });
     usePortfoliosMock.mockReturnValue({ data: [portfolio], isLoading: false });
     usePortfolioMock.mockReturnValue({ data: portfolio });
     render(wrap(<Portfolios />));
     fireEvent.click(screen.getByLabelText(/Delete portfolio/i));
+    fireEvent.click(screen.getByRole("button", { name: /^Delete$/i }));
     expect(del).toHaveBeenCalledWith("p-1");
   });
 
-  it("Delete → confirm no does NOT mutate", () => {
-    confirmMock.mockReturnValue(false);
+  it("Canceling delete does NOT mutate", () => {
     const del = vi.fn();
     deleteMutMock.mockReturnValue({ mutate: del, isPending: false });
     usePortfoliosMock.mockReturnValue({ data: [portfolio], isLoading: false });
     usePortfolioMock.mockReturnValue({ data: portfolio });
     render(wrap(<Portfolios />));
     fireEvent.click(screen.getByLabelText(/Delete portfolio/i));
+    fireEvent.click(screen.getByRole("button", { name: /^Cancel$/i }));
     expect(del).not.toHaveBeenCalled();
   });
 

@@ -298,7 +298,8 @@ const SignatureCanvas = ({ onSign }: { onSign: (dataUrl: string) => void }) => {
   function clear() {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d")!;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     onSign("");
   }
@@ -335,7 +336,7 @@ export const LegalDocumentModal = ({ open, onClose, listingTitle = "Property", s
   const [signed, setSigned] = useState(false);
 
   const today = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
-  const tpl = TEMPLATES.find((t) => t.id === selected)!;
+  const tpl = TEMPLATES.find((t) => t.id === selected) ?? TEMPLATES[0];
   const body = getDocumentBody(tpl, sellerName, buyerName, listingTitle, price, today);
   const hasSig = signMode === "type" ? typedSig.trim().length > 2 : drawnSig.length > 100;
 
