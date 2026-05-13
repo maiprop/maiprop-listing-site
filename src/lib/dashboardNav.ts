@@ -107,9 +107,10 @@ export function getNavItemsForBioType(
   isPro: boolean,
   eligibleForQuickSale = false,
 ): NavItemResolved[] {
+  void bioType;
   if (role === "admin") return ALL_NAV_ITEMS.filter(i => NAV_PRO.admin.includes(i.key));
 
-  const key = bioType ?? (
+  const key = (
     role === "seller"        ? "seller" :
     role === "professional"  ? "professional" :
     role === "agent"         ? "agent" :

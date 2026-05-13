@@ -45,9 +45,6 @@ export function profileNeedsOnboarding(p: Profile | null): boolean {
   // Onboarding is complete only when both role + participant_type are explicitly set.
   // This prevents implicit defaults from being treated as intentional role choice.
   if (explicitType && roleText && explicitType === roleText) return false;
-  // Legacy read-only fallback: rows created before participant_type existed and were never backfilled.
-  // Safe to remove once DB shows 0 profiles with NULL participant_type and non-null __type: bio.
-  if (p.bio && p.bio.startsWith("__type:")) return false;
   return true;
 }
 
@@ -220,7 +217,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const ALLOWED_FIELDS: ReadonlySet<keyof Profile> = new Set([
       "display_name", "bio", "avatar_url", "phone", "city",
       "first_name", "last_name", "country", "video_link", "website_url",
-      "investor_mode", "participant_type",
+      "investor_mode",
     ] as const);
 
     const safe: Partial<Profile> = {};

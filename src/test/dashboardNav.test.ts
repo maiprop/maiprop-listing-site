@@ -186,12 +186,13 @@ describe("institutional role", () => {
   });
 });
 
-// ── bioType override ──────────────────────────────────────────────────────────
+// ── role authority ────────────────────────────────────────────────────────────
 
-describe("bioType override", () => {
-  it("bioType=seller overrides role when provided", () => {
-    const byRole = getNavItemsForBioType(null, "seller", false);
-    const byBioType = getNavItemsForBioType("seller", "buyer", false);
+describe("role authority", () => {
+  it("ignores bioType/participant_type override for navigation privileges", () => {
+    const byRole = getNavItemsForBioType(null, "buyer", false);
+    const byBioType = getNavItemsForBioType("developer", "buyer", false);
+    expect(unlockedKeys(byBioType)).toEqual(unlockedKeys(byRole));
     expect(lockedKeys(byBioType)).toEqual(lockedKeys(byRole));
   });
 });

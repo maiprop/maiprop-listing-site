@@ -33,6 +33,7 @@ vi.mock("@/hooks/useEligibleForQuickSale", () => ({
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AdminRoute } from "@/components/AdminRoute";
 import { SellerRoute } from "@/components/SellerRoute";
+import { DeveloperRoute } from "@/components/DeveloperRoute";
 import { InvestorRoute } from "@/components/InvestorRoute";
 
 /**
@@ -346,6 +347,94 @@ describe("SellerRoute", () => {
       </SellerRoute>,
     );
     expect(screen.getByText("LIST-FORM")).toBeInTheDocument();
+  });
+});
+
+// ─── DeveloperRoute ─────────────────────────────────────────────────────────
+
+describe("DeveloperRoute", () => {
+  it("blocks unauthenticated visitors at the ProtectedRoute layer", () => {
+    useAuthMock.mockReturnValue({
+      user: null,
+      loading: false,
+      profileLoading: false,
+      needsOnboarding: false,
+    });
+    renderGuarded(
+      <DeveloperRoute>
+        <div>PROJECTS</div>
+      </DeveloperRoute>,
+    );
+    expect(screen.getByText("at-login")).toBeInTheDocument();
+  });
+
+  it("blocks non-developer Pro accounts from developer modules", () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "u-1" },
+      profile: { user_id: "u-1", role: "agent", participant_type: "agent" },
+      loading: false,
+      profileLoading: false,
+      needsOnboarding: false,
+    });
+    useSubscriptionMock.mockReturnValue({ isPro: true, loading: false });
+    renderGuarded(
+      <DeveloperRoute>
+        <div>PROJECTS</div>
+      </DeveloperRoute>,
+    );
+    expect(screen.getByText(/Developer Access Required/i)).toBeInTheDocument();
+    expect(screen.queryByText("PROJECTS")).toBeNull();
+  });
+
+  it("blocks Developer accounts without Pro", () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "u-1" },
+      profile: { user_id: "u-1", role: "developer", participant_type: "developer" },
+      loading: false,
+      profileLoading: false,
+      needsOnboarding: false,
+    });
+    useSubscriptionMock.mockReturnValue({ isPro: false, loading: false });
+    renderGuarded(
+      <DeveloperRoute>
+        <div>PROJECTS</div>
+      </DeveloperRoute>,
+    );
+    expect(screen.getByText(/Developer Pro Required/i)).toBeInTheDocument();
+    expect(screen.queryByText("PROJECTS")).toBeNull();
+  });
+
+  it("admits Developer accounts with an active Pro subscription", () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "u-1" },
+      profile: { user_id: "u-1", role: "developer", participant_type: "developer" },
+      loading: false,
+      profileLoading: false,
+      needsOnboarding: false,
+    });
+    useSubscriptionMock.mockReturnValue({ isPro: true, loading: false });
+    renderGuarded(
+      <DeveloperRoute>
+        <div>PROJECTS</div>
+      </DeveloperRoute>,
+    );
+    expect(screen.getByText("PROJECTS")).toBeInTheDocument();
+  });
+
+  it("admits platform admins regardless of role/subscription", () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "u-1" },
+      profile: { user_id: "u-1", role: "admin", participant_type: "buyer" },
+      loading: false,
+      profileLoading: false,
+      needsOnboarding: false,
+    });
+    renderGuarded(
+      <DeveloperRoute>
+        <div>PROJECTS</div>
+      </DeveloperRoute>,
+    );
+    expect(screen.getByText("PROJECTS")).toBeInTheDocument();
   });
 });
 

@@ -205,8 +205,8 @@ export const DEFAULT_AVAILABILITY: DayAvailability[] = DAYS.map((_, i) => ({
 
 // ── Step sequences ────────────────────────────────────────────────────────────
 
-export const PRO_FULL_STEPS: OnboardingStep[] = ["pick-pro-type", "pro-category", "pro-verify", "pro-services", "pro-availability", "done"];
-export const PRO_FLAT_STEPS: OnboardingStep[] = ["pick-type", "pro-category", "pro-verify", "pro-services", "pro-availability", "done"];
+export const PRO_FULL_STEPS: OnboardingStep[] = ["pick-pro-type", "pro-category", "pro-verify", "pro-services", "pro-availability", "pro-video", "done"];
+export const PRO_FLAT_STEPS: OnboardingStep[] = ["pick-type", "pro-category", "pro-verify", "pro-services", "pro-availability", "pro-video", "done"];
 export const PRO_SIMPLE_STEPS: OnboardingStep[] = ["pick-pro-type", "done"];
 export const DEVELOPER_STEPS: OnboardingStep[] = ["pick-type", "developer-setup", "done"];
 export const PARTICIPANT_STEPS: OnboardingStep[] = ["pick-participant-goal", "done"];

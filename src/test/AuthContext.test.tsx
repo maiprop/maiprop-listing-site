@@ -97,14 +97,14 @@ describe("profileNeedsOnboarding (pure helper)", () => {
     ).toBe(false);
   });
 
-  it("respects the legacy bio __type marker", () => {
+  it("does not trust the legacy bio __type marker", () => {
     expect(
       profileNeedsOnboarding({
         role: null,
         participant_type: null,
         bio: "__type:investor",
       } as never),
-    ).toBe(false);
+    ).toBe(true);
   });
 });
 
