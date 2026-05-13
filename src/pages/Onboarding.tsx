@@ -127,15 +127,15 @@ export default function Onboarding() {
   // Auto-advance past pick-type when type already set from Signup
   useEffect(() => {
     if (!presetType) return;
-    const p = participants.find(x => x.id === presetType);
-    if (!p) return;
-    setSelected(p);
-    if (p.id === "developer") {
+    const presetParticipant = participants.find((participant) => participant.id === presetType);
+    if (!presetParticipant) return;
+    setSelected(presetParticipant);
+    if (presetParticipant.id === "developer") {
       setStep("developer-setup");
-    } else if (p.isPro) {
+    } else if (presetParticipant.isPro) {
       setStep("pro-category");
-    } else if (p.nextStep) {
-      setStep(p.nextStep);
+    } else if (presetParticipant.nextStep) {
+      setStep(presetParticipant.nextStep);
     } else {
       setStep("done");
     }
@@ -295,12 +295,12 @@ export default function Onboarding() {
       if (draft.userId !== user.id || !isOnboardingStep(draft.step)) return;
       draftRestoredRef.current = true;
       const selectedId = typeof draft.selectedId === "string" ? draft.selectedId : null;
-      const p = selectedId ? participants.find(x => x.id === selectedId) ?? null : null;
-      if (!canRestoreDraftStep(draft.step, p)) {
+      const draftParticipant = selectedId ? participants.find((participant) => participant.id === selectedId) ?? null : null;
+      if (!canRestoreDraftStep(draft.step, draftParticipant)) {
         localStorage.removeItem(DRAFT_KEY);
         return;
       }
-      setSelected(p ?? null);
+      setSelected(draftParticipant ?? null);
       setStep(draft.step);
       if (typeof draft.proCategory === "string") setProCategory(draft.proCategory);
     } catch (err: unknown) {
@@ -336,33 +336,33 @@ export default function Onboarding() {
         const stored = sessionStorage.getItem("signup_participant_type") || localStorage.getItem("signup_participant_type");
         if (!stored) return;
         restoredRef.current = true;
-        const p = participants.find(x => x.id === stored);
-        if (!p) {
+        const storedParticipant = participants.find((participant) => participant.id === stored);
+        if (!storedParticipant) {
           // Unknown type stored — clean up and let user pick
           sessionStorage.removeItem("signup_participant_type");
           localStorage.removeItem("signup_participant_type");
           return;
         }
-        setSelected(p);
-        if (p.id === "developer") {
+        setSelected(storedParticipant);
+        if (storedParticipant.id === "developer") {
           // Multi-step: clear storage but preserve any draft, navigate to next step
           sessionStorage.removeItem("signup_participant_type");
           localStorage.removeItem("signup_participant_type");
           setStep("developer-setup");
-        } else if (p.isPro) {
+        } else if (storedParticipant.isPro) {
           sessionStorage.removeItem("signup_participant_type");
           localStorage.removeItem("signup_participant_type");
           setStep("pro-category");
-        } else if (p.nextStep) {
+        } else if (storedParticipant.nextStep) {
           sessionStorage.removeItem("signup_participant_type");
           localStorage.removeItem("signup_participant_type");
-          setStep(p.nextStep);
+          setStep(storedParticipant.nextStep);
         } else {
           // Simple type (e.g. participant): write to DB first, then clean up
           setLoading(true);
           const ok = await saveRoleSelection({
-            role: p.role,
-            participant_type: p.id as ParticipantId,
+            role: storedParticipant.role,
+            participant_type: storedParticipant.id as ParticipantId,
           });
           setLoading(false);
           if (!ok) return;
@@ -478,51 +478,50 @@ export default function Onboarding() {
     if (requireAuth(goal)) return;
     const role: RoleKey = goal === "seller" ? "seller" : "buyer";
     setLoading(true);
-    const p = participants.find(x => x.id === goal);
-    if (!p) {
+    const goalParticipant = participants.find((participant) => participant.id === goal);
+    if (!goalParticipant) {
       toast.error("Account type is unavailable. Please refresh and try again.");
       setLoading(false);
       return;
     }
-    setSelected(p);
+    setSelected(goalParticipant);
     const ok = await saveRoleSelection({ role, participant_type: goal });
     if (!ok) { setLoading(false); return; }
     setLoading(false);
     setStep("done");
   };
 
+  const selectParticipantStep = (participantId: string, nextStep: OnboardingStep, label: string): boolean => {
+    const participant = participants.find((option) => option.id === participantId);
+    if (!participant) {
+      toast.error(`${label} account type is unavailable. Please refresh and try again.`);
+      return false;
+    }
+    setSelected(participant);
+    setStep(nextStep);
+    return true;
+  };
+
   /** Handler for professional sub-type selection */
   const handleProSubType = async (type: "agent" | "developer" | "service_pro") => {
     if (requireAuth(type)) return;
     if (type === "service_pro") {
-      const p = participants.find(x => x.id === "professional");
-      if (!p) {
-        toast.error("Professional account type is unavailable. Please refresh and try again.");
-        return;
-      }
-      setSelected(p);
-      setStep("pro-category");
+      selectParticipantStep("professional", "pro-category", "Professional");
       return;
     }
     if (type === "developer") {
-      const p = participants.find(x => x.id === "developer");
-      if (!p) {
-        toast.error("Developer account type is unavailable. Please refresh and try again.");
-        return;
-      }
-      setSelected(p);
-      setStep("developer-setup");
+      selectParticipantStep("developer", "developer-setup", "Developer");
       return;
     }
     // agent — save role and go to done
-    const p = participants.find(x => x.id === type);
-    if (!p) {
+    const agentParticipant = participants.find((participant) => participant.id === type);
+    if (!agentParticipant) {
       toast.error("Agent account type is unavailable. Please refresh and try again.");
       return;
     }
-    setSelected(p);
+    setSelected(agentParticipant);
     setLoading(true);
-    const ok = await saveRoleSelection({ role: p.role, participant_type: type });
+    const ok = await saveRoleSelection({ role: agentParticipant.role, participant_type: type });
     if (!ok) { setLoading(false); return; }
     setLoading(false);
     setStep("done");
@@ -675,8 +674,8 @@ export default function Onboarding() {
 
     // ── Pick type (top-level — flat selection across all role types) ──
     if (step === "pick-type") {
-      const devParticipant = participants.find(x => x.id === "developer");
-      const proParticipant = participants.find(x => x.id === "professional");
+      const devParticipant = participants.find((participant) => participant.id === "developer");
+      const proParticipant = participants.find((participant) => participant.id === "professional");
       if (!devParticipant || !proParticipant) return null;
       return (
         <PickTypeStep

@@ -340,7 +340,7 @@ function Projects() {
       </main>
       <Footer />
       <ConfirmDialog
-        open={!!projectToDelete}
+        open={Boolean(projectToDelete)}
         title="Delete project"
         description="Delete this project? Linked listings will be unlinked."
         confirmLabel="Delete"

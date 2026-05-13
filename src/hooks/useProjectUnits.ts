@@ -109,7 +109,7 @@ export function useUpdateProjectUnit() {
   });
 }
 
-export function useBulkUpdateProjectUnitPrices() {
+export const useBulkUpdateProjectUnitPrices = () => {
   const qc = useQueryClient();
   const { user } = useAuth();
   return useMutation({
@@ -138,7 +138,7 @@ export function useBulkUpdateProjectUnitPrices() {
     },
     onError: () => toast.error("Failed to update unit prices. Please try again."),
   });
-}
+};
 
 export function useDeleteProjectUnit() {
   const qc = useQueryClient();

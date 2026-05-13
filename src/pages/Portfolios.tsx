@@ -168,7 +168,7 @@ function Portfolios() {
       </main>
       <Footer />
       <ConfirmDialog
-        open={!!portfolioToDelete}
+        open={Boolean(portfolioToDelete)}
         title="Delete portfolio"
         description="Delete this portfolio and remove its listing groupings?"
         confirmLabel="Delete"

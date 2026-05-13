@@ -522,7 +522,7 @@ export default function ProjectDetail() {
         onCancel={() => setBulkConfirmOpen(false)}
       />
       <ConfirmDialog
-        open={!!unitToDelete}
+        open={Boolean(unitToDelete)}
         title="Remove unit"
         description="Remove this unit from the project inventory?"
         confirmLabel="Remove"
@@ -533,7 +533,7 @@ export default function ProjectDetail() {
         onCancel={() => setUnitToDelete(null)}
       />
       <ConfirmDialog
-        open={!!leadToDelete}
+        open={Boolean(leadToDelete)}
         title="Remove lead"
         description="Remove this lead from the project CRM?"
         confirmLabel="Remove"

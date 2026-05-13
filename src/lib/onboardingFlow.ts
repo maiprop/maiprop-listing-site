@@ -43,4 +43,4 @@ export const isOnboardingStep = (value: unknown): value is OnboardingStep =>
   typeof value === "string" && ALL_ONBOARDING_STEPS.has(value as OnboardingStep);
 
 export const canRestoreDraftStep = (draftStep: OnboardingStep, selectedParticipant: ParticipantType | null): boolean =>
-  resolveStepsFor(selectedParticipant).includes(draftStep);
+  selectedParticipant ? resolveStepsFor(selectedParticipant).includes(draftStep) : draftStep === "pick-type";

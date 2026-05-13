@@ -123,7 +123,7 @@ export default function SavedSearchesTab() {
         </div>
       )}
       <ConfirmDialog
-        open={!!savedSearchToDelete}
+        open={Boolean(savedSearchToDelete)}
         title="Delete saved search"
         description="Delete this saved search and stop its email alerts?"
         confirmLabel="Delete"
