@@ -637,20 +637,45 @@ export default function Onboarding() {
     setStep("pro-video");
   };
 
-  const handleSaveVideo = async () => {
-    setLoading(true);
-    if (professionalId) {
-      const { error } = await supabase.from("professionals")
-        .update({ video_link: videoLink || null, calendar_notes: calendarNotes || null } as never)
-        .eq("id", professionalId);
-      if (error) {
-        toast.error("Could not save video settings. Please try again.");
-        setLoading(false);
-        return;
-      }
-    }
+  const canSaveVideoSettings = () => Boolean(user && professionalId);
+
+  const persistVideoSettings = async (targetUserId: string, targetProfessionalId: string): Promise<boolean> => {
+    const { error } = await supabase.from("professionals")
+      .update({ video_link: videoLink || null, calendar_notes: calendarNotes || null } as never)
+      .eq("id", targetProfessionalId)
+      .eq("user_id", targetUserId);
+    if (!error) return true;
+    toast.error("Could not save video settings. Please try again.");
+    return false;
+  };
+
+  const saveVideoSettings = (): Promise<boolean> => {
+    if (!canSaveVideoSettings() || !user || !professionalId) return Promise.resolve(true);
+    return persistVideoSettings(user.id, professionalId);
+  };
+
+  const requireVideoSaveUser = () => {
+    if (user) return true;
+    toast.error("Please sign in to finish onboarding.");
+    return false;
+  };
+
+  const handleSavedVideoSettings = (saved: boolean) => {
     setLoading(false);
-    setStep("done");
+    if (saved) setStep("done");
+  };
+
+  const runVideoSave = async () => {
+    setLoading(true);
+    const saved = await saveVideoSettings();
+    handleSavedVideoSettings(saved);
+  };
+
+  const handleSaveVideo = () => {
+    if (!requireVideoSaveUser()) {
+      return;
+    }
+    void runVideoSave();
   };
 
   const { data: pricingConfigs = {} } = usePricingConfigs();
