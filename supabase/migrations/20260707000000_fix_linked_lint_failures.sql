@@ -18,20 +18,22 @@ DECLARE
   v_limit INT;
   v_count INT;
 BEGIN
-  SELECT
-    COALESCE(p.role, 'buyer'),
-    (
-      p.subscription_product_id IS NOT NULL
-      AND EXISTS (
-        SELECT 1
-        FROM public.pro_product_ids pp
-        WHERE pp.product_id = p.subscription_product_id
-      )
-    )
-    OR COALESCE(p.force_pro_access, FALSE)
+  EXECUTE
+    'SELECT
+       COALESCE(p.role, ''buyer''),
+       (
+         p.subscription_product_id IS NOT NULL
+         AND EXISTS (
+           SELECT 1
+           FROM public.pro_product_ids pp
+           WHERE pp.product_id = p.subscription_product_id
+         )
+       )
+       OR COALESCE(p.force_pro_access, FALSE)
+     FROM public.profiles p
+     WHERE p.user_id = $1'
   INTO v_role, v_is_pro
-  FROM public.profiles p
-  WHERE p.user_id = (SELECT auth.uid());
+  USING (SELECT auth.uid());
 
   IF NOT FOUND THEN
     RETURN FALSE;
@@ -43,10 +45,12 @@ BEGIN
     RETURN TRUE;
   END IF;
 
-  SELECT COUNT(*)
+  EXECUTE
+    'SELECT COUNT(*)
+     FROM public.listings
+     WHERE owner_id = $1'
   INTO v_count
-  FROM public.listings
-  WHERE owner_id = (SELECT auth.uid());
+  USING (SELECT auth.uid());
 
   RETURN v_count < v_limit;
 END;
@@ -98,10 +102,13 @@ BEGIN
     RAISE EXCEPTION 'Not authenticated' USING ERRCODE = '42501';
   END IF;
 
-  SELECT role::TEXT INTO v_role
-  FROM public.profiles
-  WHERE user_id = v_user
-  LIMIT 1;
+  EXECUTE
+    'SELECT role::TEXT
+     FROM public.profiles
+     WHERE user_id = $1
+     LIMIT 1'
+  INTO v_role
+  USING v_user;
 
   IF v_role IS DISTINCT FROM 'agent' AND NOT public.has_platform_admin(v_user) THEN
     RAISE EXCEPTION 'Only agents can submit data inputs' USING ERRCODE = '42501';
@@ -115,11 +122,13 @@ BEGIN
   v_month_start := date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC';
   PERFORM pg_advisory_xact_lock(hashtextextended(v_user::TEXT || ':' || v_month_start::DATE::TEXT, 0));
 
-  SELECT COUNT(*)
+  EXECUTE
+    'SELECT COUNT(*)
+     FROM public.agent_data_inputs
+     WHERE user_id = $1
+       AND created_at >= $2'
   INTO v_used
-  FROM public.agent_data_inputs
-  WHERE user_id = v_user
-    AND created_at >= v_month_start;
+  USING v_user, v_month_start;
 
   IF v_used >= 20 THEN
     RAISE EXCEPTION 'Monthly data input limit (20) reached'
@@ -147,36 +156,39 @@ BEGIN
     ELSE p_transaction_type
   END;
 
-  INSERT INTO public.agent_data_inputs (
-    user_id,
-    property_address,
-    city,
-    postal_code,
-    kaek,
-    property_type,
-    transaction_type,
-    agent_side,
-    sale_price,
-    closing_date,
-    buyer_name,
-    seller_name,
-    notes
-  ) VALUES (
+  EXECUTE
+    'INSERT INTO public.agent_data_inputs (
+       user_id,
+       property_address,
+       city,
+       postal_code,
+       kaek,
+       property_type,
+       transaction_type,
+       agent_side,
+       sale_price,
+       closing_date,
+       buyer_name,
+       seller_name,
+       notes
+     ) VALUES (
+       $1, $2, $3, $4, $5, COALESCE($6, ''other''), $7, ''seller'', $8, $9, $10, $11, $12
+     )
+     RETURNING id'
+  INTO v_id
+  USING
     v_user,
     p_property_address,
     p_property_city,
     p_property_postal_code,
     p_kaek,
-    COALESCE(p_property_type, 'other'),
+    p_property_type,
     v_transaction_type,
-    'seller',
     p_closing_price,
     p_closed_at,
     p_buyer_name,
     p_seller_name,
-    p_notes
-  )
-  RETURNING id INTO v_id;
+    p_notes;
 
   RETURN v_id;
 END;

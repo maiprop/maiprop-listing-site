@@ -3,7 +3,7 @@
  * Left panel: template list. Right panel: document preview + signature capture.
  */
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
@@ -229,6 +229,11 @@ function SignatureCanvas({ onSign }: { onSign: (dataUrl: string) => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
   const lastPos = useRef<{ x: number; y: number } | null>(null);
+  const exportSignature = useCallback((canvas: HTMLCanvasElement) => {
+    window.requestAnimationFrame(() => {
+      onSign(canvas.toDataURL());
+    });
+  }, [onSign]);
 
   function getPos(e: MouseEvent | TouchEvent, canvas: HTMLCanvasElement) {
     const rect = canvas.getBoundingClientRect();
@@ -264,7 +269,7 @@ function SignatureCanvas({ onSign }: { onSign: (dataUrl: string) => void }) {
     function stop() {
       if (!drawing.current) return;
       drawing.current = false;
-      onSign(drawingCanvas.toDataURL());
+      exportSignature(drawingCanvas);
     }
 
     canvas.addEventListener("mousedown", start);
@@ -281,7 +286,7 @@ function SignatureCanvas({ onSign }: { onSign: (dataUrl: string) => void }) {
       canvas.removeEventListener("touchmove", move);
       canvas.removeEventListener("touchend", stop);
     };
-  }, [onSign]);
+  }, [exportSignature]);
 
   function clear() {
     const canvas = canvasRef.current;
