@@ -12,6 +12,8 @@ describe("onboarding flow helpers", () => {
   it("rejects draft steps that do not belong to the selected participant module", () => {
     const buyer = participants.find((p) => p.id === "buyer") ?? null;
     const professional = participants.find((p) => p.id === "professional") ?? null;
+    expect(buyer).not.toBeNull();
+    expect(professional).not.toBeNull();
 
     expect(canRestoreDraftStep("pro-services", buyer)).toBe(false);
     expect(canRestoreDraftStep("pro-services", professional)).toBe(true);
@@ -19,7 +21,21 @@ describe("onboarding flow helpers", () => {
 
   it("keeps developer onboarding on the developer setup path", () => {
     const developer = participants.find((p) => p.id === "developer") ?? null;
+    expect(developer).not.toBeNull();
 
     expect(resolveStepsFor(developer)).toEqual(["pick-type", "developer-setup", "done"]);
+  });
+
+  it("keeps buyer, seller, and agent drafts on their active module paths", () => {
+    const buyer = participants.find((p) => p.id === "buyer") ?? null;
+    const seller = participants.find((p) => p.id === "seller") ?? null;
+    const agent = participants.find((p) => p.id === "agent") ?? null;
+    expect(buyer).not.toBeNull();
+    expect(seller).not.toBeNull();
+    expect(agent).not.toBeNull();
+
+    expect(resolveStepsFor(buyer)).toEqual(["pick-participant-goal", "done"]);
+    expect(resolveStepsFor(seller)).toEqual(["pick-participant-goal", "done"]);
+    expect(resolveStepsFor(agent)).toEqual(["pick-pro-type", "done"]);
   });
 });
