@@ -1,7 +1,6 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { isPlatformAdmin } from "@/lib/authUtils";
 import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
-import { PRICING_KEYS, usePricingConfigs } from "@/hooks/usePricingConfigs";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -41,49 +40,56 @@ const isLoadingSubscriptionAccess = (options: {
   investorLoading: boolean;
   subscribed: boolean;
   hasEffectiveProduct: boolean;
-  pricingConfigsLoading: boolean;
+  proProductLoading: boolean;
 }) => (
   options.subscriptionLoading ||
   options.investorLoading ||
-  [options.subscribed, options.hasEffectiveProduct, options.pricingConfigsLoading].every(Boolean)
+  [options.subscribed, options.hasEffectiveProduct, options.proProductLoading].every(Boolean)
 );
 
-const getDeveloperProductIds = (pricingConfigs: ReturnType<typeof usePricingConfigs>["data"]) => [
-  pricingConfigs?.[PRICING_KEYS.developer_pro]?.stripeProductId,
-].filter((value): value is string => typeof value === "string" && value.length > 0);
+const useValidatedProProduct = (productId: string | null) => {
+  return useQuery({
+    queryKey: ["validated-pro-product", productId],
+    queryFn: async () => {
+      if (!productId) return null;
+      const { data } = await supabase
+        .from("pro_product_ids")
+        .select("product_id")
+        .eq("product_id", productId)
+        .maybeSingle();
+      return data;
+    },
+    enabled: Boolean(productId),
+    staleTime: 60_000,
+  });
+};
 
 const hasDeveloperEntitlement = (options: {
   isAdmin: boolean;
   forceProAccess: boolean;
-  subscribed: boolean;
-  effectiveProductId: string | null;
-  developerProductIds: string[];
+  hasValidatedProProduct: boolean;
 }) => (
   options.isAdmin ||
   options.forceProAccess ||
-  (
-    options.subscribed &&
-    typeof options.effectiveProductId === "string" &&
-    options.developerProductIds.includes(options.effectiveProductId)
-  )
+  options.hasValidatedProProduct
 );
 
 /**
  * Thin wrapper around AuthContext.subscription.
  *
- * Platform admins get Pro access through DB role checks. Any active Stripe
- * subscription grants broad Pro access, while developer modules require a
- * Developer Pro product or explicit platform/admin entitlement.
+ * Platform admins get Pro access through DB role checks. Stripe subscription
+ * access is validated against the server-maintained pro_product_ids table.
  */
 export const useSubscription = () => {
   const { subscription, refreshSubscription, profile, user } = useAuth();
-  const { data: pricingConfigs, isLoading: pricingConfigsLoading } = usePricingConfigs();
   const { productId: profileProductId, forceProAccess } = getProfileSubscriptionFields(profile);
   const isAdmin = isPlatformAdmin(profile);
   const isInvestorRole = isInvestorParticipant(profile);
   const effectiveProductId = subscription.productId ?? profileProductId;
   const hasEffectiveProduct = typeof effectiveProductId === "string" && effectiveProductId.length > 0;
-  const hasStripePro = subscription.subscribed && hasEffectiveProduct;
+  const { data: validatedProProduct, isLoading: validatedProProductLoading } = useValidatedProProduct(effectiveProductId);
+  const hasValidatedProProduct = subscription.subscribed && Boolean(validatedProProduct);
+  const hasStripePro = hasValidatedProProduct;
   const { data: investorSubStatus, isLoading: investorStatusLoading } = useInvestorProStatus(user?.id, isInvestorRole);
   const hasInvestorPro = isInvestorRole && isActiveInvestorStatus(investorSubStatus?.status);
 
@@ -91,9 +97,7 @@ export const useSubscription = () => {
   const hasDeveloperPro = hasDeveloperEntitlement({
     isAdmin,
     forceProAccess,
-    subscribed: subscription.subscribed,
-    effectiveProductId,
-    developerProductIds: getDeveloperProductIds(pricingConfigs),
+    hasValidatedProProduct,
   });
 
   return {
@@ -107,7 +111,7 @@ export const useSubscription = () => {
       investorLoading: investorStatusLoading,
       subscribed: subscription.subscribed,
       hasEffectiveProduct,
-      pricingConfigsLoading,
+      proProductLoading: validatedProProductLoading,
     }),
     refreshSubscription,
   };

@@ -3,18 +3,26 @@
  * admin always Pro, investor sub → Pro, Stripe subscriber → Pro, free user → not Pro.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderHook } from "@testing-library/react";
+import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
-    from: vi.fn(() => ({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      in: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: null, error: null }),
-    })),
+    from: vi.fn((table: string) => {
+      const chain = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        in: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: table === "pro_product_ids" ? { product_id: "prod_abc" } : null,
+          error: null,
+        }),
+        single: vi.fn().mockResolvedValue({ data: null, error: null }),
+      };
+      return chain;
+    }),
   },
 }));
 
@@ -58,7 +66,7 @@ describe("useSubscription", () => {
     expect(result.current.isPro).toBe(false);
   });
 
-  it("Stripe subscriber gets isPro", () => {
+  it("Stripe subscriber gets isPro when the product is server-authorized", async () => {
     (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({
       subscription: { subscribed: true, productId: "prod_abc", subscriptionEnd: "2027-01-01", loading: false },
       refreshSubscription: vi.fn(),
@@ -66,7 +74,7 @@ describe("useSubscription", () => {
       user: { id: "u3" },
     });
     const { result } = renderHook(() => useSubscription(), { wrapper });
-    expect(result.current.isPro).toBe(true);
+    await waitFor(() => expect(result.current.isPro).toBe(true));
     expect(result.current.productId).toBe("prod_abc");
   });
 
