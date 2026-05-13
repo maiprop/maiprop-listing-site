@@ -20,7 +20,6 @@ enabled = true
   module_system = "es-modules"
   dialect = "typescript"
   cyclomatic_complexity_threshold = "high"
-  max_allowed_cyclomatic_complexity = 60
 
 [[analyzers]]
 name = "docker"
