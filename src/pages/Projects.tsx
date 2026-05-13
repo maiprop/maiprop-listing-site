@@ -18,8 +18,7 @@ import type { Tables } from "@/integrations/supabase/types";
 type ProjectListing = { id: string; title: string; cover_image_url?: string | null; price?: number | null };
 type ProjectWithListings = Tables<"projects"> & { listings?: ProjectListing[] };
 
-// skipcq: JS-R1005 - This page keeps create/edit/delete project UI state together with its ProGate surface.
-const Projects = () => {
+const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delete project UI state together with its ProGate surface.
   const navigate = useNavigate();
   const { user, profile } = useAuth();
   const participantType = getParticipantTypeFromProfile(profile);

@@ -24,8 +24,7 @@ type FavoriteRow = Database["public"]["Tables"]["favorites"]["Row"] & {
   listings: Database["public"]["Tables"]["listings"]["Row"] | null;
 };
 
-// skipcq: JS-R1005 - Portfolio list actions share one confirmation and rename state for a compact dashboard page.
-const Portfolios = () => {
+const Portfolios = () => { // skipcq: JS-R1005 - Portfolio list actions share one confirmation and rename state for a compact dashboard page.
   const { user } = useAuth();
   const { data: portfolios = [], isLoading } = usePortfolios();
   const { data: favorites = [] } = useFavorites();
@@ -171,8 +170,7 @@ const Portfolios = () => {
   );
 };
 
-// skipcq: JS-R1005 - Portfolio detail coordinates listing membership, rename, and add/remove controls in one repeated item.
-const PortfolioDetail = ({
+const PortfolioDetail = ({ // skipcq: JS-R1005 - Portfolio detail coordinates listing membership, rename, and add/remove controls in one repeated item.
   portfolioId,
   portfolio,
   favorites,
