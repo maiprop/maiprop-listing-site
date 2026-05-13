@@ -104,6 +104,42 @@ function POIBadge({ poi }: { poi: POI }) {
   );
 }
 
+const categoryButtonClass = (active: boolean) =>
+  `flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-all border ${
+    active
+      ? "bg-primary text-primary-foreground border-primary"
+      : "bg-secondary border-border text-muted-foreground hover:border-primary/40"
+  }`;
+
+const CategoryFilterButton = ({
+  category,
+  activeCategory,
+  onSelect,
+}: {
+  category: "all" | POI["category"];
+  activeCategory: string;
+  onSelect: (category: "all" | POI["category"]) => void;
+}) => {
+  const isActive = activeCategory === category;
+  if (category === "all") {
+    return (
+      <button key={category} onClick={() => onSelect(category)} className={categoryButtonClass(isActive)}>
+        <MapPin className="w-3 h-3" />
+        All
+      </button>
+    );
+  }
+
+  const meta = CATEGORY_META[category];
+  const Icon = meta.icon;
+  return (
+    <button key={category} onClick={() => onSelect(category)} className={categoryButtonClass(isActive)}>
+      <Icon className="w-3 h-3" />
+      {meta.label}
+    </button>
+  );
+};
+
 // ── Main component ─────────────────────────────────────────────────────────────
 
 interface PropertyMiniMapProps {
@@ -337,25 +373,14 @@ export default function PropertyMiniMap({
         {/* Category filters */}
         {pois && uniqueCategories.length > 0 && (
           <div className="flex gap-1.5 flex-wrap mb-3">
-            {uniqueCategories.map(cat => {
-              const isAll = cat === "all";
-              const meta = isAll ? null : CATEGORY_META[cat as POI["category"]];
-              const Icon = isAll ? MapPin : meta!.icon;
-              return (
-                <button
-                  key={cat}
-                  onClick={() => setActiveCategory(cat)}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-all border ${
-                    activeCategory === cat
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-secondary border-border text-muted-foreground hover:border-primary/40"
-                  }`}
-                >
-                  <Icon className="w-3 h-3" />
-                  {isAll ? "All" : meta!.label}
-                </button>
-              );
-            })}
+            {uniqueCategories.map((category) => (
+              <CategoryFilterButton
+                key={category}
+                category={category as "all" | POI["category"]}
+                activeCategory={activeCategory}
+                onSelect={setActiveCategory}
+              />
+            ))}
           </div>
         )}
 

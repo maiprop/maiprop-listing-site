@@ -98,7 +98,15 @@ jobs:
 
       - name: Run Deno tests
         working-directory: supabase/functions
-        run: deno test --allow-env --allow-net --allow-read .
+        run: |
+          for attempt in 1 2 3; do
+            deno test --allow-env --allow-net --allow-read . && exit 0
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            echo "Deno test failed on attempt $attempt; retrying after transient dependency fetch failure..."
+            sleep 10
+          done
 
       - name: Upload dist artifact
         if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
@@ -154,11 +162,15 @@ jobs:
   e2e-security-staging:
     name: E2E Security (Staging)
     runs-on: ubuntu-latest
-    # Manual trigger only until a staging Supabase project is provisioned.
-    # The schedule trigger was producing a nightly false-positive failure
-    # because none of the STAGING_* secrets are set in this org. Switch back
-    # to `github.event_name == 'schedule'` once .env.staging is wired up.
-    if: github.event_name == 'workflow_dispatch'
+    # Run automatically for release-bearing branches and same-repo PRs. Dependabot
+    # PRs are excluded because repository secrets are intentionally unavailable.
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' &&
+        github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name &&
+        github.actor != 'dependabot[bot]' &&
+        github.event.pull_request.draft == false)
     needs: quality
     env:
       CI: true
@@ -579,10 +591,9 @@ jobs:
   deploy-supabase-staging:
     name: Deploy Supabase edge functions (staging)
     runs-on: ubuntu-latest
-    # Manual trigger until a staging Supabase project is provisioned.
-    # Switch `if` to include `github.event_name == 'pull_request'` once
-    # STAGING_SUPABASE_PROJECT_ID and SUPABASE_ACCESS_TOKEN secrets are set.
-    if: github.event_name == 'workflow_dispatch'
+    # Keep deployments out of arbitrary PRs; staging receives mainline and manual
+    # deployments after the quality gate passes.
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     needs: quality
 
     steps:

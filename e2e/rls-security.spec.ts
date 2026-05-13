@@ -15,6 +15,7 @@
  */
 import { test, expect } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import WebSocket from "ws";
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL ?? "";
 const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "";
@@ -32,6 +33,7 @@ const canRun =
 async function signIn(email: string): Promise<{ client: SupabaseClient; userId: string }> {
   const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
+    realtime: { transport: WebSocket },
   });
   const { data, error } = await client.auth.signInWithPassword({
     email,
@@ -86,6 +88,7 @@ test.describe("RLS — cross-user isolation", () => {
   test("anonymous client cannot read user_roles", async () => {
     const anonClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
+      realtime: { transport: WebSocket },
     });
     const { data, error } = await anonClient.from("user_roles").select("*").limit(1);
 

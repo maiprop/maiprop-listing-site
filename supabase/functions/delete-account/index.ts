@@ -30,7 +30,7 @@
  *   professionals, and every other table with a FK to auth.users.
  */
 
-import Stripe from "https://esm.sh/stripe@18.5.0";
+import Stripe from "npm:stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { verifyBearerToken, AuthError } from "../_shared/auth.ts";

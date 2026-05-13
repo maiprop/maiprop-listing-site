@@ -13,12 +13,13 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
 import { ProGate } from "@/components/gates/ProGate";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import type { Tables } from "@/integrations/supabase/types";
 
 type ProjectListing = { id: string; title: string; cover_image_url?: string | null; price?: number | null };
 type ProjectWithListings = Tables<"projects"> & { listings?: ProjectListing[] };
 
-function Projects() {
+const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delete project UI state together with its ProGate surface.
   const navigate = useNavigate();
   const { user, profile } = useAuth();
   const participantType = getParticipantTypeFromProfile(profile);
@@ -37,6 +38,7 @@ function Projects() {
   const [newCity, setNewCity] = useState("");
   const [newAddress, setNewAddress] = useState("");
   const [newPermit, setNewPermit] = useState("");
+  const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
 
   const handleCreate = () => {
     if (!newName.trim()) {
@@ -64,8 +66,7 @@ function Projects() {
   };
 
   const handleDelete = (id: string) => {
-    if (!confirm("Delete this project? Listings will be unlinked.")) return;
-    deleteProject.mutate(id);
+    setProjectToDelete(id);
   };
 
   const handleLinkListing = (projectId: string, listingId: string) => {
@@ -338,8 +339,19 @@ function Projects() {
         </ProGate>
       </main>
       <Footer />
+      <ConfirmDialog
+        open={Boolean(projectToDelete)}
+        title="Delete project"
+        description="Delete this project? Linked listings will be unlinked."
+        confirmLabel="Delete"
+        onConfirm={() => {
+          if (projectToDelete) deleteProject.mutate(projectToDelete);
+          setProjectToDelete(null);
+        }}
+        onCancel={() => setProjectToDelete(null)}
+      />
     </div>
   );
-}
+};
 
 export default Projects;

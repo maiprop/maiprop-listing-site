@@ -3,7 +3,7 @@
  * Left panel: template list. Right panel: document preview + signature capture.
  */
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
@@ -92,11 +92,10 @@ const TEMPLATES: Template[] = [
 
 // ── Document body generator ───────────────────────────────────────────────────
 
-function fmt(n: number) {
-  return new Intl.NumberFormat("el-GR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
-}
+const fmt = (n: number) =>
+  new Intl.NumberFormat("el-GR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
 
-function getDocumentBody(tpl: Template, seller: string, buyer: string, listing: string, price: number, date: string) {
+const getDocumentBody = (tpl: Template, seller: string, buyer: string, listing: string, price: number, date: string) => { // skipcq: JS-R1005 - Template-specific legal copy is intentionally centralized for review.
   const priceTxt = fmt(price);
   switch (tpl.id) {
     case "preliminary":
@@ -221,14 +220,27 @@ MEMORANDUM OF UNDERSTANDING — QUICK SALE
 Î—Î¼ÎµÏÎ¿Î¼Î·Î½Î¯Î± / Date: ${date}
       `;
   }
-}
+  return "";
+};
 
 // ── Canvas draw signature ────────────────────────────────────────────────────
 
-function SignatureCanvas({ onSign }: { onSign: (dataUrl: string) => void }) {
+const SignatureCanvas = ({ onSign }: { onSign: (dataUrl: string) => void }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
   const lastPos = useRef<{ x: number; y: number } | null>(null);
+  const exportSignature = useCallback((canvas: HTMLCanvasElement) => {
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const reader = new FileReader();
+      reader.addEventListener("load", () => {
+        if (typeof reader.result === "string") {
+          onSign(reader.result);
+        }
+      });
+      reader.readAsDataURL(blob);
+    });
+  }, [onSign]);
 
   function getPos(e: MouseEvent | TouchEvent, canvas: HTMLCanvasElement) {
     const rect = canvas.getBoundingClientRect();
@@ -239,27 +251,33 @@ function SignatureCanvas({ onSign }: { onSign: (dataUrl: string) => void }) {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d")!;
-    ctx.strokeStyle = "hsl(var(--foreground))";
-    ctx.lineWidth = 2;
-    ctx.lineCap = "round";
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const drawingCanvas = canvas;
+    const drawingContext = ctx;
+    drawingContext.strokeStyle = "hsl(var(--foreground))";
+    drawingContext.lineWidth = 2;
+    drawingContext.lineCap = "round";
 
     function start(e: MouseEvent | TouchEvent) {
       drawing.current = true;
-      lastPos.current = getPos(e, canvas!);
+      lastPos.current = getPos(e, drawingCanvas);
     }
     function move(e: MouseEvent | TouchEvent) {
-      if (!drawing.current) return;
+      if (!drawing.current || !lastPos.current) return;
       e.preventDefault();
-      const pos = getPos(e, canvas!);
-      ctx.beginPath();
-      ctx.moveTo(lastPos.current!.x, lastPos.current!.y);
-      ctx.lineTo(pos.x, pos.y);
-      ctx.stroke();
+      const pos = getPos(e, drawingCanvas);
+      drawingContext.beginPath();
+      drawingContext.moveTo(lastPos.current.x, lastPos.current.y);
+      drawingContext.lineTo(pos.x, pos.y);
+      drawingContext.stroke();
       lastPos.current = pos;
-      onSign(canvas!.toDataURL());
     }
-    function stop() { drawing.current = false; }
+    function stop() {
+      if (!drawing.current) return;
+      drawing.current = false;
+      exportSignature(drawingCanvas);
+    }
 
     canvas.addEventListener("mousedown", start);
     canvas.addEventListener("mousemove", move);
@@ -275,12 +293,13 @@ function SignatureCanvas({ onSign }: { onSign: (dataUrl: string) => void }) {
       canvas.removeEventListener("touchmove", move);
       canvas.removeEventListener("touchend", stop);
     };
-  }, [onSign]);
+  }, [exportSignature]);
 
   function clear() {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d")!;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     onSign("");
   }
@@ -302,11 +321,11 @@ function SignatureCanvas({ onSign }: { onSign: (dataUrl: string) => void }) {
       <p className="text-xs text-muted-foreground text-center mt-1">Draw your signature above</p>
     </div>
   );
-}
+};
 
 // ── Main component ───────────────────────────────────────────────────────────
 
-export function LegalDocumentModal({ open, onClose, listingTitle = "Property", sellerName = "Seller Name", buyerName = "Buyer Name", price = 250000 }: Props) {
+export const LegalDocumentModal = ({ open, onClose, listingTitle = "Property", sellerName = "Seller Name", buyerName = "Buyer Name", price = 250000 }: Props) => { // skipcq: JS-R1005 - This modal coordinates several small UI states around one document preview.
   const [selected, setSelected] = useState<TemplateId>("preliminary");
   const [signMode, setSignMode] = useState<SignMode>("type");
   const [typedSig, setTypedSig] = useState("");
@@ -317,7 +336,7 @@ export function LegalDocumentModal({ open, onClose, listingTitle = "Property", s
   const [signed, setSigned] = useState(false);
 
   const today = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
-  const tpl = TEMPLATES.find((t) => t.id === selected)!;
+  const tpl = TEMPLATES.find((t) => t.id === selected) ?? TEMPLATES[0];
   const body = getDocumentBody(tpl, sellerName, buyerName, listingTitle, price, today);
   const hasSig = signMode === "type" ? typedSig.trim().length > 2 : drawnSig.length > 100;
 
@@ -552,4 +571,4 @@ export function LegalDocumentModal({ open, onClose, listingTitle = "Property", s
       </DialogContent>
     </Dialog>
   );
-}
+};

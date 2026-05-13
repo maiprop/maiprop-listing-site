@@ -16,7 +16,7 @@ const platforms = [
   { id: "whatsapp", label: "WhatsApp Video", icon: "📱" },
 ];
 
-function getNextDays(count: number) {
+const getNextDays = (count: number) => {
   const days = [];
   const d = new Date();
   d.setDate(d.getDate() + 1);
@@ -32,7 +32,7 @@ function getNextDays(count: number) {
     d.setDate(d.getDate() + 1);
   }
   return days;
-}
+};
 
 interface OnlineViewingModalProps {
   open: boolean;
@@ -53,7 +53,7 @@ interface OnlineViewingModalProps {
   };
 }
 
-export default function OnlineViewingModal({ open, onClose, listing, professional }: OnlineViewingModalProps) {
+const OnlineViewingModal = ({ open, onClose, listing, professional }: OnlineViewingModalProps) => { // skipcq: JS-R1005 - Booking mode branches stay together so property and professional submissions cannot drift.
   const { user, profile } = useAuth();
   const bookViewing = useBookViewing();
   const submitConsultation = useSubmitConsultation();
@@ -68,7 +68,7 @@ export default function OnlineViewingModal({ open, onClose, listing, professiona
 
   const days = getNextDays(6);
   const isProperty = !!listing;
-  const entityName = isProperty ? listing!.title : (professional?.display_name || "Professional");
+  const entityName = listing?.title ?? professional?.display_name ?? "Professional";
   const isLoading = bookViewing.isPending || submitConsultation.isPending;
 
   const handleClose = () => {
@@ -82,11 +82,15 @@ export default function OnlineViewingModal({ open, onClose, listing, professiona
     if (!user && (!resolvedName.trim() || !resolvedEmail.trim())) { toast.error("Please fill in your name and email"); return; }
 
     try {
-      if (isProperty && user) {
+      if (listing) {
+        if (!user) {
+          toast.error("Please sign in to book a video viewing");
+          return;
+        }
         // Real viewing booking into viewings table
         await bookViewing.mutateAsync({
-          listing_id: listing!.id,
-          owner_id: listing!.owner_id,
+          listing_id: listing.id,
+          owner_id: listing.owner_id,
           viewing_type: "video",
           scheduled_at: `${selectedDate}T${selectedTime}:00.000Z`,
           note: note || undefined,
@@ -102,7 +106,7 @@ export default function OnlineViewingModal({ open, onClose, listing, professiona
           preferred_time: selectedTime,
           message: `[Online Meeting via ${platforms.find(p => p.id === platform)?.label}] ${note}`,
         });
-      } else if (isProperty && !user) {
+      } else {
         // Guest property viewing — can't save without auth, show error
         toast.error("Please sign in to book a video viewing");
         return;
@@ -279,4 +283,6 @@ export default function OnlineViewingModal({ open, onClose, listing, professiona
       </DialogContent>
     </Dialog>
   );
-}
+};
+
+export default OnlineViewingModal;

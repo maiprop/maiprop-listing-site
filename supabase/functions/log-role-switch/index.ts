@@ -17,7 +17,7 @@
  * silently fails. Going through the RPC removes that dependency entirely.
  */
 
-import Stripe from "https://esm.sh/stripe@18.5.0";
+import Stripe from "npm:stripe@18.5.0";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { createLogger } from "../_shared/logger.ts";

@@ -4,67 +4,97 @@ import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
-/**
- * useSubscription — thin wrapper around AuthContext.subscription.
- *
- * Returns:
- *   isPro       — true when the user has any active subscription, or is admin,
- *                 or is an investor/institutional with an active investor_subscription.
- *   subscribed  — raw subscribed boolean from Stripe
- *   productId   — current Stripe product ID (null if unsubscribed)
- *   subscriptionEnd — ISO date string of renewal/expiry
- *   loading     — true while the subscription status is being fetched
- *   refreshSubscription — force-refresh from Stripe
- *
- * Platform admins (role="admin" in DB) always get Pro access.
- * Access is controlled server-side via DB role — never via hardcoded emails.
- * Any active Stripe subscription grants Pro, regardless of which plan was purchased.
- */
-export function useSubscription() {
-  const { subscription, refreshSubscription, profile, user } = useAuth();
+const getProfileSubscriptionFields = (profile: ReturnType<typeof useAuth>["profile"]) => ({
+  productId: (profile as { subscription_product_id?: string | null } | null)?.subscription_product_id ?? null,
+  forceProAccess: Boolean((profile as { force_pro_access?: boolean | null } | null)?.force_pro_access),
+});
 
-  const isAdmin = isPlatformAdmin(profile);
+const isInvestorParticipant = (profile: ReturnType<typeof useAuth>["profile"]) => {
   const participantType = getParticipantTypeFromProfile(profile);
-  const isInvestorRole = participantType === "investor" || participantType === "institutional";
+  return participantType === "investor" || participantType === "institutional";
+};
 
-  const profileProductId = (profile as { subscription_product_id?: string | null } | null)?.subscription_product_id ?? null;
-  const forceProAccess = !!(profile as { force_pro_access?: boolean | null } | null)?.force_pro_access;
-  const effectiveProductId = subscription.productId ?? profileProductId;
-
-  // Any active Stripe subscription grants Pro access — plan key doesn't matter.
-  const hasStripePro = subscription.subscribed && !!effectiveProductId;
-
-  // Investors/institutional with an admin-approved investor_subscriptions record also get Pro features,
-  // since they pay €490–€1490/month for the deal-flow tier.
-  const { data: investorSubStatus } = useQuery({
-    queryKey: ["investor-sub-pro", user?.id],
+const useInvestorProStatus = (userId: string | undefined, enabled: boolean) => {
+  return useQuery({
+    queryKey: ["investor-sub-pro", userId],
     queryFn: async () => {
-      if (!user?.id) return null;
+      if (!userId) return null;
       const { data } = await supabase
         .from("investor_subscriptions")
         .select("status")
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .in("status", ["active", "trial"])
         .limit(1)
         .maybeSingle();
       return (data as unknown as { status: string } | null);
     },
-    enabled: !!user?.id && isInvestorRole,
+    enabled: Boolean(userId) && enabled,
     staleTime: 30_000,
   });
+};
 
-  const hasInvestorPro =
-    isInvestorRole &&
-    (investorSubStatus?.status === "active" || investorSubStatus?.status === "trial");
+const useValidatedProProduct = (productId: string | null) => {
+  return useQuery({
+    queryKey: ["validated-pro-product", productId],
+    queryFn: async () => {
+      if (!productId) return null;
+      const { data } = await supabase
+        .from("pro_product_ids")
+        .select("product_id")
+        .eq("product_id", productId)
+        .maybeSingle();
+      return data;
+    },
+    enabled: Boolean(productId),
+    staleTime: 60_000,
+  });
+};
 
-  const isPro = isAdmin || hasStripePro || hasInvestorPro || forceProAccess;
+const isActiveInvestorStatus = (status: string | undefined) => status === "active" || status === "trial";
+const hasAnyProAccess = (flags: boolean[]) => flags.includes(true);
+const isLoadingSubscriptionAccess = (options: {
+  subscriptionLoading: boolean;
+  investorLoading: boolean;
+  subscribed: boolean;
+  hasEffectiveProduct: boolean;
+  proProductLoading: boolean;
+}) => (
+  options.subscriptionLoading ||
+  options.investorLoading ||
+  [options.subscribed, options.hasEffectiveProduct, options.proProductLoading].every(Boolean)
+);
+
+/**
+ * Thin wrapper around AuthContext.subscription.
+ *
+ * Platform admins get Pro access through DB role checks. Stripe subscription
+ * access is validated against the server-maintained pro_product_ids table.
+ */
+export const useSubscription = () => {
+  const { subscription, refreshSubscription, profile, user } = useAuth();
+  const { productId: profileProductId, forceProAccess } = getProfileSubscriptionFields(profile);
+  const isAdmin = isPlatformAdmin(profile);
+  const isInvestorRole = isInvestorParticipant(profile);
+  const effectiveProductId = subscription.productId ?? profileProductId;
+  const hasEffectiveProduct = typeof effectiveProductId === "string" && effectiveProductId.length > 0;
+  const { data: validatedProProduct, isLoading: validatedProProductLoading } = useValidatedProProduct(effectiveProductId);
+  const { data: investorSubStatus, isLoading: investorStatusLoading } = useInvestorProStatus(user?.id, isInvestorRole);
+  const hasStripePro = subscription.subscribed && Boolean(validatedProProduct);
+  const hasInvestorPro = isInvestorRole && isActiveInvestorStatus(investorSubStatus?.status);
+  const isPro = hasAnyProAccess([isAdmin, hasStripePro, hasInvestorPro, forceProAccess]);
 
   return {
     isPro,
     subscribed: subscription.subscribed,
-    productId: subscription.productId,
+    productId: effectiveProductId,
     subscriptionEnd: subscription.subscriptionEnd,
-    loading: subscription.loading,
+    loading: isLoadingSubscriptionAccess({
+      subscriptionLoading: subscription.loading,
+      investorLoading: investorStatusLoading,
+      subscribed: subscription.subscribed,
+      hasEffectiveProduct,
+      proProductLoading: validatedProProductLoading,
+    }),
     refreshSubscription,
   };
-}
+};

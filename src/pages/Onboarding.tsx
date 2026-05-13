@@ -11,9 +11,9 @@ import { usePricingConfigs, formatPrice, PRICING_KEYS } from "@/hooks/usePricing
 import { RoleSwitchModal } from "@/components/RoleSwitchModal";
 import { classifySwitch, getPlanForParticipant } from "@/lib/rolePlanMap";
 import type { ParticipantId } from "@/lib/participantConfig";
+import { canRestoreDraftStep, isOnboardingStep, resolveStepsFor } from "@/lib/onboardingFlow";
 import {
   participants, DEFAULT_AVAILABILITY, colorMap,
-  PRO_FULL_STEPS, PRO_FLAT_STEPS, PRO_SIMPLE_STEPS, DEVELOPER_STEPS, PARTICIPANT_STEPS, TOP_STEPS,
   type OnboardingStep, type ParticipantType, type SelectedService, type DayAvailability, type RoleKey,
 } from "@/lib/onboardingConfig";
 import { OnboardingShell as Shell } from "@/components/onboarding/OnboardingShell";
@@ -97,30 +97,6 @@ const isFirstOnboardingFor = (
 ): boolean => resolvePresetType(profile) === null;
 
 /**
- * Lookup map from participant id to its step list. Replaces the chain of
- * `if (selected.id === "...")` branches in resolveStepsFor so the helper's
- * own cyclomatic complexity drops below DeepSource's medium-risk threshold.
- */
-const STEPS_BY_PARTICIPANT_ID: Readonly<Partial<Record<string, OnboardingStep[]>>> = {
-  participant: PARTICIPANT_STEPS,
-  market_pro: PRO_SIMPLE_STEPS,
-  developer: DEVELOPER_STEPS,
-  professional: PRO_FLAT_STEPS,
-};
-
-/**
- * Resolves the active step list for a given selected participant. Pure
- * module-level helper so the branching does not contribute to the
- * Onboarding component's cyclomatic complexity.
- */
-const resolveStepsFor = (selected: ParticipantType | null): OnboardingStep[] => {
-  if (!selected) return TOP_STEPS;
-  const byId = STEPS_BY_PARTICIPANT_ID[selected.id];
-  if (byId) return byId;
-  return selected.isPro ? PRO_FULL_STEPS : TOP_STEPS;
-};
-
-/**
  * Lookup from the current onboarding step to the step the back button
  * should navigate to. Replaces the chained ternary in the Onboarding
  * component, removing ~7 cyclomatic-complexity points from its body.
@@ -151,15 +127,15 @@ export default function Onboarding() {
   // Auto-advance past pick-type when type already set from Signup
   useEffect(() => {
     if (!presetType) return;
-    const p = participants.find(x => x.id === presetType);
-    if (!p) return;
-    setSelected(p);
-    if (p.id === "developer") {
+    const presetParticipant = participants.find((participant) => participant.id === presetType);
+    if (!presetParticipant) return;
+    setSelected(presetParticipant);
+    if (presetParticipant.id === "developer") {
       setStep("developer-setup");
-    } else if (p.isPro) {
+    } else if (presetParticipant.isPro) {
       setStep("pro-category");
-    } else if (p.nextStep) {
-      setStep(p.nextStep);
+    } else if (presetParticipant.nextStep) {
+      setStep(presetParticipant.nextStep);
     } else {
       setStep("done");
     }
@@ -315,13 +291,18 @@ export default function Onboarding() {
     try {
       const raw = localStorage.getItem(DRAFT_KEY);
       if (!raw) return;
-      const draft = JSON.parse(raw) as { userId: string; step: OnboardingStep; selectedId?: string; proCategory?: string };
-      if (draft.userId !== user.id) return;
+      const draft = JSON.parse(raw) as { userId?: unknown; step?: unknown; selectedId?: unknown; proCategory?: unknown };
+      if (draft.userId !== user.id || !isOnboardingStep(draft.step)) return;
       draftRestoredRef.current = true;
-      const p = draft.selectedId ? participants.find(x => x.id === draft.selectedId) : null;
-      setSelected(p ?? null);
+      const selectedId = typeof draft.selectedId === "string" ? draft.selectedId : null;
+      const draftParticipant = selectedId ? participants.find((participant) => participant.id === selectedId) ?? null : null;
+      if (!canRestoreDraftStep(draft.step, draftParticipant)) {
+        localStorage.removeItem(DRAFT_KEY);
+        return;
+      }
+      setSelected(draftParticipant ?? null);
       setStep(draft.step);
-      if (draft.proCategory) setProCategory(draft.proCategory);
+      if (typeof draft.proCategory === "string") setProCategory(draft.proCategory);
     } catch (err: unknown) {
       logger.warn("[Onboarding] draft restore failed:", err instanceof Error ? err.message : err);
       localStorage.removeItem(DRAFT_KEY);
@@ -355,33 +336,33 @@ export default function Onboarding() {
         const stored = sessionStorage.getItem("signup_participant_type") || localStorage.getItem("signup_participant_type");
         if (!stored) return;
         restoredRef.current = true;
-        const p = participants.find(x => x.id === stored);
-        if (!p) {
+        const storedParticipant = participants.find((participant) => participant.id === stored);
+        if (!storedParticipant) {
           // Unknown type stored — clean up and let user pick
           sessionStorage.removeItem("signup_participant_type");
           localStorage.removeItem("signup_participant_type");
           return;
         }
-        setSelected(p);
-        if (p.id === "developer") {
+        setSelected(storedParticipant);
+        if (storedParticipant.id === "developer") {
           // Multi-step: clear storage but preserve any draft, navigate to next step
           sessionStorage.removeItem("signup_participant_type");
           localStorage.removeItem("signup_participant_type");
           setStep("developer-setup");
-        } else if (p.isPro) {
+        } else if (storedParticipant.isPro) {
           sessionStorage.removeItem("signup_participant_type");
           localStorage.removeItem("signup_participant_type");
           setStep("pro-category");
-        } else if (p.nextStep) {
+        } else if (storedParticipant.nextStep) {
           sessionStorage.removeItem("signup_participant_type");
           localStorage.removeItem("signup_participant_type");
-          setStep(p.nextStep);
+          setStep(storedParticipant.nextStep);
         } else {
           // Simple type (e.g. participant): write to DB first, then clean up
           setLoading(true);
           const ok = await saveRoleSelection({
-            role: p.role,
-            participant_type: p.id as ParticipantId,
+            role: storedParticipant.role,
+            participant_type: storedParticipant.id as ParticipantId,
           });
           setLoading(false);
           if (!ok) return;
@@ -497,37 +478,55 @@ export default function Onboarding() {
     if (requireAuth(goal)) return;
     const role: RoleKey = goal === "seller" ? "seller" : "buyer";
     setLoading(true);
-    const p = participants.find(x => x.id === goal)!;
-    setSelected(p);
+    const goalParticipant = participants.find((participant) => participant.id === goal);
+    if (!goalParticipant) {
+      toast.error("Account type is unavailable. Please refresh and try again.");
+      setLoading(false);
+      return;
+    }
+    setSelected(goalParticipant);
     const ok = await saveRoleSelection({ role, participant_type: goal });
     if (!ok) { setLoading(false); return; }
     setLoading(false);
     setStep("done");
   };
 
-  /** Handler for professional sub-type selection */
-  const handleProSubType = async (type: "agent" | "developer" | "service_pro") => {
-    if (requireAuth(type)) return;
-    if (type === "service_pro") {
-      const p = participants.find(x => x.id === "professional")!;
-      setSelected(p);
-      setStep("pro-category");
+  const selectParticipantStep = (participantId: string, nextStep: OnboardingStep, label: string): boolean => {
+    const participant = participants.find((option) => option.id === participantId);
+    if (!participant) {
+      toast.error(`${label} account type is unavailable. Please refresh and try again.`);
+      return false;
+    }
+    setSelected(participant);
+    setStep(nextStep);
+    return true;
+  };
+
+  const saveAgentSelection = async () => {
+    const agentParticipant = participants.find((participant) => participant.id === "agent");
+    if (!agentParticipant) {
+      toast.error("Agent account type is unavailable. Please refresh and try again.");
       return;
     }
-    if (type === "developer") {
-      const p = participants.find(x => x.id === "developer")!;
-      setSelected(p);
-      setStep("developer-setup");
-      return;
-    }
-    // agent — save role and go to done
-    const p = participants.find(x => x.id === type)!;
-    setSelected(p);
+    setSelected(agentParticipant);
     setLoading(true);
-    const ok = await saveRoleSelection({ role: p.role, participant_type: type });
-    if (!ok) { setLoading(false); return; }
+    const ok = await saveRoleSelection({ role: agentParticipant.role, participant_type: "agent" });
     setLoading(false);
-    setStep("done");
+    if (ok) setStep("done");
+  };
+
+  const proSubTypeHandlers = {
+    service_pro: () => selectParticipantStep("professional", "pro-category", "Professional"),
+    developer: () => selectParticipantStep("developer", "developer-setup", "Developer"),
+    agent: saveAgentSelection,
+  } satisfies Record<"agent" | "developer" | "service_pro", () => boolean | Promise<void>>;
+
+  /** Handler for professional sub-type selection */
+  const handleProSubType = (type: "agent" | "developer" | "service_pro") => {
+    if (requireAuth(type)) return;
+    Promise.resolve(proSubTypeHandlers[type]()).catch(() => {
+      toast.error("Could not save your selection. Please try again.");
+    });
   };
 
   const handleDeveloperSetup = async () => {
@@ -598,7 +597,7 @@ export default function Onboarding() {
     if (Object.keys(selectedServices).length === 0) { toast.error("Please select at least one service you offer"); return; }
     setLoading(true);
     const rows = Object.values(selectedServices).map(s => ({
-      professional_id: professionalId!,
+      professional_id: professionalId,
       service_key: s.template.key,
       service_name: s.template.name,
       description: s.template.description,
@@ -621,27 +620,67 @@ export default function Onboarding() {
     if (!professionalId) { toast.error("Verification step incomplete — please go back and try again."); setStep("pro-verify"); return; }
     setLoading(true);
     const rows = availability.map((day, i) => ({ ...day, dayIndex: i })).filter(d => d.enabled).map(d => ({
-      professional_id: professionalId!,
+      professional_id: professionalId,
       day_of_week: d.dayIndex,
       start_time: d.start,
       end_time: d.end,
       is_active: true,
     }));
      
-    if (rows.length > 0) await supabase.from("professional_availability").insert(rows);
+    if (rows.length > 0) {
+      const { error } = await supabase.from("professional_availability").insert(rows);
+      if (error) {
+        toast.error("Could not save availability. Please try again.");
+        setLoading(false);
+        return;
+      }
+    }
     setLoading(false);
     setStep("pro-video");
   };
 
-  const handleSaveVideo = async () => {
-    setLoading(true);
-    if (professionalId) {
-      await supabase.from("professionals")
-        .update({ video_link: videoLink || null, calendar_notes: calendarNotes || null } as never)
-        .eq("id", professionalId);
-    }
+  const canSaveVideoSettings = () => Boolean(user && professionalId);
+
+  const persistVideoSettings = async (targetUserId: string, targetProfessionalId: string): Promise<boolean> => {
+    const { error } = await supabase.from("professionals")
+      .update({ video_link: videoLink || null, calendar_notes: calendarNotes || null } as never)
+      .eq("id", targetProfessionalId)
+      .eq("user_id", targetUserId);
+    if (!error) return true;
+    toast.error("Could not save video settings. Please try again.");
+    return false;
+  };
+
+  const saveVideoSettings = (): Promise<boolean> => {
+    if (!canSaveVideoSettings() || !user || !professionalId) return Promise.resolve(true);
+    return persistVideoSettings(user.id, professionalId);
+  };
+
+  const requireVideoSaveUser = () => {
+    if (user) return true;
+    toast.error("Please sign in to finish onboarding.");
+    return false;
+  };
+
+  const handleSavedVideoSettings = (saved: boolean) => {
     setLoading(false);
-    setStep("done");
+    if (saved) setStep("done");
+  };
+
+  const runVideoSave = async () => {
+    setLoading(true);
+    const saved = await saveVideoSettings();
+    handleSavedVideoSettings(saved);
+  };
+
+  const handleSaveVideo = () => {
+    if (!requireVideoSaveUser()) {
+      return;
+    }
+    runVideoSave().catch(() => {
+      toast.error("Could not save video settings. Please try again.");
+      setLoading(false);
+    });
   };
 
   const { data: pricingConfigs = {} } = usePricingConfigs();
@@ -665,8 +704,9 @@ export default function Onboarding() {
 
     // ── Pick type (top-level — flat selection across all role types) ──
     if (step === "pick-type") {
-      const devParticipant = participants.find(x => x.id === "developer")!;
-      const proParticipant = participants.find(x => x.id === "professional")!;
+      const devParticipant = participants.find((participant) => participant.id === "developer");
+      const proParticipant = participants.find((participant) => participant.id === "professional");
+      if (!devParticipant || !proParticipant) return null;
       return (
         <PickTypeStep
           pendingCardId={pendingCardId}
@@ -682,7 +722,7 @@ export default function Onboarding() {
           onConfirm={(id) => {
             if (id === "buyer") { maybeBillingGate("buyer", () => handleParticipantGoal("buyer")); return; }
             if (id === "seller") { maybeBillingGate("seller", () => handleParticipantGoal("seller")); return; }
-            if (id === "agent") { maybeBillingGate("agent", () => void handleProSubType("agent")); return; }
+            if (id === "agent") { maybeBillingGate("agent", () => { handleProSubType("agent"); }); return; }
           }}
         />
       );
@@ -835,7 +875,7 @@ export default function Onboarding() {
         selected={selected}
         selectedColor={selectedColor}
         SelectedIcon={SelectedIcon}
-        isPro={!!isPro}
+        isPro={Boolean(isPro)}
         proCategory={proCategory}
         selectedServicesCount={Object.keys(selectedServices).length}
         actions={actions}
@@ -863,7 +903,11 @@ export default function Onboarding() {
           fromType={switchCtx.fromType}
           toType={billingModalToType}
           hasActiveSub={switchCtx.hadActiveSub}
-          onConfirm={() => void handleBillingModalConfirm()}
+          onConfirm={() => {
+            handleBillingModalConfirm().catch(() => {
+              toast.error("Could not continue. Please try again.");
+            });
+          }}
           onCancel={handleBillingModalCancel}
           confirming={billingConfirming}
         />

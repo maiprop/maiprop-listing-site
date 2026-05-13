@@ -16,8 +16,8 @@ export function PropertyTypeButton({
   const commercialType = PROPERTY_TYPE_MAP["commercial"];
   const currentType = value ? PROPERTY_TYPE_MAP[value as PropertyTypeKey] : null;
   const currentSubtype = currentType?.subtypes.find(s => s.value === subtype);
-  const label = currentSubtype
-    ? `${currentType!.emoji} ${currentSubtype.label}`
+  const label = currentType && currentSubtype
+    ? `${currentType.emoji} ${currentSubtype.label}`
     : currentType
     ? `${currentType.emoji} ${currentType.label}`
     : `🏘️ ${t("listings.filters.allTypes")}`;

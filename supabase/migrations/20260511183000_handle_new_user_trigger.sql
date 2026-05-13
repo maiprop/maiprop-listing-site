@@ -72,18 +72,33 @@ CREATE TRIGGER on_auth_user_created
 
 -- ── 5. Backfill missing profiles ─────────────────────────────────────────────
 -- Assigns meaningful roles to the owner accounts; all other missing profiles
--- get the column default ('individual' at this timestamp, renamed 'buyer' by
--- migration 20260608). Uses 'individual' here because 'buyer' does not yet
--- exist in the enum when this migration runs in a fresh-apply sequence.
+-- get the available default participant role. Live databases may already have
+-- renamed 'individual' to 'buyer', while fresh applies at this point still use
+-- 'individual', so the fallback role is resolved from pg_enum at runtime.
 -- The ON CONFLICT guard makes this idempotent.
 INSERT INTO public.profiles (user_id, role, created_at, updated_at)
 SELECT
   u.id,
-  CASE
+  (
+    CASE
     WHEN LOWER(u.email) IN ('kr@maiprop.co', 'k@maiprop.co') THEN 'admin'::public.user_role
-    WHEN u.email = 'kostisrenios@gmail.com'                   THEN 'agent'::public.user_role
-    ELSE 'individual'::public.user_role
-  END,
+    WHEN LOWER(u.email) = 'kostisrenios@gmail.com'            THEN 'agent'::public.user_role
+      ELSE (
+        CASE
+          WHEN EXISTS (
+            SELECT 1
+            FROM pg_type t
+            JOIN pg_enum e ON e.enumtypid = t.oid
+            JOIN pg_namespace n ON n.oid = t.typnamespace
+            WHERE n.nspname = 'public'
+              AND t.typname = 'user_role'
+              AND e.enumlabel = 'individual'
+          ) THEN 'individual'
+          ELSE 'buyer'
+        END
+      )::public.user_role
+    END
+  ),
   COALESCE(u.created_at, now()),
   now()
 FROM auth.users u

@@ -9,10 +9,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
-import { useQueryClient } from "@tanstack/react-query";
 import { useProject, useUpdateProject } from "@/hooks/useProjects";
 import {
-  useProjectUnits, useCreateProjectUnit, useUpdateProjectUnit, useDeleteProjectUnit,
+  useProjectUnits, useCreateProjectUnit, useUpdateProjectUnit, useBulkUpdateProjectUnitPrices, useDeleteProjectUnit,
   type ProjectUnitInsert, type ProjectUnit,
 } from "@/hooks/useProjectUnits";
 import {
@@ -48,7 +47,7 @@ const MEDIA_TYPES: { value: ProjectMediaType; label: string; mandatory?: boolean
 const KITCHEN_TYPES = ["open", "closed", "semi-open", "kitchenette", "none"];
 const ENERGY_CLASSES = ["A+", "A", "B+", "B", "C", "D", "E", "F", "G", "Exempt"];
 
-function Section({ title, icon: Icon, children, defaultOpen = true }: { title: string; icon: React.ElementType; children: React.ReactNode; defaultOpen?: boolean }) {
+const Section = ({ title, icon: Icon, children, defaultOpen = true }: { title: string; icon: React.ElementType; children: React.ReactNode; defaultOpen?: boolean }) => {
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div className="glass-card rounded-xl border border-border overflow-hidden">
@@ -59,11 +58,10 @@ function Section({ title, icon: Icon, children, defaultOpen = true }: { title: s
       {open && <div className="p-5 pt-0 space-y-4">{children}</div>}
     </div>
   );
-}
+};
 
 export default function ProjectDetail() {
   const { id } = useParams();
-  const qc = useQueryClient();
   const { user, profile } = useAuth();
   const participantType = getParticipantTypeFromProfile(profile);
   const isDeveloper = participantType === "developer";
@@ -79,6 +77,7 @@ export default function ProjectDetail() {
   const updateProject = useUpdateProject();
   const createUnit = useCreateProjectUnit();
   const updateUnit = useUpdateProjectUnit();
+  const bulkUpdateUnitPrices = useBulkUpdateProjectUnitPrices();
   const deleteUnit = useDeleteProjectUnit();
   const addMedia = useAddProjectMedia();
   const deleteMedia = useDeleteProjectMedia();
@@ -92,6 +91,8 @@ export default function ProjectDetail() {
   const [leadForm, setLeadForm] = useState<Partial<ProjectLeadInsert>>({});
   const [bulkPricePct, setBulkPricePct] = useState("");
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
+  const [unitToDelete, setUnitToDelete] = useState<string | null>(null);
+  const [leadToDelete, setLeadToDelete] = useState<string | null>(null);
 
   useEffect(() => {
     if (project) {
@@ -169,12 +170,12 @@ export default function ProjectDetail() {
   };
 
   const handleDeleteUnit = (unitId: string) => {
-    if (!confirm("Remove this unit?")) return;
-    deleteUnit.mutate({ id: unitId, projectId: id! });
+    setUnitToDelete(unitId);
   };
 
   const handleLinkListing = (listingId: string) => {
-    updateListing.mutate({ id: listingId, updates: { project_id: id! } });
+    if (!id) return;
+    updateListing.mutate({ id: listingId, updates: { project_id: id } });
   };
 
   const handleUnlinkListing = (listingId: string) => {
@@ -203,28 +204,30 @@ export default function ProjectDetail() {
     setBulkConfirmOpen(true);
   };
 
-  const executeBulkPriceUpdate = async () => {
+  const executeBulkPriceUpdate = () => {
     setBulkConfirmOpen(false);
     if (!id) return;
     const pct = parseFloat(bulkPricePct);
-     
-    const availableUnits = units.filter((u: ProjectUnit) => u.availability_status === "available" && u.price);
-    try {
-      for (const u of availableUnits) {
-        const newPrice = Math.round(Number(u.price) * (1 + pct / 100));
-        const newPricePerSqm = u.internal_sqm ? newPrice / Number(u.internal_sqm) : undefined;
-         
-        const { error } = await supabase.from("project_units").update({ price: newPrice, price_per_sqm: newPricePerSqm }).eq("id", u.id);
-        if (error) throw error;
-      }
-      qc.invalidateQueries({ queryKey: ["project_units", id] });
-      qc.invalidateQueries({ queryKey: ["projects"] });
-      modal.close();
-      setBulkPricePct("");
-      toast.success(`Updated ${availableUnits.length} unit(s)`);
-    } catch (e: unknown) {
-      toast.error((e instanceof Error ? e.message : null) || "Update failed");
+    if (!Number.isFinite(pct) || pct === 0) {
+      toast.error("Enter a non-zero percentage change.");
+      return;
     }
+     
+    const availableUnits = units.filter((u: ProjectUnit) => u.availability_status === "available" && u.price != null);
+    if (availableUnits.length === 0) {
+      toast.error("No available units to update.");
+      return;
+    }
+    bulkUpdateUnitPrices.mutate(
+      { projectId: id, units: availableUnits, percentage: pct },
+      {
+        onSuccess: ({ updatedCount }) => {
+          modal.close();
+          setBulkPricePct("");
+          toast.success(`Updated ${updatedCount} unit(s)`);
+        },
+      }
+    );
   };
 
   if (!user) {
@@ -359,7 +362,17 @@ export default function ProjectDetail() {
                       {items.map((m: ProjectMedia) => (
                         <div key={m.id} className="flex items-center gap-1 bg-secondary rounded-lg px-2 py-1">
                           {m.media_type === "brochure_pdf" ? <FileText className="w-4 h-4" /> : <img src={m.url} alt="" className="w-10 h-10 rounded object-cover" />}
-                          <button type="button" onClick={() => deleteMedia.mutate({ id: m.id, projectId: id! })} className="p-1 rounded hover:bg-destructive/10 text-destructive"><Trash2 className="w-3 h-3" /></button>
+                          <button
+                            type="button"
+                            aria-label={`Delete ${m.media_type.replace(/_/g, " ")}`}
+                            onClick={() => {
+                              if (!id) return;
+                              deleteMedia.mutate({ id: m.id, projectId: id });
+                            }}
+                            className="p-1 rounded hover:bg-destructive/10 text-destructive"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
                         </div>
                       ))}
                       <label className="cursor-pointer">
@@ -397,8 +410,8 @@ export default function ProjectDetail() {
                       <div>
                         <span className="font-semibold">{u.unit_id || u.unit_number || `Unit ${u.floor || "?"}-${u.unit_number || "?"}`}</span>
                         <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${u.availability_status === "sold" ? "bg-brand-emerald/20 text-brand-emerald" : u.availability_status === "reserved" ? "bg-brand-gold/20 text-brand-gold" : "bg-primary/10 text-primary"}`}>{u.availability_status}</span>
-                        {!!u.price && <span className="ml-2 text-sm text-muted-foreground">€{Number(u.price).toLocaleString()}</span>}
-                        {!!u.internal_sqm && <span className="ml-2 text-xs text-muted-foreground">{u.internal_sqm}m²</span>}
+                        {Boolean(u.price) && <span className="ml-2 text-sm text-muted-foreground">€{Number(u.price).toLocaleString()}</span>}
+                        {Boolean(u.internal_sqm) && <span className="ml-2 text-xs text-muted-foreground">{u.internal_sqm}m²</span>}
                       </div>
                       <div className="flex gap-1">
                         <Button variant="ghost" size="icon" aria-label="Edit unit" onClick={() => setEditingUnitId(u.id)}><Edit2 className="w-4 h-4" /></Button>
@@ -454,7 +467,15 @@ export default function ProjectDetail() {
                       <option value="converted">Converted</option>
                       <option value="lost">Lost</option>
                     </select>
-                    <Button variant="ghost" size="icon" className="text-destructive h-8 w-8" onClick={() => { if (confirm("Remove lead?")) deleteLead.mutate({ id: l.id, projectId: id! }); }}><Trash2 className="w-3 h-3" /></Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Delete lead ${l.name}`}
+                      className="text-destructive h-8 w-8"
+                      onClick={() => setLeadToDelete(l.id)}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -496,14 +517,37 @@ export default function ProjectDetail() {
         title="Apply bulk price change"
         description={`Apply ${bulkPricePct}% price change to all available units? This cannot be undone.`}
         confirmLabel="Apply"
+        destructive={false}
         onConfirm={executeBulkPriceUpdate}
         onCancel={() => setBulkConfirmOpen(false)}
+      />
+      <ConfirmDialog
+        open={Boolean(unitToDelete)}
+        title="Remove unit"
+        description="Remove this unit from the project inventory?"
+        confirmLabel="Remove"
+        onConfirm={() => {
+          if (id && unitToDelete) deleteUnit.mutate({ id: unitToDelete, projectId: id });
+          setUnitToDelete(null);
+        }}
+        onCancel={() => setUnitToDelete(null)}
+      />
+      <ConfirmDialog
+        open={Boolean(leadToDelete)}
+        title="Remove lead"
+        description="Remove this lead from the project CRM?"
+        confirmLabel="Remove"
+        onConfirm={() => {
+          if (id && leadToDelete) deleteLead.mutate({ id: leadToDelete, projectId: id });
+          setLeadToDelete(null);
+        }}
+        onCancel={() => setLeadToDelete(null)}
       />
     </div>
   );
 }
 
-function UnitEditForm({ unit, onSave, onCancel, isCreate }: { unit?: ProjectUnit | null; onSave: (u: Partial<ProjectUnitInsert>) => void; onCancel: () => void; isCreate?: boolean }) {
+const UnitEditForm = ({ unit, onSave, onCancel, isCreate }: { unit?: ProjectUnit | null; onSave: (u: Partial<ProjectUnitInsert>) => void; onCancel: () => void; isCreate?: boolean }) => { // skipcq: JS-R1005 - UnitEditForm intentionally maps one dense project-unit schema into a single editor.
   const [f, setF] = useState({
     unit_id: unit?.unit_id || "",
     floor: unit?.floor ?? "",
@@ -581,4 +625,4 @@ function UnitEditForm({ unit, onSave, onCancel, isCreate }: { unit?: ProjectUnit
       </div>
     </div>
   );
-}
+};

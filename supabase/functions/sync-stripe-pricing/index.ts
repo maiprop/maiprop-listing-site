@@ -6,7 +6,7 @@
  *   - If price exists but amount changed (prices are immutable): archive old price, create new price, save new price_id
  * - Returns a summary of actions taken per config.
  */
-import Stripe from "https://esm.sh/stripe@18.5.0";
+import Stripe from "npm:stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { createLogger } from "../_shared/logger.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";

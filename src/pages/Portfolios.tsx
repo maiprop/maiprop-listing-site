@@ -18,13 +18,14 @@ import { useAuth } from "@/contexts/AuthContext";
 import { dbListingToCard } from "@/lib/listingUtils";
 import { toast } from "sonner";
 import { ProGate } from "@/components/gates/ProGate";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 /** Shape returned by useFavorites(): a favorites row with the joined listing. */
 type FavoriteRow = Database["public"]["Tables"]["favorites"]["Row"] & {
   listings: Database["public"]["Tables"]["listings"]["Row"] | null;
 };
 
-function Portfolios() {
+const Portfolios = () => { // skipcq: JS-R1005 - Portfolio list actions share one confirmation and rename state for a compact dashboard page.
   const { user } = useAuth();
   const { data: portfolios = [], isLoading } = usePortfolios();
   const { data: favorites = [] } = useFavorites();
@@ -36,6 +37,7 @@ function Portfolios() {
   const [newName, setNewName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
+  const [portfolioToDelete, setPortfolioToDelete] = useState<string | null>(null);
 
   const handleCreate = () => {
     if (!newName.trim()) {
@@ -51,8 +53,7 @@ function Portfolios() {
   };
 
   const handleDelete = (id: string) => {
-    if (!confirm("Delete this portfolio?")) return;
-    deletePortfolio.mutate(id);
+    setPortfolioToDelete(id);
   };
 
   const handleRename = (id: string) => {
@@ -166,11 +167,22 @@ function Portfolios() {
         </ProGate>
       </main>
       <Footer />
+      <ConfirmDialog
+        open={Boolean(portfolioToDelete)}
+        title="Delete portfolio"
+        description="Delete this portfolio and remove its listing groupings?"
+        confirmLabel="Delete"
+        onConfirm={() => {
+          if (portfolioToDelete) deletePortfolio.mutate(portfolioToDelete);
+          setPortfolioToDelete(null);
+        }}
+        onCancel={() => setPortfolioToDelete(null)}
+      />
     </div>
   );
-}
+};
 
-function PortfolioDetail({
+const PortfolioDetail = ({ // skipcq: JS-R1005 - Portfolio detail coordinates listing membership, rename, and add/remove controls in one repeated item.
   portfolioId,
   portfolio,
   favorites,
@@ -194,7 +206,7 @@ function PortfolioDetail({
   onSaveRename: (id: string) => void;
   onCancelEdit: () => void;
   updatePortfolio: ReturnType<typeof useUpdatePortfolio>;
-}) {
+}) => {
   const { data: fullPortfolio } = usePortfolio(portfolioId);
   // fullPortfolio is the full join (listings included); portfolio is the
   // sidebar entry (no listings). Default to an empty listings[] so callers
@@ -303,6 +315,6 @@ function PortfolioDetail({
       </div>
     </div>
   );
-}
+};
 
 export default Portfolios;

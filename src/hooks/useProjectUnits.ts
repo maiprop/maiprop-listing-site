@@ -37,7 +37,13 @@ export type ProjectUnitInsert = {
 
 export type ProjectUnitUpdate = Partial<Omit<ProjectUnitInsert, "project_id">>;
 
-export function useProjectUnits(projectId: string | undefined) {
+export type BulkUpdateProjectUnitPricesInput = {
+  projectId: string;
+  units: Array<Pick<ProjectUnit, "id" | "internal_sqm" | "price" | "project_id">>;
+  percentage: number;
+};
+
+export const useProjectUnits = (projectId: string | undefined) => {
   return useQuery({
     queryKey: ["project_units", projectId],
     queryFn: async () => {
@@ -51,11 +57,11 @@ export function useProjectUnits(projectId: string | undefined) {
       if (error) throw error;
       return data || [];
     },
-    enabled: !!projectId,
+    enabled: Boolean(projectId),
   });
-}
+};
 
-export function useCreateProjectUnit() {
+export const useCreateProjectUnit = () => {
   const qc = useQueryClient();
   const { user } = useAuth();
   return useMutation({
@@ -76,9 +82,9 @@ export function useCreateProjectUnit() {
     },
     onError: () => toast.error("Failed to add unit. Please try again."),
   });
-}
+};
 
-export function useUpdateProjectUnit() {
+export const useUpdateProjectUnit = () => {
   const qc = useQueryClient();
   const { user } = useAuth();
   return useMutation({
@@ -101,9 +107,36 @@ export function useUpdateProjectUnit() {
     },
     onError: () => toast.error("Failed to update unit. Please try again."),
   });
-}
+};
 
-export function useDeleteProjectUnit() {
+export const useBulkUpdateProjectUnitPrices = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ projectId, units, percentage }: BulkUpdateProjectUnitPricesInput) => {
+      if (units.length === 0) return { updatedCount: 0 };
+
+      // Localized escape hatch: generated Supabase types can lag new migrations in PR CI.
+      const rpc = supabase.rpc as unknown as (
+        fn: "bulk_update_project_unit_prices",
+        args: { p_project_id: string; p_percentage: number },
+      ) => Promise<{ data: number | null; error: Error | null }>;
+      const { data, error } = await rpc("bulk_update_project_unit_prices", {
+        p_project_id: projectId,
+        p_percentage: percentage,
+      });
+
+      if (error) throw error;
+      return { updatedCount: data ?? 0 };
+    },
+    onSuccess: (_data, { projectId }) => {
+      qc.invalidateQueries({ queryKey: ["project_units", projectId] });
+      qc.invalidateQueries({ queryKey: ["projects"] });
+    },
+    onError: () => toast.error("Failed to update unit prices. Please try again."),
+  });
+};
+
+export const useDeleteProjectUnit = () => {
   const qc = useQueryClient();
   const { user } = useAuth();
   return useMutation({
@@ -123,4 +156,4 @@ export function useDeleteProjectUnit() {
     },
     onError: () => toast.error("Failed to remove unit. Please try again."),
   });
-}
+};

@@ -24,7 +24,10 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   // Redirect to onboarding for new users — but don't loop if already on /onboarding
-  if (needsOnboarding && location.pathname !== "/onboarding") {
+  const isAccountSettingsRoute = location.pathname === "/dashboard/settings";
+
+  // Keep account settings reachable for account-level actions such as GDPR deletion.
+  if (needsOnboarding && location.pathname !== "/onboarding" && !isAccountSettingsRoute) {
     return <Navigate to="/onboarding" replace />;
   }
 

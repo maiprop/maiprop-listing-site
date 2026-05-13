@@ -14,7 +14,7 @@ import React from "react";
 
 // ── Module mocks (hoisted above imports) ──────────────────────────────────
 vi.mock("@/integrations/supabase/client", () => ({
-  supabase: { from: vi.fn(), auth: { getUser: vi.fn() } },
+  supabase: { from: vi.fn(), rpc: vi.fn(), auth: { getUser: vi.fn() } },
 }));
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: vi.fn(),
@@ -24,7 +24,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useDeleteProjectMedia } from "@/hooks/useProjectMedia";
 import { useDeleteProjectLead, useUpdateProjectLead } from "@/hooks/useProjectLeads";
-import { useDeleteProjectUnit, useUpdateProjectUnit } from "@/hooks/useProjectUnits";
+import { useBulkUpdateProjectUnitPrices, useDeleteProjectUnit, useUpdateProjectUnit, type BulkUpdateProjectUnitPricesInput } from "@/hooks/useProjectUnits";
 import { useUpdateContactTask } from "@/hooks/useContacts";
 import { useUpdateLead, useDeleteLead } from "@/hooks/useLeads";
 import { useToggleFavorite } from "@/hooks/useFavorites";
@@ -179,6 +179,38 @@ describe("IDOR ownership guards on project mutation hooks", () => {
     expect(chain.eqCalls).toContainEqual(["id", "unit-1"]);
     expect(chain.eqCalls).toContainEqual(["project_id", "proj-xyz"]);
     expect(ownerChain.eqCalls).toContainEqual(["owner_id", TEST_USER_ID]);
+  });
+
+  it("useBulkUpdateProjectUnitPrices delegates available-unit ownership checks to the bulk RPC", async () => {
+    vi.mocked(supabase.rpc).mockResolvedValue({
+      data: 2,
+      error: null,
+      success: true,
+      count: null,
+      status: 200,
+      statusText: "OK",
+    });
+
+    const { result } = renderHook(() => useBulkUpdateProjectUnitPrices(), { wrapper });
+    const units: BulkUpdateProjectUnitPricesInput["units"] = [
+      { id: "unit-1", project_id: "proj-xyz", price: 100000, internal_sqm: 50 },
+      { id: "unit-2", project_id: "proj-xyz", price: 150000, internal_sqm: 75 },
+    ];
+
+    let response: { updatedCount: number } | undefined;
+    await act(async () => {
+      response = await result.current.mutateAsync({
+        projectId: "proj-xyz",
+        percentage: 5,
+        units,
+      });
+    });
+
+    expect(supabase.rpc).toHaveBeenCalledWith("bulk_update_project_unit_prices", {
+      p_project_id: "proj-xyz",
+      p_percentage: 5,
+    });
+    expect(response?.updatedCount).toBe(2);
   });
 });
 

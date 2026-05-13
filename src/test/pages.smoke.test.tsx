@@ -380,6 +380,7 @@ vi.mock("@/hooks/useProjectUnits", () => ({
   useProjectUnits: vi.fn().mockReturnValue({ data: [], isLoading: false }),
   useCreateProjectUnit: vi.fn().mockReturnValue({ mutate: vi.fn() }),
   useUpdateProjectUnit: vi.fn().mockReturnValue({ mutateAsync: vi.fn() }),
+  useBulkUpdateProjectUnitPrices: vi.fn().mockReturnValue({ mutate: vi.fn() }),
   useDeleteProjectUnit: vi.fn().mockReturnValue({ mutateAsync: vi.fn() }),
 }));
 
