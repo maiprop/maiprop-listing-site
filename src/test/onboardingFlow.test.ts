@@ -8,6 +8,7 @@ describe("onboardingFlow", () => {
   it("recognizes only known onboarding steps", () => {
     expect(isOnboardingStep("pro-video")).toBe(true);
     expect(isOnboardingStep("pro-services")).toBe(true);
+    expect(isOnboardingStep("done")).toBe(true);
     expect(isOnboardingStep("unknown-step")).toBe(false);
     expect(isOnboardingStep(null)).toBe(false);
   });

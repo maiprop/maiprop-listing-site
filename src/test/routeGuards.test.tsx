@@ -13,6 +13,7 @@ import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { renderWithProviders } from "@/test/utils";
 
 const { useAuthMock, useSubscriptionMock, useEligibleMock } = vi.hoisted(() => ({
   useAuthMock: vi.fn(),
@@ -353,6 +354,25 @@ describe("SellerRoute", () => {
 // ─── DeveloperRoute ─────────────────────────────────────────────────────────
 
 describe("DeveloperRoute", () => {
+  const renderDeveloperRoute = () => renderWithProviders(
+    <Routes>
+      <Route
+        path="/private"
+        element={(
+          <DeveloperRoute>
+            <div>PROJECTS</div>
+          </DeveloperRoute>
+        )}
+      />
+      <Route path="/login" element={<div>at-login</div>} />
+      <Route path="/dashboard" element={<div>at-dashboard</div>} />
+      <Route path="/dashboard/settings" element={<div>at-settings</div>} />
+      <Route path="/pricing" element={<div>at-pricing</div>} />
+      <Route path="/onboarding" element={<div>at-onboarding</div>} />
+    </Routes>,
+    { initialPath: "/private" },
+  );
+
   it("blocks unauthenticated visitors at the ProtectedRoute layer", () => {
     useAuthMock.mockReturnValue({
       user: null,
@@ -360,12 +380,21 @@ describe("DeveloperRoute", () => {
       profileLoading: false,
       needsOnboarding: false,
     });
-    renderGuarded(
-      <DeveloperRoute>
-        <div>PROJECTS</div>
-      </DeveloperRoute>,
-    );
+    renderDeveloperRoute();
     expect(screen.getByText("at-login")).toBeInTheDocument();
+  });
+
+  it("shows a recovery view when an authenticated user has no resolved profile", () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "u-1" },
+      profile: null,
+      loading: false,
+      profileLoading: false,
+      needsOnboarding: false,
+    });
+    renderDeveloperRoute();
+    expect(screen.getByText(/Profile Required/i)).toBeInTheDocument();
+    expect(screen.queryByText("PROJECTS")).toBeNull();
   });
 
   it("blocks non-developer Pro accounts from developer modules", () => {
@@ -377,11 +406,7 @@ describe("DeveloperRoute", () => {
       needsOnboarding: false,
     });
     useSubscriptionMock.mockReturnValue({ isPro: true, loading: false });
-    renderGuarded(
-      <DeveloperRoute>
-        <div>PROJECTS</div>
-      </DeveloperRoute>,
-    );
+    renderDeveloperRoute();
     expect(screen.getByText(/Developer Access Required/i)).toBeInTheDocument();
     expect(screen.queryByText("PROJECTS")).toBeNull();
   });
@@ -395,11 +420,7 @@ describe("DeveloperRoute", () => {
       needsOnboarding: false,
     });
     useSubscriptionMock.mockReturnValue({ isPro: false, loading: false });
-    renderGuarded(
-      <DeveloperRoute>
-        <div>PROJECTS</div>
-      </DeveloperRoute>,
-    );
+    renderDeveloperRoute();
     expect(screen.getByText(/Developer Pro Required/i)).toBeInTheDocument();
     expect(screen.queryByText("PROJECTS")).toBeNull();
   });
@@ -413,11 +434,7 @@ describe("DeveloperRoute", () => {
       needsOnboarding: false,
     });
     useSubscriptionMock.mockReturnValue({ isPro: true, loading: false });
-    renderGuarded(
-      <DeveloperRoute>
-        <div>PROJECTS</div>
-      </DeveloperRoute>,
-    );
+    renderDeveloperRoute();
     expect(screen.getByText("PROJECTS")).toBeInTheDocument();
   });
 
@@ -429,11 +446,7 @@ describe("DeveloperRoute", () => {
       profileLoading: false,
       needsOnboarding: false,
     });
-    renderGuarded(
-      <DeveloperRoute>
-        <div>PROJECTS</div>
-      </DeveloperRoute>,
-    );
+    renderDeveloperRoute();
     expect(screen.getByText("PROJECTS")).toBeInTheDocument();
   });
 });

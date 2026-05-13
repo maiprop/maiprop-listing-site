@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { isPlatformAdmin } from "@/lib/authUtils";
 import { useSubscription } from "@/hooks/useSubscription";
 import { Button } from "@/components/ui/button";
-import { ProtectedRoute } from "./ProtectedRoute";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 /** Protects Developer-only project and portfolio modules. */
 export function DeveloperRoute({ children }: { children: React.ReactNode }) {
@@ -19,10 +19,36 @@ function DeveloperGate({ children }: { children: React.ReactNode }) {
   const { profile, loading } = useAuth();
   const { isPro, loading: subLoading } = useSubscription();
 
-  if (loading || subLoading || !profile) {
+  if (loading || subLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="w-10 h-10 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />
+      </div>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center px-4">
+        <div className="max-w-md w-full text-center space-y-5">
+          <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto">
+            <Building2 className="h-7 w-7 text-muted-foreground" aria-hidden="true" />
+          </div>
+          <div>
+            <h1 className="font-display text-2xl font-bold mb-2">Profile Required</h1>
+            <p className="text-muted-foreground text-sm">
+              We could not load your account profile. Refresh your session or return to the dashboard before opening developer modules.
+            </p>
+          </div>
+          <div className="flex gap-3 justify-center">
+            <Button asChild>
+              <Link to="/dashboard">Back to Dashboard</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link to="/login">Sign In Again</Link>
+            </Button>
+          </div>
+        </div>
       </div>
     );
   }

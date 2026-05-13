@@ -298,6 +298,10 @@ export default function Onboarding() {
         localStorage.removeItem(DRAFT_KEY);
         return;
       }
+      if (draft.step === "done") {
+        localStorage.removeItem(DRAFT_KEY);
+        return;
+      }
       draftRestoredRef.current = true;
       const p = typeof draft.selectedId === "string" ? participants.find(x => x.id === draft.selectedId) ?? null : null;
       if (!canRestoreDraftStep(p, draft.step)) {
@@ -620,6 +624,12 @@ export default function Onboarding() {
       is_active: true,
     }));
      
+    const { error: deleteError } = await supabase
+      .from("professional_availability")
+      .delete()
+      .eq("professional_id", professionalId);
+    if (deleteError) { toast.error("Could not update availability. Please try again."); setLoading(false); return; }
+
     if (rows.length > 0) {
       const { error } = await supabase.from("professional_availability").insert(rows);
       if (error) { toast.error("Could not save availability. Please try again."); setLoading(false); return; }
