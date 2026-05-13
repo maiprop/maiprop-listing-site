@@ -524,7 +524,9 @@ export default function Onboarding() {
   /** Handler for professional sub-type selection */
   const handleProSubType = (type: "agent" | "developer" | "service_pro") => {
     if (requireAuth(type)) return;
-    void proSubTypeHandlers[type]();
+    Promise.resolve(proSubTypeHandlers[type]()).catch(() => {
+      toast.error("Could not save your selection. Please try again.");
+    });
   };
 
   const handleDeveloperSetup = async () => {
@@ -675,7 +677,10 @@ export default function Onboarding() {
     if (!requireVideoSaveUser()) {
       return;
     }
-    void runVideoSave();
+    runVideoSave().catch(() => {
+      toast.error("Could not save video settings. Please try again.");
+      setLoading(false);
+    });
   };
 
   const { data: pricingConfigs = {} } = usePricingConfigs();
@@ -717,7 +722,7 @@ export default function Onboarding() {
           onConfirm={(id) => {
             if (id === "buyer") { maybeBillingGate("buyer", () => handleParticipantGoal("buyer")); return; }
             if (id === "seller") { maybeBillingGate("seller", () => handleParticipantGoal("seller")); return; }
-            if (id === "agent") { maybeBillingGate("agent", () => void handleProSubType("agent")); return; }
+            if (id === "agent") { maybeBillingGate("agent", () => { handleProSubType("agent"); }); return; }
           }}
         />
       );
@@ -898,7 +903,11 @@ export default function Onboarding() {
           fromType={switchCtx.fromType}
           toType={billingModalToType}
           hasActiveSub={switchCtx.hadActiveSub}
-          onConfirm={() => void handleBillingModalConfirm()}
+          onConfirm={() => {
+            handleBillingModalConfirm().catch(() => {
+              toast.error("Could not continue. Please try again.");
+            });
+          }}
           onCancel={handleBillingModalCancel}
           confirming={billingConfirming}
         />

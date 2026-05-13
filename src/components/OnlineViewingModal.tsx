@@ -82,13 +82,11 @@ export default function OnlineViewingModal({ open, onClose, listing, professiona
     if (!user && (!resolvedName.trim() || !resolvedEmail.trim())) { toast.error("Please fill in your name and email"); return; }
 
     try {
-      if (listing && !user) {
-        // Guest property bookings cannot be persisted safely without auth.
-        toast.error("Please sign in to book a video viewing");
-        return;
-      }
-
-      if (listing && user) {
+      if (listing) {
+        if (!user) {
+          toast.error("Please sign in to book a video viewing");
+          return;
+        }
         // Real viewing booking into viewings table
         await bookViewing.mutateAsync({
           listing_id: listing.id,
@@ -108,7 +106,7 @@ export default function OnlineViewingModal({ open, onClose, listing, professiona
           preferred_time: selectedTime,
           message: `[Online Meeting via ${platforms.find(p => p.id === platform)?.label}] ${note}`,
         });
-      } else if (isProperty && !user) {
+      } else {
         // Guest property viewing — can't save without auth, show error
         toast.error("Please sign in to book a video viewing");
         return;
