@@ -125,6 +125,10 @@ export default function Dashboard() {
   useEffect(() => {
     if (!section) return;
     const routeSection = section as NavKey;
+    if (routeSection === "settings" && activeSection !== "settings") {
+      setActiveSection("settings");
+      return;
+    }
     const routeSectionIsAvailable = sectionNavItems.some((item) => item.key === routeSection);
     if (routeSectionIsAvailable && activeSection !== routeSection) {
       setActiveSection(routeSection);
@@ -668,7 +672,7 @@ export default function Dashboard() {
           )}
 
           {/* ── SETTINGS ─────────────────────────────────────────────── */}
-          {activeSection === "settings" && navItems.some(i => i.key === "settings") && (
+          {activeSection === "settings" && (
             <SettingsSection
               roleLabel={roleLabel}
               onUpdate={updateProfile}
