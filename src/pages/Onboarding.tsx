@@ -666,8 +666,8 @@ export default function Onboarding() {
     return false;
   };
 
-  const saveVideoSettings = async (): Promise<boolean> => {
-    if (!canSaveVideoSettings() || !user || !professionalId) return true;
+  const saveVideoSettings = (): Promise<boolean> => {
+    if (!canSaveVideoSettings() || !user || !professionalId) return Promise.resolve(true);
     return persistVideoSettings(user.id, professionalId);
   };
 

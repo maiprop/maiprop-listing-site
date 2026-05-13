@@ -35,6 +35,16 @@ const useInvestorProStatus = (userId: string | undefined, enabled: boolean) => {
 };
 
 const isActiveInvestorStatus = (status: string | undefined) => status === "active" || status === "trial";
+const hasAnyProAccess = (flags: boolean[]) => flags.includes(true);
+const isLoadingSubscriptionAccess = (options: {
+  subscriptionLoading: boolean;
+  subscribed: boolean;
+  hasEffectiveProduct: boolean;
+  pricingConfigsLoading: boolean;
+}) => (
+  options.subscriptionLoading ||
+  [options.subscribed, options.hasEffectiveProduct, options.pricingConfigsLoading].every(Boolean)
+);
 
 const getDeveloperProductIds = (pricingConfigs: ReturnType<typeof usePricingConfigs>["data"]) => [
   pricingConfigs?.[PRICING_KEYS.developer_pro]?.stripeProductId,
@@ -66,7 +76,7 @@ const hasDeveloperEntitlement = (options: {
  * subscription grants broad Pro access, while developer modules require a
  * Developer Pro product or explicit platform/admin entitlement.
  */
-export function useSubscription() {
+export const useSubscription = () => {
   const { subscription, refreshSubscription, profile, user } = useAuth();
   const { data: pricingConfigs, isLoading: pricingConfigsLoading } = usePricingConfigs();
   const { productId: profileProductId, forceProAccess } = getProfileSubscriptionFields(profile);
@@ -78,7 +88,7 @@ export function useSubscription() {
   const { data: investorSubStatus } = useInvestorProStatus(user?.id, isInvestorRole);
   const hasInvestorPro = isInvestorRole && isActiveInvestorStatus(investorSubStatus?.status);
 
-  const isPro = isAdmin || hasStripePro || hasInvestorPro || forceProAccess;
+  const isPro = hasAnyProAccess([isAdmin, hasStripePro, hasInvestorPro, forceProAccess]);
   const hasDeveloperPro = hasDeveloperEntitlement({
     isAdmin,
     forceProAccess,
@@ -93,7 +103,12 @@ export function useSubscription() {
     subscribed: subscription.subscribed,
     productId: effectiveProductId,
     subscriptionEnd: subscription.subscriptionEnd,
-    loading: subscription.loading || (subscription.subscribed && hasEffectiveProduct && pricingConfigsLoading),
+    loading: isLoadingSubscriptionAccess({
+      subscriptionLoading: subscription.loading,
+      subscribed: subscription.subscribed,
+      hasEffectiveProduct,
+      pricingConfigsLoading,
+    }),
     refreshSubscription,
   };
-}
+};

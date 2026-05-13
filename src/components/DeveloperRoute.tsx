@@ -8,8 +8,13 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 type GateStatus = "loading" | "missing-profile" | "admin" | "wrong-role" | "missing-plan" | "allowed";
 type GateCheck = {
-  when: boolean;
   status: GateStatus;
+  matches: (context: {
+    profile: ReturnType<typeof useAuth>["profile"];
+    loading: boolean;
+    subLoading: boolean;
+    hasDeveloperPro: boolean;
+  }) => boolean;
 };
 
 type GateMessageProps = {
@@ -84,20 +89,22 @@ const GateMessage = ({ tone, title, message, primary, secondary }: GateMessagePr
   </div>
 );
 
+const gateChecks: GateCheck[] = [
+  { status: "loading", matches: ({ loading, subLoading }) => [loading, subLoading].includes(true) },
+  { status: "missing-profile", matches: ({ profile }) => profile === null },
+  { status: "admin", matches: ({ profile }) => isPlatformAdmin(profile) },
+  { status: "wrong-role", matches: ({ profile }) => profile?.role !== "developer" },
+  { status: "allowed", matches: ({ hasDeveloperPro }) => hasDeveloperPro },
+];
+
 const getGateStatus = (
   profile: ReturnType<typeof useAuth>["profile"],
   loading: boolean,
   subLoading: boolean,
   hasDeveloperPro: boolean,
 ): GateStatus => {
-  const checks: GateCheck[] = [
-    { when: loading || subLoading, status: "loading" },
-    { when: !profile, status: "missing-profile" },
-    { when: isPlatformAdmin(profile), status: "admin" },
-    { when: profile?.role !== "developer", status: "wrong-role" },
-    { when: hasDeveloperPro, status: "allowed" },
-  ];
-  return checks.find((check) => check.when)?.status ?? "missing-plan";
+  const context = { profile, loading, subLoading, hasDeveloperPro };
+  return gateChecks.find((check) => check.matches(context))?.status ?? "missing-plan";
 };
 
 const DeveloperGate = ({ children }: { children: React.ReactNode }) => {
