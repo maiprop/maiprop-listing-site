@@ -83,14 +83,13 @@ export default function BrandedVideoRoom() {
       if (qErr) throw qErr;
       return data;
     },
-    enabled: !!professionalId,
+    enabled: Boolean(professionalId),
   });
 
   // ── Derived values ───────────────────────────────────────────────────────
   const EXTERNAL_PATTERNS = ["zoom.us", "whereby.com", "meet.google.com", "teams.microsoft.com"];
-  const isExternalLink =
-    !!pro?.video_link &&
-    EXTERNAL_PATTERNS.some((p) => pro.video_link!.includes(p));
+  const videoLink = pro?.video_link ?? "";
+  const isExternalLink = Boolean(videoLink) && EXTERNAL_PATTERNS.some((p) => videoLink.includes(p));
 
   const jitsiRoom = `maiprop-${professionalId}`;
   const jitsiUrl = `https://meet.jit.si/${jitsiRoom}`;

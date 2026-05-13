@@ -24,7 +24,7 @@ type FavoriteRow = Database["public"]["Tables"]["favorites"]["Row"] & {
   listings: Database["public"]["Tables"]["listings"]["Row"] | null;
 };
 
-function Portfolios() {
+const Portfolios = () => {
   const { user } = useAuth();
   const { data: portfolios = [], isLoading } = usePortfolios();
   const { data: favorites = [] } = useFavorites();
@@ -168,9 +168,9 @@ function Portfolios() {
       <Footer />
     </div>
   );
-}
+};
 
-function PortfolioDetail({
+const PortfolioDetail = ({
   portfolioId,
   portfolio,
   favorites,
@@ -194,7 +194,7 @@ function PortfolioDetail({
   onSaveRename: (id: string) => void;
   onCancelEdit: () => void;
   updatePortfolio: ReturnType<typeof useUpdatePortfolio>;
-}) {
+}) => {
   const { data: fullPortfolio } = usePortfolio(portfolioId);
   // fullPortfolio is the full join (listings included); portfolio is the
   // sidebar entry (no listings). Default to an empty listings[] so callers
@@ -303,6 +303,6 @@ function PortfolioDetail({
       </div>
     </div>
   );
-}
+};
 
 export default Portfolios;

@@ -15,11 +15,11 @@ type OnboardingRequest = {
 
 const ROLES = new Set(["buyer", "seller", "agent", "developer", "professional"]);
 
-function optionalString(value: unknown, maxLength: number): string | null {
+const optionalString = (value: unknown, maxLength: number): string | null => {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed.length === 0 ? null : trimmed.slice(0, maxLength);
-}
+};
 
 Deno.serve(async (req) => {
   const corsPreflightResponse = handleCors(req);

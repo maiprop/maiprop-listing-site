@@ -48,7 +48,7 @@ const MEDIA_TYPES: { value: ProjectMediaType; label: string; mandatory?: boolean
 const KITCHEN_TYPES = ["open", "closed", "semi-open", "kitchenette", "none"];
 const ENERGY_CLASSES = ["A+", "A", "B+", "B", "C", "D", "E", "F", "G", "Exempt"];
 
-function Section({ title, icon: Icon, children, defaultOpen = true }: { title: string; icon: React.ElementType; children: React.ReactNode; defaultOpen?: boolean }) {
+const Section = ({ title, icon: Icon, children, defaultOpen = true }: { title: string; icon: React.ElementType; children: React.ReactNode; defaultOpen?: boolean }) => {
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div className="glass-card rounded-xl border border-border overflow-hidden">
@@ -59,7 +59,7 @@ function Section({ title, icon: Icon, children, defaultOpen = true }: { title: s
       {open && <div className="p-5 pt-0 space-y-4">{children}</div>}
     </div>
   );
-}
+};
 
 export default function ProjectDetail() {
   const { id } = useParams();
@@ -397,8 +397,8 @@ export default function ProjectDetail() {
                       <div>
                         <span className="font-semibold">{u.unit_id || u.unit_number || `Unit ${u.floor || "?"}-${u.unit_number || "?"}`}</span>
                         <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${u.availability_status === "sold" ? "bg-brand-emerald/20 text-brand-emerald" : u.availability_status === "reserved" ? "bg-brand-gold/20 text-brand-gold" : "bg-primary/10 text-primary"}`}>{u.availability_status}</span>
-                        {!!u.price && <span className="ml-2 text-sm text-muted-foreground">€{Number(u.price).toLocaleString()}</span>}
-                        {!!u.internal_sqm && <span className="ml-2 text-xs text-muted-foreground">{u.internal_sqm}m²</span>}
+                        {Boolean(u.price) && <span className="ml-2 text-sm text-muted-foreground">€{Number(u.price).toLocaleString()}</span>}
+                        {Boolean(u.internal_sqm) && <span className="ml-2 text-xs text-muted-foreground">{u.internal_sqm}m²</span>}
                       </div>
                       <div className="flex gap-1">
                         <Button variant="ghost" size="icon" aria-label="Edit unit" onClick={() => setEditingUnitId(u.id)}><Edit2 className="w-4 h-4" /></Button>
@@ -503,7 +503,7 @@ export default function ProjectDetail() {
   );
 }
 
-function UnitEditForm({ unit, onSave, onCancel, isCreate }: { unit?: ProjectUnit | null; onSave: (u: Partial<ProjectUnitInsert>) => void; onCancel: () => void; isCreate?: boolean }) {
+const UnitEditForm = ({ unit, onSave, onCancel, isCreate }: { unit?: ProjectUnit | null; onSave: (u: Partial<ProjectUnitInsert>) => void; onCancel: () => void; isCreate?: boolean }) => {
   const [f, setF] = useState({
     unit_id: unit?.unit_id || "",
     floor: unit?.floor ?? "",
@@ -581,4 +581,4 @@ function UnitEditForm({ unit, onSave, onCancel, isCreate }: { unit?: ProjectUnit
       </div>
     </div>
   );
-}
+};

@@ -18,7 +18,7 @@ import type { Tables } from "@/integrations/supabase/types";
 type ProjectListing = { id: string; title: string; cover_image_url?: string | null; price?: number | null };
 type ProjectWithListings = Tables<"projects"> & { listings?: ProjectListing[] };
 
-function Projects() {
+const Projects = () => {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
   const participantType = getParticipantTypeFromProfile(profile);
@@ -340,6 +340,6 @@ function Projects() {
       <Footer />
     </div>
   );
-}
+};
 
 export default Projects;
