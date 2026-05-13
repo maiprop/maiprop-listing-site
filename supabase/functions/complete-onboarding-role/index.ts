@@ -54,10 +54,7 @@ const parseOnboardingBody = (body: OnboardingRequest) => {
   };
 };
 
-Deno.serve(async (req) => {
-  const corsPreflightResponse = handleCors(req);
-  if (corsPreflightResponse) return corsPreflightResponse;
-
+const handlePost = async (req: Request): Promise<Response> => {
   if (req.method !== "POST") {
     return jsonResponse(req, { error: "Method not allowed" }, 405);
   }
@@ -93,4 +90,9 @@ Deno.serve(async (req) => {
     log.warn("complete failed", { status, err: message });
     return jsonResponse(req, { error: message }, status);
   }
+};
+
+Deno.serve(async (req) => {
+  const corsPreflightResponse = handleCors(req);
+  return corsPreflightResponse ?? handlePost(req);
 });

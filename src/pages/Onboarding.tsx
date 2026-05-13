@@ -515,18 +515,16 @@ export default function Onboarding() {
     if (ok) setStep("done");
   };
 
+  const proSubTypeHandlers = {
+    service_pro: () => selectParticipantStep("professional", "pro-category", "Professional"),
+    developer: () => selectParticipantStep("developer", "developer-setup", "Developer"),
+    agent: saveAgentSelection,
+  } satisfies Record<"agent" | "developer" | "service_pro", () => boolean | Promise<void>>;
+
   /** Handler for professional sub-type selection */
   const handleProSubType = async (type: "agent" | "developer" | "service_pro") => {
     if (requireAuth(type)) return;
-    if (type === "service_pro") {
-      selectParticipantStep("professional", "pro-category", "Professional");
-      return;
-    }
-    if (type === "developer") {
-      selectParticipantStep("developer", "developer-setup", "Developer");
-      return;
-    }
-    await saveAgentSelection();
+    await proSubTypeHandlers[type]();
   };
 
   const handleDeveloperSetup = async () => {

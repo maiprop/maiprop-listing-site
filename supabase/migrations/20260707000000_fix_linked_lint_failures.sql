@@ -58,43 +58,8 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
-DECLARE
-  v_role TEXT;
-  v_is_pro BOOLEAN;
-  v_limit INT;
-  v_count INT;
 BEGIN
-  SELECT
-    COALESCE(p.role, 'buyer'),
-    (
-      p.subscription_product_id IS NOT NULL
-      AND EXISTS (
-        SELECT 1
-        FROM public.pro_product_ids pp
-        WHERE pp.product_id = p.subscription_product_id
-      )
-    )
-    OR COALESCE(p.force_pro_access, FALSE)
-  INTO v_role, v_is_pro
-  FROM public.profiles p
-  WHERE p.user_id = (SELECT auth.uid());
-
-  IF NOT FOUND THEN
-    RETURN FALSE;
-  END IF;
-
-  v_limit := public.get_listing_limit(v_role, v_is_pro);
-
-  IF v_limit IS NULL THEN
-    RETURN TRUE;
-  END IF;
-
-  SELECT COUNT(*)
-  INTO v_count
-  FROM public.listings
-  WHERE owner_id = (SELECT auth.uid());
-
-  RETURN v_count < v_limit;
+  RETURN public.check_listing_quota();
 END;
 $$;
 
