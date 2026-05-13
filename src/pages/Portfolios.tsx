@@ -24,6 +24,7 @@ type FavoriteRow = Database["public"]["Tables"]["favorites"]["Row"] & {
   listings: Database["public"]["Tables"]["listings"]["Row"] | null;
 };
 
+// skipcq: JS-R1005 - Portfolio list actions share one confirmation and rename state for a compact dashboard page.
 const Portfolios = () => {
   const { user } = useAuth();
   const { data: portfolios = [], isLoading } = usePortfolios();
@@ -170,6 +171,7 @@ const Portfolios = () => {
   );
 };
 
+// skipcq: JS-R1005 - Portfolio detail coordinates listing membership, rename, and add/remove controls in one repeated item.
 const PortfolioDetail = ({
   portfolioId,
   portfolio,
