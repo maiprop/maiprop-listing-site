@@ -12,6 +12,8 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AdminRoute } from "@/components/AdminRoute";
 import { InvestorRoute } from "@/components/InvestorRoute";
 import { SellerRoute } from "@/components/SellerRoute";
+import { DeveloperRoute } from "@/components/DeveloperRoute";
+import { NewBuildingRoute } from "@/components/NewBuildingRoute";
 import { BottomNav } from "@/components/BottomNav";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useAiTranslation } from "@/hooks/useAiTranslation";
@@ -113,7 +115,7 @@ const App = () => (
                     <Routes>
                       <Route path="/" element={<ErrorBoundary><Index /></ErrorBoundary>} />
                       <Route path="/listings/new" element={<SellerRoute><ErrorBoundary><CreateListing /></ErrorBoundary></SellerRoute>} />
-                      <Route path="/listings/new-building" element={<SellerRoute><ErrorBoundary><CreateNewBuildingListing /></ErrorBoundary></SellerRoute>} />
+                      <Route path="/listings/new-building" element={<NewBuildingRoute><ErrorBoundary><CreateNewBuildingListing /></ErrorBoundary></NewBuildingRoute>} />
                       <Route path="/listings" element={<ErrorBoundary><Listings /></ErrorBoundary>} />
                       <Route path="/property/:id" element={<ErrorBoundary><PropertyDetail /></ErrorBoundary>} />
                       <Route path="/auction/:id" element={<ErrorBoundary><AuctionRouter /></ErrorBoundary>} />
@@ -137,9 +139,9 @@ const App = () => (
                       <Route path="/terms-of-service" element={<ErrorBoundary><TermsOfService /></ErrorBoundary>} />
                       <Route path="/cookie-policy" element={<ErrorBoundary><CookiePolicy /></ErrorBoundary>} />
                       <Route path="/reset-password" element={<ErrorBoundary><ResetPassword /></ErrorBoundary>} />
-                      <Route path="/projects" element={<ProtectedRoute><ErrorBoundary><Projects /></ErrorBoundary></ProtectedRoute>} />
-                      <Route path="/projects/:id" element={<ProtectedRoute><ErrorBoundary><ProjectDetail /></ErrorBoundary></ProtectedRoute>} />
-                      <Route path="/portfolios" element={<ProtectedRoute><ErrorBoundary><Portfolios /></ErrorBoundary></ProtectedRoute>} />
+                      <Route path="/projects" element={<DeveloperRoute><ErrorBoundary><Projects /></ErrorBoundary></DeveloperRoute>} />
+                      <Route path="/projects/:id" element={<DeveloperRoute><ErrorBoundary><ProjectDetail /></ErrorBoundary></DeveloperRoute>} />
+                      <Route path="/portfolios" element={<DeveloperRoute><ErrorBoundary><Portfolios /></ErrorBoundary></DeveloperRoute>} />
                       <Route path="/ai-assistant" element={<ErrorBoundary><AIAssistantPage /></ErrorBoundary>} />
                       <Route path="/pricing" element={<ErrorBoundary><Pricing /></ErrorBoundary>} />
                       <Route path="/admin" element={<AdminRoute><ErrorBoundary><AdminDashboard /></ErrorBoundary></AdminRoute>} />

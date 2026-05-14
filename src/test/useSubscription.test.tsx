@@ -28,6 +28,8 @@ vi.mock("@/integrations/supabase/client", () => ({
 
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: vi.fn(),
+  profileRoleSwitchInProgress: (profile: { role_switch_in_progress_at?: string | null } | null) =>
+    Boolean(profile?.role_switch_in_progress_at),
 }));
 
 import { useAuth } from "@/contexts/AuthContext";
@@ -64,6 +66,7 @@ describe("useSubscription", () => {
     });
     const { result } = renderHook(() => useSubscription(), { wrapper });
     expect(result.current.isPro).toBe(false);
+    expect(result.current.accessSource).toBe("free");
   });
 
   it("Stripe subscriber gets isPro when the product is server-authorized", async () => {
@@ -76,6 +79,8 @@ describe("useSubscription", () => {
     const { result } = renderHook(() => useSubscription(), { wrapper });
     await waitFor(() => expect(result.current.isPro).toBe(true));
     expect(result.current.productId).toBe("prod_abc");
+    expect(result.current.accessSource).toBe("stripe");
+    expect(result.current.hasStripeBilling).toBe(true);
   });
 
   it("force_pro_access grants isPro", () => {
@@ -87,5 +92,23 @@ describe("useSubscription", () => {
     });
     const { result } = renderHook(() => useSubscription(), { wrapper });
     expect(result.current.isPro).toBe(true);
+    expect(result.current.accessSource).toBe("override");
+    expect(result.current.isManuallyManagedPlan).toBe(true);
+  });
+
+  it("does not inherit investor-pro entitlement during a role switch", async () => {
+    (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({
+      subscription: { subscribed: false, productId: null, subscriptionEnd: null, loading: false },
+      refreshSubscription: vi.fn(),
+      profile: {
+        role: "investor",
+        participant_type: "investor",
+        role_switch_in_progress_at: "2026-05-14T10:00:00.000Z",
+      },
+      user: { id: "u5" },
+    });
+    const { result } = renderHook(() => useSubscription(), { wrapper });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.isPro).toBe(false);
   });
 });

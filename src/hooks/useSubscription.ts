@@ -1,6 +1,6 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { isPlatformAdmin } from "@/lib/authUtils";
-import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
+import { getExplicitParticipantTypeFromProfile } from "@/lib/participantConfig";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -9,8 +9,11 @@ const getProfileSubscriptionFields = (profile: ReturnType<typeof useAuth>["profi
   forceProAccess: Boolean((profile as { force_pro_access?: boolean | null } | null)?.force_pro_access),
 });
 
+const profileRoleSwitchInProgress = (profile: ReturnType<typeof useAuth>["profile"]) =>
+  Boolean((profile as { role_switch_in_progress_at?: string | null } | null)?.role_switch_in_progress_at);
+
 const isInvestorParticipant = (profile: ReturnType<typeof useAuth>["profile"]) => {
-  const participantType = getParticipantTypeFromProfile(profile);
+  const participantType = profileRoleSwitchInProgress(profile) ? null : getExplicitParticipantTypeFromProfile(profile);
   return participantType === "investor" || participantType === "institutional";
 };
 
@@ -52,6 +55,7 @@ const useValidatedProProduct = (productId: string | null) => {
 
 const isActiveInvestorStatus = (status: string | undefined) => status === "active" || status === "trial";
 const hasAnyProAccess = (flags: boolean[]) => flags.includes(true);
+type SubscriptionAccessSource = "admin" | "stripe" | "investor" | "override" | "free";
 const isLoadingSubscriptionAccess = (options: {
   subscriptionLoading: boolean;
   investorLoading: boolean;
@@ -82,9 +86,24 @@ export const useSubscription = () => {
   const hasStripePro = subscription.subscribed && Boolean(validatedProProduct);
   const hasInvestorPro = isInvestorRole && isActiveInvestorStatus(investorSubStatus?.status);
   const isPro = hasAnyProAccess([isAdmin, hasStripePro, hasInvestorPro, forceProAccess]);
+  const hasDeveloperPro = isAdmin || forceProAccess || hasStripePro;
+  const accessSource: SubscriptionAccessSource = isAdmin
+    ? "admin"
+    : hasStripePro
+      ? "stripe"
+      : hasInvestorPro
+        ? "investor"
+        : forceProAccess
+          ? "override"
+          : "free";
 
   return {
     isPro,
+    hasDeveloperPro,
+    accessSource,
+    hasStripeBilling: accessSource === "stripe",
+    isInvestorManagedPlan: accessSource === "investor",
+    isManuallyManagedPlan: accessSource === "admin" || accessSource === "override",
     subscribed: subscription.subscribed,
     productId: effectiveProductId,
     subscriptionEnd: subscription.subscriptionEnd,

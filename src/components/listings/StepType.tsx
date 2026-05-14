@@ -7,9 +7,10 @@ interface Props {
   form: ListingFormData;
   set: (key: string, value: unknown) => void;
   toggle: (key: string) => void;
+  showPreSaleOption: boolean;
 }
 
-export function StepType({ form, set, toggle }: Props) {
+export function StepType({ form, set, toggle, showPreSaleOption }: Props) {
   const { listing_type: lt, property_type: pt } = form;
 
   return (
@@ -37,7 +38,7 @@ export function StepType({ form, set, toggle }: Props) {
       </div>
 
       {/* Pre-sale / Off-market flags */}
-      {(lt === "sale" || !lt) && (
+      {showPreSaleOption && (lt === "sale" || !lt) && (
         <div className="space-y-3">
           <label className="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" checked={form.is_pre_sale} onChange={() => toggle("is_pre_sale")} className="rounded border-border" />

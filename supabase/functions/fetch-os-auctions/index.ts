@@ -22,17 +22,27 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { createLogger } from "../_shared/logger.ts";
-import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
+import {
+  makeRateLimiter,
+  tooManyRequestsResponse,
+} from "../_shared/rateLimit.ts";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 
 const log = createLogger("fetch-os-auctions");
-const limiter = makeRateLimiter({ bucket: "fetch-os-auctions", maxRequests: 20, windowMs: 60_000 });
+const limiter = makeRateLimiter({
+  bucket: "fetch-os-auctions",
+  maxRequests: 20,
+  windowMs: 60_000,
+  failClosed: true,
+});
 
 const FREE_CAP = 60;
 const AUTH_CAP = 600;
 const TRAILING_SLASH_RE = /\/$/;
 const OS_ALLOWED_HOST_SUFFIX = ".maiprop.co";
-type SupabaseAdminClient = ReturnType<typeof createClient<Record<string, unknown>>>;
+type SupabaseAdminClient = ReturnType<
+  typeof createClient<Record<string, unknown>>
+>;
 type ProfilePlanRow = {
   role?: string | null;
   participant_type?: string | null;
@@ -126,7 +136,8 @@ function getSubtypeTag(category?: string): string | null {
 function mapOwnershipStatusToTag(raw?: string | null): string | null {
   if (!raw) return null;
   const ownershipStatus = raw.toUpperCase().trim();
-  return OWNERSHIP_STATUS_TAGS.get(ownershipStatus) ?? `ownership:${ownershipStatus.toLowerCase()}`;
+  return OWNERSHIP_STATUS_TAGS.get(ownershipStatus) ??
+    `ownership:${ownershipStatus.toLowerCase()}`;
 }
 
 // ── OS DTO type (same subset as poll-os-auctions) ───────────────────────────
@@ -241,7 +252,8 @@ function getAuctionCity(auction: OsAuction): string {
 }
 
 function getAuctionUrl(auction: OsAuction): string | null {
-  return auction.url ?? auction.auctionUrl ?? auction.listingUrl ?? auction.eAuctionUrl ?? null;
+  return auction.url ?? auction.auctionUrl ?? auction.listingUrl ??
+    auction.eAuctionUrl ?? null;
 }
 
 function getNumberOrNull(value?: number | string): number | null {
@@ -250,14 +262,23 @@ function getNumberOrNull(value?: number | string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function getNumberOrDefault(value: number | string | undefined, fallback: number): number {
+function getNumberOrDefault(
+  value: number | string | undefined,
+  fallback: number,
+): number {
   if (value == null) return fallback;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function getStreetViewUrl(lat: number | null, lng: number | null): string | null {
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")?.replace(TRAILING_SLASH_RE, "");
+function getStreetViewUrl(
+  lat: number | null,
+  lng: number | null,
+): string | null {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")?.replace(
+    TRAILING_SLASH_RE,
+    "",
+  );
   return supabaseUrl && lat != null && lng != null
     ? `${supabaseUrl}/functions/v1/streetview-proxy?size=800x450&lat=${lat}&lng=${lng}`
     : null;
@@ -267,7 +288,10 @@ function getOwnershipPercentage(auction: OsAuction): number | undefined {
   return getNumberOrNull(auction.ownershipPercentage) ?? undefined;
 }
 
-function getOwnershipTag(auction: OsAuction, ownershipPct: number | undefined): string | null {
+function getOwnershipTag(
+  auction: OsAuction,
+  ownershipPct: number | undefined,
+): string | null {
   const ownershipTag = mapOwnershipStatusToTag(auction.ownershipStatus);
   if (ownershipTag) return ownershipTag;
   if (ownershipPct == null) return null;
@@ -282,7 +306,9 @@ function getCurrentRoundTag(auction: OsAuction): string | null {
   return auction.currentRound != null ? `round:${auction.currentRound}` : null;
 }
 
-function getOwnershipPercentageTag(ownershipPct: number | undefined): string | null {
+function getOwnershipPercentageTag(
+  ownershipPct: number | undefined,
+): string | null {
   return ownershipPct != null ? `ownership_pct:${ownershipPct}` : null;
 }
 
@@ -311,7 +337,11 @@ export function mapAuction(auction: OsAuction): MappedAuction {
   const ownershipPct = getOwnershipPercentage(auction);
   const ownershipTag = getOwnershipTag(auction, ownershipPct);
   const subtypeTag = getSubtypeTag(auction.propertyCategory);
-  const requiredTags = [tagKey, "source:maiprop-os", getAuctionStatusTag(auction)];
+  const requiredTags = [
+    tagKey,
+    "source:maiprop-os",
+    getAuctionStatusTag(auction),
+  ];
   const optionalTags = [
     getCurrentRoundTag(auction),
     ownershipTag,
@@ -364,7 +394,11 @@ async function fetchWithTimeout(
   }
 }
 
-async function getOsToken(baseUrl: string, email: string, password: string): Promise<string> {
+async function getOsToken(
+  baseUrl: string,
+  email: string,
+  password: string,
+): Promise<string> {
   const res = await fetchWithTimeout(
     `${baseUrl}/auth/login`,
     {
@@ -376,7 +410,11 @@ async function getOsToken(baseUrl: string, email: string, password: string): Pro
   );
   const json = await res.json();
   const token = json?.data?.token ?? json?.token ?? json?.accessToken;
-  if (!token) throw new Error(`OS auth failed (${res.status}): ${JSON.stringify(json).slice(0, 200)}`);
+  if (!token) {
+    throw new Error(
+      `OS auth failed (${res.status}): ${JSON.stringify(json).slice(0, 200)}`,
+    );
+  }
   return token;
 }
 
@@ -416,7 +454,9 @@ async function hasPortalProAccess(
   if (profile?.role === "admin") return true;
   if (profile?.force_pro_access) return true;
   if (profile?.subscription_product_id) return true;
-  if (isInvestorProfile(profile)) return await hasInvestorSubscription(sb, userId);
+  if (isInvestorProfile(profile)) {
+    return await hasInvestorSubscription(sb, userId);
+  }
   return false;
 }
 
@@ -477,7 +517,9 @@ function getSupabaseConfig(): SupabaseConfig | null {
   return url && serviceRoleKey ? { url, serviceRoleKey } : null;
 }
 
-async function parseRequestBody(req: Request): Promise<Record<string, unknown>> {
+async function parseRequestBody(
+  req: Request,
+): Promise<Record<string, unknown>> {
   const body = await req.json().catch(function getEmptyBody() {
     return {};
   });
@@ -490,26 +532,36 @@ function getDefaultPageSize(planCap: number): number {
   return planCap;
 }
 
-function getRequestNumber(
+function getFiniteInteger(
   body: Record<string, unknown>,
   key: string,
   fallback: number,
-): number {
-  const value = body[key];
-  return value == null ? fallback : Number(value);
+): number | null {
+  const raw = body[key];
+  const value = raw == null ? fallback : Number(raw);
+  return Number.isFinite(value) && Number.isInteger(value) ? value : null;
 }
 
-function getRequestedPageSize(body: Record<string, unknown>, planCap: number): number {
-  const sizeFallback = getRequestNumber(body, "size", getDefaultPageSize(planCap));
-  return getRequestNumber(body, "pageSize", sizeFallback);
-}
+export function getValidatedPagination(
+  body: Record<string, unknown>,
+  planCap: number,
+): { page: number; size: number } | { error: string } {
+  const page = getFiniteInteger(body, "page", 0);
+  if (page == null || page < 0) {
+    return { error: "page must be a finite non-negative integer" };
+  }
 
-function getCappedPageSize(requestedSize: number, planCap: number): number {
-  return Math.min(requestedSize, planCap);
-}
+  const rawSize = body.pageSize ?? body.size;
+  const size = rawSize == null
+    ? getDefaultPageSize(planCap)
+    : getFiniteInteger({ size: rawSize }, "size", planCap);
+  if (size == null || size < 1 || size > planCap) {
+    return {
+      error: `pageSize must be a finite integer between 1 and ${planCap}`,
+    };
+  }
 
-function getPageSize(body: Record<string, unknown>, planCap: number): number {
-  return getCappedPageSize(getRequestedPageSize(body, planCap), planCap);
+  return { page, size };
 }
 
 type FilterEntry = readonly [string, unknown];
@@ -518,7 +570,9 @@ function hasTruthyFilterValue([, value]: FilterEntry): boolean {
   return Boolean(value);
 }
 
-function getOptionalFilters(body: Record<string, unknown>): Record<string, unknown> {
+function getOptionalFilters(
+  body: Record<string, unknown>,
+): Record<string, unknown> {
   return Object.fromEntries(
     OPTIONAL_FILTER_KEYS
       .map(function getOptionalFilterEntry(key) {
@@ -543,9 +597,12 @@ function getStringFilterEntries(
   });
 }
 
-export function buildFilterRequest(body: Record<string, unknown>): Record<string, unknown> {
+export function buildFilterRequest(
+  body: Record<string, unknown>,
+): Record<string, unknown> {
   return {
-    auctionDateFrom: body.auctionDateFrom ?? new Date().toISOString().split("T")[0],
+    auctionDateFrom: body.auctionDateFrom ??
+      new Date().toISOString().split("T")[0],
     ...getOptionalFilters(body),
     ...Object.fromEntries(getAmountFilterEntries(body)),
     ...Object.fromEntries(getStringFilterEntries(body, SORT_FILTER_KEYS)),
@@ -559,9 +616,14 @@ async function fetchOsAuctionDetails(
   filterRequest: Record<string, unknown>,
 ): Promise<OsResponse | OsAuction[]> {
   log.info("authenticating with OS API");
-  const token = await getOsToken(osConfig.url, osConfig.email, osConfig.password);
+  const token = await getOsToken(
+    osConfig.url,
+    osConfig.email,
+    osConfig.password,
+  );
 
-  const endpoint = `${osConfig.url}/api/v1/auctions/filter/details?page=${page}&pageSize=${size}`;
+  const endpoint =
+    `${osConfig.url}/api/v1/auctions/filter/details?page=${page}&pageSize=${size}`;
   log.info("fetching auctions", { page, size, filter: filterRequest });
 
   const auctionResponse = await fetchWithTimeout(
@@ -580,7 +642,11 @@ async function fetchOsAuctionDetails(
   if (!auctionResponse.ok) {
     const detail = (await auctionResponse.text()).slice(0, 300);
     log.error("OS API error", { status: auctionResponse.status, detail });
-    throw { kind: "os-api", status: auctionResponse.status, detail } satisfies OsApiFailure;
+    throw {
+      kind: "os-api",
+      status: auctionResponse.status,
+      detail,
+    } satisfies OsApiFailure;
   }
 
   return (await auctionResponse.json()) as OsResponse | OsAuction[];
@@ -607,13 +673,24 @@ function isOsApiFailure(err: unknown): err is OsApiFailure {
     (err as { kind?: unknown }).kind === "os-api";
 }
 
+export function getFetchErrorPayload(
+  err: unknown,
+): { error: string; status: number } {
+  return isOsApiFailure(err)
+    ? { error: "Auction provider temporarily unavailable", status: 502 }
+    : { error: "Unable to fetch auctions", status: 500 };
+}
+
 function getBearerToken(req: Request): string | null {
   const authHeader = req.headers.get("Authorization");
   return authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
 }
 
 async function sha256Hex(value: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(value),
+  );
   return Array.from(new Uint8Array(digest), function toHex(byte) {
     return byte.toString(16).padStart(2, "0");
   }).join("");
@@ -635,12 +712,26 @@ async function getGuardResponse(
     : null;
 }
 
-function getRuntimeConfig(corsHeaders: Record<string, string>): RuntimeConfig | Response {
+function getRuntimeConfig(
+  corsHeaders: Record<string, string>,
+): RuntimeConfig | Response {
   const osConfig = getOsConfig();
-  if (!osConfig) return jsonResponse({ error: "OS credentials not configured" }, corsHeaders, 503);
+  if (!osConfig) {
+    return jsonResponse(
+      { error: "OS credentials not configured" },
+      corsHeaders,
+      503,
+    );
+  }
 
   const supabaseConfig = getSupabaseConfig();
-  if (!supabaseConfig) return jsonResponse({ error: "Supabase credentials not configured" }, corsHeaders, 503);
+  if (!supabaseConfig) {
+    return jsonResponse(
+      { error: "Supabase credentials not configured" },
+      corsHeaders,
+      503,
+    );
+  }
 
   return { osConfig, supabaseConfig };
 }
@@ -659,14 +750,23 @@ function buildAuctionResponsePayload(
   };
 }
 
-function handleFetchError(err: unknown, corsHeaders: Record<string, string>): Response {
+function handleFetchError(
+  err: unknown,
+  corsHeaders: Record<string, string>,
+): Response {
   if (isOsApiFailure(err)) {
-    return jsonResponse({ error: `OS returned ${err.status}`, detail: err.detail }, corsHeaders, 502);
+    log.error("OS API request failed", {
+      status: err.status,
+      detail: err.detail,
+    });
+    const payload = getFetchErrorPayload(err);
+    return jsonResponse({ error: payload.error }, corsHeaders, payload.status);
   }
 
   const message = err instanceof Error ? err.message : String(err);
   log.error("fetch error", { err: message });
-  return jsonResponse({ error: message }, corsHeaders, 500);
+  const payload = getFetchErrorPayload(err);
+  return jsonResponse({ error: payload.error }, corsHeaders, payload.status);
 }
 
 async function handleAuctionRequest(
@@ -674,20 +774,34 @@ async function handleAuctionRequest(
   corsHeaders: Record<string, string>,
   runtimeConfig: RuntimeConfig,
 ): Promise<Response> {
-  const sb = createClient(runtimeConfig.supabaseConfig.url, runtimeConfig.supabaseConfig.serviceRoleKey);
+  const sb = createClient(
+    runtimeConfig.supabaseConfig.url,
+    runtimeConfig.supabaseConfig.serviceRoleKey,
+  );
 
   try {
     const body = await parseRequestBody(req);
     const planCap = await getPlanCap(req, sb);
-    const page = getRequestNumber(body, "page", 0);
-    const size = getPageSize(body, planCap);
+    const pagination = getValidatedPagination(body, planCap);
+    if ("error" in pagination) {
+      return jsonResponse({ error: pagination.error }, corsHeaders, 400);
+    }
+    const { page, size } = pagination;
     const filterRequest = buildFilterRequest(body);
-    const osResponse = await fetchOsAuctionDetails(runtimeConfig.osConfig, page, size, filterRequest);
+    const osResponse = await fetchOsAuctionDetails(
+      runtimeConfig.osConfig,
+      page,
+      size,
+      filterRequest,
+    );
     const { auctions, total } = parseOsResponse(osResponse);
     const mapped = auctions.map(mapAuction);
 
     log.info("returning auctions", { count: mapped.length, total, page });
-    return jsonResponse(buildAuctionResponsePayload(mapped, total, page, planCap), corsHeaders);
+    return jsonResponse(
+      buildAuctionResponsePayload(mapped, total, page, planCap),
+      corsHeaders,
+    );
   } catch (err: unknown) {
     return handleFetchError(err, corsHeaders);
   }
@@ -699,6 +813,10 @@ async function handleRequest(req: Request): Promise<Response> {
   const corsHeaders = getCorsHeaders(req);
   const guardResponse = await getGuardResponse(req, corsHeaders);
   if (guardResponse) return guardResponse;
+
+  if (req.method !== "POST") {
+    return jsonResponse({ error: "Method not allowed" }, corsHeaders, 405);
+  }
 
   const runtimeConfig = getRuntimeConfig(corsHeaders);
   if (runtimeConfig instanceof Response) return runtimeConfig;

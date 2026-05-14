@@ -192,13 +192,19 @@ export default function Listings() {
                 </div>
                 {/* View toggle */}
                 <div className="flex rounded-xl border border-border overflow-hidden shrink-0">
-                  <button onClick={() => setViewMode("grid")}
+                  <button
+                    onClick={() => setViewMode("grid")}
+                    aria-label="Grid view"
+                    aria-pressed={viewMode === "grid"}
                     className={`p-2 transition-colors ${viewMode === "grid" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"}`}>
-                    <LayoutGrid className="w-4 h-4" />
+                    <LayoutGrid className="w-4 h-4" aria-hidden="true" />
                   </button>
-                  <button onClick={() => setViewMode("map")}
+                  <button
+                    onClick={() => setViewMode("map")}
+                    aria-label="Map view"
+                    aria-pressed={viewMode === "map" || viewMode === "split"}
                     className={`p-2 transition-colors ${viewMode === "map" || viewMode === "split" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"}`}>
-                    <Map className="w-4 h-4" />
+                    <Map className="w-4 h-4" aria-hidden="true" />
                   </button>
                 </div>
                 {/* Filters button */}

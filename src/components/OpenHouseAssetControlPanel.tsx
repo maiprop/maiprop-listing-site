@@ -15,6 +15,7 @@ import {
   useAcceptOpenHouseOffer,
   useRevealAllOffers,
   getOpenHouseDocSignedUrl,
+  getOpenHouseApprovalBlockers,
   type OHTimeslot,
   type OHRegistrationStatus,
   type OpenHouseRegistration,
@@ -27,6 +28,7 @@ import { toast } from "sonner";
 interface Props {
   listingId: string;
   isOwner: boolean;
+  listingPrice?: number | null;
 }
 
 const STATUS_LABELS: Record<OHRegistrationStatus, string> = {
@@ -37,7 +39,7 @@ const STATUS_LABELS: Record<OHRegistrationStatus, string> = {
   cancelled: "Cancelled",
 };
 
-export default function OpenHouseAssetControlPanel({ listingId, isOwner }: Props) {
+export default function OpenHouseAssetControlPanel({ listingId, isOwner, listingPrice }: Props) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [registrationsOpen, setRegistrationsOpen] = useState(true);
   const [offersOpen, setOffersOpen] = useState(true);
@@ -57,9 +59,14 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner }: Props
 
   if (!isOwner) return null;
 
-  const handleApprove = (regId: string) => {
+  const handleApprove = (registration: OpenHouseRegistration) => {
+    const blockers = getOpenHouseApprovalBlockers(registration, settings, listingPrice);
+    if (blockers.length > 0) {
+      toast.error(`Approval blocked: ${blockers.join(", ")}`);
+      return;
+    }
     updateReg.mutate({
-      id: regId,
+      id: registration.id,
       updates: {
         status: "approved",
         approved_at: new Date().toISOString(),
@@ -231,11 +238,20 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner }: Props
                           <Shield className="w-3 h-3" /> {r.investor_declaration_signed_at ? "Investor ✓" : "Investor —"}
                         </span>
                       </div>
+                      {r.status === "pending" && (() => {
+                        const blockers = getOpenHouseApprovalBlockers(r, settings, listingPrice);
+                        if (blockers.length === 0) return null;
+                        return (
+                          <p className="mt-2 text-xs text-amber-700">
+                            Missing before approval: {blockers.join(", ")}
+                          </p>
+                        );
+                      })()}
                     </div>
                     {r.status === "pending" && (
                       <div className="flex gap-2">
                         <Button size="sm" variant="outline" className="gap-1 text-emerald-600 border-emerald-500/40"
-                          onClick={() => handleApprove(r.id)}>
+                          onClick={() => handleApprove(r)}>
                           <Check className="w-3.5 h-3.5" /> Approve
                         </Button>
                         <Button size="sm" variant="outline" className="gap-1 text-destructive border-destructive/40"

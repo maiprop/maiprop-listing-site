@@ -54,6 +54,9 @@ Object.defineProperty(window, "IntersectionObserver", { writable: true, value: I
 // scrollIntoView — not implemented in jsdom
 Element.prototype.scrollIntoView = () => {};
 
+// scrollTo - jsdom exposes a warning-only implementation.
+Object.defineProperty(window, "scrollTo", { writable: true, value: vi.fn() });
+
 // Canvas export APIs are missing unless jsdom is paired with the optional
 // native canvas package. Tests only need deterministic, non-throwing output.
 HTMLCanvasElement.prototype.toDataURL = () => "data:image/png;base64,test";

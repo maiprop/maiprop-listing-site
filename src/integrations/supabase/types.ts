@@ -612,35 +612,56 @@ export type Database = {
       }
       firesale_interest: {
         Row: {
+          admin_note: string | null
           created_at: string
           deal_id: string
           id: string
           investor_id: string
+          last_status_changed_at: string
           message: string | null
           proof_amount: number | null
+          proof_of_funds_verified_at: string | null
+          proof_of_funds_verified_by: string | null
           proof_of_funds_url: string | null
+          reservation_expires_at: string | null
+          reserved_at: string | null
+          reserved_by: string | null
           status: string
           updated_at: string
         }
         Insert: {
+          admin_note?: string | null
           created_at?: string
           deal_id: string
           id?: string
           investor_id: string
+          last_status_changed_at?: string
           message?: string | null
           proof_amount?: number | null
+          proof_of_funds_verified_at?: string | null
+          proof_of_funds_verified_by?: string | null
           proof_of_funds_url?: string | null
+          reservation_expires_at?: string | null
+          reserved_at?: string | null
+          reserved_by?: string | null
           status?: string
           updated_at?: string
         }
         Update: {
+          admin_note?: string | null
           created_at?: string
           deal_id?: string
           id?: string
           investor_id?: string
+          last_status_changed_at?: string
           message?: string | null
           proof_amount?: number | null
+          proof_of_funds_verified_at?: string | null
+          proof_of_funds_verified_by?: string | null
           proof_of_funds_url?: string | null
+          reservation_expires_at?: string | null
+          reserved_at?: string | null
+          reserved_by?: string | null
           status?: string
           updated_at?: string
         }
@@ -658,6 +679,64 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      firesale_interest_audit_log: {
+        Row: {
+          action: string
+          actor_id: string | null
+          created_at: string
+          deal_id: string
+          from_status: string | null
+          id: string
+          interest_id: string
+          metadata: Json
+          to_status: string | null
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          created_at?: string
+          deal_id: string
+          from_status?: string | null
+          id?: string
+          interest_id: string
+          metadata?: Json
+          to_status?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          created_at?: string
+          deal_id?: string
+          from_status?: string | null
+          id?: string
+          interest_id?: string
+          metadata?: Json
+          to_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "firesale_interest_audit_log_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "firesale_interest_audit_log_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "firesale_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "firesale_interest_audit_log_interest_id_fkey"
+            columns: ["interest_id"]
+            isOneToOne: false
+            referencedRelation: "firesale_interest"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -3094,6 +3173,17 @@ export type Database = {
         Args: { p_bucket: string; p_limit: number; p_window_seconds: number }
         Returns: Json
       }
+      admin_update_firesale_interest_workflow: {
+        Args: {
+          p_admin_note?: string
+          p_interest_id: string
+          p_proof_amount?: number
+          p_reservation_hours?: number
+          p_status: string
+          p_verify_pof?: boolean
+        }
+        Returns: Database["public"]["Tables"]["firesale_interest"]["Row"]
+      }
       check_listing_quota: { Args: never; Returns: boolean }
       complete_onboarding_role: {
         Args: {
@@ -3144,6 +3234,10 @@ export type Database = {
       }
       get_agent_monthly_input_count: {
         Args: { p_user_id: string }
+        Returns: number
+      }
+      release_expired_firesale_reservations: {
+        Args: { p_deal_id?: string }
         Returns: number
       }
       get_ai_call_monthly_limit: {

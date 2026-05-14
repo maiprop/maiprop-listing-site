@@ -19,6 +19,20 @@
  * Pro is simulated by setting profiles.subscription_product_id = STRIPE_PRO_PRODUCT_ID.
  * Investor tiers are seeded via investor_subscriptions table.
  * Professional Pro also sets professionals.subscription_tier = "pro".
+ *
+ * Preferred browser-test env keys map to this seeded matrix:
+ *   E2E_BUYER_FREE_EMAIL / E2E_BUYER_FREE_PASSWORD
+ *   E2E_BUYER_PRO_EMAIL / E2E_BUYER_PRO_PASSWORD
+ *   E2E_SELLER_PRO_EMAIL / E2E_SELLER_PRO_PASSWORD
+ *   E2E_AGENT_PRO_EMAIL / E2E_AGENT_PRO_PASSWORD
+ *   E2E_DEVELOPER_PRO_EMAIL / E2E_DEVELOPER_PRO_PASSWORD
+ *   E2E_INVESTOR_PRIVATE_EMAIL
+ *   E2E_INVESTOR_INSTITUTIONAL_EMAIL
+ *   E2E_ADMIN_EMAIL
+ *   E2E_PROFESSIONAL_ARCHITECT_EMAIL
+ *   E2E_PROFESSIONAL_LAWYER_EMAIL
+ *   E2E_PROFESSIONAL_VALUER_EMAIL
+ *   E2E_DEMO_PASSWORD
  */
 
 import { createClient } from "@supabase/supabase-js";

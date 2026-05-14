@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 
 interface Props {
-  invitationStatus: "none" | "pending" | "rejected";
+  invitationStatus: "none" | "pending" | "approved" | "rejected";
   onRequestClick: () => void;
 }
 

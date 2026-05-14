@@ -41,7 +41,7 @@ Find these in Supabase → Project Settings → API.
 | Stripe checkout | `VITE_STRIPE_PRO_PRODUCT_ID` + all `VITE_STRIPE_PRICE_*` | Stripe dashboard → Products |
 | Error monitoring | `VITE_SENTRY_DSN` | sentry.io → Project → Client Keys |
 | Analytics | `VITE_PLAUSIBLE_DOMAIN` | plausible.io → Sites |
-| Street view | `VITE_GOOGLE_STREETVIEW_KEY` | Google Cloud Console |
+| Street view / Places | `VITE_GOOGLE_MAPS_API_KEY` | Google Cloud Console; restrict to local/staging domains |
 
 ### 4. Service-role key (server-side scripts only)
 
@@ -99,8 +99,17 @@ Dashboard → Project Settings → Edge Functions → Secrets.
 |---|---|
 | `STRIPE_SECRET_KEY` | `stripe-webhook`, `create-checkout`, `customer-portal`, `get-invoices`, `create-stripe-price`, `sync-stripe-pricing` |
 | `STRIPE_WEBHOOK_SECRET` | `stripe-webhook` |
-| `OS_WEBHOOK_SECRET` | `receive-from-os` (HMAC, see `WEBHOOK_VERIFICATION.md`) |
+| `MAIPROP_OS_WEBHOOK_SECRET` | `receive-from-os` (HMAC, see `WEBHOOK_VERIFICATION.md`) |
+| `MAIPROP_OS_URL` | OS import/sync functions |
+| `MAIPROP_OS_EMAIL` | OS import/sync functions |
+| `MAIPROP_OS_PASSWORD` | OS import/sync functions |
+| `GOOGLE_MAPS_API_KEY` | `streetview-proxy` and OS image enrichment |
+| `CRON_SECRET` | `send-saved-search-alerts` scheduled invocation guard |
+| `WEBHOOK_SECRET` | `oh-registration-notify` |
+| `SENTRY_DSN` | edge-function structured logger forwarding |
+| `ENVIRONMENT` | edge-function environment tag and CORS tightening |
 | `OPENAI_API_KEY` | `ai-search`, `property-chat`, `pro-ai-tools`, `listing-ai-assist`, `ai-translate`, `smart-filters`, `neighbourhood-report`, `ai-service-match`, `property-valuation`, `property-pois` |
+| `LOVABLE_API_KEY` | legacy `followup-lead` content generation |
 | `BREVO_API_KEY` | `send-saved-search-alerts`, `auth-email-hook`, `process-email-queue`, `invitation-notify`, `oh-registration-notify` |
 | `BREVO_FROM_EMAIL` | same Brevo-backed email functions as above |
 | `BREVO_FROM_NAME` | optional default sender-name override for Brevo-backed emails |
@@ -120,6 +129,72 @@ Under Settings → Secrets and variables → Actions:
 | `E2E_TEST_EMAIL` | auth E2E spec sign-in | repo or `production` env |
 | `E2E_TEST_PASSWORD` | same | same |
 | `LHCI_GITHUB_APP_TOKEN` | Lighthouse CI status checks | repo. See `LIGHTHOUSE_CI_SETUP.md` |
+| `GITHUB_TOKEN` | GitHub-provided token used by secret scanning | automatic |
+| `GITLEAKS_LICENSE` | optional Gitleaks license for enhanced scanning | repo |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare Pages production/preview deploy | production environment |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account for Pages deploy | production environment |
+| `VITE_SUPABASE_URL` | production Vite build Supabase URL | production environment |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | production Vite build anon/publishable key | production environment |
+| `VITE_SUPABASE_PROJECT_ID` | production Supabase project ref | production environment |
+| `VITE_SUPABASE_PROJECT_URL` | legacy alias for `VITE_SUPABASE_URL`; prefer `VITE_SUPABASE_URL` | local/test only |
+| `VITE_MAPBOX_TOKEN` | optional map token for production build | production environment |
+| `VITE_SENTRY_DSN` | optional browser Sentry DSN | production environment |
+| `VITE_STRIPE_PRO_PRODUCT_ID` | optional Stripe product id for subscription checks | production environment |
+| `VITE_TURNSTILE_SITE_KEY` | optional Turnstile site key | production environment |
+| `VITE_GOOGLE_MAPS_API_KEY` | optional browser Google Maps key | production environment |
+| `VITE_PLAUSIBLE_DOMAIN` | optional analytics domain | production environment |
+| `VITE_APP_URL` | canonical app origin for production build | production environment |
+| `SITE_LOCK_PASSWORD` | optional Cloudflare Pages runtime passcode gate | production environment |
+| `STAGING_SUPABASE_URL` | staging Supabase URL for security/E2E jobs | repo or staging environment |
+| `STAGING_SUPABASE_PUBLISHABLE_KEY` | staging anon/publishable key | repo or staging environment |
+| `STAGING_SUPABASE_PROJECT_ID` | staging Supabase project ref | repo or staging environment |
+| `SUPABASE_ACCESS_TOKEN` | Supabase CLI deploy/list token | repo or environment scoped to deploy jobs |
+| `SUPABASE_PROJECT_REF` | optional project ref alias used by release-safety live inventory | manual release certification |
+| `RLS_USER_A_EMAIL` | staging RLS test user A | repo or staging environment |
+| `RLS_USER_B_EMAIL` | staging RLS test user B | repo or staging environment |
+| `RLS_USER_PASSWORD` | shared staging RLS test password | repo or staging environment |
+| `ONBOARDING_TEST_EMAIL` | staging onboarding E2E user | repo or staging environment |
+| `ONBOARDING_TEST_PASSWORD` | staging onboarding E2E password | repo or staging environment |
+| `SUPABASE_SERVICE_ROLE_KEY` | staging-only service role for security tests and fixtures | staging environment only |
+
+Additional seeded E2E accounts:
+
+| Variable | Purpose |
+|---|---|
+| `E2E_DEMO_PASSWORD` | default password for seeded demo users |
+| `E2E_USE_SEEDED_DEMO_ACCOUNTS` | explicit marker that seeded demo-account E2E may use shared fixture accounts |
+| `E2E_BUYER_FREE_EMAIL` / `E2E_BUYER_FREE_PASSWORD` | free buyer fixture |
+| `E2E_BUYER_PRO_EMAIL` / `E2E_BUYER_PRO_PASSWORD` | pro buyer fixture |
+| `E2E_SELLER_PRO_EMAIL` / `E2E_SELLER_PRO_PASSWORD` | pro seller fixture |
+| `E2E_AGENT_PRO_EMAIL` / `E2E_AGENT_PRO_PASSWORD` | pro agent fixture |
+| `E2E_DEVELOPER_PRO_EMAIL` / `E2E_DEVELOPER_PRO_PASSWORD` | developer fixture |
+| `E2E_INVESTOR_PRIVATE_EMAIL` / `E2E_INVESTOR_PRIVATE_PASSWORD` | private investor fixture |
+| `E2E_INVESTOR_INSTITUTIONAL_EMAIL` / `E2E_INVESTOR_INSTITUTIONAL_PASSWORD` | institutional investor fixture |
+| `E2E_ADMIN_EMAIL` / `E2E_ADMIN_PASSWORD` | admin fixture |
+| `E2E_PROFESSIONAL_ARCHITECT_PASSWORD`, `E2E_PROFESSIONAL_LAWYER_PASSWORD`, `E2E_PROFESSIONAL_VALUER_PASSWORD` | professional fixture passwords |
+
+Destructive tests are disabled by default:
+
+| Variable | Purpose |
+|---|---|
+| `E2E_ALLOW_DESTRUCTIVE_LIVE_TESTS` | must be `true` before destructive live E2E can run |
+| `E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS` | comma-separated allowlist of isolated Supabase refs for destructive E2E |
+| `I_KNOW_THIS_IS_PROD` | manual override for guarded production seed scripts; use only during an approved production operation |
+
+Checkout redirect origin allowlists:
+
+| Variable | Purpose |
+|---|---|
+| `CHECKOUT_ALLOWED_ORIGINS` | comma-separated allowed checkout redirect origins |
+| `ALLOWED_CHECKOUT_ORIGINS` | legacy alias for `CHECKOUT_ALLOWED_ORIGINS` |
+
+Release inventory can optionally compare repo functions with live Supabase:
+
+```powershell
+$env:RELEASE_SAFETY_LIVE_FUNCTIONS="true"
+$env:RELEASE_SAFETY_SUPABASE_PROJECT_REF="<project-ref>"
+npm run check:release-safety -- --live-functions
+```
 
 CI intentionally uses **stub** Supabase URL + key (format-valid placeholders in `.github/workflows/ci.yml`). Real keys must never be checked in.
 

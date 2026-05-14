@@ -45,20 +45,38 @@ All demo accounts use:
 - **Password**: `Demo2025!`
 - **Email domain**: `@maiprop.demo`
 
-| Account | Email | Role | Pro? |
-|---------|-------|------|------|
-| Seller Pro | seller.pro@maiprop.demo | seller | Yes (force_pro_access) |
-| Seller Free | seller.free@maiprop.demo | seller | No |
-| Buyer Pro | buyer.pro@maiprop.demo | buyer | Yes (force_pro_access) |
-| Buyer Free | buyer.free@maiprop.demo | buyer | No |
-| Investor Private | investor.private@maiprop.demo | investor (private) | Yes |
-| Agent Pro | agent.pro@maiprop.demo | agent | Yes |
-| Developer Pro | developer.pro@maiprop.demo | developer | Yes |
-| Professional (Architect) | professional1@maiprop.demo | professional | Yes |
-| Professional (Lawyer) | professional2@maiprop.demo | professional | Yes |
-| Professional (Valuer) | professional3@maiprop.demo | professional | Yes |
+| Account | Canonical Email | Legacy Alias | Role | Pro? |
+|---------|------------------|--------------|------|------|
+| Seller Pro | seller.pro@maiprop.demo | - | seller | Yes |
+| Seller Free | seller.free@maiprop.demo | - | seller | No |
+| Buyer Pro | buyer.pro@maiprop.demo | - | buyer | Yes |
+| Buyer Free | buyer.free@maiprop.demo | - | buyer | No |
+| Investor Private | investor.private@maiprop.demo | - | investor (private) | Yes |
+| Investor Institutional | investor.institutional@maiprop.demo | - | investor (institutional) | Yes |
+| Agent Pro | agent.pro@maiprop.demo | - | agent | Yes |
+| Developer Pro | developer.pro@maiprop.demo | - | developer | Yes |
+| Professional (Architect) | architect.pro@maiprop.demo | professional1@maiprop.demo | professional | Yes |
+| Professional (Lawyer) | lawyer.pro@maiprop.demo | professional2@maiprop.demo | professional | Yes |
+| Professional (Valuer) | valuer.pro@maiprop.demo | professional3@maiprop.demo | professional | Yes |
+| Admin | admin@maiprop.demo | - | admin | Yes |
 
-The three professional accounts are seeded by `scripts/seed-mock-professionals.ts` and are needed for any flow gated by `participant_type === "professional"` (e.g., the "Premium Tools" section on the Billing tab).
+Canonical browser-test accounts come from `scripts/seed-demo-accounts.ts`. The `professional1/2/3` identities are legacy aliases from `scripts/seed-mock-users.ts` and `scripts/seed-mock-professionals.ts`; keep them only for backward compatibility with older data snapshots.
+
+Preferred Playwright env overrides:
+- `E2E_BUYER_FREE_EMAIL` / `E2E_BUYER_FREE_PASSWORD`
+- `E2E_BUYER_PRO_EMAIL` / `E2E_BUYER_PRO_PASSWORD`
+- `E2E_SELLER_PRO_EMAIL` / `E2E_SELLER_PRO_PASSWORD`
+- `E2E_AGENT_PRO_EMAIL` / `E2E_AGENT_PRO_PASSWORD`
+- `E2E_DEVELOPER_PRO_EMAIL` / `E2E_DEVELOPER_PRO_PASSWORD`
+- `E2E_INVESTOR_PRIVATE_EMAIL`
+- `E2E_INVESTOR_INSTITUTIONAL_EMAIL`
+- `E2E_ADMIN_EMAIL`
+- `E2E_PROFESSIONAL_ARCHITECT_EMAIL`
+- `E2E_PROFESSIONAL_LAWYER_EMAIL`
+- `E2E_PROFESSIONAL_VALUER_EMAIL`
+- `E2E_DEMO_PASSWORD`
+
+For general authenticated smoke coverage, prefer `buyer.free@maiprop.demo`. Some deployed environments have stale `buyer.pro` credentials until the demo seed script is rerun.
 
 ## Pro Access Override
 

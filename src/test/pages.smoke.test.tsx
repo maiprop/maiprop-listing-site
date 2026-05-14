@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen } from "@testing-library/react";
+import { act, screen } from "@testing-library/react";
 import React, { Suspense } from "react";
 import { renderWithProviders } from "@/test/utils";
 
@@ -51,6 +51,8 @@ vi.mock("@/contexts/AuthContext", () => ({
     signIn: vi.fn().mockResolvedValue({ error: null }),
     signUp: vi.fn().mockResolvedValue({ error: null }),
   }),
+  profileRoleSwitchInProgress: (profile: { role_switch_in_progress_at?: string | null } | null) =>
+    Boolean(profile?.role_switch_in_progress_at),
   AuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
@@ -237,6 +239,16 @@ vi.mock("@/hooks/useListingForm", () => ({
     validateStep: vi.fn().mockReturnValue({}), handleSubmit: vi.fn(),
     completionPct: 0, pt: "apartment", lt: "sale",
     setErrors: vi.fn(),
+  }),
+}));
+
+vi.mock("@/hooks/useCreateListingConnections", () => ({
+  useCreateListingConnections: vi.fn().mockReturnValue({
+    supabaseOk: true,
+    storageOk: true,
+    locationSource: "nominatim",
+    locationOk: true,
+    loading: false,
   }),
 }));
 
@@ -563,6 +575,51 @@ vi.mock("@/components/property/DetailPrimitives", () => ({
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
+const renderWithSettledSuspense = async (ui: React.ReactElement, options?: { initialPath?: string }) => {
+  let result: ReturnType<typeof renderWithProviders> | undefined;
+
+  await act(async () => {
+    result = renderWithProviders(
+      <Suspense fallback={<div>loading</div>}>
+        {ui}
+      </Suspense>,
+      options
+    );
+  });
+
+  await act(async () => {
+    for (let i = 0; i < 10; i += 1) {
+      await Promise.resolve();
+    }
+  });
+
+  return result;
+};
+
+const preloadIndexLazyDependencies = async () => {
+  await import("@/components/Footer");
+};
+
+const preloadListingsLazyDependencies = async () => {
+  await Promise.all([
+    import("@/components/MapView"),
+    import("@/components/CompareDrawer"),
+  ]);
+};
+
+const preloadDashboardLazyDependencies = async () => {
+  await Promise.all([
+    import("@/pages/dashboard/ViewingsTab"),
+    import("@/pages/dashboard/SavedSearchesTab"),
+    import("@/pages/dashboard/AuctionsTab"),
+    import("@/pages/dashboard/ProjectsTab"),
+    import("@/pages/dashboard/PortfoliosTab"),
+    import("@/pages/dashboard/AnalyticsTab"),
+    import("@/pages/dashboard/BillingTab"),
+    import("@/pages/dashboard/DataInputTab"),
+  ]);
+};
+
 describe("Page smoke tests", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -570,66 +627,41 @@ describe("Page smoke tests", () => {
 
   it("Index page renders without throwing", async () => {
     const { default: Index } = await import("@/pages/Index");
-    expect(() => renderWithProviders(
-      <Suspense fallback={<div>loading</div>}>
-        <Index />
-      </Suspense>
-    )).not.toThrow();
+    await preloadIndexLazyDependencies();
+    await expect(renderWithSettledSuspense(<Index />)).resolves.toBeDefined();
   });
 
   it("Listings page renders without throwing", async () => {
     const { default: Listings } = await import("@/pages/Listings");
-    expect(() => renderWithProviders(
-      <Suspense fallback={<div>loading</div>}>
-        <Listings />
-      </Suspense>
-    )).not.toThrow();
+    await preloadListingsLazyDependencies();
+    await expect(renderWithSettledSuspense(<Listings />)).resolves.toBeDefined();
   });
 
   it("Index page mounts the navbar", async () => {
     const { default: Index } = await import("@/pages/Index");
-    renderWithProviders(
-      <Suspense fallback={<div data-testid="suspense-loading">loading</div>}>
-        <Index />
-      </Suspense>
-    );
-    // Either the navbar is rendered or Suspense is still active — neither should throw
-    const navbar = screen.queryByTestId("navbar");
-    const loading = screen.queryByTestId("suspense-loading");
-    expect(navbar !== null || loading !== null).toBe(true);
+    await preloadIndexLazyDependencies();
+    await renderWithSettledSuspense(<Index />);
+    expect(screen.getByTestId("navbar")).toBeInTheDocument();
   });
 
   it("Listings page mounts the navbar", async () => {
     const { default: Listings } = await import("@/pages/Listings");
-    renderWithProviders(
-      <Suspense fallback={<div data-testid="suspense-loading">loading</div>}>
-        <Listings />
-      </Suspense>
-    );
-    const navbar = screen.queryByTestId("navbar");
-    const loading = screen.queryByTestId("suspense-loading");
-    expect(navbar !== null || loading !== null).toBe(true);
+    await preloadListingsLazyDependencies();
+    await renderWithSettledSuspense(<Listings />);
+    expect(screen.getByTestId("navbar")).toBeInTheDocument();
   });
 
   it("Dashboard page renders without throwing", async () => {
     const { default: Dashboard } = await import("@/pages/Dashboard");
-    expect(() => renderWithProviders(
-      <Suspense fallback={<div>loading</div>}>
-        <Dashboard />
-      </Suspense>
-    )).not.toThrow();
+    await preloadDashboardLazyDependencies();
+    await expect(renderWithSettledSuspense(<Dashboard />)).resolves.toBeDefined();
   });
 
   it("Dashboard page mounts the navbar", async () => {
     const { default: Dashboard } = await import("@/pages/Dashboard");
-    renderWithProviders(
-      <Suspense fallback={<div data-testid="suspense-loading">loading</div>}>
-        <Dashboard />
-      </Suspense>
-    );
-    const navbar = screen.queryByTestId("navbar");
-    const loading = screen.queryByTestId("suspense-loading");
-    expect(navbar !== null || loading !== null).toBe(true);
+    await preloadDashboardLazyDependencies();
+    await renderWithSettledSuspense(<Dashboard />);
+    expect(screen.getByTestId("navbar")).toBeInTheDocument();
   });
 
   it("PropertyDetail page renders loading state without throwing", async () => {
@@ -736,13 +768,7 @@ describe("Page smoke tests", () => {
 
   it("AIAssistantPage renders without throwing", async () => {
     const { default: AIAssistantPage } = await import("@/pages/AIAssistantPage");
-    expect(() =>
-      renderWithProviders(
-        <Suspense fallback={<div>loading</div>}>
-          <AIAssistantPage />
-        </Suspense>
-      )
-    ).not.toThrow();
+    await expect(renderWithSettledSuspense(<AIAssistantPage />)).resolves.toBeDefined();
   });
 
   it("Auctions page renders without throwing", async () => {

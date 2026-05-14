@@ -5,7 +5,7 @@
  */
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 const { useLeadsMock, createMutateMock, updateMutateMock, deleteMutateMock } = vi.hoisted(() => ({
@@ -91,6 +91,7 @@ describe("LeadsCRM", () => {
   });
 
   it("opens the add-lead form on +Add and submits a new lead via createLead.mutateAsync", async () => {
+    createMutateMock.mockResolvedValue(undefined);
     render(<LeadsCRM />, { wrapper: wrap });
     // Two 'Add Lead' buttons render when the list is empty (toolbar + empty-state CTA).
     // Either works — click the first.
@@ -99,9 +100,8 @@ describe("LeadsCRM", () => {
     fireEvent.change(screen.getByPlaceholderText("Name *"), { target: { value: "Charlie New" } });
     fireEvent.change(screen.getByPlaceholderText("Email"), { target: { value: "charlie@example.com" } });
     fireEvent.click(screen.getByRole("button", { name: /^Save$/i }));
-    // The component awaits mutateAsync, but the mock returns undefined
-    // synchronously — assert the call was made.
-    expect(createMutateMock).toHaveBeenCalled();
+    await waitFor(() => expect(createMutateMock).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByPlaceholderText("Name *")).not.toBeInTheDocument());
   });
 
   it("does not save a lead without a name (client-side guard)", () => {

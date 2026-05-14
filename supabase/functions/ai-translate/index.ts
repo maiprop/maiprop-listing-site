@@ -14,35 +14,70 @@
  * Rate limited: 10 req/min per IP (translation is expensive).
  */
 
-import { openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
-import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
+import { createClient } from "npm:@supabase/supabase-js@2.57.2";
+import {
+  openAIChatCompletion,
+  readOpenAITextContent,
+} from "../_shared/openai.ts";
+import {
+  makeRateLimiter,
+  tooManyRequestsResponse,
+} from "../_shared/rateLimit.ts";
 import { createLogger } from "../_shared/logger.ts";
 
 const log = createLogger("ai-translate");
 
 const ALLOWED_ORIGINS = [
-  "https://maiprop.co", "https://www.maiprop.co", "https://app.maiprop.co", "https://portal.maiprop.co",
-  "http://localhost:8080", "http://localhost:8081", "http://localhost:8082",
-  "http://localhost:8083", "http://localhost:5173", "http://localhost:3000",
+  "https://maiprop.co",
+  "https://www.maiprop.co",
+  "https://app.maiprop.co",
+  "https://portal.maiprop.co",
+  "http://localhost:8080",
+  "http://localhost:8081",
+  "http://localhost:8082",
+  "http://localhost:8083",
+  "http://localhost:5173",
+  "http://localhost:3000",
 ];
 
 const LOCALE_NAMES: Record<string, string> = {
-  fr: "French", de: "German", ar: "Arabic", zh: "Simplified Chinese",
-  ru: "Russian", tr: "Turkish", it: "Italian", es: "Spanish",
-  pt: "Portuguese", nl: "Dutch", pl: "Polish", ro: "Romanian",
-  bg: "Bulgarian", cs: "Czech", hu: "Hungarian", sk: "Slovak",
-  hr: "Croatian", sr: "Serbian", uk: "Ukrainian", he: "Hebrew",
-  ja: "Japanese", ko: "Korean",
+  fr: "French",
+  de: "German",
+  ar: "Arabic",
+  zh: "Simplified Chinese",
+  ru: "Russian",
+  tr: "Turkish",
+  it: "Italian",
+  es: "Spanish",
+  pt: "Portuguese",
+  nl: "Dutch",
+  pl: "Polish",
+  ro: "Romanian",
+  bg: "Bulgarian",
+  cs: "Czech",
+  hu: "Hungarian",
+  sk: "Slovak",
+  hr: "Croatian",
+  sr: "Serbian",
+  uk: "Ukrainian",
+  he: "Hebrew",
+  ja: "Japanese",
+  ko: "Korean",
 };
 
 // Static locales never need AI translation
 const STATIC_LOCALES = new Set(["en", "el"]);
+const MAX_TRANSLATION_KEYS = 500;
+const MAX_TRANSLATION_CHARS = 50_000;
 
 function corsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get("origin") ?? "";
   return {
-    "Access-Control-Allow-Origin": ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0],
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Origin": ALLOWED_ORIGINS.includes(origin)
+      ? origin
+      : ALLOWED_ORIGINS[0],
+    "Access-Control-Allow-Headers":
+      "authorization, x-client-info, apikey, content-type",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Vary": "Origin",
   };
@@ -51,25 +86,74 @@ function corsHeaders(req: Request): Record<string, string> {
 // Rate limit: 10 req/min per IP — cross-region, DB-backed.
 // The previous in-memory Map was per-isolate and would let the same IP burst
 // 10 × N regions / minute (audit BUG F).
-const translateLimiter = makeRateLimiter({ bucket: "ai-translate", maxRequests: 10, windowMs: 60_000 });
+const translateLimiter = makeRateLimiter({
+  bucket: "ai-translate",
+  maxRequests: 10,
+  windowMs: 60_000,
+  failClosed: true,
+});
+
+function jsonError(
+  error: string,
+  status: number,
+  hdrs: Record<string, string>,
+): Response {
+  return new Response(JSON.stringify({ error }), {
+    status,
+    headers: { ...hdrs, "Content-Type": "application/json" },
+  });
+}
+
+async function requireAuthenticatedUser(
+  req: Request,
+  hdrs: Record<string, string>,
+): Promise<Response | null> {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader?.toLowerCase().startsWith("bearer ")) {
+    return jsonError("Authentication required for AI translation", 401, hdrs);
+  }
+
+  const url = Deno.env.get("SUPABASE_URL");
+  const key = Deno.env.get("SUPABASE_ANON_KEY") ??
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!url || !key) {
+    return jsonError("Translation auth service not configured", 503, hdrs);
+  }
+
+  const token = authHeader.slice(7).trim();
+  if (!token) {
+    return jsonError("Authentication required for AI translation", 401, hdrs);
+  }
+
+  const supabase = createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: authHeader } },
+  });
+  const { data, error } = await supabase.auth.getUser(token);
+  if (error || !data.user) {
+    return jsonError("Invalid or expired token", 401, hdrs);
+  }
+  return null;
+}
 
 Deno.serve(async (req) => {
   const hdrs = corsHeaders(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: hdrs });
 
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0].trim() ?? "unknown";
-  if (await translateLimiter.isLimited(ip)) return tooManyRequestsResponse(hdrs);
-
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Use POST" }), {
-      status: 405, headers: { ...hdrs, "Content-Type": "application/json" },
+      status: 405,
+      headers: { ...hdrs, "Content-Type": "application/json" },
     });
   }
 
   let body: { locale?: string; strings?: Record<string, string> };
-  try { body = await req.json(); } catch {
+  try {
+    body = await req.json();
+  } catch {
     return new Response(JSON.stringify({ error: "Invalid JSON" }), {
-      status: 400, headers: { ...hdrs, "Content-Type": "application/json" },
+      status: 400,
+      headers: { ...hdrs, "Content-Type": "application/json" },
     });
   }
 
@@ -77,7 +161,8 @@ Deno.serve(async (req) => {
 
   if (!locale || typeof locale !== "string") {
     return new Response(JSON.stringify({ error: "locale is required" }), {
-      status: 400, headers: { ...hdrs, "Content-Type": "application/json" },
+      status: 400,
+      headers: { ...hdrs, "Content-Type": "application/json" },
     });
   }
 
@@ -95,29 +180,70 @@ Deno.serve(async (req) => {
 
   const targetLanguage = LOCALE_NAMES[locale];
   if (!targetLanguage) {
-    return new Response(JSON.stringify({ error: `Unsupported locale: ${locale}` }), {
-      status: 400, headers: { ...hdrs, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ error: `Unsupported locale: ${locale}` }),
+      {
+        status: 400,
+        headers: { ...hdrs, "Content-Type": "application/json" },
+      },
+    );
   }
 
-  if (!strings || typeof strings !== "object" || Object.keys(strings).length === 0) {
-    return new Response(JSON.stringify({ error: "strings must be a non-empty object" }), {
-      status: 400, headers: { ...hdrs, "Content-Type": "application/json" },
-    });
+  if (
+    !strings || typeof strings !== "object" || Object.keys(strings).length === 0
+  ) {
+    return new Response(
+      JSON.stringify({ error: "strings must be a non-empty object" }),
+      {
+        status: 400,
+        headers: { ...hdrs, "Content-Type": "application/json" },
+      },
+    );
   }
 
-  // Limit to 500 keys per request to avoid runaway costs
-  const entries = Object.entries(strings).slice(0, 500);
+  const authError = await requireAuthenticatedUser(req, hdrs);
+  if (authError) return authError;
+
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
+    "unknown";
+  if (await translateLimiter.isLimited(ip)) {
+    return tooManyRequestsResponse(hdrs);
+  }
+
+  const entries = Object.entries(strings);
+  if (entries.length > MAX_TRANSLATION_KEYS) {
+    return jsonError(
+      `Too many strings; maximum is ${MAX_TRANSLATION_KEYS}`,
+      413,
+      hdrs,
+    );
+  }
+  const totalChars = entries.reduce(
+    (sum, [key, value]) => sum + key.length + String(value).length,
+    0,
+  );
+  if (totalChars > MAX_TRANSLATION_CHARS) {
+    return jsonError(
+      `Translation payload too large; maximum is ${MAX_TRANSLATION_CHARS} characters`,
+      413,
+      hdrs,
+    );
+  }
   const inputJson = JSON.stringify(Object.fromEntries(entries), null, 2);
 
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
   if (!OPENAI_API_KEY) {
-    return new Response(JSON.stringify({ error: "Translation service not configured" }), {
-      status: 503, headers: { ...hdrs, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ error: "Translation service not configured" }),
+      {
+        status: 503,
+        headers: { ...hdrs, "Content-Type": "application/json" },
+      },
+    );
   }
 
-  const prompt = `You are a professional translator for a Greek real estate SaaS platform called maiProp.
+  const prompt =
+    `You are a professional translator for a Greek real estate SaaS platform called maiProp.
 
 Translate the following UI strings from English to ${targetLanguage}.
 
@@ -143,25 +269,45 @@ Output (JSON only):`;
 
     if (!response.ok) {
       const err = await response.text();
-      log.error("OpenAI API error", { status: response.status, body: err?.slice(0, 500) });
-      return new Response(JSON.stringify({ error: "Translation API error", detail: response.status }), {
-        status: 502, headers: { ...hdrs, "Content-Type": "application/json" },
+      log.error("OpenAI API error", {
+        status: response.status,
+        body: err?.slice(0, 500),
       });
+      return new Response(
+        JSON.stringify({
+          error: "Translation API error",
+          detail: response.status,
+        }),
+        {
+          status: 502,
+          headers: { ...hdrs, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const payload = await response.json();
     const raw = readOpenAITextContent(payload);
 
     // Parse the JSON — strip any accidental markdown fences
-    const cleaned = raw.replace(/^```json?\s*/i, "").replace(/```\s*$/i, "").trim();
+    const cleaned = raw.replace(/^```json?\s*/i, "").replace(/```\s*$/i, "")
+      .trim();
     let translated: Record<string, string>;
     try {
       translated = JSON.parse(cleaned);
     } catch {
-      log.error("failed to parse OpenAI output", { sample: cleaned.slice(0, 200) });
-      return new Response(JSON.stringify({ error: "Translation parsing failed", raw: cleaned.slice(0, 500) }), {
-        status: 502, headers: { ...hdrs, "Content-Type": "application/json" },
+      log.error("failed to parse OpenAI output", {
+        sample: cleaned.slice(0, 200),
       });
+      return new Response(
+        JSON.stringify({
+          error: "Translation parsing failed",
+          raw: cleaned.slice(0, 500),
+        }),
+        {
+          status: 502,
+          headers: { ...hdrs, "Content-Type": "application/json" },
+        },
+      );
     }
 
     return new Response(
@@ -171,8 +317,9 @@ Output (JSON only):`;
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     log.error("translate error", { err: msg });
-    return new Response(JSON.stringify({ error: msg }), {
-      status: 500, headers: { ...hdrs, "Content-Type": "application/json" },
+    return new Response(JSON.stringify({ error: "Translation failed" }), {
+      status: 500,
+      headers: { ...hdrs, "Content-Type": "application/json" },
     });
   }
 });

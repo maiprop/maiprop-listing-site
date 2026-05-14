@@ -30,6 +30,10 @@ interface Invoice {
 
 interface BillingInfo {
   invoices: Invoice[];
+  billing_configured?: boolean;
+  customer_found?: boolean;
+  portal_eligible?: boolean;
+  billing_reason?: string;
   subscription: {
     id: string;
     status: string;
@@ -248,15 +252,27 @@ function StatusBadge({ status }: { status: string | null }) {
 
 export default function BillingTab() {
   const navigate = useNavigate();
-  const { isPro, subscriptionEnd, loading: subLoading } = useSubscription();
+  const {
+    isPro,
+    subscriptionEnd,
+    loading: subLoading,
+    accessSource,
+    hasStripeBilling,
+    isInvestorManagedPlan,
+    isManuallyManagedPlan,
+  } = useSubscription();
   const { profile } = useAuth();
-  const { data, isLoading, refetch, isRefetching } = useBillingInfo();
+  const { data, isLoading, refetch, isRefetching, error } = useBillingInfo();
   const [portalLoading, setPortalLoading] = useState(false);
 
   const participantType = getParticipantTypeFromProfile(profile) ?? "buyer";
   const addonSections: AddonSection[] = ADDONS_BY_ROLE[participantType] ?? ADDONS_BY_ROLE["buyer"];
 
   const openPortal = async () => {
+    if (!hasStripeBilling || data?.portal_eligible === false) {
+      toast.info("This plan is managed outside the self-serve Stripe portal.");
+      return;
+    }
     setPortalLoading(true);
     try {
       const { data: pData, error } = await supabase.functions.invoke("customer-portal");
@@ -270,6 +286,14 @@ export default function BillingTab() {
 
   const sub = data?.subscription ?? null;
   const invoices = data?.invoices ?? [];
+  const canManageBilling = isPro && hasStripeBilling && data?.portal_eligible !== false;
+  const showsManualManagement = isInvestorManagedPlan || isManuallyManagedPlan || (!hasStripeBilling && isPro);
+  const invoiceHistoryDescription = data?.billing_reason === "invoice_unavailable"
+    ? "Stripe billing is connected, but invoice history could not be loaded on this refresh."
+    : "Your last 12 invoices.";
+  const emptyInvoiceCopy = showsManualManagement || data?.customer_found === false
+    ? "This access is not currently backed by a Stripe invoice history in maiProp."
+    : "No invoices yet. They'll appear here after your first payment.";
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -298,6 +322,10 @@ export default function BillingTab() {
                     <Zap className="w-5 h-5 text-primary" />
                     {sub.plan_name}
                   </>
+                ) : isInvestorManagedPlan ? (
+                  "Investor managed plan"
+                ) : isManuallyManagedPlan ? (
+                  "Managed access"
                 ) : (
                   "Free plan"
                 )}
@@ -305,10 +333,15 @@ export default function BillingTab() {
             )}
           </div>
           <div className="flex items-center gap-2">
-            {isPro ? (
+            {canManageBilling ? (
               <Button variant="outline" size="sm" className="gap-1.5" onClick={openPortal} disabled={portalLoading}>
                 {portalLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CreditCard className="w-3.5 h-3.5" />}
                 Manage billing
+              </Button>
+            ) : isPro ? (
+              <Button variant="outline" size="sm" className="gap-1.5" disabled>
+                <Shield className="w-3.5 h-3.5" />
+                Managed by maiProp
               </Button>
             ) : (
               <Button size="sm" className="gap-1.5 bg-gradient-primary border-0 text-primary-foreground" onClick={() => navigate("/pricing")}>
@@ -341,17 +374,26 @@ export default function BillingTab() {
           </div>
         ) : isPro ? (
           <div className="text-sm text-muted-foreground">
-            {subscriptionEnd ? `Pro access active until ${formatDate(subscriptionEnd)}.` : "Pro access active."}
+            {canManageBilling
+              ? (subscriptionEnd ? `Pro access active until ${formatDate(subscriptionEnd)}.` : "Pro access active.")
+              : accessSource === "investor"
+                ? "Investor access is active and managed directly by maiProp."
+                : "This access is active but managed outside the self-serve billing portal."}
           </div>
         ) : (
           <div className="rounded-xl bg-secondary p-4 text-sm text-muted-foreground">
             You're on the free plan. Upgrade to unlock analytics, unlimited viewings, saved searches and more.
           </div>
         )}
+        {error && (
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm text-muted-foreground">
+            Live billing details could not be fully refreshed right now. Your access state is still shown from the account profile.
+          </div>
+        )}
       </div>
 
       {/* Payment method */}
-      {isPro && (
+      {canManageBilling && (
         <div className="glass-card rounded-2xl border border-border p-5">
           <div className="flex items-center justify-between">
             <div>
@@ -371,7 +413,7 @@ export default function BillingTab() {
         <div className="flex items-center justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1">Invoice history</p>
-            <p className="text-sm text-muted-foreground">Your last 12 invoices.</p>
+            <p className="text-sm text-muted-foreground">{invoiceHistoryDescription}</p>
           </div>
           <FileText className="w-5 h-5 text-muted-foreground" />
         </div>
@@ -385,7 +427,7 @@ export default function BillingTab() {
         ) : invoices.length === 0 ? (
           <div className="text-center py-10 text-sm text-muted-foreground">
             <FileText className="w-8 h-8 mx-auto mb-2 opacity-30" />
-            No invoices yet. They'll appear here after your first payment.
+            {emptyInvoiceCopy}
           </div>
         ) : (
           <div className="divide-y divide-border">
@@ -426,7 +468,11 @@ export default function BillingTab() {
       {/* Cancel / support */}
       {isPro && (
         <div className="text-center text-xs text-muted-foreground space-y-1">
-          <p>To cancel your subscription, click <button className="underline hover:text-foreground" onClick={openPortal}>Manage billing</button> and choose "Cancel plan".</p>
+          {canManageBilling ? (
+            <p>To cancel your subscription, click <button className="underline hover:text-foreground" onClick={openPortal}>Manage billing</button> and choose "Cancel plan".</p>
+          ) : (
+            <p>Subscription changes for this access level are handled directly by the maiProp team.</p>
+          )}
           <p>Need help? <a href="mailto:support@maiprop.co" className="underline hover:text-foreground">support@maiprop.co</a></p>
         </div>
       )}

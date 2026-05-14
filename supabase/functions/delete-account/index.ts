@@ -20,6 +20,7 @@
  *        - listing-images / avatars       : `${user.id}/<file>`             (flat, 1 level)
  *        - project-media                  : `${user.id}/<projectId>/<file>`  (nested, 2 levels)
  *        - message-attachments            : `${user.id}/<convId>/<file>`     (nested, 2 levels)
+ *        - open-house-docs                : `${user.id}/.../<file>`          (POF / ID docs)
  *        - firesale-photos                : `${firesaleRequestId}/<file>`    (NOT under user.id)
  *      Buckets that put user.id at the top of the path are walked recursively
  *      by `removeFolderRecursive(supabase, bucket, user.id)`. firesale-photos
@@ -40,7 +41,13 @@ import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.t
 const log = createLogger("delete-account");
 const limiter = makeRateLimiter({ bucket: "delete-account", maxRequests: 3, windowMs: 60_000 });
 
-const USER_FOLDER_BUCKETS = ["listing-images", "avatars", "project-media", "message-attachments"] as const;
+export const USER_FOLDER_BUCKETS = [
+  "listing-images",
+  "avatars",
+  "project-media",
+  "message-attachments",
+  "open-house-docs",
+] as const;
 
 Deno.serve(async (req) => {
   const corsPreflightResponse = handleCors(req);
@@ -194,7 +201,7 @@ type StorageSubset = {
   };
 };
 
-async function removeFolderRecursive(
+export async function removeFolderRecursive(
   supabase: StorageSubset,
   bucket: string,
   prefix: string,

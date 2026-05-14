@@ -12,6 +12,7 @@
 import { test, expect } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 import WebSocket from "ws";
+import { skipUnlessDestructiveLiveE2EAllowed } from "./helpers/liveSafety";
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL ?? "";
 const ANON_KEY = process.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "";
@@ -24,6 +25,8 @@ const canRun =
   SERVICE_ROLE.length > 40;
 
 test.describe("GDPR — account deletion", () => {
+  skipUnlessDestructiveLiveE2EAllowed();
+
   test.skip(
     !canRun,
     "Requires VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY, and SUPABASE_SERVICE_ROLE_KEY",

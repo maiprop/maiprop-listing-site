@@ -10,7 +10,7 @@
  *  - global fetch                     → short-circuit Nominatim
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { act, render, screen, fireEvent, waitFor } from "@testing-library/react";
 
 const { useAuthMock, useSubMock, isSellSideRoleMock, functionsInvokeMock, fromMock, navigateMock, toastMock } = vi.hoisted(() => ({
   useAuthMock: vi.fn(),
@@ -150,8 +150,11 @@ describe("FiresaleQuickSaleForm", () => {
       });
       // Loading label appears synchronously after the useEffect schedules the timer.
       expect(screen.getByText(/Searching address suggestions/i)).toBeInTheDocument();
-      await vi.advanceTimersByTimeAsync(500);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(500);
+      });
       expect(fetchStub).toHaveBeenCalled();
+      expect(screen.queryByText(/Searching address suggestions/i)).not.toBeInTheDocument();
     } finally {
       vi.useRealTimers();
     }

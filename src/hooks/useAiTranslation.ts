@@ -102,13 +102,26 @@ export function useAiTranslation() {
       }
     }
 
-    // Fetch from AI edge function
+    // Fetch from AI edge function. Non-static AI generation is authenticated
+    // server-side, so anonymous visitors keep the fallback language instead of
+    // burning an unauthenticated 401 on every locale change.
     setStatus("loading");
     setError(null);
 
-    supabase.functions
-      .invoke("ai-translate", { body: { locale, strings: FLAT_EN } })
-      .then(({ data, error: fnErr }) => {
+    supabase.auth.getSession()
+      .then(({ data }) => {
+        if (!data.session) {
+          setError("Sign in to generate AI translations");
+          setStatus("ready");
+          return null;
+        }
+        return supabase.functions.invoke("ai-translate", {
+          body: { locale, strings: FLAT_EN },
+        });
+      })
+      .then((result) => {
+        if (!result) return;
+        const { data, error: fnErr } = result;
         if (fnErr || !data?.strings) {
           logger.warn("ai-translate error:", fnErr ?? "no strings returned");
           setError("Translation unavailable");

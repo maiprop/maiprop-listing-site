@@ -5,13 +5,15 @@
 #   docker build -t maiprop-dev .
 #   docker run -p 8080:8080 --env-file .env maiprop-dev
 
-FROM node:20-slim AS base
+FROM node:20.19.5-slim AS base
 
 WORKDIR /app
 
-# Install Deno for edge function development
+ARG DENO_VERSION=2.7.12
+
+# Install Deno for edge function development.
 RUN apt-get update && apt-get install -y curl unzip && \
-    curl -fsSL https://deno.land/install.sh | sh && \
+    curl -fsSL https://deno.land/install.sh | sh -s "v${DENO_VERSION}" && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 ENV DENO_INSTALL="/root/.deno"
 ENV PATH="$DENO_INSTALL/bin:$PATH"

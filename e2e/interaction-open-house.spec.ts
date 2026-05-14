@@ -20,14 +20,16 @@ import { getBaseURL } from "./helpers/baseURL";
 // Constants
 // ---------------------------------------------------------------------------
 
-const PASSWORD = "Demo2025!";
-const hasCredentials = !!(process.env.E2E_TEST_EMAIL && process.env.E2E_TEST_PASSWORD);
+const PASSWORD = process.env.E2E_DEMO_PASSWORD ?? "Demo2025!";
+const hasCredentials = PASSWORD !== "";
 
 const ACCOUNTS = {
-  buyerFree: "buyer.free@maiprop.demo",
-  buyerPro: "buyer.pro@maiprop.demo",
-  sellerPro: "seller.pro@maiprop.demo",
-  agentPro: "agent.pro@maiprop.demo",
+  buyerFree: process.env.E2E_BUYER_FREE_EMAIL ?? "buyer.free@maiprop.demo",
+  // Some deployed seed datasets no longer include a working buyer.pro account.
+  // Fall back to buyer.free so the suite still exercises authenticated buyer flows.
+  buyerPro: process.env.E2E_BUYER_PRO_EMAIL ?? process.env.E2E_BUYER_FREE_EMAIL ?? "buyer.free@maiprop.demo",
+  sellerPro: process.env.E2E_SELLER_PRO_EMAIL ?? "seller.pro@maiprop.demo",
+  agentPro: process.env.E2E_AGENT_PRO_EMAIL ?? "agent.pro@maiprop.demo",
 } as const;
 
 // ---------------------------------------------------------------------------

@@ -1,0 +1,1774 @@
+{
+  "generated_at": "2026-05-14T16:46:59.169Z",
+  "totals": {
+    "source_files": 477,
+    "source_lines": 83144,
+    "test_files": 171,
+    "routes": 38,
+    "supabase_functions": 48,
+    "likely_tested_source_files": 420
+  },
+  "by_root": {
+    "src/pages": {
+      "files": 48,
+      "lines": 17701,
+      "likely_tested_files": 47,
+      "likely_untested_files": [
+        "src/pages/AuctionDetail.tsx"
+      ]
+    },
+    "src/components": {
+      "files": 204,
+      "lines": 33780,
+      "likely_tested_files": 178,
+      "likely_untested_files": [
+        "src/components/dashboard/DashboardMobileNav.tsx",
+        "src/components/dashboard/DashboardSidebar.tsx",
+        "src/components/firesale/QuickSaleSubmittedView.tsx",
+        "src/components/listings/ListingCompareButton.tsx",
+        "src/components/map/mapConfig.ts",
+        "src/components/property/PropertyDescriptionSection.tsx",
+        "src/components/property/PropertyDetailsAndEnergy.tsx",
+        "src/components/property/PropertyValuationLockedCard.tsx",
+        "src/components/ui/accordion.tsx",
+        "src/components/ui/aspect-ratio.tsx",
+        "src/components/ui/carousel.tsx",
+        "src/components/ui/collapsible.tsx",
+        "src/components/ui/command.tsx",
+        "src/components/ui/context-menu.tsx",
+        "src/components/ui/dropdown-menu.tsx",
+        "src/components/ui/hover-card.tsx",
+        "src/components/ui/input-otp.tsx",
+        "src/components/ui/menubar.tsx",
+        "src/components/ui/navigation-menu.tsx",
+        "src/components/ui/popover.tsx",
+        "src/components/ui/radio-group.tsx",
+        "src/components/ui/resizable.tsx",
+        "src/components/ui/scroll-area.tsx",
+        "src/components/ui/sheet.tsx",
+        "src/components/ui/slider.tsx",
+        "src/components/ui/toggle-group.tsx"
+      ]
+    },
+    "src/hooks": {
+      "files": 61,
+      "lines": 8558,
+      "likely_tested_files": 49,
+      "likely_untested_files": [
+        "src/hooks/listingForm.types.ts",
+        "src/hooks/projectOwnership.ts",
+        "src/hooks/useContactSubmissions.ts",
+        "src/hooks/useCreateBuildingListing.ts",
+        "src/hooks/useFiresalePhotoUploader.ts",
+        "src/hooks/useHomepageListings.ts",
+        "src/hooks/useInvitationRequests.ts",
+        "src/hooks/useListingsPipeline.ts",
+        "src/hooks/useNominatimAddressSuggestions.ts",
+        "src/hooks/usePortalDropdown.ts",
+        "src/hooks/usePriceIndex.ts",
+        "src/hooks/useSmartFilters.ts"
+      ]
+    },
+    "src/lib": {
+      "files": 39,
+      "lines": 5647,
+      "likely_tested_files": 25,
+      "likely_untested_files": [
+        "src/lib/apiDocsData.ts",
+        "src/lib/authErrorMessages.ts",
+        "src/lib/authRedirect.ts",
+        "src/lib/buildingListingUploads.ts",
+        "src/lib/documentTemplateData.ts",
+        "src/lib/filterConfig.ts",
+        "src/lib/listingsCardUtils.ts",
+        "src/lib/listingsConfig.ts",
+        "src/lib/newBuildConfig.ts",
+        "src/lib/passwordPolicy.ts",
+        "src/lib/professionalServiceCatalog.ts",
+        "src/lib/propertyFeatures.ts",
+        "src/lib/propertyTypes.ts",
+        "src/lib/statusColors.ts"
+      ]
+    },
+    "src/contexts": {
+      "files": 1,
+      "lines": 295,
+      "likely_tested_files": 1,
+      "likely_untested_files": []
+    },
+    "supabase/functions": {
+      "files": 124,
+      "lines": 17163,
+      "likely_tested_files": 120,
+      "likely_untested_files": [
+        "supabase/functions/_shared/email-templates/email-change.tsx",
+        "supabase/functions/_shared/email-templates/magic-link.tsx",
+        "supabase/functions/_shared/email-templates/reauthentication.tsx",
+        "supabase/functions/_shared/fetchWithTimeout.ts"
+      ]
+    }
+  },
+  "largest_files": [
+    {
+      "file": "src/lib/professionalServiceCatalog.ts",
+      "lines": 1019,
+      "likely_tested": false
+    },
+    {
+      "file": "src/lib/documentTemplateData.ts",
+      "lines": 1015,
+      "likely_tested": false
+    },
+    {
+      "file": "src/pages/Onboarding.tsx",
+      "lines": 919,
+      "likely_tested": true
+    },
+    {
+      "file": "supabase/functions/fetch-os-auctions/index.ts",
+      "lines": 828,
+      "likely_tested": true
+    },
+    {
+      "file": "src/hooks/useOpenHouseAssetControl.ts",
+      "lines": 789,
+      "likely_tested": true
+    },
+    {
+      "file": "src/pages/InvestorDashboard.tsx",
+      "lines": 774,
+      "likely_tested": true
+    },
+    {
+      "file": "src/pages/Dashboard.tsx",
+      "lines": 716,
+      "likely_tested": true
+    },
+    {
+      "file": "src/pages/Listings.tsx",
+      "lines": 696,
+      "likely_tested": true
+    },
+    {
+      "file": "src/pages/NewBuildDetail.tsx",
+      "lines": 689,
+      "likely_tested": true
+    },
+    {
+      "file": "src/pages/OpenHouseDetail.tsx",
+      "lines": 687,
+      "likely_tested": true
+    },
+    {
+      "file": "src/components/OpenHouseRegistrationDialog.tsx",
+      "lines": 656,
+      "likely_tested": true
+    },
+    {
+      "file": "supabase/functions/poll-os-auctions/index.ts",
+      "lines": 656,
+      "likely_tested": true
+    },
+    {
+      "file": "src/pages/AdminPricing.tsx",
+      "lines": 652,
+      "likely_tested": true
+    },
+    {
+      "file": "src/pages/PropertyDetail.tsx",
+      "lines": 644,
+      "likely_tested": true
+    },
+    {
+      "file": "src/components/ui/sidebar.tsx",
+      "lines": 638,
+      "likely_tested": true
+    },
+    {
+      "file": "src/pages/Pricing.tsx",
+      "lines": 637,
+      "likely_tested": true
+    },
+    {
+      "file": "src/pages/ProjectDetail.tsx",
+      "lines": 629,
+      "likely_tested": true
+    },
+    {
+      "file": "src/components/firesale/FiresaleQuickSaleForm.tsx",
+      "lines": 611,
+      "likely_tested": true
+    },
+    {
+      "file": "src/pages/CreateNewBuildingListing.tsx",
+      "lines": 573,
+      "likely_tested": true
+    },
+    {
+      "file": "src/components/LegalDocumentModal.tsx",
+      "lines": 567,
+      "likely_tested": true
+    },
+    {
+      "file": "src/pages/Professionals.tsx",
+      "lines": 561,
+      "likely_tested": true
+    },
+    {
+      "file": "src/components/AdminPanel.tsx",
+      "lines": 556,
+      "likely_tested": true
+    },
+    {
+      "file": "supabase/functions/full-sync-from-os/index.ts",
+      "lines": 554,
+      "likely_tested": true
+    },
+    {
+      "file": "src/pages/dashboard/AnalyticsTab.tsx",
+      "lines": 551,
+      "likely_tested": true
+    },
+    {
+      "file": "src/components/Navbar.tsx",
+      "lines": 540,
+      "likely_tested": true
+    },
+    {
+      "file": "src/components/OpenHouseAssetControlPanel.tsx",
+      "lines": 540,
+      "likely_tested": true
+    },
+    {
+      "file": "src/components/PropertyCard.tsx",
+      "lines": 535,
+      "likely_tested": true
+    },
+    {
+      "file": "src/components/ProfessionalServicesEditor.tsx",
+      "lines": 529,
+      "likely_tested": true
+    },
+    {
+      "file": "src/pages/dashboard/BillingTab.tsx",
+      "lines": 525,
+      "likely_tested": true
+    },
+    {
+      "file": "supabase/functions/followup-lead/index.ts",
+      "lines": 520,
+      "likely_tested": true
+    }
+  ],
+  "likely_untested_large_files": [
+    {
+      "file": "src/lib/professionalServiceCatalog.ts",
+      "lines": 1019,
+      "likely_tested": false
+    },
+    {
+      "file": "src/lib/documentTemplateData.ts",
+      "lines": 1015,
+      "likely_tested": false
+    },
+    {
+      "file": "src/lib/apiDocsData.ts",
+      "lines": 405,
+      "likely_tested": false
+    },
+    {
+      "file": "src/pages/AuctionDetail.tsx",
+      "lines": 376,
+      "likely_tested": false
+    },
+    {
+      "file": "src/lib/propertyTypes.ts",
+      "lines": 316,
+      "likely_tested": false
+    },
+    {
+      "file": "src/lib/filterConfig.ts",
+      "lines": 295,
+      "likely_tested": false
+    },
+    {
+      "file": "src/hooks/useCreateBuildingListing.ts",
+      "lines": 234,
+      "likely_tested": false
+    },
+    {
+      "file": "src/components/ui/carousel.tsx",
+      "lines": 225,
+      "likely_tested": false
+    },
+    {
+      "file": "src/hooks/useFiresalePhotoUploader.ts",
+      "lines": 214,
+      "likely_tested": false
+    },
+    {
+      "file": "src/components/ui/menubar.tsx",
+      "lines": 208,
+      "likely_tested": false
+    },
+    {
+      "file": "src/components/map/mapConfig.ts",
+      "lines": 203,
+      "likely_tested": false
+    },
+    {
+      "file": "src/hooks/useListingsPipeline.ts",
+      "lines": 193,
+      "likely_tested": false
+    },
+    {
+      "file": "src/components/ui/dropdown-menu.tsx",
+      "lines": 180,
+      "likely_tested": false
+    },
+    {
+      "file": "src/components/ui/context-menu.tsx",
+      "lines": 179,
+      "likely_tested": false
+    },
+    {
+      "file": "src/components/dashboard/DashboardSidebar.tsx",
+      "lines": 166,
+      "likely_tested": false
+    },
+    {
+      "file": "src/hooks/useHomepageListings.ts",
+      "lines": 145,
+      "likely_tested": false
+    },
+    {
+      "file": "src/components/ui/command.tsx",
+      "lines": 133,
+      "likely_tested": false
+    },
+    {
+      "file": "src/lib/propertyFeatures.ts",
+      "lines": 125,
+      "likely_tested": false
+    },
+    {
+      "file": "src/lib/statusColors.ts",
+      "lines": 124,
+      "likely_tested": false
+    },
+    {
+      "file": "src/components/ui/navigation-menu.tsx",
+      "lines": 121,
+      "likely_tested": false
+    },
+    {
+      "file": "src/components/property/PropertyDetailsAndEnergy.tsx",
+      "lines": 109,
+      "likely_tested": false
+    },
+    {
+      "file": "src/components/ui/sheet.tsx",
+      "lines": 108,
+      "likely_tested": false
+    },
+    {
+      "file": "src/components/dashboard/DashboardMobileNav.tsx",
+      "lines": 102,
+      "likely_tested": false
+    },
+    {
+      "file": "src/components/firesale/QuickSaleSubmittedView.tsx",
+      "lines": 100,
+      "likely_tested": false
+    },
+    {
+      "file": "src/hooks/useSmartFilters.ts",
+      "lines": 96,
+      "likely_tested": false
+    },
+    {
+      "file": "src/hooks/listingForm.types.ts",
+      "lines": 78,
+      "likely_tested": false
+    },
+    {
+      "file": "src/hooks/useNominatimAddressSuggestions.ts",
+      "lines": 76,
+      "likely_tested": false
+    },
+    {
+      "file": "src/lib/buildingListingUploads.ts",
+      "lines": 76,
+      "likely_tested": false
+    },
+    {
+      "file": "src/hooks/usePriceIndex.ts",
+      "lines": 72,
+      "likely_tested": false
+    },
+    {
+      "file": "src/components/ui/input-otp.tsx",
+      "lines": 62,
+      "likely_tested": false
+    }
+  ],
+  "routes": [
+    "*",
+    "/",
+    "/admin",
+    "/admin/pricing",
+    "/ai-assistant",
+    "/api-docs",
+    "/auction/:id",
+    "/auctions",
+    "/contact",
+    "/cookie-policy",
+    "/dashboard",
+    "/dashboard/:section",
+    "/document-templates",
+    "/firesale",
+    "/investor-dashboard",
+    "/listings",
+    "/listings/new",
+    "/listings/new-building",
+    "/login",
+    "/messages",
+    "/new-build/:id",
+    "/onboarding",
+    "/open-house/:id",
+    "/open-houses",
+    "/platform-map",
+    "/portfolios",
+    "/pricing",
+    "/privacy-policy",
+    "/professionals",
+    "/professionals/:id",
+    "/professionals/me",
+    "/projects",
+    "/projects/:id",
+    "/property/:id",
+    "/reset-password",
+    "/signup",
+    "/terms-of-service",
+    "/video-room/:professionalId"
+  ],
+  "supabase_functions": [
+    {
+      "name": "agent-data-input",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "ai-search",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "ai-service-match",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "ai-translate",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "apply-data-input-credit",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "auth-email-hook",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "check-subscription",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "complete-onboarding-role",
+      "has_index": true,
+      "has_test": false
+    },
+    {
+      "name": "create-checkout",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "create-stripe-price",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "csp-report",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "customer-portal",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "delete-account",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "fetch-auction-enrichment",
+      "has_index": true,
+      "has_test": false
+    },
+    {
+      "name": "fetch-os-auctions",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "fetch-past-deals-from-os",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "fetch-report-from-os",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "flag-auction-on-os",
+      "has_index": true,
+      "has_test": false
+    },
+    {
+      "name": "followup-lead",
+      "has_index": true,
+      "has_test": false
+    },
+    {
+      "name": "full-sync-from-os",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "get-invoices",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "healthz",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "invitation-notify",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "listing-ai-assist",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "log-role-switch",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "neighbourhood-report",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "oh-registration-notify",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "os-diagnose",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "os-sales-coordinates",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "owner-pro-status",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "poll-os-auctions",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "pro-ai-tools",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "process-email-queue",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "property-chat",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "property-pois",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "property-valuation",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "receive-from-os",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "record-listing-view",
+      "has_index": true,
+      "has_test": false
+    },
+    {
+      "name": "scheduled-followups",
+      "has_index": true,
+      "has_test": false
+    },
+    {
+      "name": "send-saved-search-alerts",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "sitemap",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "smart-filters",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "streetview-proxy",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "stripe-webhook",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "sync-firesale-to-os",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "sync-stripe-pricing",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "sync-to-os",
+      "has_index": true,
+      "has_test": true
+    },
+    {
+      "name": "transfer-platform-admin",
+      "has_index": true,
+      "has_test": false
+    }
+  ],
+  "role_term_coverage": {
+    "buyer": {
+      "source_files": 47,
+      "test_files": 32,
+      "sample_source_files": [
+        "src/pages/AdminPricing.tsx",
+        "src/pages/AuctionDetail.tsx",
+        "src/pages/dashboard/AnalyticsTab.tsx",
+        "src/pages/dashboard/BillingTab.tsx",
+        "src/pages/dashboard/DataInputTab.tsx",
+        "src/pages/Dashboard.tsx",
+        "src/pages/InvestorDashboard.tsx",
+        "src/pages/NewBuildDetail.tsx",
+        "src/pages/Onboarding.tsx",
+        "src/pages/PlatformMap.tsx",
+        "src/pages/Pricing.tsx",
+        "src/pages/Professionals.tsx",
+        "src/pages/PropertyDetail.tsx",
+        "src/pages/TermsOfService.tsx",
+        "src/components/BottomNav.tsx",
+        "src/components/dashboard/BuyerOpenHousesCard.tsx",
+        "src/components/dashboard/ProfileEditor.tsx",
+        "src/components/dashboard/SettingsSection.tsx",
+        "src/components/DashboardPlanCard.tsx",
+        "src/components/firesale/FiresaleInvestorPanel.tsx"
+      ],
+      "sample_test_files": [
+        "src/test/authContext.onboarding.test.ts",
+        "src/test/AuthContext.test.tsx",
+        "src/test/authUtils.test.ts",
+        "src/test/components.smoke.test.tsx",
+        "src/test/components.test.tsx",
+        "src/test/CreateListing.test.tsx",
+        "src/test/dashboardNav.test.ts",
+        "src/test/DataInputTab.test.tsx",
+        "src/test/LeadsCRM.test.tsx",
+        "src/test/LegalDocumentModal.test.tsx",
+        "src/test/onboardingFlow.test.ts",
+        "src/test/participantConfig.test.ts",
+        "src/test/rolePlanMap.test.ts",
+        "src/test/routeGuards.test.tsx",
+        "src/test/useAgentDataInputs.test.tsx",
+        "src/test/useEligibleForQuickSale.test.tsx",
+        "src/test/useListings.isPro.test.ts",
+        "src/test/useOpenHouseAssetControl.test.tsx",
+        "src/test/usePlanLimits.test.ts",
+        "src/test/useSubscription.test.tsx"
+      ]
+    },
+    "seller": {
+      "source_files": 51,
+      "test_files": 24,
+      "sample_source_files": [
+        "src/pages/AdminPricing.tsx",
+        "src/pages/CreateListing.tsx",
+        "src/pages/dashboard/AnalyticsTab.tsx",
+        "src/pages/dashboard/AuctionsTab.tsx",
+        "src/pages/dashboard/BillingTab.tsx",
+        "src/pages/dashboard/DataInputTab.tsx",
+        "src/pages/dashboard/MyListingsSection.tsx",
+        "src/pages/Dashboard.tsx",
+        "src/pages/Firesale.tsx",
+        "src/pages/Onboarding.tsx",
+        "src/pages/PlatformMap.tsx",
+        "src/pages/Pricing.tsx",
+        "src/pages/Professionals.tsx",
+        "src/pages/TermsOfService.tsx",
+        "src/components/admin/FiresaleComponents.tsx",
+        "src/components/AdminFeaturedListings.tsx",
+        "src/components/BottomNav.tsx",
+        "src/components/dashboard/ProfileEditor.tsx",
+        "src/components/dashboard/SettingsSection.tsx",
+        "src/components/DashboardPlanCard.tsx"
+      ],
+      "sample_test_files": [
+        "src/test/authContext.onboarding.test.ts",
+        "src/test/AuthContext.test.tsx",
+        "src/test/authUtils.test.ts",
+        "src/test/components.smoke.test.tsx",
+        "src/test/components.test.tsx",
+        "src/test/CreateListing.test.tsx",
+        "src/test/dashboardNav.test.ts",
+        "src/test/DataInputTab.test.tsx",
+        "src/test/FiresaleQuickSaleForm.test.tsx",
+        "src/test/LeadsCRM.test.tsx",
+        "src/test/LegalDocumentModal.test.tsx",
+        "src/test/onboardingFlow.test.ts",
+        "src/test/participantConfig.test.ts",
+        "src/test/rolePlanMap.test.ts",
+        "src/test/routeGuards.test.tsx",
+        "src/test/useAgentDataInputs.test.tsx",
+        "e2e/interaction-agent-developer.spec.ts",
+        "e2e/interaction-buyer-seller.spec.ts",
+        "e2e/interaction-open-house.spec.ts",
+        "e2e/pages-authenticated.spec.ts"
+      ]
+    },
+    "landlord": {
+      "source_files": 10,
+      "test_files": 0,
+      "sample_source_files": [
+        "src/pages/TermsOfService.tsx",
+        "src/components/dashboard/SettingsSection.tsx",
+        "src/components/LegalDocumentModal.tsx",
+        "src/components/onboarding/PickTypeStep.tsx",
+        "src/components/property/PropertyOwnerCard.tsx",
+        "src/components/PropertyCard.tsx",
+        "src/lib/documentTemplateData.ts",
+        "src/lib/onboardingConfig.ts",
+        "src/lib/professionalServiceCatalog.ts",
+        "supabase/functions/pro-ai-tools/index.ts"
+      ],
+      "sample_test_files": []
+    },
+    "agent": {
+      "source_files": 77,
+      "test_files": 30,
+      "sample_source_files": [
+        "src/pages/AdminPricing.tsx",
+        "src/pages/AIAssistantPage.tsx",
+        "src/pages/CreateListing.tsx",
+        "src/pages/dashboard/AnalyticsTab.tsx",
+        "src/pages/dashboard/AuctionsTab.tsx",
+        "src/pages/dashboard/BillingTab.tsx",
+        "src/pages/dashboard/DataInputTab.tsx",
+        "src/pages/dashboard/MyListingsSection.tsx",
+        "src/pages/Dashboard.tsx",
+        "src/pages/Messages.tsx",
+        "src/pages/Onboarding.tsx",
+        "src/pages/OpenHouses.tsx",
+        "src/pages/PlatformMap.tsx",
+        "src/pages/Pricing.tsx",
+        "src/pages/PrivacyPolicy.tsx",
+        "src/pages/ProfessionalProfile.tsx",
+        "src/pages/Professionals.tsx",
+        "src/pages/TermsOfService.tsx",
+        "src/components/AIServiceMatchModal.tsx",
+        "src/components/BottomNav.tsx"
+      ],
+      "sample_test_files": [
+        "src/test/AdminPricing.test.tsx",
+        "src/test/authContext.onboarding.test.ts",
+        "src/test/authUtils.test.ts",
+        "src/test/components.smoke.test.tsx",
+        "src/test/components.test.tsx",
+        "src/test/CreateListing.test.tsx",
+        "src/test/dashboardNav.test.ts",
+        "src/test/DataInputTab.test.tsx",
+        "src/test/listingUtils.test.ts",
+        "src/test/onboardingFlow.test.ts",
+        "src/test/openHouseAssetControl.test.ts",
+        "src/test/pages.smoke.test.tsx",
+        "src/test/participantConfig.test.ts",
+        "src/test/rolePlanMap.test.ts",
+        "src/test/routeGuards.test.tsx",
+        "src/test/useAgentDataInputs.test.tsx",
+        "src/test/useOpenHouseAssetControl.test.tsx",
+        "src/test/usePlanLimits.test.ts",
+        "src/test/useSubscription.test.tsx",
+        "e2e/interaction-agent-developer.spec.ts"
+      ]
+    },
+    "professional": {
+      "source_files": 82,
+      "test_files": 21,
+      "sample_source_files": [
+        "src/pages/AdminDashboard.tsx",
+        "src/pages/AdminPricing.tsx",
+        "src/pages/BrandedVideoRoom.tsx",
+        "src/pages/dashboard/AnalyticsTab.tsx",
+        "src/pages/dashboard/BillingTab.tsx",
+        "src/pages/Dashboard.tsx",
+        "src/pages/DocumentTemplates.tsx",
+        "src/pages/Index.tsx",
+        "src/pages/NotFound.tsx",
+        "src/pages/Onboarding.tsx",
+        "src/pages/OpenHouseDetail.tsx",
+        "src/pages/PlatformMap.tsx",
+        "src/pages/Pricing.tsx",
+        "src/pages/PrivacyPolicy.tsx",
+        "src/pages/ProfessionalProfile.tsx",
+        "src/pages/ProfessionalProfileMe.tsx",
+        "src/pages/Professionals.tsx",
+        "src/pages/PropertyDetail.tsx",
+        "src/pages/TermsOfService.tsx",
+        "src/components/admin/ProVerificationComponents.tsx"
+      ],
+      "sample_test_files": [
+        "src/test/App.test.tsx",
+        "src/test/authContext.onboarding.test.ts",
+        "src/test/components.smoke.test.tsx",
+        "src/test/components.test.tsx",
+        "src/test/dashboardNav.test.ts",
+        "src/test/onboardingFlow.test.ts",
+        "src/test/pages.smoke.test.tsx",
+        "src/test/participantConfig.test.ts",
+        "src/test/ProfessionalVerificationPanel.test.tsx",
+        "src/test/rolePlanMap.test.ts",
+        "src/test/useAdminProfessionals.test.tsx",
+        "src/test/useAnalytics.test.tsx",
+        "src/test/useConsultations.test.tsx",
+        "src/test/useListings.isPro.test.ts",
+        "src/test/useProfessionals.test.tsx",
+        "e2e/interaction-professional-buyer.spec.ts",
+        "e2e/onboarding-role-selection.spec.ts",
+        "e2e/pages-authenticated.spec.ts",
+        "e2e/pages-public.spec.ts",
+        "e2e/pages-roles.spec.ts"
+      ]
+    },
+    "developer": {
+      "source_files": 48,
+      "test_files": 16,
+      "sample_source_files": [
+        "src/pages/AdminPricing.tsx",
+        "src/pages/ApiDocs.tsx",
+        "src/pages/CreateListing.tsx",
+        "src/pages/CreateNewBuildingListing.tsx",
+        "src/pages/dashboard/AnalyticsTab.tsx",
+        "src/pages/dashboard/BillingTab.tsx",
+        "src/pages/dashboard/MyListingsSection.tsx",
+        "src/pages/Dashboard.tsx",
+        "src/pages/InvestorDashboard.tsx",
+        "src/pages/NewBuildDetail.tsx",
+        "src/pages/Onboarding.tsx",
+        "src/pages/PlatformMap.tsx",
+        "src/pages/Pricing.tsx",
+        "src/pages/ProjectDetail.tsx",
+        "src/pages/Projects.tsx",
+        "src/components/AdminInvitationRequests.tsx",
+        "src/components/AdminSubscribers.tsx",
+        "src/components/BottomNav.tsx",
+        "src/components/dashboard/SettingsSection.tsx",
+        "src/components/DashboardPlanCard.tsx"
+      ],
+      "sample_test_files": [
+        "src/test/authContext.onboarding.test.ts",
+        "src/test/authUtils.test.ts",
+        "src/test/components.smoke.test.tsx",
+        "src/test/CreateListing.test.tsx",
+        "src/test/dashboardNav.test.ts",
+        "src/test/onboardingFlow.test.ts",
+        "src/test/participantConfig.test.ts",
+        "src/test/rolePlanMap.test.ts",
+        "src/test/routeGuards.test.tsx",
+        "src/test/usePlanLimits.test.ts",
+        "src/test/useProjects.test.tsx",
+        "e2e/interaction-agent-developer.spec.ts",
+        "e2e/onboarding-role-selection.spec.ts",
+        "e2e/pages-authenticated.spec.ts",
+        "e2e/pages-roles.spec.ts",
+        "supabase/functions/create-checkout/sanitizeRedirectPath.test.ts"
+      ]
+    },
+    "investor": {
+      "source_files": 49,
+      "test_files": 25,
+      "sample_source_files": [
+        "src/pages/AdminDashboard.tsx",
+        "src/pages/AdminPricing.tsx",
+        "src/pages/dashboard/BillingTab.tsx",
+        "src/pages/Dashboard.tsx",
+        "src/pages/DocumentTemplates.tsx",
+        "src/pages/Firesale.tsx",
+        "src/pages/InvestorDashboard.tsx",
+        "src/pages/PlatformMap.tsx",
+        "src/pages/Pricing.tsx",
+        "src/pages/Professionals.tsx",
+        "src/pages/TermsOfService.tsx",
+        "src/components/admin/FiresaleComponents.tsx",
+        "src/components/AdminFiresalePipeline.tsx",
+        "src/components/AdminInvestorScreening.tsx",
+        "src/components/AdminInvitationRequests.tsx",
+        "src/components/AdminSubscribers.tsx",
+        "src/components/BottomNav.tsx",
+        "src/components/dashboard/SettingsSection.tsx",
+        "src/components/firesale/FiresaleInvestorPanel.tsx",
+        "src/components/firesale/FiresaleQuickSaleForm.tsx"
+      ],
+      "sample_test_files": [
+        "src/test/App.test.tsx",
+        "src/test/authContext.onboarding.test.ts",
+        "src/test/AuthContext.test.tsx",
+        "src/test/authUtils.test.ts",
+        "src/test/components.smoke.test.tsx",
+        "src/test/components.test.tsx",
+        "src/test/dashboardNav.test.ts",
+        "src/test/InvestorDashboard.behavior.test.tsx",
+        "src/test/openHouseAssetControl.test.ts",
+        "src/test/pages.smoke.test.tsx",
+        "src/test/participantConfig.test.ts",
+        "src/test/POFVerificationPanel.test.tsx",
+        "src/test/rolePlanMap.test.ts",
+        "src/test/routeGuards.test.tsx",
+        "src/test/useEligibleForQuickSale.test.tsx",
+        "src/test/useFiresaleInterest.test.tsx",
+        "src/test/useOpenHouseAssetControl.test.tsx",
+        "src/test/usePlanLimits.test.ts",
+        "src/test/useSubscription.test.tsx",
+        "e2e/interaction-auctions.spec.ts"
+      ]
+    },
+    "admin": {
+      "source_files": 76,
+      "test_files": 37,
+      "sample_source_files": [
+        "src/pages/AdminDashboard.tsx",
+        "src/pages/AdminPricing.tsx",
+        "src/pages/CreateListing.tsx",
+        "src/pages/CreateNewBuildingListing.tsx",
+        "src/pages/dashboard/DataInputTab.tsx",
+        "src/pages/Dashboard.tsx",
+        "src/pages/Firesale.tsx",
+        "src/pages/InvestorDashboard.tsx",
+        "src/pages/PlatformMap.tsx",
+        "src/pages/Pricing.tsx",
+        "src/pages/TermsOfService.tsx",
+        "src/components/admin/FiresaleComponents.tsx",
+        "src/components/admin/ProVerificationComponents.tsx",
+        "src/components/AdminFeaturedListings.tsx",
+        "src/components/AdminFiresalePipeline.tsx",
+        "src/components/AdminInvestorScreening.tsx",
+        "src/components/AdminInvitationRequests.tsx",
+        "src/components/AdminPanel.tsx",
+        "src/components/AdminProfessionalVerification.tsx",
+        "src/components/AdminReports.tsx"
+      ],
+      "sample_test_files": [
+        "src/test/AdminPricing.test.tsx",
+        "src/test/AdminReports.test.tsx",
+        "src/test/App.test.tsx",
+        "src/test/AuctionFiltersPanel.test.tsx",
+        "src/test/authContext.onboarding.test.ts",
+        "src/test/AuthContext.test.tsx",
+        "src/test/authUtils.test.ts",
+        "src/test/buildAuctionFilter.test.ts",
+        "src/test/components.smoke.test.tsx",
+        "src/test/components.test.tsx",
+        "src/test/dashboardNav.test.ts",
+        "src/test/firesaleReservationMigration.test.ts",
+        "src/test/InvestorDashboard.behavior.test.tsx",
+        "src/test/pages.smoke.test.tsx",
+        "src/test/participantConfig.test.ts",
+        "src/test/POFVerificationPanel.test.tsx",
+        "src/test/ProfessionalVerificationPanel.test.tsx",
+        "src/test/routeGuards.test.tsx",
+        "src/test/useAdminProfessionals.test.tsx",
+        "src/test/useEligibleForQuickSale.test.tsx"
+      ]
+    },
+    "platform_admin": {
+      "source_files": 5,
+      "test_files": 1,
+      "sample_source_files": [
+        "src/contexts/AuthContext.tsx",
+        "supabase/functions/apply-data-input-credit/index.test.ts",
+        "supabase/functions/apply-data-input-credit/index.ts",
+        "supabase/functions/invitation-notify/index.ts",
+        "supabase/functions/transfer-platform-admin/index.ts"
+      ],
+      "sample_test_files": [
+        "supabase/functions/apply-data-input-credit/index.test.ts"
+      ]
+    }
+  },
+  "business_term_coverage": {
+    "pricing": {
+      "source_files": 63,
+      "test_files": 15,
+      "sample_source_files": [
+        "src/pages/AdminDashboard.tsx",
+        "src/pages/AdminPricing.tsx",
+        "src/pages/AIAssistantPage.tsx",
+        "src/pages/Auctions.tsx",
+        "src/pages/CreateListing.tsx",
+        "src/pages/CreateNewBuildingListing.tsx",
+        "src/pages/dashboard/BillingTab.tsx",
+        "src/pages/dashboard/ViewingsTab.tsx",
+        "src/pages/Dashboard.tsx",
+        "src/pages/DocumentTemplates.tsx",
+        "src/pages/InvestorDashboard.tsx",
+        "src/pages/NewBuildDetail.tsx",
+        "src/pages/Onboarding.tsx",
+        "src/pages/PlatformMap.tsx",
+        "src/pages/Pricing.tsx",
+        "src/pages/ProjectDetail.tsx",
+        "src/pages/PropertyDetail.tsx",
+        "src/components/AdminSubscribers.tsx",
+        "src/components/auctions/AuctionFiltersPanel.tsx",
+        "src/components/BookConsultationModal.tsx"
+      ],
+      "sample_test_files": [
+        "src/test/AdminPricing.test.tsx",
+        "src/test/App.test.tsx",
+        "src/test/components.smoke.test.tsx",
+        "src/test/CreateListing.test.tsx",
+        "src/test/pages.smoke.test.tsx",
+        "src/test/participantConfig.test.ts",
+        "src/test/PropertyValuation.test.tsx",
+        "src/test/rolePlanMap.test.ts",
+        "src/test/routeGuards.test.tsx",
+        "src/test/useListingForm.test.tsx",
+        "src/test/useListingForm.validation.test.ts",
+        "e2e/pages-public.spec.ts",
+        "e2e/pages-roles.spec.ts",
+        "e2e/payment-checkout.spec.ts",
+        "supabase/functions/sync-stripe-pricing/index.test.ts"
+      ]
+    },
+    "checkout": {
+      "source_files": 12,
+      "test_files": 5,
+      "sample_source_files": [
+        "src/pages/Onboarding.tsx",
+        "src/pages/Pricing.tsx",
+        "src/components/RoleSwitchModal.tsx",
+        "src/lib/apiDocsData.ts",
+        "src/lib/rolePlanMap.ts",
+        "supabase/functions/create-checkout/index.test.ts",
+        "supabase/functions/create-checkout/index.ts",
+        "supabase/functions/create-checkout/sanitizeRedirectPath.test.ts",
+        "supabase/functions/customer-portal/index.ts",
+        "supabase/functions/stripe-webhook/index.test.ts",
+        "supabase/functions/stripe-webhook/index.ts",
+        "supabase/functions/_shared/auditLog.ts"
+      ],
+      "sample_test_files": [
+        "src/test/rolePlanMap.test.ts",
+        "e2e/payment-checkout.spec.ts",
+        "supabase/functions/create-checkout/index.test.ts",
+        "supabase/functions/create-checkout/sanitizeRedirectPath.test.ts",
+        "supabase/functions/stripe-webhook/index.test.ts"
+      ]
+    },
+    "subscription": {
+      "source_files": 66,
+      "test_files": 19,
+      "sample_source_files": [
+        "src/pages/AdminPricing.tsx",
+        "src/pages/AIAssistantPage.tsx",
+        "src/pages/CreateListing.tsx",
+        "src/pages/CreateNewBuildingListing.tsx",
+        "src/pages/dashboard/AuctionsTab.tsx",
+        "src/pages/dashboard/BillingTab.tsx",
+        "src/pages/dashboard/DataInputTab.tsx",
+        "src/pages/dashboard/ViewingsTab.tsx",
+        "src/pages/Dashboard.tsx",
+        "src/pages/DocumentTemplates.tsx",
+        "src/pages/InvestorDashboard.tsx",
+        "src/pages/NewBuildDetail.tsx",
+        "src/pages/Onboarding.tsx",
+        "src/pages/Pricing.tsx",
+        "src/pages/ProfessionalProfile.tsx",
+        "src/pages/Professionals.tsx",
+        "src/pages/PropertyDetail.tsx",
+        "src/pages/TermsOfService.tsx",
+        "src/components/AdminInvitationRequests.tsx",
+        "src/components/AdminSubscribers.tsx"
+      ],
+      "sample_test_files": [
+        "src/test/AdminPricing.test.tsx",
+        "src/test/App.test.tsx",
+        "src/test/AuthContext.test.tsx",
+        "src/test/components.smoke.test.tsx",
+        "src/test/components.test.tsx",
+        "src/test/CreateListing.test.tsx",
+        "src/test/FiresaleQuickSaleForm.test.tsx",
+        "src/test/InvestorDashboard.behavior.test.tsx",
+        "src/test/pages.smoke.test.tsx",
+        "src/test/PropertyValuation.test.tsx",
+        "src/test/routeGuards.test.tsx",
+        "src/test/subscriptionUtils.test.ts",
+        "src/test/useEligibleForQuickSale.test.tsx",
+        "src/test/useListings.isPro.test.ts",
+        "src/test/useProfessionals.test.tsx",
+        "src/test/useSubscription.test.tsx",
+        "supabase/functions/apply-data-input-credit/index.test.ts",
+        "supabase/functions/check-subscription/index.test.ts",
+        "supabase/functions/stripe-webhook/webhook.test.ts"
+      ]
+    },
+    "invoice": {
+      "source_files": 10,
+      "test_files": 4,
+      "sample_source_files": [
+        "src/pages/dashboard/BillingTab.tsx",
+        "src/pages/dashboard/DataInputTab.tsx",
+        "src/hooks/useAgentDataInput.ts",
+        "src/hooks/useAgentDataInputs.ts",
+        "supabase/functions/agent-data-input/index.ts",
+        "supabase/functions/apply-data-input-credit/index.test.ts",
+        "supabase/functions/apply-data-input-credit/index.ts",
+        "supabase/functions/get-invoices/index.test.ts",
+        "supabase/functions/get-invoices/index.ts",
+        "supabase/functions/stripe-webhook/index.ts"
+      ],
+      "sample_test_files": [
+        "src/test/DataInputTab.test.tsx",
+        "src/test/useAgentDataInputs.test.tsx",
+        "supabase/functions/apply-data-input-credit/index.test.ts",
+        "supabase/functions/get-invoices/index.test.ts"
+      ]
+    },
+    "stripe": {
+      "source_files": 37,
+      "test_files": 14,
+      "sample_source_files": [
+        "src/pages/AdminPricing.tsx",
+        "src/pages/dashboard/BillingTab.tsx",
+        "src/pages/dashboard/DataInputTab.tsx",
+        "src/pages/Onboarding.tsx",
+        "src/pages/PrivacyPolicy.tsx",
+        "src/pages/TermsOfService.tsx",
+        "src/hooks/useAgentDataInputs.ts",
+        "src/hooks/usePricingConfigs.ts",
+        "src/hooks/useSubscription.ts",
+        "src/lib/apiDocsData.ts",
+        "src/lib/config.ts",
+        "src/lib/documentTemplateData.ts",
+        "src/lib/format.ts",
+        "src/lib/rolePlanMap.ts",
+        "src/lib/subscriptionUtils.ts",
+        "src/contexts/AuthContext.tsx",
+        "supabase/functions/apply-data-input-credit/index.test.ts",
+        "supabase/functions/apply-data-input-credit/index.ts",
+        "supabase/functions/check-subscription/index.ts",
+        "supabase/functions/create-checkout/index.ts"
+      ],
+      "sample_test_files": [
+        "src/test/AdminPricing.test.tsx",
+        "src/test/DataInputTab.test.tsx",
+        "src/test/rolePlanMap.test.ts",
+        "src/test/subscriptionUtils.test.ts",
+        "src/test/useAgentDataInputs.test.tsx",
+        "src/test/useSubscription.test.tsx",
+        "e2e/payment-checkout.spec.ts",
+        "supabase/functions/apply-data-input-credit/index.test.ts",
+        "supabase/functions/create-checkout/sanitizeRedirectPath.test.ts",
+        "supabase/functions/create-stripe-price/index.test.ts",
+        "supabase/functions/healthz/index.test.ts",
+        "supabase/functions/stripe-webhook/index.test.ts",
+        "supabase/functions/stripe-webhook/webhook.test.ts",
+        "supabase/functions/sync-stripe-pricing/index.test.ts"
+      ]
+    },
+    "open_house": {
+      "source_files": 21,
+      "test_files": 7,
+      "sample_source_files": [
+        "src/pages/OpenHouseDetail.tsx",
+        "src/pages/OpenHouses.tsx",
+        "src/components/AdminFeaturedListings.tsx",
+        "src/components/AdminReports.tsx",
+        "src/components/index/HomepageOpenHousesSection.tsx",
+        "src/components/listings/StepPricing.tsx",
+        "src/components/listings/StepType.tsx",
+        "src/components/Navbar.tsx",
+        "src/components/OpenHouseAnalytics.tsx",
+        "src/components/OpenHouseDashboardSection.tsx",
+        "src/components/POFVerificationPanel.tsx",
+        "src/components/professionals/ProfileComponents.tsx",
+        "src/components/PropertyCard.tsx",
+        "src/hooks/listingForm.types.ts",
+        "src/hooks/useHomepageListings.ts",
+        "src/hooks/useListingForm.ts",
+        "src/hooks/useOpenHouseAssetControl.ts",
+        "src/lib/listingUtils.ts",
+        "supabase/functions/delete-account/index.ts",
+        "supabase/functions/oh-registration-notify/index.ts"
+      ],
+      "sample_test_files": [
+        "src/test/components.smoke.test.tsx",
+        "src/test/components.test.tsx",
+        "src/test/OpenHouseAnalytics.test.tsx",
+        "src/test/openHouseOfferMigration.test.ts",
+        "src/test/useListingForm.test.tsx",
+        "src/test/useListingForm.validation.test.ts",
+        "src/test/useOpenHouseAssetControl.test.tsx"
+      ]
+    },
+    "auction": {
+      "source_files": 85,
+      "test_files": 27,
+      "sample_source_files": [
+        "src/pages/AdminDashboard.tsx",
+        "src/pages/AdminPricing.tsx",
+        "src/pages/AuctionDetail.tsx",
+        "src/pages/Auctions.tsx",
+        "src/pages/dashboard/AuctionsTab.tsx",
+        "src/pages/dashboard/SavedPropertiesSection.tsx",
+        "src/pages/Dashboard.tsx",
+        "src/pages/Index.tsx",
+        "src/pages/NotFound.tsx",
+        "src/pages/OpenHouses.tsx",
+        "src/pages/PlatformMap.tsx",
+        "src/pages/Pricing.tsx",
+        "src/pages/PrivacyPolicy.tsx",
+        "src/pages/PropertyDetail.tsx",
+        "src/pages/TermsOfService.tsx",
+        "src/components/AdminFeaturedListings.tsx",
+        "src/components/AdminPanel.tsx",
+        "src/components/AdminReports.tsx",
+        "src/components/AIAssistantWidget.tsx",
+        "src/components/AuctionAlertModal.tsx"
+      ],
+      "sample_test_files": [
+        "src/test/App.test.tsx",
+        "src/test/AuctionBidHistory.test.tsx",
+        "src/test/AuctionFiltersPanel.test.tsx",
+        "src/test/AuctionPagination.test.tsx",
+        "src/test/auctionUtils.test.ts",
+        "src/test/buildAuctionFilter.test.ts",
+        "src/test/components.smoke.test.tsx",
+        "src/test/components.test.tsx",
+        "src/test/pages.smoke.test.tsx",
+        "src/test/planLimitErrors.test.ts",
+        "src/test/PropertyValuation.test.tsx",
+        "src/test/useAuctionAlerts.test.tsx",
+        "src/test/useAuctionListings.test.tsx",
+        "src/test/useListingForm.test.tsx",
+        "src/test/useListingForm.validation.test.ts",
+        "src/test/useListings.filters.test.ts",
+        "src/test/useListings.isPro.test.ts",
+        "src/test/usePlanLimits.test.ts",
+        "e2e/interaction-agent-developer.spec.ts",
+        "e2e/interaction-auctions.spec.ts"
+      ]
+    },
+    "firesale": {
+      "source_files": 38,
+      "test_files": 15,
+      "sample_source_files": [
+        "src/pages/AdminDashboard.tsx",
+        "src/pages/AdminPricing.tsx",
+        "src/pages/dashboard/SavedPropertiesSection.tsx",
+        "src/pages/Firesale.tsx",
+        "src/pages/InvestorDashboard.tsx",
+        "src/pages/NotFound.tsx",
+        "src/pages/Pricing.tsx",
+        "src/pages/PrivacyPolicy.tsx",
+        "src/pages/TermsOfService.tsx",
+        "src/components/admin/FiresaleComponents.tsx",
+        "src/components/AdminFiresalePipeline.tsx",
+        "src/components/AdminInvestorScreening.tsx",
+        "src/components/AdminPanel.tsx",
+        "src/components/AdminReports.tsx",
+        "src/components/BottomNav.tsx",
+        "src/components/DealChecklist.tsx",
+        "src/components/firesale/FiresaleInvestorPanel.tsx",
+        "src/components/firesale/FiresaleQuickSaleForm.tsx",
+        "src/components/firesale/QuickSaleSubmittedView.tsx",
+        "src/components/Footer.tsx"
+      ],
+      "sample_test_files": [
+        "src/test/AdminReports.test.tsx",
+        "src/test/App.test.tsx",
+        "src/test/components.smoke.test.tsx",
+        "src/test/components.test.tsx",
+        "src/test/DealChecklist.test.tsx",
+        "src/test/FiresaleQuickSaleForm.test.tsx",
+        "src/test/firesaleReservationMigration.test.ts",
+        "src/test/InvestorDashboard.behavior.test.tsx",
+        "src/test/pages.smoke.test.tsx",
+        "src/test/useFiresaleInterest.test.tsx",
+        "src/test/useListings.filters.test.ts",
+        "e2e/interaction-investor-admin.spec.ts",
+        "e2e/pages-authenticated.spec.ts",
+        "e2e/pages-public.spec.ts",
+        "supabase/functions/sync-firesale-to-os/index.test.ts"
+      ]
+    },
+    "quick_sale": {
+      "source_files": 1,
+      "test_files": 0,
+      "sample_source_files": [
+        "src/components/Navbar.tsx"
+      ],
+      "sample_test_files": []
+    },
+    "pof": {
+      "source_files": 8,
+      "test_files": 6,
+      "sample_source_files": [
+        "src/pages/AdminDashboard.tsx",
+        "src/pages/InvestorDashboard.tsx",
+        "src/components/admin/FiresaleComponents.tsx",
+        "src/components/OpenHouseAssetControlPanel.tsx",
+        "src/components/OpenHouseRegistrationDialog.tsx",
+        "src/components/POFVerificationPanel.tsx",
+        "src/components/ProofOfFundsReviewer.tsx",
+        "src/hooks/useFiresaleInterest.ts"
+      ],
+      "sample_test_files": [
+        "src/test/components.smoke.test.tsx",
+        "src/test/DealChecklist.test.tsx",
+        "src/test/openHouseAssetControl.test.ts",
+        "src/test/pages.smoke.test.tsx",
+        "src/test/POFVerificationPanel.test.tsx",
+        "src/test/useFiresaleInterest.test.tsx"
+      ]
+    },
+    "portfolio": {
+      "source_files": 24,
+      "test_files": 8,
+      "sample_source_files": [
+        "src/pages/dashboard/PortfoliosTab.tsx",
+        "src/pages/Dashboard.tsx",
+        "src/pages/PlatformMap.tsx",
+        "src/pages/Portfolios.tsx",
+        "src/pages/Pricing.tsx",
+        "src/pages/ProfessionalProfile.tsx",
+        "src/components/dashboard/SettingsSection.tsx",
+        "src/components/DeveloperRoute.tsx",
+        "src/components/firesale/FiresaleInvestorPanel.tsx",
+        "src/components/index/OSDashboardMockup.tsx",
+        "src/components/index/OSSection.tsx",
+        "src/components/InvitationRequestModal.tsx",
+        "src/components/onboarding/PickProTypeStep.tsx",
+        "src/components/onboarding/PickTypeStep.tsx",
+        "src/components/professionals/ProfessionalOverviewTab.tsx",
+        "src/components/ProofOfFundsReviewer.tsx",
+        "src/hooks/usePortfolios.ts",
+        "src/hooks/useProfessionals.ts",
+        "src/hooks/useProfessionalServices.ts",
+        "src/lib/dashboardNav.ts"
+      ],
+      "sample_test_files": [
+        "src/test/App.test.tsx",
+        "src/test/dashboardNav.test.ts",
+        "src/test/pages.smoke.test.tsx",
+        "src/test/Portfolios.test.tsx",
+        "src/test/usePortfolios.test.tsx",
+        "src/test/useProjects.test.tsx",
+        "e2e/pages-authenticated.spec.ts",
+        "e2e/pages-public.spec.ts"
+      ]
+    },
+    "project": {
+      "source_files": 61,
+      "test_files": 19,
+      "sample_source_files": [
+        "src/pages/AdminPricing.tsx",
+        "src/pages/ApiDocs.tsx",
+        "src/pages/CreateNewBuildingListing.tsx",
+        "src/pages/dashboard/BillingTab.tsx",
+        "src/pages/dashboard/DataInputTab.tsx",
+        "src/pages/dashboard/ProjectsTab.tsx",
+        "src/pages/Dashboard.tsx",
+        "src/pages/NewBuildDetail.tsx",
+        "src/pages/Onboarding.tsx",
+        "src/pages/PlatformMap.tsx",
+        "src/pages/Pricing.tsx",
+        "src/pages/ProfessionalProfile.tsx",
+        "src/pages/Professionals.tsx",
+        "src/pages/ProjectDetail.tsx",
+        "src/pages/Projects.tsx",
+        "src/components/BookConsultationModal.tsx",
+        "src/components/BottomNav.tsx",
+        "src/components/CompareAIReports.tsx",
+        "src/components/CompareDrawer.tsx",
+        "src/components/dashboard/SettingsSection.tsx"
+      ],
+      "sample_test_files": [
+        "src/test/App.test.tsx",
+        "src/test/components.smoke.test.tsx",
+        "src/test/dashboardNav.test.ts",
+        "src/test/DataInputTab.test.tsx",
+        "src/test/idor.mutations.test.ts",
+        "src/test/LeadsCRM.test.tsx",
+        "src/test/liveSafety.test.ts",
+        "src/test/NeighbourhoodReport.test.tsx",
+        "src/test/pages.smoke.test.tsx",
+        "src/test/ProjectsTab.test.tsx",
+        "src/test/routeGuards.test.tsx",
+        "src/test/useProjects.test.tsx",
+        "src/test/useProjectViews.test.tsx",
+        "e2e/interaction-agent-developer.spec.ts",
+        "e2e/pages-authenticated.spec.ts",
+        "e2e/pages-public.spec.ts",
+        "e2e/payment-checkout.spec.ts",
+        "e2e/rls-security.spec.ts",
+        "supabase/functions/_shared/cors.test.ts"
+      ]
+    },
+    "listing": {
+      "source_files": 193,
+      "test_files": 74,
+      "sample_source_files": [
+        "src/pages/AdminDashboard.tsx",
+        "src/pages/AdminPricing.tsx",
+        "src/pages/AuctionDetail.tsx",
+        "src/pages/Auctions.tsx",
+        "src/pages/CookiePolicy.tsx",
+        "src/pages/CreateListing.tsx",
+        "src/pages/CreateNewBuildingListing.tsx",
+        "src/pages/dashboard/AnalyticsTab.tsx",
+        "src/pages/dashboard/BillingTab.tsx",
+        "src/pages/dashboard/MyListingsSection.tsx",
+        "src/pages/dashboard/PortfoliosTab.tsx",
+        "src/pages/dashboard/ProjectsTab.tsx",
+        "src/pages/dashboard/SavedPropertiesSection.tsx",
+        "src/pages/dashboard/SavedSearchesTab.tsx",
+        "src/pages/dashboard/ViewingsTab.tsx",
+        "src/pages/Dashboard.tsx",
+        "src/pages/Index.tsx",
+        "src/pages/Listings.tsx",
+        "src/pages/Messages.tsx",
+        "src/pages/NewBuildDetail.tsx"
+      ],
+      "sample_test_files": [
+        "src/test/AdminPricing.test.tsx",
+        "src/test/AdminReports.test.tsx",
+        "src/test/App.test.tsx",
+        "src/test/async.errors.test.ts",
+        "src/test/AuctionBidHistory.test.tsx",
+        "src/test/buildAuctionFilter.test.ts",
+        "src/test/CompareAIReports.test.tsx",
+        "src/test/components.smoke.test.tsx",
+        "src/test/components.test.tsx",
+        "src/test/compressImage.real.test.ts",
+        "src/test/CreateListing.test.tsx",
+        "src/test/dashboardNav.test.ts",
+        "src/test/DealChecklist.test.tsx",
+        "src/test/idor.mutations.test.ts",
+        "src/test/LeadsCRM.test.tsx",
+        "src/test/LegalDocumentModal.test.tsx",
+        "src/test/listings.mutations.test.ts",
+        "src/test/listingsFilters.test.ts",
+        "src/test/listingUtils.test.ts",
+        "src/test/MapView.test.tsx"
+      ]
+    },
+    "lead": {
+      "source_files": 98,
+      "test_files": 13,
+      "sample_source_files": [
+        "src/pages/AdminPricing.tsx",
+        "src/pages/ApiDocs.tsx",
+        "src/pages/AuctionDetail.tsx",
+        "src/pages/CookiePolicy.tsx",
+        "src/pages/dashboard/AnalyticsTab.tsx",
+        "src/pages/dashboard/BillingTab.tsx",
+        "src/pages/dashboard/ContactsAndLeadsSection.tsx",
+        "src/pages/Dashboard.tsx",
+        "src/pages/DocumentTemplates.tsx",
+        "src/pages/Firesale.tsx",
+        "src/pages/Messages.tsx",
+        "src/pages/NewBuildDetail.tsx",
+        "src/pages/OpenHouseDetail.tsx",
+        "src/pages/PlatformMap.tsx",
+        "src/pages/Portfolios.tsx",
+        "src/pages/Pricing.tsx",
+        "src/pages/PrivacyPolicy.tsx",
+        "src/pages/ProfessionalProfile.tsx",
+        "src/pages/Professionals.tsx",
+        "src/pages/ProjectDetail.tsx"
+      ],
+      "sample_test_files": [
+        "src/test/async.errors.test.ts",
+        "src/test/components.smoke.test.tsx",
+        "src/test/components.test.tsx",
+        "src/test/dashboardNav.test.ts",
+        "src/test/idor.mutations.test.ts",
+        "src/test/LeadsCRM.test.tsx",
+        "src/test/pages.smoke.test.tsx",
+        "src/test/useAnalytics.test.tsx",
+        "src/test/useConsultations.test.tsx",
+        "src/test/useFormWizard.test.ts",
+        "src/test/useLeads.test.tsx",
+        "src/test/useListings.filters.test.ts",
+        "e2e/interaction-agent-developer.spec.ts"
+      ]
+    },
+    "message": {
+      "source_files": 165,
+      "test_files": 55,
+      "sample_source_files": [
+        "src/pages/AdminPricing.tsx",
+        "src/pages/Contact.tsx",
+        "src/pages/CreateNewBuildingListing.tsx",
+        "src/pages/dashboard/AnalyticsTab.tsx",
+        "src/pages/dashboard/BillingTab.tsx",
+        "src/pages/Dashboard.tsx",
+        "src/pages/InvestorDashboard.tsx",
+        "src/pages/Login.tsx",
+        "src/pages/Messages.tsx",
+        "src/pages/NewBuildDetail.tsx",
+        "src/pages/NotFound.tsx",
+        "src/pages/Onboarding.tsx",
+        "src/pages/OpenHouseDetail.tsx",
+        "src/pages/PlatformMap.tsx",
+        "src/pages/Pricing.tsx",
+        "src/pages/PrivacyPolicy.tsx",
+        "src/pages/ProfessionalProfile.tsx",
+        "src/pages/Professionals.tsx",
+        "src/pages/ProjectDetail.tsx",
+        "src/pages/PropertyDetail.tsx"
+      ],
+      "sample_test_files": [
+        "src/test/aiErrorUtils.test.ts",
+        "src/test/App.test.tsx",
+        "src/test/async.errors.test.ts",
+        "src/test/AuthContext.test.tsx",
+        "src/test/CompareAIReports.test.tsx",
+        "src/test/components.smoke.test.tsx",
+        "src/test/components.test.tsx",
+        "src/test/dashboardNav.test.ts",
+        "src/test/InvestorDashboard.behavior.test.tsx",
+        "src/test/LeadsCRM.test.tsx",
+        "src/test/listings.mutations.test.ts",
+        "src/test/Messages.test.tsx",
+        "src/test/messagesHelpers.test.ts",
+        "src/test/NeighbourhoodReport.test.tsx",
+        "src/test/pages.smoke.test.tsx",
+        "src/test/planLimitErrors.test.ts",
+        "src/test/Portfolios.test.tsx",
+        "src/test/PropertyMiniMap.test.tsx",
+        "src/test/PropertyValuation.test.tsx",
+        "src/test/queryObserver.test.ts"
+      ]
+    },
+    "viewing": {
+      "source_files": 49,
+      "test_files": 8,
+      "sample_source_files": [
+        "src/pages/CookiePolicy.tsx",
+        "src/pages/dashboard/AnalyticsTab.tsx",
+        "src/pages/dashboard/BillingTab.tsx",
+        "src/pages/dashboard/ViewingsTab.tsx",
+        "src/pages/Dashboard.tsx",
+        "src/pages/Firesale.tsx",
+        "src/pages/Index.tsx",
+        "src/pages/Listings.tsx",
+        "src/pages/Messages.tsx",
+        "src/pages/PlatformMap.tsx",
+        "src/pages/Pricing.tsx",
+        "src/pages/PrivacyPolicy.tsx",
+        "src/pages/PropertyDetail.tsx",
+        "src/pages/TermsOfService.tsx",
+        "src/components/AdminProfessionalVerification.tsx",
+        "src/components/dashboard/BookingCalendarSection.tsx",
+        "src/components/dashboard/SettingsSection.tsx",
+        "src/components/DashboardPlanCard.tsx",
+        "src/components/firesale/FiresaleInvestorPanel.tsx",
+        "src/components/index/HomepageOpenHousesSection.tsx"
+      ],
+      "sample_test_files": [
+        "src/test/components.smoke.test.tsx",
+        "src/test/components.test.tsx",
+        "src/test/dashboardNav.test.ts",
+        "src/test/LeadsCRM.test.tsx",
+        "src/test/pages.smoke.test.tsx",
+        "src/test/planLimitErrors.test.ts",
+        "src/test/useLeads.test.tsx",
+        "src/test/useViewings.test.tsx"
+      ]
+    },
+    "consultation": {
+      "source_files": 27,
+      "test_files": 6,
+      "sample_source_files": [
+        "src/pages/BrandedVideoRoom.tsx",
+        "src/pages/dashboard/AnalyticsTab.tsx",
+        "src/pages/Dashboard.tsx",
+        "src/pages/PlatformMap.tsx",
+        "src/pages/Pricing.tsx",
+        "src/pages/PrivacyPolicy.tsx",
+        "src/pages/ProfessionalProfile.tsx",
+        "src/components/BookConsultationModal.tsx",
+        "src/components/dashboard/BookingCalendarSection.tsx",
+        "src/components/dashboard/ProfessionalProfileEditor.tsx",
+        "src/components/LeadsCRM.tsx",
+        "src/components/onboarding/ProServicesStep.tsx",
+        "src/components/onboarding/ProVideoStep.tsx",
+        "src/components/OnlineViewingModal.tsx",
+        "src/components/professionals/ProfessionalOverviewTab.tsx",
+        "src/components/professionals/ProfessionalServicesTab.tsx",
+        "src/components/professionals/ProfileComponents.tsx",
+        "src/components/ProfessionalServicesEditor.tsx",
+        "src/components/RequestCallbackModal.tsx",
+        "src/components/SendMessageModal.tsx"
+      ],
+      "sample_test_files": [
+        "src/test/components.smoke.test.tsx",
+        "src/test/components.test.tsx",
+        "src/test/LeadsCRM.test.tsx",
+        "src/test/pages.smoke.test.tsx",
+        "src/test/useConsultations.test.tsx",
+        "e2e/interaction-professional-buyer.spec.ts"
+      ]
+    },
+    "onboarding": {
+      "source_files": 34,
+      "test_files": 21,
+      "sample_source_files": [
+        "src/pages/AdminPricing.tsx",
+        "src/pages/dashboard/BillingTab.tsx",
+        "src/pages/Login.tsx",
+        "src/pages/Onboarding.tsx",
+        "src/pages/PlatformMap.tsx",
+        "src/pages/ProfessionalProfileMe.tsx",
+        "src/pages/Signup.tsx",
+        "src/components/BottomNav.tsx",
+        "src/components/dashboard/SettingsSection.tsx",
+        "src/components/DeveloperRoute.tsx",
+        "src/components/firesale/FiresaleQuickSaleForm.tsx",
+        "src/components/NewBuildingRoute.tsx",
+        "src/components/onboarding/DeveloperSetupStep.tsx",
+        "src/components/onboarding/DoneScreen.tsx",
+        "src/components/onboarding/OnboardingShell.tsx",
+        "src/components/onboarding/PickParticipantGoalStep.tsx",
+        "src/components/onboarding/PickProTypeStep.tsx",
+        "src/components/onboarding/PickTypeStep.tsx",
+        "src/components/onboarding/ProAvailabilityStep.tsx",
+        "src/components/onboarding/ProCategoryStep.tsx"
+      ],
+      "sample_test_files": [
+        "src/test/App.test.tsx",
+        "src/test/authContext.onboarding.test.ts",
+        "src/test/AuthContext.test.tsx",
+        "src/test/components.smoke.test.tsx",
+        "src/test/FiresaleQuickSaleForm.test.tsx",
+        "src/test/onboardingFlow.test.ts",
+        "src/test/pages.smoke.test.tsx",
+        "src/test/routeGuards.test.tsx",
+        "src/test/useFormWizard.test.ts",
+        "e2e/auth.spec.ts",
+        "e2e/gdpr-delete-account.spec.ts",
+        "e2e/interaction-agent-developer.spec.ts",
+        "e2e/interaction-auctions.spec.ts",
+        "e2e/interaction-buyer-seller.spec.ts",
+        "e2e/interaction-investor-admin.spec.ts",
+        "e2e/interaction-open-house.spec.ts",
+        "e2e/interaction-professional-buyer.spec.ts",
+        "e2e/onboarding-role-selection.spec.ts",
+        "e2e/pages-authenticated.spec.ts",
+        "e2e/pages-roles.spec.ts"
+      ]
+    },
+    "role_switch": {
+      "source_files": 5,
+      "test_files": 7,
+      "sample_source_files": [
+        "src/pages/Onboarding.tsx",
+        "src/components/dashboard/SettingsSection.tsx",
+        "src/hooks/useSubscription.ts",
+        "src/contexts/AuthContext.tsx",
+        "supabase/functions/log-role-switch/index.ts"
+      ],
+      "sample_test_files": [
+        "src/test/AuthContext.test.tsx",
+        "src/test/components.smoke.test.tsx",
+        "src/test/components.test.tsx",
+        "src/test/pages.smoke.test.tsx",
+        "src/test/routeGuards.test.tsx",
+        "src/test/useEligibleForQuickSale.test.tsx",
+        "src/test/useSubscription.test.tsx"
+      ]
+    },
+    "agent_data": {
+      "source_files": 7,
+      "test_files": 2,
+      "sample_source_files": [
+        "src/pages/dashboard/DataInputTab.tsx",
+        "src/hooks/useAgentDataInputs.ts",
+        "supabase/functions/agent-data-input/index.test.ts",
+        "supabase/functions/agent-data-input/index.ts",
+        "supabase/functions/apply-data-input-credit/index.test.ts",
+        "supabase/functions/apply-data-input-credit/index.ts",
+        "supabase/functions/stripe-webhook/index.ts"
+      ],
+      "sample_test_files": [
+        "supabase/functions/agent-data-input/index.test.ts",
+        "supabase/functions/apply-data-input-credit/index.test.ts"
+      ]
+    }
+  }
+}

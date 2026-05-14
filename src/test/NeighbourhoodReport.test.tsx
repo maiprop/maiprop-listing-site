@@ -95,7 +95,11 @@ describe("NeighbourhoodReport — gates", () => {
   });
 
   it("renders the upgrade CTA when the user is logged in but not Pro", () => {
-    render(<MemoryRouter><NeighbourhoodReport {...baseProps} isPro={false} /></MemoryRouter>);
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <NeighbourhoodReport {...baseProps} isPro={false} />
+      </MemoryRouter>,
+    );
     expect(screen.getByText(/Upgrade to Pro/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Load Neighbourhood Report/i })).toBeNull();
     expect(invokeMock).not.toHaveBeenCalled();

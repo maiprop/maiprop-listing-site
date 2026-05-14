@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
+import { profileRoleSwitchInProgress, useAuth } from "@/contexts/AuthContext";
 import { isSellSideRole, isPlatformAdmin } from "@/lib/authUtils";
-import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
+import { getExplicitParticipantTypeFromProfile } from "@/lib/participantConfig";
 import { useSubscription } from "@/hooks/useSubscription";
 import { ProtectedRoute } from "./ProtectedRoute";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,8 @@ export function SellerRoute({ children }: { children: React.ReactNode }) {
 function SellerGate({ children }: { children: React.ReactNode }) {
   const { profile, loading } = useAuth();
   const { isPro, loading: subLoading } = useSubscription();
+  const switching = profileRoleSwitchInProgress(profile);
+  const participantType = switching ? null : getExplicitParticipantTypeFromProfile(profile);
 
   if (loading || subLoading || !profile) {
     return (
@@ -27,7 +29,7 @@ function SellerGate({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!isSellSideRole(profile) && !isPlatformAdmin(profile)) {
+  if (switching || (!isSellSideRole(profile) && !isPlatformAdmin(profile))) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center px-4">
         <div className="max-w-md w-full text-center space-y-5">
@@ -54,7 +56,6 @@ function SellerGate({ children }: { children: React.ReactNode }) {
   }
 
   // Developer role requires an active Pro subscription — listing creation is Pro-only for developers.
-  const participantType = getParticipantTypeFromProfile(profile);
   if (participantType === "developer" && !isPro && !isPlatformAdmin(profile)) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center px-4">

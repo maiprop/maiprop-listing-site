@@ -87,11 +87,15 @@ describe("toast() + useToast() store", () => {
   beforeEach(() => {
     // dismiss with no id then advance fake timers to drain
     vi.useFakeTimers();
-    toast({ title: "drain-prep" }); // ensure something exists
-    const { result: drain } = renderHook(() => useToast());
+    act(() => {
+      toast({ title: "drain-prep" }); // ensure something exists
+    });
+    const { result: drain, unmount } = renderHook(() => useToast());
     act(() => drain.current.dismiss());
     // The remove timeout is 1_000_000ms; jump past it.
     act(() => vi.advanceTimersByTime(1_000_001));
+    unmount();
+    vi.clearAllTimers();
     vi.useRealTimers();
   });
 

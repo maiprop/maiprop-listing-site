@@ -17,6 +17,12 @@ export type ConsultationRequestInput = {
   message?: string;
 };
 
+function getSuccessToastLabel(requestType: ConsultationRequestInput["request_type"]) {
+  if (requestType === "callback") return "Callback request sent.";
+  if (requestType === "message") return "Message request sent.";
+  return "Consultation request sent.";
+}
+
 export function useSubmitConsultation() {
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -69,15 +75,15 @@ export function useSubmitConsultation() {
           leadSaved = false;
         }
       }
-      return { leadSaved };
+      return { leadSaved, requestType: input.request_type };
     },
-    onSuccess: ({ leadSaved }) => {
+    onSuccess: ({ leadSaved, requestType }) => {
       qc.invalidateQueries({ queryKey: ["consultation-requests"] });
       if (leadSaved) {
-        toast.success("Request sent! The professional will contact you soon.");
+        toast.success(getSuccessToastLabel(requestType));
       } else {
         toast.warning(
-          "Request sent, but the professional's lead record could not be created.",
+          `${getSuccessToastLabel(requestType)} The professional CRM record could not be created automatically.`,
         );
       }
     },

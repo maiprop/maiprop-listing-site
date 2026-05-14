@@ -49,6 +49,8 @@ vi.mock("@/integrations/supabase/client", () => ({
 const mockUseAuth = vi.fn().mockReturnValue({ user: null, profile: null, loading: false });
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => mockUseAuth(),
+  profileRoleSwitchInProgress: (profile: { role_switch_in_progress_at?: string | null } | null) =>
+    Boolean(profile?.role_switch_in_progress_at),
   AuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
@@ -609,7 +611,7 @@ describe("PropertyDetail", () => {
       { initialPath: "/property/prop-1" }
     );
     // Title appears in both h1 and potentially meta — check at least one heading
-    const heading = screen.getAllByText("Sea View Villa")[0];
+    const heading = await screen.findByRole("heading", { name: "Sea View Villa" });
     expect(heading).toBeInTheDocument();
   });
 

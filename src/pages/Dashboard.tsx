@@ -8,7 +8,7 @@ import {
   Search, Wrench, Shield,
   FolderKanban, Users, Briefcase, Flame,
   ExternalLink,
-  Bookmark, ArrowRight,
+  Bookmark, ArrowRight, Settings,
 } from "lucide-react";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useEligibleForQuickSale } from "@/hooks/useEligibleForQuickSale";
@@ -17,7 +17,7 @@ import { DashboardPlanCard } from "@/components/DashboardPlanCard";
 import OpenHouseDashboardSection from "@/components/OpenHouseDashboardSection";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
-import { useAuth } from "@/contexts/AuthContext";
+import { profileRoleSwitchInProgress, useAuth } from "@/contexts/AuthContext";
 import { useMyListings } from "@/hooks/useListings";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useViewings } from "@/hooks/useViewings";
@@ -29,10 +29,10 @@ import ProfessionalServicesEditor from "@/components/ProfessionalServicesEditor"
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { getParticipantTypeFromProfile, PARTICIPANT_LABELS, type ParticipantId } from "@/lib/participantConfig";
+import { getExplicitParticipantTypeFromProfile, getParticipantTypeFromProfile, PARTICIPANT_LABELS, type ParticipantId } from "@/lib/participantConfig";
 import { ProGate } from "@/components/gates/ProGate";
 // ── Extracted subcomponents ───────────────────────────────────────────────────
-import { type NavKey, type DashboardRole, getNavItemsForBioType } from "@/lib/dashboardNav";
+import { type NavKey, type DashboardRole, type NavItemResolved, getNavItemsForBioType } from "@/lib/dashboardNav";
 import { ContactsAndLeadsSection } from "./dashboard/ContactsAndLeadsSection";
 import { MyListingsSection } from "./dashboard/MyListingsSection";
 import { SavedPropertiesSection } from "./dashboard/SavedPropertiesSection";
@@ -87,11 +87,22 @@ export default function Dashboard() {
   const { isPro } = useSubscription();
   const { eligible: eligibleForQuickSale } = useEligibleForQuickSale();
   const role: DashboardRole = (profile?.role as DashboardRole) || "buyer";
-  const bioType = getParticipantTypeFromProfile(profile);
+  const roleSwitchInProgress = profileRoleSwitchInProgress(profile);
+  const bioType = roleSwitchInProgress
+    ? null
+    : (getExplicitParticipantTypeFromProfile(profile) ?? getParticipantTypeFromProfile(profile));
+  const hasInvestorAccess =
+    !roleSwitchInProgress && (
+      role === "investor" ||
+      role === "institutional" ||
+      (eligibleForQuickSale && role === "buyer" && bioType === "buyer")
+    );
 
-  const navItems = useMemo(
-    () => getNavItemsForBioType(bioType, role, isPro, eligibleForQuickSale),
-    [bioType, role, isPro, eligibleForQuickSale]
+  const navItems = useMemo<NavItemResolved[]>(
+    () => roleSwitchInProgress
+      ? [{ key: "settings", label: "Settings", icon: Settings, locked: false }]
+      : getNavItemsForBioType(bioType, role, isPro, eligibleForQuickSale),
+    [bioType, role, isPro, eligibleForQuickSale, roleSwitchInProgress]
   );
   const sectionNavItems = useMemo(() => navItems.filter(i => !("href" in i && i.href) && !i.locked), [navItems]);
   const defaultSection = (sectionNavItems[0]?.key ?? "overview") as NavKey;
@@ -152,11 +163,17 @@ export default function Dashboard() {
     [profile, user]
   );
   const roleLabel = useMemo(
-    () => role === "admin" ? "Admin" : (PARTICIPANT_LABELS[bioType as ParticipantId] ?? "Buyer / Renter"),
-    [role, bioType]
+    () => roleSwitchInProgress
+      ? "Switching Account Type"
+      : role === "admin"
+      ? "Admin"
+      : hasInvestorAccess
+        ? "Investor"
+        : (PARTICIPANT_LABELS[bioType as ParticipantId] ?? "Buyer / Renter"),
+    [role, bioType, hasInvestorAccess, roleSwitchInProgress]
   );
 
-  const isInvestorLike = role === "investor" || role === "institutional";
+  const isInvestorLike = hasInvestorAccess;
   const isSellSide = role === "agent" || role === "developer";
   const isSellerLike = role === "seller" || bioType === "seller" || isSellSide;
 
@@ -188,11 +205,17 @@ export default function Dashboard() {
       agent:        sellSideStats,
       developer:    sellSideStats,
       professional: [{ label: "Services", value: professionalServices.length, icon: Wrench, color: "text-primary" }, { label: "Pending Leads", value: pendingLeadsCount, icon: Briefcase, color: "text-brand-gold" }, { label: "Total Leads", value: leads.length, icon: Users, color: "text-primary" }],
+      investor:     [{ label: "Saved", value: favorites.length, icon: Heart, color: "text-destructive" }, { label: "Saved Searches", value: savedSearches.length, icon: Bookmark, color: "text-primary" }, { label: "Viewings", value: upcomingViewingsCount, icon: Calendar, color: "text-brand-gold" }, { label: "Auction Alerts", value: auctionAlerts.filter(a => a.active).length, icon: Gavel, color: "text-brand-gold" }],
+      institutional:[{ label: "Saved", value: favorites.length, icon: Heart, color: "text-destructive" }, { label: "Saved Searches", value: savedSearches.length, icon: Bookmark, color: "text-primary" }, { label: "Viewings", value: upcomingViewingsCount, icon: Calendar, color: "text-brand-gold" }, { label: "Auction Alerts", value: auctionAlerts.filter(a => a.active).length, icon: Gavel, color: "text-brand-gold" }],
       admin:        sellSideStats,
     };
-    const key = role === "admin" ? "admin" : (bioType ?? (role === "seller" ? "seller" : role === "professional" ? "professional" : role === "agent" ? "agent" : role === "developer" ? "developer" : role === "investor" ? "buyer" : role === "institutional" ? "seller" : "buyer"));
+    const key = role === "admin"
+      ? "admin"
+      : hasInvestorAccess
+        ? (role === "institutional" ? "institutional" : "investor")
+        : (bioType ?? (role === "seller" ? "seller" : role === "professional" ? "professional" : role === "agent" ? "agent" : role === "developer" ? "developer" : "buyer"));
     return statsByType[key] ?? statsByType.buyer;
-  }, [myListings, favorites, savedSearches, auctionAlerts, upcomingViewingsCount, ownViewingsCount, professionalServices, pendingLeadsCount, leads, bioType, role]);
+  }, [myListings, favorites, savedSearches, auctionAlerts, upcomingViewingsCount, ownViewingsCount, professionalServices, pendingLeadsCount, leads, bioType, role, hasInvestorAccess]);
 
   const planUsage = useMemo(() => {
     const monthStart = startOfCurrentMonth().toISOString();
@@ -208,8 +231,8 @@ export default function Dashboard() {
   }, [savedSearches, viewings, ownViewings, auctionAlerts, myListings, bioType, role, isSellerLike]);
 
   const showPlanCard = useMemo(
-    () => ["buyer", "seller", "agent", "developer", "professional"].includes(bioType ?? "") || role === "seller",
-    [bioType, role]
+    () => !hasInvestorAccess && (["buyer", "seller", "agent", "developer", "professional"].includes(bioType ?? "") || role === "seller"),
+    [bioType, role, hasInvestorAccess]
   );
 
   // Auth loading guard — show spinner while session/profile resolves
@@ -272,7 +295,7 @@ export default function Dashboard() {
             <div className="space-y-6">
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
-                  <h1 className="font-display text-2xl font-bold">Good morning, {displayName} ðŸ‘‹</h1>
+                  <h1 className="font-display text-2xl font-bold">Good morning, {displayName} 👋</h1>
                   <p className="text-muted-foreground text-sm mt-1">
                     {isInvestorLike ? "Your investment pipeline and deal opportunities." :
                      bioType === "developer" ? "Manage your project listings and showcases." :
@@ -429,7 +452,7 @@ export default function Dashboard() {
                           </p>
                           <div className="flex gap-2">
                             <Button size="sm" className="bg-orange-500 hover:bg-orange-600 border-0 text-white" asChild>
-                              <Link to="/pricing?audience=developer">Start 7-day free trial â†’</Link>
+                              <Link to="/pricing?audience=developer">Start 7-day free trial →</Link>
                             </Button>
                             <Button size="sm" variant="outline" className="border-orange-500/30 text-orange-400" asChild>
                               <Link to="/listings/new-building">Preview listing tools</Link>
@@ -457,7 +480,7 @@ export default function Dashboard() {
                             <img src={l.cover_image_url || "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400&q=60"} alt="" className="w-full h-36 object-cover" />
                             <div className="p-4">
                               <p className="font-semibold text-sm truncate">{l.title}</p>
-                              <p className="text-xs text-muted-foreground">{l.city} Â· €{Number(l.price).toLocaleString()}</p>
+                              <p className="text-xs text-muted-foreground">{l.city} · €{Number(l.price).toLocaleString()}</p>
                               <div className="flex gap-2 mt-3">
                                 <span className={`text-xs px-2 py-0.5 rounded-full ${l.status === "active" ? "bg-brand-emerald/20 text-brand-emerald" : "bg-secondary text-muted-foreground"}`}>{l.status}</span>
                                 <span className="text-xs text-muted-foreground">{l.views_count} views</span>
@@ -478,7 +501,7 @@ export default function Dashboard() {
                       </Button>
                     </div>
                   )}
-                  {/* Seller â†’ buyer cross-sell */}
+                  {/* Seller → buyer cross-sell */}
                   {bioType === "seller" && (
                     <div className="glass-card rounded-xl border border-border p-4 flex items-center gap-4">
                       <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
@@ -489,7 +512,7 @@ export default function Dashboard() {
                         <p className="text-xs text-muted-foreground mt-0.5">Browse listings while you sell — all in one place.</p>
                       </div>
                       <Button size="sm" variant="outline" className="shrink-0 border-border text-xs h-8" asChild>
-                        <Link to="/listings">Browse â†’</Link>
+                        <Link to="/listings">Browse →</Link>
                       </Button>
                     </div>
                   )}

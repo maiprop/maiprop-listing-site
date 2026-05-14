@@ -8,7 +8,9 @@ import { APP_ORIGIN } from "@/lib/config";
 import { getExplicitParticipantTypeFromProfile } from "@/lib/participantConfig";
 import { validatePassword } from "@/lib/passwordPolicy";
 
-export type Profile = Tables<"profiles">;
+export type Profile = Tables<"profiles"> & {
+  role_switch_in_progress_at?: string | null;
+};
 
 export interface SubscriptionState {
   subscribed: boolean;
@@ -37,9 +39,16 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+export function profileRoleSwitchInProgress(
+  profile: { role_switch_in_progress_at?: string | null } | null,
+): boolean {
+  return Boolean(profile?.role_switch_in_progress_at);
+}
+
 export function profileNeedsOnboarding(p: Profile | null): boolean {
   if (!p) return false;
   if (p.role === "admin") return false;
+  if (profileRoleSwitchInProgress(p)) return true;
   const explicitType = getExplicitParticipantTypeFromProfile(p);
   const roleText = p.role ? String(p.role) : null;
   // Onboarding is complete only when both role + participant_type are explicitly set.
@@ -74,7 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfileLoading(true);
     const { data } = await supabase
       .from("profiles")
-      .select("user_id, display_name, avatar_url, role, bio, first_name, last_name, city, country, phone, website_url, is_platform_admin, verified, created_at, updated_at, id, participant_type, investor_mode, subscription_product_id, force_pro_access")
+      .select("user_id, display_name, avatar_url, role, bio, first_name, last_name, city, country, phone, website_url, is_platform_admin, verified, created_at, updated_at, id, participant_type, investor_mode, subscription_product_id, force_pro_access, role_switch_in_progress_at")
       .eq("user_id", userId)
       .single();
     // Discard stale result if the auth user changed before this resolved
@@ -147,13 +156,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    // Restore session from storage on mount
+    // Restore session from storage on mount.
+    // Do not rely solely on onAuthStateChange here: on a hard reload with an
+    // already-authenticated user, the event can lag behind initial route
+    // rendering and leave ProtectedRoute stuck on its loading shell.
     supabase.auth.getSession().then(({ data: { session: sess } }) => {
       if (!sess) {
         // No session — stop loading, let login page show
         setLoading(false);
+        return;
       }
-      // If there IS a session, onAuthStateChange will fire and handle everything
+
+      setSession(sess);
+      setUser(sess.user);
+      setLoading(false);
+
+      fetchProfile(sess.user.id).catch((err) => {
+        logger.warn("Profile fetch failed during session restore:", err);
+        setProfileLoading(false);
+      });
+      checkSubscription(sess).catch((err: unknown) => {
+        logger.warn("[AuthContext] subscription restore failed:", err instanceof Error ? err.message : err);
+      });
     }).catch(() => setLoading(false));
 
     // Refresh subscription every 5 minutes
@@ -223,7 +247,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       "investor_mode", "participant_type",
     ] as const);
 
-    const safe: Partial<Profile> = {};
+    const safe: Partial<Tables<"profiles">> = {};
     for (const key of Object.keys(updates) as Array<keyof Profile>) {
       if (ALLOWED_FIELDS.has(key)) {
         (safe as Record<string, unknown>)[key] = updates[key];

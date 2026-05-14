@@ -26,7 +26,7 @@ jobs:
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version: 20.19.5
           cache: npm
 
       - name: Install dependencies
@@ -86,7 +86,6 @@ jobs:
 
       - name: Secret scanning (gitleaks)
         uses: gitleaks/gitleaks-action@44c470ffc35caa8b1eb3e8012ca53c2f9bea4eb5 # v2.3.8
-        continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
@@ -100,7 +99,7 @@ jobs:
         working-directory: supabase/functions
         run: |
           for attempt in 1 2 3; do
-            deno test --allow-env --allow-net --allow-read . && exit 0
+            deno test --allow-env --allow-net --allow-read --allow-write . && exit 0
             if [ "$attempt" -eq 3 ]; then
               exit 1
             fi
@@ -116,11 +115,9 @@ jobs:
           path: dist/
           retention-days: 1
 
-  e2e:
-    name: E2E Tests
+  release-safety:
+    name: Release Safety Inventory
     runs-on: ubuntu-latest
-    # Only run on push to main or when a PR targets main and is not a draft
-    if: github.event_name == 'push' || github.event.pull_request.draft == false
     needs: quality
 
     steps:
@@ -128,7 +125,37 @@ jobs:
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version: 20.19.5
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check release safety inventory
+        run: npm run check:release-safety -- --out release-safety-inventory.json
+
+      - name: Upload release safety inventory
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-safety-inventory
+          path: release-safety-inventory.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+  e2e:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    # Only run on push to main or when a PR targets main and is not a draft
+    if: github.event_name == 'push' || github.event.pull_request.draft == false
+    needs: [quality, release-safety]
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20.19.5
           cache: npm
 
       - name: Install dependencies
@@ -171,7 +198,7 @@ jobs:
         github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name &&
         github.actor != 'dependabot[bot]' &&
         github.event.pull_request.draft == false)
-    needs: quality
+    needs: [quality, release-safety]
     env:
       CI: true
       VITE_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
@@ -189,7 +216,7 @@ jobs:
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version: 20.19.5
           cache: npm
 
       - name: Validate required staging secrets
@@ -240,7 +267,7 @@ jobs:
   migrations-validate:
     name: Validate Supabase migrations
     runs-on: ubuntu-latest
-    needs: quality
+    needs: [quality, release-safety]
 
     services:
       postgres:
@@ -414,7 +441,7 @@ jobs:
     name: Lighthouse CI
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: quality
+    needs: [quality, release-safety]
     env:
       # Keep Lighthouse builds on the same format-valid Supabase stubs used
       # elsewhere in CI so route chunks that import the client never crash.
@@ -427,7 +454,7 @@ jobs:
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version: 20.19.5
           cache: npm
 
       - name: Install dependencies
@@ -437,7 +464,7 @@ jobs:
         run: npm run build
 
       - name: Run Lighthouse CI
-        run: npx @lhci/cli@latest autorun
+        run: npx @lhci/cli@0.15.1 autorun
         env:
           LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
 
@@ -446,7 +473,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [quality, e2e]
+    needs: [quality, release-safety, e2e, e2e-security-staging, migrations-validate, lighthouse]
 
     env:
       CF_API_TOKEN:   ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -460,7 +487,7 @@ jobs:
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version: 20.19.5
           cache: npm
 
       - name: Install dependencies
@@ -594,7 +621,7 @@ jobs:
     # Keep deployments out of arbitrary PRs; staging receives mainline and manual
     # deployments after the quality gate passes.
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
-    needs: quality
+    needs: [quality, release-safety]
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -620,15 +647,14 @@ jobs:
           SUPABASE_ACCESS_TOKEN:       ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
       - name: Setup Supabase CLI
-        uses: supabase/setup-cli@v1
+        uses: supabase/setup-cli@b60b5899c73b63a2d2d651b1e90db8d4c9392f51 # v1.6.0
         with:
-          version: latest
+          version: 2.98.1
 
       - name: Deploy edge functions to staging
         run: |
           supabase functions deploy \
-            --project-ref "$STAGING_SUPABASE_PROJECT_ID" \
-            --no-verify-jwt
+            --project-ref "$STAGING_SUPABASE_PROJECT_ID"
         env:
           SUPABASE_ACCESS_TOKEN:         ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           STAGING_SUPABASE_PROJECT_ID:   ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
@@ -644,7 +670,7 @@ jobs:
       github.event_name == 'pull_request' &&
       github.event.pull_request.draft == false &&
       github.actor != 'dependabot[bot]'
-    needs: quality
+    needs: [quality, release-safety]
 
     steps:
       - name: Checkout (for Pages Functions in functions/)

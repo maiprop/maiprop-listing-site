@@ -96,7 +96,7 @@ beforeEach(() => {
   useAuthMock.mockReset();
   useAuthMock.mockReturnValue({
     user: { id: "u-1" },
-    profile: { participant_type: "seller" },
+    profile: { role: "seller", participant_type: "seller" },
   });
   useSubMock.mockReset();
   useSubMock.mockReturnValue({ isPro: false });
@@ -125,7 +125,7 @@ describe("CreateListing", () => {
   it("redirects non-eligible users (participant_type=buyer) and toasts an error", () => {
     useAuthMock.mockReturnValue({
       user: { id: "u-1" },
-      profile: { participant_type: "buyer" },
+      profile: { role: "buyer", participant_type: "buyer" },
     });
     render(<CreateListing />, { wrapper: wrap });
     // A spinner + 'Redirecting…' label appears.

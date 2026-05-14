@@ -13,6 +13,7 @@ import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
 import { getPlanLimits } from "@/hooks/usePlanLimits";
 import { useMyListings } from "@/hooks/useListings";
 import { Link } from "react-router-dom";
+import { isPlatformAdmin, isSellSideRole } from "@/lib/authUtils";
 import { StepType } from "@/components/listings/StepType";
 import { StepDetails } from "@/components/listings/StepDetails";
 import { StepFeatures } from "@/components/listings/StepFeatures";
@@ -39,7 +40,8 @@ export default function CreateListing() {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
   const participantType = getParticipantTypeFromProfile(profile);
-  const canCreateListing = ["seller", "agent", "institutional", "developer"].includes(participantType);
+  const canCreateListing = isSellSideRole(profile) || isPlatformAdmin(profile);
+  const canCreatePreSale = profile?.role === "developer" || isPlatformAdmin(profile);
 
   const redirectedRef = useRef(false);
   useEffect(() => {
@@ -66,7 +68,14 @@ export default function CreateListing() {
     handleAiDescription, handleAiPrice,
     validateStep, handleSubmit,
     completionPct,
-  } = useListingForm();
+  } = useListingForm({ allowPreSale: canCreatePreSale });
+
+  useEffect(() => {
+    if (!canCreatePreSale && form.is_pre_sale) {
+      set("is_pre_sale", false);
+      set("construction_status", "");
+    }
+  }, [canCreatePreSale, form.is_pre_sale, set]);
 
   // Field refs for scroll-to-error
   const fieldRefs = useRef<Record<string, HTMLElement | null>>({});
@@ -201,7 +210,7 @@ export default function CreateListing() {
           </div>
 
           <div className="glass-card rounded-2xl p-6 md:p-8">
-            {step === "type" && <StepType form={form} set={set} toggle={toggle} />}
+            {step === "type" && <StepType form={form} set={set} toggle={toggle} showPreSaleOption={canCreatePreSale} />}
             {step === "details" && (
               <StepDetails
                 form={form}
@@ -261,7 +270,16 @@ export default function CreateListing() {
                 </Button>
               ) : (
                 <div className="flex gap-2">
-                  <Button variant="outline" onClick={handleSaveDraft} disabled={submitting}>Save Draft</Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      handleSaveDraft();
+                      navigate("/dashboard");
+                    }}
+                    disabled={submitting}
+                  >
+                    Save Draft
+                  </Button>
                   <Button className="bg-gradient-primary border-0 text-primary-foreground" onClick={() => handleSubmit(false)} disabled={submitting}>
                     {submitting ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Publishing...</> : "Publish Listing"}
                   </Button>

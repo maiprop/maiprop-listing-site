@@ -1,9 +1,11 @@
 /**
- * Tests for the four route guards:
+ * Tests for the route guards:
  *   - ProtectedRoute      → auth presence + onboarding redirect
  *   - AdminRoute          → ProtectedRoute ∩ profile.role === 'admin'
  *   - SellerRoute         → ProtectedRoute ∩ sell-side role (+ Pro for developer)
  *   - InvestorRoute       → ProtectedRoute ∩ Quick-Sale eligibility
+ *   - DeveloperRoute      → ProtectedRoute ∩ developer role + developer pro
+ *   - NewBuildingRoute    → ProtectedRoute ∩ developer role + developer pro
  *
  * Strategy: mock useAuth + useSubscription + useEligibleForQuickSale at the
  * module boundary, then render each guard inside a MemoryRouter so the
@@ -22,6 +24,8 @@ const { useAuthMock, useSubscriptionMock, useEligibleMock } = vi.hoisted(() => (
 
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => useAuthMock(),
+  profileRoleSwitchInProgress: (profile: { role_switch_in_progress_at?: string | null } | null) =>
+    Boolean(profile?.role_switch_in_progress_at),
 }));
 vi.mock("@/hooks/useSubscription", () => ({
   useSubscription: () => useSubscriptionMock(),
@@ -34,6 +38,8 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AdminRoute } from "@/components/AdminRoute";
 import { SellerRoute } from "@/components/SellerRoute";
 import { InvestorRoute } from "@/components/InvestorRoute";
+import { DeveloperRoute } from "@/components/DeveloperRoute";
+import { NewBuildingRoute } from "@/components/NewBuildingRoute";
 
 /**
  * Renders the guarded route at /private inside a memory router and provides
@@ -50,6 +56,7 @@ function renderGuarded(guard: React.ReactElement, initial: string = "/private") 
         <Route path="/onboarding" element={<div>at-onboarding</div>} />
         <Route path="/dashboard" element={<div>at-dashboard</div>} />
         <Route path="/pricing" element={<div>at-pricing</div>} />
+        <Route path="/pricing/developer" element={<div>at-pricing-developer</div>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -370,6 +377,28 @@ describe("SellerRoute", () => {
     );
     expect(screen.getByText("LIST-FORM")).toBeInTheDocument();
   });
+
+  it("does not keep listing access while the previous role is being switched away", () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "u-1" },
+      profile: {
+        user_id: "u-1",
+        role: "seller",
+        participant_type: "seller",
+        role_switch_in_progress_at: "2026-05-14T10:00:00.000Z",
+      },
+      loading: false,
+      profileLoading: false,
+      needsOnboarding: false,
+    });
+    renderGuarded(
+      <SellerRoute>
+        <div>LIST-FORM</div>
+      </SellerRoute>,
+    );
+    expect(screen.getByText(/Listing Access Required/i)).toBeInTheDocument();
+    expect(screen.queryByText("LIST-FORM")).toBeNull();
+  });
 });
 
 // ─── InvestorRoute ──────────────────────────────────────────────────────────
@@ -440,5 +469,55 @@ describe("InvestorRoute", () => {
       </InvestorRoute>,
     );
     expect(screen.getByText("QUICK-SALE")).toBeInTheDocument();
+  });
+});
+
+describe("DeveloperRoute", () => {
+  it("blocks a stale developer profile during role switch", () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "u-1" },
+      profile: {
+        user_id: "u-1",
+        role: "developer",
+        participant_type: "developer",
+        role_switch_in_progress_at: "2026-05-14T10:00:00.000Z",
+      },
+      loading: false,
+      profileLoading: false,
+      needsOnboarding: false,
+    });
+    useSubscriptionMock.mockReturnValue({ hasDeveloperPro: true, loading: false });
+    renderGuarded(
+      <DeveloperRoute>
+        <div>PROJECTS</div>
+      </DeveloperRoute>,
+    );
+    expect(screen.getByText(/Developer Access Required/i)).toBeInTheDocument();
+    expect(screen.queryByText("PROJECTS")).toBeNull();
+  });
+});
+
+describe("NewBuildingRoute", () => {
+  it("blocks off-plan creation while a developer switch is still in progress", () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "u-1" },
+      profile: {
+        user_id: "u-1",
+        role: "developer",
+        participant_type: "developer",
+        role_switch_in_progress_at: "2026-05-14T10:00:00.000Z",
+      },
+      loading: false,
+      profileLoading: false,
+      needsOnboarding: false,
+    });
+    useSubscriptionMock.mockReturnValue({ hasDeveloperPro: true, loading: false });
+    renderGuarded(
+      <NewBuildingRoute>
+        <div>NEW-BUILDING</div>
+      </NewBuildingRoute>,
+    );
+    expect(screen.getByText(/Developer Access Required/i)).toBeInTheDocument();
+    expect(screen.queryByText("NEW-BUILDING")).toBeNull();
   });
 });

@@ -9,6 +9,11 @@
     "type": "git",
     "url": "https://github.com/maiprop/maiprop-listing-site.git"
   },
+  "packageManager": "npm@10.8.2",
+  "engines": {
+    "node": ">=20.19.0 <21",
+    "npm": ">=10.8.0 <11"
+  },
   "type": "module",
   "overrides": {
     "tmp": "^0.2.4",
@@ -39,8 +44,11 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "test:deno": "deno test --allow-env --allow-net --allow-read supabase/functions/",
+    "test:deno": "deno test --allow-env --allow-net --allow-read --allow-write supabase/functions/",
     "check:bundle-size": "node scripts/check-bundle-size.mjs",
+    "inventory:release": "node scripts/release-safety-inventory.mjs",
+    "check:release-safety": "node scripts/release-safety-inventory.mjs --check",
+    "inventory:audit-coverage": "node scripts/audit-coverage-inventory.mjs",
     "lint:migrations": "node scripts/check-migration-idempotency.mjs",
     "lint:migrations:chronology": "node scripts/check-migration-idempotency.mjs --check-chronology",
     "lighthouse": "lhci autorun",

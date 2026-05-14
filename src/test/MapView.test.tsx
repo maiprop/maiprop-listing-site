@@ -21,28 +21,45 @@ const handlerHolder: {
   onMouseMove?: (e: unknown) => void;
 } = {};
 
-vi.mock("react-map-gl", () => ({
-  __esModule: true,
-  Map: ({ children, onClick, onMouseMove, ...rest }: {
-    children?: React.ReactNode;
-    onClick?: (e: unknown) => void;
-    onMouseMove?: (e: unknown) => void;
-  } & Record<string, unknown>) => {
+interface MapMockProps {
+  children?: React.ReactNode;
+  onClick?: (e: unknown) => void;
+  onMouseMove?: (e: unknown) => void;
+  mapboxAccessToken?: unknown;
+}
+
+interface ChildrenMockProps {
+  children?: React.ReactNode;
+}
+
+vi.mock("react-map-gl", async () => {
+  const React = await vi.importActual<typeof import("react")>("react");
+  const Map = React.forwardRef<{ getMap: () => null }, MapMockProps>(function MockMap(
+    { children, onClick, onMouseMove, ...rest },
+    ref,
+  ) {
+    React.useImperativeHandle(ref, () => ({ getMap: () => null }), []);
     handlerHolder.onClick = onClick;
     handlerHolder.onMouseMove = onMouseMove;
     return (
       <div data-testid="map-mock" data-token={String(rest.mapboxAccessToken ?? "")}>{children}</div>
     );
-  },
-  Source: ({ children }: { children?: React.ReactNode }) => (
-    <div data-testid="map-source">{children}</div>
-  ),
-  Layer: () => <div data-testid="map-layer" />,
-  Popup: ({ children }: { children?: React.ReactNode }) => (
-    <div data-testid="map-popup">{children}</div>
-  ),
-  NavigationControl: () => <div data-testid="map-nav" />,
-}));
+  });
+  const Source = React.forwardRef<HTMLDivElement, ChildrenMockProps>(function MockSource({ children }, ref) {
+    return <div ref={ref} data-testid="map-source">{children}</div>;
+  });
+  const Layer = React.forwardRef<HTMLDivElement>(function MockLayer(_props, ref) {
+    return <div ref={ref} data-testid="map-layer" />;
+  });
+  const Popup = React.forwardRef<HTMLDivElement, ChildrenMockProps>(function MockPopup({ children }, ref) {
+    return <div ref={ref} data-testid="map-popup">{children}</div>;
+  });
+  const NavigationControl = React.forwardRef<HTMLDivElement>(function MockNavigationControl(_props, ref) {
+    return <div ref={ref} data-testid="map-nav" />;
+  });
+
+  return { __esModule: true, Map, Source, Layer, Popup, NavigationControl };
+});
 vi.mock("mapbox-gl/dist/mapbox-gl.css", () => ({}));
 
 import { MapView } from "@/components/MapView";

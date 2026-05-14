@@ -258,7 +258,7 @@ export default function OpenHouseDetail() {
           {/* Owner: Asset Control panel */}
           {isOwner && id && (
             <div className="mb-6">
-              <OpenHouseAssetControlPanel listingId={id} isOwner={true} />
+              <OpenHouseAssetControlPanel listingId={id} isOwner={true} listingPrice={db?.price ?? null} />
             </div>
           )}
 

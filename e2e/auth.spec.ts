@@ -7,8 +7,8 @@
  */
 import { test, expect } from "@playwright/test";
 
-// Default to seeded demo buyer account so sign-in flow tests run without env vars.
-const TEST_EMAIL = process.env.E2E_TEST_EMAIL ?? "buyer.pro@maiprop.demo";
+// Default to the most reliable seeded demo buyer account so auth smoke stays stable.
+const TEST_EMAIL = process.env.E2E_TEST_EMAIL ?? "buyer.free@maiprop.demo";
 const TEST_PASSWORD = process.env.E2E_TEST_PASSWORD ?? "Demo2025!";
 const hasCredentials = TEST_EMAIL !== "" && TEST_PASSWORD !== "";
 

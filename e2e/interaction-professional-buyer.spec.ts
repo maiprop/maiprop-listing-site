@@ -13,33 +13,42 @@
  */
 import { test, expect, type Page, type Browser, type BrowserContext } from "@playwright/test";
 import { getBaseURL } from "./helpers/baseURL";
+import { demoAccounts, demoPasswords } from "./helpers/demoAccounts";
 
 // ─── Credentials ─────────────────────────────────────────────────────────────
 
-const PASSWORD = "Demo2025!";
+const PASSWORD = demoPasswords.default;
 
 const ACCOUNTS = {
-  buyer:     "buyer.pro@maiprop.demo",
-  architect: "architect.pro@maiprop.demo",
-  lawyer:    "lawyer.pro@maiprop.demo",
-  notary:    "notary.pro@maiprop.demo",
-  engineer:  "engineer.pro@maiprop.demo",
+  buyer: demoAccounts.buyerFree,
+  architect: demoAccounts.professionalArchitect,
+  lawyer: demoAccounts.professionalLawyer,
+  valuer: demoAccounts.professionalValuer,
 } as const;
-
-const hasCredentials = !!(process.env.E2E_TEST_EMAIL && process.env.E2E_TEST_PASSWORD);
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /** Sign in on a given page and wait for the post-auth redirect. */
 async function signIn(page: Page, email: string, password = PASSWORD): Promise<void> {
-  await page.goto("/login");
-  await page.locator('input[type="email"], input[name="email"]').first().fill(email);
-  await page.locator('input[type="password"]').first().fill(password);
-  await page
-    .locator('button[type="submit"], button:has-text("Sign in"), button:has-text("Log in")')
-    .first()
-    .click();
-  await page.waitForURL(/\/dashboard|\/onboarding/, { timeout: 25_000 });
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    await page.goto("/login");
+    await page.locator('input[type="email"], input[name="email"]').first().fill(email);
+    await page.locator('input[type="password"]').first().fill(password);
+    await page
+      .locator('button[type="submit"], button:has-text("Sign in"), button:has-text("Log in")')
+      .first()
+      .click();
+    try {
+      await page.waitForURL(/\/dashboard|\/onboarding/, { timeout: 25_000 });
+      return;
+    } catch (error) {
+      const invalidCredentials = await page.getByText("Invalid email or password", { exact: true })
+        .isVisible()
+        .catch(() => false);
+      if (attempt === 1 || invalidCredentials) throw error;
+      await page.waitForTimeout(1_000);
+    }
+  }
 }
 
 /**
@@ -60,8 +69,6 @@ async function signInContext(
 // ─── 1. Professional own-profile access ──────────────────────────────────────
 
 test.describe("Professional own-profile (/professionals/me)", () => {
-  test.skip(!hasCredentials, "Demo credentials required");
-
   test("architect.pro signs in and can access /professionals/me", async ({ page }) => {
     await signIn(page, ACCOUNTS.architect);
     await page.goto("/professionals/me");
@@ -155,9 +162,7 @@ test.describe("Professional own-profile (/professionals/me)", () => {
 // ─── 2. Buyer browsing the professionals directory ────────────────────────────
 
 test.describe("Buyer — professionals directory (/professionals)", () => {
-  test.skip(!hasCredentials, "Demo credentials required");
-
-  test("buyer.pro can browse /professionals directory", async ({ page }) => {
+  test("seeded buyer can browse /professionals directory", async ({ page }) => {
     await signIn(page, ACCOUNTS.buyer);
     await page.goto("/professionals");
     await page.waitForLoadState("networkidle", { timeout: 15_000 });
@@ -275,8 +280,6 @@ test.describe("Buyer — professionals directory (/professionals)", () => {
 // ─── 3. Consultation / contact button on professional detail page ─────────────
 
 test.describe("Professional detail page — consultation / contact button", () => {
-  test.skip(!hasCredentials, "Demo credentials required");
-
   test(
     "professional profile detail page has a contact or book button",
     async ({ page }) => {
@@ -326,10 +329,8 @@ test.describe("Professional detail page — consultation / contact button", () =
 // ─── 4. Video room — authenticated no-crash check ────────────────────────────
 
 test.describe("Video room — authenticated buyer", () => {
-  test.skip(!hasCredentials, "Demo credentials required");
-
   test(
-    "buyer.pro navigating to /video-room lands on valid page (not crash)",
+    "seeded buyer navigating to /video-room lands on valid page (not crash)",
     async ({ page }) => {
       const errors: string[] = [];
       page.on("pageerror", (err) => errors.push(err.message));

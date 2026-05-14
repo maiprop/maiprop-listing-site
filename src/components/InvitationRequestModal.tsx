@@ -194,7 +194,7 @@ export function InvitationRequestModal({ user, onClose, onSuccess }: Props) {
                     <ul className="space-y-1">
                       {t.features.map(f => (
                         <li key={f} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                          <span className="text-emerald-500">âœ“</span> {f}
+                          <span className="text-emerald-500">✓</span> {f}
                         </li>
                       ))}
                     </ul>

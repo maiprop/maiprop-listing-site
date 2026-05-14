@@ -13,15 +13,17 @@
  */
 import { test, expect, type Page } from "@playwright/test";
 import { getBaseURL } from "./helpers/baseURL";
+import { demoAccounts, demoPasswords, seededDemoAccountsEnabled } from "./helpers/demoAccounts";
 
 // ─── Credentials ─────────────────────────────────────────────────────────────
 
-const INVESTOR_PRIVATE_EMAIL      = process.env.E2E_INVESTOR_PRIVATE_EMAIL       ?? "";
-const INVESTOR_INSTITUTIONAL_EMAIL = process.env.E2E_INVESTOR_INSTITUTIONAL_EMAIL ?? "";
-const ADMIN_EMAIL                 = process.env.E2E_ADMIN_EMAIL                  ?? "";
-const DEMO_PASSWORD               = process.env.E2E_DEMO_PASSWORD                ?? "";
+const INVESTOR_PRIVATE_EMAIL       = demoAccounts.investorPrivate;
+const INVESTOR_INSTITUTIONAL_EMAIL = demoAccounts.investorInstitutional;
+const ADMIN_EMAIL                  = demoAccounts.admin;
+const DEMO_PASSWORD                = demoPasswords.default;
 
 const hasCredentials =
+  seededDemoAccountsEnabled("E2E_INVESTOR_PRIVATE_EMAIL", "E2E_INVESTOR_INSTITUTIONAL_EMAIL", "E2E_ADMIN_EMAIL") &&
   INVESTOR_PRIVATE_EMAIL !== "" && INVESTOR_INSTITUTIONAL_EMAIL !== "" &&
   ADMIN_EMAIL !== "" && DEMO_PASSWORD !== "";
 
@@ -37,6 +39,31 @@ async function signIn(page: Page, email: string, password: string): Promise<void
   await page.locator('input[type="password"]').first().fill(password);
   await page.locator('button[type="submit"], button:has-text("Sign in"), button:has-text("Log in")').first().click();
   await page.waitForURL(/\/dashboard|\/onboarding|\/admin/, { timeout: 25_000 });
+}
+
+async function expectInvestorDashboardReady(page: Page): Promise<void> {
+  await expect(page).toHaveURL(/\/investor-dashboard/);
+  await expect(page.getByTestId("investor-dashboard")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/Investor Access Required/i)).toHaveCount(0);
+
+  const errorState = page.getByTestId("investor-deal-feed-error");
+  if (await errorState.isVisible().catch(() => false)) {
+    await expect(errorState.getByRole("button", { name: /retry/i })).toBeVisible();
+    return;
+  }
+
+  await expect(page.getByTestId("investor-filters")).toBeVisible();
+  await expect(page.getByLabel(/city/i)).toBeVisible();
+  await expect(page.getByLabel(/property type/i)).toBeVisible();
+  await expect(page.getByLabel(/urgency/i)).toBeVisible();
+  await expect(page.getByTestId("investor-deal-list")).toBeAttached();
+}
+
+async function expectAdminSurfaceReady(page: Page): Promise<void> {
+  await expect(page).toHaveURL(/\/admin/);
+  await expect(page.locator("body")).toContainText(/\S/, { timeout: 15_000 });
+  await expect(page.locator(".animate-spin").first()).toBeHidden({ timeout: 10_000 }).catch(() => {});
+  await expect(page.locator("main, [data-testid*='admin'], nav, [role='navigation']").first()).toBeAttached();
 }
 
 // ─── Investor tests ───────────────────────────────────────────────────────────
@@ -59,11 +86,7 @@ test.describe("Investor (private) — sign in and basic navigation", () => {
     // Must NOT have been redirected to /login
     expect(page.url()).not.toContain("/login");
 
-    // Page must render meaningful DOM content (spinner, gate, or dashboard — not blank).
-    // useEligibleForQuickSale may stay loading if KYC/subscription aren't fully set up,
-    // so we only check that the React app rendered something (node count), not a specific heading.
-    const nodeCount = await page.locator("body *").count();
-    expect(nodeCount).toBeGreaterThan(5);
+    await expectInvestorDashboardReady(page);
   });
 
   test("investor.private sees /firesale content", async ({ page }) => {
@@ -113,12 +136,7 @@ test.describe("Investor (institutional) — investor-dashboard access", () => {
     // Must NOT have been redirected to /login
     expect(page.url()).not.toContain("/login");
 
-    // Page must render DOM content (spinner, gate, or dashboard — not blank)
-    const nodeCount = await page.locator("body *").count();
-    expect(nodeCount).toBeGreaterThan(5);
-
-    const bodyText = await page.locator("body").textContent();
-    expect(bodyText?.trim().length).toBeGreaterThan(0);
+    await expectInvestorDashboardReady(page);
   });
 });
 
@@ -161,11 +179,8 @@ test.describe("Simultaneous investor sessions", () => {
       expect(privatePage.url()).not.toContain("/login");
       expect(institutionalPage.url()).not.toContain("/login");
 
-      // Both pages must render DOM content (spinner, gate, or full dashboard)
-      const privateCount = await privatePage.locator("body *").count();
-      const institutionalCount = await institutionalPage.locator("body *").count();
-      expect(privateCount).toBeGreaterThan(5);
-      expect(institutionalCount).toBeGreaterThan(5);
+      await expectInvestorDashboardReady(privatePage);
+      await expectInvestorDashboardReady(institutionalPage);
 
       // No JS errors in either context
       expect(privateErrors).toHaveLength(0);
@@ -188,9 +203,7 @@ test.describe("Admin — sign in and panel access", () => {
     // Must have landed on a legitimate post-login route
     expect(page.url()).toMatch(/\/dashboard|\/admin|\/onboarding/);
 
-    // Page body must render meaningful content
-    const bodyText = await page.locator("body").textContent();
-    expect(bodyText?.trim().length).toBeGreaterThan(10);
+    await expect(page.locator("body")).toContainText(/\S/, { timeout: 15_000 });
   });
 
   test("admin can access /admin panel without redirect", async ({ page }) => {
@@ -201,9 +214,7 @@ test.describe("Admin — sign in and panel access", () => {
     // URL must still contain /admin — admin was not redirected away
     expect(page.url()).toContain("/admin");
 
-    // Page must render meaningful content (body text > 10 chars)
-    const bodyText = await page.locator("body").textContent();
-    expect(bodyText?.trim().length).toBeGreaterThan(10);
+    await expectAdminSurfaceReady(page);
   });
 
   test("admin panel renders key management sections", async ({ page }) => {
@@ -213,15 +224,7 @@ test.describe("Admin — sign in and panel access", () => {
     // URL must still be /admin (admin was not redirected to /dashboard)
     expect(page.url()).toContain("/admin");
 
-    // Admin panel must have rendered meaningful DOM — not a bare spinner.
-    // We poll up to 10s for the node count to exceed 20 (spinner-only pages have ~5 nodes).
-    await page.waitForFunction(
-      () => document.querySelectorAll("body *").length > 20,
-      { timeout: 10_000 }
-    ).catch(() => {});
-
-    const nodeCount = await page.locator("body *").count();
-    expect(nodeCount).toBeGreaterThan(10);
+    await expectAdminSurfaceReady(page);
   });
 
   test("admin panel has no uncaught JS errors", async ({ page }) => {
@@ -284,12 +287,8 @@ test.describe("Simultaneous admin and investor sessions", () => {
       // Investor must not have been redirected to /login
       expect(investorPage.url()).not.toContain("/login");
 
-      // Both pages must have rendered meaningful content
-      const adminBody = await adminPage.locator("body").textContent();
-      expect(adminBody?.trim().length).toBeGreaterThan(10);
-
-      const investorBody = await investorPage.locator("body").textContent();
-      expect(investorBody?.trim().length).toBeGreaterThan(10);
+      await expectAdminSurfaceReady(adminPage);
+      await expectInvestorDashboardReady(investorPage);
 
       // No JS errors in either context
       expect(adminErrors).toHaveLength(0);

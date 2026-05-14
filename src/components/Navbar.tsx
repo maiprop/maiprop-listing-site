@@ -19,7 +19,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { useEligibleForQuickSale } from "@/hooks/useEligibleForQuickSale";
 import { getParticipantTypeFromProfile, isInvestorMode, PARTICIPANT_LABELS, type ParticipantId } from "@/lib/participantConfig";
 import { formatTimeAgo } from "@/lib/format";
-import { isPlatformAdmin } from "@/lib/authUtils";
+import { isPlatformAdmin, isSellSideRole } from "@/lib/authUtils";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
 // Pages that have a full-width dark hero image at the top
@@ -36,8 +36,8 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
   const { t } = useTranslation();
 
   const participantType = getParticipantTypeFromProfile(profile);
-  const isDeveloper = participantType === "developer";
-  const canListProperty = ["seller", "agent", "developer", "institutional"].includes(participantType) || isPlatformAdmin(profile);
+  const isDeveloper = profile?.role === "developer" || isPlatformAdmin(profile);
+  const canListProperty = isSellSideRole(profile) || isPlatformAdmin(profile);
   const { eligible: eligibleForQuickSale } = useEligibleForQuickSale();
 
   const queryClient = useQueryClient();
@@ -388,27 +388,33 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
               </DropdownMenu>
 
               {canListProperty && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground hover:opacity-90 gap-1.5">
-                      <Plus className="w-3.5 h-3.5" /> List Property <ChevronDown className="w-3 h-3 opacity-80" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuItem asChild>
-                      <Link to="/listings/new" className="flex items-center gap-2 cursor-pointer">
-                        <Home className="w-3.5 h-3.5" /> Regular Listing
-                      </Link>
-                    </DropdownMenuItem>
-                    {isDeveloper && (
+                isDeveloper ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground hover:opacity-90 gap-1.5">
+                        <Plus className="w-3.5 h-3.5" /> List Property <ChevronDown className="w-3 h-3 opacity-80" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48">
+                      <DropdownMenuItem asChild>
+                        <Link to="/listings/new" className="flex items-center gap-2 cursor-pointer">
+                          <Home className="w-3.5 h-3.5" /> Listing
+                        </Link>
+                      </DropdownMenuItem>
                       <DropdownMenuItem asChild>
                         <Link to="/listings/new-building" className="flex items-center gap-2 cursor-pointer">
                           <Building2 className="w-3.5 h-3.5" /> New Building
                         </Link>
                       </DropdownMenuItem>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : (
+                  <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground hover:opacity-90 gap-1.5" asChild>
+                    <Link to="/listings/new">
+                      <Plus className="w-3.5 h-3.5" /> List Property
+                    </Link>
+                  </Button>
+                )
               )}
               {/* Pro badge / CTA */}
               {isPro ? (

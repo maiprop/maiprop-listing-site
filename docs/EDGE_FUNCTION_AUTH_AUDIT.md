@@ -22,7 +22,6 @@ Every `verify_jwt = false` function must be either intentionally public, protect
 | `healthz` | Public read-only endpoint. | Health status only. | Ready. |
 | `csp-report` | Public write-only browser report receiver. | CSP violation reports. | Conditional: log-flood risk. |
 | `record-listing-view` | Public endpoint with body validation, CORS allowlist, and rate limiting; uses service role for the service-role-only atomic RPC. | Listing view counters/events. | Ready: no private data returned. |
-| `owner-pro-status` | Public endpoint with listing UUID validation, CORS allowlist, and rate limiting; resolves the listing owner server-side before checking subscription status. | Boolean owner Pro status only. | Conditional: public boolean is intentional for listing contact/calendar UI. |
 | `stripe-webhook` | Stripe signature verification with webhook signing secret. | Stripe events and billing state. | Ready if signature tests stay green. |
 | `auth-email-hook` | Supabase Auth hook secret via `SEND_EMAIL_HOOK_SECRET`. | Auth email payloads. | Ready if secret is configured in prod. |
 | `sync-to-os` | Custom Bearer/user authorization in handler; not Supabase JWT-gated by platform config. | Listing sync data. | Conditional: keep tests for missing/invalid auth. |
@@ -38,7 +37,7 @@ Every `verify_jwt = false` function must be either intentionally public, protect
 
 ## `verify_jwt = true` Functions
 
-These functions are platform JWT-gated in `supabase/config.toml`: `property-chat`, `pro-ai-tools`, `ai-service-match`, `fetch-report-from-os`, `listing-ai-assist`, `create-checkout`, `check-subscription`, `customer-portal`, `create-stripe-price`, `process-email-queue`, `sync-stripe-pricing`, `get-invoices`, `delete-account`, `fetch-past-deals-from-os`, `log-role-switch`, `agent-data-input`, `apply-data-input-credit`, `flag-auction-on-os`, `fetch-auction-enrichment`, `transfer-platform-admin`, and `complete-onboarding-role`. The last two verify the caller JWT in the Edge Function and then call service-role-only RPCs that take the verified caller id explicitly.
+These functions are platform JWT-gated in `supabase/config.toml`: `property-chat`, `pro-ai-tools`, `ai-service-match`, `fetch-report-from-os`, `listing-ai-assist`, `create-checkout`, `check-subscription`, `customer-portal`, `create-stripe-price`, `process-email-queue`, `sync-stripe-pricing`, `get-invoices`, `delete-account`, `fetch-past-deals-from-os`, `log-role-switch`, `agent-data-input`, `apply-data-input-credit`, `flag-auction-on-os`, `fetch-auction-enrichment`, `transfer-platform-admin`, `complete-onboarding-role`, and `owner-pro-status`. `owner-pro-status` is JWT-gated because it resolves subscription-derived owner status with a service-role client; anonymous listing detail pages must degrade to no Pro badge rather than exposing arbitrary account status. The last two transfer/onboarding functions verify the caller JWT in the Edge Function and then call service-role-only RPCs that take the verified caller id explicitly.
 
 ## Blocking Follow-Ups
 

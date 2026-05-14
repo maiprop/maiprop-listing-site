@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
+import { AuthError, verifyBearerToken } from "../_shared/auth.ts";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { createLogger } from "../_shared/logger.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
@@ -51,6 +52,8 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false },
     });
+    await verifyBearerToken(req, supabase);
+
     const { data: listing, error: listingError } = await supabase
       .from("listings")
       .select("owner_id")
@@ -72,6 +75,13 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err: unknown) {
+    if (err instanceof AuthError) {
+      return new Response(JSON.stringify({ error: err.message }), {
+        status: err.status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const message = err instanceof Error ? err.message : "Failed to resolve owner status";
     log.warn("resolve failed", { err: message });
     return new Response(JSON.stringify({ error: message }), {

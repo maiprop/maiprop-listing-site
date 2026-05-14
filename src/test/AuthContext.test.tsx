@@ -97,6 +97,16 @@ describe("profileNeedsOnboarding (pure helper)", () => {
     ).toBe(false);
   });
 
+  it("returns true while a role switch is in progress even if role and participant_type still align", () => {
+    expect(
+      profileNeedsOnboarding({
+        role: "seller",
+        participant_type: "seller",
+        role_switch_in_progress_at: "2026-05-14T10:00:00.000Z",
+      } as never),
+    ).toBe(true);
+  });
+
   it("respects the legacy bio __type marker", () => {
     expect(
       profileNeedsOnboarding({

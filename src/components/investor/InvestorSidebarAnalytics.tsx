@@ -24,7 +24,7 @@ interface Props {
   typeBreakdown: TypeBreakdown[];
   marketPulse: MarketPulse;
   liveDealsCount: number;
-  invitationStatus: "none" | "pending" | "rejected";
+  invitationStatus: "none" | "pending" | "approved" | "rejected";
   canAccessDealFlow: boolean;
   onInviteClick: () => void;
 }

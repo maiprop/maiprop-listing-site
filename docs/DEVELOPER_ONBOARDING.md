@@ -63,10 +63,10 @@ npx vitest run src/test/SomeFile.test.ts  # Single test file
 ```bash
 # Run Deno tests
 cd supabase/functions
-deno test --allow-env --allow-net --allow-read .
+deno test --allow-env --allow-net --allow-read --allow-write .
 
 # Run a single test file
-deno test --allow-env --allow-net --allow-read ./_shared/rateLimit.test.ts
+deno test --allow-env --allow-net --allow-read --allow-write ./_shared/rateLimit.test.ts
 ```
 
 Edge functions use Deno, not Node. Key differences:

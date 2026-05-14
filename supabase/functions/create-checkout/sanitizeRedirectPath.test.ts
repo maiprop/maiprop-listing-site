@@ -6,7 +6,13 @@
  * would break the handler-level integration tests in `index.test.ts`).
  */
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { sanitizeRedirectPath } from "./index.ts";
+import {
+  isInviteOnlyCheckoutPlan,
+  isSupportedCheckoutPlan,
+  normalizePlanKey,
+  resolveCheckoutOrigin,
+  sanitizeRedirectPath,
+} from "./index.ts";
 
 Deno.test("sanitizeRedirectPath: accepts a same-origin path", () => {
   assertEquals(sanitizeRedirectPath("/dashboard"), "/dashboard");
@@ -45,7 +51,10 @@ Deno.test("sanitizeRedirectPath: rejects empty string", () => {
 });
 
 Deno.test("sanitizeRedirectPath: rejects CRLF / control characters (header injection)", () => {
-  assertEquals(sanitizeRedirectPath("/dashboard\r\nLocation: https://evil"), null);
+  assertEquals(
+    sanitizeRedirectPath("/dashboard\r\nLocation: https://evil"),
+    null,
+  );
   assertEquals(sanitizeRedirectPath("/dashboard\nfoo"), null);
   assertEquals(sanitizeRedirectPath("/dashboard\tfoo"), null);
 });
@@ -62,4 +71,43 @@ Deno.test("sanitizeRedirectPath: rejects paths not starting with /", () => {
   assertEquals(sanitizeRedirectPath("dashboard"), null);
   assertEquals(sanitizeRedirectPath("./dashboard"), null);
   assertEquals(sanitizeRedirectPath("../etc/passwd"), null);
+});
+
+Deno.test("normalizePlanKey: defaults to pro and rejects malformed keys", () => {
+  assertEquals(normalizePlanKey(undefined), "pro");
+  assertEquals(normalizePlanKey("agent_basic"), "agent_basic");
+  assertEquals(normalizePlanKey(" investor_private "), "investor_private");
+  assertEquals(normalizePlanKey("../investor_private"), null);
+  assertEquals(normalizePlanKey("https://evil.test"), null);
+});
+
+Deno.test("isInviteOnlyCheckoutPlan: blocks direct checkout for investor plans", () => {
+  assertEquals(isInviteOnlyCheckoutPlan("investor_private"), true);
+  assertEquals(isInviteOnlyCheckoutPlan("investor_institutional"), true);
+  assertEquals(isInviteOnlyCheckoutPlan("professional_basic"), false);
+});
+
+Deno.test("isSupportedCheckoutPlan: rejects unknown syntactically valid keys", () => {
+  assertEquals(isSupportedCheckoutPlan("pro"), true);
+  assertEquals(isSupportedCheckoutPlan("agent_basic"), true);
+  assertEquals(isSupportedCheckoutPlan("developer_pro"), true);
+  assertEquals(isSupportedCheckoutPlan("professional_basic"), true);
+  assertEquals(isSupportedCheckoutPlan("valuation_single"), false);
+  assertEquals(isSupportedCheckoutPlan("made_up_valid_key"), false);
+});
+
+Deno.test("resolveCheckoutOrigin: allows known origins and rejects attacker origins", () => {
+  assertEquals(
+    resolveCheckoutOrigin("https://maiprop.co"),
+    "https://maiprop.co",
+  );
+  assertEquals(
+    resolveCheckoutOrigin("https://feature.maiprop-listing-site.pages.dev"),
+    "https://feature.maiprop-listing-site.pages.dev",
+  );
+  assertEquals(
+    resolveCheckoutOrigin("https://evil.example"),
+    "https://portal.maiprop.co",
+  );
+  assertEquals(resolveCheckoutOrigin(null), "https://portal.maiprop.co");
 });

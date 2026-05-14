@@ -17,19 +17,15 @@
  */
 import { test, expect, type Page, type Browser } from "@playwright/test";
 import { getBaseURL } from "./helpers/baseURL";
+import { demoAccounts, demoPasswords } from "./helpers/demoAccounts";
 
 // ─── Credentials ─────────────────────────────────────────────────────────────
 
-const PW = process.env.E2E_DEMO_PASSWORD ?? "";
-
-const BUYER_EMAIL                 = process.env.E2E_BUYER_EMAIL                  ?? "";
-const INVESTOR_PRIVATE_EMAIL      = process.env.E2E_INVESTOR_PRIVATE_EMAIL       ?? "";
-const INVESTOR_INSTITUTIONAL_EMAIL = process.env.E2E_INVESTOR_INSTITUTIONAL_EMAIL ?? "";
-const ADMIN_EMAIL                 = process.env.E2E_ADMIN_EMAIL                  ?? "";
-
-const hasCredentials =
-  BUYER_EMAIL !== "" && INVESTOR_PRIVATE_EMAIL !== "" &&
-  INVESTOR_INSTITUTIONAL_EMAIL !== "" && ADMIN_EMAIL !== "" && PW !== "";
+const PW = demoPasswords.default;
+const BUYER_EMAIL = demoAccounts.buyerFree;
+const INVESTOR_PRIVATE_EMAIL = demoAccounts.investorPrivate;
+const INVESTOR_INSTITUTIONAL_EMAIL = demoAccounts.investorInstitutional;
+const ADMIN_EMAIL = demoAccounts.admin;
 
 // ─── Sign-in helper ───────────────────────────────────────────────────────────
 
@@ -38,14 +34,33 @@ const hasCredentials =
  * Accepts /dashboard, /onboarding, or /admin as valid landing URLs.
  */
 async function signIn(page: Page, email: string, password: string): Promise<void> {
-  await page.goto("/login");
-  await page.locator('input[type="email"], input[name="email"]').first().fill(email);
-  await page.locator('input[type="password"]').first().fill(password);
-  await page
-    .locator('button[type="submit"], button:has-text("Sign in"), button:has-text("Log in")')
-    .first()
-    .click();
-  await page.waitForURL(/\/dashboard|\/onboarding|\/admin/, { timeout: 25_000 });
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    await page.goto("/login");
+    await page.locator('input[type="email"], input[name="email"]').first().fill(email);
+    await page.locator('input[type="password"]').first().fill(password);
+    await page
+      .locator('button[type="submit"], button:has-text("Sign in"), button:has-text("Log in")')
+      .first()
+      .click();
+
+    try {
+      await page.waitForURL(/\/dashboard|\/onboarding|\/admin/, { timeout: 25_000 });
+      return;
+    } catch (error) {
+      const invalidCredentials = await page.getByText("Invalid email or password", { exact: true })
+        .isVisible()
+        .catch(() => false);
+      if (attempt === 1 || invalidCredentials) throw error;
+      await page.waitForTimeout(1_000);
+    }
+  }
+}
+
+async function expectPageShell(page: Page): Promise<void> {
+  await expect(page.locator("main, #main-content, body").first()).toBeVisible({ timeout: 10_000 });
+  await expect(
+    page.locator("h1, h2, [role='heading'], article, [class*='card'], [class*='empty']").first(),
+  ).toBeVisible({ timeout: 15_000 });
 }
 
 // ─── PUBLIC — auction browsing ────────────────────────────────────────────────
@@ -160,9 +175,7 @@ test.describe("Public auction browsing", () => {
 // ─── AUTHENTICATED — auction interaction ──────────────────────────────────────
 
 test.describe("Authenticated auction interaction", () => {
-  test.skip(!hasCredentials, "Requires seeded demo accounts");
-
-  test("buyer.pro can view auctions after sign-in", async ({ page }) => {
+  test("seeded buyer can view auctions after sign-in", async ({ page }) => {
     await signIn(page, BUYER_EMAIL, PW);
     await page.goto("/auctions");
     await page.waitForLoadState("load", { timeout: 15_000 });
@@ -213,10 +226,7 @@ test.describe("Authenticated auction interaction", () => {
     await signIn(page, INVESTOR_PRIVATE_EMAIL, PW);
     await page.goto("/investor-dashboard");
     await page.waitForLoadState("load", { timeout: 15_000 });
-
-    // Body must render content
-    const bodyText = await page.locator("body").textContent();
-    expect((bodyText ?? "").trim().length).toBeGreaterThan(10);
+    await expectPageShell(page);
 
     // Must NOT be blocked by the access gate
     const hasGate = await page
@@ -230,9 +240,7 @@ test.describe("Authenticated auction interaction", () => {
     await signIn(page, INVESTOR_INSTITUTIONAL_EMAIL, PW);
     await page.goto("/investor-dashboard");
     await page.waitForLoadState("load", { timeout: 15_000 });
-
-    const bodyText = await page.locator("body").textContent();
-    expect((bodyText ?? "").trim().length).toBeGreaterThan(10);
+    await expectPageShell(page);
 
     const hasGate = await page
       .locator("text=Investor Access Required")
@@ -294,8 +302,6 @@ test.describe("Authenticated auction interaction", () => {
 // ─── MULTI-USER simultaneous browsing ────────────────────────────────────────
 
 test.describe("Multi-user simultaneous browsing", () => {
-  test.skip(!hasCredentials, "Requires seeded demo accounts");
-
   /**
    * Two browser contexts: one unauthenticated (buyer), one authenticated
    * (investor.private). Both navigate to /auctions simultaneously.
@@ -403,11 +409,9 @@ test.describe("Multi-user simultaneous browsing", () => {
           ),
       ]);
 
-      // Each page must have substantive content
-      for (const p of [invPrivatePage, invInstitutionalPage, buyerPage]) {
-        const bodyText = await p.locator("body").textContent();
-        expect((bodyText ?? "").trim().length).toBeGreaterThan(10);
-      }
+      await expectPageShell(invPrivatePage);
+      await expectPageShell(invInstitutionalPage);
+      await expectPageShell(buyerPage);
 
       // No JS errors in any context
       expect(invPrivateErrors).toHaveLength(0);
@@ -463,12 +467,10 @@ test.describe("Multi-user simultaneous browsing", () => {
 
       // Admin: URL must still contain /admin (not redirected away) and page renders
       expect(adminPage.url()).toContain("/admin");
-      const adminBodyText = await adminPage.locator("body").textContent();
-      expect((adminBodyText ?? "").trim().length).toBeGreaterThan(10);
+      await expectPageShell(adminPage);
 
       // Investor: page renders without the access gate
-      const investorBodyText = await investorPage.locator("body").textContent();
-      expect((investorBodyText ?? "").trim().length).toBeGreaterThan(10);
+      await expectPageShell(investorPage);
 
       const hasGate = await investorPage
         .locator("text=Investor Access Required")

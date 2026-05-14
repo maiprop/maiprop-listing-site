@@ -96,7 +96,7 @@ beforeEach(() => {
 
 describe("useListingForm — initialisation + simple setters", () => {
   it("starts with the canonical initial form", () => {
-    const { result } = renderHook(() => useListingForm(), { wrapper: wrap });
+    const { result } = renderHook(() => useListingForm({ allowPreSale: true }), { wrapper: wrap });
     expect(result.current.form.listing_type).toBe("sale");
     expect(result.current.form.property_type).toBe("apartment");
     expect(result.current.form.title).toBe("");
@@ -105,13 +105,13 @@ describe("useListingForm — initialisation + simple setters", () => {
   });
 
   it("set() updates the requested field", () => {
-    const { result } = renderHook(() => useListingForm(), { wrapper: wrap });
+    const { result } = renderHook(() => useListingForm({ allowPreSale: true }), { wrapper: wrap });
     act(() => result.current.set("title", "Athens 3-bed"));
     expect(result.current.form.title).toBe("Athens 3-bed");
   });
 
   it("toggle() flips a boolean field", () => {
-    const { result } = renderHook(() => useListingForm(), { wrapper: wrap });
+    const { result } = renderHook(() => useListingForm({ allowPreSale: true }), { wrapper: wrap });
     act(() => result.current.toggle("has_parking"));
     expect(result.current.form.has_parking).toBe(true);
     act(() => result.current.toggle("has_parking"));
@@ -370,7 +370,7 @@ describe("useListingForm — handleSubmit", () => {
         }),
       }),
     });
-    const { result } = renderHook(() => useListingForm(), { wrapper: wrap });
+    const { result } = renderHook(() => useListingForm({ allowPreSale: true }), { wrapper: wrap });
     setBaseForm(result);
     act(() => result.current.toggle("is_pre_sale"));
     await act(async () => {

@@ -1,33 +1,32 @@
 name: Deploy Edge Functions
 
 on:
-  # Manual trigger with optional function filter
+  # Manual trigger with explicit targeting. This workflow intentionally does
+  # not auto-deploy on push; production Supabase changes require an explicit
+  # ready-to-proceed action.
   workflow_dispatch:
     inputs:
       functions:
-        description: "Space-separated function names to deploy (leave empty for ALL)"
+        description: "Space-separated function names to deploy"
         required: false
         type: string
-      dry_run:
-        description: "Dry run — list functions without deploying"
+      confirm_deploy_all:
+        description: "Required when functions is blank; confirms deploying ALL edge functions"
         required: false
         type: boolean
         default: false
-
-  # Auto-deploy when edge function source changes on main
-  push:
-    branches: [main]
-    paths:
-      - "supabase/functions/**"
-      - "supabase/config.toml"
+      dry_run:
+        description: "Dry run - list functions without deploying"
+        required: false
+        type: boolean
+        default: true
 
 jobs:
   deploy:
     name: Deploy to Supabase
     runs-on: ubuntu-latest
     environment: production
-    # Only auto-deploy on push; always run on manual dispatch
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+    if: github.event_name == 'workflow_dispatch'
 
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -40,7 +39,7 @@ jobs:
 
       - uses: supabase/setup-cli@b60b5899c73b63a2d2d651b1e90db8d4c9392f51 # v1.6.0
         with:
-          version: latest
+          version: 2.98.1
 
       - name: Validate secrets
         run: |
@@ -52,52 +51,22 @@ jobs:
       - name: Link project
         run: supabase link --project-ref "$PROJECT_REF"
 
-      - name: Detect changed functions (push event)
-        id: changes
-        if: github.event_name == 'push'
-        run: |
-          set -euo pipefail
-          # Get changed files in the push
-          CHANGED=$(git diff --name-only HEAD~1 HEAD -- supabase/functions/ supabase/config.toml 2>/dev/null || echo "")
-
-          if echo "$CHANGED" | grep -q "config.toml"; then
-            echo "Config changed — deploying all functions"
-            echo "deploy_all=true" >> "$GITHUB_OUTPUT"
-          else
-            # Extract function names from changed paths
-            FUNCS=$(echo "$CHANGED" | grep "^supabase/functions/" | cut -d'/' -f3 | grep -v "^_shared$" | grep -v "^deno" | grep -v "^node_modules$" | sort -u | tr '\n' ' ')
-            if echo "$CHANGED" | grep -q "_shared/"; then
-              echo "Shared code changed — deploying all functions"
-              echo "deploy_all=true" >> "$GITHUB_OUTPUT"
-            elif [ -n "$FUNCS" ]; then
-              echo "Changed functions: $FUNCS"
-              echo "functions=$FUNCS" >> "$GITHUB_OUTPUT"
-              echo "deploy_all=false" >> "$GITHUB_OUTPUT"
-            else
-              echo "No function changes detected"
-              echo "deploy_all=false" >> "$GITHUB_OUTPUT"
-              echo "functions=" >> "$GITHUB_OUTPUT"
-            fi
-          fi
-
       - name: Determine functions to deploy
         id: target
         env:
-          EVENT_NAME: ${{ github.event_name }}
           INPUT_FUNCTIONS: ${{ github.event.inputs.functions }}
-          CHANGES_DEPLOY_ALL: ${{ steps.changes.outputs.deploy_all }}
-          CHANGES_FUNCTIONS: ${{ steps.changes.outputs.functions }}
+          CONFIRM_DEPLOY_ALL: ${{ github.event.inputs.confirm_deploy_all }}
         run: |
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            if [ -z "$INPUT_FUNCTIONS" ]; then
-              echo "deploy_all=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "functions=$INPUT_FUNCTIONS" >> "$GITHUB_OUTPUT"
-              echo "deploy_all=false" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          if [ -z "$INPUT_FUNCTIONS" ]; then
+            if [ "$CONFIRM_DEPLOY_ALL" != "true" ]; then
+              echo "::error::Set 'functions' or set 'confirm_deploy_all=true' to target every edge function."
+              exit 1
             fi
+            echo "deploy_all=true" >> "$GITHUB_OUTPUT"
           else
-            echo "deploy_all=$CHANGES_DEPLOY_ALL" >> "$GITHUB_OUTPUT"
-            echo "functions=$CHANGES_FUNCTIONS" >> "$GITHUB_OUTPUT"
+            echo "functions=$INPUT_FUNCTIONS" >> "$GITHUB_OUTPUT"
+            echo "deploy_all=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Deploy functions
@@ -119,13 +88,13 @@ jobs:
             echo "No functions to deploy"
           fi
 
-      - name: Dry run — list targets
+      - name: Dry run - list targets
         if: inputs.dry_run == true
         env:
           TARGET_DEPLOY_ALL: ${{ steps.target.outputs.deploy_all }}
           TARGET_FUNCTIONS: ${{ steps.target.outputs.functions }}
         run: |
-          echo "DRY RUN — would deploy:"
+          echo "DRY RUN - would deploy:"
           if [ "$TARGET_DEPLOY_ALL" = "true" ]; then
             echo "  ALL functions"
             ls -d supabase/functions/*/ | grep -v _shared | grep -v node_modules | sed 's|supabase/functions/||;s|/||'
@@ -134,5 +103,5 @@ jobs:
               echo "  - $fn"
             done
           else
-            echo "  (none — no changes detected)"
+            echo "  (none)"
           fi

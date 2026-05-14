@@ -9,26 +9,35 @@
  */
 import { test, expect, type Page, type Browser } from "@playwright/test";
 import { getBaseURL } from "./helpers/baseURL";
+import { demoAccounts, demoPasswords } from "./helpers/demoAccounts";
 
 // ── Credentials ───────────────────────────────────────────────────────────────
 
-const buyerEmail    = process.env.E2E_BUYER_EMAIL    ?? "";
-const buyerPassword = process.env.E2E_BUYER_PASSWORD ?? "";
-const sellerEmail   = process.env.E2E_SELLER_EMAIL   ?? "";
-const sellerPassword = process.env.E2E_SELLER_PASSWORD ?? "";
-
-const hasCredentials = buyerEmail !== "" && buyerPassword !== "" &&
-                       sellerEmail !== "" && sellerPassword !== "";
+const buyerEmail = demoAccounts.buyerFree;
+const buyerPassword = demoPasswords.buyerFree;
+const sellerEmail = demoAccounts.sellerPro;
+const sellerPassword = demoPasswords.sellerPro;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /** Sign in a page object with the provided credentials and wait for the app shell. */
 async function signInAs(page: Page, email: string, password: string): Promise<void> {
-  await page.goto("/login");
-  await page.locator('input[type="email"], input[name="email"]').first().fill(email);
-  await page.locator('input[type="password"]').first().fill(password);
-  await page.locator('button[type="submit"], button:has-text("Sign in"), button:has-text("Log in")').first().click();
-  await page.waitForURL(/\/dashboard|\/onboarding/, { timeout: 25_000 });
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    await page.goto("/login");
+    await page.locator('input[type="email"], input[name="email"]').first().fill(email);
+    await page.locator('input[type="password"]').first().fill(password);
+    await page.locator('button[type="submit"], button:has-text("Sign in"), button:has-text("Log in")').first().click();
+    try {
+      await page.waitForURL(/\/dashboard|\/onboarding/, { timeout: 25_000 });
+      return;
+    } catch (error) {
+      const invalidCredentials = await page.getByText("Invalid email or password", { exact: true })
+        .isVisible()
+        .catch(() => false);
+      if (attempt === 1 || invalidCredentials) throw error;
+      await page.waitForTimeout(1_000);
+    }
+  }
 }
 
 /**
@@ -58,8 +67,6 @@ async function navigateToFirstListing(page: Page): Promise<string | null> {
 // ── Multi-context tests ───────────────────────────────────────────────────────
 
 test.describe("Buyer + Seller simultaneous sessions", () => {
-  test.skip(!hasCredentials, "Set buyer/seller demo credentials to run cross-user tests");
-
   // 1. Both users can sign in at the same time
   test("buyer and seller can both sign in simultaneously", async ({ browser }: { browser: Browser }) => {
     test.setTimeout(90_000);
@@ -134,8 +141,6 @@ test.describe("Buyer + Seller simultaneous sessions", () => {
 // ── Single-context buyer tests ────────────────────────────────────────────────
 
 test.describe("Buyer — listings and property detail", () => {
-  test.skip(!hasCredentials, "Set buyer demo credentials to run buyer tests");
-
   // 2. Buyer browses listings and opens a property detail
   test("buyer can browse listings and navigate to a property detail page", async ({ page }) => {
     await signInAs(page, buyerEmail, buyerPassword);
@@ -261,8 +266,6 @@ test.describe("Buyer — listings and property detail", () => {
 // ── Single-context seller tests ───────────────────────────────────────────────
 
 test.describe("Seller — dashboard and listings", () => {
-  test.skip(!hasCredentials, "Set seller demo credentials to run seller tests");
-
   // 5. Seller can view their dashboard without crash
   test("seller can view their listings in the dashboard", async ({ page }) => {
     await signInAs(page, sellerEmail, sellerPassword);

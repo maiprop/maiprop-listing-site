@@ -25,16 +25,27 @@ vi.mock("@/components/SignInForAI", () => ({
 }));
 
 // Stub react-map-gl primitives — jsdom can't run WebGL.
-vi.mock("react-map-gl", () => {
-  const Map = ({ children, ...rest }: { children?: React.ReactNode } & Record<string, unknown>) => (
-    <div data-testid="mapbox-map" data-token={String(rest.mapboxAccessToken ?? "")}>
-      {children}
-    </div>
-  );
-  const Marker = ({ children }: { children?: React.ReactNode }) => (
-    <div data-testid="mapbox-marker">{children}</div>
-  );
-  const NavigationControl = () => <div data-testid="nav-control" />;
+interface MapMockProps {
+  children?: React.ReactNode;
+  mapboxAccessToken?: unknown;
+}
+
+vi.mock("react-map-gl", async () => {
+  const React = await vi.importActual<typeof import("react")>("react");
+  const Map = React.forwardRef<{ getMap: () => null }, MapMockProps>(function MockMap({ children, ...rest }, ref) {
+    React.useImperativeHandle(ref, () => ({ getMap: () => null }), []);
+    return (
+      <div data-testid="mapbox-map" data-token={String(rest.mapboxAccessToken ?? "")}>
+        {children}
+      </div>
+    );
+  });
+  const Marker = React.forwardRef<HTMLDivElement, MapMockProps>(function MockMarker({ children }, ref) {
+    return <div ref={ref} data-testid="mapbox-marker">{children}</div>;
+  });
+  const NavigationControl = React.forwardRef<HTMLDivElement>(function MockNavigationControl(_props, ref) {
+    return <div ref={ref} data-testid="nav-control" />;
+  });
   return { __esModule: true, default: Map, Map, Marker, NavigationControl };
 });
 // CSS import side-effect — jsdom can't parse it.

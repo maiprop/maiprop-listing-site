@@ -503,8 +503,8 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
             )}
             {property.listingType === "auction" && (
               <Link to={detailPath} className="flex-1">
-                <button className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-brand-auction/80 text-white font-semibold text-sm transition-all hover:bg-brand-auction hover:shadow-md active:scale-[0.98]">
-                  <Gavel className="w-4 h-4" />
+                <button className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-brand-auction text-white font-semibold text-sm transition-all hover:bg-brand-purple-dark hover:shadow-md active:scale-[0.98]">
+                  <Gavel className="w-4 h-4" aria-hidden="true" />
                   {t("propertyCard.actions.viewAuction")}
                 </button>
               </Link>

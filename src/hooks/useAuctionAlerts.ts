@@ -16,7 +16,7 @@ export function useAuctionAlerts() {
       if (!user) return [];
       const { data, error } = await supabase
         .from("auction_alerts")
-        .select("id, user_id, city, court_name, property_type, min_price, max_price, email_notify, active, created_at, updated_at")
+        .select("id, user_id, city, court_name, property_type, min_price, max_price, email_notify, active, created_at")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
       if (error) throw error;

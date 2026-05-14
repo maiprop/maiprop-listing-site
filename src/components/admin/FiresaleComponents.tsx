@@ -6,7 +6,12 @@ import {
   Users, Crown, Wallet, ChevronUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useFiresaleInterestQueue, useUpdateInterestStatus, type InterestStatus } from "@/hooks/useFiresaleInterest";
+import {
+  hasPriorityProof,
+  useFiresaleInterestQueue,
+  useUpdateInterestStatus,
+  type InterestStatus,
+} from "@/hooks/useFiresaleInterest";
 import { formatTimeAgo } from "@/lib/format";
 
 // ── Shared types & constants ──────────────────────────────────────────────────
@@ -49,11 +54,23 @@ function parseSellerResponse(notes: string | null): { response: string | null; c
 }
 
 const INTEREST_STATUS_CONFIG: Record<InterestStatus, { label: string; color: string }> = {
-  interested:  { label: "Interested",  color: "bg-primary/15 text-primary border-primary/20" },
-  shortlisted: { label: "Shortlisted", color: "bg-brand-gold/15 text-brand-gold border-brand-gold/20" },
-  engaged:     { label: "Engaged",     color: "bg-brand-emerald/15 text-brand-emerald border-brand-emerald/20" },
-  passed:      { label: "Passed",      color: "bg-muted text-muted-foreground border-border" },
+  interested:  { label: "Interested",   color: "bg-primary/15 text-primary border-primary/20" },
+  prioritized: { label: "Priority",     color: "bg-brand-gold/15 text-brand-gold border-brand-gold/20" },
+  reserved:    { label: "Reserved",     color: "bg-accent/15 text-accent border-accent/20" },
+  engaged:     { label: "Engaged",      color: "bg-brand-emerald/15 text-brand-emerald border-brand-emerald/20" },
+  won:         { label: "Won",          color: "bg-brand-emerald/15 text-brand-emerald border-brand-emerald/20" },
+  passed:      { label: "Passed",       color: "bg-muted text-muted-foreground border-border" },
+  expired:     { label: "Expired",      color: "bg-muted text-muted-foreground border-border" },
 };
+
+function formatReservationEnds(expiresAt: string | null) {
+  if (!expiresAt) return null;
+  const ms = new Date(expiresAt).getTime() - Date.now();
+  if (ms <= 0) return "expired";
+  const hours = Math.floor(ms / (1000 * 60 * 60));
+  const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
+  return `${hours}h ${minutes}m left`;
+}
 
 // ── InvestorQueue ─────────────────────────────────────────────────────────────
 
@@ -63,7 +80,10 @@ export function InvestorQueue({ dealId }: { dealId: string }) {
   const updateStatus = useUpdateInterestStatus();
 
   const total = queue.length;
-  const withPOF = queue.filter(e => e.proof_of_funds_url).length;
+  const withPOF = queue.filter((entry) => hasPriorityProof(entry)).length;
+  const activeReservationLabel = formatReservationEnds(
+    queue.find((entry) => entry.status === "reserved")?.reservation_expires_at ?? null,
+  );
 
   return (
     <div className="rounded-xl border border-border overflow-hidden">
@@ -85,6 +105,11 @@ export function InvestorQueue({ dealId }: { dealId: string }) {
 
       {open && (
         <div className="border-t border-border">
+          {activeReservationLabel && (
+            <div className="px-4 py-2 border-b border-border bg-accent/5 text-[10px] text-accent">
+              Active reservation window: {activeReservationLabel}
+            </div>
+          )}
           {isLoading ? (
             <div className="p-6 flex justify-center"><RefreshCw className="w-4 h-4 animate-spin text-muted-foreground" /></div>
           ) : queue.length === 0 ? (
@@ -103,7 +128,7 @@ export function InvestorQueue({ dealId }: { dealId: string }) {
                   const name = prof?.display_name ||
                     [prof?.first_name, prof?.last_name].filter(Boolean).join(" ") ||
                     "Investor";
-                  const hasPOF = !!entry.proof_of_funds_url;
+                  const hasPOF = hasPriorityProof(entry);
                   const cfg = INTEREST_STATUS_CONFIG[entry.status];
                   return (
                     <div key={entry.id} className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
@@ -131,7 +156,7 @@ export function InvestorQueue({ dealId }: { dealId: string }) {
                           <div className="flex items-center gap-2 mt-0.5">
                             {hasPOF ? (
                               <span className="flex items-center gap-1 text-[10px] text-emerald-600">
-                                <Wallet className="w-2.5 h-2.5" /> Funds verified
+                                <Wallet className="w-2.5 h-2.5" /> {entry.proof_of_funds_verified_at ? "Funds verified" : "Funds uploaded"}
                               </span>
                             ) : (
                               <span className="text-[10px] text-muted-foreground flex items-center gap-1">

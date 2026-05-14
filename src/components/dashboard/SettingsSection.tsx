@@ -28,7 +28,7 @@ export function SettingsSection({
   roleLabel: string;
   onUpdate: (updates: Record<string, unknown>) => Promise<{ error: Error | null }>;
   refreshProfile: () => Promise<void>;
-  currentType: ParticipantId;
+  currentType: ParticipantId | null;
   hasActiveSub: boolean;
 }) {
   const navigate = useNavigate();
@@ -101,7 +101,7 @@ export function SettingsSection({
     }
   };
 
-  const perm = ROLE_PERMISSIONS[currentType];
+  const perm = currentType ? ROLE_PERMISSIONS[currentType] : null;
 
   return (
     <div className="space-y-6 max-w-xl">

@@ -21,7 +21,7 @@ const SUPABASE_URL = process.env.VITE_SUPABASE_URL ?? "";
 const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "";
 
 // Two seeded demo users with known passwords.
-const USER_A_EMAIL = process.env.RLS_USER_A_EMAIL ?? "buyer.pro@maiprop.demo";
+const USER_A_EMAIL = process.env.RLS_USER_A_EMAIL ?? "buyer.free@maiprop.demo";
 const USER_B_EMAIL = process.env.RLS_USER_B_EMAIL ?? "seller.pro@maiprop.demo";
 const USER_PASSWORD = process.env.RLS_USER_PASSWORD ?? "Demo2025!";
 
