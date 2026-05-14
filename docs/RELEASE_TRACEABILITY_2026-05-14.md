@@ -45,6 +45,9 @@ and must remain mapped to this release branch:
   `20260514172000_admin_review_invitation_workflow` move Quick Sale invitation
   approval/rejection invariants out of the browser and into an admin-checked
   DB/edge workflow.
+- `20260514172151_admin_update_firesale_pipeline_workflow` is applied live and
+  moves Quick Sale admin pipeline updates plus investor publication controls
+  into admin-checked Postgres RPCs with row locking.
 
 ## Verification Commands
 

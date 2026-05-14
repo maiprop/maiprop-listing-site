@@ -8,7 +8,6 @@ import { RefreshCw, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { logger } from "@/lib/logger";
 import { toast } from "sonner";
 import { STATUS_CONFIG, type AdminDeal, AdminDealRow } from "@/components/admin/FiresaleComponents";
 
@@ -34,50 +33,22 @@ function useUpdateAdminDeal() {
       status,
       admin_notes,
       offerPrice,
-      deals,
     }: {
       id: string;
       status: string;
       admin_notes: string;
       offerPrice?: number;
-      deals: AdminDeal[];
     }) => {
-      const updates: Record<string, unknown> = { status, admin_notes };
-      if (offerPrice !== undefined) updates.offer_price = offerPrice;
-      const { error } = await supabase
-        .from("firesale_requests")
-        .update(updates as never)
-        .eq("id", id);
+      const { data, error } = await supabase.rpc("admin_update_firesale_pipeline_deal" as never, {
+        p_deal_id: id,
+        p_status: status,
+        p_admin_notes: admin_notes,
+        p_offer_price: offerPrice ?? null,
+      } as never);
       if (error) throw error;
 
-      if (status === "offer_sent") {
-        const deal = deals.find((d) => d.id === id);
-        const dealAddress = deal ? `${deal.address}, ${deal.city}` : "a distressed property";
-        const { data: investors, error: investorsError } = await supabase
-          .from("profiles")
-          .select("user_id")
-          .eq("investor_mode", true);
-
-        if (investorsError) {
-          logger.warn("Could not fetch investors for notification:", investorsError.message);
-          return { notified: 0 };
-        }
-
-        const investorCount = investors?.length ?? 0;
-        if (investorCount > 0) {
-          const notifications = investors.map((inv) => ({
-            user_id: inv.user_id,
-            title: "New Quick Sale Deal Available",
-            body: `A new distressed property at ${dealAddress} is available. Offer sent.`,
-            type: "investor_alert",
-            read: false,
-          }));
-          const { error: notifError } = await supabase.from("notifications").insert(notifications);
-          if (notifError) logger.warn("Could not insert investor notifications:", notifError.message);
-        }
-        return { notified: investorCount };
-      }
-      return { notified: 0 };
+      const result = Array.isArray(data) ? data[0] : data;
+      return { notified: Number((result as { notified?: number } | null)?.notified ?? 0) };
     },
     onSuccess: (result, { status }) => {
       qc.invalidateQueries({ queryKey: ["admin-firesale-deals"] });
@@ -97,7 +68,7 @@ export default function AdminFiresalePipeline() {
   const updateDeal = useUpdateAdminDeal();
 
   const handleAdminUpdate = async (id: string, status: string, admin_notes: string, offerPrice?: number) => {
-    updateDeal.mutate({ id, status, admin_notes, offerPrice, deals: adminDeals });
+    updateDeal.mutate({ id, status, admin_notes, offerPrice });
   };
 
   const adminStats = {
