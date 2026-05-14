@@ -67,4 +67,49 @@ describe("getOpenHouseApprovalBlockers", () => {
 
     expect(blockers).toEqual([]);
   });
+
+  it("does not require buyer screening questions below the high-value threshold", () => {
+    const blockers = getOpenHouseApprovalBlockers(
+      {
+        timeslot_index: 0,
+        id_doc_url: "docs/id.pdf",
+        id_verified_at: new Date().toISOString(),
+        waiver_signed_at: new Date().toISOString(),
+        proof_of_funds_url: "docs/pof.pdf",
+        proof_amount: 250000,
+        investor_declaration_signed_at: new Date().toISOString(),
+        mortgage_status: null,
+        budget_range: null,
+        working_with_agent: null,
+      },
+      baseSettings,
+      199999
+    );
+
+    expect(blockers).not.toContain("Mortgage/funds question missing");
+    expect(blockers).not.toContain("Budget range missing");
+    expect(blockers).not.toContain("Agent representation question missing");
+    expect(blockers).toEqual([]);
+  });
+
+  it("blocks approval when proof amount is below the seller minimum", () => {
+    const blockers = getOpenHouseApprovalBlockers(
+      {
+        timeslot_index: 0,
+        id_doc_url: "docs/id.pdf",
+        id_verified_at: new Date().toISOString(),
+        waiver_signed_at: new Date().toISOString(),
+        proof_of_funds_url: "docs/pof.pdf",
+        proof_amount: 150000,
+        investor_declaration_signed_at: new Date().toISOString(),
+        mortgage_status: "cash",
+        budget_range: "200k_500k",
+        working_with_agent: "no",
+      },
+      baseSettings,
+      350000
+    );
+
+    expect(blockers).toEqual(["Proof of funds is below the minimum 200,000"]);
+  });
 });

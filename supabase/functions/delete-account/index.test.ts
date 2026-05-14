@@ -24,6 +24,17 @@ Deno.test("fake Bearer token returns 401 (not 500)", async () => {
   assertEquals([401, 503].includes(res.status), true);
 });
 
+Deno.test("user-folder cleanup bucket allowlist covers only user-id-prefixed storage", () => {
+  assertEquals(USER_FOLDER_BUCKETS, [
+    "listing-images",
+    "avatars",
+    "project-media",
+    "message-attachments",
+    "open-house-docs",
+  ]);
+  assertEquals(USER_FOLDER_BUCKETS.includes("firesale-photos" as never), false);
+});
+
 Deno.test("storage cleanup includes open-house proof documents under the user folder", async () => {
   assert(USER_FOLDER_BUCKETS.includes("open-house-docs"));
 
@@ -78,6 +89,38 @@ Deno.test("storage cleanup includes open-house proof documents under the user fo
       bucket: "open-house-docs",
       paths: ["user-1/firesale/deal-1/proof.pdf"],
     },
+  ]);
+});
+
+Deno.test("recursive storage cleanup removes nested project and message files without deleting sibling prefixes", async () => {
+  const removed: Array<{ bucket: string; paths: string[] }> = [];
+  const entriesByPrefix = new Map<string, Array<{ id: string | null; name: string }>>([
+    ["user-2", [{ id: null, name: "child-a" }, { id: "root-file", name: "avatar.png" }]],
+    ["user-2/child-a", [{ id: null, name: "child-b" }, { id: "nested-file", name: "floorplan.pdf" }]],
+    ["user-2/child-a/child-b", [{ id: "deep-file", name: "contract.pdf" }]],
+  ]);
+
+  const supabase = {
+    storage: {
+      from: (bucket: string) => ({
+        list: (prefix: string) => Promise.resolve({
+          data: entriesByPrefix.get(prefix) ?? [],
+          error: null,
+        }),
+        remove: (paths: string[]) => {
+          removed.push({ bucket, paths });
+          return Promise.resolve({ error: null });
+        },
+      }),
+    },
+  };
+
+  await removeFolderRecursive(supabase, "project-media", "user-2");
+
+  assertEquals(removed, [
+    { bucket: "project-media", paths: ["user-2/avatar.png"] },
+    { bucket: "project-media", paths: ["user-2/child-a/floorplan.pdf"] },
+    { bucket: "project-media", paths: ["user-2/child-a/child-b/contract.pdf"] },
   ]);
 });
 

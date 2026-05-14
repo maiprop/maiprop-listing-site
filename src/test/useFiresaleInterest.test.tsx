@@ -69,17 +69,27 @@ describe("queue helpers", () => {
     expect(hasPriorityProof({ proof_of_funds_url: "proof.pdf", proof_amount: null, proof_of_funds_verified_at: null })).toBe(true);
     expect(isActiveReservation({ status: "reserved", reservation_expires_at: "2999-01-01T00:00:00.000Z" })).toBe(true);
     expect(isActiveReservation({ status: "reserved", reservation_expires_at: "2000-01-01T00:00:00.000Z" })).toBe(false);
+    expect(isActiveReservation({ status: "reserved", reservation_expires_at: null })).toBe(false);
+    expect(isActiveReservation({ status: "engaged", reservation_expires_at: null })).toBe(true);
+    expect(isActiveReservation({ status: "won", reservation_expires_at: "2000-01-01T00:00:00.000Z" })).toBe(true);
   });
 
-  it("sorts reserved first, then prioritized, then proof-backed interested rows", () => {
+  it("sorts active holds first, then prioritized, then proof-backed interested rows", () => {
     const rows = [
       { id: "late", status: "interested", proof_of_funds_url: null, proof_amount: null, proof_of_funds_verified_at: null, reservation_expires_at: null, created_at: "2026-01-03" },
       { id: "reserved", status: "reserved", proof_of_funds_url: null, proof_amount: null, proof_of_funds_verified_at: null, reservation_expires_at: "2999-01-01T00:00:00.000Z", created_at: "2026-01-04" },
+      { id: "expired-reservation", status: "reserved", proof_of_funds_url: null, proof_amount: null, proof_of_funds_verified_at: null, reservation_expires_at: "2000-01-01T00:00:00.000Z", created_at: "2026-01-05" },
       { id: "prio", status: "prioritized", proof_of_funds_url: "proof.pdf", proof_amount: 500000, proof_of_funds_verified_at: null, reservation_expires_at: null, created_at: "2026-01-02" },
       { id: "proof", status: "interested", proof_of_funds_url: "proof.pdf", proof_amount: 1000000, proof_of_funds_verified_at: null, reservation_expires_at: null, created_at: "2026-01-01" },
     ] as never[];
 
-    expect(sortFiresaleInterestQueue(rows).map((row) => row.id)).toEqual(["reserved", "prio", "proof", "late"]);
+    expect(sortFiresaleInterestQueue(rows).map((row) => row.id)).toEqual([
+      "reserved",
+      "prio",
+      "proof",
+      "late",
+      "expired-reservation",
+    ]);
   });
 });
 

@@ -176,8 +176,16 @@ jobs:
       - name: Build app
         run: npm run build
 
+      - name: Run authenticated performance gates
+        run: npm run test:perf
+        env:
+          CI: true
+          VITE_SUPABASE_URL: https://abcdefghijklmnop.supabase.co
+          VITE_SUPABASE_PUBLISHABLE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlhdCI6MTcwMDAwMDAwMCwiZXhwIjo5OTk5OTk5OTk5fQ.ci_placeholder_signature_not_real
+          VITE_SUPABASE_PROJECT_ID: abcdefghijklmnop
+
       - name: Run E2E smoke + auth tests
-        run: npx playwright test --project=chromium
+        run: npx playwright test --project=chromium --grep-invert @perf
         env:
           CI: true
           VITE_SUPABASE_URL: https://abcdefghijklmnop.supabase.co
@@ -455,11 +463,15 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [quality, release-safety]
     env:
-      # Keep Lighthouse builds on the same format-valid Supabase stubs used
-      # elsewhere in CI so route chunks that import the client never crash.
-      VITE_SUPABASE_URL: https://abcdefghijklmnop.supabase.co
-      VITE_SUPABASE_PUBLISHABLE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlhdCI6MTcwMDAwMDAwMCwiZXhwIjo5OTk5OTk5OTk5fQ.ci_placeholder_signature_not_real
-      VITE_SUPABASE_PROJECT_ID: abcdefghijklmnop
+      # Lighthouse audits protected app surfaces, so use staging Supabase and
+      # a seeded Pro seller account instead of measuring the login page.
+      VITE_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+      VITE_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+      LIGHTHOUSE_AUTH_EMAIL: ${{ secrets.E2E_SELLER_PRO_EMAIL }}
+      LIGHTHOUSE_AUTH_PASSWORD: ${{ secrets.E2E_SELLER_PRO_PASSWORD }}
+      LIGHTHOUSE_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+      LIGHTHOUSE_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -474,6 +486,28 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Validate Lighthouse authenticated audit secrets
+        run: |
+          required=(
+            "VITE_SUPABASE_URL"
+            "VITE_SUPABASE_PUBLISHABLE_KEY"
+            "VITE_SUPABASE_PROJECT_ID"
+            "LIGHTHOUSE_AUTH_EMAIL"
+            "LIGHTHOUSE_AUTH_PASSWORD"
+            "LIGHTHOUSE_ADMIN_EMAIL"
+            "LIGHTHOUSE_ADMIN_PASSWORD"
+          )
+          missing=0
+          for key in "${required[@]}"; do
+            if [ -z "${!key}" ]; then
+              echo "::error::Missing required Lighthouse secret: $key"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
 
       - name: Build app
         run: npm run build

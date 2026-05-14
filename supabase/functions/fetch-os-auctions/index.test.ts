@@ -22,6 +22,7 @@ const {
   getValidatedPagination,
   getRateLimitKey,
   mapAuction,
+  hasPortalProAccess,
 } = await import("./index.ts");
 
 Deno.test("buildFilterRequest forwards sort fields to OS", () => {
@@ -129,6 +130,61 @@ Deno.test("pagination validation rejects malformed page/pageSize", () => {
     page: 2,
     size: 10,
   });
+});
+
+function makeEntitlementClient(profile: Record<string, unknown>, pricingRow: Record<string, unknown> | null = null) {
+  return {
+    from(table: string) {
+      return {
+        select() {
+          return this;
+        },
+        eq() {
+          return this;
+        },
+        in() {
+          return this;
+        },
+        limit() {
+          return this;
+        },
+        single() {
+          if (table === "profiles") return Promise.resolve({ data: profile });
+          return Promise.resolve({ data: null });
+        },
+        maybeSingle() {
+          if (table === "pricing_configs") return Promise.resolve({ data: pricingRow });
+          return Promise.resolve({ data: null });
+        },
+      };
+    },
+  };
+}
+
+Deno.test("OS portal access rejects non-investor Stripe products", async () => {
+  const client = makeEntitlementClient({
+    role: "agent",
+    participant_type: "agent",
+    subscription_product_id: "prod_agent",
+    force_pro_access: false,
+  });
+
+  assertEquals(await hasPortalProAccess(client as never, "user-agent"), false);
+});
+
+Deno.test("OS portal access accepts only investor-scoped pricing products", async () => {
+  const client = makeEntitlementClient({
+    role: "investor",
+    participant_type: "investor",
+    subscription_product_id: "prod_investor",
+    force_pro_access: false,
+  }, {
+    key: "investor_private",
+    audience: "investor",
+    metadata: { stripe_product_id: "prod_investor" },
+  });
+
+  assertEquals(await hasPortalProAccess(client as never, "user-investor"), true);
 });
 
 restore();

@@ -114,6 +114,7 @@ export async function captureHandler(
     BREVO_FROM_EMAIL: "noreply@maiprop.test",
     SEND_EMAIL_HOOK_SECRET: "v1,whsec_test_hook_secret",
     STRIPE_SECRET_KEY: "sk_test_placeholder",
+    STRIPE_WEBHOOK_SECRET: "whsec_test_placeholder",
     MAIPROP_OS_URL: "https://os.test",
     MAIPROP_OS_EMAIL: "test@test.com",
     MAIPROP_OS_PASSWORD: "testpass",

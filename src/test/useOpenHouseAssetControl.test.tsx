@@ -302,6 +302,27 @@ describe("useUpdateOpenHouseRegistration", () => {
     expect(toastMock.success).toHaveBeenCalledWith("Updated");
   });
 
+  it("blocks requesters from self-verifying ID or marking attendance", async () => {
+    mockRegUpdate({
+      requester_id: "u-1",
+      status: "approved",
+      listings: { owner_id: "someone-else" },
+    });
+    const { result } = renderHookWithQuery(() => useUpdateOpenHouseRegistration());
+    await act(async () => {
+      await result.current
+        .mutateAsync({
+          id: "r-1",
+          updates: {
+            id_verified_at: "2026-01-01T10:00:00.000Z",
+            status: "attended",
+          },
+        })
+        .catch(() => {});
+    });
+    expect(toastMock.error).toHaveBeenCalledWith("Only the host can approve, reject, or mark attendance.");
+  });
+
   it("rejects when the caller is neither the requester nor the listing owner", async () => {
     mockRegUpdate({
       requester_id: "other-buyer",

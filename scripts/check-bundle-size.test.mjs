@@ -9,7 +9,7 @@
  * tests pin the fix against both old and new hash formats.
  */
 import { describe, it, expect } from "vitest";
-import { budgetKeyFor, BUDGETS_KB } from "./check-bundle-size.mjs";
+import { budgetKeyFor, BUDGETS_KB, forbiddenInitialPreloads, modulePreloadHrefs } from "./check-bundle-size.mjs";
 
 describe("budgetKeyFor — Vite 7 (base64url hash)", () => {
   // Real filenames from the April 2026 production build.
@@ -20,6 +20,17 @@ describe("budgetKeyFor — Vite 7 (base64url hash)", () => {
 
   it("maps vendor-charts-<base64>.js to 'vendor-charts'", () => {
     expect(budgetKeyFor("vendor-charts-DiLdui5R.js")).toBe("vendor-charts");
+  });
+
+  it("maps lazy chart auto-chunks to 'vendor-charts'", () => {
+    expect(budgetKeyFor("recharts-DiLdui5R.js")).toBe("vendor-charts");
+    expect(budgetKeyFor("d3-array-AbCdEf12.js")).toBe("vendor-charts");
+    expect(budgetKeyFor("BarChart-BJpoPrMY.js")).toBe("vendor-charts");
+  });
+
+  it("maps lazy Mapbox chunks to 'vendor-mapbox'", () => {
+    expect(budgetKeyFor("mapbox-gl-DOAvebQf.js")).toBe("vendor-mapbox");
+    expect(budgetKeyFor("react-map-gl-AbCdEf12.js")).toBe("vendor-mapbox");
   });
 
   it("maps named manual chunks with mixed-case hashes", () => {
@@ -41,7 +52,6 @@ describe("budgetKeyFor — Vite 7 (base64url hash)", () => {
   });
 
   it("falls through to '*' for unknown chunks", () => {
-    expect(budgetKeyFor("mapbox-gl-DOAvebQf.js")).toBe("*");
     expect(budgetKeyFor("some-third-party-AbCdEf12.js")).toBe("*");
   });
 });
@@ -83,5 +93,51 @@ describe("BUDGETS_KB invariants", () => {
 
   it("has an 'index' budget — the initial entry chunk cannot fall through", () => {
     expect(BUDGETS_KB["index"]).toBeTypeOf("number");
+  });
+
+  it("has explicit budgets for lazy Mapbox and chart chunks", () => {
+    expect(BUDGETS_KB["vendor-mapbox"]).toBeTypeOf("number");
+    expect(BUDGETS_KB["vendor-charts"]).toBeTypeOf("number");
+  });
+});
+
+describe("initial preload guards", () => {
+  it("extracts Vite modulepreload hrefs from index.html", () => {
+    const html = `
+      <link rel="modulepreload" crossorigin href="/assets/vendor-react-AbCdEf12.js">
+      <link crossorigin href="/assets/not-a-preload-AbCdEf12.js">
+      <link href="/assets/index-AbCdEf12.js" rel="modulepreload">
+    `;
+
+    expect(modulePreloadHrefs(html)).toEqual([
+      "/assets/vendor-react-AbCdEf12.js",
+      "/assets/index-AbCdEf12.js",
+    ]);
+  });
+
+  it("flags chart and map chunks that leak into initial modulepreloads", () => {
+    const html = `
+      <link rel="modulepreload" href="/assets/recharts-DiLdui5R.js">
+      <link rel="modulepreload" href="/assets/LazyRecharts-DncSVfaD.js">
+      <link rel="modulepreload" href="/assets/d3-array-AbCdEf12.js">
+      <link rel="modulepreload" href="/assets/mapbox-gl-DOAvebQf.js">
+      <link rel="modulepreload" href="/assets/vendor-react-AbCdEf12.js">
+    `;
+
+    expect(forbiddenInitialPreloads(html)).toEqual([
+      "/assets/recharts-DiLdui5R.js",
+      "/assets/LazyRecharts-DncSVfaD.js",
+      "/assets/d3-array-AbCdEf12.js",
+      "/assets/mapbox-gl-DOAvebQf.js",
+    ]);
+  });
+
+  it("allows chart and map chunks to exist when they are not initial preloads", () => {
+    const html = `
+      <script type="module" crossorigin src="/assets/index-AbCdEf12.js"></script>
+      <link rel="modulepreload" href="/assets/vendor-react-AbCdEf12.js">
+    `;
+
+    expect(forbiddenInitialPreloads(html)).toEqual([]);
   });
 });

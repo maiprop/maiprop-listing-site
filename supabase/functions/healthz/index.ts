@@ -3,7 +3,7 @@ import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { jsonResponse } from "../_shared/response.ts";
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return handleCors(req);
+  if (req.method === "OPTIONS") return handleCors(req) ?? new Response("ok");
   const headers = getCorsHeaders(req);
 
   const checks: Record<string, "ok" | "fail"> = {};
@@ -28,11 +28,16 @@ Deno.serve(async (req) => {
   checks.env_vars = missingEnvs.length === 0 ? "ok" : "fail";
   if (checks.env_vars === "fail") allOk = false;
 
-  // 3. Optional integrations (report status but don't fail health check)
+  // 3. Integrations. Billing is a release-critical dependency: a missing
+  // Stripe secret should degrade health instead of hiding behind "healthy".
   checks.openai = Deno.env.get("OPENAI_API_KEY") ? "ok" : "fail";
-  checks.stripe = Deno.env.get("STRIPE_SECRET_KEY") ? "ok" : "fail";
+  checks.stripe = Deno.env.get("STRIPE_SECRET_KEY") &&
+      Deno.env.get("STRIPE_WEBHOOK_SECRET")
+    ? "ok"
+    : "fail";
   checks.sentry = Deno.env.get("SENTRY_DSN") ? "ok" : "fail";
   checks.brevo = Deno.env.get("BREVO_API_KEY") ? "ok" : "fail";
+  if (checks.stripe === "fail") allOk = false;
 
   const status = allOk ? 200 : 503;
   return jsonResponse(

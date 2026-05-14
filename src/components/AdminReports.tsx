@@ -5,7 +5,7 @@
  * Tab 2: Content Reports  — listing_reports table with status filter & resolve action.
  */
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import {
   Building2, Users, Flame, DoorOpen, Flag, ExternalLink,
   Download, Loader2, CheckCircle, TrendingUp,
@@ -16,8 +16,8 @@ import { Button } from "@/components/ui/button";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-} from "recharts";
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ChartFallback,
+} from "@/components/charts/LazyRecharts";
 
 // ── Types ─────────────────────────────────────────────────────────────────────────
 type ReportStatus = "pending" | "resolved";
@@ -236,8 +236,9 @@ function PlatformOverviewTab() {
           </Button>
         </div>
         {s.monthlyListings.some((m) => m.count > 0) ? (
-          <ResponsiveContainer width="100%" height={180}>
-            <BarChart data={s.monthlyListings} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+          <Suspense fallback={<ChartFallback height={180} />}>
+            <ResponsiveContainer width="100%" height={180}>
+              <BarChart data={s.monthlyListings} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
               <XAxis
                 dataKey="label"
                 tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
@@ -260,8 +261,9 @@ function PlatformOverviewTab() {
                 labelStyle={{ color: "hsl(var(--foreground))" }}
               />
               <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} opacity={0.85} />
-            </BarChart>
-          </ResponsiveContainer>
+              </BarChart>
+            </ResponsiveContainer>
+          </Suspense>
         ) : (
           <p className="text-sm text-muted-foreground text-center py-6">No listings created in the last 6 months.</p>
         )}

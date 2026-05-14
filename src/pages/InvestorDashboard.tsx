@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
+import { profileRoleSwitchInProgress, useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { isPlatformAdmin } from "@/lib/authUtils";
 import { formatTimeAgo } from "@/lib/format";
@@ -171,7 +171,10 @@ export default function InvestorDashboard() {
   const invitationStatus = (invitationStatusRow ?? "none") as "none" | "pending" | "approved" | "rejected";
 
   const subscribed = subscription?.status === "active" || subscription?.status === "trial";
-  const canAccessDealFlow = isPlatformAdmin(profile) || subscribed;
+  const isInvestorDealFlowRole =
+    !profileRoleSwitchInProgress(profile) &&
+    (profile?.role === "investor" || profile?.role === "institutional");
+  const canAccessDealFlow = isPlatformAdmin(profile) || (isInvestorDealFlowRole && subscribed);
   const [showInvitationModal, setShowInvitationModal] = useState(false);
 
   const daysLeft = daysUntilExpiry(subscription?.expires_at ?? null);

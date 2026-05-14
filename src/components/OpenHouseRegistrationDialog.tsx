@@ -240,7 +240,7 @@ export default function OpenHouseRegistrationDialog({
       const storedPath = await uploadOpenHouseDoc(idDocFile, path);
       await updateReg.mutateAsync({
         id: regId,
-        updates: { id_doc_type: idDocType, id_doc_url: storedPath, id_verified_at: new Date().toISOString() },
+        updates: { id_doc_type: idDocType, id_doc_url: storedPath },
       });
       setStep("waiver");
     } catch (e: unknown) {

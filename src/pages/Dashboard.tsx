@@ -390,12 +390,12 @@ export default function Dashboard() {
                       <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Flame className="w-4 h-4 text-destructive" /> Quick Sale™ Access</h2>
                       <p className="text-sm text-muted-foreground mb-3">
                         {invitationRequestStatus === "pending" && "Your application for Quick Sale™ deal access is under review. We'll notify you within 48 hours."}
-                        {invitationRequestStatus === "approved" && "You have access to the Quick Sale™ deal flow. View exclusive off-market opportunities."}
+                        {invitationRequestStatus === "approved" && "Your Quick Sale™ application is approved. Complete payment to activate deal-flow access."}
                         {invitationRequestStatus === "rejected" && "Your application was not approved. You may browse auctions and saved searches."}
                         {invitationRequestStatus === "none" && "Apply for access to exclusive Quick Sale™ deals. Invitation-only."}
                       </p>
                       {invitationRequestStatus === "approved" ? (
-                        <Button size="sm" className="bg-gradient-gold border-0 text-background" asChild><Link to="/investor-dashboard">Open Deal Flow</Link></Button>
+                        <Button size="sm" className="bg-gradient-gold border-0 text-background" asChild><Link to="/pricing">View Investor Plans</Link></Button>
                       ) : invitationRequestStatus === "none" ? (
                         <Button variant="outline" size="sm" className="border-destructive/40 text-destructive" asChild><Link to="/investor-dashboard">Apply for Access</Link></Button>
                       ) : null}

@@ -29,6 +29,7 @@ type SyncResult = {
 type PricingConfigRow = {
   id: string;
   key: string;
+  audience?: string | null;
   amount: number | string;
   currency?: string | null;
   unit?: string | null;
@@ -36,6 +37,44 @@ type PricingConfigRow = {
   description?: string | null;
   metadata?: Record<string, string> | null;
 };
+
+function normalizeAudience(raw: string | null | undefined): string | null {
+  if (raw === "buyer" || raw === "seller" || raw === "participant" || raw === "pro") return "participant";
+  if (raw === "agent" || raw === "developer" || raw === "professional" || raw === "investor" || raw === "institutional") {
+    return raw;
+  }
+  return null;
+}
+
+function entitlementMetadata(config: PricingConfigRow): Record<string, string> {
+  const audience = normalizeAudience(config.audience) ?? config.audience ?? "participant";
+  return {
+    pricing_config_key: config.key,
+    pricing_config_id: config.id,
+    plan_key: config.key,
+    audience,
+    role: audience,
+    entitlement_role: audience,
+  };
+}
+
+async function registerProProduct(
+  supabase: unknown,
+  productId: string | undefined,
+  config: PricingConfigRow,
+) {
+  if (!productId) return;
+  const audience = normalizeAudience(config.audience) ?? config.audience ?? "participant";
+  const unit = config.unit ?? "monthly";
+  if (!["participant", "agent", "developer", "professional"].includes(audience) ||
+    !["monthly", "yearly"].includes(unit)) {
+    return;
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await ((supabase as { from: any }).from as any)("pro_product_ids")
+    .upsert({ product_id: productId }, { onConflict: "product_id" });
+  if (error) throw new Error("Failed to register Pro product: " + error.message);
+}
 
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -87,6 +126,7 @@ Deno.serve(async (req) => {
       const existingPriceId = meta.stripe_price_id;
       const existingAmount = Number(meta.stripe_last_amount ?? -1);
       const existingLabel = meta.stripe_last_label ?? "";
+      const existingAudience = meta.stripe_last_audience ?? "";
 
       const amount = Math.round(Number(config.amount) * 100); // cents
       const currency = (config.currency ?? "EUR").toLowerCase();
@@ -95,6 +135,7 @@ Deno.serve(async (req) => {
       const interval = unit === "yearly" ? "year" : "month";
       const productName = config.label || config.key;
       const productDesc = config.description ?? undefined;
+      const entitlementMeta = entitlementMetadata(config);
 
       const result: SyncResult = { id: config.id, key: config.key, action: "no_change" };
 
@@ -108,7 +149,7 @@ Deno.serve(async (req) => {
           const product = await stripe.products.create({
             name: productName,
             ...(productDesc && { description: productDesc }),
-            metadata: { pricing_config_key: config.key, pricing_config_id: config.id },
+            metadata: entitlementMeta,
           });
           productId = product.id;
           newMeta.stripe_product_id = productId;
@@ -118,7 +159,11 @@ Deno.serve(async (req) => {
           await stripe.products.update(productId, {
             name: productName,
             ...(productDesc && { description: productDesc }),
+            metadata: entitlementMeta,
           });
+          result.action = "product_updated";
+        } else if (existingAudience !== entitlementMeta.audience) {
+          await stripe.products.update(productId, { metadata: entitlementMeta });
           result.action = "product_updated";
         }
 
@@ -128,7 +173,7 @@ Deno.serve(async (req) => {
             product: productId!,
             currency,
             unit_amount: amount,
-            metadata: { pricing_config_key: config.key, pricing_config_id: config.id },
+            metadata: entitlementMeta,
           };
           if (isRecurring) priceParams.recurring = { interval };
           const price = await stripe.prices.create(priceParams);
@@ -136,6 +181,7 @@ Deno.serve(async (req) => {
           newMeta.stripe_price_id = priceId;
           newMeta.stripe_last_amount = String(config.amount);
           newMeta.stripe_last_label = productName;
+          newMeta.stripe_last_audience = entitlementMeta.audience;
           result.action = "created";
         } else if (amount !== existingAmount) {
           // ── Amount changed: archive old price, create new ────────────────
@@ -145,7 +191,7 @@ Deno.serve(async (req) => {
             product: productId!,
             currency,
             unit_amount: amount,
-            metadata: { pricing_config_key: config.key, pricing_config_id: config.id },
+            metadata: entitlementMeta,
           };
           if (isRecurring) priceParams.recurring = { interval };
           const newPrice = await stripe.prices.create(priceParams);
@@ -153,9 +199,14 @@ Deno.serve(async (req) => {
           newMeta.stripe_price_id = priceId;
           newMeta.stripe_last_amount = String(config.amount);
           newMeta.stripe_last_label = productName;
+          newMeta.stripe_last_audience = entitlementMeta.audience;
           result.action = "price_updated";
         } else if (productName !== existingLabel) {
           newMeta.stripe_last_label = productName;
+          result.action = "product_updated";
+        } else if (existingAudience !== entitlementMeta.audience) {
+          await stripe.prices.update(priceId, { metadata: entitlementMeta });
+          newMeta.stripe_last_audience = entitlementMeta.audience;
           result.action = "product_updated";
         }
 
@@ -166,6 +217,8 @@ Deno.serve(async (req) => {
             .update({ metadata: newMeta, updated_at: new Date().toISOString() })
             .eq("id", config.id);
         }
+
+        await registerProProduct(supabase, productId, config);
 
         result.price_id = priceId;
         result.product_id = productId;

@@ -71,8 +71,8 @@ describe("PropertyMiniMap", () => {
   it("renders the Mapbox map + property marker when lat/lng + token + user are present", async () => {
     invokeMock.mockResolvedValue({ data: { pois: [] } });
     render(<PropertyMiniMap {...baseProps} />);
-    expect(screen.getByTestId("mapbox-map")).toBeInTheDocument();
-    expect(screen.getAllByTestId("mapbox-marker").length).toBeGreaterThan(0);
+    expect(await screen.findByTestId("mapbox-map")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByTestId("mapbox-marker").length).toBeGreaterThan(0));
     // Wait for the auto-fetch to settle so subsequent assertions are stable.
     await waitFor(() => expect(invokeMock).toHaveBeenCalled());
   });

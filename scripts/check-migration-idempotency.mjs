@@ -278,6 +278,33 @@ export function loadAppliedFutureVersions(file = APPLIED_FUTURE_MIGRATIONS_FILE)
 }
 
 /**
+ * Every live-applied future migration that is allowlisted must still have a
+ * source-controlled SQL file. The allowlist explains chronology; it is not a
+ * substitute for release traceability.
+ *
+ * @param {string[]} files Basenames or paths to migration files.
+ * @param {string[]} appliedFutureVersions
+ * @returns {Violation[]}
+ */
+export function lintAppliedFutureSources(files, appliedFutureVersions = []) {
+  const present = new Set(
+    files
+      .filter((f) => f.endsWith(".sql"))
+      .map((f) => /^(\d{14})_/.exec(basename(f))?.[1])
+      .filter(Boolean),
+  );
+
+  return appliedFutureVersions
+    .filter((version) => !present.has(version))
+    .map((version) => ({
+      file: APPLIED_FUTURE_MIGRATIONS_FILE,
+      line: 1,
+      rule: `Applied future migration ${version} has no source SQL file`,
+      snippet: `Add supabase/migrations/${version}_<description>.sql or remove the version from the allowlist after proving it is not applied remotely.`,
+    }));
+}
+
+/**
  * Programmatic entry point — exported for tests.
  * @returns {{ scanned: number; violations: Violation[]; chronologyViolations: Violation[] }}
  */
@@ -300,14 +327,28 @@ export function run({
   const chronologyViolations = checkChronology
     ? lintMigrationChronology(allFiles, { now, appliedFutureVersions })
     : [];
-  return { scanned: files.length, violations, chronologyViolations };
+  const appliedFutureSourceViolations = checkChronology
+    ? lintAppliedFutureSources(allFiles, appliedFutureVersions)
+    : [];
+  return {
+    scanned: files.length,
+    violations,
+    chronologyViolations,
+    appliedFutureSourceViolations,
+  };
 }
 
 // CLI entry — only when invoked directly, not on import.
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   const checkChronology = process.argv.includes("--check-chronology");
-  const { scanned, violations, chronologyViolations } = run({ checkChronology });
-  const allViolations = [...chronologyViolations, ...violations];
+  const { scanned, violations, chronologyViolations, appliedFutureSourceViolations } = run({
+    checkChronology,
+  });
+  const allViolations = [
+    ...chronologyViolations,
+    ...appliedFutureSourceViolations,
+    ...violations,
+  ];
   if (allViolations.length === 0) {
     console.log(
       `[migration-idempotency] OK — ${scanned} new migration(s) inspected, no violations.`,

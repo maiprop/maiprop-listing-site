@@ -18,8 +18,11 @@ type DealRow = {
 let feedRows: DealRow[] = [];
 let feedError: Error | null = null;
 const expressInterestMock = vi.fn().mockResolvedValue({});
+let authProfile: Record<string, unknown> = { id: "profile-1", role: "admin", participant_type: "investor" };
+let queriedTables: string[] = [];
 
 function makeQuery(table: string) {
+  queriedTables.push(table);
   const query = {
     select: vi.fn(() => query),
     eq: vi.fn(() => query),
@@ -61,9 +64,11 @@ vi.mock("@/integrations/supabase/client", () => ({
 }));
 
 vi.mock("@/contexts/AuthContext", () => ({
+  profileRoleSwitchInProgress: (profile: { role_switch_in_progress_at?: string | null } | null) =>
+    Boolean(profile?.role_switch_in_progress_at),
   useAuth: () => ({
     user: { id: "user-1", email: "investor.private@maiprop.demo" },
-    profile: { id: "profile-1", role: "admin", participant_type: "investor" },
+    profile: authProfile,
   }),
 }));
 
@@ -138,6 +143,8 @@ describe("InvestorDashboard behavior", () => {
   beforeEach(() => {
     feedRows = defaultRows;
     feedError = null;
+    authProfile = { id: "profile-1", role: "admin", participant_type: "investor" };
+    queriedTables = [];
     expressInterestMock.mockClear();
   });
 
@@ -165,6 +172,17 @@ describe("InvestorDashboard behavior", () => {
     expect(errorState).toHaveTextContent("We could not refresh the investor deal feed");
     expect(errorState).not.toHaveTextContent("permission denied");
     expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
+  });
+
+  it("does not load paid investor deal flow for a non-investor subscribed profile", async () => {
+    authProfile = { id: "profile-1", role: "developer", participant_type: "developer" };
+
+    renderWithProviders(<InvestorDashboard />);
+
+    await screen.findByTestId("investor-dashboard");
+    await waitFor(() => expect(queriedTables).toContain("investor_subscriptions"));
+    expect(queriedTables).not.toContain("firesale_requests_investor_feed");
+    expect(queriedTables).not.toContain("firesale_requests");
   });
 
   it("labels the express-interest dialog fields and restores focus on close", async () => {

@@ -26,8 +26,8 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { PropertyReportCard } from "@/components/property/PropertyReportCard";
 import { PropertyAuctionSection } from "@/components/property/PropertyAuctionSection";
 import { toast } from "sonner";
-import PropertyMiniMap from "@/components/PropertyMiniMap";
 import PropertyValuation from "@/components/PropertyValuation";
+const PropertyMiniMap = lazy(() => import("@/components/PropertyMiniMap"));
 const NeighbourhoodReport = lazy(() => import("@/components/NeighbourhoodReport"));
 import { buildPropertyFeatureGroups, buildDetailRows } from "@/lib/propertyFeatures";
 const AIAssistantWidget = lazy(() => import("@/components/AIAssistantWidget"));
@@ -384,13 +384,15 @@ export default function PropertyDetail() {
 
               {/* ── Mini map ── */}
               <div className="rounded-2xl overflow-hidden">
-                <PropertyMiniMap
-                  latitude={db?.latitude}
-                  longitude={db?.longitude}
-                  address={address}
-                  city={city}
-                  title={title}
-                  onWalkScoreChange={setWalkScore} />
+                <Suspense fallback={<div className="h-96 bg-muted animate-pulse rounded-2xl" />}>
+                  <PropertyMiniMap
+                    latitude={db?.latitude}
+                    longitude={db?.longitude}
+                    address={address}
+                    city={city}
+                    title={title}
+                    onWalkScoreChange={setWalkScore} />
+                </Suspense>
               </div>
 
               {/* ── Neighbourhood Report — sign-in only ── */}

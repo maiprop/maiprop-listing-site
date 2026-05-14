@@ -124,6 +124,10 @@ Rotation cadence for each is documented in [`SECRETS_ROTATION.md`](./SECRETS_ROT
 
 Under Settings → Secrets and variables → Actions:
 
+GitHub Actions also sets `CI=true` automatically. Playwright uses this to run
+against the production preview server on port `4173` and to enable stricter
+fail-fast behavior.
+
 | Secret | Purpose | Scope |
 |---|---|---|
 | `E2E_TEST_EMAIL` | auth E2E spec sign-in | repo or `production` env |

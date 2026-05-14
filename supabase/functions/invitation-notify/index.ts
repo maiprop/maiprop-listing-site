@@ -1,4 +1,4 @@
-import { createClient } from "npm:@supabase/supabase-js@2.57.2";
+﻿import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { getBrevoSender, sendBrevoEmail } from "../_shared/brevo.ts";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { createLogger } from "../_shared/logger.ts";
@@ -70,7 +70,7 @@ Deno.serve(async (req) => {
     let html: string;
 
     if (type === "approved") {
-      subject = "🎉 Your MaiProp Deal Flow access has been approved";
+      subject = "Your MaiProp Deal Flow application has been approved";
       html = `
 <!DOCTYPE html>
 <html>
@@ -90,7 +90,7 @@ Deno.serve(async (req) => {
         <tr>
           <td style="background:#f8f9fb;border:1px solid #e5e7eb;border-top:0;border-radius:0 0 16px 16px;padding:40px;">
             <p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#0a0e1a;">Congratulations, ${firstName}!</p>
-            <p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6;">Your invitation request to MaiProp's exclusive Deal Flow has been <strong style="color:#10b981;">approved</strong>. You now have full access to our curated off-market deal pipeline.</p>
+            <p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6;">Your invitation request to MaiProp's exclusive Deal Flow has been <strong style="color:#10b981;">approved</strong>. Complete the payment step to activate access to the curated off-market deal pipeline.</p>
 
             ${
               tier
@@ -104,7 +104,7 @@ Deno.serve(async (req) => {
             }
 
             <div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:12px;padding:20px 24px;margin:0 0 32px;">
-              <p style="margin:0 0 12px;font-size:13px;font-weight:600;color:#065f46;">What's included:</p>
+              <p style="margin:0 0 12px;font-size:13px;font-weight:600;color:#065f46;">After payment, your plan includes:</p>
               <ul style="margin:0;padding-left:18px;color:#047857;font-size:13px;line-height:1.8;">
                 <li>Access to off-market distressed assets</li>
                 <li>AI-powered deal scoring and valuation</li>
@@ -115,14 +115,14 @@ Deno.serve(async (req) => {
 
             <table width="100%" cellpadding="0" cellspacing="0">
               <tr><td align="center">
-                <a href="${appUrl}/firesale" style="display:inline-block;background:#0a0e1a;color:#d4af37;text-decoration:none;font-size:14px;font-weight:700;padding:14px 36px;border-radius:10px;letter-spacing:0.5px;">
-                  View Deal Flow →
+                <a href="${appUrl}pricing" style="display:inline-block;background:#0a0e1a;color:#d4af37;text-decoration:none;font-size:14px;font-weight:700;padding:14px 36px;border-radius:10px;letter-spacing:0.5px;">
+                  Complete Payment
                 </a>
               </td></tr>
             </table>
 
             <p style="margin:32px 0 0;font-size:12px;color:#9ca3af;text-align:center;">
-              Your 1-year access is now active. Questions? Contact us at <a href="mailto:kr@maiprop.co" style="color:#d4af37;">kr@maiprop.co</a>
+              Approval does not activate access until payment is confirmed. Questions? Contact us at <a href="mailto:kr@maiprop.co" style="color:#d4af37;">kr@maiprop.co</a>
             </p>
           </td>
         </tr>

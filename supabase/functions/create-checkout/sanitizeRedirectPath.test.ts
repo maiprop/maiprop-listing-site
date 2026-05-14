@@ -8,7 +8,11 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   isInviteOnlyCheckoutPlan,
+  isCheckoutAudienceAllowed,
   isSupportedCheckoutPlan,
+  getStripePriceEnvKey,
+  getStripePriceEnvKeys,
+  normalizeBillingCycle,
   normalizePlanKey,
   resolveCheckoutOrigin,
   sanitizeRedirectPath,
@@ -81,6 +85,34 @@ Deno.test("normalizePlanKey: defaults to pro and rejects malformed keys", () => 
   assertEquals(normalizePlanKey("https://evil.test"), null);
 });
 
+Deno.test("normalizeBillingCycle: defaults monthly and accepts annual aliases", () => {
+  assertEquals(normalizeBillingCycle(undefined), "monthly");
+  assertEquals(normalizeBillingCycle(""), "monthly");
+  assertEquals(normalizeBillingCycle("monthly"), "monthly");
+  assertEquals(normalizeBillingCycle("month"), "monthly");
+  assertEquals(normalizeBillingCycle("annual"), "annual");
+  assertEquals(normalizeBillingCycle("yearly"), "annual");
+  assertEquals(normalizeBillingCycle("weekly"), null);
+});
+
+Deno.test("getStripePriceEnvKey: separates monthly and annual price ids", () => {
+  assertEquals(getStripePriceEnvKey("developer_pro", "monthly"), "STRIPE_PRICE_DEVELOPER_PRO_MONTHLY");
+  assertEquals(getStripePriceEnvKey("developer_pro", "annual"), "STRIPE_PRICE_DEVELOPER_PRO_ANNUAL");
+});
+
+Deno.test("getStripePriceEnvKeys: supports role-audience annual secret aliases", () => {
+  assertEquals(getStripePriceEnvKeys("agent_basic", "annual"), [
+    "STRIPE_PRICE_AGENT_ANNUAL",
+    "STRIPE_PRICE_AGENT_BASIC_ANNUAL",
+    "STRIPE_PRICE_AGENT_BASIC_YEARLY",
+  ]);
+  assertEquals(getStripePriceEnvKeys("developer_pro", "monthly"), [
+    "STRIPE_PRICE_DEVELOPER_MONTHLY",
+    "STRIPE_PRICE_DEVELOPER_PRO_MONTHLY",
+    "STRIPE_PRICE_DEVELOPER_PRO",
+  ]);
+});
+
 Deno.test("isInviteOnlyCheckoutPlan: blocks direct checkout for investor plans", () => {
   assertEquals(isInviteOnlyCheckoutPlan("investor_private"), true);
   assertEquals(isInviteOnlyCheckoutPlan("investor_institutional"), true);
@@ -94,6 +126,25 @@ Deno.test("isSupportedCheckoutPlan: rejects unknown syntactically valid keys", (
   assertEquals(isSupportedCheckoutPlan("professional_basic"), true);
   assertEquals(isSupportedCheckoutPlan("valuation_single"), false);
   assertEquals(isSupportedCheckoutPlan("made_up_valid_key"), false);
+});
+
+Deno.test("isCheckoutAudienceAllowed: blocks cross-role plan use", () => {
+  assertEquals(
+    isCheckoutAudienceAllowed("developer", { role: "agent", participant_type: "agent" }),
+    false,
+  );
+  assertEquals(
+    isCheckoutAudienceAllowed("developer", { role: "developer", participant_type: "developer" }),
+    true,
+  );
+  assertEquals(
+    isCheckoutAudienceAllowed("participant", { role: "buyer", participant_type: "buyer" }),
+    true,
+  );
+  assertEquals(
+    isCheckoutAudienceAllowed("participant", { role: "seller", participant_type: "seller" }),
+    true,
+  );
 });
 
 Deno.test("resolveCheckoutOrigin: allows known origins and rejects attacker origins", () => {

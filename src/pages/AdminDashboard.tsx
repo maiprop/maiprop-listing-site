@@ -3,7 +3,7 @@
  * Accessible only at /admin, protected by AdminRoute.
  */
 
-import { useState, useEffect } from "react";
+import { lazy, Suspense, useState, useEffect } from "react";
 import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import { Shield, Flame, Users, Wifi, SlidersHorizontal, ArrowLeft, DoorOpen, FolderKanban, MailPlus, FileText, Star, BadgeCheck, Wallet } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
@@ -14,7 +14,6 @@ import AdminSubscribers from "@/components/AdminSubscribers";
 import AdminPanel from "@/components/AdminPanel";
 import { AdminPricingContent } from "@/pages/AdminPricing";
 import OpenHouseDashboardSection from "@/components/OpenHouseDashboardSection";
-import AdminReports from "@/components/AdminReports";
 import AdminInvitationRequests from "@/components/AdminInvitationRequests";
 import AdminFeaturedListings from "@/components/AdminFeaturedListings";
 import { AdminProfessionalVerification } from "@/components/AdminProfessionalVerification";
@@ -25,6 +24,15 @@ import { Button } from "@/components/ui/button";
 type AdminTab = "pipeline" | "investor-screening" | "subscribers" | "pricing" | "os-sync" | "open-houses" | "reports" | "invitations" | "featured" | "pro-verification" | "pof-review";
 
 const VALID_TABS = ["pipeline", "investor-screening", "subscribers", "pricing", "os-sync", "open-houses", "reports", "invitations", "featured", "pro-verification", "pof-review"];
+const AdminReports = lazy(() => import("@/components/AdminReports"));
+
+function AdminTabFallback() {
+  return (
+    <div className="rounded-lg border border-border bg-card p-8 text-sm text-muted-foreground">
+      Loading...
+    </div>
+  );
+}
 
 export default function AdminDashboard() {
   const [searchParams] = useSearchParams();
@@ -115,7 +123,11 @@ export default function AdminDashboard() {
           {activeTab === "pricing" && <AdminPricingContent embed />}
           {activeTab === "os-sync" && <AdminPanel />}
           {activeTab === "invitations" && <AdminInvitationRequests />}
-          {activeTab === "reports" && <AdminReports />}
+          {activeTab === "reports" && (
+            <Suspense fallback={<AdminTabFallback />}>
+              <AdminReports />
+            </Suspense>
+          )}
           {activeTab === "featured" && <AdminFeaturedListings />}
           {activeTab === "pro-verification" && <AdminProfessionalVerification />}
           {activeTab === "pof-review" && <POFVerificationPanel />}

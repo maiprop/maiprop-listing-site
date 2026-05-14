@@ -1,6 +1,7 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { isPlatformAdmin } from "@/lib/authUtils";
-import { getExplicitParticipantTypeFromProfile } from "@/lib/participantConfig";
+import { getExplicitParticipantTypeFromProfile, getPricingAudienceFromProfile } from "@/lib/participantConfig";
+import { isSubscriptionAudienceAllowed } from "@/lib/subscriptionUtils";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -36,26 +37,15 @@ const useInvestorProStatus = (userId: string | undefined, enabled: boolean) => {
   });
 };
 
-const useValidatedProProduct = (productId: string | null) => {
-  return useQuery({
-    queryKey: ["validated-pro-product", productId],
-    queryFn: async () => {
-      if (!productId) return null;
-      const { data } = await supabase
-        .from("pro_product_ids")
-        .select("product_id")
-        .eq("product_id", productId)
-        .maybeSingle();
-      return data;
-    },
-    enabled: Boolean(productId),
-    staleTime: 60_000,
-  });
-};
-
 const isActiveInvestorStatus = (status: string | undefined) => status === "active" || status === "trial";
 const hasAnyProAccess = (flags: boolean[]) => flags.includes(true);
 type SubscriptionAccessSource = "admin" | "stripe" | "investor" | "override" | "free";
+type PricingEntitlementRow = {
+  key?: string | null;
+  audience?: string | null;
+  metadata?: { stripe_product_id?: string | null } | null;
+};
+
 const isLoadingSubscriptionAccess = (options: {
   subscriptionLoading: boolean;
   investorLoading: boolean;
@@ -68,25 +58,33 @@ const isLoadingSubscriptionAccess = (options: {
   [options.subscribed, options.hasEffectiveProduct, options.proProductLoading].every(Boolean)
 );
 
+const getCurrentPricingAudience = (profile: ReturnType<typeof useAuth>["profile"]) =>
+  profileRoleSwitchInProgress(profile) ? null : getPricingAudienceFromProfile(profile);
+
 /**
  * Thin wrapper around AuthContext.subscription.
  *
  * Platform admins get Pro access through DB role checks. Stripe subscription
- * access is validated against the server-maintained pro_product_ids table.
+ * access is validated against DB pricing_configs metadata and must match the
+ * current role/audience to prevent cross-role entitlement reuse.
  */
 export const useSubscription = () => {
   const { subscription, refreshSubscription, profile, user } = useAuth();
   const { productId: profileProductId, forceProAccess } = getProfileSubscriptionFields(profile);
   const isAdmin = isPlatformAdmin(profile);
   const isInvestorRole = isInvestorParticipant(profile);
+  const currentAudience = getCurrentPricingAudience(profile);
   const effectiveProductId = subscription.productId ?? profileProductId;
   const hasEffectiveProduct = typeof effectiveProductId === "string" && effectiveProductId.length > 0;
-  const { data: validatedProProduct, isLoading: validatedProProductLoading } = useValidatedProProduct(effectiveProductId);
+  const { data: validatedProProduct, isLoading: validatedProProductLoading } = useValidatedProProduct(
+    effectiveProductId,
+    currentAudience,
+  );
   const { data: investorSubStatus, isLoading: investorStatusLoading } = useInvestorProStatus(user?.id, isInvestorRole);
   const hasStripePro = subscription.subscribed && Boolean(validatedProProduct);
   const hasInvestorPro = isInvestorRole && isActiveInvestorStatus(investorSubStatus?.status);
   const isPro = hasAnyProAccess([isAdmin, hasStripePro, hasInvestorPro, forceProAccess]);
-  const hasDeveloperPro = isAdmin || forceProAccess || hasStripePro;
+  const hasDeveloperPro = isAdmin || forceProAccess || (hasStripePro && currentAudience === "developer");
   const accessSource: SubscriptionAccessSource = isAdmin
     ? "admin"
     : hasStripePro
@@ -116,4 +114,31 @@ export const useSubscription = () => {
     }),
     refreshSubscription,
   };
+};
+
+function findMatchingEntitlement(
+  rows: PricingEntitlementRow[],
+  productId: string,
+  profileAudience: string | null,
+) {
+  return rows.find((row) =>
+    row.metadata?.stripe_product_id === productId &&
+    isSubscriptionAudienceAllowed(row.audience, profileAudience)
+  ) ?? null;
+}
+
+const useValidatedProProduct = (productId: string | null, profileAudience: string | null) => {
+  return useQuery({
+    queryKey: ["validated-pro-product", productId, profileAudience],
+    queryFn: async () => {
+      if (!productId || !profileAudience) return null;
+      const { data } = await supabase
+        .from("pricing_configs")
+        .select("key, audience, metadata")
+        .eq("is_active", true);
+      return findMatchingEntitlement((data ?? []) as PricingEntitlementRow[], productId, profileAudience);
+    },
+    enabled: Boolean(productId && profileAudience),
+    staleTime: 60_000,
+  });
 };

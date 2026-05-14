@@ -31,6 +31,7 @@ const productionDeployNeeds = [
   "lighthouse",
 ];
 const documentedEnvAllowlist = new Set([
+  "CI",
   "DEV",
   "GITHUB_STEP_SUMMARY",
   "MODE",

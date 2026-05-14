@@ -220,7 +220,7 @@ export default function AdminInvitationRequests() {
             <MailPlus className="w-5 h-5 text-primary" /> Invitation Requests
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Approve to automatically activate a 1-year investor subscription. Email notifications are sent automatically.
+            Approve to mark the applicant as vetted and send the payment next step. Deal-flow access activates only after payment is confirmed.
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-2 h-8 text-xs">
@@ -476,7 +476,7 @@ export default function AdminInvitationRequests() {
       <ConfirmDialog
         open={!!approveTarget}
         title="Approve investor access?"
-        description={`Grant full investor dashboard access to ${approveTarget?.full_name || approveTarget?.email || "this applicant"}?`}
+        description={`Approve ${approveTarget?.full_name || approveTarget?.email || "this applicant"} for payment setup? Full investor dashboard access starts only after payment is confirmed.`}
         confirmLabel="Approve"
         destructive={false}
         onConfirm={() => { if (approveTarget) approve(approveTarget); setApproveTarget(null); }}

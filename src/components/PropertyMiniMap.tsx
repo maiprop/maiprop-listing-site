@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useRef, useCallback, useEffect } from "react";
+import type { ComponentType } from "react";
 import { computeWalkScore, walkScoreLabel, walkScoreColour } from "@/lib/walkScore";
-import Map, { Marker, NavigationControl, MapRef } from "react-map-gl";
+import type { MapRef } from "react-map-gl";
 import {
   MapPin, ExternalLink, School, Bus, Coffee, Hospital,
   ShoppingBag, TreePine, Loader2, Zap, RefreshCw,
@@ -12,7 +13,6 @@ import { getAiErrorMessage } from "@/lib/aiErrorUtils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { SignInForAI } from "@/components/SignInForAI";
-import "mapbox-gl/dist/mapbox-gl.css";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -164,6 +164,29 @@ export default function PropertyMiniMap({
   const [poiError, setPoiError] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<POI["category"] | "all">("all");
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [MapComponents, setMapComponents] = useState<{
+    Map: ComponentType<any>;
+    Marker: ComponentType<any>;
+    NavigationControl: ComponentType<any>;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!MAPBOX_TOKEN || !lat || !lng || MapComponents) return;
+    let cancelled = false;
+    const loadMap = async () => {
+      const mapModule = await import("react-map-gl");
+      await import("mapbox-gl/dist/mapbox-gl.css");
+      if (!cancelled) {
+        setMapComponents({
+          Map: mapModule.Map,
+          Marker: mapModule.Marker,
+          NavigationControl: mapModule.NavigationControl,
+        });
+      }
+    };
+    loadMap();
+    return () => { cancelled = true; };
+  }, [lat, lng, MapComponents]);
 
   // Auto-load POIs when coords are available (requires auth)
   const loadPOIs = useCallback(async () => {
@@ -272,8 +295,15 @@ export default function PropertyMiniMap({
             className="w-full h-full border-0"
             src={`https://maps.google.com/maps?q=${lat},${lng}&output=embed&z=15`}
           />
+        ) : !MapComponents ? (
+          <div className="w-full h-full flex items-center justify-center bg-secondary">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              Loading map...
+            </div>
+          </div>
         ) : (
-        <Map
+        <MapComponents.Map
           ref={mapRef}
           mapboxAccessToken={MAPBOX_TOKEN}
           initialViewState={{ longitude: lng, latitude: lat, zoom: 15 }}
@@ -283,17 +313,17 @@ export default function PropertyMiniMap({
           scrollZoom={false}
           dragPan={true}
         >
-          <NavigationControl position="bottom-right" />
+          <MapComponents.NavigationControl position="bottom-right" />
 
           {/* Property pin */}
-          <Marker longitude={lng} latitude={lat} anchor="bottom">
+          <MapComponents.Marker longitude={lng} latitude={lat} anchor="bottom">
             <div className="flex flex-col items-center">
               <div className="w-9 h-9 rounded-full bg-primary border-2 border-white shadow-lg flex items-center justify-center">
                 <MapPin className="w-4 h-4 text-primary-foreground" />
               </div>
               <div className="w-1 h-2 bg-primary rounded-b-full" />
             </div>
-          </Marker>
+          </MapComponents.Marker>
 
           {/* POI markers on map */}
           {mapLoaded && filteredPOIs.map((poi, idx) => {
@@ -303,7 +333,7 @@ export default function PropertyMiniMap({
             const meta = CATEGORY_META[poi.category];
             const Icon = meta.icon;
             return (
-              <Marker key={`${poi.category}-${idx}`} longitude={poiLng} latitude={poiLat} anchor="center">
+              <MapComponents.Marker key={`${poi.category}-${idx}`} longitude={poiLng} latitude={poiLat} anchor="center">
                 <div
                   className="w-6 h-6 rounded-full flex items-center justify-center shadow-md border border-white/30"
                   style={{ background: meta.markerColour }}
@@ -311,10 +341,10 @@ export default function PropertyMiniMap({
                 >
                   <Icon className="w-3 h-3 text-background" />
                 </div>
-              </Marker>
+              </MapComponents.Marker>
             );
           })}
-        </Map>
+        </MapComponents.Map>
         )}
 
         {/* Coords badge */}

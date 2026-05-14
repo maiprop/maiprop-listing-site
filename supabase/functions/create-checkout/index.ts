@@ -25,6 +25,14 @@ const PUBLIC_CHECKOUT_PLAN_KEYS = new Set([
   "developer_pro",
   "professional_basic",
 ]);
+const PLAN_ENTITLEMENT: Record<string, { audience: string; role: string }> = {
+  pro: { audience: "participant", role: "participant" },
+  agent_basic: { audience: "agent", role: "agent" },
+  developer_pro: { audience: "developer", role: "developer" },
+  professional_basic: { audience: "professional", role: "professional" },
+  investor_private: { audience: "investor", role: "investor" },
+  investor_institutional: { audience: "institutional", role: "institutional" },
+};
 const PLAN_KEY_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 const DEFAULT_CHECKOUT_ORIGIN = "https://portal.maiprop.co";
 const CHECKOUT_ALLOWED_ORIGINS = [
@@ -76,11 +84,45 @@ export function sanitizeRedirectPath(raw: unknown): string | null {
 
 /** Shape of a single `pricing_configs` row we care about. The full table is
  *  not in the generated types since this is an unregistered Supabase table. */
-type PricingConfigRow = { metadata?: { stripe_price_id?: string } | null };
+type PricingConfigRow = {
+  key?: string | null;
+  audience?: string | null;
+  unit?: string | null;
+  metadata?: {
+    stripe_price_id?: string;
+    stripe_price_id_monthly?: string;
+    stripe_monthly_price_id?: string;
+    stripe_price_id_annual?: string;
+    stripe_annual_price_id?: string;
+    stripe_price_id_yearly?: string;
+    stripe_yearly_price_id?: string;
+    stripe_product_id?: string;
+  } | null;
+};
+type BillingCycle = "monthly" | "annual";
+type CheckoutPlan = {
+  priceId: string;
+  planKey: string;
+  audience: string;
+  role: string;
+  billingCycle: BillingCycle;
+  productId?: string;
+};
+type CheckoutProfileRow = {
+  role?: string | null;
+  participant_type?: string | null;
+};
 
 export function normalizePlanKey(raw: unknown): string | null {
   const plan = typeof raw === "string" && raw.trim() ? raw.trim() : "pro";
   return PLAN_KEY_RE.test(plan) ? plan : null;
+}
+
+export function normalizeBillingCycle(raw: unknown): BillingCycle | null {
+  if (raw === undefined || raw === null || raw === "") return "monthly";
+  if (raw === "monthly" || raw === "month") return "monthly";
+  if (raw === "annual" || raw === "yearly" || raw === "year") return "annual";
+  return null;
 }
 
 export function isInviteOnlyCheckoutPlan(planKey: string): boolean {
@@ -130,15 +172,106 @@ export function resolveCheckoutOrigin(rawOrigin: string | null): string {
   return siteOrigin;
 }
 
-/** Plan keys: env STRIPE_PRICE_<UPPERCASE_KEY> or active DB pricing_configs.metadata.stripe_price_id. */
-async function getPriceForPlan(
+function getPlanEntitlement(planKey: string) {
+  return PLAN_ENTITLEMENT[planKey] ?? null;
+}
+
+function normalizeAudience(raw: string | null | undefined): string | null {
+  if (raw === "buyer" || raw === "seller" || raw === "participant" || raw === "pro") {
+    return "participant";
+  }
+  if (raw === "agent" || raw === "developer" || raw === "professional" || raw === "investor" || raw === "institutional") {
+    return raw;
+  }
+  return null;
+}
+
+export function isCheckoutAudienceAllowed(
+  planAudience: string,
+  profile: CheckoutProfileRow | null,
+): boolean {
+  const profileAudience = normalizeAudience(profile?.participant_type) ??
+    normalizeAudience(profile?.role);
+  return profileAudience === planAudience;
+}
+
+async function getCheckoutProfile(
+  supabase: unknown,
+  userId: string,
+): Promise<CheckoutProfileRow | null> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data } = await ((supabase as { from: any }).from as any)("profiles")
+    .select("role, participant_type")
+    .eq("user_id", userId)
+    .maybeSingle();
+  return (data as CheckoutProfileRow | null) ?? null;
+}
+
+export function getStripePriceEnvKey(planKey: string, billingCycle: BillingCycle): string {
+  const normalizedPlan = planKey.toUpperCase().replace(/-/g, "_");
+  const suffix = billingCycle === "annual" ? "ANNUAL" : "MONTHLY";
+  return `STRIPE_PRICE_${normalizedPlan}_${suffix}`;
+}
+
+const PLAN_PRICE_ENV_ALIASES: Record<string, Record<BillingCycle, string[]>> = {
+  pro: {
+    monthly: ["STRIPE_PRICE_PARTICIPANT_MONTHLY", "STRIPE_PRICE_PRO_MONTHLY"],
+    annual: ["STRIPE_PRICE_PARTICIPANT_ANNUAL", "STRIPE_PRICE_PRO_ANNUAL"],
+  },
+  agent_basic: {
+    monthly: ["STRIPE_PRICE_AGENT_MONTHLY"],
+    annual: ["STRIPE_PRICE_AGENT_ANNUAL"],
+  },
+  developer_pro: {
+    monthly: ["STRIPE_PRICE_DEVELOPER_MONTHLY"],
+    annual: ["STRIPE_PRICE_DEVELOPER_ANNUAL"],
+  },
+  professional_basic: {
+    monthly: ["STRIPE_PRICE_PROFESSIONAL_MONTHLY"],
+    annual: ["STRIPE_PRICE_PROFESSIONAL_ANNUAL"],
+  },
+};
+
+export function getStripePriceEnvKeys(planKey: string, billingCycle: BillingCycle): string[] {
+  return Array.from(new Set([
+    ...(PLAN_PRICE_ENV_ALIASES[planKey]?.[billingCycle] ?? []),
+    getStripePriceEnvKey(planKey, billingCycle),
+    ...(billingCycle === "annual"
+      ? [`STRIPE_PRICE_${planKey.toUpperCase().replace(/-/g, "_")}_YEARLY`]
+      : [`STRIPE_PRICE_${planKey.toUpperCase().replace(/-/g, "_")}`]),
+  ]));
+}
+
+function getFirstConfiguredEnvPrice(planKey: string, billingCycle: BillingCycle): string | null {
+  for (const key of getStripePriceEnvKeys(planKey, billingCycle)) {
+    const value = Deno.env.get(key);
+    if (value) return value;
+  }
+  return null;
+}
+
+function getDbStripePriceId(row: PricingConfigRow | null, billingCycle: BillingCycle): string | undefined {
+  const meta = row?.metadata ?? {};
+  if (billingCycle === "annual") {
+    return meta.stripe_price_id_annual ??
+      meta.stripe_annual_price_id ??
+      meta.stripe_price_id_yearly ??
+      meta.stripe_yearly_price_id ??
+      (row?.unit === "yearly" ? meta.stripe_price_id : undefined);
+  }
+  return meta.stripe_price_id_monthly ??
+    meta.stripe_monthly_price_id ??
+    (row?.unit !== "yearly" ? meta.stripe_price_id : undefined);
+}
+
+/** Plan keys: active DB pricing_configs.metadata.stripe_price_id, then env STRIPE_PRICE_<UPPERCASE_KEY>. */
+async function getCheckoutPlan(
   supabase: unknown,
   planKey: string,
-): Promise<string | null> {
-  const envKey = `STRIPE_PRICE_${planKey.toUpperCase().replace(/-/g, "_")}`;
-  const envPrice = Deno.env.get(envKey);
-  if (envPrice) return envPrice;
-
+  billingCycle: BillingCycle,
+): Promise<CheckoutPlan | null> {
+  const entitlement = getPlanEntitlement(planKey);
+  if (!entitlement) return null;
   // The runtime Supabase client returned by `createClient(url, key)` carries
   // generics that don't match the value of `ReturnType<typeof createClient>`,
   // so we accept it as `unknown` here and bridge through `(... .from as any)`
@@ -147,16 +280,32 @@ async function getPriceForPlan(
   const { data } = await ((supabase as { from: any }).from as any)(
     "pricing_configs",
   )
-    .select("metadata")
+    .select("key, audience, unit, metadata")
     .eq("key", planKey)
     .eq("is_active", true)
     .maybeSingle();
-  const stripePriceId = (data as PricingConfigRow | null)?.metadata
-    ?.stripe_price_id;
-  if (stripePriceId) return stripePriceId;
+  const row = data as PricingConfigRow | null;
+  const stripePriceId = getDbStripePriceId(row, billingCycle);
+  const rowAudience = normalizeAudience(row?.audience ?? null);
+  if (stripePriceId && rowAudience === entitlement.audience) {
+    return {
+      priceId: stripePriceId,
+      planKey,
+      audience: entitlement.audience,
+      role: entitlement.role,
+      billingCycle,
+      productId: row?.metadata?.stripe_product_id,
+    };
+  }
 
-  return planKey === "pro"
-    ? Deno.env.get("STRIPE_PRICE_DEFAULT") ?? null
+  const envPrice = getFirstConfiguredEnvPrice(planKey, billingCycle);
+  if (envPrice) {
+    return { priceId: envPrice, planKey, audience: entitlement.audience, role: entitlement.role, billingCycle };
+  }
+
+  const defaultPrice = planKey === "pro" && billingCycle === "monthly" ? Deno.env.get("STRIPE_PRICE_DEFAULT") : null;
+  return defaultPrice
+    ? { priceId: defaultPrice, planKey, audience: entitlement.audience, role: entitlement.role, billingCycle }
     : null;
 }
 
@@ -186,11 +335,24 @@ async function getOrCreateOwnedStripeCustomer(
   const created = await stripe.customers.create({
     email: user.email,
     metadata: { user_id: user.id },
+  }, {
+    idempotencyKey: `maiprop-customer-${user.id}`,
   });
   logStep("Created Stripe customer with user_id metadata", {
     customerId: created.id,
   });
   return created.id;
+}
+
+async function shortSha256(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(value),
+  );
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("")
+    .slice(0, 16);
 }
 
 Deno.serve(async (req) => {
@@ -263,6 +425,13 @@ Deno.serve(async (req) => {
         },
       );
     }
+    const billingCycle = normalizeBillingCycle(body.billing_cycle ?? body.billingCycle);
+    if (!billingCycle) {
+      return new Response(JSON.stringify({ error: "Invalid billing cycle" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400,
+      });
+    }
     // Caller-provided redirect URLs are accepted only when they are same-origin
     // relative paths starting with "/" — guards against open-redirect abuse while
     // honouring the success_url/cancel_url contract from Onboarding/Pricing.
@@ -273,34 +442,84 @@ Deno.serve(async (req) => {
       apiVersion: "2025-08-27.basil",
     });
 
-    const priceId = await getPriceForPlan(supabaseClient, plan);
-    if (!priceId) {
+    const checkoutPlan = await getCheckoutPlan(supabaseClient, plan, billingCycle);
+    if (!checkoutPlan) {
       log.warn("checkout price not configured", { plan });
       return new Response(JSON.stringify({ error: "Plan is unavailable" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 404,
       });
     }
-    logStep("Resolved price", { plan, priceId });
+
+    const profile = await getCheckoutProfile(supabaseClient, user.id);
+    if (!isCheckoutAudienceAllowed(checkoutPlan.audience, profile)) {
+      log.warn("blocked cross-role checkout attempt", {
+        userId: user.id,
+        plan,
+        audience: checkoutPlan.audience,
+        profileRole: profile?.role ?? null,
+        profileParticipantType: profile?.participant_type ?? null,
+      });
+      return new Response(
+        JSON.stringify({
+          error:
+            "This checkout plan is not available for your current account type.",
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 403,
+        },
+      );
+    }
+    logStep("Resolved price", {
+      plan,
+      priceId: checkoutPlan.priceId,
+      audience: checkoutPlan.audience,
+      billingCycle: checkoutPlan.billingCycle,
+    });
 
     const customerId = await getOrCreateOwnedStripeCustomer(stripe, user);
     const origin = resolveCheckoutOrigin(req.headers.get("origin"));
     const success = `${origin}${successPath ?? "/pricing?checkout=success"}`;
     const cancel = `${origin}${cancelPath ?? "/pricing?checkout=cancelled"}`;
+    const redirectHash = await shortSha256(`${success}|${cancel}`);
 
-    const session = await stripe.checkout.sessions.create({
-      customer: customerId,
-      line_items: [{ price: priceId, quantity: 1 }],
-      mode: "subscription",
-      success_url: success,
-      cancel_url: cancel,
-      metadata: { user_id: user.id, plan },
-      // Propagate plan to the subscription object itself so the webhook can
-      // identify professional_* plans and update professionals.subscription_tier.
-      // Stripe does NOT auto-copy session.metadata onto the resulting subscription,
-      // so we set subscription_data.metadata explicitly.
-      subscription_data: { metadata: { user_id: user.id, plan } },
-    });
+    const session = await stripe.checkout.sessions.create(
+      {
+        customer: customerId,
+        line_items: [{ price: checkoutPlan.priceId, quantity: 1 }],
+        mode: "subscription",
+        success_url: success,
+        cancel_url: cancel,
+        metadata: {
+          user_id: user.id,
+          plan,
+          plan_key: checkoutPlan.planKey,
+          audience: checkoutPlan.audience,
+          role: checkoutPlan.role,
+          billing_cycle: checkoutPlan.billingCycle,
+        },
+        // Propagate plan to the subscription object itself so the webhook can
+        // identify professional_* plans and update professionals.subscription_tier.
+        // Stripe does NOT auto-copy session.metadata onto the resulting subscription,
+        // so we set subscription_data.metadata explicitly.
+        subscription_data: {
+          metadata: {
+            user_id: user.id,
+            plan,
+            plan_key: checkoutPlan.planKey,
+            audience: checkoutPlan.audience,
+            role: checkoutPlan.role,
+            billing_cycle: checkoutPlan.billingCycle,
+            ...(checkoutPlan.productId ? { product_id: checkoutPlan.productId } : {}),
+          },
+        },
+      },
+      {
+        idempotencyKey:
+          `maiprop-checkout-${user.id}-${checkoutPlan.planKey}-${checkoutPlan.billingCycle}-${redirectHash}`,
+      },
+    );
 
     logStep("Checkout session created", { sessionId: session.id, plan });
 

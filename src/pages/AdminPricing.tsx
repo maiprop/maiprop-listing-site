@@ -31,7 +31,7 @@ type PricingConfig = {
 const PRICING_SECTIONS = [
   { key: "users",        label: "Users (consumers)",         module: "user_subscription",         audience: "user" },
   { key: "agents",       label: "Agents",                    module: "agent_subscription",        audience: "agent" },
-  { key: "developers",   label: "Developers",                module: "developer_subscription",    audience: "agent" },
+  { key: "developers",   label: "Developers",                module: "developer_subscription",    audience: "developer" },
   { key: "professionals",label: "Professionals",             module: "professional_subscription", audience: "professional" },
   { key: "investors",    label: "Investors",                 module: "investor_subscription",     audience: "investor" },
   { key: "valuation",    label: "Valuation / AI reports",    module: "valuation_reports",         audience: "user" },
@@ -85,7 +85,7 @@ const DEFAULT_SEED: Omit<PricingConfig, "id" | "created_at" | "updated_at">[] = 
   { key: "agency_growth",             label: "Agency Growth (legacy)",  description: "Replaced by per-seat, priority and dedicated-manager add-ons.",            audience: "agent",        module: "agent_subscription",       unit: "monthly",    currency: "EUR", amount: 449,  is_active: false, sort_order: 4,  metadata: { deprecated: true } },
   { key: "agency_enterprise",         label: "Agency Enterprise (legacy)", description: "Replaced by white-label & dedicated-manager add-ons.",                  audience: "agent",        module: "agent_subscription",       unit: "monthly",    currency: "EUR", amount: 749,  is_active: false, sort_order: 5,  metadata: { deprecated: true } },
   // ── Developers ────────────────────────────────────────────────────────────
-  { key: "developer_pro",             label: "Developer Pro",           description: "Unlimited projects, new build showcase, pre-sale & floor plans",            audience: "agent",        module: "developer_subscription",   unit: "monthly",    currency: "EUR", amount: 129,  is_active: true, sort_order: 1,  metadata: {} },
+  { key: "developer_pro",             label: "Developer Pro",           description: "Unlimited projects, new build showcase, pre-sale & floor plans",            audience: "developer",    module: "developer_subscription",   unit: "monthly",    currency: "EUR", amount: 129,  is_active: true, sort_order: 1,  metadata: {} },
   // ── Professionals (Free + Pro only — everything else is an add-on) ────────
   { key: "professional_basic",        label: "Professional Pro",        description: "Priority leads, booking calendar, verified badge & AI tools",              audience: "professional", module: "professional_subscription", unit: "monthly",    currency: "EUR", amount: 69,   is_active: true, sort_order: 1,  metadata: {} },
   // Legacy Premium tier — replaced by API access, referral network and seat add-ons.

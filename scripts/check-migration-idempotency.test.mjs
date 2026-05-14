@@ -13,6 +13,7 @@ import {
   lintMigration,
   lintMigrationChronology,
   loadAppliedFutureVersions,
+  lintAppliedFutureSources,
   isInScope,
   run,
 } from "./check-migration-idempotency.mjs";
@@ -202,6 +203,27 @@ describe("loadAppliedFutureVersions", () => {
   });
 });
 
+describe("lintAppliedFutureSources", () => {
+  test("flags allowlisted future migrations without source SQL", () => {
+    const out = lintAppliedFutureSources(
+      ["20260704000000_present.sql"],
+      ["20260704000000", "20260705000000"],
+    );
+
+    expect(out).toHaveLength(1);
+    expect(out[0].rule).toContain("20260705000000");
+  });
+
+  test("passes when every allowlisted future migration has source SQL", () => {
+    const out = lintAppliedFutureSources(
+      ["20260704000000_present.sql", "20260705000000_present.sql"],
+      ["20260704000000", "20260705000000"],
+    );
+
+    expect(out).toHaveLength(0);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // run — directory walker
 // ---------------------------------------------------------------------------
@@ -224,6 +246,7 @@ describe("run", () => {
       expect(result.scanned, "should ignore the pre-baseline file").toBe(2);
       expect(result.violations, "two violations in the new bad file").toHaveLength(2);
       expect(result.chronologyViolations).toHaveLength(0);
+      expect(result.appliedFutureSourceViolations).toHaveLength(0);
       expect(result.violations.every((v) => v.file === "20300101000000_new_bad.sql")).toBe(true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -242,8 +265,10 @@ describe("run", () => {
         baseline: "20260501000000",
         checkChronology: true,
         now: new Date("2026-05-07T00:00:00Z"),
+        appliedFutureVersions: [],
       });
       expect(result.chronologyViolations).toHaveLength(2);
+      expect(result.appliedFutureSourceViolations).toHaveLength(0);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

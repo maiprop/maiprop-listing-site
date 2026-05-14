@@ -25,3 +25,30 @@ export function isActiveSubscription(status: StripeSubscriptionStatus | string):
 export function isProSubscription(sub: { status: string }): boolean {
   return isActiveSubscription(sub.status);
 }
+
+export type SubscriptionAudience =
+  | "participant"
+  | "agent"
+  | "developer"
+  | "professional"
+  | "investor"
+  | "institutional";
+
+export function normalizeSubscriptionAudience(raw: string | null | undefined): SubscriptionAudience | null {
+  if (raw === "buyer" || raw === "seller" || raw === "participant" || raw === "pro") return "participant";
+  if (raw === "agent") return "agent";
+  if (raw === "developer") return "developer";
+  if (raw === "professional") return "professional";
+  if (raw === "investor") return "investor";
+  if (raw === "institutional") return "institutional";
+  return null;
+}
+
+export function isSubscriptionAudienceAllowed(
+  productAudience: string | null | undefined,
+  profileAudience: string | null | undefined,
+): boolean {
+  const normalizedProductAudience = normalizeSubscriptionAudience(productAudience);
+  const normalizedProfileAudience = normalizeSubscriptionAudience(profileAudience);
+  return Boolean(normalizedProductAudience && normalizedProductAudience === normalizedProfileAudience);
+}

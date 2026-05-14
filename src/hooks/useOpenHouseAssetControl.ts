@@ -452,10 +452,12 @@ export function useUpdateOpenHouseRegistration() {
       if (isRequester) {
         const requesterStatusAllowed = requestedStatus === undefined || requestedStatus === "cancelled";
         const ownerOnlyFields = [
+          "id_verified_at",
           "approved_by",
           "approved_at",
           "attended_at",
           "rejection_reason",
+          "pof_verified_status",
         ] as const;
         if (!requesterStatusAllowed || ownerOnlyFields.some((field) => field in updates)) {
           throw new Error("Only the host can approve, reject, or mark attendance.");

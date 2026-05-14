@@ -11,10 +11,10 @@ Deno.test("OPTIONS preflight returns 200", async () => {
   assertEquals(res.status, 200);
 });
 
-Deno.test("missing Stripe-Signature header returns 400 or 500", async () => {
+Deno.test("missing Stripe-Signature header returns 400", async () => {
   const res = await handler(req("POST", { type: "checkout.session.completed" }));
   // Stripe webhook verifies HMAC; missing signature → webhook error, not 200
-  assertEquals([400, 500].includes(res.status), true);
+  assertEquals(res.status, 400);
 });
 
 Deno.test("wrong Stripe-Signature returns error response", async () => {

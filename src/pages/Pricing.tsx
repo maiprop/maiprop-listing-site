@@ -203,7 +203,7 @@ const PLANS: Record<AudienceId, PlanDef> = {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function Pricing() {
-  const { user, profile } = useAuth();
+  const { user, profile, profileLoading } = useAuth();
   const { isPro, loading: subLoading, refreshSubscription } = useSubscription();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -290,9 +290,14 @@ export default function Pricing() {
       const pt = getPricingAudienceFromProfile(profile);
       const validTab = AUDIENCE_TABS.some(t => t.id === pt) ? pt : "participant";
       setActiveTab(validTab as AudienceId);
+      setHasAutoSelected(true);
+      return;
+    }
+    if (user && profileLoading) {
+      return;
     }
     setHasAutoSelected(true);
-  }, [profile, hasAutoSelected, searchParams]);
+  }, [profile, profileLoading, user, hasAutoSelected, searchParams]);
 
   const { data: pricingConfigs = {} } = usePricingConfigs();
   const planKey = PLAN_KEYS[activeTab];

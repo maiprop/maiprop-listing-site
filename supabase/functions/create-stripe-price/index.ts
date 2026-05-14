@@ -18,11 +18,25 @@ interface ProfileRow {
 interface PricingConfigRow {
   id: string;
   key: string;
+  audience?: string | null;
   label?: string | null;
   amount?: number | string | null;
   currency?: string | null;
   unit?: string | null;
   metadata?: Record<string, unknown> | null;
+}
+
+function normalizeAudience(raw: string | null | undefined): string | null {
+  if (raw === "buyer" || raw === "seller" || raw === "participant" || raw === "pro") return "participant";
+  if (raw === "agent" || raw === "developer" || raw === "professional" || raw === "investor" || raw === "institutional") {
+    return raw;
+  }
+  return null;
+}
+
+function shouldRegisterGenericProProduct(audience: string, unit: string): boolean {
+  return ["participant", "agent", "developer", "professional"].includes(audience) &&
+    ["monthly", "yearly"].includes(unit);
 }
 
 Deno.serve(async (req) => {
@@ -60,7 +74,7 @@ Deno.serve(async (req) => {
 
     const { data: configRaw, error: configError } = await supabaseClient
       .from("pricing_configs")
-      .select("id, key, label, amount, currency, unit, metadata")
+      .select("id, key, audience, label, amount, currency, unit, metadata")
       .eq("id", configId)
       .single();
     if (configError || !configRaw) throw new Error("Pricing config not found");
@@ -73,6 +87,15 @@ Deno.serve(async (req) => {
     if (amount <= 0) throw new Error("Amount must be greater than 0");
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
+    const audience = normalizeAudience(config.audience) ?? "participant";
+    const entitlementMetadata = {
+      pricing_config_key: config.key,
+      pricing_config_id: configId,
+      plan_key: config.key,
+      audience,
+      role: audience,
+      entitlement_role: audience,
+    };
 
     // Recurring (monthly/yearly) or one-time
     const isRecurring = ["monthly", "yearly"].includes(unit);
@@ -80,14 +103,14 @@ Deno.serve(async (req) => {
 
     const product = await stripe.products.create({
       name: config.label || config.key,
-      metadata: { pricing_config_key: config.key },
+      metadata: entitlementMetadata,
     });
 
     const priceParams: Stripe.PriceCreateParams = {
       product: product.id,
       currency,
       unit_amount: amount,
-      metadata: { pricing_config_key: config.key, pricing_config_id: configId },
+      metadata: entitlementMetadata,
     };
     if (isRecurring) {
       priceParams.recurring = { interval };
@@ -104,6 +127,13 @@ Deno.serve(async (req) => {
       .update({ metadata: meta, updated_at: new Date().toISOString() })
       .eq("id", configId);
     if (updateError) throw new Error("Failed to save price ID: " + updateError.message);
+
+    if (shouldRegisterGenericProProduct(audience, unit)) {
+      const { error: productError } = await supabaseClient
+        .from("pro_product_ids")
+        .upsert({ product_id: product.id }, { onConflict: "product_id" });
+      if (productError) throw new Error("Failed to register Pro product: " + productError.message);
+    }
 
     return new Response(JSON.stringify({
       price_id: price.id,

@@ -110,7 +110,7 @@ export function StepLocation({ form, set, errors, setFieldRef, connections, step
 
     if ((window as GWindow).google?.maps?.places) { initGoogle(); return; }
     const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&loading=async`;
     script.async = true;
     script.onload = () => { googleScriptLoadedRef.current = true; initGoogle(); };
     document.head.appendChild(script);

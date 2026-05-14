@@ -50,6 +50,14 @@ type ProfilePlanRow = {
   force_pro_access?: boolean | null;
 };
 
+type PricingConfigPlanRow = {
+  key?: string | null;
+  audience?: string | null;
+  metadata?: {
+    stripe_product_id?: string | null;
+  } | null;
+};
+
 // ── Category mapping (mirrors poll-os-auctions) ─────────────────────────────
 
 const CATEGORY_MAP = new Map<string, string>([
@@ -440,7 +448,27 @@ async function hasInvestorSubscription(
   return sub?.status === "active" || sub?.status === "trial";
 }
 
-async function hasPortalProAccess(
+function isOsAuctionEntitlement(row: PricingConfigPlanRow | null): boolean {
+  if (!row?.key || !row?.audience) return false;
+  return row.audience === "investor" || row.audience === "institutional" ||
+    row.key === "investor_private" || row.key === "investor_institutional";
+}
+
+async function hasInvestorProductEntitlement(
+  sb: SupabaseAdminClient,
+  productId: string | null | undefined,
+): Promise<boolean> {
+  if (!productId) return false;
+  const { data } = await sb
+    .from("pricing_configs")
+    .select("key, audience, metadata")
+    .eq("metadata->>stripe_product_id", productId)
+    .limit(1)
+    .maybeSingle();
+  return isOsAuctionEntitlement(data as PricingConfigPlanRow | null);
+}
+
+export async function hasPortalProAccess(
   sb: SupabaseAdminClient,
   userId: string,
 ): Promise<boolean> {
@@ -452,10 +480,9 @@ async function hasPortalProAccess(
   const profile = profileRow as ProfilePlanRow | null;
 
   if (profile?.role === "admin") return true;
-  if (profile?.force_pro_access) return true;
-  if (profile?.subscription_product_id) return true;
   if (isInvestorProfile(profile)) {
-    return await hasInvestorSubscription(sb, userId);
+    return await hasInvestorSubscription(sb, userId) ||
+      await hasInvestorProductEntitlement(sb, profile?.subscription_product_id);
   }
   return false;
 }

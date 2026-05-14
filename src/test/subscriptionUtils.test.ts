@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { isActiveSubscription, isProSubscription } from "@/lib/subscriptionUtils";
+import {
+  isActiveSubscription,
+  isProSubscription,
+  isSubscriptionAudienceAllowed,
+  normalizeSubscriptionAudience,
+} from "@/lib/subscriptionUtils";
 
 describe("isActiveSubscription", () => {
   it("returns true for active", () => {
@@ -43,5 +48,19 @@ describe("isProSubscription", () => {
     expect(isProSubscription({ status: "canceled" })).toBe(false);
     expect(isProSubscription({ status: "past_due" })).toBe(false);
     expect(isProSubscription({ status: "incomplete" })).toBe(false);
+  });
+});
+
+describe("subscription audience entitlement", () => {
+  it("normalizes buyer/seller/pro to participant", () => {
+    expect(normalizeSubscriptionAudience("buyer")).toBe("participant");
+    expect(normalizeSubscriptionAudience("seller")).toBe("participant");
+    expect(normalizeSubscriptionAudience("pro")).toBe("participant");
+  });
+
+  it("accepts only matching role audiences", () => {
+    expect(isSubscriptionAudienceAllowed("developer", "developer")).toBe(true);
+    expect(isSubscriptionAudienceAllowed("participant", "developer")).toBe(false);
+    expect(isSubscriptionAudienceAllowed("agent", "professional")).toBe(false);
   });
 });

@@ -19,9 +19,33 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 
 const log = createLogger("stripe-webhook");
 
+type PricingConfigRow = {
+  key?: string | null;
+  audience?: string | null;
+  metadata?: {
+    stripe_price_id?: string | null;
+    stripe_product_id?: string | null;
+  } | null;
+};
+
+type SubscriptionEntitlement = {
+  planKey: string;
+  audience: string;
+  role: string;
+  productId: string;
+} | null;
+
+// The generated Supabase database type is not available inside Edge Functions.
+// Keep the admin client intentionally dynamic while retaining Stripe-side types.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SupabaseAdminClient = any;
+
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req, "stripe-signature");
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  const signature = req.headers.get("stripe-signature");
+  if (!signature) return errorResponse("Missing stripe-signature header", 400, corsHeaders);
 
   const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
   const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
@@ -31,9 +55,6 @@ Deno.serve(async (req) => {
   if (!stripeKey) return errorResponse("STRIPE_SECRET_KEY not set", 500, corsHeaders);
   if (!webhookSecret) return errorResponse("STRIPE_WEBHOOK_SECRET not set", 500, corsHeaders);
   if (!supabaseUrl || !serviceRoleKey) return errorResponse("Supabase env not set", 500, corsHeaders);
-
-  const signature = req.headers.get("stripe-signature");
-  if (!signature) return errorResponse("Missing stripe-signature header", 400, corsHeaders);
 
   const body = await req.text();
   const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
@@ -48,7 +69,7 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false },
-  });
+  }) as unknown as SupabaseAdminClient;
 
   log.info("event received", { event_type: event.type });
 
@@ -116,8 +137,9 @@ Deno.serve(async (req) => {
         // Fires on every successful recurring charge. Re-sync to handle plan upgrades
         // where the subscription object may already be updated before this fires.
         const invoice = event.data.object as Stripe.Invoice;
-        if (invoice.subscription && invoice.customer) {
-          const sub = await stripe.subscriptions.retrieve(invoice.subscription as string);
+        const subscriptionId = (invoice as unknown as { subscription?: string | Stripe.Subscription | null }).subscription;
+        if (subscriptionId && invoice.customer) {
+          const sub = await stripe.subscriptions.retrieve(subscriptionId as string);
           await syncSubscription(supabase, stripe, sub);
         }
         break;
@@ -152,8 +174,55 @@ function resolveProfileFilter(customer: Stripe.Customer): { column: string; valu
   return null;
 }
 
+function normalizeAudience(raw: string | null | undefined): string | null {
+  if (raw === "buyer" || raw === "seller" || raw === "participant" || raw === "pro") return "participant";
+  if (raw === "agent" || raw === "developer" || raw === "professional" || raw === "investor" || raw === "institutional") {
+    return raw;
+  }
+  return null;
+}
+
+function firstSubscriptionItem(sub: Stripe.Subscription) {
+  return sub.items.data[0] ?? null;
+}
+
+async function resolveSubscriptionEntitlement(
+  supabase: SupabaseAdminClient,
+  sub: Stripe.Subscription,
+): Promise<SubscriptionEntitlement> {
+  const item = firstSubscriptionItem(sub);
+  const priceId = item?.price?.id ?? null;
+  const productId = typeof item?.price?.product === "string" ? item.price.product : null;
+  if (!productId) return null;
+
+  const metadataPlan = (sub.metadata?.plan_key ?? sub.metadata?.plan ?? "") as string;
+  const { data } = await supabase
+    .from("pricing_configs")
+    .select("key, audience, metadata")
+    .eq("is_active", true);
+
+  const rows = (data ?? []) as PricingConfigRow[];
+  const row = rows.find((candidate) => {
+    const meta = candidate.metadata ?? {};
+    const matchesProductOrPrice = meta.stripe_product_id === productId || meta.stripe_price_id === priceId;
+    if (metadataPlan) {
+      return candidate.key === metadataPlan && matchesProductOrPrice;
+    }
+    return matchesProductOrPrice;
+  });
+  const audience = normalizeAudience(row?.audience ?? sub.metadata?.audience ?? null);
+  if (!row?.key || !audience) return null;
+
+  return {
+    planKey: row.key,
+    audience,
+    role: normalizeAudience(sub.metadata?.role as string | undefined) ?? audience,
+    productId,
+  };
+}
+
 async function syncSubscription(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseAdminClient,
   stripe: Stripe,
   sub: Stripe.Subscription,
 ) {
@@ -166,7 +235,8 @@ async function syncSubscription(
   }
 
   const isActive = sub.status === "active" || sub.status === "trialing";
-  const productId = isActive ? (sub.items.data[0]?.price.product as string) : null;
+  const entitlement = isActive ? await resolveSubscriptionEntitlement(supabase, sub) : null;
+  const productId = entitlement?.productId ?? null;
 
   const { error } = await supabase
     .from("profiles")
@@ -176,7 +246,13 @@ async function syncSubscription(
   if (error) {
     log.error("failed to update profile", { filter, err: String(error.message ?? error) });
   } else {
-    log.info("updated profile subscription", { filter, product_id: productId, status: sub.status });
+    log.info("updated profile subscription", {
+      filter,
+      product_id: productId,
+      status: sub.status,
+      plan_key: entitlement?.planKey,
+      audience: entitlement?.audience,
+    });
   }
 
   // Promote the matching professionals row to 'pro' when the subscription is
@@ -184,11 +260,11 @@ async function syncSubscription(
   // by create-checkout. The BEFORE UPDATE trigger
   // public.professionals_guard_subscription_tier permits service-role writes
   // because auth.uid() is NULL on edge-function calls without a user JWT.
-  await syncProfessionalTier(supabase, sub, isActive);
+  await syncProfessionalTier(supabase, sub, isActive, entitlement);
 }
 
 async function clearSubscription(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseAdminClient,
   stripe: Stripe,
   customerId: string,
 ) {
@@ -226,12 +302,13 @@ async function clearSubscription(
 
 /** Update professionals.subscription_tier when the subscription is a professional plan. */
 async function syncProfessionalTier(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseAdminClient,
   sub: Stripe.Subscription,
   isActive: boolean,
+  entitlement: SubscriptionEntitlement,
 ) {
-  const planKey = (sub.metadata?.plan ?? "") as string;
-  if (!planKey.startsWith("professional_")) return;
+  const planKey = entitlement?.planKey ?? (sub.metadata?.plan_key ?? sub.metadata?.plan ?? "") as string;
+  if (entitlement?.audience !== "professional" && !planKey.startsWith("professional_")) return;
 
   const userId = (sub.metadata?.user_id ?? "") as string;
   if (!userId) {
@@ -253,7 +330,7 @@ async function syncProfessionalTier(
 }
 
 async function resolveUserIdByEmail(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseAdminClient,
   email: string | null,
 ): Promise<string | null> {
   if (!email) return null;
@@ -293,14 +370,14 @@ function errorResponse(message: string, status: number, corsHeaders: Record<stri
  *   - Customer has no user_id metadata.
  */
 async function applyAgentDataInputDiscount(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseAdminClient,
   stripe: Stripe,
   invoice: Stripe.Invoice,
 ): Promise<void> {
   if (invoice.status && invoice.status !== "draft") return;
   if (!invoice.id || !invoice.customer) return;
   // Skip initial signup invoices — no prior verified inputs are possible yet.
-  if ((invoice as Record<string, unknown>).billing_reason === "subscription_create") return;
+  if ((invoice as unknown as Record<string, unknown>).billing_reason === "subscription_create") return;
 
   const customer = await stripe.customers.retrieve(invoice.customer as string) as Stripe.Customer;
   const userId = customer.metadata?.user_id ?? await resolveUserIdByEmail(supabase, customer.email ?? null);
