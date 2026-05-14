@@ -36,6 +36,11 @@ and must remain mapped to this release branch:
 - Live Edge Function inventory matches repository source/config names.
 - `delete-account` now includes `open-house-docs` user-folder cleanup for
   proof-of-funds and open-house document erasure.
+- `create-checkout` was redeployed from repository source after live smoke
+  detected the invite-only checkout path returning HTTP 500 instead of 403.
+- `npm run test:e2e:live-smoke` now covers account deletion auth, checkout
+  eligibility, role approval access, firesale access, and open-house/RPC
+  boundaries.
 
 ## Verification Commands
 
@@ -49,6 +54,7 @@ npm run lint
 npm test
 npm run test:deno
 npm run build
+npm run test:e2e:live-smoke
 npm audit --omit=dev
 npm run lint:migrations
 npm run lint:migrations:chronology

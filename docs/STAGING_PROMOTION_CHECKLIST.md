@@ -25,6 +25,7 @@ npm run build
 npm audit --omit=dev --audit-level=high
 npm run lint:migrations
 npm run check:release-safety
+npm run test:e2e:live-smoke
 ```
 
 Expected result: every command exits 0.
@@ -65,7 +66,8 @@ applying constraints.
 - [ ] Deploy edge functions to staging only.
 - [ ] Deploy the frontend to staging only.
 - [ ] Run staging RLS/security E2E.
-- [ ] Run critical buyer, seller, investor, open-house, firesale, checkout, and GDPR deletion flows against staging.
+- [ ] Run `npm run test:e2e:live-smoke` for account deletion auth, checkout eligibility, role approval, firesale, and open-house smoke coverage.
+- [ ] Run destructive GDPR deletion and mutation drills only against the allowlisted staging Supabase project.
 - [ ] Verify Sentry/logs contain the new release SHA and no new error burst.
 
 ## Production Promotion
