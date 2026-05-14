@@ -2,8 +2,8 @@
 
 ## Prerequisites
 
-- **Node.js 20+** (LTS)
-- **npm 10+**
+- **Node.js 20.19.5** (use `.nvmrc` / `.node-version`)
+- **npm 10.8.2** (`engine-strict=true` rejects npm 11+ installs)
 - **Deno 2.7+** (for edge function development)
 - Git
 
@@ -13,6 +13,7 @@
 # 1. Clone the repo
 git clone https://github.com/maiprop/maiprop-listing-site.git
 cd maiprop-listing-site
+nvm use
 
 # 2. Copy environment template
 cp .env.example .env
@@ -50,6 +51,7 @@ npm run dev
 
 ```bash
 npm run dev          # Dev server with HMR (port 8080)
+npm run check:runtime # Verify Node/npm match package.json engines
 npm run build        # Production build
 npm run lint         # ESLint check
 npm run test         # Vitest (single run)

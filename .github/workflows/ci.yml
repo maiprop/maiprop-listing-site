@@ -26,8 +26,11 @@ jobs:
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20.19.5
+          node-version-file: .node-version
           cache: npm
+
+      - name: Check runtime
+        run: npm run check:runtime
 
       - name: Install dependencies
         run: npm ci
@@ -125,8 +128,11 @@ jobs:
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20.19.5
+          node-version-file: .node-version
           cache: npm
+
+      - name: Check runtime
+        run: npm run check:runtime
 
       - name: Install dependencies
         run: npm ci
@@ -155,8 +161,11 @@ jobs:
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20.19.5
+          node-version-file: .node-version
           cache: npm
+
+      - name: Check runtime
+        run: npm run check:runtime
 
       - name: Install dependencies
         run: npm ci
@@ -216,8 +225,11 @@ jobs:
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20.19.5
+          node-version-file: .node-version
           cache: npm
+
+      - name: Check runtime
+        run: npm run check:runtime
 
       - name: Validate required staging secrets
         run: |
@@ -454,8 +466,11 @@ jobs:
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20.19.5
+          node-version-file: .node-version
           cache: npm
+
+      - name: Check runtime
+        run: npm run check:runtime
 
       - name: Install dependencies
         run: npm ci
@@ -487,8 +502,11 @@ jobs:
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20.19.5
+          node-version-file: .node-version
           cache: npm
+
+      - name: Check runtime
+        run: npm run check:runtime
 
       - name: Install dependencies
         run: npm ci

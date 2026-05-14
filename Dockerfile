@@ -20,7 +20,8 @@ ENV PATH="$DENO_INSTALL/bin:$PATH"
 
 # Install dependencies
 COPY package.json package-lock.json ./
-RUN npm ci
+COPY scripts/check-runtime.mjs ./scripts/check-runtime.mjs
+RUN npm run check:runtime && npm ci
 
 # Copy source
 COPY . .
