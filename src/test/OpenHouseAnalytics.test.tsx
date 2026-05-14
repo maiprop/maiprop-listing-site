@@ -19,13 +19,27 @@ const { fromMock } = vi.hoisted(() => ({
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: { from: (...a: unknown[]) => fromMock(...a) },
 }));
-vi.mock("recharts", async () => {
-  const actual = await vi.importActual<typeof import("recharts")>("recharts");
+vi.mock("@/components/charts/LazyRecharts", () => {
+  const Passthrough = ({ children }: { children?: React.ReactNode }) => (
+    <div>{children}</div>
+  );
+  const Leaf = ({ children }: { children?: React.ReactNode }) => (
+    <div>{children}</div>
+  );
+
   return {
-    ...actual,
-    // Force a fixed pixel size so the SVG actually paints in jsdom.
-    ResponsiveContainer: ({ children }: { children: React.ReactNode }) => (
-      <div style={{ width: 600, height: 300 }}>{children}</div>
+    ResponsiveContainer: Passthrough,
+    BarChart: Passthrough,
+    Bar: Passthrough,
+    XAxis: Leaf,
+    YAxis: Leaf,
+    Tooltip: Leaf,
+    PieChart: Passthrough,
+    Pie: Passthrough,
+    Cell: Leaf,
+    Legend: Leaf,
+    ChartFallback: ({ height = 180 }: { height?: number }) => (
+      <div data-testid="chart-fallback" style={{ height }} />
     ),
   };
 });
