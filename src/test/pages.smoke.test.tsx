@@ -782,6 +782,18 @@ describe("Page smoke tests", () => {
     ).not.toThrow();
   });
 
+  it("AuctionDetail page renders not-found state without throwing", async () => {
+    const { default: AuctionDetail } = await import("@/pages/AuctionDetail");
+    expect(() =>
+      renderWithProviders(
+        <Suspense fallback={<div>loading</div>}>
+          <AuctionDetail />
+        </Suspense>,
+        { initialPath: "/auctions/test-auction-id" }
+      )
+    ).not.toThrow();
+  });
+
   it("Firesale page renders without throwing", async () => {
     const { default: Firesale } = await import("@/pages/Firesale");
     expect(() =>

@@ -9,14 +9,14 @@
 | **Playwright** | E2E browser tests | `npm run test:e2e` |
 | **Deno test** | Edge-function tests | `npm run test:deno` |
 
-## Current coverage baseline (2026-04-27, updated 2026-04-27)
+## Current coverage baseline (2026-05-14)
 
 | Metric | Current | Threshold | Target Q3 | Target Q4 |
 |--------|---------|-----------|-----------|-----------|
-| Lines       | ~64.63% | 60% | 70% | 80% |
-| Statements  | ~64.63% | 60% | 70% | 80% |
-| Functions   | ~42.15% | 38% | 50% | 60% |
-| Branches    | ~60.66% | 55% | 65% | 75% |
+| Lines       | 66.51% | 63% | 70% | 80% |
+| Statements  | 66.51% | 63% | 70% | 80% |
+| Functions   | 44.49% | 43% | 50% | 60% |
+| Branches    | 60.90% | 60% | 65% | 75% |
 
 > **Threshold = floor.** The numbers in `vitest.config.ts` MUST match this
 > table. Whenever a PR adds meaningful coverage to one of the P0 priority
@@ -27,7 +27,15 @@
 
 ## Priority coverage gaps
 
-Ranked by business impact — files at **0%** that should get tests first:
+The project no longer accepts audited runtime source files at **0% line
+coverage**; `npm run test:audit-coverage` enforces that using
+`coverage/coverage-summary.json` plus `docs/audit-coverage-inventory.json`.
+This is still not a claim that every line/function has been exercised. It proves
+that coverage was measured, that every audited runtime file has at least one
+executed line, and that remaining low-coverage files are visible in the
+inventory for prioritization.
+
+Ranked by business impact:
 
 ### P0 — Revenue / trust paths
 - `src/pages/PropertyDetail.tsx` (has partial coverage — extend)
@@ -91,6 +99,9 @@ npm run test:watch        # watch mode
 npm run test:coverage
 start ./coverage/index.html
 
+# Strict audit coverage inventory
+npm run test:audit-coverage
+
 # E2E (requires dev server on :8080 or auto-starts per playwright.config.ts)
 npm run test:e2e
 npm run test:e2e:ui       # Playwright inspector UI
@@ -114,6 +125,6 @@ npm run test:deno
 - run: npm ci
 - run: npm run lint
 - run: npx tsc -p tsconfig.app.json --noEmit
-- run: npm run test:coverage
+- run: npm run test:audit-coverage
 - run: npm audit --omit=dev --audit-level=high
 ```
