@@ -41,6 +41,10 @@ and must remain mapped to this release branch:
 - `npm run test:e2e:live-smoke` now covers account deletion auth, checkout
   eligibility, role approval access, firesale access, and open-house/RPC
   boundaries.
+- `admin-review-invitation` Edge Function and
+  `20260514172000_admin_review_invitation_workflow` move Quick Sale invitation
+  approval/rejection invariants out of the browser and into an admin-checked
+  DB/edge workflow.
 
 ## Verification Commands
 
