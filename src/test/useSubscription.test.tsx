@@ -30,6 +30,18 @@ vi.mock("@/contexts/AuthContext", () => ({
   useAuth: vi.fn(),
 }));
 
+vi.mock("@/hooks/usePricingConfigs", () => ({
+  PRICING_KEYS: { developer_pro: "developer_pro" },
+  usePricingConfigs: vi.fn(() => ({
+    data: {
+      developer_pro: {
+        stripeProductId: "prod_developer",
+      },
+    },
+    isLoading: false,
+  })),
+}));
+
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
 
@@ -76,6 +88,18 @@ describe("useSubscription", () => {
     const { result } = renderHook(() => useSubscription(), { wrapper });
     await waitFor(() => expect(result.current.isPro).toBe(true));
     expect(result.current.productId).toBe("prod_abc");
+  });
+
+  it("does not grant developer modules for a non-developer Pro product", async () => {
+    (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({
+      subscription: { subscribed: true, productId: "prod_abc", subscriptionEnd: "2027-01-01", loading: false },
+      refreshSubscription: vi.fn(),
+      profile: { role: "developer", participant_type: "developer" },
+      user: { id: "u5" },
+    });
+    const { result } = renderHook(() => useSubscription(), { wrapper });
+    await waitFor(() => expect(result.current.isPro).toBe(true));
+    expect(result.current.hasDeveloperPro).toBe(false);
   });
 
   it("force_pro_access grants isPro", () => {

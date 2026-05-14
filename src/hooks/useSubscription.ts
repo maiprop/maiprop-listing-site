@@ -1,6 +1,7 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { isPlatformAdmin } from "@/lib/authUtils";
 import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
+import { PRICING_KEYS, usePricingConfigs } from "@/hooks/usePricingConfigs";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -67,12 +68,22 @@ const isLoadingSubscriptionAccess = (options: {
 const hasDeveloperEntitlement = (options: {
   isAdmin: boolean;
   forceProAccess: boolean;
-  hasValidatedProProduct: boolean;
+  subscribed: boolean;
+  effectiveProductId: string | null;
+  developerProductIds: string[];
 }) => (
   options.isAdmin ||
   options.forceProAccess ||
-  options.hasValidatedProProduct
+  (
+    options.subscribed &&
+    typeof options.effectiveProductId === "string" &&
+    options.developerProductIds.includes(options.effectiveProductId)
+  )
 );
+
+const getDeveloperProductIds = (pricingConfigs: ReturnType<typeof usePricingConfigs>["data"]) => [
+  pricingConfigs?.[PRICING_KEYS.developer_pro]?.stripeProductId,
+].filter((value): value is string => typeof value === "string" && value.length > 0);
 
 /**
  * Thin wrapper around AuthContext.subscription.
@@ -82,6 +93,7 @@ const hasDeveloperEntitlement = (options: {
  */
 export const useSubscription = () => {
   const { subscription, refreshSubscription, profile, user } = useAuth();
+  const { data: pricingConfigs, isLoading: pricingConfigsLoading } = usePricingConfigs();
   const { productId: profileProductId, forceProAccess } = getProfileSubscriptionFields(profile);
   const isAdmin = isPlatformAdmin(profile);
   const isInvestorRole = isInvestorParticipant(profile);
@@ -96,7 +108,9 @@ export const useSubscription = () => {
   const hasDeveloperPro = hasDeveloperEntitlement({
     isAdmin,
     forceProAccess,
-    hasValidatedProProduct,
+    subscribed: subscription.subscribed,
+    effectiveProductId,
+    developerProductIds: getDeveloperProductIds(pricingConfigs),
   });
 
   return {
@@ -110,7 +124,7 @@ export const useSubscription = () => {
       investorLoading: investorStatusLoading,
       subscribed: subscription.subscribed,
       hasEffectiveProduct,
-      proProductLoading: validatedProProductLoading,
+      proProductLoading: validatedProProductLoading || pricingConfigsLoading,
     }),
     refreshSubscription,
   };
