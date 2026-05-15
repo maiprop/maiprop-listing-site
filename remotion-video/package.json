@@ -3,11 +3,6 @@
   "module": "index.ts",
   "type": "module",
   "private": true,
-  "scripts": {
-    "render": "node scripts/render-remotion.mjs",
-    "render:all": "node scripts/render-remotion.mjs --all",
-    "render:stakeholders": "node scripts/render-remotion.mjs --stakeholders"
-  },
   "devDependencies": {
     "@types/bun": "latest"
   },
@@ -17,6 +12,8 @@
   "dependencies": {
     "@remotion/bundler": "^4.0.451",
     "@remotion/cli": "^4.0.451",
+    "@remotion/compositor-linux-x64-gnu": "^4.0.451",
+    "@remotion/compositor-linux-x64-musl": "^4.0.451",
     "@remotion/google-fonts": "^4.0.451",
     "@remotion/renderer": "^4.0.451",
     "@remotion/transitions": "^4.0.451",
@@ -24,10 +21,5 @@
     "react": "18",
     "react-dom": "18",
     "remotion": "^4.0.451"
-  },
-  "optionalDependencies": {
-    "@remotion/compositor-linux-x64-gnu": "^4.0.451",
-    "@remotion/compositor-linux-x64-musl": "^4.0.451",
-    "@remotion/compositor-win32-x64-msvc": "^4.0.451"
   }
 }
