@@ -97,6 +97,9 @@ Dashboard → Project Settings → Edge Functions → Secrets.
 
 | Secret | Used by |
 |---|---|
+| `BILLING_MODE=mock` | Temporary billing mode for health, checkout, billing portal, and invoice surfaces while real Stripe IDs/secrets are unavailable. Remove before real paid launch. |
+| `STRIPE_MODE=mock` | Alternate explicit mock billing-mode flag; prefer `BILLING_MODE=mock` for new environments. |
+| `STRIPE_MOCK_MODE=true` | Legacy equivalent of `BILLING_MODE=mock`; prefer `BILLING_MODE=mock`. |
 | `STRIPE_SECRET_KEY` | `stripe-webhook`, `create-checkout`, `customer-portal`, `get-invoices`, `create-stripe-price`, `sync-stripe-pricing` |
 | `STRIPE_WEBHOOK_SECRET` | `stripe-webhook` |
 | `MAIPROP_OS_WEBHOOK_SECRET` | `receive-from-os` (HMAC, see `WEBHOOK_VERIFICATION.md`) |

@@ -1,13 +1,15 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { jsonResponse } from "../_shared/response.ts";
+import { getStripeMode } from "../_shared/stripeMode.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return handleCors(req) ?? new Response("ok");
   const headers = getCorsHeaders(req);
 
-  const checks: Record<string, "ok" | "fail"> = {};
+  const checks: Record<string, "ok" | "fail" | "mock"> = {};
   let allOk = true;
+  const billingMode = getStripeMode();
 
   // 1. Database connectivity
   try {
@@ -31,8 +33,9 @@ Deno.serve(async (req) => {
   // 3. Integrations. Billing is a release-critical dependency: a missing
   // Stripe secret should degrade health instead of hiding behind "healthy".
   checks.openai = Deno.env.get("OPENAI_API_KEY") ? "ok" : "fail";
-  checks.stripe = Deno.env.get("STRIPE_SECRET_KEY") &&
-      Deno.env.get("STRIPE_WEBHOOK_SECRET")
+  checks.stripe = billingMode === "mock"
+    ? "mock"
+    : Deno.env.get("STRIPE_SECRET_KEY") && Deno.env.get("STRIPE_WEBHOOK_SECRET")
     ? "ok"
     : "fail";
   checks.sentry = Deno.env.get("SENTRY_DSN") ? "ok" : "fail";
@@ -41,7 +44,12 @@ Deno.serve(async (req) => {
 
   const status = allOk ? 200 : 503;
   return jsonResponse(
-    { status: allOk ? "healthy" : "degraded", checks, timestamp: new Date().toISOString() },
+    {
+      status: allOk ? "healthy" : "degraded",
+      billing_mode: billingMode,
+      checks,
+      timestamp: new Date().toISOString(),
+    },
     status,
     headers,
   );

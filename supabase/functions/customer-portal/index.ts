@@ -1,13 +1,24 @@
 import Stripe from "npm:stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
-import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
-import { verifyBearerToken, AuthError } from "../_shared/auth.ts";
+import {
+  makeRateLimiter,
+  tooManyRequestsResponse,
+} from "../_shared/rateLimit.ts";
+import { AuthError, verifyBearerToken } from "../_shared/auth.ts";
 import { createLogger } from "../_shared/logger.ts";
+import {
+  isStripeMockMode,
+  withMockBillingParams,
+} from "../_shared/stripeMode.ts";
 
 const log = createLogger("customer-portal");
 
-const portalLimiter = makeRateLimiter({ bucket: "customer-portal", maxRequests: 10, windowMs: 60_000 });
+const portalLimiter = makeRateLimiter({
+  bucket: "customer-portal",
+  maxRequests: 10,
+  windowMs: 60_000,
+});
 
 // Redirect the legacy logStep helper through the structured logger.
 const logStep = (step: string, details?: unknown): void => {
@@ -16,8 +27,8 @@ const logStep = (step: string, details?: unknown): void => {
     details && typeof details === "object"
       ? (details as Record<string, unknown>)
       : details !== undefined
-        ? { details }
-        : undefined,
+      ? { details }
+      : undefined,
   );
 };
 
@@ -57,8 +68,11 @@ Deno.serve(async (req) => {
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
 
-  const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
-  if (await portalLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
+  const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    "anonymous";
+  if (await portalLimiter.isLimited(_ip)) {
+    return tooManyRequestsResponse(corsHeaders);
+  }
 
   const supabaseClient = createClient(
     Deno.env.get("SUPABASE_URL") ?? "",
@@ -68,23 +82,42 @@ Deno.serve(async (req) => {
 
   try {
     logStep("Function started");
-    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
-    if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
-
     const user = await verifyBearerToken(req, supabaseClient);
     logStep("User authenticated", { userId: user.id, email: user.email });
+
+    const origin = req.headers.get("origin") || "https://portal.maiprop.co";
+    if (isStripeMockMode()) {
+      return new Response(
+        JSON.stringify({
+          url: `${origin}${
+            withMockBillingParams("/dashboard/billing", { portal: "mock" })
+          }`,
+          mock: true,
+          billing_reason: "stripe_mock",
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        },
+      );
+    }
+
+    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
+    if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
     const customerId = await resolveCustomer(stripe, user);
     if (!customerId) {
-      return new Response(JSON.stringify({ error: "No Stripe customer found" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 404,
-      });
+      return new Response(
+        JSON.stringify({ error: "No Stripe customer found" }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 404,
+        },
+      );
     }
     logStep("Customer found", { customerId });
 
-    const origin = req.headers.get("origin") || "https://portal.maiprop.co";
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: customerId,
       // /dashboard/billing is a real route (Dashboard.tsx renders BillingTab for :section=billing).

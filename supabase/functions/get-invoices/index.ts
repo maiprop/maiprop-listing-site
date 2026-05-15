@@ -6,6 +6,7 @@ import {
   makeRateLimiter,
   tooManyRequestsResponse,
 } from "../_shared/rateLimit.ts";
+import { isStripeMockMode } from "../_shared/stripeMode.ts";
 
 const log = createLogger("get-invoices");
 const limiter = makeRateLimiter({
@@ -104,6 +105,24 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 401,
       });
+    }
+
+    if (isStripeMockMode()) {
+      return new Response(
+        JSON.stringify({
+          invoices: [],
+          subscription: null,
+          billing_configured: true,
+          customer_found: false,
+          portal_eligible: false,
+          billing_reason: "stripe_mock",
+          billing_mode: "mock",
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        },
+      );
     }
 
     if (!stripeKey) {

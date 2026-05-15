@@ -7,6 +7,10 @@ import {
   makeRateLimiter,
   tooManyRequestsResponse,
 } from "../_shared/rateLimit.ts";
+import {
+  isStripeMockMode,
+  withMockBillingParams,
+} from "../_shared/stripeMode.ts";
 
 const log = createLogger("create-checkout");
 const limiter = makeRateLimiter({
@@ -177,10 +181,16 @@ function getPlanEntitlement(planKey: string) {
 }
 
 function normalizeAudience(raw: string | null | undefined): string | null {
-  if (raw === "buyer" || raw === "seller" || raw === "participant" || raw === "pro") {
+  if (
+    raw === "buyer" || raw === "seller" || raw === "participant" ||
+    raw === "pro"
+  ) {
     return "participant";
   }
-  if (raw === "agent" || raw === "developer" || raw === "professional" || raw === "investor" || raw === "institutional") {
+  if (
+    raw === "agent" || raw === "developer" || raw === "professional" ||
+    raw === "investor" || raw === "institutional"
+  ) {
     return raw;
   }
   return null;
@@ -207,7 +217,25 @@ async function getCheckoutProfile(
   return (data as CheckoutProfileRow | null) ?? null;
 }
 
-export function getStripePriceEnvKey(planKey: string, billingCycle: BillingCycle): string {
+function buildMockCheckoutUrl(
+  origin: string,
+  successPath: string | null,
+  plan: string,
+  billingCycle: BillingCycle,
+): string {
+  return `${origin}${
+    withMockBillingParams(successPath ?? "/pricing?checkout=success", {
+      checkout: "success",
+      plan,
+      billing_cycle: billingCycle,
+    })
+  }`;
+}
+
+export function getStripePriceEnvKey(
+  planKey: string,
+  billingCycle: BillingCycle,
+): string {
   const normalizedPlan = planKey.toUpperCase().replace(/-/g, "_");
   const suffix = billingCycle === "annual" ? "ANNUAL" : "MONTHLY";
   return `STRIPE_PRICE_${normalizedPlan}_${suffix}`;
@@ -232,17 +260,25 @@ const PLAN_PRICE_ENV_ALIASES: Record<string, Record<BillingCycle, string[]>> = {
   },
 };
 
-export function getStripePriceEnvKeys(planKey: string, billingCycle: BillingCycle): string[] {
-  return Array.from(new Set([
-    ...(PLAN_PRICE_ENV_ALIASES[planKey]?.[billingCycle] ?? []),
-    getStripePriceEnvKey(planKey, billingCycle),
-    ...(billingCycle === "annual"
-      ? [`STRIPE_PRICE_${planKey.toUpperCase().replace(/-/g, "_")}_YEARLY`]
-      : [`STRIPE_PRICE_${planKey.toUpperCase().replace(/-/g, "_")}`]),
-  ]));
+export function getStripePriceEnvKeys(
+  planKey: string,
+  billingCycle: BillingCycle,
+): string[] {
+  return Array.from(
+    new Set([
+      ...(PLAN_PRICE_ENV_ALIASES[planKey]?.[billingCycle] ?? []),
+      getStripePriceEnvKey(planKey, billingCycle),
+      ...(billingCycle === "annual"
+        ? [`STRIPE_PRICE_${planKey.toUpperCase().replace(/-/g, "_")}_YEARLY`]
+        : [`STRIPE_PRICE_${planKey.toUpperCase().replace(/-/g, "_")}`]),
+    ]),
+  );
 }
 
-function getFirstConfiguredEnvPrice(planKey: string, billingCycle: BillingCycle): string | null {
+function getFirstConfiguredEnvPrice(
+  planKey: string,
+  billingCycle: BillingCycle,
+): string | null {
   for (const key of getStripePriceEnvKeys(planKey, billingCycle)) {
     const value = Deno.env.get(key);
     if (value) return value;
@@ -250,7 +286,10 @@ function getFirstConfiguredEnvPrice(planKey: string, billingCycle: BillingCycle)
   return null;
 }
 
-function getDbStripePriceId(row: PricingConfigRow | null, billingCycle: BillingCycle): string | undefined {
+function getDbStripePriceId(
+  row: PricingConfigRow | null,
+  billingCycle: BillingCycle,
+): string | undefined {
   const meta = row?.metadata ?? {};
   if (billingCycle === "annual") {
     return meta.stripe_price_id_annual ??
@@ -300,12 +339,26 @@ async function getCheckoutPlan(
 
   const envPrice = getFirstConfiguredEnvPrice(planKey, billingCycle);
   if (envPrice) {
-    return { priceId: envPrice, planKey, audience: entitlement.audience, role: entitlement.role, billingCycle };
+    return {
+      priceId: envPrice,
+      planKey,
+      audience: entitlement.audience,
+      role: entitlement.role,
+      billingCycle,
+    };
   }
 
-  const defaultPrice = planKey === "pro" && billingCycle === "monthly" ? Deno.env.get("STRIPE_PRICE_DEFAULT") : null;
+  const defaultPrice = planKey === "pro" && billingCycle === "monthly"
+    ? Deno.env.get("STRIPE_PRICE_DEFAULT")
+    : null;
   return defaultPrice
-    ? { priceId: defaultPrice, planKey, audience: entitlement.audience, role: entitlement.role, billingCycle }
+    ? {
+      priceId: defaultPrice,
+      planKey,
+      audience: entitlement.audience,
+      role: entitlement.role,
+      billingCycle,
+    }
     : null;
 }
 
@@ -425,7 +478,9 @@ Deno.serve(async (req) => {
         },
       );
     }
-    const billingCycle = normalizeBillingCycle(body.billing_cycle ?? body.billingCycle);
+    const billingCycle = normalizeBillingCycle(
+      body.billing_cycle ?? body.billingCycle,
+    );
     if (!billingCycle) {
       return new Response(JSON.stringify({ error: "Invalid billing cycle" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -438,25 +493,19 @@ Deno.serve(async (req) => {
     const successPath = sanitizeRedirectPath(body.success_url);
     const cancelPath = sanitizeRedirectPath(body.cancel_url);
 
-    const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
-      apiVersion: "2025-08-27.basil",
-    });
-
-    const checkoutPlan = await getCheckoutPlan(supabaseClient, plan, billingCycle);
-    if (!checkoutPlan) {
-      log.warn("checkout price not configured", { plan });
-      return new Response(JSON.stringify({ error: "Plan is unavailable" }), {
+    const entitlement = getPlanEntitlement(plan);
+    if (!entitlement) {
+      return new Response(JSON.stringify({ error: "Unknown plan" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 404,
+        status: 400,
       });
     }
-
     const profile = await getCheckoutProfile(supabaseClient, user.id);
-    if (!isCheckoutAudienceAllowed(checkoutPlan.audience, profile)) {
+    if (!isCheckoutAudienceAllowed(entitlement.audience, profile)) {
       log.warn("blocked cross-role checkout attempt", {
         userId: user.id,
         plan,
-        audience: checkoutPlan.audience,
+        audience: entitlement.audience,
         profileRole: profile?.role ?? null,
         profileParticipantType: profile?.participant_type ?? null,
       });
@@ -471,6 +520,48 @@ Deno.serve(async (req) => {
         },
       );
     }
+
+    const origin = resolveCheckoutOrigin(req.headers.get("origin"));
+    if (isStripeMockMode()) {
+      const url = buildMockCheckoutUrl(origin, successPath, plan, billingCycle);
+      logStep("Mock checkout session returned", {
+        userId: user.id,
+        plan,
+        audience: entitlement.audience,
+        billingCycle,
+      });
+      return new Response(
+        JSON.stringify({
+          url,
+          mock: true,
+          mode: "mock",
+          plan,
+          billing_cycle: billingCycle,
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        },
+      );
+    }
+
+    const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
+      apiVersion: "2025-08-27.basil",
+    });
+
+    const checkoutPlan = await getCheckoutPlan(
+      supabaseClient,
+      plan,
+      billingCycle,
+    );
+    if (!checkoutPlan) {
+      log.warn("checkout price not configured", { plan });
+      return new Response(JSON.stringify({ error: "Plan is unavailable" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 404,
+      });
+    }
+
     logStep("Resolved price", {
       plan,
       priceId: checkoutPlan.priceId,
@@ -479,7 +570,6 @@ Deno.serve(async (req) => {
     });
 
     const customerId = await getOrCreateOwnedStripeCustomer(stripe, user);
-    const origin = resolveCheckoutOrigin(req.headers.get("origin"));
     const success = `${origin}${successPath ?? "/pricing?checkout=success"}`;
     const cancel = `${origin}${cancelPath ?? "/pricing?checkout=cancelled"}`;
     const redirectHash = await shortSha256(`${success}|${cancel}`);
@@ -511,7 +601,9 @@ Deno.serve(async (req) => {
             audience: checkoutPlan.audience,
             role: checkoutPlan.role,
             billing_cycle: checkoutPlan.billingCycle,
-            ...(checkoutPlan.productId ? { product_id: checkoutPlan.productId } : {}),
+            ...(checkoutPlan.productId
+              ? { product_id: checkoutPlan.productId }
+              : {}),
           },
         },
       },

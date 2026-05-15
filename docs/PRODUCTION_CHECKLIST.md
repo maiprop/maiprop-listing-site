@@ -32,6 +32,7 @@ Go through every box **before** promoting a release to production. This is a saf
 
 - [ ] Production webhook endpoint exists in Stripe dashboard and points at `https://<prod-ref>.supabase.co/functions/v1/stripe-webhook`.
 - [ ] `STRIPE_WEBHOOK_SECRET` in Supabase matches the one shown in Stripe dashboard (they rotate on endpoint recreate).
+- [ ] `BILLING_MODE`/`STRIPE_MOCK_MODE` are unset before paid production launch; mock mode is only for pre-Stripe smoke checks and never proves real payment activation.
 - [ ] `npm run test:deno` passes — signature tests are green.
 - [ ] `VITE_STRIPE_PRICE_*` point to **live-mode** price IDs. No `_test_` substring.
 - [ ] Manual test: complete a checkout with a real card in an off-hours window; verify subscription appears in profile and webhook delivered 200.
