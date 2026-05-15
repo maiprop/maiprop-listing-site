@@ -102,7 +102,7 @@ const coerceStringArray = (value: unknown, allowed?: Set<string>): string[] => {
     .slice(0, 24);
 };
 
-Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates auth, quota, AI parsing, and response shaping.
+const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS-R1005 - One Edge handler coordinates auth, quota, AI parsing, and response shaping.
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
@@ -199,4 +199,6 @@ Rules:
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+};
+
+Deno.serve(handleRequest);

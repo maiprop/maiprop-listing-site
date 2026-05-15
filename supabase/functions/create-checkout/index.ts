@@ -193,9 +193,9 @@ const CHECKOUT_AUDIENCE_ALIASES: Record<string, string> = {
   user: "participant",
 };
 
-function normalizeAudience(raw: string | null | undefined): string | null {
+const normalizeAudience = (raw: string | null | undefined): string | null => {
   return raw ? CHECKOUT_AUDIENCE_ALIASES[raw] ?? null : null;
-}
+};
 
 export function isCheckoutAudienceAllowed(
   planAudience: string,

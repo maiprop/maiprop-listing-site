@@ -48,7 +48,7 @@ const parseMatchJson = (raw: string): Record<string, unknown> => {
   return JSON.parse(cleaned.slice(start, end + 1)) as Record<string, unknown>;
 };
 
-Deno.serve(async (req) => {
+const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS-R1005 - One Edge handler coordinates auth, quota, AI parsing, and response shaping.
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
@@ -119,4 +119,6 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+};
+
+Deno.serve(handleRequest);

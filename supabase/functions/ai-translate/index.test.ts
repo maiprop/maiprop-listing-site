@@ -74,23 +74,23 @@ Deno.test("unknown origin falls back to production CORS origin", async () => {
 
 Deno.test("translation parse failures do not expose raw model output", async () => {
   const originalFetch = globalThis.fetch;
-  const fetchMock = async (input: RequestInfo | URL): Promise<Response> => {
+  const fetchMock = (input: RequestInfo | URL): Promise<Response> => {
     const url = String(input);
     if (url.includes("/auth/v1/user")) {
-      return new Response(JSON.stringify({ user: { id: "user-1" } }), {
+      return Promise.resolve(new Response(JSON.stringify({ user: { id: "user-1" } }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
-      });
+      }));
     }
     if (url.includes("generativelanguage.googleapis.com") || url.includes("api.openai.com")) {
-      return new Response(JSON.stringify({
+      return Promise.resolve(new Response(JSON.stringify({
         choices: [{ message: { content: "not-json-secret-fragment" } }],
       }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
-      });
+      }));
     }
-    return new Response("{}", { status: 200 });
+    return Promise.resolve(new Response("{}", { status: 200 }));
   };
   globalThis.fetch = fetchMock as typeof fetch;
   try {

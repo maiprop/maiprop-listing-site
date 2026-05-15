@@ -9,7 +9,7 @@ const log = createLogger("listing-ai-assist");
 const BUCKET = "listing-ai-assist";
 const listingAiLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 20, windowMs: 60_000, failClosed: true });
 
-Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates auth, quota, provider errors, and response shaping.
+const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS-R1005 - One Edge handler coordinates auth, quota, provider errors, and response shaping.
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
@@ -108,4 +108,6 @@ ${property.listing_type === "rent" ? "Provide monthly rent estimate in EUR." : "
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+};
+
+Deno.serve(handleRequest);

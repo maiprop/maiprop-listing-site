@@ -47,9 +47,9 @@ const SUBSCRIPTION_AUDIENCE_ALIASES: Record<string, SubscriptionAudience> = {
   user: "participant",
 };
 
-export function normalizeSubscriptionAudience(raw: string | null | undefined): SubscriptionAudience | null {
+export const normalizeSubscriptionAudience = (raw: string | null | undefined): SubscriptionAudience | null => {
   return raw ? SUBSCRIPTION_AUDIENCE_ALIASES[raw] ?? null : null;
-}
+};
 
 export function isSubscriptionAudienceAllowed(
   productAudience: string | null | undefined,
