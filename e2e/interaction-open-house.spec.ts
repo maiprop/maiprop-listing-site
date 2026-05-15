@@ -15,13 +15,14 @@
  */
 import { test, expect, type Page, type BrowserContext } from "@playwright/test";
 import { getBaseURL } from "./helpers/baseURL";
+import { seededDemoAccountsEnabled } from "./helpers/demoAccounts";
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
 const PASSWORD = process.env.E2E_DEMO_PASSWORD ?? "Demo2025!";
-const hasCredentials = PASSWORD !== "";
+const hasCredentials = PASSWORD !== "" && seededDemoAccountsEnabled();
 
 const ACCOUNTS = {
   buyerFree: process.env.E2E_BUYER_FREE_EMAIL ?? "buyer.free@maiprop.demo",

@@ -9,7 +9,7 @@
  */
 import { test, expect, type Page, type Browser } from "@playwright/test";
 import { getBaseURL } from "./helpers/baseURL";
-import { demoAccounts, demoPasswords } from "./helpers/demoAccounts";
+import { demoAccounts, demoPasswords, seededDemoAccountsEnabled } from "./helpers/demoAccounts";
 
 // ── Credentials ───────────────────────────────────────────────────────────────
 
@@ -17,6 +17,7 @@ const buyerEmail = demoAccounts.buyerFree;
 const buyerPassword = demoPasswords.buyerFree;
 const sellerEmail = demoAccounts.sellerPro;
 const sellerPassword = demoPasswords.sellerPro;
+const hasSeededDemoAccounts = seededDemoAccountsEnabled();
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -83,6 +84,7 @@ const navigateToFirstListing = async (page: Page): Promise<string | null> => {
 // ── Multi-context tests ───────────────────────────────────────────────────────
 
 test.describe("Buyer + Seller simultaneous sessions", () => {
+  test.skip(!hasSeededDemoAccounts, "Seeded demo accounts require real Supabase config");
   // 1. Both users can sign in at the same time
   test("buyer and seller can both sign in simultaneously", async ({
     browser,
@@ -165,6 +167,7 @@ test.describe("Buyer + Seller simultaneous sessions", () => {
 // ── Single-context buyer tests ────────────────────────────────────────────────
 
 test.describe("Buyer — listings and property detail", () => {
+  test.skip(!hasSeededDemoAccounts, "Seeded demo accounts require real Supabase config");
   // 2. Buyer browses listings and opens a property detail
   test("buyer can browse listings and navigate to a property detail page", async ({
     page,
@@ -320,6 +323,7 @@ test.describe("Buyer — listings and property detail", () => {
 // ── Single-context seller tests ───────────────────────────────────────────────
 
 test.describe("Seller — dashboard and listings", () => {
+  test.skip(!hasSeededDemoAccounts, "Seeded demo accounts require real Supabase config");
   // 5. Seller can view their dashboard without crash
   test("seller can view their listings in the dashboard", async ({ page }) => {
     await signInAs(page, sellerEmail, sellerPassword);

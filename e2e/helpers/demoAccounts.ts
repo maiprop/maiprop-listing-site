@@ -155,5 +155,15 @@ export const seededDemoAccountsEnabled = (
   ...requiredEnvKeys: string[]
 ): boolean => {
   if (process.env.E2E_USE_SEEDED_DEMO_ACCOUNTS === "true") return true;
+  const supabaseUrl = process.env.VITE_SUPABASE_URL ?? "";
+  const supabaseKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "";
+  if (
+    !supabaseUrl ||
+    supabaseUrl.includes("abcdefghijklmnop") ||
+    !supabaseKey ||
+    supabaseKey.includes("placeholder")
+  ) {
+    return false;
+  }
   return requiredEnvKeys.every((key) => Boolean(process.env[key]));
 };
