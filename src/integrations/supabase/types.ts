@@ -3227,6 +3227,21 @@ export type Database = {
         }
         Returns: undefined
       }
+      create_open_house_registration: {
+        Args: {
+          p_contact_email?: string | null
+          p_contact_name?: string | null
+          p_contact_permission?: boolean
+          p_contact_phone?: string | null
+          p_id_verification_consent?: boolean
+          p_listing_id: string
+          p_note?: string | null
+          p_privacy_acknowledgement?: boolean
+          p_timeslot_index?: number | null
+          p_visit_purpose?: string | null
+        }
+        Returns: Database["public"]["Tables"]["open_house_registrations"]["Row"]
+      }
       delete_email: {
         Args: { message_id: number; queue_name: string }
         Returns: boolean

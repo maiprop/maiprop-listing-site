@@ -6,6 +6,21 @@ import type { Database } from "@/integrations/supabase/types";
 
 type OHRegUpdate = Database["public"]["Tables"]["open_house_registrations"]["Update"];
 type OHOfferUpdate = Database["public"]["Tables"]["open_house_offers"]["Update"];
+type CreateOpenHouseRegistrationRpc = (
+  fn: "create_open_house_registration",
+  args: {
+    p_listing_id: string;
+    p_timeslot_index?: number | null;
+    p_contact_name?: string | null;
+    p_contact_email?: string | null;
+    p_contact_phone?: string | null;
+    p_visit_purpose?: string | null;
+    p_note?: string | null;
+    p_contact_permission?: boolean;
+    p_id_verification_consent?: boolean;
+    p_privacy_acknowledgement?: boolean;
+  },
+) => Promise<{ data: OpenHouseRegistration | null; error: { code?: string; message?: string } | null }>;
 type SubmitOpenHouseOfferRpc = (
   fn: "submit_open_house_offer",
   args: {
@@ -328,24 +343,19 @@ export function useCreateOpenHouseRegistration() {
     }) => {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) throw new Error("Not authenticated");
-      const { data, error } = await supabase
-        .from("open_house_registrations")
-        .insert({
-          listing_id: listingId,
-          requester_id: authUser.id,
-          contact_name: contactName,
-          contact_email: contactEmail,
-          contact_phone: contactPhone,
-          contact_permission_at: new Date().toISOString(),
-          id_verification_consent_at: new Date().toISOString(),
-          privacy_acknowledged_at: new Date().toISOString(),
-          visit_purpose: visitPurpose || null,
-          timeslot_index: timeslotIndex ?? null,
-          status: "pending" as OHRegistrationStatus,
-          note: note || null,
-        })
-        .select()
-        .single();
+      const rpc = supabase.rpc as unknown as CreateOpenHouseRegistrationRpc;
+      const { data, error } = await rpc("create_open_house_registration", {
+          p_listing_id: listingId,
+          p_timeslot_index: timeslotIndex ?? null,
+          p_contact_name: contactName,
+          p_contact_email: contactEmail,
+          p_contact_phone: contactPhone,
+          p_visit_purpose: visitPurpose || null,
+          p_note: note || null,
+          p_contact_permission: true,
+          p_id_verification_consent: true,
+          p_privacy_acknowledgement: true,
+        });
       if (error) {
         // Handle duplicate registration gracefully — fetch existing and return it
         if (error.code === "23505") {
@@ -364,6 +374,17 @@ export function useCreateOpenHouseRegistration() {
         }
         // PostgrestError has a `.message` but does not extend Error — wrap it so
         // the onError handler always receives a true Error instance.
+        const capacityMessages: Record<string, string> = {
+          open_house_total_capacity_reached: "This open house is fully booked.",
+          open_house_timeslot_capacity_reached: "That timeslot is fully booked. Please choose another slot.",
+          open_house_timeslot_required: "Please choose a timeslot.",
+          open_house_timeslot_invalid: "That timeslot is no longer available. Please choose another slot.",
+          open_house_registration_closed: "Registration for this open house is closed.",
+          open_house_not_active: "This open house is not accepting registrations.",
+        };
+        if (error.message && capacityMessages[error.message]) {
+          throw new Error(capacityMessages[error.message]);
+        }
         throw new Error(error.message || "Registration failed. Please try again.");
       }
       return data;
@@ -512,6 +533,7 @@ export function useUpdateOpenHouseRegistration() {
           "attended_at",
           "rejection_reason",
           "pof_verified_status",
+          "timeslot_index",
         ] as const;
         if (!requesterStatusAllowed || ownerOnlyFields.some((field) => field in updates)) {
           throw new Error("Only the host can approve, reject, or mark attendance.");

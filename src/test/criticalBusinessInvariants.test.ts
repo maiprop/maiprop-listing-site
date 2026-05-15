@@ -65,6 +65,7 @@ describe("critical business invariants", () => {
   it("keeps open-house registration, attendance, and offer state enforced in the database", () => {
     const registration = read("supabase/migrations/20260515092259_open_house_registration_contact_verification.sql");
     const registrationGuard = read("supabase/migrations/20260514185213_harden_open_house_registration_updates.sql");
+    const registrationCapacity = read("supabase/migrations/20260515200905_serialize_open_house_registration_capacity.sql");
     const offers = read("supabase/migrations/20260514142236_harden_open_house_offer_workflow.sql");
 
     expect(registration).toContain("open_house_contact_name_required");
@@ -74,6 +75,13 @@ describe("critical business invariants", () => {
 
     expect(registrationGuard).toContain("host_controlled_open_house_fields");
     expect(registrationGuard).toContain("requester_can_only_cancel_registration");
+
+    expect(registrationCapacity).toContain("create_open_house_registration");
+    expect(registrationCapacity).toContain("pg_advisory_xact_lock");
+    expect(registrationCapacity).toContain("open_house_total_capacity_reached");
+    expect(registrationCapacity).toContain("open_house_timeslot_capacity_reached");
+    expect(registrationCapacity).toContain("guard_open_house_registration_insert");
+    expect(registrationCapacity).toContain("use_create_open_house_registration_rpc");
 
     expect(offers).toContain("idx_open_house_one_accepted_offer_per_listing");
     expect(offers).toContain("submit_open_house_offer");
