@@ -58,26 +58,42 @@ const getFallbackConversationId = async (participantFilter: string) => {
   return data?.[0]?.id ?? null;
 };
 
-const startConversationForUser = async (
-  currentUserId: string | undefined,
-  { other_user_id, listing_id }: StartConversationInput,
-) => {
+const requireCurrentUserId = (currentUserId: string | undefined) => {
   if (!currentUserId) throw new Error("Must be logged in");
-  if (other_user_id === currentUserId) throw new Error("Cannot start a conversation with yourself");
+  return currentUserId;
+};
 
-  const participantFilter = getParticipantConversationFilter(currentUserId, other_user_id);
-  const targetListingId = listing_id ?? null;
-  const conversations = await selectParticipantConversations(participantFilter);
-  const reusableConversationId = getReusableConversationId(conversations, targetListingId);
-  if (reusableConversationId) return reusableConversationId;
+const assertDifferentParticipant = (currentUserId: string, otherUserId: string) => {
+  if (otherUserId === currentUserId) throw new Error("Cannot start a conversation with yourself");
+};
 
+const createConversationWithFallback = async (
+  currentUserId: string,
+  otherUserId: string,
+  targetListingId: string | null,
+  participantFilter: string,
+) => {
   try {
-    return await insertConversation(currentUserId, other_user_id, targetListingId);
+    return await insertConversation(currentUserId, otherUserId, targetListingId);
   } catch (error: unknown) {
     const fallbackConversationId = await getFallbackConversationId(participantFilter);
     if (fallbackConversationId) return fallbackConversationId;
     throw error;
   }
+};
+
+const startConversationForUser = async (
+  currentUserId: string | undefined,
+  { other_user_id, listing_id }: StartConversationInput,
+) => {
+  const userId = requireCurrentUserId(currentUserId);
+  assertDifferentParticipant(userId, other_user_id);
+  const participantFilter = getParticipantConversationFilter(userId, other_user_id);
+  const targetListingId = listing_id ?? null;
+  const conversations = await selectParticipantConversations(participantFilter);
+  const reusableConversationId = getReusableConversationId(conversations, targetListingId);
+  return reusableConversationId
+    ?? createConversationWithFallback(userId, other_user_id, targetListingId, participantFilter);
 };
 
 export function useConversations() {

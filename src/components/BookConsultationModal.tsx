@@ -10,6 +10,21 @@ import { toast } from "sonner";
 const PRICING_LABELS: Record<string, string> = { hourly: "/hr", daily: "/day", fixed: "fixed" };
 const SLOT_INTERVAL_MINUTES = 60;
 
+const normalizeSlotMinute = (minute: number) => (minute === 30 ? 30 : 0);
+
+const parseSlotStart = (time: string) => {
+  const [hour, minute] = time.split(":").map(Number);
+  return hour * 60 + normalizeSlotMinute(minute);
+};
+
+const parseSlotEnd = (time: string) => Number(time.split(":")[0]) * 60;
+
+const formatSlotTime = (minutes: number) => {
+  const hour = Math.floor(minutes / 60);
+  const minute = minutes % 60;
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+};
+
 const getAvailableDays = (availability: { day_of_week: number; start_time: string; end_time: string }[], count = 14) => {
   const days: { label: string; date: string; display: string; dayOfWeek: number; startTime: string; endTime: string }[] = [];
   const d = new Date();
@@ -35,16 +50,12 @@ const getAvailableDays = (availability: { day_of_week: number; start_time: strin
 };
 
 const generateTimeSlots = (startTime: string, endTime: string) => {
-  const [sh, sm] = startTime.split(":").map(Number);
-  const [eh] = endTime.split(":").map(Number);
-  const startMinutes = sh * 60 + (sm === 30 ? 30 : 0);
-  const endMinutes = eh * 60;
+  const startMinutes = parseSlotStart(startTime);
+  const endMinutes = parseSlotEnd(endTime);
   const slots: string[] = [];
 
   for (let current = startMinutes; current <= endMinutes; current += SLOT_INTERVAL_MINUTES) {
-    const hour = Math.floor(current / 60);
-    const minute = current % 60;
-    slots.push(`${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`);
+    slots.push(formatSlotTime(current));
   }
 
   return slots;
