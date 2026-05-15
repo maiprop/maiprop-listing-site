@@ -1,22 +1,20 @@
 /**
- * aiUsage — per-user monthly cost ceiling for AI endpoints.
+ * aiUsage - per-user monthly cost ceiling for AI endpoints.
  *
- * Two-step pattern:
- *   1. Call `enforceAiQuota(req, bucket, corsHeaders)` early in the
- *      request handler. It does Bearer-token auth + a pre-flight quota
- *      check. Returns either a userId you can use for downstream work,
- *      OR a Response you should return immediately.
- *   2. After the AI call succeeds, call `recordAiCall(userId, bucket)`
- *      to persist the usage. This is best-effort — a recording failure
- *      logs but does not affect the user's response.
+ * Reservation pattern:
+ *   1. Call `enforceAiQuota(req, bucket, corsHeaders)` early in the request
+ *      handler. It verifies the Bearer token and reserves one quota unit in
+ *      Postgres before provider work starts.
+ *   2. Existing callers may still call `recordAiCall(userId, bucket)` after a
+ *      successful provider call; it is now a compatibility no-op because the
+ *      quota unit was already reserved up front.
  *
  * Buckets are seeded in migration 20260623160000_ai_usage_tracking.sql.
- * The DB enforces strict caps via a BEFORE INSERT trigger; the
- * pre-flight check is for UX (return 429 before burning OpenAI credits).
+ * The DB enforces strict caps via an atomic reservation RPC and a BEFORE
+ * INSERT trigger. Provider work must not run unless reservation succeeds.
  *
- * Anonymous endpoints (e.g. ai-translate with verify_jwt=false) should
- * NOT use this helper — their abuse vector is rate limiting, not
- * per-user quota.
+ * Anonymous endpoints (e.g. ai-translate with verify_jwt=false) should NOT use
+ * this helper; their abuse vector is rate limiting, not per-user quota.
  */
 
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
@@ -44,46 +42,86 @@ export interface QuotaResult {
 export interface EnforceResult {
   userId: string | null;
   errorResponse: Response | null;
+  reserved: boolean;
+}
+
+type ReserveResult = QuotaResult & {
+  reservation_id?: string;
+};
+
+function jsonResponse(
+  body: Record<string, unknown>,
+  status: number,
+  corsHeaders: Record<string, string>,
+): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+function quotaDeniedResponse(
+  quota: ReserveResult,
+  corsHeaders: Record<string, string>,
+): Response {
+  const reason = quota.reason ?? "monthly_limit_reached";
+  const status = reason === "plan_does_not_include_feature" ? 402 : 429;
+  return jsonResponse(
+    {
+      error: reason === "plan_does_not_include_feature"
+        ? "This AI feature is not included in your plan. Please upgrade."
+        : "Monthly AI usage limit reached. Resets on the 1st of next month.",
+      reason,
+      used: quota.used,
+      limit: quota.limit,
+    },
+    status,
+    corsHeaders,
+  );
+}
+
+function quotaUnavailableResponse(
+  corsHeaders: Record<string, string>,
+): Response {
+  return jsonResponse(
+    { error: "AI quota service unavailable. Please retry shortly." },
+    503,
+    corsHeaders,
+  );
 }
 
 /**
- * Verifies the Authorization Bearer token, looks up the user, and
- * checks their per-month quota for the given bucket. On any failure
- * (auth, quota, infra error) returns an `errorResponse` ready to be
- * returned by the caller.
+ * Verifies the Authorization Bearer token, looks up the user, and reserves one
+ * per-month quota unit for the given bucket. On any failure (auth, quota,
+ * infra error) returns an `errorResponse` ready to be returned by the caller.
  *
- * Fails OPEN on infra error (e.g. RPC unreachable) so a quota-system
- * outage cannot take down AI endpoints. The trigger on usage_ai_calls
- * still provides defence-in-depth.
+ * Fails closed on quota infra errors so paid provider calls cannot run when the
+ * quota system cannot prove the request is allowed.
  */
 export async function enforceAiQuota(
   req: Request,
   bucket: string,
   corsHeaders: Record<string, string>,
 ): Promise<EnforceResult> {
-  // Auth header check ALWAYS runs and fails closed. We do this before
-  // probing the Supabase client so that the behaviour is consistent
-  // regardless of whether SUPABASE_URL is set in the current environment
-  // (e.g. unit-test isolates with no Supabase access still see 401 for
-  // missing or malformed Authorization headers, matching production).
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.toLowerCase().startsWith("bearer ")) {
     return {
       userId: null,
-      errorResponse: new Response(
-        JSON.stringify({ error: "Authentication required" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      ),
+      errorResponse: jsonResponse({ error: "Authentication required" }, 401, corsHeaders),
+      reserved: false,
     };
   }
 
-  // Quota and token-verification require Supabase. If the service-role
-  // credentials aren't available (test env, local dev without secrets),
-  // fail OPEN on the QUOTA portion only — auth was already enforced above.
+  // Quota and token verification require Supabase. Missing configuration is a
+  // fail-closed path because otherwise provider calls would be unmetered.
   const client = getClient();
   if (!client) {
-    console.warn("[aiUsage] no SUPABASE_URL/SERVICE_ROLE_KEY — skipping quota enforcement");
-    return { userId: null, errorResponse: null };
+    console.error("[aiUsage] no SUPABASE_URL/SERVICE_ROLE_KEY - denying AI request");
+    return {
+      userId: null,
+      errorResponse: quotaUnavailableResponse(corsHeaders),
+      reserved: false,
+    };
   }
 
   const token = authHeader.slice(7).trim();
@@ -91,17 +129,16 @@ export async function enforceAiQuota(
   if (userError || !userData.user) {
     return {
       userId: null,
-      errorResponse: new Response(
-        JSON.stringify({ error: "Invalid or expired token" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      ),
+      errorResponse: jsonResponse({ error: "Invalid or expired token" }, 401, corsHeaders),
+      reserved: false,
     };
   }
 
   const userId = userData.user.id;
 
-  // Pre-flight quota: the RPC reads auth.uid() so we need a request-scoped
-  // client. Cheaper to spin one up here than to thread it through.
+  // The reservation RPC reads auth.uid(), so use a request-scoped client
+  // carrying the user's JWT. The RPC locks user+bucket+month and inserts the
+  // usage row before the expensive provider call starts.
   const userClient = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -112,74 +149,42 @@ export async function enforceAiQuota(
   );
 
   const { data: quotaData, error: quotaError } = await userClient.rpc(
-    "check_ai_quota",
+    "reserve_ai_quota",
     { p_bucket: bucket },
   );
 
   if (quotaError) {
-    console.warn(
-      `[aiUsage] check_ai_quota failed for bucket=${bucket} userId=${userId}: ${quotaError.message} — failing open`,
+    console.error(
+      `[aiUsage] reserve_ai_quota failed for bucket=${bucket} userId=${userId}: ${quotaError.message} - failing closed`,
     );
-    return { userId, errorResponse: null };
-  }
-
-  const quota = quotaData as unknown as QuotaResult;
-  if (!quota.allowed) {
     return {
       userId,
-      errorResponse: new Response(
-        JSON.stringify({
-          error: quota.reason === "plan_does_not_include_feature"
-            ? "This AI feature is not included in your plan. Please upgrade."
-            : "Monthly AI usage limit reached. Resets on the 1st of next month.",
-          reason: quota.reason,
-          used: quota.used,
-          limit: quota.limit,
-        }),
-        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      ),
+      errorResponse: quotaUnavailableResponse(corsHeaders),
+      reserved: false,
     };
   }
 
-  return { userId, errorResponse: null };
+  const quota = quotaData as unknown as ReserveResult;
+  if (!quota.allowed) {
+    return {
+      userId,
+      errorResponse: quotaDeniedResponse(quota, corsHeaders),
+      reserved: false,
+    };
+  }
+
+  return { userId, errorResponse: null, reserved: true };
 }
 
 /**
- * Records one AI call against the user's monthly quota. Best-effort:
- * a recording failure is logged but does not throw — the user already
- * received their AI response, and the next request will still go
- * through the pre-flight check.
- *
- * If the BEFORE INSERT trigger raises (i.e. a concurrent burst pushed
- * the user past the cap between the pre-flight check and now), the
- * error is swallowed too — we don't punish the user for a race window.
+ * Compatibility shim for existing edge functions. Quota is now reserved by
+ * `enforceAiQuota()` before provider work begins, so this function intentionally
+ * does not insert a second usage row.
  */
 export async function recordAiCall(
   userId: string | null,
   bucket: string,
 ): Promise<void> {
   if (!userId) return;
-
-  // Use a request-scoped client with the user's JWT so the RPC sees
-  // auth.uid(). We don't have the JWT here, so we use a service-role
-  // client and pass user_id explicitly via the trigger (the trigger
-  // reads NEW.user_id, not auth.uid).
-  const url = Deno.env.get("SUPABASE_URL");
-  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!url || !key) return;
-
-  const client = createClient(url, key, { auth: { persistSession: false } });
-
-  // Direct insert with service role — the BEFORE INSERT trigger
-  // enforces the cap atomically. Cast through `unknown` because the
-  // generated supabase-js types may not yet include usage_ai_calls.
-  const { error } = await (client.from("usage_ai_calls") as unknown as {
-    insert: (row: { user_id: string; bucket: string }) => Promise<{ error: { message: string } | null }>;
-  }).insert({ user_id: userId, bucket });
-
-  if (error) {
-    console.warn(
-      `[aiUsage] recordAiCall failed for bucket=${bucket} userId=${userId}: ${error.message}`,
-    );
-  }
+  console.debug(`[aiUsage] quota already reserved for bucket=${bucket} userId=${userId}`);
 }

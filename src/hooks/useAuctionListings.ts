@@ -52,6 +52,11 @@ const getAuctionSelect = (withImages: boolean): string => {
   return withImages ? `${AUCTION_SELECT_CORE}, listing_images(url, sort_order)` : AUCTION_SELECT_CORE;
 };
 
+const normalizeAuctionFetchLimit = (maxRows?: number): number => {
+  if (!Number.isFinite(maxRows)) return PORTAL_AUCTION_FETCH_LIMIT;
+  return Math.max(1, Math.min(PORTAL_AUCTION_FETCH_LIMIT, Math.floor(Number(maxRows))));
+};
+
 const hasCompleteAuctionPage = (rows: AuctionListingRow[], pageSize: number): boolean => {
   return rows.length === pageSize;
 };
@@ -133,12 +138,12 @@ const fetchAuctionsFromDatabase = (
   return fetchAuctionFallbackPageRange(today, withImages, 0, maxRows, []);
 };
 
-const fetchAuctionsFromOs = async (today: string): Promise<AuctionListingRow[]> => {
+const fetchAuctionsFromOs = async (today: string, maxRows: number): Promise<AuctionListingRow[]> => {
   const { data, error } = await supabase.functions.invoke("fetch-os-auctions", {
     body: {
       auctionDateFrom: today,
       page: 0,
-      pageSize: PORTAL_AUCTION_FETCH_LIMIT,
+      pageSize: maxRows,
       sortBy: "AUCTION_DATE",
       order: "ASC",
     },
@@ -151,20 +156,20 @@ const fetchAuctionsFromOs = async (today: string): Promise<AuctionListingRow[]> 
   return rows as AuctionListingRow[];
 };
 
-const fetchFallbackAuctions = async (today: string): Promise<AuctionListingRow[]> => {
+const fetchFallbackAuctions = async (today: string, maxRows: number): Promise<AuctionListingRow[]> => {
   try {
-    return await fetchAuctionsFromDatabase(today, true);
+    return await fetchAuctionsFromDatabase(today, true, maxRows);
   } catch (_dbJoinErr: unknown) {
-    return fetchAuctionsFromDatabase(today, false);
+    return fetchAuctionsFromDatabase(today, false, maxRows);
   }
 };
 
-const fetchAuctionListings = async (): Promise<AuctionListingRow[]> => {
+const fetchAuctionListings = async (maxRows: number): Promise<AuctionListingRow[]> => {
   const today = getTodayDate();
   try {
-    return randomizeAuctionPresentation(await fetchAuctionsFromOs(today));
+    return randomizeAuctionPresentation(await fetchAuctionsFromOs(today, maxRows));
   } catch (_osErr: unknown) {
-    return randomizeAuctionPresentation(await fetchFallbackAuctions(today));
+    return randomizeAuctionPresentation(await fetchFallbackAuctions(today, maxRows));
   }
 };
 
@@ -195,14 +200,15 @@ const withAuctionTimeout = async (
   }
 };
 
-const getAuctionQuery = (): Promise<AuctionListingRow[]> => {
-  return withAuctionTimeout(fetchAuctionListings());
+const getAuctionQuery = (maxRows: number): Promise<AuctionListingRow[]> => {
+  return withAuctionTimeout(fetchAuctionListings(maxRows));
 };
 
-export const useAuctionListings = () => {
+export const useAuctionListings = (maxRows?: number) => {
+  const fetchLimit = normalizeAuctionFetchLimit(maxRows);
   return useQuery({
-    queryKey: ["auction-listings-all"],
-    queryFn: getAuctionQuery,
+    queryKey: ["auction-listings", fetchLimit],
+    queryFn: () => getAuctionQuery(fetchLimit),
     staleTime: 30_000, // 30s — auction status changes frequently
   });
 };

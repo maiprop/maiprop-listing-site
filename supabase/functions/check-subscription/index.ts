@@ -7,6 +7,7 @@ import {
 } from "../_shared/rateLimit.ts";
 import { AuthError, verifyBearerToken } from "../_shared/auth.ts";
 import { createLogger } from "../_shared/logger.ts";
+import { resolveSubscriptionEntitlement } from "../_shared/entitlements.ts";
 
 const log = createLogger("check-subscription");
 const checkSubLimiter = makeRateLimiter({
@@ -27,17 +28,17 @@ function isStripeSubscribed(status: string | null | undefined) {
 }
 
 async function getDatabaseFallback( // skipcq: JS-R1005 - Fallback subscription resolution intentionally checks product IDs, direct subscription state, and investor grants.
-  supabaseClient: ReturnType<typeof createClient>,
+  supabaseClient: unknown,
   userId: string,
 ): Promise<FallbackSubscriptionState> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const from = (supabaseClient as { from: any }).from as any;
   const [{ data: profile }, { data: investorSub }] = await Promise.all([
-    supabaseClient
-      .from("profiles")
+    from("profiles")
       .select("subscription_product_id")
       .eq("user_id", userId)
       .maybeSingle(),
-    supabaseClient
-      .from("investor_subscriptions")
+    from("investor_subscriptions")
       .select("status, expires_at")
       .eq("user_id", userId)
       .in("status", ["active", "trial"])
@@ -48,24 +49,34 @@ async function getDatabaseFallback( // skipcq: JS-R1005 - Fallback subscription 
   const productId =
     (profile as { subscription_product_id?: string | null } | null)
       ?.subscription_product_id ?? null;
-  const { data: validProduct } = productId
-    ? await supabaseClient
-      .from("pro_product_ids")
-      .select("product_id")
-      .eq("product_id", productId)
-      .maybeSingle()
-    : { data: null };
+  const entitlement = productId
+    ? await resolveSubscriptionEntitlement(supabaseClient, userId, {
+      productId,
+    })
+    : null;
   const investor = investorSub as {
     status?: string;
     expires_at?: string | null;
   } | null;
 
   return {
-    subscribed: Boolean(validProduct) || investor?.status === "active" ||
+    subscribed: Boolean(entitlement) || investor?.status === "active" ||
       investor?.status === "trial",
-    product_id: validProduct ? productId : null,
+    product_id: entitlement?.productId ?? null,
     subscription_end: investor?.expires_at ?? null,
     source: "database",
+  };
+}
+
+function getSubscriptionItemIds(subscription: Stripe.Subscription | null): {
+  productId: string | null;
+  priceId: string | null;
+} {
+  const price = subscription?.items.data[0]?.price;
+  const product = price?.product;
+  return {
+    productId: typeof product === "string" ? product : product?.id ?? null,
+    priceId: price?.id ?? null,
   };
 }
 
@@ -147,11 +158,20 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
         user.id,
       );
 
-      const productId = subscription?.items.data[0]?.price.product as
-        | string
-        | undefined;
-      const subscriptionEnd = subscription
-        ? new Date(subscription.current_period_end * 1000).toISOString()
+      const stripeItem = getSubscriptionItemIds(subscription);
+      const entitlement = subscription
+        ? await resolveSubscriptionEntitlement(
+          supabaseClient,
+          user.id,
+          stripeItem,
+        )
+        : null;
+      const productId = entitlement?.productId ?? null;
+      const currentPeriodEnd =
+        (subscription as unknown as { current_period_end?: number } | null)
+          ?.current_period_end;
+      const subscriptionEnd = currentPeriodEnd
+        ? new Date(currentPeriodEnd * 1000).toISOString()
         : null;
 
       const { error: updateError } = await supabaseClient
@@ -168,8 +188,8 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
 
       return new Response(
         JSON.stringify({
-          subscribed: Boolean(subscription),
-          product_id: productId ?? null,
+          subscribed: Boolean(entitlement),
+          product_id: productId,
           subscription_end: subscriptionEnd,
           source: customer ? "stripe" : "database",
         }),
