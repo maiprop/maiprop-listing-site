@@ -83,7 +83,7 @@ const REDIRECT_PATH_VALIDATORS = [
   (raw: string) => !/[\r\n\t]/.test(raw),
 ];
 
-const isSafeRedirectPath = (raw: unknown): raw is string => {
+const isSafeRedirectPath = (raw: unknown): raw is string => { // skipcq: JS-R1005 - Redirect safety stays explicit because each validator covers a separate abuse case.
   return typeof raw !== "string"
     ? false
     : REDIRECT_PATH_VALIDATORS.every((validator) => validator(raw));
