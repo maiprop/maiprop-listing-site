@@ -84,8 +84,9 @@ const REDIRECT_PATH_VALIDATORS = [
 ];
 
 const isSafeRedirectPath = (raw: unknown): raw is string => {
-  return typeof raw === "string" &&
-    REDIRECT_PATH_VALIDATORS.every((validator) => validator(raw));
+  return typeof raw !== "string"
+    ? false
+    : REDIRECT_PATH_VALIDATORS.every((validator) => validator(raw));
 };
 
 /** Accepts only same-origin absolute paths starting with "/" (and not "//" or "/\\").
