@@ -9,7 +9,7 @@ import { toast } from "sonner";
 
 const PRICING_LABELS: Record<string, string> = { hourly: "/hr", daily: "/day", fixed: "fixed" };
 
-function getAvailableDays(availability: { day_of_week: number; start_time: string; end_time: string }[], count = 14) {
+const getAvailableDays = (availability: { day_of_week: number; start_time: string; end_time: string }[], count = 14) => {
   const days: { label: string; date: string; display: string; dayOfWeek: number; startTime: string; endTime: string }[] = [];
   const d = new Date();
   d.setDate(d.getDate() + 1);
@@ -31,9 +31,9 @@ function getAvailableDays(availability: { day_of_week: number; start_time: strin
     checked++;
   }
   return days;
-}
+};
 
-function generateTimeSlots(startTime: string, endTime: string) {
+const generateTimeSlots = (startTime: string, endTime: string) => {
   const slots: string[] = [];
   const [sh, sm] = startTime.split(":").map(Number);
   const [eh] = endTime.split(":").map(Number);
@@ -49,9 +49,9 @@ function generateTimeSlots(startTime: string, endTime: string) {
     }
   }
   return slots;
-}
+};
 
-function getCalendarEvent(selectedDate: string, selectedTime: string, title: string, description: string) {
+const getCalendarEvent = (selectedDate: string, selectedTime: string, title: string, description: string) => {
   if (!selectedDate || !selectedTime) return null;
   const start = new Date(`${selectedDate}T${selectedTime}:00`);
   if (Number.isNaN(start.getTime())) return null;
@@ -88,9 +88,9 @@ function getCalendarEvent(selectedDate: string, selectedTime: string, title: str
       "END:VCALENDAR",
     ].join("\r\n"),
   };
-}
+};
 
-function downloadIcs(filename: string, content: string) {
+const downloadIcs = (filename: string, content: string) => {
   const blob = new Blob([content], { type: "text/calendar;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
@@ -98,7 +98,7 @@ function downloadIcs(filename: string, content: string) {
   anchor.download = filename;
   anchor.click();
   URL.revokeObjectURL(url);
-}
+};
 
 interface BookConsultationModalProps {
   open: boolean;

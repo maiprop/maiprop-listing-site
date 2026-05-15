@@ -21,6 +21,7 @@ interface Props {
   };
 }
 
+// skipcq: JS-R1005 - This tab orchestrates intentionally distinct pro/basic/non-agent profile sections.
 export function ProfessionalOverviewTab({ pro, isRealEstateAgent, professionalIsPro, agentListingsCount, agentPortfolioKpis }: Props) {
   return (
     <div className="space-y-5">

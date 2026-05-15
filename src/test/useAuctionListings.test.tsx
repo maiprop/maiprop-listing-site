@@ -22,7 +22,7 @@ import { randomizeAuctionPresentation, useAuctionListings } from "@/hooks/useAuc
 
 type AuctionRow = Parameters<typeof randomizeAuctionPresentation>[0][number];
 
-function auctionRow(id: string, overrides: Partial<AuctionRow> = {}): AuctionRow {
+const auctionRow = (id: string, overrides: Partial<AuctionRow> = {}): AuctionRow => {
   return {
     id,
     title: `Auction ${id}`,
@@ -48,17 +48,17 @@ function auctionRow(id: string, overrides: Partial<AuctionRow> = {}): AuctionRow
     priority_placement: 0,
     ...overrides,
   };
-}
+};
 
-function wrap(children: React.ReactNode) {
+const wrap = (children: React.ReactNode) => {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0, staleTime: 0 } },
   });
   return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
-}
-function renderHookWithQuery<T>(hook: () => T) {
+};
+const renderHookWithQuery = <T,>(hook: () => T) => {
   return renderHook(hook, { wrapper: ({ children }) => wrap(children) });
-}
+};
 
 beforeEach(() => {
   fromMock.mockReset();
@@ -69,13 +69,13 @@ beforeEach(() => {
  * Build a fluent query builder whose terminal `.range()` returns the supplied
  * data. Every other method returns the same builder to support chaining.
  */
-function makeBuilder(rangeImpl: () => Promise<{ data: unknown[] | null; error: unknown }>) {
+const makeBuilder = (rangeImpl: () => Promise<{ data: unknown[] | null; error: unknown }>) => {
   const b: Record<string, unknown> = {};
   const chain = ["select", "eq", "or", "order"];
   for (const m of chain) b[m] = vi.fn().mockReturnValue(b);
   b.range = vi.fn().mockImplementation(rangeImpl);
   return b;
-}
+};
 
 describe("useAuctionListings", () => {
   it("uses a deterministic daily rotation instead of preserving OS municipality order", () => {

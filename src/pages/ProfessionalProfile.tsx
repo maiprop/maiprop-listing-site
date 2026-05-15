@@ -71,6 +71,7 @@ const categoryLabels: Record<string, { label: string; emoji: string; description
   smart_home_installer: { label: "Smart Home Installer", emoji: "📱", description: "Automation, smart systems" },
 };
 
+// skipcq: JS-R1005 - Route shell coordinates profile data, actions, tabs, and modals; sections are delegated below.
 export default function ProfessionalProfile() {
   const { id } = useParams<{ id: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
