@@ -102,14 +102,14 @@ const NAV_FREE: Record<string, NavKey[]> = {
 };
 
 export function getNavItemsForBioType(
-  bioType: string | null,
+  _bioType: string | null,
   role: DashboardRole,
   isPro: boolean,
   eligibleForQuickSale = false,
 ): NavItemResolved[] {
   if (role === "admin") return ALL_NAV_ITEMS.filter(i => NAV_PRO.admin.includes(i.key));
 
-  const key = bioType ?? (
+  const key = (
     role === "seller"        ? "seller" :
     role === "professional"  ? "professional" :
     role === "agent"         ? "agent" :

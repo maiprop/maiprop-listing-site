@@ -15,6 +15,7 @@ import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { renderWithProviders } from "@/test/utils";
 
 const { useAuthMock, useSubscriptionMock, useEligibleMock } = vi.hoisted(() => ({
   useAuthMock: vi.fn(),
@@ -37,8 +38,8 @@ vi.mock("@/hooks/useEligibleForQuickSale", () => ({
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AdminRoute } from "@/components/AdminRoute";
 import { SellerRoute } from "@/components/SellerRoute";
-import { InvestorRoute } from "@/components/InvestorRoute";
 import { DeveloperRoute } from "@/components/DeveloperRoute";
+import { InvestorRoute } from "@/components/InvestorRoute";
 import { NewBuildingRoute } from "@/components/NewBuildingRoute";
 
 /**
@@ -67,7 +68,7 @@ beforeEach(() => {
   useSubscriptionMock.mockReset();
   useEligibleMock.mockReset();
   // Conservative defaults — every guard test overrides what it needs.
-  useSubscriptionMock.mockReturnValue({ isPro: false, loading: false });
+  useSubscriptionMock.mockReturnValue({ isPro: false, hasDeveloperPro: false, loading: false });
   useEligibleMock.mockReturnValue({ eligible: false, loading: false });
 });
 
@@ -398,6 +399,120 @@ describe("SellerRoute", () => {
     );
     expect(screen.getByText(/Listing Access Required/i)).toBeInTheDocument();
     expect(screen.queryByText("LIST-FORM")).toBeNull();
+  });
+});
+
+// ─── DeveloperRoute ─────────────────────────────────────────────────────────
+
+describe("DeveloperRoute", () => {
+  const renderDeveloperRoute = () => renderWithProviders(
+    <Routes>
+      <Route
+        path="/private"
+        element={(
+          <DeveloperRoute>
+            <div>PROJECTS</div>
+          </DeveloperRoute>
+        )}
+      />
+      <Route path="/login" element={<div>at-login</div>} />
+      <Route path="/dashboard" element={<div>at-dashboard</div>} />
+      <Route path="/dashboard/settings" element={<div>at-settings</div>} />
+      <Route path="/pricing" element={<div>at-pricing</div>} />
+      <Route path="/onboarding" element={<div>at-onboarding</div>} />
+    </Routes>,
+    { initialPath: "/private" },
+  );
+
+  it("blocks unauthenticated visitors at the ProtectedRoute layer", () => {
+    useAuthMock.mockReturnValue({
+      user: null,
+      loading: false,
+      profileLoading: false,
+      needsOnboarding: false,
+    });
+    renderDeveloperRoute();
+    expect(screen.getByText("at-login")).toBeInTheDocument();
+  });
+
+  it("shows a recovery view when an authenticated user has no resolved profile", () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "u-1" },
+      profile: null,
+      loading: false,
+      profileLoading: false,
+      needsOnboarding: false,
+    });
+    renderDeveloperRoute();
+    expect(screen.getByText(/Profile Required/i)).toBeInTheDocument();
+    expect(screen.queryByText("PROJECTS")).toBeNull();
+  });
+
+  it("blocks non-developer Pro accounts from developer modules", () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "u-1" },
+      profile: { user_id: "u-1", role: "agent", participant_type: "agent" },
+      loading: false,
+      profileLoading: false,
+      needsOnboarding: false,
+    });
+    useSubscriptionMock.mockReturnValue({ isPro: true, hasDeveloperPro: false, loading: false });
+    renderDeveloperRoute();
+    expect(screen.getByText(/Developer Access Required/i)).toBeInTheDocument();
+    expect(screen.queryByText("PROJECTS")).toBeNull();
+  });
+
+  it("blocks Developer accounts without Pro", () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "u-1" },
+      profile: { user_id: "u-1", role: "developer", participant_type: "developer" },
+      loading: false,
+      profileLoading: false,
+      needsOnboarding: false,
+    });
+    useSubscriptionMock.mockReturnValue({ isPro: false, hasDeveloperPro: false, loading: false });
+    renderDeveloperRoute();
+    expect(screen.getByText(/Developer Pro Required/i)).toBeInTheDocument();
+    expect(screen.queryByText("PROJECTS")).toBeNull();
+  });
+
+  it("blocks Developer accounts with a non-developer Pro subscription", () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "u-1" },
+      profile: { user_id: "u-1", role: "developer", participant_type: "developer" },
+      loading: false,
+      profileLoading: false,
+      needsOnboarding: false,
+    });
+    useSubscriptionMock.mockReturnValue({ isPro: true, hasDeveloperPro: false, loading: false });
+    renderDeveloperRoute();
+    expect(screen.getByText(/Developer Pro Required/i)).toBeInTheDocument();
+    expect(screen.queryByText("PROJECTS")).toBeNull();
+  });
+
+  it("admits Developer accounts with an active Developer Pro subscription", () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "u-1" },
+      profile: { user_id: "u-1", role: "developer", participant_type: "developer" },
+      loading: false,
+      profileLoading: false,
+      needsOnboarding: false,
+    });
+    useSubscriptionMock.mockReturnValue({ isPro: true, hasDeveloperPro: true, loading: false });
+    renderDeveloperRoute();
+    expect(screen.getByText("PROJECTS")).toBeInTheDocument();
+  });
+
+  it("admits platform admins regardless of role/subscription", () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "u-1" },
+      profile: { user_id: "u-1", role: "admin", participant_type: "buyer" },
+      loading: false,
+      profileLoading: false,
+      needsOnboarding: false,
+    });
+    renderDeveloperRoute();
+    expect(screen.getByText("PROJECTS")).toBeInTheDocument();
   });
 });
 

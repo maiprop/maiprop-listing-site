@@ -52,12 +52,12 @@ describe("profileNeedsOnboarding", () => {
     ).toBe(false);
   });
 
-  it("returns false for legacy bio marker", () => {
+  it("does not trust legacy bio markers as onboarding completion", () => {
     expect(
       profileNeedsOnboarding({ role: null, participant_type: null, bio: "__type:buyer" } as never),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       profileNeedsOnboarding({ role: null, participant_type: null, bio: "__type:seller" } as never),
-    ).toBe(false);
+    ).toBe(true);
   });
 });

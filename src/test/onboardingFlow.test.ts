@@ -1,47 +1,46 @@
 import { describe, expect, it } from "vitest";
-import { canRestoreDraftStep, isOnboardingStep, resolveStepsFor } from "@/lib/onboardingFlow";
 import { participants } from "@/lib/onboardingConfig";
+import { canRestoreDraftStep, isOnboardingStep, resolveStepsFor } from "@/lib/onboardingFlow";
 
-describe("onboarding flow helpers", () => {
-  it("recognizes only valid onboarding steps", () => {
+const findParticipant = (id: string) => participants.find((p) => p.id === id) ?? null;
+
+describe("onboardingFlow", () => {
+  it("recognizes only known onboarding steps", () => {
+    expect(isOnboardingStep("pro-video")).toBe(true);
     expect(isOnboardingStep("pro-services")).toBe(true);
-    expect(isOnboardingStep("unknown-module")).toBe(false);
+    expect(isOnboardingStep("done")).toBe(true);
+    expect(isOnboardingStep("unknown-step")).toBe(false);
     expect(isOnboardingStep(null)).toBe(false);
   });
 
-  it("rejects draft steps that do not belong to the selected participant module", () => {
-    const buyer = participants.find((participant) => participant.id === "buyer") ?? null;
-    const professional = participants.find((participant) => participant.id === "professional") ?? null;
-    expect(buyer).not.toBeNull();
-    expect(professional).not.toBeNull();
-
-    expect(canRestoreDraftStep("pro-services", buyer)).toBe(false);
-    expect(canRestoreDraftStep("pro-services", professional)).toBe(true);
-  });
-
-  it("only restores the safe first step without a selected participant", () => {
+  it("only restores the safe initial step without a participant selection", () => {
     expect(resolveStepsFor(null)).toEqual(["pick-type", "done"]);
-    expect(canRestoreDraftStep("pick-type", null)).toBe(true);
-    expect(canRestoreDraftStep("done", null)).toBe(false);
+    expect(canRestoreDraftStep(null, "pick-type")).toBe(true);
+    expect(canRestoreDraftStep(null, "done")).toBe(false);
   });
 
-  it("keeps developer onboarding on the developer setup path", () => {
-    const developer = participants.find((participant) => participant.id === "developer") ?? null;
-    expect(developer).not.toBeNull();
-
-    expect(resolveStepsFor(developer)).toEqual(["pick-type", "developer-setup", "done"]);
+  it("keeps buyer and seller drafts on the participant path", () => {
+    expect(resolveStepsFor(findParticipant("buyer"))).toEqual(["pick-participant-goal", "done"]);
+    expect(resolveStepsFor(findParticipant("seller"))).toEqual(["pick-participant-goal", "done"]);
+    expect(canRestoreDraftStep(findParticipant("buyer"), "pro-services")).toBe(false);
   });
 
-  it("keeps buyer, seller, and agent drafts on their active module paths", () => {
-    const buyer = participants.find((participant) => participant.id === "buyer") ?? null;
-    const seller = participants.find((participant) => participant.id === "seller") ?? null;
-    const agent = participants.find((participant) => participant.id === "agent") ?? null;
-    expect(buyer).not.toBeNull();
-    expect(seller).not.toBeNull();
-    expect(agent).not.toBeNull();
+  it("includes the video step in the service professional path", () => {
+    expect(resolveStepsFor(findParticipant("professional"))).toEqual([
+      "pick-type",
+      "pro-category",
+      "pro-verify",
+      "pro-services",
+      "pro-availability",
+      "pro-video",
+      "done",
+    ]);
+    expect(canRestoreDraftStep(findParticipant("professional"), "pro-video")).toBe(true);
+  });
 
-    expect(resolveStepsFor(buyer)).toEqual(["pick-participant-goal", "done"]);
-    expect(resolveStepsFor(seller)).toEqual(["pick-participant-goal", "done"]);
-    expect(resolveStepsFor(agent)).toEqual(["pick-pro-type", "done"]);
+  it("keeps developer setup on the developer path only", () => {
+    expect(resolveStepsFor(findParticipant("developer"))).toEqual(["pick-type", "developer-setup", "done"]);
+    expect(canRestoreDraftStep(findParticipant("developer"), "developer-setup")).toBe(true);
+    expect(canRestoreDraftStep(findParticipant("agent"), "developer-setup")).toBe(false);
   });
 });

@@ -126,6 +126,16 @@ const useValidatedProProduct = (
   });
 };
 
+const hasDeveloperEntitlement = (options: {
+  isAdmin: boolean;
+  forceProAccess: boolean;
+  hasValidatedProProduct: boolean;
+}) => (
+  options.isAdmin ||
+  options.forceProAccess ||
+  options.hasValidatedProProduct
+);
+
 /**
  * Thin wrapper around AuthContext.subscription.
  *
@@ -156,10 +166,11 @@ export const useSubscription = () => {
     hasInvestorPro,
     forceProAccess,
   ]);
-  const hasDeveloperPro =
-    isAdmin ||
-    forceProAccess ||
-    (hasStripePro && currentAudience === "developer");
+  const hasDeveloperPro = hasDeveloperEntitlement({
+    isAdmin,
+    forceProAccess,
+    hasValidatedProProduct: hasStripePro && currentAudience === "developer",
+  });
   const accessSource: SubscriptionAccessSource = isAdmin
     ? "admin"
     : hasStripePro
