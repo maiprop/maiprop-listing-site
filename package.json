@@ -144,7 +144,7 @@
     "globals": "^15.15.0",
     "husky": "^9.1.7",
     "i18next-scanner": "^4.6.0",
-    "jsdom": "^29.1.0",
+    "jsdom": "^29.1.1",
     "postcss": "^8.5.14",
     "rollup-plugin-visualizer": "^6.0.3",
     "sharp": "^0.34.5",
