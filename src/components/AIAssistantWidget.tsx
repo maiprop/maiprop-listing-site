@@ -3,6 +3,7 @@ import { Sparkles, X, Send, Loader2, Bot, User, ChevronDown, RotateCcw } from "l
 import ReactMarkdown from "react-markdown";
 import { SUPABASE_URL } from "@/lib/config";
 import { supabase } from "@/integrations/supabase/client";
+import { formatPrice } from "@/lib/format";
 
 export interface PropertyContext {
   title?: string;
@@ -57,7 +58,7 @@ const SUGGESTIONS_GENERIC = [
 ];
 
 const SUGGESTIONS_PROPERTY = (ctx: PropertyContext) => [
-  `Is €${ctx.price ? Math.round(ctx.price / 1000) : "?"}k a fair price for this area?`,
+  `Is ${ctx.price ? formatPrice(ctx.price) : "this price"} fair for this area?`,
   "What schools are near this property?",
   "What's the commute like from here to the city centre?",
   "What should I know about this neighbourhood?",

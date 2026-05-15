@@ -27,6 +27,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { HEATING_TYPES, CONDITION_OPTIONS } from "@/lib/filterConfig";
 import { getStreetViewProxyUrl } from "@/lib/config";
+import { formatPrice } from "@/lib/format";
 import { Section, SectionHeader, FeatureSection } from "@/components/property/DetailPrimitives";
 import { buildPropertyFeatureGroups, buildDetailRows } from "@/lib/propertyFeatures";
 import { PropertyDetailsAndEnergy } from "@/components/property/PropertyDetailsAndEnergy";
@@ -400,7 +401,7 @@ export default function OpenHouseDetail() {
                         <div className="rounded-xl border border-border bg-secondary/50 p-4 flex flex-col gap-1">
                           <p className="text-[10px] text-muted-foreground uppercase tracking-widest">AI Estimate</p>
                           <span className="font-display font-black text-3xl text-foreground">
-                            €{(aiInsightsData.estimatedValue / 1000).toFixed(0)}k
+                            {formatPrice(aiInsightsData.estimatedValue)}
                           </span>
                           <p className="text-[10px] text-muted-foreground">Confidence: {aiInsightsData.confidenceLabel}</p>
                         </div>

@@ -227,19 +227,28 @@ export function useStartConversation() {
   return useMutation({
     mutationFn: async ({ other_user_id, listing_id }: { other_user_id: string; listing_id?: string }) => {
       if (!user) throw new Error("Must be logged in");
-      const { data: existingList } = await supabase
+      if (other_user_id === user.id) throw new Error("Cannot start a conversation with yourself");
+
+      const participantFilter =
+        `and(participant_a.eq.${user.id},participant_b.eq.${other_user_id}),and(participant_a.eq.${other_user_id},participant_b.eq.${user.id})`;
+      const { data: existingList, error: existingError } = await supabase
         .from("conversations")
         .select("id, listing_id")
-        .or(
-          `and(participant_a.eq.${user.id},participant_b.eq.${other_user_id}),and(participant_a.eq.${other_user_id},participant_b.eq.${user.id})`
-        );
+        .or(participantFilter);
+      if (existingError) throw existingError;
+
       const targetListingId = listing_id ?? null;
-      const match = (existingList || []).find(
+      const conversations = existingList || [];
+      const match = conversations.find(
         (c) => c.listing_id === targetListingId || (c.listing_id == null && targetListingId == null)
       );
       if (match) return match.id;
 
-       
+      // The database currently enforces one conversation per participant pair.
+      // Reuse that thread for another listing instead of surfacing a duplicate
+      // key error as "Could not start conversation".
+      if (conversations[0]?.id) return conversations[0].id;
+
       const { data, error } = await supabase.from("conversations")
         .insert({
           participant_a: user.id,
@@ -248,7 +257,14 @@ export function useStartConversation() {
         })
         .select()
         .single();
-      if (error) throw error;
+      if (error) {
+        const { data: fallbackList } = await supabase
+          .from("conversations")
+          .select("id, listing_id")
+          .or(participantFilter);
+        if (fallbackList?.[0]?.id) return fallbackList[0].id;
+        throw error;
+      }
       return data.id;
     },
     onSuccess: () => {

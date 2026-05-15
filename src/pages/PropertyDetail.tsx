@@ -118,6 +118,7 @@ export default function PropertyDetail() {
     (dbListing as ListingWithJoins).profiles?.user_id ?? (dbListing as ListingWithJoins).owner_id :
     undefined;
     if (!ownerId) {toast.info(t("property.contactUnavailable"));return;}
+    if (ownerId === user.id) {toast.info(t("property.ownListingContact"));return;}
     try {
       const convId = await startConversation.mutateAsync({ other_user_id: ownerId, listing_id: id });
       navigate("/messages", { state: { openConversationId: convId } });

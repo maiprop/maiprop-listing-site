@@ -18,6 +18,7 @@ import { AuctionHero } from "@/components/auctions/AuctionHero";
 import { AuctionAlertBanner } from "@/components/auctions/AuctionAlertBanner";
 import { AuctionFiltersPanel } from "@/components/auctions/AuctionFiltersPanel";
 import { AuctionPagination } from "@/components/auctions/AuctionPagination";
+import { formatPrice } from "@/lib/format";
 import {
   useAuctionsPipeline,
   AUCTIONS_PAGE_SIZE,
@@ -107,7 +108,7 @@ export default function Auctions() {
   const auctionStats = [
   { value: isLoading ? "—" : String(thisWeek), label: "This Week", icon: Gavel },
   { value: isLoading ? "—" : visibleFiltered.length.toLocaleString(), label: "Visible Auctions", icon: TrendingUp },
-  { value: isLoading ? "—" : avgBid > 0 ? `€${(avgBid / 1000).toFixed(0)}k` : "—", label: "Avg Starting Bid", icon: TrendingUp }];
+  { value: isLoading ? "—" : avgBid > 0 ? formatPrice(avgBid) : "—", label: "Avg Starting Bid", icon: TrendingUp }];
 
   return (
     <div className="min-h-screen bg-background">

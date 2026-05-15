@@ -290,6 +290,35 @@ describe("useStartConversation", () => {
     expect(id).toBe("c-new");
   });
 
+  it("reuses an existing participant thread when the requested listing differs", async () => {
+    const or = vi.fn().mockResolvedValue({
+      data: [{ id: "c-existing-pair", listing_id: "l-other" }],
+      error: null,
+    });
+    const insert = vi.fn();
+    fromMock.mockReturnValue({ select: () => ({ or }), insert });
+    const { result } = renderHook(() => useStartConversation(), { wrapper: wrapper() });
+
+    let id: string | undefined;
+    await act(async () => {
+      id = await result.current.mutateAsync({ other_user_id: "u-2", listing_id: "l-new" });
+    });
+
+    expect(insert).not.toHaveBeenCalled();
+    expect(id).toBe("c-existing-pair");
+  });
+
+  it("rejects self-contact before writing a conversation", async () => {
+    const from = vi.fn();
+    fromMock.mockImplementation(from);
+    const { result } = renderHook(() => useStartConversation(), { wrapper: wrapper() });
+
+    await expect(
+      result.current.mutateAsync({ other_user_id: "u-1", listing_id: "l-1" }),
+    ).rejects.toThrow(/yourself/i);
+    expect(from).not.toHaveBeenCalled();
+  });
+
   it("rejects when there is no user", async () => {
     useAuthMock.mockReturnValue({ user: null });
     const { result } = renderHook(() => useStartConversation(), { wrapper: wrapper() });

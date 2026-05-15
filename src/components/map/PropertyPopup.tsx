@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { MapPin, Square, Layers, Calendar, Building2 } from "lucide-react";
 import { getStreetViewProxyUrl } from "@/lib/config";
 import { getOwnershipStatus, getOwnershipPct } from "@/lib/auctionUtils";
+import { formatPrice } from "@/lib/format";
 import type { MapListing } from "./mapConfig";
 import { typeColour } from "./mapConfig";
 
@@ -126,7 +127,7 @@ export function PropertyPopup({ listing, onClose: _onClose }: { listing: MapList
           €{Number(isAuction && raw.auction_starting_bid ? raw.auction_starting_bid : listing.price).toLocaleString()}
           {isAuction && !!raw.auction_starting_bid && !!raw.price && (
             <span className="text-[10px] font-normal text-muted-foreground ml-1">
-              (val. €{Number(raw.price / 1000).toFixed(0)}k)
+              (val. {formatPrice(Number(raw.price))})
             </span>
           )}
         </p>

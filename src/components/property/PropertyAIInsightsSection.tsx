@@ -9,6 +9,7 @@ import type { User } from "@supabase/supabase-js";
 import { Zap, Loader2 } from "lucide-react";
 import { Section, SectionHeader } from "@/components/property/DetailPrimitives";
 import { SignInForAI } from "@/components/SignInForAI";
+import { formatPrice } from "@/lib/format";
 
 interface AIInsightsData {
   vsMarket: number;
@@ -87,7 +88,7 @@ export function PropertyAIInsightsSection({ user, isPro: _isPro, loading, data }
                 <p className="text-[10px] text-muted-foreground uppercase tracking-widest">AI Estimate</p>
                 <div className="flex items-baseline gap-1">
                   <span className="font-display font-black text-3xl text-foreground">
-                    EUR {(data.estimatedValue / 1000).toFixed(0)}k
+                    {formatPrice(data.estimatedValue)}
                   </span>
                 </div>
                 <p className="text-[10px] text-muted-foreground">Confidence: {data.confidenceLabel}</p>
