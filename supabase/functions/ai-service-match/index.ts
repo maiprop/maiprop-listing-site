@@ -40,13 +40,13 @@ Return ONLY one valid JSON object with:
 const CATEGORIES = new Set(["lawyer", "notary", "architect", "civil_engineer", "contractor", "interior_designer", "electrician", "plumber", "financial_advisor", "valuer", "property_manager"]);
 const URGENCIES = new Set(["low", "medium", "high"]);
 
-function parseMatchJson(raw: string): Record<string, unknown> {
+const parseMatchJson = (raw: string): Record<string, unknown> => {
   const cleaned = raw.replace(/```json\s*/gi, "").replace(/```\s*/gi, "").trim();
   const start = cleaned.indexOf("{");
   const end = cleaned.lastIndexOf("}");
   if (start === -1 || end === -1 || end < start) throw new Error("No JSON in AI response");
   return JSON.parse(cleaned.slice(start, end + 1)) as Record<string, unknown>;
-}
+};
 
 Deno.serve(async (req) => {
   const corsPreflightResponse = handleCors(req);

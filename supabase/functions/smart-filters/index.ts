@@ -67,7 +67,7 @@ type SmartFilterArgs = {
   featuresLabel?: unknown;
 };
 
-function extractJsonObject(raw: string): string {
+const extractJsonObject = (raw: string): string => {
   const cleaned = raw.replace(/```json\s*/gi, "").replace(/```\s*/gi, "").trim();
   const start = cleaned.indexOf("{");
   const end = cleaned.lastIndexOf("}");
@@ -75,9 +75,9 @@ function extractJsonObject(raw: string): string {
     throw new Error("No JSON object in AI response");
   }
   return cleaned.slice(start, end + 1);
-}
+};
 
-export function parseSmartFilterArgs(raw: string): SmartFilterArgs {
+export const parseSmartFilterArgs = (raw: string): SmartFilterArgs => {
   const json = extractJsonObject(raw);
   try {
     return JSON.parse(json) as SmartFilterArgs;
@@ -91,18 +91,18 @@ export function parseSmartFilterArgs(raw: string): SmartFilterArgs {
       .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
     return JSON.parse(repaired) as SmartFilterArgs;
   }
-}
+};
 
-function coerceString(value: unknown, fallback: string): string {
+const coerceString = (value: unknown, fallback: string): string => {
   return typeof value === "string" && value.trim() ? value.trim().slice(0, 80) : fallback;
-}
+};
 
-function coerceStringArray(value: unknown, allowed?: Set<string>): string[] {
+const coerceStringArray = (value: unknown, allowed?: Set<string>): string[] => {
   if (!Array.isArray(value)) return [];
   return value
     .filter((item): item is string => typeof item === "string" && (!allowed || allowed.has(item)))
     .slice(0, 24);
-}
+};
 
 Deno.serve(async (req) => {
   const corsPreflightResponse = handleCors(req);

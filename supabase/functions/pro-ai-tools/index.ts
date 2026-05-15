@@ -10,7 +10,7 @@ const log = createLogger("pro-ai-tools");
 const BUCKET = "pro-ai-tools";
 const proAiLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 15, windowMs: 60_000, failClosed: true });
 
-async function requireAuth(req: Request): Promise<{ error: Response | null; userId: string | null }> {
+const requireAuth = async (req: Request): Promise<{ error: Response | null; userId: string | null }> => {
   const corsHeaders = getCorsHeaders(req);
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
@@ -37,7 +37,7 @@ async function requireAuth(req: Request): Promise<{ error: Response | null; user
     };
   }
   return { error: null, userId: user.id };
-}
+};
 
 const systemPrompts: Record<string, string> = {
   agents: `You are a Greek real estate agent AI assistant (2025–2026). Your role is to help with:
