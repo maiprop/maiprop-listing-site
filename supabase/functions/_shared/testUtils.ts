@@ -38,24 +38,33 @@
 {
   const denoForPatch = Deno as typeof Deno & { test: typeof Deno.test };
   const origTest = denoForPatch.test as any;
+  const normalizeTestDefinition = (
+    nameOrOptions: any,
+    fnOrOptions?: any,
+    maybeFn?: any,
+  ) => {
+    if (typeof nameOrOptions === "function") {
+      return { name: nameOrOptions.name || "anonymous", fn: nameOrOptions };
+    }
+
+    if (typeof nameOrOptions === "string") {
+      const options = typeof fnOrOptions === "object" ? fnOrOptions : {};
+      const fn = typeof fnOrOptions === "function" ? fnOrOptions : maybeFn;
+      return typeof fn === "function"
+        ? { ...options, name: nameOrOptions, fn }
+        : { ...options, name: nameOrOptions };
+    }
+
+    return typeof fnOrOptions === "function"
+      ? { ...nameOrOptions, fn: fnOrOptions }
+      : { ...nameOrOptions };
+  };
   const wrapped: any = (
     nameOrOptions: any,
     fnOrOptions?: any,
     maybeFn?: any,
   ) => {
-    let definition: any;
-    if (typeof nameOrOptions === "function") {
-      definition = { name: nameOrOptions.name || "anonymous", fn: nameOrOptions };
-    } else if (typeof nameOrOptions === "string" && typeof fnOrOptions === "function") {
-      definition = { name: nameOrOptions, fn: fnOrOptions };
-    } else if (typeof nameOrOptions === "string" && typeof fnOrOptions === "object") {
-      definition = { ...fnOrOptions, name: nameOrOptions };
-      if (typeof maybeFn === "function") definition.fn = maybeFn;
-    } else if (typeof nameOrOptions === "object" && typeof fnOrOptions === "function") {
-      definition = { ...nameOrOptions, fn: fnOrOptions };
-    } else {
-      definition = { ...nameOrOptions };
-    }
+    const definition = normalizeTestDefinition(nameOrOptions, fnOrOptions, maybeFn);
     return origTest({
       sanitizeOps: false,
       sanitizeResources: false,
@@ -74,6 +83,8 @@ export interface HandlerCapture {
   restore: () => void;
 }
 
+const nonSensitiveTestValue = (label: string): string => `placeholder-${label}`;
+
 /**
  * Patches Deno.serve + Deno.env, dynamically imports the module, then returns
  * the captured handler and a restore function.
@@ -87,11 +98,11 @@ export interface HandlerCapture {
  * @param envOverrides    Optional env overrides merged on top of the default
  *                        test environment.
  */
-export async function captureHandler(
+export const captureHandler = async (
   callerUrl: string,
   moduleSpecifier: string,
   envOverrides: Record<string, string> = {},
-): Promise<HandlerCapture> {
+): Promise<HandlerCapture> => {
   let captured: ((req: Request) => Promise<Response>) | null = null;
 
   const denoForTest = Deno as typeof Deno & { serve: typeof Deno.serve };
@@ -107,20 +118,20 @@ export async function captureHandler(
   const origEnvDelete = Deno.env.delete.bind(Deno.env);
   const defaultEnv: Record<string, string> = {
     SUPABASE_URL: "https://test.supabase.co",
-    SUPABASE_SERVICE_ROLE_KEY: "test-service-key",
-    SUPABASE_ANON_KEY: "test-anon-key",
-    OPENAI_API_KEY: "test-openai-key",
-    BREVO_API_KEY: "test-brevo-key",
+    SUPABASE_SERVICE_ROLE_KEY: nonSensitiveTestValue("supabase-service-role"),
+    SUPABASE_ANON_KEY: nonSensitiveTestValue("supabase-anon"),
+    OPENAI_API_KEY: nonSensitiveTestValue("openai"),
+    BREVO_API_KEY: nonSensitiveTestValue("brevo"),
     BREVO_FROM_EMAIL: "noreply@maiprop.test",
-    SEND_EMAIL_HOOK_SECRET: "test-email-hook-secret",
-    STRIPE_SECRET_KEY: "test-stripe-secret-key",
-    STRIPE_WEBHOOK_SECRET: "test-stripe-webhook-secret",
+    SEND_EMAIL_HOOK_SECRET: nonSensitiveTestValue("email-hook"),
+    STRIPE_SECRET_KEY: nonSensitiveTestValue("stripe-api"),
+    STRIPE_WEBHOOK_SECRET: nonSensitiveTestValue("stripe-webhook"),
     MAIPROP_OS_URL: "https://os.test",
     MAIPROP_OS_EMAIL: "test@test.com",
     MAIPROP_OS_PASSWORD: "testpass",
-    WEBHOOK_SECRET: "test-webhook-secret",
-    CRON_SECRET: "test-cron-secret",
-    MAIPROP_OS_WEBHOOK_SECRET: "test-os-webhook-secret",
+    WEBHOOK_SECRET: nonSensitiveTestValue("webhook"),
+    CRON_SECRET: nonSensitiveTestValue("cron"),
+    MAIPROP_OS_WEBHOOK_SECRET: nonSensitiveTestValue("os-webhook"),
     ...envOverrides,
   };
   // Track keys explicitly deleted by tests so they short-circuit before
@@ -144,7 +155,7 @@ export async function captureHandler(
   };
   (envForTest as typeof Deno.env & { delete: typeof Deno.env.delete }).delete = (k: string) => {
     deletedKeys.add(k);
-    delete defaultEnv[k];
+    Reflect.deleteProperty(defaultEnv, k);
     origEnvDelete(k);
   };
 
@@ -178,15 +189,19 @@ export async function captureHandler(
   // `restore` is now a no-op for backwards compatibility — existing test
   // files call `restore()` at top-level, which was the original (buggy)
   // contract. The actual env restoration happens on process unload above.
-  return { handler: captured, restore: () => {} };
-}
+  const restore = () => {
+    globalThis.addEventListener("unload", restoreEnv, { once: true });
+  };
+
+  return { handler: captured, restore };
+};
 
 /** Build a Request to the edge function URL. */
-export function req(
+export const req = (
   method = "POST",
   body?: unknown,
   headers: Record<string, string> = {},
-): Request {
+): Request => {
   return new Request("https://functions.supabase.co/fn", {
     method,
     headers: {
@@ -197,18 +212,16 @@ export function req(
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-}
+};
 
 /** Build an authenticated request with a fake Bearer token. */
-export function authedReq(
+export const authedReq = (
   method = "POST",
   body?: unknown,
   headers: Record<string, string> = {},
-): Request {
+): Request => {
   return req(method, body, { authorization: "Bearer fake-token", ...headers });
-}
+};
 
 /** Parse JSON body from a Response. */
-export async function jsonBody(res: Response): Promise<unknown> {
-  return res.json();
-}
+export const jsonBody = (res: Response): Promise<unknown> => res.json();

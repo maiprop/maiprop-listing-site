@@ -14,7 +14,7 @@ import Stripe from "npm:stripe@18.5.0";
 
 const TEST_SECRET = "test-stripe-webhook-secret-deterministic";
 
-async function sign(payload: string, secret: string, timestamp: number): Promise<string> {
+const sign = async (payload: string, secret: string, timestamp: number): Promise<string> => {
   // Stripe signature format: "t=<ts>,v1=<hmac-sha256>"
   // We use the Stripe SDK's own helper to produce a valid signature so the
   // test doesn't re-implement their scheme. Deno's Stripe SDK uses Web Crypto
@@ -27,7 +27,7 @@ async function sign(payload: string, secret: string, timestamp: number): Promise
     timestamp,
   });
   return header;
-}
+};
 
 Deno.test("stripe-webhook: accepts a validly signed payload", async () => {
   const stripe = new Stripe("test-stripe-api-key", { apiVersion: "2025-08-27.basil" });

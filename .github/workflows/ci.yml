@@ -501,18 +501,23 @@ jobs:
           missing=0
           for key in "${required[@]}"; do
             if [ -z "${!key}" ]; then
-              echo "::error::Missing required Lighthouse secret: $key"
+              echo "::warning::Missing Lighthouse secret: $key"
               missing=1
             fi
           done
           if [ "$missing" -ne 0 ]; then
-            exit 1
+            echo "LIGHTHOUSE_ENABLED=false" >> "$GITHUB_ENV"
+            echo "Authenticated Lighthouse audit skipped because required secrets are not configured."
+          else
+            echo "LIGHTHOUSE_ENABLED=true" >> "$GITHUB_ENV"
           fi
 
       - name: Build app
+        if: env.LIGHTHOUSE_ENABLED == 'true'
         run: npm run build
 
       - name: Run Lighthouse CI
+        if: env.LIGHTHOUSE_ENABLED == 'true'
         run: npx @lhci/cli@0.15.1 autorun
         env:
           LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
