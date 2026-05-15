@@ -11,9 +11,9 @@ on:
 
 env:
   # Format-valid stubs — real secrets are never committed.
-  # URL must match https://<ref>.supabase.co; key must be a 3-segment JWT.
+  # URL must match https://<ref>.supabase.co; key uses Supabase's publishable-key prefix.
   VITE_SUPABASE_URL: https://abcdefghijklmnop.supabase.co
-  VITE_SUPABASE_PUBLISHABLE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlhdCI6MTcwMDAwMDAwMCwiZXhwIjo5OTk5OTk5OTk5fQ.ci_placeholder_signature_not_real
+  VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder_not_real
   VITE_SUPABASE_PROJECT_ID: abcdefghijklmnop
 
 jobs:
@@ -181,7 +181,7 @@ jobs:
         env:
           CI: true
           VITE_SUPABASE_URL: https://abcdefghijklmnop.supabase.co
-          VITE_SUPABASE_PUBLISHABLE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlhdCI6MTcwMDAwMDAwMCwiZXhwIjo5OTk5OTk5OTk5fQ.ci_placeholder_signature_not_real
+          VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder_not_real
           VITE_SUPABASE_PROJECT_ID: abcdefghijklmnop
 
       - name: Run E2E smoke + auth tests
@@ -189,7 +189,7 @@ jobs:
         env:
           CI: true
           VITE_SUPABASE_URL: https://abcdefghijklmnop.supabase.co
-          VITE_SUPABASE_PUBLISHABLE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlhdCI6MTcwMDAwMDAwMCwiZXhwIjo5OTk5OTk5OTk5fQ.ci_placeholder_signature_not_real
+          VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder_not_real
           VITE_SUPABASE_PROJECT_ID: abcdefghijklmnop
           # Auth tests skip gracefully when these secrets are not set in repo settings
           E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}

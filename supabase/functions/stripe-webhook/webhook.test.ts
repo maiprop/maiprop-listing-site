@@ -12,7 +12,7 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import Stripe from "npm:stripe@18.5.0";
 
-const TEST_SECRET = "whsec_test_secret_deterministic_for_tests_only";
+const TEST_SECRET = "test-stripe-webhook-secret-deterministic";
 
 async function sign(payload: string, secret: string, timestamp: number): Promise<string> {
   // Stripe signature format: "t=<ts>,v1=<hmac-sha256>"
@@ -30,7 +30,7 @@ async function sign(payload: string, secret: string, timestamp: number): Promise
 }
 
 Deno.test("stripe-webhook: accepts a validly signed payload", async () => {
-  const stripe = new Stripe("sk_test_dummy", { apiVersion: "2025-08-27.basil" });
+  const stripe = new Stripe("test-stripe-api-key", { apiVersion: "2025-08-27.basil" });
   const payload = JSON.stringify({
     id: "evt_test_1",
     type: "customer.subscription.created",
@@ -45,7 +45,7 @@ Deno.test("stripe-webhook: accepts a validly signed payload", async () => {
 });
 
 Deno.test("stripe-webhook: rejects a tampered payload", async () => {
-  const stripe = new Stripe("sk_test_dummy", { apiVersion: "2025-08-27.basil" });
+  const stripe = new Stripe("test-stripe-api-key", { apiVersion: "2025-08-27.basil" });
   const payload = JSON.stringify({ id: "evt_test_2", type: "customer.subscription.created" });
   const ts = Math.floor(Date.now() / 1000);
   const sig = await sign(payload, TEST_SECRET, ts);
@@ -63,14 +63,14 @@ Deno.test("stripe-webhook: rejects a tampered payload", async () => {
 });
 
 Deno.test("stripe-webhook: rejects wrong secret", async () => {
-  const stripe = new Stripe("sk_test_dummy", { apiVersion: "2025-08-27.basil" });
+  const stripe = new Stripe("test-stripe-api-key", { apiVersion: "2025-08-27.basil" });
   const payload = JSON.stringify({ id: "evt_test_3", type: "ping" });
   const ts = Math.floor(Date.now() / 1000);
   const sig = await sign(payload, TEST_SECRET, ts);
 
   let threw = false;
   try {
-    await stripe.webhooks.constructEventAsync(payload, sig, "whsec_different_secret");
+    await stripe.webhooks.constructEventAsync(payload, sig, "different-stripe-webhook-secret");
   } catch {
     threw = true;
   }
