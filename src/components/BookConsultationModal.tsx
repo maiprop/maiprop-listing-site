@@ -49,14 +49,11 @@ const getAvailableDays = (availability: { day_of_week: number; start_time: strin
   return days;
 };
 
-const generateTimeSlots = (startTime: string, endTime: string) => {
-  const startMinutes = parseSlotStart(startTime);
-  const endMinutes = parseSlotEnd(endTime);
-  const slotCount = Math.max(0, Math.floor((endMinutes - startMinutes) / SLOT_INTERVAL_MINUTES) + 1);
-  return Array.from({ length: slotCount }, (_, index) =>
-    formatSlotTime(startMinutes + index * SLOT_INTERVAL_MINUTES)
-  );
-};
+const getSlotCount = (startMinutes: number, endMinutes: number) =>
+  Math.max(0, Math.floor((endMinutes - startMinutes) / SLOT_INTERVAL_MINUTES) + 1);
+
+const getSlotAtIndex = (startMinutes: number, index: number) =>
+  formatSlotTime(startMinutes + index * SLOT_INTERVAL_MINUTES);
 
 const getCalendarEvent = (selectedDate: string, selectedTime: string, title: string, description: string) => {
   if (!selectedDate || !selectedTime) return null;
@@ -147,7 +144,11 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
   const selectedDayData = availableDays.find((d) => d.date === selectedDate);
   const timeSlots = useMemo(() => {
     if (!selectedDayData) return [];
-    return generateTimeSlots(selectedDayData.startTime, selectedDayData.endTime);
+    const startMinutes = parseSlotStart(selectedDayData.startTime);
+    const endMinutes = parseSlotEnd(selectedDayData.endTime);
+    return Array.from({ length: getSlotCount(startMinutes, endMinutes) }, (_, index) =>
+      getSlotAtIndex(startMinutes, index)
+    );
   }, [selectedDayData]);
 
   const serviceSupportsVideo = selectedService ? Boolean(selectedService.video_enabled) : allowVideoCall;
