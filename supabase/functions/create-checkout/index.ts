@@ -73,17 +73,22 @@ const logStep = (step: string, details?: unknown): void => {
  *  Returns null for anything else so callers fall back to a server-controlled default.
  *  Exported so unit tests can cover every branch without spinning up the handler. */
 export const sanitizeRedirectPath = (raw: unknown): string | null => {
-  if (typeof raw !== "string" || raw.length === 0) return null;
-  // Reject scheme-relative ("//evil") and back-slash escape ("/\\evil") forms,
-  // both of which browsers may resolve to attacker-controlled origins.
-  if (!raw.startsWith("/") || raw.startsWith("//") || raw.startsWith("/\\")) {
-    return null;
-  }
-  // Reject anything that looks like an attempt to break out of the origin via
-  // CRLF / control characters in headers Stripe will echo back.
-  if (/[\r\n\t]/.test(raw)) return null;
-  if (raw.length > 512) return null;
-  return raw;
+  return isSafeRedirectPath(raw) ? raw : null;
+};
+
+const UNSAFE_REDIRECT_PREFIXES = ["//", "/\\"];
+
+const hasUnsafeRedirectPrefix = (raw: string): boolean => {
+  return UNSAFE_REDIRECT_PREFIXES.some((prefix) => raw.startsWith(prefix));
+};
+
+const isSafeRedirectPath = (raw: unknown): raw is string => {
+  return typeof raw === "string" &&
+    raw.length > 0 &&
+    raw.length <= 512 &&
+    raw.startsWith("/") &&
+    !hasUnsafeRedirectPrefix(raw) &&
+    !/[\r\n\t]/.test(raw);
 };
 
 /** Shape of a single `pricing_configs` row we care about. The full table is
@@ -123,10 +128,22 @@ export const normalizePlanKey = (raw: unknown): string | null => {
 };
 
 export const normalizeBillingCycle = (raw: unknown): BillingCycle | null => {
-  if (raw === undefined || raw === null || raw === "") return "monthly";
-  if (raw === "monthly" || raw === "month") return "monthly";
-  if (raw === "annual" || raw === "yearly" || raw === "year") return "annual";
-  return null;
+  const alias = toBillingCycleAlias(raw);
+  return alias === null ? null : BILLING_CYCLE_ALIASES[alias] ?? null;
+};
+
+const BILLING_CYCLE_ALIASES: Record<string, BillingCycle> = {
+  "": "monthly",
+  annual: "annual",
+  month: "monthly",
+  monthly: "monthly",
+  year: "annual",
+  yearly: "annual",
+};
+
+const toBillingCycleAlias = (raw: unknown): string | null => {
+  if (raw === undefined || raw === null) return "";
+  return typeof raw === "string" ? raw : null;
 };
 
 export const isInviteOnlyCheckoutPlan = (planKey: string): boolean => {
@@ -291,17 +308,88 @@ const getDbStripePriceId = (
   row: PricingConfigRow | null,
   billingCycle: BillingCycle,
 ): string | undefined => {
+  return billingCycle === "annual"
+    ? getAnnualDbStripePriceId(row)
+    : getMonthlyDbStripePriceId(row);
+};
+
+const getAnnualDbStripePriceId = (
+  row: PricingConfigRow | null,
+): string | undefined => {
   const meta = row?.metadata ?? {};
-  if (billingCycle === "annual") {
-    return meta.stripe_price_id_annual ??
-      meta.stripe_annual_price_id ??
-      meta.stripe_price_id_yearly ??
-      meta.stripe_yearly_price_id ??
-      (row?.unit === "yearly" ? meta.stripe_price_id : undefined);
-  }
+  return meta.stripe_price_id_annual ??
+    meta.stripe_annual_price_id ??
+    meta.stripe_price_id_yearly ??
+    meta.stripe_yearly_price_id ??
+    getUnitScopedStripePriceId(row, "yearly");
+};
+
+const getMonthlyDbStripePriceId = (
+  row: PricingConfigRow | null,
+): string | undefined => {
+  const meta = row?.metadata ?? {};
   return meta.stripe_price_id_monthly ??
     meta.stripe_monthly_price_id ??
-    (row?.unit !== "yearly" ? meta.stripe_price_id : undefined);
+    getNonYearlyStripePriceId(row);
+};
+
+const getUnitScopedStripePriceId = (
+  row: PricingConfigRow | null,
+  unit: string,
+): string | undefined => {
+  return row?.unit === unit ? row.metadata?.stripe_price_id : undefined;
+};
+
+const getNonYearlyStripePriceId = (
+  row: PricingConfigRow | null,
+): string | undefined => {
+  return row?.unit !== "yearly" ? row?.metadata?.stripe_price_id : undefined;
+};
+
+const queryActivePricingConfig = async (
+  supabase: unknown,
+  planKey: string,
+): Promise<PricingConfigRow | null> => {
+  // The runtime Supabase client returned by `createClient(url, key)` carries
+  // generics that don't match the value of `ReturnType<typeof createClient>`,
+  // so we accept it as `unknown` here and bridge through `(... .from as any)`.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data } = await ((supabase as { from: any }).from as any)(
+    "pricing_configs",
+  )
+    .select("key, audience, unit, metadata")
+    .eq("key", planKey)
+    .eq("is_active", true)
+    .maybeSingle();
+  return data as PricingConfigRow | null;
+};
+
+const buildCheckoutPlan = (
+  priceId: string | null | undefined,
+  planKey: string,
+  billingCycle: BillingCycle,
+  productId?: string,
+): CheckoutPlan | null => {
+  const entitlement = getPlanEntitlement(planKey);
+  return priceId && entitlement
+    ? {
+      priceId,
+      planKey,
+      audience: entitlement.audience,
+      role: entitlement.role,
+      billingCycle,
+      productId,
+    }
+    : null;
+};
+
+const getDefaultStripePrice = (
+  planKey: string,
+  billingCycle: BillingCycle,
+): string | null => {
+  return planKey === "pro" && billingCycle === "monthly"
+    ? Deno.env.get("STRIPE_PRICE_DEFAULT") ?? null
+    : null;
 };
 
 /** Plan keys: active DB pricing_configs.metadata.stripe_price_id, then env STRIPE_PRICE_<UPPERCASE_KEY>. */
@@ -312,55 +400,25 @@ const getCheckoutPlan = async (
 ): Promise<CheckoutPlan | null> => {
   const entitlement = getPlanEntitlement(planKey);
   if (!entitlement) return null;
-  // The runtime Supabase client returned by `createClient(url, key)` carries
-  // generics that don't match the value of `ReturnType<typeof createClient>`,
-  // so we accept it as `unknown` here and bridge through `(... .from as any)`
-  // — the same narrow cast pattern this repo uses for unregistered tables.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data } = await ((supabase as { from: any }).from as any)(
-    "pricing_configs",
-  )
-    .select("key, audience, unit, metadata")
-    .eq("key", planKey)
-    .eq("is_active", true)
-    .maybeSingle();
-  const row = data as PricingConfigRow | null;
+
+  const row = await queryActivePricingConfig(supabase, planKey);
   const stripePriceId = getDbStripePriceId(row, billingCycle);
   const rowAudience = normalizeAudience(row?.audience ?? null);
   if (stripePriceId && rowAudience === entitlement.audience) {
-    return {
-      priceId: stripePriceId,
+    return buildCheckoutPlan(
+      stripePriceId,
       planKey,
-      audience: entitlement.audience,
-      role: entitlement.role,
       billingCycle,
-      productId: row?.metadata?.stripe_product_id,
-    };
+      row?.metadata?.stripe_product_id,
+    );
   }
 
   const envPrice = getFirstConfiguredEnvPrice(planKey, billingCycle);
-  if (envPrice) {
-    return {
-      priceId: envPrice,
-      planKey,
-      audience: entitlement.audience,
-      role: entitlement.role,
-      billingCycle,
-    };
-  }
-
-  const defaultPrice = planKey === "pro" && billingCycle === "monthly"
-    ? Deno.env.get("STRIPE_PRICE_DEFAULT")
-    : null;
-  return defaultPrice
-    ? {
-      priceId: defaultPrice,
-      planKey,
-      audience: entitlement.audience,
-      role: entitlement.role,
-      billingCycle,
-    }
-    : null;
+  return buildCheckoutPlan(
+    envPrice ?? getDefaultStripePrice(planKey, billingCycle),
+    planKey,
+    billingCycle,
+  );
 };
 
 const findOwnedStripeCustomer = async (
