@@ -34,14 +34,21 @@ export type SubscriptionAudience =
   | "investor"
   | "institutional";
 
+const SUBSCRIPTION_AUDIENCE_ALIASES: Record<string, SubscriptionAudience> = {
+  agent: "agent",
+  buyer: "participant",
+  developer: "developer",
+  institutional: "institutional",
+  investor: "investor",
+  participant: "participant",
+  pro: "participant",
+  professional: "professional",
+  seller: "participant",
+  user: "participant",
+};
+
 export function normalizeSubscriptionAudience(raw: string | null | undefined): SubscriptionAudience | null {
-  if (raw === "buyer" || raw === "seller" || raw === "participant" || raw === "pro" || raw === "user") return "participant";
-  if (raw === "agent") return "agent";
-  if (raw === "developer") return "developer";
-  if (raw === "professional") return "professional";
-  if (raw === "investor") return "investor";
-  if (raw === "institutional") return "institutional";
-  return null;
+  return raw ? SUBSCRIPTION_AUDIENCE_ALIASES[raw] ?? null : null;
 }
 
 export function isSubscriptionAudienceAllowed(

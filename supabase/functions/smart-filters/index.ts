@@ -86,9 +86,7 @@ export const parseSmartFilterArgs = (raw: string): SmartFilterArgs => {
       .replace(/,\s*}/g, "}")
       .replace(/,\s*]/g, "]")
       .replace(/\)\s*}/g, "}")
-      .replace(/\)\s*,/g, ",")
-      // eslint-disable-next-line no-control-regex
-      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
+      .replace(/\)\s*,/g, ",");
     return JSON.parse(repaired) as SmartFilterArgs;
   }
 };
@@ -104,7 +102,7 @@ const coerceStringArray = (value: unknown, allowed?: Set<string>): string[] => {
     .slice(0, 24);
 };
 
-Deno.serve(async (req) => {
+Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates auth, quota, AI parsing, and response shaping.
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);

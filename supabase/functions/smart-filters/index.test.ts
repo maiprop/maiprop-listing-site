@@ -25,7 +25,7 @@ Deno.test("fake Bearer returns 401 (not 500)", async () => {
 });
 
 Deno.test("parseSmartFilterArgs accepts Gemini/OpenAI text JSON responses", () => {
-  const parsed = parseSmartFilterArgs(`Here is the JSON:\n\`\`\`json\n{"sections":["size","bedrooms"],"featureKeys":["has_parking"],"sizeLabel":"Home Area","priceLabel":"Asking Price","bedsLabel":"Bedrooms","featuresLabel":"Amenities"}\n\`\`\``);
+  const parsed = parseSmartFilterArgs("Here is the JSON:\n```json\n{\"sections\":[\"size\",\"bedrooms\"],\"featureKeys\":[\"has_parking\"],\"sizeLabel\":\"Home Area\",\"priceLabel\":\"Asking Price\",\"bedsLabel\":\"Bedrooms\",\"featuresLabel\":\"Amenities\"}\n```");
   assertEquals(parsed.sections, ["size", "bedrooms"]);
   assertEquals(parsed.featureKeys, ["has_parking"]);
   assertEquals(parsed.priceLabel, "Asking Price");

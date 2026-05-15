@@ -180,21 +180,21 @@ function getPlanEntitlement(planKey: string) {
   return PLAN_ENTITLEMENT[planKey] ?? null;
 }
 
+const CHECKOUT_AUDIENCE_ALIASES: Record<string, string> = {
+  agent: "agent",
+  buyer: "participant",
+  developer: "developer",
+  institutional: "institutional",
+  investor: "investor",
+  participant: "participant",
+  pro: "participant",
+  professional: "professional",
+  seller: "participant",
+  user: "participant",
+};
+
 function normalizeAudience(raw: string | null | undefined): string | null {
-  if (
-    raw === "buyer" || raw === "seller" || raw === "participant" ||
-    raw === "user" ||
-    raw === "pro"
-  ) {
-    return "participant";
-  }
-  if (
-    raw === "agent" || raw === "developer" || raw === "professional" ||
-    raw === "investor" || raw === "institutional"
-  ) {
-    return raw;
-  }
-  return null;
+  return raw ? CHECKOUT_AUDIENCE_ALIASES[raw] ?? null : null;
 }
 
 export function isCheckoutAudienceAllowed(

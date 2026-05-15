@@ -1,7 +1,8 @@
 version = 1
 
 exclude_patterns = [
-  "supabase/functions/fetch-os-auctions/index.ts"
+  "supabase/functions/fetch-os-auctions/index.ts",
+  "remotion-video/**"
 ]
 
 test_patterns = [
