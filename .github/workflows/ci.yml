@@ -551,7 +551,7 @@ jobs:
         if: steps.lighthouse-secrets.outputs.enabled == 'true'
         run: |
           npx playwright install chromium --with-deps
-          echo "CHROME_PATH=$(node -e 'const { chromium } = require(\"playwright\"); process.stdout.write(chromium.executablePath())')" >> "$GITHUB_ENV"
+          echo "CHROME_PATH=$(node -e 'const { chromium } = require("playwright"); process.stdout.write(chromium.executablePath())')" >> "$GITHUB_ENV"
 
       - name: Run Lighthouse CI
         if: steps.lighthouse-secrets.outputs.enabled == 'true'
