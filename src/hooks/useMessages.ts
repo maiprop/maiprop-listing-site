@@ -5,6 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
 type ConversationCandidate = { id: string; listing_id: string | null };
+type StartConversationInput = { other_user_id: string; listing_id?: string };
 
 const getParticipantConversationFilter = (currentUserId: string, otherUserId: string) =>
   `and(participant_a.eq.${currentUserId},participant_b.eq.${otherUserId}),and(participant_a.eq.${otherUserId},participant_b.eq.${currentUserId})`;
@@ -42,6 +43,41 @@ const insertConversation = async (
     .single();
   if (error) throw error;
   return data.id;
+};
+
+const getReusableConversationId = (
+  conversations: ConversationCandidate[],
+  targetListingId: string | null,
+) => findMatchingConversation(conversations, targetListingId)?.id ?? conversations[0]?.id;
+
+const getFallbackConversationId = async (participantFilter: string) => {
+  const { data } = await supabase
+    .from("conversations")
+    .select("id, listing_id")
+    .or(participantFilter);
+  return data?.[0]?.id ?? null;
+};
+
+const startConversationForUser = async (
+  currentUserId: string | undefined,
+  { other_user_id, listing_id }: StartConversationInput,
+) => {
+  if (!currentUserId) throw new Error("Must be logged in");
+  if (other_user_id === currentUserId) throw new Error("Cannot start a conversation with yourself");
+
+  const participantFilter = getParticipantConversationFilter(currentUserId, other_user_id);
+  const targetListingId = listing_id ?? null;
+  const conversations = await selectParticipantConversations(participantFilter);
+  const reusableConversationId = getReusableConversationId(conversations, targetListingId);
+  if (reusableConversationId) return reusableConversationId;
+
+  try {
+    return await insertConversation(currentUserId, other_user_id, targetListingId);
+  } catch (error: unknown) {
+    const fallbackConversationId = await getFallbackConversationId(participantFilter);
+    if (fallbackConversationId) return fallbackConversationId;
+    throw error;
+  }
 };
 
 export function useConversations() {
@@ -265,32 +301,7 @@ export function useStartConversation() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   return useMutation({
-    mutationFn: async ({ other_user_id, listing_id }: { other_user_id: string; listing_id?: string }) => {
-      if (!user) throw new Error("Must be logged in");
-      if (other_user_id === user.id) throw new Error("Cannot start a conversation with yourself");
-
-      const participantFilter = getParticipantConversationFilter(user.id, other_user_id);
-      const conversations = await selectParticipantConversations(participantFilter);
-      const targetListingId = listing_id ?? null;
-      const match = findMatchingConversation(conversations, targetListingId);
-      if (match) return match.id;
-
-      // The database currently enforces one conversation per participant pair.
-      // Reuse that thread for another listing instead of surfacing a duplicate
-      // key error as "Could not start conversation".
-      if (conversations[0]?.id) return conversations[0].id;
-
-      try {
-        return await insertConversation(user.id, other_user_id, targetListingId);
-      } catch (error: unknown) {
-        const { data: fallbackList } = await supabase
-          .from("conversations")
-          .select("id, listing_id")
-          .or(participantFilter);
-        if (fallbackList?.[0]?.id) return fallbackList[0].id;
-        throw error;
-      }
-    },
+    mutationFn: (input: StartConversationInput) => startConversationForUser(user?.id, input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
     },

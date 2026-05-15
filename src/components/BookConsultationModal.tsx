@@ -8,6 +8,7 @@ import { useProfessionalServices, useProfessionalAvailability } from "@/hooks/us
 import { toast } from "sonner";
 
 const PRICING_LABELS: Record<string, string> = { hourly: "/hr", daily: "/day", fixed: "fixed" };
+const SLOT_INTERVAL_MINUTES = 60;
 
 const getAvailableDays = (availability: { day_of_week: number; start_time: string; end_time: string }[], count = 14) => {
   const days: { label: string; date: string; display: string; dayOfWeek: number; startTime: string; endTime: string }[] = [];
@@ -34,20 +35,18 @@ const getAvailableDays = (availability: { day_of_week: number; start_time: strin
 };
 
 const generateTimeSlots = (startTime: string, endTime: string) => {
-  const slots: string[] = [];
   const [sh, sm] = startTime.split(":").map(Number);
   const [eh] = endTime.split(":").map(Number);
-  let hour = sh;
-  const startMinute = sm === 30 ? 30 : 0;
-  let minute = startMinute;
-  while (hour < eh || (hour === eh && minute === 0)) {
+  const startMinutes = sh * 60 + (sm === 30 ? 30 : 0);
+  const endMinutes = eh * 60;
+  const slots: string[] = [];
+
+  for (let current = startMinutes; current <= endMinutes; current += SLOT_INTERVAL_MINUTES) {
+    const hour = Math.floor(current / 60);
+    const minute = current % 60;
     slots.push(`${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`);
-    minute += 60;
-    if (minute >= 60) {
-      hour += Math.floor(minute / 60);
-      minute %= 60;
-    }
   }
+
   return slots;
 };
 

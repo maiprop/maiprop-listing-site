@@ -73,10 +73,10 @@ const getAuctionShuffleScore = (row: AuctionListingRow, seed: string): number =>
   return hashString(`${seed}:${row.id}:${row.auction_date ?? ""}:${row.city ?? ""}`);
 };
 
-export function randomizeAuctionPresentation(
+export const randomizeAuctionPresentation = (
   rows: AuctionListingRow[],
   seed = getAuctionRotationSeed(),
-): AuctionListingRow[] {
+): AuctionListingRow[] => {
   return [...rows].sort((a, b) => {
     const priorityDelta = (b.priority_placement ?? 0) - (a.priority_placement ?? 0);
     if (priorityDelta !== 0) return priorityDelta;
@@ -84,7 +84,7 @@ export function randomizeAuctionPresentation(
     if (featuredDelta !== 0) return featuredDelta;
     return getAuctionShuffleScore(a, seed) - getAuctionShuffleScore(b, seed);
   });
-}
+};
 
 const fetchAuctionPageFromDatabase = async (
   today: string,
@@ -171,8 +171,8 @@ const fetchAuctionListings = async (): Promise<AuctionListingRow[]> => {
 const getTimeoutRejection = (
   setTimer: (timer: ReturnType<typeof setTimeout>) => void,
 ): Promise<never> => {
-  return new Promise(function createTimeoutRejection(_, reject) {
-    const timer = setTimeout(function rejectTimeout() {
+  return new Promise((_, reject) => {
+    const timer = setTimeout(() => {
       reject(new Error("Request timeout"));
     }, QUERY_TIMEOUT_MS);
     setTimer(timer);
@@ -186,7 +186,7 @@ const withAuctionTimeout = async (
   try {
     return await Promise.race([
       request,
-      getTimeoutRejection(function setTimeoutHandle(timer) {
+      getTimeoutRejection((timer) => {
         timeout = timer;
       }),
     ]);
@@ -199,10 +199,10 @@ const getAuctionQuery = (): Promise<AuctionListingRow[]> => {
   return withAuctionTimeout(fetchAuctionListings());
 };
 
-export function useAuctionListings() {
+export const useAuctionListings = () => {
   return useQuery({
     queryKey: ["auction-listings-all"],
     queryFn: getAuctionQuery,
     staleTime: 30_000, // 30s — auction status changes frequently
   });
-}
+};
