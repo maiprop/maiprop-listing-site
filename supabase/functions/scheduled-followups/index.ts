@@ -12,6 +12,11 @@ const SCHEDULE = [
   { step: 2, daysAfter: 8 },
   { step: 3, daysAfter: 29 },
 ];
+const requireEnv = (key: string): string => {
+  const value = Deno.env.get(key);
+  if (!value) throw new Error(`Missing required environment variable: ${key}`);
+  return value;
+};
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -24,15 +29,16 @@ Deno.serve(async (req) => {
     const provided = req.headers.get("x-cron-secret");
     if (!CRON_SECRET || provided !== CRON_SECRET) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
   }
   // ────────────────────────────────────────────────────────────────────────
 
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseUrl = requireEnv("SUPABASE_URL");
+    const supabaseKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const now = new Date();
@@ -55,37 +61,48 @@ Deno.serve(async (req) => {
     }
 
     if (!leads || leads.length === 0) {
-      return new Response(JSON.stringify({ success: true, processed: 0, message: "No leads need followup" }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          success: true,
+          processed: 0,
+          message: "No leads need followup",
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     for (const lead of leads) {
       const createdAt = new Date(lead.created_at);
-      const daysSinceCreation = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24);
+      const daysSinceCreation =
+        (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24);
       const currentStep = lead.followup_step || 0;
 
       // Find the next step that should be sent based on timing
       const nextSchedule = SCHEDULE.find(
-        (s) => s.step === currentStep + 1 && daysSinceCreation >= s.daysAfter
+        (s) => s.step === currentStep + 1 && daysSinceCreation >= s.daysAfter,
       );
 
       if (!nextSchedule) continue;
 
       // Call the followup-lead function internally
       try {
-        const followupRes = await fetch(`${supabaseUrl}/functions/v1/followup-lead`, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${supabaseKey}`,
-            "Content-Type": "application/json",
+        const followupRes = await fetch(
+          `${supabaseUrl}/functions/v1/followup-lead`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${supabaseKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              lead_id: lead.id,
+              step: nextSchedule.step,
+            }),
           },
-          body: JSON.stringify({
-            lead_id: lead.id,
-            step: nextSchedule.step,
-          }),
-        });
+        );
 
         const followupData = await followupRes.json();
         results.push({
@@ -95,7 +112,7 @@ Deno.serve(async (req) => {
         });
 
         console.log(
-          `Followup step ${nextSchedule.step} for ${lead.full_name}: ${followupRes.ok ? "OK" : "FAILED"}`
+          `Followup step ${nextSchedule.step} for ${lead.full_name}: ${followupRes.ok ? "OK" : "FAILED"}`,
         );
       } catch (e) {
         console.error(`Failed to send followup to ${lead.full_name}:`, e);
@@ -117,7 +134,7 @@ Deno.serve(async (req) => {
       {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
   } catch (error: unknown) {
     console.error("Scheduled followup error:", error);

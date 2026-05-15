@@ -1,5 +1,11 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
+const requireEnv = (key: string): string => {
+  const value = Deno.env.get(key);
+  if (!value) throw new Error(`Missing required environment variable: ${key}`);
+  return value;
+};
+
 type LeadRecord = {
   id?: string;
   full_name: string;
@@ -26,8 +32,13 @@ type PropertyCard = {
 type SupabaseSelectedQuery = {
   eq: (column: string, value: unknown) => SupabaseSelectedQuery;
   lte: (column: string, value: unknown) => SupabaseSelectedQuery;
-  order: (column: string, options?: Record<string, unknown>) => SupabaseSelectedQuery;
-  limit: (count: number) => PromiseLike<{ data?: PropertyCard[] | null; error?: unknown }>;
+  order: (
+    column: string,
+    options?: Record<string, unknown>,
+  ) => SupabaseSelectedQuery;
+  limit: (
+    count: number,
+  ) => PromiseLike<{ data?: PropertyCard[] | null; error?: unknown }>;
 };
 
 type SupabaseClientLike = {
@@ -43,13 +54,22 @@ const corsHeaders = {
 };
 
 const SITE_URL = "https://properties.maiprop.co";
-const LOGO_URL = "https://cqxcztafhnwkhxgaylne.supabase.co/storage/v1/object/public/email-assets/logo-new.png";
+const LOGO_URL =
+  "https://cqxcztafhnwkhxgaylne.supabase.co/storage/v1/object/public/email-assets/logo-new.png";
 
 function escapeHtml(text: string): string {
-  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
-function brandWrap(innerHtml: string, ctaText: string, ctaHref: string): string {
+function brandWrap(
+  innerHtml: string,
+  ctaText: string,
+  ctaHref: string,
+): string {
   return `
 <!DOCTYPE html>
 <html lang="en" dir="ltr">
@@ -129,13 +149,19 @@ function textToHtml(text: string): string {
 }
 
 // Step 1: New property suggestions (different from initial followup)
-async function generateStep1(lead: LeadRecord, supabase: SupabaseClientLike, LOVABLE_API_KEY: string) {
+async function generateStep1(
+  lead: LeadRecord,
+  supabase: SupabaseClientLike,
+  LOVABLE_API_KEY: string,
+) {
   const budget = Number(lead.investment_budget) || 250000;
 
   // Get different properties - order by date_added to show newer ones
   const { data: props } = await supabase
     .from("properties")
-    .select("id, title, location, price, size, bedrooms, yield, project_type, images, description")
+    .select(
+      "id, title, location, price, size, bedrooms, yield, project_type, images, description",
+    )
     .eq("status", "available")
     .lte("price", budget * 1.3)
     .order("date_added", { ascending: false })
@@ -196,23 +222,36 @@ Do NOT use markdown. Plain text only. Sign off: "The mAI Prop Team"`;
       </table>
     </div>`;
 
-  const fullContent = htmlContent +
-    (cardsHtml ? `<div style="margin-top:20px;border-top:1px solid #e0d8cc;padding-top:16px;"><p style="margin:0 0 10px;color:#0a0e2a;font-size:14px;font-weight:600;text-transform:uppercase;letter-spacing:1px;">🏠 New Listings For You</p>${cardsHtml}</div>` : "") +
+  const fullContent =
+    htmlContent +
+    (cardsHtml
+      ? `<div style="margin-top:20px;border-top:1px solid #e0d8cc;padding-top:16px;"><p style="margin:0 0 10px;color:#0a0e2a;font-size:14px;font-weight:600;text-transform:uppercase;letter-spacing:1px;">🏠 New Listings For You</p>${cardsHtml}</div>`
+      : "") +
     processHtml;
 
   return {
     subject: `${firstName}, new properties just listed — don't miss out`,
-    body: brandWrap(fullContent, "Book a Free Consultation →", "https://calendly.com/maipropos/consultation"),
+    body: brandWrap(
+      fullContent,
+      "Book a Free Consultation →",
+      "https://calendly.com/maipropos/consultation",
+    ),
   };
 }
 
 // Step 2: Extensive property details with more info
-async function generateStep2(lead: LeadRecord, supabase: SupabaseClientLike, LOVABLE_API_KEY: string) {
+async function generateStep2(
+  lead: LeadRecord,
+  supabase: SupabaseClientLike,
+  LOVABLE_API_KEY: string,
+) {
   const budget = Number(lead.investment_budget) || 250000;
 
   const { data: props } = await supabase
     .from("properties")
-    .select("id, title, location, price, size, bedrooms, yield, project_type, images, description, floor, construction_year")
+    .select(
+      "id, title, location, price, size, bedrooms, yield, project_type, images, description, floor, construction_year",
+    )
     .eq("status", "available")
     .lte("price", budget * 1.5)
     .order("price", { ascending: true })
@@ -221,19 +260,22 @@ async function generateStep2(lead: LeadRecord, supabase: SupabaseClientLike, LOV
   const topProps = props || [];
 
   // Build detailed property cards with more info
-  const detailedCardsHtml = topProps.map((p: PropertyCard) => {
-    const img = (p.images || [])[0] || "";
-    const link = `${SITE_URL}/#property-${p.id}`;
-    const priceStr = p.price ? `€${Number(p.price).toLocaleString()}` : "";
-    const details = [
-      p.size ? `${p.size}m²` : "",
-      p.bedrooms ? `${p.bedrooms} bedroom${p.bedrooms > 1 ? "s" : ""}` : "",
-      p.floor ? `Floor ${p.floor}` : "",
-      p.yield ? `Yield: ${p.yield}` : "",
-      p.construction_year ? `Built: ${p.construction_year}` : "",
-    ].filter(Boolean).join(" · ");
+  const detailedCardsHtml = topProps
+    .map((p: PropertyCard) => {
+      const img = (p.images || [])[0] || "";
+      const link = `${SITE_URL}/#property-${p.id}`;
+      const priceStr = p.price ? `€${Number(p.price).toLocaleString()}` : "";
+      const details = [
+        p.size ? `${p.size}m²` : "",
+        p.bedrooms ? `${p.bedrooms} bedroom${p.bedrooms > 1 ? "s" : ""}` : "",
+        p.floor ? `Floor ${p.floor}` : "",
+        p.yield ? `Yield: ${p.yield}` : "",
+        p.construction_year ? `Built: ${p.construction_year}` : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
 
-    return `
+      return `
     <a href="${link}" style="display:block;text-decoration:none;margin:14px 0;border-radius:8px;overflow:hidden;border:1px solid #1a1e3a;">
       ${img ? `<img src="${img}" alt="${escapeHtml(p.title)}" width="460" style="display:block;width:100%;max-height:200px;object-fit:cover;" />` : ""}
       <div style="padding:16px 18px;background:#0f1340;">
@@ -243,7 +285,8 @@ async function generateStep2(lead: LeadRecord, supabase: SupabaseClientLike, LOV
         ${p.description ? `<p style="margin:0;color:#c0d0e0;font-size:13px;line-height:1.5;">${escapeHtml(p.description).substring(0, 150)}…</p>` : ""}
       </div>
     </a>`;
-  }).join("");
+    })
+    .join("");
 
   const budgetStr = `€${Number(lead.investment_budget).toLocaleString()}`;
   const prompt = `You are mAI Prop's senior investment advisor. Write a personalized follow-up email (max 10 lines) for a Golden Visa lead.
@@ -266,17 +309,28 @@ Do NOT use markdown. Plain text only. Sign off: "The mAI Prop Team"`;
   const htmlContent = textToHtml(aiText);
   const firstName = escapeHtml(lead.full_name.split(" ")[0]);
 
-  const fullContent = htmlContent +
-    (detailedCardsHtml ? `<div style="margin-top:20px;border-top:1px solid #e0d8cc;padding-top:16px;"><p style="margin:0 0 10px;color:#0a0e2a;font-size:14px;font-weight:600;text-transform:uppercase;letter-spacing:1px;">📋 Your Detailed Property Portfolio</p>${detailedCardsHtml}</div>` : "");
+  const fullContent =
+    htmlContent +
+    (detailedCardsHtml
+      ? `<div style="margin-top:20px;border-top:1px solid #e0d8cc;padding-top:16px;"><p style="margin:0 0 10px;color:#0a0e2a;font-size:14px;font-weight:600;text-transform:uppercase;letter-spacing:1px;">📋 Your Detailed Property Portfolio</p>${detailedCardsHtml}</div>`
+      : "");
 
   return {
     subject: `${firstName}, your personalized investment portfolio — mAI Prop`,
-    body: brandWrap(fullContent, "Schedule a Video Call →", "https://calendly.com/maipropos/consultation"),
+    body: brandWrap(
+      fullContent,
+      "Schedule a Video Call →",
+      "https://calendly.com/maipropos/consultation",
+    ),
   };
 }
 
 // Step 3: Golden Visa benefits deep dive
-async function generateStep3(lead: LeadRecord, _supabase: SupabaseClientLike, LOVABLE_API_KEY: string) {
+async function generateStep3(
+  lead: LeadRecord,
+  _supabase: SupabaseClientLike,
+  LOVABLE_API_KEY: string,
+) {
   const firstName = escapeHtml(lead.full_name.split(" ")[0]);
 
   const budgetStr = `€${Number(lead.investment_budget).toLocaleString()}`;
@@ -344,26 +398,37 @@ Do NOT use markdown formatting. Use • for bullets. Plain text only. Sign off: 
 
   return {
     subject: `${firstName}, your Golden Visa guide — act before thresholds increase`,
-    body: brandWrap(fullContent, "Book Your Free Consultation →", "https://calendly.com/maipropos/consultation"),
+    body: brandWrap(
+      fullContent,
+      "Book Your Free Consultation →",
+      "https://calendly.com/maipropos/consultation",
+    ),
   };
 }
 
 async function callAI(apiKey: string, prompt: string): Promise<string> {
   try {
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
+    const response = await fetch(
+      "https://ai.gateway.lovable.dev/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash-lite",
+          messages: [
+            {
+              role: "system",
+              content:
+                "You write ultra-concise, professional emails for a luxury real estate firm. Output only the email body. No subject line. No markdown.",
+            },
+            { role: "user", content: prompt },
+          ],
+        }),
       },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash-lite",
-        messages: [
-          { role: "system", content: "You write ultra-concise, professional emails for a luxury real estate firm. Output only the email body. No subject line. No markdown." },
-          { role: "user", content: prompt },
-        ],
-      }),
-    });
+    );
     if (!response.ok) throw new Error(`AI error: ${response.status}`);
     const data = await response.json();
     return data.choices?.[0]?.message?.content?.trim() || "";
@@ -384,25 +449,39 @@ Deno.serve(async (req) => {
       const authHeader = req.headers.get("Authorization");
       if (!authHeader) {
         return new Response(JSON.stringify({ error: "Unauthorized" }), {
-          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       const token = authHeader.replace("Bearer ", "");
-      const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      const serviceRoleKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
       // Allow internal calls from scheduled-followups (which pass the service role key)
       if (token !== serviceRoleKey) {
-        const _ac = createClient(Deno.env.get("SUPABASE_URL")!, serviceRoleKey);
-        const { data: { user }, error: authErr } = await _ac.auth.getUser(token);
+        const _ac = createClient(requireEnv("SUPABASE_URL"), serviceRoleKey);
+        const {
+          data: { user },
+          error: authErr,
+        } = await _ac.auth.getUser(token);
         if (authErr || !user) {
           return new Response(JSON.stringify({ error: "Invalid token" }), {
-            status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
-        const { data: roleData } = await _ac.from("user_roles").select("role").eq("user_id", user.id).eq("role", "admin").single();
+        const { data: roleData } = await _ac
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", user.id)
+          .eq("role", "admin")
+          .single();
         if (!roleData) {
-          return new Response(JSON.stringify({ error: "Forbidden — admin access required" }), {
-            status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
+          return new Response(
+            JSON.stringify({ error: "Forbidden — admin access required" }),
+            {
+              status: 403,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
+          );
         }
       }
     }
@@ -412,32 +491,46 @@ Deno.serve(async (req) => {
 
     if (!lead_id || typeof lead_id !== "string") {
       return new Response(JSON.stringify({ error: "Missing lead_id" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     if (![1, 2, 3].includes(step)) {
-      return new Response(JSON.stringify({ error: "Step must be 1, 2, or 3" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Step must be 1, 2, or 3" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseUrl = requireEnv("SUPABASE_URL");
+    const supabaseKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { data: lead, error: dbError } = await supabase.from("leads").select("*").eq("id", lead_id).single();
+    const { data: lead, error: dbError } = await supabase
+      .from("leads")
+      .select("*")
+      .eq("id", lead_id)
+      .single();
     if (dbError || !lead) {
       return new Response(JSON.stringify({ error: "Lead not found" }), {
-        status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const BREVO_API_KEY = Deno.env.get("brevo");
     if (!BREVO_API_KEY && !preview_only) {
-      return new Response(JSON.stringify({ error: "Email service not configured" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Email service not configured" }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY") || "";
@@ -452,7 +545,6 @@ Deno.serve(async (req) => {
     } else {
       result = await generateStep3(lead, propertySupabase, LOVABLE_API_KEY);
     }
-
     // Fallback if AI failed
     if (!result.body) {
       const firstName = escapeHtml(lead.full_name.split(" ")[0]);
@@ -464,23 +556,35 @@ Deno.serve(async (req) => {
            <p style="margin:0;color:#e0fafa;font-size:15px;line-height:1.6;">We'd love to schedule a call — reply to this email or visit our website.</p>
            <p style="margin:12px 0 0;color:#e0fafa;font-size:15px;">Warm regards,<br/>The mAI Prop Team</p>`,
           "Browse Our Portfolio →",
-          `${SITE_URL}/#opportunities`
+          `${SITE_URL}/#opportunities`,
         ),
       };
     }
 
     // Preview mode — return HTML without sending
     if (preview_only) {
-      return new Response(JSON.stringify({ success: true, preview: true, subject: result.subject, html: result.body }), {
-        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          success: true,
+          preview: true,
+          subject: result.subject,
+          html: result.body,
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+    if (!BREVO_API_KEY) {
+      throw new Error("Email service not configured");
     }
 
     // Send via Brevo
     const emailRes = await fetch("https://api.brevo.com/v3/smtp/email", {
       method: "POST",
       headers: {
-        "api-key": BREVO_API_KEY!,
+        "api-key": BREVO_API_KEY,
         "Content-Type": "application/json",
         accept: "application/json",
       },
@@ -497,23 +601,32 @@ Deno.serve(async (req) => {
     if (!emailRes.ok) {
       console.error("Brevo error:", JSON.stringify(emailData));
       return new Response(JSON.stringify({ error: "Failed to send email" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     // Update followup_step and mark as contacted if still new
     await supabase
       .from("leads")
-      .update({ followup_step: step, ...(lead.status === "new" ? { status: "contacted" } : {}) })
+      .update({
+        followup_step: step,
+        ...(lead.status === "new" ? { status: "contacted" } : {}),
+      })
       .eq("id", lead_id);
 
-    return new Response(JSON.stringify({ success: true, step, email_id: emailData.id }), {
-      status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ success: true, step, email_id: emailData.id }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   } catch (error: unknown) {
     console.error("Followup error:", error);
     return new Response(JSON.stringify({ error: "Internal error" }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });

@@ -2,17 +2,30 @@
 import { getBrevoSender, sendBrevoEmail } from "../_shared/brevo.ts";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { createLogger } from "../_shared/logger.ts";
-import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
+import {
+  makeRateLimiter,
+  tooManyRequestsResponse,
+} from "../_shared/rateLimit.ts";
 
 const log = createLogger("invitation-notify");
-const limiter = makeRateLimiter({ bucket: "invitation-notify", maxRequests: 10, windowMs: 60_000 });
+const limiter = makeRateLimiter({
+  bucket: "invitation-notify",
+  maxRequests: 10,
+  windowMs: 60_000,
+});
+const requireEnv = (key: string): string => {
+  const value = Deno.env.get(key);
+  if (!value) throw new Error(`Missing required environment variable: ${key}`);
+  return value;
+};
 
 Deno.serve(async (req) => {
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
 
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
+  const ip =
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
   if (await limiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);
 
   try {
@@ -25,8 +38,8 @@ Deno.serve(async (req) => {
     }
 
     const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      requireEnv("SUPABASE_URL"),
+      requireEnv("SUPABASE_SERVICE_ROLE_KEY"),
     );
 
     const token = authHeader.slice("Bearer ".length).trim();
@@ -57,10 +70,13 @@ Deno.serve(async (req) => {
     const { type, email, full_name, rejection_reason, tier } = body;
 
     if (!type || !email) {
-      return new Response(JSON.stringify({ error: "type and email are required" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "type and email are required" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const firstName = full_name?.split(" ")[0] || "there";
@@ -186,10 +202,13 @@ Deno.serve(async (req) => {
 </body>
 </html>`;
     } else {
-      return new Response(JSON.stringify({ error: "Invalid type. Use 'approved' or 'rejected'" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Invalid type. Use 'approved' or 'rejected'" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     await sendBrevoEmail({
@@ -207,7 +226,9 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
-    log.error("invitation-notify error", { err: err instanceof Error ? err.message : String(err) });
+    log.error("invitation-notify error", {
+      err: err instanceof Error ? err.message : String(err),
+    });
     return new Response(JSON.stringify({ error: (err as Error).message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

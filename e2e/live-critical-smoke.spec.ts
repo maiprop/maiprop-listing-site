@@ -6,7 +6,12 @@
  * are rejected unless the caller has the right session/role. Destructive drills
  * still belong behind e2e/helpers/liveSafety.ts.
  */
-import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import {
+  expect,
+  test,
+  type APIRequestContext,
+  type Page,
+} from "@playwright/test";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { demoAccounts, demoPasswords } from "./helpers/demoAccounts";
@@ -41,8 +46,11 @@ function env(...keys: string[]): string {
 }
 
 const SUPABASE_URL = env("VITE_SUPABASE_URL", "SUPABASE_URL");
-const ANON_KEY =
-  env("VITE_SUPABASE_PUBLISHABLE_KEY", "VITE_SUPABASE_ANON_KEY", "SUPABASE_ANON_KEY");
+const ANON_KEY = env(
+  "VITE_SUPABASE_PUBLISHABLE_KEY",
+  "VITE_SUPABASE_ANON_KEY",
+  "SUPABASE_ANON_KEY",
+);
 
 const hasLiveSupabase =
   SUPABASE_URL.startsWith("https://") &&
@@ -61,35 +69,52 @@ async function signInViaSupabase(
   email: string,
   password: string,
 ): Promise<string> {
-  const res = await request.post(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
-    headers: {
-      apikey: ANON_KEY,
-      "Content-Type": "application/json",
+  const res = await request.post(
+    `${SUPABASE_URL}/auth/v1/token?grant_type=password`,
+    {
+      headers: {
+        apikey: ANON_KEY,
+        "Content-Type": "application/json",
+      },
+      data: { email, password },
+      failOnStatusCode: false,
     },
-    data: { email, password },
-    failOnStatusCode: false,
-  });
+  );
 
   expect(res.status(), await res.text()).toBe(200);
   const body = (await res.json()) as { access_token?: string };
-  expect(body.access_token).toBeTruthy();
-  return body.access_token!;
+  const accessToken = body.access_token;
+  expect(accessToken).toBeTruthy();
+  return accessToken ?? "";
 }
 
-async function signInViaUi(page: Page, email: string, password: string): Promise<void> {
+async function signInViaUi(
+  page: Page,
+  email: string,
+  password: string,
+): Promise<void> {
   await page.goto("/login");
-  await page.locator('input[type="email"], input[name="email"]').first().fill(email);
+  await page
+    .locator('input[type="email"], input[name="email"]')
+    .first()
+    .fill(email);
   await page.locator('input[type="password"]').first().fill(password);
   await page
-    .locator('button[type="submit"], button:has-text("Sign in"), button:has-text("Log in")')
+    .locator(
+      'button[type="submit"], button:has-text("Sign in"), button:has-text("Log in")',
+    )
     .first()
     .click();
-  await page.waitForURL(/\/dashboard|\/onboarding|\/admin/, { timeout: 25_000 });
+  await page.waitForURL(/\/dashboard|\/onboarding|\/admin/, {
+    timeout: 25_000,
+  });
 }
 
 async function expectRenderablePage(page: Page): Promise<void> {
   await expect(page.locator("body")).toContainText(/\S/, { timeout: 15_000 });
-  await expect(page.locator("nav, header, main, [role='main']").first()).toBeAttached({
+  await expect(
+    page.locator("nav, header, main, [role='main']").first(),
+  ).toBeAttached({
     timeout: 10_000,
   });
 }
@@ -97,19 +122,26 @@ async function expectRenderablePage(page: Page): Promise<void> {
 test.describe("Live critical smoke checks", () => {
   test.describe.configure({ mode: "serial" });
 
-  test("account deletion edge function rejects anonymous callers", async ({ request }) => {
+  test("account deletion edge function rejects anonymous callers", async ({
+    request,
+  }) => {
     skipUnlessLiveSupabase();
 
-    const res = await request.post(`${SUPABASE_URL}/functions/v1/delete-account`, {
-      headers: { apikey: ANON_KEY },
-      data: {},
-      failOnStatusCode: false,
-    });
+    const res = await request.post(
+      `${SUPABASE_URL}/functions/v1/delete-account`,
+      {
+        headers: { apikey: ANON_KEY },
+        data: {},
+        failOnStatusCode: false,
+      },
+    );
 
     expect([401, 403]).toContain(res.status());
   });
 
-  test("checkout eligibility blocks invite-only investor plans for a regular buyer", async ({ request }) => {
+  test("checkout eligibility blocks invite-only investor plans for a regular buyer", async ({
+    request,
+  }) => {
     skipUnlessLiveSupabase();
 
     const token = await signInViaSupabase(
@@ -118,20 +150,25 @@ test.describe("Live critical smoke checks", () => {
       demoPasswords.buyerFree,
     );
 
-    const res = await request.post(`${SUPABASE_URL}/functions/v1/create-checkout`, {
-      headers: {
-        apikey: ANON_KEY,
-        Authorization: `Bearer ${token}`,
-        Origin: "http://localhost:8080",
+    const res = await request.post(
+      `${SUPABASE_URL}/functions/v1/create-checkout`,
+      {
+        headers: {
+          apikey: ANON_KEY,
+          Authorization: `Bearer ${token}`,
+          Origin: "http://localhost:8080",
+        },
+        data: { plan: "investor_private" },
+        failOnStatusCode: false,
       },
-      data: { plan: "investor_private" },
-      failOnStatusCode: false,
-    });
+    );
 
     expect(res.status(), await res.text()).toBe(403);
   });
 
-  test("non-admin users cannot reach the role approval surface", async ({ page }) => {
+  test("non-admin users cannot reach the role approval surface", async ({
+    page,
+  }) => {
     const errors: string[] = [];
     page.on("pageerror", (err) => errors.push(err.message));
 
@@ -143,7 +180,9 @@ test.describe("Live critical smoke checks", () => {
     expect(errors).toHaveLength(0);
   });
 
-  test("admin can load the role approval queue without mutating requests", async ({ page }) => {
+  test("admin can load the role approval queue without mutating requests", async ({
+    page,
+  }) => {
     const errors: string[] = [];
     page.on("pageerror", (err) => errors.push(err.message));
 
@@ -152,14 +191,19 @@ test.describe("Live critical smoke checks", () => {
     await page.waitForLoadState("load", { timeout: 15_000 });
 
     expect(page.url()).toContain("/admin");
-    await expect(page.locator("body")).toContainText(/Invitation|approved|pending|rejected/i, {
-      timeout: 15_000,
-    });
+    await expect(page.locator("body")).toContainText(
+      /Invitation|approved|pending|rejected/i,
+      {
+        timeout: 15_000,
+      },
+    );
     await expectRenderablePage(page);
     expect(errors).toHaveLength(0);
   });
 
-  test("firesale and investor access surfaces render for a regular buyer", async ({ page }) => {
+  test("firesale and investor access surfaces render for a regular buyer", async ({
+    page,
+  }) => {
     const errors: string[] = [];
     page.on("pageerror", (err) => errors.push(err.message));
 
@@ -167,20 +211,28 @@ test.describe("Live critical smoke checks", () => {
 
     await page.goto("/firesale");
     await page.waitForLoadState("load", { timeout: 15_000 });
-    await expect(page.locator("body")).toContainText(/Quick Sale|Investor|Invitation/i, {
-      timeout: 15_000,
-    });
+    await expect(page.locator("body")).toContainText(
+      /Quick Sale|Investor|Invitation/i,
+      {
+        timeout: 15_000,
+      },
+    );
 
     await page.goto("/investor-dashboard");
     await page.waitForLoadState("load", { timeout: 15_000 });
-    await expect(page.locator("body")).toContainText(/Investor Access Required|deal flow|Quick Sale/i, {
-      timeout: 15_000,
-    });
+    await expect(page.locator("body")).toContainText(
+      /Investor Access Required|deal flow|Quick Sale/i,
+      {
+        timeout: 15_000,
+      },
+    );
 
     expect(errors).toHaveLength(0);
   });
 
-  test("open-house browsing flow renders and detail navigation stays healthy", async ({ page }) => {
+  test("open-house browsing flow renders and detail navigation stays healthy", async ({
+    page,
+  }) => {
     const errors: string[] = [];
     page.on("pageerror", (err) => errors.push(err.message));
 
@@ -200,22 +252,27 @@ test.describe("Live critical smoke checks", () => {
     expect(errors).toHaveLength(0);
   });
 
-  test("firesale and open-house mutation RPCs reject anonymous callers", async ({ request }) => {
+  test("firesale and open-house mutation RPCs reject anonymous callers", async ({
+    request,
+  }) => {
     skipUnlessLiveSupabase();
 
     const protectedCalls = [
-      request.post(`${SUPABASE_URL}/rest/v1/rpc/admin_update_firesale_interest_workflow`, {
-        headers: { apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}` },
-        data: {
-          p_interest_id: "00000000-0000-0000-0000-000000000000",
-          p_status: "approved",
-          p_reservation_hours: null,
-          p_verify_pof: false,
-          p_admin_note: "anonymous smoke check",
-          p_proof_amount: null,
+      request.post(
+        `${SUPABASE_URL}/rest/v1/rpc/admin_update_firesale_interest_workflow`,
+        {
+          headers: { apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}` },
+          data: {
+            p_interest_id: "00000000-0000-0000-0000-000000000000",
+            p_status: "approved",
+            p_reservation_hours: null,
+            p_verify_pof: false,
+            p_admin_note: "anonymous smoke check",
+            p_proof_amount: null,
+          },
+          failOnStatusCode: false,
         },
-        failOnStatusCode: false,
-      }),
+      ),
       request.post(`${SUPABASE_URL}/rest/v1/rpc/submit_open_house_offer`, {
         headers: { apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}` },
         data: {
