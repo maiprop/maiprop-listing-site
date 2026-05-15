@@ -28,9 +28,19 @@ module.exports = async (browser, context) => {
 
   const target = new URL(context.url);
   const page = await browser.newPage();
+  await page.goto(target.origin, { waitUntil: "domcontentloaded" });
+  const cookies = await page.cookies();
+  if (cookies.length) {
+    await page.deleteCookie(...cookies);
+  }
+  await page.evaluate(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
   await page.goto(`${target.origin}/login`, { waitUntil: "networkidle0" });
-  await page.type("#login-email", email);
-  await page.type("#login-password", password);
+  await page.waitForSelector("#login-email, input[type='email'], input[name='email']", { timeout: 30_000 });
+  await page.type("#login-email, input[type='email'], input[name='email']", email);
+  await page.type("#login-password, input[type='password'], input[name='password']", password);
   await Promise.all([
     page.waitForNavigation({ waitUntil: "networkidle0", timeout: 30_000 }).catch(() => undefined),
     page.click('button[type="submit"]'),
