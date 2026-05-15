@@ -37,7 +37,7 @@ Find these in Supabase → Project Settings → API.
 | Feature | Variable | Where to get it |
 |---|---|---|
 | Maps | `VITE_MAPBOX_TOKEN` | mapbox.com → Account → Access Tokens |
-| AI search / assist | `OPENAI_API_KEY` | OpenAI dashboard (set in Supabase Edge Function secrets) |
+| AI search / assist | `GEMINI_API_KEY` or `OPENAI_API_KEY` | Gemini or OpenAI dashboard (set in Supabase Edge Function secrets) |
 | Stripe checkout | `VITE_STRIPE_PRO_PRODUCT_ID` + all `VITE_STRIPE_PRICE_*` | Stripe dashboard → Products |
 | Error monitoring | `VITE_SENTRY_DSN` | sentry.io → Project → Client Keys |
 | Analytics | `VITE_PLAUSIBLE_DOMAIN` | plausible.io → Sites |
@@ -111,7 +111,12 @@ Dashboard → Project Settings → Edge Functions → Secrets.
 | `WEBHOOK_SECRET` | `oh-registration-notify` |
 | `SENTRY_DSN` | edge-function structured logger forwarding |
 | `ENVIRONMENT` | edge-function environment tag and CORS tightening |
-| `OPENAI_API_KEY` | `ai-search`, `property-chat`, `pro-ai-tools`, `listing-ai-assist`, `ai-translate`, `smart-filters`, `neighbourhood-report`, `ai-service-match`, `property-valuation`, `property-pois` |
+| `GEMINI_API_KEY` | Preferred AI provider for report/search/assist functions when configured |
+| `GEMINI_MODEL` | Optional Gemini model override; defaults to `gemini-2.5-flash` |
+| `OPENAI_API_KEY` | Fallback AI provider for `ai-search`, `property-chat`, `pro-ai-tools`, `listing-ai-assist`, `ai-translate`, `smart-filters`, `neighbourhood-report`, `ai-service-match`, `property-valuation`, `property-pois` |
+| `OPENAI_MODEL` | Optional OpenAI model override for non-translation AI functions |
+| `OPENAI_TRANSLATION_MODEL` | Optional OpenAI model override for translation |
+| `OPENAI_REASONING_EFFORT` | Optional OpenAI reasoning effort override for supported models |
 | `LOVABLE_API_KEY` | legacy `followup-lead` content generation |
 | `BREVO_API_KEY` | `send-saved-search-alerts`, `auth-email-hook`, `process-email-queue`, `invitation-notify`, `oh-registration-notify` |
 | `BREVO_FROM_EMAIL` | same Brevo-backed email functions as above |
