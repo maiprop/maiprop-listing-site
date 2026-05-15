@@ -51,6 +51,55 @@ function generateTimeSlots(startTime: string, endTime: string) {
   return slots;
 }
 
+function getCalendarEvent(selectedDate: string, selectedTime: string, title: string, description: string) {
+  if (!selectedDate || !selectedTime) return null;
+  const start = new Date(`${selectedDate}T${selectedTime}:00`);
+  if (Number.isNaN(start.getTime())) return null;
+  const end = new Date(start.getTime() + 60 * 60 * 1000);
+  const format = (date: Date) => date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+  const dates = `${format(start)}/${format(end)}`;
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: title,
+    dates,
+    details: description,
+  });
+  const outlookParams = new URLSearchParams({
+    subject: title,
+    startdt: start.toISOString(),
+    enddt: end.toISOString(),
+    body: description,
+  });
+  return {
+    googleUrl: `https://calendar.google.com/calendar/render?${params.toString()}`,
+    outlookUrl: `https://outlook.live.com/calendar/0/deeplink/compose?${outlookParams.toString()}`,
+    ics: [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//maiProp//Professional Consultation//EN",
+      "BEGIN:VEVENT",
+      `UID:${crypto.randomUUID()}@maiprop.co`,
+      `DTSTAMP:${format(new Date())}`,
+      `DTSTART:${format(start)}`,
+      `DTEND:${format(end)}`,
+      `SUMMARY:${title.replace(/\r?\n/g, " ")}`,
+      `DESCRIPTION:${description.replace(/\r?\n/g, "\\n")}`,
+      "END:VEVENT",
+      "END:VCALENDAR",
+    ].join("\r\n"),
+  };
+}
+
+function downloadIcs(filename: string, content: string) {
+  const blob = new Blob([content], { type: "text/calendar;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
 interface BookConsultationModalProps {
   open: boolean;
   onClose: () => void;
@@ -145,6 +194,12 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
       ? `EUR ${selectedService.rate_amount}${PRICING_LABELS[selectedService.pricing_model] ?? ""}`
       : "On Request"
     : null;
+  const calendarEvent = getCalendarEvent(
+    selectedDate,
+    selectedTime,
+    `Tentative consultation with ${proName}`,
+    `${selectedService?.service_name || "Consultation"} request on maiProp. The professional still needs to confirm this session.`,
+  );
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -198,6 +253,23 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
                 {usesHostedRoom
                   ? "If the request is accepted, the professional can meet you in the built-in maiProp video room."
                   : "If the request is accepted, the professional will share or confirm the final meeting link."}
+              </div>
+            )}
+            {calendarEvent && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <Button variant="outline" className="border-border" asChild>
+                  <a href={calendarEvent.googleUrl} target="_blank" rel="noopener noreferrer">Google Calendar</a>
+                </Button>
+                <Button variant="outline" className="border-border" asChild>
+                  <a href={calendarEvent.outlookUrl} target="_blank" rel="noopener noreferrer">Outlook</a>
+                </Button>
+                <Button
+                  variant="outline"
+                  className="border-border"
+                  onClick={() => downloadIcs("maiprop-consultation.ics", calendarEvent.ics)}
+                >
+                  Download .ics
+                </Button>
               </div>
             )}
             <Button className="w-full bg-gradient-primary border-0 text-primary-foreground" onClick={handleClose}>Done</Button>

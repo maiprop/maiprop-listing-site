@@ -195,6 +195,7 @@ vi.mock("@/hooks/useAuctionAlerts", () => ({
 vi.mock("@/hooks/useConsultations", () => ({
   useMyConsultationRequests: vi.fn().mockReturnValue({ data: [], isLoading: false }),
   useCreateConsultationRequest: vi.fn().mockReturnValue({ mutate: vi.fn() }),
+  useSubmitConsultation: vi.fn().mockReturnValue({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
 }));
 
 vi.mock("@/hooks/useEligibleForQuickSale", () => ({
@@ -967,6 +968,120 @@ describe("Page smoke tests", () => {
         { initialPath: "/professionals/test-id" }
       )
     ).not.toThrow();
+  });
+
+  it("ProfessionalProfile limits free professional profiles to contact details", async () => {
+    const { useProfessional } = await import("@/hooks/useProfessionals");
+    const useProfessionalMock = useProfessional as ReturnType<typeof vi.fn>;
+    useProfessionalMock.mockReturnValue({
+      data: {
+        id: "pro-free",
+        user_id: "user-free",
+        display_name: "Free Professional",
+        title: "Architect",
+        category: "architect",
+        city: "Athens",
+        bio: "Public profile",
+        avatar_url: null,
+        rating: 4.8,
+        reviews_count: 2,
+        verified: true,
+        hourly_rate: 90,
+        experience_years: 8,
+        specialties: ["Renovation"],
+        languages: ["Greek", "English"],
+        license_number: "TEE-123",
+        website_url: "https://example.com",
+        video_link: null,
+        projects_count: 15,
+        average_deal_size: null,
+        average_portfolio_asset_size: null,
+        subscription_tier: "free",
+        calendar_notes: null,
+        notes: null,
+        created_at: "",
+        updated_at: "",
+      },
+      isLoading: false,
+    });
+    const { default: ProfessionalProfile } = await import("@/pages/ProfessionalProfile");
+
+    renderWithProviders(
+      <Suspense fallback={<div>loading</div>}>
+        <Routes>
+          <Route path="/professionals/:id" element={<ProfessionalProfile />} />
+        </Routes>
+      </Suspense>,
+      { initialPath: "/professionals/pro-free" }
+    );
+
+    expect((await screen.findAllByText(/contact details only/i)).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: /send inquiry/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /book consultation/i })).not.toBeInTheDocument();
+    useProfessionalMock.mockReturnValue({ data: null, isLoading: false });
+  });
+
+  it("ProfessionalProfile shows agent portfolio KPIs for Pro agents", async () => {
+    const { useProfessional } = await import("@/hooks/useProfessionals");
+    const { useListings } = await import("@/hooks/useListings");
+    const useProfessionalMock = useProfessional as ReturnType<typeof vi.fn>;
+    const useListingsMock = useListings as ReturnType<typeof vi.fn>;
+    useProfessionalMock.mockReturnValue({
+      data: {
+        id: "agent-pro",
+        user_id: "agent-user",
+        display_name: "Pro Agent",
+        title: "Real Estate Agent",
+        category: "real_estate_agent",
+        city: "Athens",
+        bio: "Agent profile",
+        avatar_url: null,
+        rating: 4.9,
+        reviews_count: 10,
+        verified: true,
+        hourly_rate: null,
+        experience_years: 12,
+        specialties: ["Residential"],
+        languages: ["Greek"],
+        license_number: "AG-1",
+        website_url: null,
+        video_link: null,
+        projects_count: 42,
+        average_deal_size: null,
+        average_portfolio_asset_size: null,
+        subscription_tier: "pro",
+        calendar_notes: null,
+        notes: null,
+        created_at: "",
+        updated_at: "",
+      },
+      isLoading: false,
+    });
+    useListingsMock.mockReturnValue({
+      data: [
+        { id: "l1", price: 300000, property_type: "apartment", listing_type: "sale", city: "Athens", region: "Attica" },
+        { id: "l2", price: 500000, property_type: "apartment", listing_type: "rent", city: "Athens", region: "Attica" },
+        { id: "l3", price: 700000, property_type: "villa", listing_type: "sale", city: "Voula", region: "Attica" },
+      ],
+      isLoading: false,
+    });
+    const { default: ProfessionalProfile } = await import("@/pages/ProfessionalProfile");
+
+    renderWithProviders(
+      <Suspense fallback={<div>loading</div>}>
+        <Routes>
+          <Route path="/professionals/:id" element={<ProfessionalProfile />} />
+        </Routes>
+      </Suspense>,
+      { initialPath: "/professionals/agent-pro" }
+    );
+
+    expect((await screen.findAllByText(/Average Deal Size/i)).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Typology Mix/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Main Area of Service/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Main Deal Type/i).length).toBeGreaterThan(0);
+    useProfessionalMock.mockReturnValue({ data: null, isLoading: false });
+    useListingsMock.mockReturnValue({ data: [], isLoading: false });
   });
 
   it("ProfessionalProfileMe page renders without throwing", async () => {

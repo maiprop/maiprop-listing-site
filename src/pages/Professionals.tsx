@@ -442,6 +442,8 @@ export default function Professionals() {
                 const rating = Number(pro.rating) || 0;
                 const specialties = pro.specialties || [];
 
+                const professionalIsPro = (pro.subscription_tier || "").toLowerCase() === "pro";
+
                 return (
                   <div
                     key={pro.id}
@@ -528,8 +530,10 @@ export default function Professionals() {
                         >
                           <Link to={`/professionals/${pro.id}`}>View Profile <ArrowRight className="w-3 h-3" /></Link>
                         </Button>
-                        <Button size="sm" variant="outline" className="border-border px-3" asChild aria-label={`Contact ${pro.display_name}`}>
-                          <Link to={`/professionals/${pro.id}?contact=1`}><MessageSquare className="w-3.5 h-3.5" /></Link>
+                        <Button size="sm" variant="outline" className="border-border px-3" asChild aria-label={`${professionalIsPro ? "Contact" : "View contact details for"} ${pro.display_name}`}>
+                          <Link to={professionalIsPro ? `/professionals/${pro.id}?contact=1` : `/professionals/${pro.id}`}>
+                            <MessageSquare className="w-3.5 h-3.5" />
+                          </Link>
                         </Button>
                       </div>
                     </div>);
