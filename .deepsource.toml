@@ -19,7 +19,7 @@ enabled = true
   environment = ["browser", "nodejs", "vitest"]
   module_system = "es-modules"
   dialect = "typescript"
-  cyclomatic_complexity_threshold = "high"
+  cyclomatic_complexity_threshold = "critical"
 
 [[analyzers]]
 name = "docker"
