@@ -497,7 +497,7 @@ const shortSha256 = async (value: string): Promise<string> => {
     .slice(0, 16);
 };
 
-Deno.serve(async (req) => {
+const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS-R1005 - Checkout coordinates auth, plan eligibility, Stripe customer/session creation, and consistent error responses.
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
@@ -717,4 +717,6 @@ Deno.serve(async (req) => {
       status,
     });
   }
-});
+};
+
+Deno.serve(handleRequest);
