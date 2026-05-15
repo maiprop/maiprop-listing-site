@@ -8,7 +8,7 @@ import {
   ChevronRight,
   ExternalLink,
   Loader2,
-  Info, LayoutGrid, Globe, Scale,
+  Info, LayoutGrid, Scale,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -35,7 +35,6 @@ import { AuctionAlertModal } from "@/components/AuctionAlertModal";
 import { getStreetViewProxyUrl } from "@/lib/config";
 import { dbListingToCard } from "@/lib/listingUtils";
 import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
-import { Section, SectionHeader } from "@/components/property/DetailPrimitives";
 import PropertyGallery from "@/components/property/PropertyGallery";
 import PropertyFeatureList from "@/components/property/PropertyFeatureList";
 import PropertyOwnerCard from "@/components/property/PropertyOwnerCard";
@@ -176,7 +175,6 @@ export default function PropertyDetail() {
   const energyClass = db.energy_class;
   const isLandType = propertyType === "land";
   const isAuction = listingType === "auction";
-  const websiteUrl = db.website_url;
 
   // Extract ownership info from tags (for auction listings)
   const tags: string[] = db.tags ?? [];
@@ -357,7 +355,6 @@ export default function PropertyDetail() {
                   listingId={id!}
                   auctionDate={db.auction_date}
                   auctionStartingBid={Number(db.auction_starting_bid) || 0}
-                  auctionCourt={db.auction_court}
                   ownershipDisplay={ownershipDisplay}
                   ownershipPct={ownershipPct}
                   ownershipStatus={ownershipStatus}
@@ -376,12 +373,6 @@ export default function PropertyDetail() {
               />
 
               {/* ── Website Link (distinctive section) ── */}
-              {websiteUrl &&
-              <Section>
-                  <SectionHeader icon={Globe} title="Official Website" />
-                </Section>
-              }
-
               {/* ── Mini map ── */}
               <div className="rounded-2xl overflow-hidden">
                 <Suspense fallback={<div className="h-96 bg-muted animate-pulse rounded-2xl" />}>

@@ -16,7 +16,6 @@ import {
   Clock,
   ExternalLink,
   Gavel,
-  Globe,
   LayoutGrid,
   Loader2,
   MapPin,
@@ -265,7 +264,6 @@ export default function AuctionDetail() {
   if (auctionDate) detailRows.push({ label: "Auction Date", value: formatDate(auctionDate) });
   if (yearBuilt) detailRows.push({ label: "Construction Year", value: yearBuilt });
   if (region) detailRows.push({ label: "Region", value: region });
-  if (websiteUrl) detailRows.push({ label: "Official Platform", value: "eAuction" });
 
   const propertyContext = {
     title,
@@ -377,6 +375,14 @@ export default function AuctionDetail() {
                   <div className="rounded-xl bg-brand-gold/8 border border-brand-gold/20 p-3 text-xs text-muted-foreground leading-relaxed">
                     Judicial auction - buyer conducts own due diligence. maiProp provides AI-powered pre-auction analysis.
                   </div>
+
+                  {websiteUrl && (
+                    <Button asChild variant="outline" className="w-full gap-2">
+                      <a href={websiteUrl} target="_blank" rel="noreferrer noopener">
+                        <ExternalLink className="w-4 h-4" /> Open eAuction listing
+                      </a>
+                    </Button>
+                  )}
                 </div>
               </Section>
 
@@ -486,18 +492,6 @@ export default function AuctionDetail() {
                 </div>
               </div>
 
-              {websiteUrl && (
-                <Section>
-                  <SectionHeader icon={Globe} title="Official Website" />
-                  <div className="p-5">
-                    <Button asChild variant="outline" className="w-full gap-2">
-                      <a href={websiteUrl} target="_blank" rel="noreferrer noopener">
-                        <ExternalLink className="w-4 h-4" /> View source listing
-                      </a>
-                    </Button>
-                  </div>
-                </Section>
-              )}
             </div>
           </div>
         </div>

@@ -353,7 +353,7 @@ export default function Auctions() {
                    <span className="font-semibold text-foreground">{polygonFilteredCount}</span> auctions
                    {polygonFilterIds && <span className="text-primary"> · area filter active</span>}
                    {selectedCity !== "All Cities" ? ` in ${selectedCity}` : ""}
-                   {" · "}ordered by date
+                   {" · "}daily randomized rotation
                  </p>
                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                    {paginated.map((a) =>

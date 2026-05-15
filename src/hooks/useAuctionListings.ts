@@ -6,6 +6,7 @@ const AUCTION_SELECT_CORE = "id, title, city, address, price, auction_starting_b
 const QUERY_TIMEOUT_MS = 15_000;
 const AUCTION_FETCH_LIMIT = 500;
 const PORTAL_AUCTION_FETCH_LIMIT = 600;
+const AUCTION_RANDOMIZATION_SALT = "maiprop-auctions-v1";
 
 /**
  * Shape returned by the fetchAll helper. Columns are a Pick<> against the
@@ -53,6 +54,36 @@ function getAuctionSelect(withImages: boolean): string {
 
 function hasCompleteAuctionPage(rows: AuctionListingRow[], pageSize: number): boolean {
   return rows.length === pageSize;
+}
+
+function hashString(value: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function getAuctionRotationSeed(date = new Date()): string {
+  return `${AUCTION_RANDOMIZATION_SALT}:${date.toISOString().slice(0, 10)}`;
+}
+
+function getAuctionShuffleScore(row: AuctionListingRow, seed: string): number {
+  return hashString(`${seed}:${row.id}:${row.auction_date ?? ""}:${row.city ?? ""}`);
+}
+
+export function randomizeAuctionPresentation(
+  rows: AuctionListingRow[],
+  seed = getAuctionRotationSeed(),
+): AuctionListingRow[] {
+  return [...rows].sort((a, b) => {
+    const priorityDelta = (b.priority_placement ?? 0) - (a.priority_placement ?? 0);
+    if (priorityDelta !== 0) return priorityDelta;
+    const featuredDelta = Number(b.is_featured) - Number(a.is_featured);
+    if (featuredDelta !== 0) return featuredDelta;
+    return getAuctionShuffleScore(a, seed) - getAuctionShuffleScore(b, seed);
+  });
 }
 
 async function fetchAuctionPageFromDatabase(
@@ -131,9 +162,9 @@ async function fetchFallbackAuctions(today: string): Promise<AuctionListingRow[]
 async function fetchAuctionListings(): Promise<AuctionListingRow[]> {
   const today = getTodayDate();
   try {
-    return await fetchAuctionsFromOs(today);
+    return randomizeAuctionPresentation(await fetchAuctionsFromOs(today));
   } catch (_osErr: unknown) {
-    return fetchFallbackAuctions(today);
+    return randomizeAuctionPresentation(await fetchFallbackAuctions(today));
   }
 }
 

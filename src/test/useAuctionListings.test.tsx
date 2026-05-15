@@ -18,7 +18,37 @@ vi.mock("@/integrations/supabase/client", () => ({
   },
 }));
 
-import { useAuctionListings } from "@/hooks/useAuctionListings";
+import { randomizeAuctionPresentation, useAuctionListings } from "@/hooks/useAuctionListings";
+
+type AuctionRow = Parameters<typeof randomizeAuctionPresentation>[0][number];
+
+function auctionRow(id: string, overrides: Partial<AuctionRow> = {}): AuctionRow {
+  return {
+    id,
+    title: `Auction ${id}`,
+    city: "Athens",
+    address: null,
+    price: 0,
+    auction_starting_bid: null,
+    auction_date: "2026-06-01",
+    auction_court: null,
+    property_type: "apartment",
+    cover_image_url: null,
+    sqm: 0,
+    bedrooms: null,
+    bathrooms: null,
+    latitude: null,
+    longitude: null,
+    tags: null,
+    year_built: null,
+    construction_status: null,
+    website_url: null,
+    region: null,
+    is_featured: false,
+    priority_placement: 0,
+    ...overrides,
+  };
+}
 
 function wrap(children: React.ReactNode) {
   const qc = new QueryClient({
@@ -48,6 +78,35 @@ function makeBuilder(rangeImpl: () => Promise<{ data: unknown[] | null; error: u
 }
 
 describe("useAuctionListings", () => {
+  it("uses a deterministic daily rotation instead of preserving OS municipality order", () => {
+    const municipalitySorted = [
+      auctionRow("athens-a", { city: "Athens" }),
+      auctionRow("athens-b", { city: "Athens" }),
+      auctionRow("marousi-a", { city: "Marousi" }),
+      auctionRow("piraeus-a", { city: "Piraeus" }),
+    ];
+
+    const firstPass = randomizeAuctionPresentation(municipalitySorted, "seed:2026-05-15");
+    const secondPass = randomizeAuctionPresentation(municipalitySorted, "seed:2026-05-15");
+
+    expect(firstPass.map((row) => row.id)).toEqual(secondPass.map((row) => row.id));
+    expect(firstPass.map((row) => row.id)).not.toEqual(municipalitySorted.map((row) => row.id));
+  });
+
+  it("keeps commercial placement above randomized organic auctions", () => {
+    const rows = [
+      auctionRow("organic-a"),
+      auctionRow("featured", { is_featured: true }),
+      auctionRow("priority", { priority_placement: 5 }),
+      auctionRow("organic-b"),
+    ];
+
+    const ordered = randomizeAuctionPresentation(rows, "seed:2026-05-15");
+
+    expect(ordered[0].id).toBe("priority");
+    expect(ordered[1].id).toBe("featured");
+  });
+
   it("returns live OS auctions when the proxy succeeds", async () => {
     invokeMock.mockResolvedValue({ data: { data: [{ id: "os-a1", title: "OS auction" }] }, error: null });
     const { result } = renderHookWithQuery(() => useAuctionListings());

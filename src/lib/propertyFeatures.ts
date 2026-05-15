@@ -117,7 +117,6 @@ export function buildDetailRows(
     ...(db.commercial_subtype ? [{ label: "Subtype", value: db.commercial_subtype }] : []),
     ...(db.plot_surface ? [{ label: "Plot Surface", value: `${db.plot_surface} m²` }] : []),
     ...(db.floor_height ? [{ label: "Floor Height", value: `${db.floor_height} m` }] : []),
-    { label: "System Code", value: db.id.slice(0, 8).toUpperCase() },
     { label: "Published", value: new Date(db.created_at).toLocaleDateString("en-GB") },
     { label: "Last Updated", value: new Date(db.updated_at).toLocaleDateString("en-GB") },
   ];

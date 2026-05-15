@@ -288,6 +288,12 @@ export default function NeighbourhoodReport({ city, address, region, propertyTyp
                   {data.pricePerSqmTrend.change5Y >= 0 ? "+" : ""}{data.pricePerSqmTrend.change5Y.toFixed(1)}%
                 </span>
               </p>
+              <div className="mt-2 rounded-lg bg-secondary/70 border border-border px-3 py-2 text-[10px] text-muted-foreground leading-relaxed">
+                <span className="font-semibold text-foreground">How this is estimated: </span>
+                The report blends area-level comparable sale and listing signals, local EUR/m2 benchmarks, property type,
+                neighbourhood, address or coordinates when available, and recent year-over-year plus five-year movement.
+                Treat it as directional market intelligence, not a certified valuation.
+              </div>
             </div>
 
             {/* Noise + Safety side by side */}
