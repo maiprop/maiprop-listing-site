@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
 
   // 3. Integrations. Billing is a release-critical dependency: a missing
   // Stripe secret should degrade health instead of hiding behind "healthy".
-  checks.openai = Deno.env.get("OPENAI_API_KEY") ? "ok" : "fail";
+  checks.openai = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("OPENAI_API_KEY") ? "ok" : "fail";
   checks.stripe = billingMode === "mock"
     ? "mock"
     : Deno.env.get("STRIPE_SECRET_KEY") && Deno.env.get("STRIPE_WEBHOOK_SECRET")

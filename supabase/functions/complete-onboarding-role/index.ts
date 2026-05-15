@@ -13,7 +13,13 @@ type OnboardingRequest = {
   phone?: unknown;
 };
 
-const SELF_SERVICE_ROLES = new Set(["buyer", "seller", "professional"]);
+const SELF_SERVICE_ROLES = new Set([
+  "buyer",
+  "seller",
+  "agent",
+  "developer",
+  "professional",
+]);
 
 const optionalString = (value: unknown, maxLength: number): string | null => {
   if (typeof value !== "string") return null;
@@ -46,7 +52,10 @@ const parseOnboardingBody = (body: OnboardingRequest) => {
     participantType.length === 0 ||
     participantType.length > 80
   ) {
-    throw new AuthError("Invalid onboarding payload", 400);
+    throw new AuthError("role_not_allowed", 400);
+  }
+  if (role !== participantType) {
+    throw new AuthError("role_participant_mismatch", 400);
   }
 
   return {

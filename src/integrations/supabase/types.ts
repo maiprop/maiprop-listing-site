@@ -1800,11 +1800,16 @@ export type Database = {
           approved_by: string | null
           attended_at: string | null
           budget_range: string | null
+          contact_email: string | null
+          contact_name: string | null
+          contact_permission_at: string | null
+          contact_phone: string | null
           created_at: string | null
           id: string
           id_doc_type: Database["public"]["Enums"]["oh_id_doc_type"] | null
           id_doc_url: string | null
           id_verified_at: string | null
+          id_verification_consent_at: string | null
           investor_declaration_signed_at: string | null
           listing_id: string
           mortgage_status: string | null
@@ -1819,6 +1824,8 @@ export type Database = {
           status: Database["public"]["Enums"]["oh_registration_status"] | null
           timeslot_index: number | null
           updated_at: string | null
+          privacy_acknowledged_at: string | null
+          visit_purpose: string | null
           waiver_signed_at: string | null
           waiver_url: string | null
           working_with_agent: string | null
@@ -1828,11 +1835,16 @@ export type Database = {
           approved_by?: string | null
           attended_at?: string | null
           budget_range?: string | null
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_permission_at?: string | null
+          contact_phone?: string | null
           created_at?: string | null
           id?: string
           id_doc_type?: Database["public"]["Enums"]["oh_id_doc_type"] | null
           id_doc_url?: string | null
           id_verified_at?: string | null
+          id_verification_consent_at?: string | null
           investor_declaration_signed_at?: string | null
           listing_id: string
           mortgage_status?: string | null
@@ -1847,6 +1859,8 @@ export type Database = {
           status?: Database["public"]["Enums"]["oh_registration_status"] | null
           timeslot_index?: number | null
           updated_at?: string | null
+          privacy_acknowledged_at?: string | null
+          visit_purpose?: string | null
           waiver_signed_at?: string | null
           waiver_url?: string | null
           working_with_agent?: string | null
@@ -1856,11 +1870,16 @@ export type Database = {
           approved_by?: string | null
           attended_at?: string | null
           budget_range?: string | null
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_permission_at?: string | null
+          contact_phone?: string | null
           created_at?: string | null
           id?: string
           id_doc_type?: Database["public"]["Enums"]["oh_id_doc_type"] | null
           id_doc_url?: string | null
           id_verified_at?: string | null
+          id_verification_consent_at?: string | null
           investor_declaration_signed_at?: string | null
           listing_id?: string
           mortgage_status?: string | null
@@ -1875,6 +1894,8 @@ export type Database = {
           status?: Database["public"]["Enums"]["oh_registration_status"] | null
           timeslot_index?: number | null
           updated_at?: string | null
+          privacy_acknowledged_at?: string | null
+          visit_purpose?: string | null
           waiver_signed_at?: string | null
           waiver_url?: string | null
           working_with_agent?: string | null

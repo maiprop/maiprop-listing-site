@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import {
   Users, Euro, ChevronDown, ChevronUp, Check, X, Loader2, Settings, Calendar, TrendingUp,
-  FileCheck, FileText, Wallet, Shield, ExternalLink,
+  FileCheck, FileText, Wallet, Shield, ExternalLink, Mail, Phone, UserRound,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -203,7 +203,24 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner, listing
                   <div key={r.id} className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div className="min-w-0 flex-1">
                       <div className="font-medium">
-                        {r.profiles?.display_name || [r.profiles?.first_name, r.profiles?.last_name].filter(Boolean).join(" ") || "Visitor"}
+                        {r.contact_name || r.profiles?.display_name || [r.profiles?.first_name, r.profiles?.last_name].filter(Boolean).join(" ") || "Visitor"}
+                      </div>
+                      <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1 text-[11px] text-muted-foreground">
+                        {r.contact_email && (
+                          <span className="inline-flex items-center gap-1">
+                            <Mail className="w-3 h-3" /> {r.contact_email}
+                          </span>
+                        )}
+                        {r.contact_phone && (
+                          <span className="inline-flex items-center gap-1">
+                            <Phone className="w-3 h-3" /> {r.contact_phone}
+                          </span>
+                        )}
+                        {r.visit_purpose && (
+                          <span className="inline-flex items-center gap-1">
+                            <UserRound className="w-3 h-3" /> {r.visit_purpose}
+                          </span>
+                        )}
                       </div>
                       <div className="flex flex-wrap gap-2 mt-2 text-[11px]">
                         <span className={cn(
@@ -249,7 +266,17 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner, listing
                       })()}
                     </div>
                     {r.status === "pending" && (
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 flex-wrap">
+                        {r.id_doc_url && !r.id_verified_at && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1 text-primary border-primary/40"
+                            onClick={() => updateReg.mutate({ id: r.id, updates: { id_verified_at: new Date().toISOString() } })}
+                          >
+                            <FileCheck className="w-3.5 h-3.5" /> Verify ID
+                          </Button>
+                        )}
                         <Button size="sm" variant="outline" className="gap-1 text-emerald-600 border-emerald-500/40"
                           onClick={() => handleApprove(r)}>
                           <Check className="w-3.5 h-3.5" /> Approve

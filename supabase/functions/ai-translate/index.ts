@@ -16,6 +16,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import {
+  hasAIProviderCredentials,
   openAIChatCompletion,
   readOpenAITextContent,
 } from "../_shared/openai.ts";
@@ -231,8 +232,7 @@ Deno.serve(async (req) => {
   }
   const inputJson = JSON.stringify(Object.fromEntries(entries), null, 2);
 
-  const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-  if (!OPENAI_API_KEY) {
+  if (!hasAIProviderCredentials()) {
     return new Response(
       JSON.stringify({ error: "Translation service not configured" }),
       {
@@ -269,7 +269,7 @@ Output (JSON only):`;
 
     if (!response.ok) {
       const err = await response.text();
-      log.error("OpenAI API error", {
+      log.error("AI provider API error", {
         status: response.status,
         body: err?.slice(0, 500),
       });
@@ -295,7 +295,7 @@ Output (JSON only):`;
     try {
       translated = JSON.parse(cleaned);
     } catch {
-      log.error("failed to parse OpenAI output", {
+      log.error("failed to parse AI provider output", {
         sample: cleaned.slice(0, 200),
       });
       return new Response(

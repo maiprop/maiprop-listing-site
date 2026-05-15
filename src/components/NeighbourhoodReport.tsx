@@ -1,10 +1,9 @@
 import React, { useState } from "react";
 import {
   Building2, Volume2, Shield, TrendingUp, TrendingDown,
-  Minus, Loader2, Zap, Lock, MapPin, HardHat, CheckCircle2,
+  Minus, Loader2, Zap, MapPin, HardHat, CheckCircle2,
   AlertCircle, Clock,
 } from "lucide-react";
-import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { getAiErrorMessage } from "@/lib/aiErrorUtils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -52,9 +51,9 @@ export interface NeighbourhoodReportProps {
   propertyType?: string;
   lat?: number | null;
   lng?: number | null;
-  /** If provided, fetch report from OS API first; fall back to AI if none. */
+  /** If provided, the AI endpoint may persist listing-level neighbourhood scores. */
   listingId?: string | null;
-  /** Whether the current user has a Pro subscription. Non-Pro logged-in users see an upgrade CTA. */
+  /** Deprecated: reports are available to all signed-in users; server quotas handle free vs Pro limits. */
   isPro?: boolean;
 }
 
@@ -181,12 +180,7 @@ const OUTLOOK_COLOUR: Record<string, string> = {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-function isOsNeighbourhoodReport(r: unknown): r is NeighbourhoodData {
-  const o = r as Record<string, unknown>;
-  return !!o && typeof o.areaName === "string" && o.pricePerSqmTrend != null;
-}
-
-export default function NeighbourhoodReport({ city, address, region, propertyType, lat, lng, listingId, isPro = false }: NeighbourhoodReportProps) {
+export default function NeighbourhoodReport({ city, address, region, propertyType, lat, lng, listingId, isPro: _isPro = false }: NeighbourhoodReportProps) {
   const { user } = useAuth();
   const [data, setData] = useState<NeighbourhoodData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -197,16 +191,6 @@ export default function NeighbourhoodReport({ city, address, region, propertyTyp
     setLoading(true);
     setError(null);
     try {
-      if (listingId) {
-        const { data: osRes, error: osErr } = await supabase.functions.invoke("fetch-report-from-os", {
-          body: { listing_id: listingId, report_type: "neighbourhood" },
-        });
-        if (!osErr && osRes?.ok && osRes.report && isOsNeighbourhoodReport(osRes.report)) {
-          setData(osRes.report as NeighbourhoodData);
-          setLoading(false);
-          return;
-        }
-      }
       const { data: result, error: fnErr } = await supabase.functions.invoke("neighbourhood-report", {
         body: { city, address, region, propertyType, lat, lng, listingId },
       });
@@ -242,39 +226,21 @@ export default function NeighbourhoodReport({ city, address, region, propertyTyp
       <div className="p-5">
         {!user && <SignInForAI feature="Neighbourhood Report" />}
 
-        {/* Logged-in non-Pro: show upgrade CTA instead of load button */}
-        {user && !isPro && (
-          <div className="text-center space-y-3 py-2">
-            <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto">
-              <Lock className="w-5 h-5 text-primary" />
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Neighbourhood reports — noise, safety, price trends, and investment outlook — are a Pro feature.
-            </p>
-            <Link
-              to="/pricing"
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity"
-            >
-              <Zap className="w-3.5 h-3.5" /> Upgrade to Pro
-            </Link>
-          </div>
-        )}
-
-        {user && isPro && !data && !loading && !error && (
+        {user && !data && !loading && !error && (
           <div className="text-center space-y-3 py-4">
             <Button className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2" onClick={load}>
               <Building2 className="w-4 h-4" /> Load Neighbourhood Report
             </Button>
           </div>
         )}
-        {user && isPro && loading && (
+        {user && loading && (
           <div className="flex flex-col items-center gap-3 py-8">
             <Loader2 className="w-7 h-7 animate-spin text-primary" />
             <p className="text-xs text-muted-foreground">AI is analysing the neighbourhood…</p>
           </div>
         )}
 
-        {user && isPro && error && !loading && (
+        {user && error && !loading && (
           <div className="flex items-center justify-between gap-3 px-3 py-3 rounded-xl bg-destructive/10 border border-destructive/20">
             <div className="flex items-center gap-2">
               <AlertCircle className="w-4 h-4 text-destructive shrink-0" />
@@ -284,7 +250,7 @@ export default function NeighbourhoodReport({ city, address, region, propertyTyp
           </div>
         )}
 
-        {user && isPro && data && !loading && (
+        {user && data && !loading && (
           <div className="space-y-6">
 
             {/* Highlights */}

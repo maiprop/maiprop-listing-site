@@ -1,9 +1,7 @@
 /**
- * Tests for usePropertyAIInsights — the hook that drives AI valuation on
- * PropertyDetail. It calls supabase.functions.invoke('fetch-report-from-os')
- * first; if that returns nothing usable, it falls back to
- * 'property-valuation'. Errors surface through `sonner` toasts via the
- * `isAiUsageLimitError` helper.
+ * Tests for usePropertyAIInsights, the hook that drives AI market insights on
+ * PropertyDetail. It calls property-valuation directly so GPT analysis and
+ * server-side quota are enforced consistently for signed-in free and Pro users.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
@@ -70,28 +68,18 @@ describe("usePropertyAIInsights", () => {
     expect(result.current.aiInsightsLoading).toBe(false);
   });
 
-  it("does nothing when isPro is false (non-Pro users are not charged)", () => {
-    const { result } = renderHook(() => usePropertyAIInsights(baseListing, baseUser, "L-1", false));
-    expect(invokeMock).not.toHaveBeenCalled();
-    expect(result.current.aiInsightsData).toBeNull();
-    expect(result.current.aiInsightsLoading).toBe(false);
-  });
-
-  it("uses the OpenSearch report when fetch-report-from-os returns a usable payload", async () => {
+  it("runs for non-Pro users because the server enforces the free quota", async () => {
     invokeMock.mockResolvedValueOnce({
       data: {
-        ok: true,
-        report: {
-          estimatedValue: 470_000,
-          marketComparisonPct: 4.5,
-          rentalYieldEstimate: 3.8,
-          marketComparison: "above_market",
-          confidenceLabel: "High",
-        },
+        estimatedValue: 470_000,
+        marketComparisonPct: 4.5,
+        rentalYieldEstimate: 3.8,
+        marketComparison: "above_market",
+        confidenceLabel: "High",
       },
     });
     const { result } = renderHook(() =>
-      usePropertyAIInsights(baseListing, baseUser, "L-1", true),
+      usePropertyAIInsights(baseListing, baseUser, "L-1", false),
     );
     await waitFor(() => expect(result.current.aiInsightsData).not.toBeNull());
     expect(result.current.aiInsightsData).toEqual({
@@ -101,53 +89,30 @@ describe("usePropertyAIInsights", () => {
       marketComparison: "above_market",
       confidenceLabel: "High",
     });
-    // Only the OS endpoint was called — fallback skipped.
     expect(invokeMock).toHaveBeenCalledTimes(1);
-    expect(invokeMock.mock.calls[0][0]).toBe("fetch-report-from-os");
+    expect(invokeMock.mock.calls[0][0]).toBe("property-valuation");
   });
 
-  it("falls back to property-valuation when the OS report has no estimatedValue", async () => {
-    invokeMock.mockResolvedValueOnce({ data: { ok: true, report: null } });
-    invokeMock.mockResolvedValueOnce({
-      data: {
-        marketComparisonPct: -2.1,
-        rentalYieldEstimate: 4.2,
-        estimatedValue: 440_000,
-        marketComparison: "below_market",
-        confidenceLabel: "Medium",
-      },
-    });
-    const { result } = renderHook(() =>
-      usePropertyAIInsights(baseListing, baseUser, "L-1", true),
-    );
-    await waitFor(() => expect(result.current.aiInsightsData).not.toBeNull());
-    expect(invokeMock).toHaveBeenCalledTimes(2);
-    expect(invokeMock.mock.calls[1][0]).toBe("property-valuation");
-    expect(result.current.aiInsightsData?.estimatedValue).toBe(440_000);
-  });
-
-  it("uses snapshot.id when the explicit id arg is undefined", async () => {
-    invokeMock.mockResolvedValueOnce({ data: { ok: false } });
+  it("passes listing fields to property-valuation", async () => {
     invokeMock.mockResolvedValueOnce({ data: { estimatedValue: 200_000 } });
     renderHook(() => usePropertyAIInsights(baseListing, baseUser, undefined, true));
-    await waitFor(() => expect(invokeMock).toHaveBeenCalledTimes(2));
-    expect(invokeMock.mock.calls[0][1]).toMatchObject({
-      body: { listing_id: "L-1", report_type: "valuation" },
-    });
+    await waitFor(() => expect(invokeMock).toHaveBeenCalledTimes(1));
+    expect(invokeMock.mock.calls[0]).toMatchObject([
+      "property-valuation",
+      { body: { city: "Athens", address: "Kolonaki 12", price: 450_000, sqm: 95 } },
+    ]);
   });
 
   it("populates ownershipStatus and ownershipPercentage from tags", async () => {
-    invokeMock.mockResolvedValueOnce({ data: { ok: false } });
     invokeMock.mockResolvedValueOnce({ data: { estimatedValue: 100 } });
     renderHook(() => usePropertyAIInsights(baseListing, baseUser, "L-1", true));
-    await waitFor(() => expect(invokeMock).toHaveBeenCalledTimes(2));
-    const valuationBody = (invokeMock.mock.calls[1][1] as { body: Record<string, unknown> }).body;
+    await waitFor(() => expect(invokeMock).toHaveBeenCalledTimes(1));
+    const valuationBody = (invokeMock.mock.calls[0][1] as { body: Record<string, unknown> }).body;
     expect(valuationBody.ownershipStatus).toBe("private");
     expect(valuationBody.ownershipPercentage).toBe(100);
   });
 
   it("falls back to default values when property-valuation returns sparse fields", async () => {
-    invokeMock.mockResolvedValueOnce({ data: null });
     invokeMock.mockResolvedValueOnce({ data: {} });
     const { result } = renderHook(() =>
       usePropertyAIInsights(baseListing, baseUser, "L-1", true),
@@ -156,14 +121,13 @@ describe("usePropertyAIInsights", () => {
     expect(result.current.aiInsightsData).toEqual({
       vsMarket: 0,
       rentalYield: 0,
-      estimatedValue: 450_000, // falls back to listing.price
+      estimatedValue: 450_000,
       marketComparison: "at_market",
       confidenceLabel: "Medium",
     });
   });
 
-  it("surfaces a toast.error when isAiUsageLimitError reports true on the fallback", async () => {
-    invokeMock.mockResolvedValueOnce({ data: null });
+  it("surfaces a toast.error when isAiUsageLimitError reports true", async () => {
     invokeMock.mockResolvedValueOnce({ data: { error: "limit reached" }, error: { message: "limit" } });
     isAiLimitMock.mockReturnValue(true);
     renderHook(() => usePropertyAIInsights(baseListing, baseUser, "L-1", true));
@@ -178,17 +142,15 @@ describe("usePropertyAIInsights", () => {
     await waitFor(() => expect(toastErrorMock).toHaveBeenCalled());
   });
 
-  it("does not refire if dbListing changes after the first load (aiInsightsLoaded latch)", async () => {
+  it("does not refire if dbListing changes after the first load", async () => {
     invokeMock.mockResolvedValueOnce({
-      data: { ok: true, report: { estimatedValue: 500_000 } },
+      data: { estimatedValue: 500_000 },
     });
     const { rerender } = renderHook(
       ({ l }: { l: ListingWithJoins | null }) => usePropertyAIInsights(l, baseUser, "L-1", true),
       { initialProps: { l: baseListing } },
     );
     await waitFor(() => expect(invokeMock).toHaveBeenCalledTimes(1));
-    // Re-render with a different listing object — should NOT refire because
-    // the internal `aiInsightsLoaded` latch is already true.
     rerender({ l: { ...baseListing, id: "L-2" } });
     await new Promise((r) => setTimeout(r, 10));
     expect(invokeMock).toHaveBeenCalledTimes(1);

@@ -59,6 +59,13 @@ export interface OpenHouseRegistration {
   id: string;
   listing_id: string;
   requester_id: string;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  contact_permission_at: string | null;
+  id_verification_consent_at: string | null;
+  privacy_acknowledged_at: string | null;
+  visit_purpose: string | null;
   timeslot_index: number | null;
   id_doc_type: OHIdDocType | null;
   id_doc_url: string | null;
@@ -103,6 +110,12 @@ export interface OpenHouseOffer {
 type RegistrationContext = Pick<
   OpenHouseRegistration,
   | "timeslot_index"
+  | "contact_name"
+  | "contact_email"
+  | "contact_phone"
+  | "contact_permission_at"
+  | "id_verification_consent_at"
+  | "privacy_acknowledged_at"
   | "id_doc_url"
   | "id_verified_at"
   | "waiver_signed_at"
@@ -153,6 +166,13 @@ export function getOpenHouseApprovalBlockers(
   if ((settings?.timeslots?.length ?? 0) > 0 && registration.timeslot_index === null) {
     blockers.push("Timeslot not selected");
   }
+
+  if (!registration.contact_name) blockers.push("Contact name missing");
+  if (!registration.contact_email) blockers.push("Contact email missing");
+  if (!registration.contact_phone) blockers.push("Contact phone missing");
+  if (!registration.contact_permission_at) blockers.push("Contact permission missing");
+  if (!registration.id_verification_consent_at) blockers.push("ID verification consent missing");
+  if (!registration.privacy_acknowledged_at) blockers.push("Privacy acknowledgement missing");
 
   if (requiresScreening) {
     if (!registration.mortgage_status) blockers.push("Mortgage/funds question missing");
@@ -293,10 +313,18 @@ export function useCreateOpenHouseRegistration() {
       listingId,
       timeslotIndex,
       note,
+      contactName,
+      contactEmail,
+      contactPhone,
+      visitPurpose,
     }: {
       listingId: string;
       timeslotIndex?: number;
       note?: string;
+      contactName: string;
+      contactEmail: string;
+      contactPhone: string;
+      visitPurpose?: string;
     }) => {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) throw new Error("Not authenticated");
@@ -305,6 +333,13 @@ export function useCreateOpenHouseRegistration() {
         .insert({
           listing_id: listingId,
           requester_id: authUser.id,
+          contact_name: contactName,
+          contact_email: contactEmail,
+          contact_phone: contactPhone,
+          contact_permission_at: new Date().toISOString(),
+          id_verification_consent_at: new Date().toISOString(),
+          privacy_acknowledged_at: new Date().toISOString(),
+          visit_purpose: visitPurpose || null,
           timeslot_index: timeslotIndex ?? null,
           status: "pending" as OHRegistrationStatus,
           note: note || null,
@@ -355,6 +390,13 @@ export function useUpdateOpenHouseRegistration() {
       id: string;
       updates: Partial<{
         timeslot_index: number;
+        contact_name: string;
+        contact_email: string;
+        contact_phone: string;
+        contact_permission_at: string;
+        id_verification_consent_at: string;
+        privacy_acknowledged_at: string;
+        visit_purpose: string;
         id_doc_type: OHIdDocType;
         id_doc_url: string;
         id_verified_at: string;
@@ -389,6 +431,12 @@ export function useUpdateOpenHouseRegistration() {
           requester_id,
           status,
           timeslot_index,
+          contact_name,
+          contact_email,
+          contact_phone,
+          contact_permission_at,
+          id_verification_consent_at,
+          privacy_acknowledged_at,
           id_doc_url,
           id_verified_at,
           waiver_signed_at,
@@ -425,6 +473,12 @@ export function useUpdateOpenHouseRegistration() {
         requester_id?: string;
         status?: OHRegistrationStatus;
         timeslot_index?: number | null;
+        contact_name?: string | null;
+        contact_email?: string | null;
+        contact_phone?: string | null;
+        contact_permission_at?: string | null;
+        id_verification_consent_at?: string | null;
+        privacy_acknowledged_at?: string | null;
         id_doc_url?: string | null;
         id_verified_at?: string | null;
         waiver_signed_at?: string | null;
@@ -467,6 +521,12 @@ export function useUpdateOpenHouseRegistration() {
       if (isOwner && requestedStatus === "approved") {
         const registrationForApproval: RegistrationContext = {
           timeslot_index: updates.timeslot_index ?? lookup?.timeslot_index ?? null,
+          contact_name: updates.contact_name ?? lookup?.contact_name ?? null,
+          contact_email: updates.contact_email ?? lookup?.contact_email ?? null,
+          contact_phone: updates.contact_phone ?? lookup?.contact_phone ?? null,
+          contact_permission_at: updates.contact_permission_at ?? lookup?.contact_permission_at ?? null,
+          id_verification_consent_at: updates.id_verification_consent_at ?? lookup?.id_verification_consent_at ?? null,
+          privacy_acknowledged_at: updates.privacy_acknowledged_at ?? lookup?.privacy_acknowledged_at ?? null,
           id_doc_url: updates.id_doc_url ?? lookup?.id_doc_url ?? null,
           id_verified_at: updates.id_verified_at ?? lookup?.id_verified_at ?? null,
           waiver_signed_at: updates.waiver_signed_at ?? lookup?.waiver_signed_at ?? null,

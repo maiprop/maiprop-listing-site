@@ -2,8 +2,7 @@
  * Tests for `NeighbourhoodReport`. Mocks supabase + auth + sonner. Covers:
  *   - Sign-in gate
  *   - Initial Load button → fetch
- *   - OS API short-circuit on listingId
- *   - Fallback to neighbourhood-report when OS misses
+ *   - Listing-scoped neighbourhood-report calls
  *   - Error toast + retry
  *   - Full result UI (highlights, trend, noise, safety, walkability,
  *     development projects, investment outlook, demographics, refresh)
@@ -94,14 +93,13 @@ describe("NeighbourhoodReport — gates", () => {
     expect(screen.getByText(/Sign in for Neighbourhood Report/i)).toBeInTheDocument();
   });
 
-  it("renders the upgrade CTA when the user is logged in but not Pro", () => {
+  it("renders the Load CTA when the user is logged in but not Pro", () => {
     render(
       <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <NeighbourhoodReport {...baseProps} isPro={false} />
       </MemoryRouter>,
     );
-    expect(screen.getByText(/Upgrade to Pro/i)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Load Neighbourhood Report/i })).toBeNull();
+    expect(screen.getByRole("button", { name: /Load Neighbourhood Report/i })).toBeInTheDocument();
     expect(invokeMock).not.toHaveBeenCalled();
   });
 
@@ -113,33 +111,18 @@ describe("NeighbourhoodReport — gates", () => {
 });
 
 describe("NeighbourhoodReport — fetch flows", () => {
-  it("uses the OS API short-circuit when listingId is provided and the report is valid", async () => {
-    invokeMock.mockImplementation((name: string) => {
-      if (name === "fetch-report-from-os")
-        return Promise.resolve({ data: { ok: true, report: fullData }, error: null });
-      throw new Error("AI should not be called");
-    });
+  it("calls neighbourhood-report when listingId is provided so quota and GPT analysis are enforced", async () => {
+    invokeMock.mockResolvedValue({ data: fullData, error: null });
     render(<NeighbourhoodReport {...baseProps} listingId="l-1" />);
     fireEvent.click(screen.getByRole("button", { name: /Load Neighbourhood Report/i }));
     await waitFor(() => expect(screen.getByText(/Plaka.*Athens/i)).toBeInTheDocument());
-    // Highlights pills.
     expect(screen.getByText(/UNESCO district/)).toBeInTheDocument();
-    // Investment outlook value.
     expect(screen.getByText(/Excellent/)).toBeInTheDocument();
-  });
-
-  it("falls back to neighbourhood-report when OS returns no usable report", async () => {
-    invokeMock.mockImplementation((name: string) => {
-      if (name === "fetch-report-from-os")
-        return Promise.resolve({ data: { ok: false, report: null }, error: null });
-      if (name === "neighbourhood-report")
-        return Promise.resolve({ data: fullData, error: null });
-      throw new Error("unexpected " + name);
-    });
-    render(<NeighbourhoodReport {...baseProps} listingId="l-2" />);
-    fireEvent.click(screen.getByRole("button", { name: /Load Neighbourhood Report/i }));
-    await waitFor(() => expect(screen.getByText(/Plaka.*Athens/i)).toBeInTheDocument());
-    expect(invokeMock).toHaveBeenCalledTimes(2);
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+    expect(invokeMock).toHaveBeenCalledWith(
+      "neighbourhood-report",
+      expect.objectContaining({ body: expect.objectContaining({ listingId: "l-1" }) }),
+    );
   });
 
   it("calls neighbourhood-report directly when no listingId is given", async () => {

@@ -77,17 +77,26 @@ Deno.test("OPTIONS preflight returns 200", async () => {
   assertEquals(res.status, 200);
 });
 
-Deno.test("self-service onboarding rejects approval-gated agent role before RPC", async () => {
+Deno.test("self-service onboarding forwards agent role to trusted RPC", async () => {
   resetScenario();
   const res = await handler(authedJson({ role: "agent", participantType: "agent" }));
-  const body = await res.json();
 
-  assertEquals(res.status, 400);
-  assertEquals(body.error, "Invalid onboarding payload");
-  assert(!globalThis.__completeOnboardingScenario.calls.some((call) => call.name === "rpc"));
+  assertEquals(res.status, 200);
+  const rpcCall = globalThis.__completeOnboardingScenario.calls.find((call) => call.name === "rpc");
+  assertEquals(rpcCall?.args, {
+    name: "complete_onboarding_role_for_user",
+    args: {
+      p_user_id: "11111111-1111-4111-8111-111111111111",
+      p_role: "agent",
+      p_participant_type: "agent",
+      p_display_name: null,
+      p_city: null,
+      p_phone: null,
+    },
+  });
 });
 
-Deno.test("self-service onboarding rejects approval-gated developer role before RPC", async () => {
+Deno.test("self-service onboarding forwards developer role to trusted RPC", async () => {
   resetScenario();
   const res = await handler(authedJson({
     role: "developer",
@@ -96,7 +105,28 @@ Deno.test("self-service onboarding rejects approval-gated developer role before 
     city: "Athens",
   }));
 
+  assertEquals(res.status, 200);
+  const rpcCall = globalThis.__completeOnboardingScenario.calls.find((call) => call.name === "rpc");
+  assertEquals(rpcCall?.args, {
+    name: "complete_onboarding_role_for_user",
+    args: {
+      p_user_id: "11111111-1111-4111-8111-111111111111",
+      p_role: "developer",
+      p_participant_type: "developer",
+      p_display_name: "Dev Co",
+      p_city: "Athens",
+      p_phone: null,
+    },
+  });
+});
+
+Deno.test("self-service onboarding rejects invite-only investor role before RPC", async () => {
+  resetScenario();
+  const res = await handler(authedJson({ role: "investor", participantType: "investor" }));
+  const body = await res.json();
+
   assertEquals(res.status, 400);
+  assertEquals(body.error, "role_not_allowed");
   assert(!globalThis.__completeOnboardingScenario.calls.some((call) => call.name === "rpc"));
 });
 

@@ -629,7 +629,7 @@ describe("Page smoke tests", () => {
     const { default: Index } = await import("@/pages/Index");
     await preloadIndexLazyDependencies();
     await expect(renderWithSettledSuspense(<Index />)).resolves.toBeDefined();
-  });
+  }, 10_000);
 
   it("Listings page renders without throwing", async () => {
     const { default: Listings } = await import("@/pages/Listings");

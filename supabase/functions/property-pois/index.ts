@@ -1,6 +1,6 @@
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
-import { openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
+import { hasAIProviderCredentials, openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
 import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
 import { createLogger } from "../_shared/logger.ts";
 
@@ -33,39 +33,41 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (!Deno.env.get("OPENAI_API_KEY")) throw new Error("OPENAI_API_KEY not configured");
+    if (!hasAIProviderCredentials()) throw new Error("AI provider key not configured");
 
-    const prompt = `You are a Greek real estate assistant. Given a property at address "${address}" in ${city}, Greece (coordinates: ${lat}, ${lng}), generate a realistic list of 10-14 nearby points of interest that a prospective buyer would care about.
+    const prompt = `You are a Greek real estate assistant. Given a property at address "${address}" in ${city}, Greece (coordinates: ${lat}, ${lng}), generate exactly 12 nearby points of interest that a prospective buyer would care about.
 
-Return ONLY valid JSON with this exact structure, no markdown, no explanation:
+Return ONLY valid JSON. Use this example shape exactly:
 {
   "pois": [
     {
-      "name": "string (specific realistic place name in English, e.g. 'Primary School Kolonaki')",
-      "category": "school" | "transit" | "cafe" | "hospital" | "shopping" | "park",
-      "distanceKm": number (realistic 0.05 to 2.5),
-      "walkMinutes": number (distanceKm * 12 rounded to nearest whole number),
-      "description": "string (brief 3-5 word description, optional)"
+      "name": "Syntagma Metro Station",
+      "category": "transit",
+      "distanceKm": 0.05,
+      "walkMinutes": 1,
+      "description": "Central metro interchange"
     }
   ]
 }
 
 Rules:
 - Use real-sounding Greek place names relevant to ${city}
-- Include 2-3 of each category: school, transit, cafe, hospital, shopping, park
+- Allowed categories: school, transit, cafe, hospital, shopping, park
+- Include at least one item per allowed category
 - Distances should be realistically spread from 50m to 2.5km
 - walkMinutes = Math.round(distanceKm * 12) approximately
-- Return only the JSON object, nothing else`;
+- Return only the JSON object, nothing else
+- The JSON must be complete and parseable`;
 
     const response = await openAIChatCompletion({
       messages: [{ role: "user", content: prompt }],
       temperature: 0.7,
-      max_tokens: 1200,
+      max_tokens: 3072,
     });
 
     if (!response.ok) {
       const status = response.status;
-      if (status === 429) {
+      if (status === 403 || status === 429) {
         return new Response(
           JSON.stringify({ error: "AI features are temporarily unavailable due to usage limits. Please try again later or contact support." }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }

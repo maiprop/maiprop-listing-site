@@ -1,375 +1,513 @@
 /**
- * AuctionDetail — detail page for OS-synced auction listings.
+ * AuctionDetail handles OS-synced auction listings.
  *
- * Only handles OS auction IDs (e.g. "uePMM0riww") — fetched from the live
- * auctions cache via useAuctionListings(), or passed directly in route state.
- *
- * UUID IDs (DB-stored listings) are handled by AuctionRouter in App.tsx which
- * renders PropertyDetail directly, so this component never sees them.
+ * DB-backed auction listings are rendered by PropertyDetail through
+ * AuctionRouter. This page intentionally mirrors that same detail layout so
+ * auctions opened from /dashboard and /auctions feel like one product surface.
  */
-
-import { Suspense, lazy, useMemo } from "react";
-import { useParams, useLocation, Link } from "react-router-dom";
+import { Suspense, lazy, useMemo, useState } from "react";
 import { Helmet } from "react-helmet-async";
+import { Link, useLocation, useParams } from "react-router-dom";
 import {
-  Gavel,
-  MapPin,
-  Calendar,
-  Square,
-  Home,
-  ExternalLink,
-  ChevronLeft,
-  Building2,
-  Clock,
   AlertCircle,
+  Building2,
+  Calendar,
+  ChevronLeft,
+  Clock,
+  ExternalLink,
+  Gavel,
+  Globe,
+  LayoutGrid,
   Loader2,
+  MapPin,
+  Scale,
+  Square,
 } from "lucide-react";
-import { formatDate, formatPrice } from "@/lib/format";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
+import { Navbar } from "@/components/Navbar";
+import PropertyGallery from "@/components/property/PropertyGallery";
+import PropertyValuation from "@/components/PropertyValuation";
+import { PropertyScoresSection } from "@/components/property/PropertyScoresSection";
+import { DetailRow, Section, SectionHeader } from "@/components/property/DetailPrimitives";
 import { useAuctionListings } from "@/hooks/useAuctionListings";
-import PropertyMiniMap from "@/components/PropertyMiniMap";
+import { formatDate, formatPrice } from "@/lib/format";
 import {
-  daysUntil,
+  OWNERSHIP_BADGE,
   countdownBadge,
+  daysUntil,
+  getOwnershipPct,
+  getOwnershipStatus,
   getPropertyTypeLabel,
   normalizeOwnership,
-  getOwnershipStatus,
-  getOwnershipPct,
-  OWNERSHIP_BADGE,
 } from "@/lib/auctionUtils";
 
 const AIAssistantWidget = lazy(() => import("@/components/AIAssistantWidget"));
+const PropertyMiniMap = lazy(() => import("@/components/PropertyMiniMap"));
+const NeighbourhoodReport = lazy(() => import("@/components/NeighbourhoodReport"));
 
-/** Only allow http/https URLs in external auction links to prevent javascript: injection. */
+const AUCTION_INFO_NOTES: { id: string; text: string }[] = [
+  {
+    id: "platform",
+    text: "Auctions are conducted through the certified eAuction platform. Register and obtain a bidding code before the auction date.",
+  },
+  {
+    id: "starting-bid",
+    text: "The starting bid shown is the first-round price. Later rounds may have lower bids if the asset remains unsold.",
+  },
+  {
+    id: "deposit",
+    text: "A 10% deposit of the winning bid is typically required immediately after the auction.",
+  },
+  {
+    id: "diligence",
+    text: "Due diligence on cadastre, encumbrances, planning status, and occupancy remains the buyer's responsibility.",
+  },
+  {
+    id: "transfer-tax",
+    text: "Transfer tax, notary fees, and legal costs apply on top of the winning bid.",
+  },
+];
+
 const safeUrl = (url: string | null | undefined): string | null =>
   url && /^https?:\/\//i.test(url) ? url : null;
 
-// ── Static content arrays ─────────────────────────────────────────────────────
-const AUCTION_INFO_NOTES: { id: string; text: string }[] = [
-  { id: "platform",     text: "Auctions are conducted through the certified eAuction platform. You must register and obtain a bidding code before the auction date." },
-  { id: "starting-bid", text: "The starting bid shown is the first-round price. Subsequent rounds may have lower bids if the property is unsold." },
-  { id: "deposit",      text: "A 10% deposit of the winning bid is required immediately after the auction." },
-  { id: "diligence",    text: "Due diligence (cadastre, encumbrances, planning status) is the buyer's responsibility. Consult a notary and lawyer before bidding." },
-  { id: "transfer-tax", text: "Transfer tax (3% FMA) and notary fees apply on top of the winning bid." },
-];
+const asNumber = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
 
-// ── Sub-components (extracted to limit JSX nesting depth) ────────────────────
+function AuctionBreadcrumb({ title }: { title: string }) {
+  return (
+    <nav aria-label="Breadcrumb" className="container py-2 sm:py-3">
+      <ol className="flex items-center gap-1.5 text-xs text-muted-foreground overflow-x-auto scrollbar-none list-none p-0 m-0">
+        <li>
+          <Link to="/" className="hover:text-foreground transition-colors shrink-0">Home</Link>
+        </li>
+        <li aria-hidden="true">/</li>
+        <li>
+          <Link to="/auctions" className="hover:text-foreground transition-colors shrink-0">Auctions</Link>
+        </li>
+        <li aria-hidden="true">/</li>
+        <li>
+          <span className="text-foreground truncate font-medium" aria-current="page">{title}</span>
+        </li>
+      </ol>
+    </nav>
+  );
+}
 
-const StatChip = ({ icon, label }: { icon: React.ReactNode; label: string }) => (
-  <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-secondary border border-border text-sm">
-    <span className="text-primary shrink-0">{icon}</span>
-    <span className="text-foreground font-medium">{label}</span>
-  </div>
-);
-
-const AuctionBreadcrumb = ({ title }: { title: string }) => (
-  <div className="border-b border-border bg-card/50">
-    <div className="max-w-5xl mx-auto px-4 py-3">
-      <nav aria-label="breadcrumb">
-        <ol className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <li><Link to="/auctions" className="hover:text-foreground transition-colors">Auctions</Link></li>
-          <li aria-hidden="true">/</li>
-          <li aria-current="page" className="text-foreground truncate max-w-xs">{title}</li>
-        </ol>
-      </nav>
+function StatChip({ icon, label }: { icon: React.ReactNode; label: string }) {
+  return (
+    <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
+      <span className="text-primary shrink-0">{icon}</span>
+      {label}
     </div>
-  </div>
-);
+  );
+}
 
-const AuctionTitleRow = ({
-  title, city, address, region, bid, auctionDate,
-  ownershipBadge, ownershipPct,
+function AuctionTitleSection({
+  title,
+  city,
+  address,
+  region,
+  propertyTypeLabel,
+  auctionDate,
+  days,
+  sqm,
+  yearBuilt,
+  ownershipBadge,
+  ownershipPct,
 }: {
-  title: string; city: string; address?: string | null; region?: string | null;
-  bid: number; auctionDate?: string | null;
-  ownershipBadge: { cls: string; label: string } | null; ownershipPct: number | null;
-}) => (
-  <div className="flex flex-col sm:flex-row sm:items-start gap-4 justify-between">
-    <div className="space-y-1.5 flex-1">
+  title: string;
+  city: string;
+  address?: string | null;
+  region?: string | null;
+  propertyTypeLabel: string | null;
+  auctionDate?: string | null;
+  days: number;
+  sqm: number | null;
+  yearBuilt: number | null;
+  ownershipBadge: { cls: string; label: string } | null;
+  ownershipPct: number | null;
+}) {
+  const badge = countdownBadge(days);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-6 flex-wrap">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap mb-2">
+            {propertyTypeLabel && (
+              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground bg-muted px-2 py-0.5 rounded-full border border-border">
+                {propertyTypeLabel}
+              </span>
+            )}
+            <span className="text-[10px] font-bold uppercase tracking-widest text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20">
+              For auction
+            </span>
+            {badge && (
+              <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${badge.cls}`}>
+                {badge.label}
+              </span>
+            )}
+          </div>
+          <h1 className="font-display text-2xl md:text-3xl font-bold leading-tight line-clamp-3 sm:line-clamp-none pr-2">
+            {title}
+          </h1>
+          <div className="flex items-center gap-1.5 mt-2 text-sm text-muted-foreground">
+            <MapPin className="w-3.5 h-3.5 shrink-0" />
+            <span>
+              {address && address !== city ? `${address}, ${city}` : city}
+              {region && region !== city ? ` - ${region}` : ""}
+            </span>
+          </div>
+        </div>
+      </div>
+
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-brand-gold/15 text-brand-gold border border-brand-gold/30">
-          <Gavel className="w-3 h-3" /> AUCTION
-        </span>
+        {sqm != null && sqm > 1 && <StatChip icon={<Square className="w-3.5 h-3.5" />} label={`${sqm} m2`} />}
+        {auctionDate && <StatChip icon={<Calendar className="w-3.5 h-3.5" />} label={`Auction: ${formatDate(auctionDate)}`} />}
+        {days < 999 && (
+          <StatChip
+            icon={<Clock className="w-3.5 h-3.5" />}
+            label={days === 0 ? "Today" : `${days} day${days !== 1 ? "s" : ""} to go`}
+          />
+        )}
+        {yearBuilt != null && <StatChip icon={<Building2 className="w-3.5 h-3.5" />} label={`Construction year ${yearBuilt}`} />}
         {ownershipBadge && (
-          <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border ${ownershipBadge.cls}`}>
-            <Building2 className="w-2.5 h-2.5" />
+          <div className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border ${ownershipBadge.cls}`}>
+            <Building2 className="w-3.5 h-3.5 shrink-0" />
             {ownershipBadge.label}
-            {ownershipPct != null && ownershipPct < 100 && <span className="opacity-80">({ownershipPct}%)</span>}
-          </span>
+          </div>
+        )}
+        {ownershipPct != null && ownershipPct < 100 && (
+          <StatChip icon={<Building2 className="w-3.5 h-3.5" />} label={`${ownershipPct}%`} />
         )}
       </div>
-      <h1 className="font-display text-xl sm:text-2xl font-bold leading-snug">{title}</h1>
-      <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <MapPin className="w-4 h-4 shrink-0 text-primary" />
-        <span>{address ? `${address}, ` : ""}{city}{region && region !== city ? `, ${region}` : ""}</span>
-      </div>
     </div>
-    <div className="glass-card rounded-2xl px-5 py-4 border border-brand-gold/30 bg-brand-gold/5 shrink-0 text-center sm:text-right">
-      <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Starting Bid</p>
-      <p className="font-display text-2xl font-black bg-gradient-primary bg-clip-text text-transparent">
-        €{bid.toLocaleString("el-GR")}
-      </p>
-      {auctionDate && (
-        <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1 justify-center sm:justify-end">
-          <Calendar className="w-3 h-3" />
-          {formatDate(auctionDate)}
-        </p>
-      )}
-    </div>
-  </div>
-);
+  );
+}
 
-// ── Main component ────────────────────────────────────────────────────────────
-const AuctionStatRow = ({
-  sqm, yearBuilt, auctionDate, days,
-}: {
-  sqm?: number | null; yearBuilt?: number | null;
-  auctionDate?: string | null; days: number;
-}) => (
-  <div className="flex flex-wrap gap-2">
-    {sqm && sqm > 1 && (
-      <StatChip icon={<Square className="w-4 h-4" />} label={`${sqm} m²`} />
-    )}
-    {yearBuilt && (
-      <StatChip icon={<Home className="w-4 h-4" />} label={`Built ${yearBuilt}`} />
-    )}
-    {auctionDate && (
-      <StatChip
-        icon={<Calendar className="w-4 h-4" />}
-        label={`Auction: ${formatDate(auctionDate)}`}
-      />
-    )}
-    {/* daysUntil returns 999 sentinel when no date — exclude it */}
-    {days < 999 && (
-      <StatChip
-        icon={<Clock className="w-4 h-4" />}
-        label={days === 0 ? "Today" : `${days} day${days !== 1 ? "s" : ""} to go`}
-      />
-    )}
-  </div>
-);
-
-const AuctionDetail = () => {
+export default function AuctionDetail() {
   const { id = "" } = useParams<{ id: string }>();
   const { state } = useLocation() as { state?: { auction?: Record<string, unknown> } };
+  const [walkScore, setWalkScore] = useState<number | null>(null);
 
-  // 1. Route state — instant data when navigating from AuctionCard
   const auctionFromState = state?.auction ?? null;
-
-  // 2. Live auctions cache
   const { data: allAuctions = [], isLoading: auctionsLoading } = useAuctionListings();
   const auctionFromCache = useMemo(
-    () => allAuctions.find((a) => a.id === id) ?? null,
+    () => allAuctions.find((auction) => auction.id === id) ?? null,
     [allAuctions, id],
   );
-
-  // Resolve the best available data source — state wins (instant on navigation),
-  // then the live cache.
-  const auction =
-    auctionFromState ??
-    (auctionFromCache as Record<string, unknown> | null);
-
+  const auction = auctionFromState ?? (auctionFromCache as Record<string, unknown> | null);
   const isLoading = !auction && auctionsLoading;
 
-  // ── Derived display values ─────────────────────────────────────────────────
-  const bid = (auction?.auction_starting_bid ?? auction?.price ?? 0) as number;
-  const auctionDate = auction?.auction_date as string | null | undefined;
-  const days = daysUntil(auctionDate ?? null);
-  const badge = countdownBadge(days);
-  const ownershipStatus = normalizeOwnership(getOwnershipStatus((auction?.tags as string[] | undefined) ?? []));
-  const ownershipPct = getOwnershipPct((auction?.tags as string[] | undefined) ?? []);
-  const ownershipBadge = ownershipStatus ? OWNERSHIP_BADGE[ownershipStatus] : null;
-  const websiteUrl = auction?.website_url as string | null | undefined;
-  const title = (auction?.title as string | undefined) ?? "Auction Property";
-  const city = (auction?.city as string | undefined) ?? "";
-  const address = auction?.address as string | null | undefined;
-  const sqm = auction?.sqm as number | null | undefined;
-  const yearBuilt = auction?.year_built as number | null | undefined;
-  const coverImage = auction?.cover_image_url as string | null | undefined;
-  const lat = auction?.latitude as number | null | undefined;
-  const lng = auction?.longitude as number | null | undefined;
-  const region = auction?.region as string | null | undefined;
-  const propertyType = auction?.property_type as string | undefined;
-  const propTypeLabel = auction ? getPropertyTypeLabel(auction as Parameters<typeof getPropertyTypeLabel>[0]) : null;
-
-  // Property context for the AI assistant
-  const propertyContext = auction
-    ? {
-        title,
-        city: city || undefined,
-        address: address ?? undefined,
-        price: bid || undefined,
-        sqm: sqm ?? undefined,
-        propertyType: propertyType ?? undefined,
-        listingType: "auction" as const,
-        yearBuilt: yearBuilt ?? undefined,
-        latitude: lat ?? undefined,
-        longitude: lng ?? undefined,
-        region: region ?? undefined,
-      }
-    : undefined;
-
-  // ── Loading state ──────────────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <>
+      <div className="min-h-screen bg-background">
         <Navbar />
-        <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex items-center justify-center pt-32">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
-        <Footer />
-      </>
+      </div>
     );
   }
 
-  // ── Not found ──────────────────────────────────────────────────────────────
   if (!auction) {
     return (
-      <>
+      <div className="min-h-screen bg-background">
         <Navbar />
-        <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4 p-6">
-          <AlertCircle className="w-12 h-12 text-muted-foreground" />
-          <h1 className="text-xl font-semibold">Auction not found</h1>
-          <p className="text-sm text-muted-foreground text-center max-w-xs">
-            This auction may have ended or the link is invalid.
-          </p>
-          <Button asChild variant="outline">
+        <div className="container pt-32 text-center">
+          <AlertCircle className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+          <p className="text-muted-foreground">This auction may have ended or the link is invalid.</p>
+          <Button asChild className="mt-4" variant="outline">
             <Link to="/auctions">
               <ChevronLeft className="w-4 h-4 mr-1" /> Back to Auctions
             </Link>
           </Button>
         </div>
         <Footer />
-      </>
+      </div>
     );
   }
 
-  // ── Detail view ────────────────────────────────────────────────────────────
-  return (
-    <>
-      <Helmet>
-        <title>{title} | maiProp Auctions</title>
-        <meta name="description" content={`Auction: ${title}. Starting bid ${formatPrice(bid)}. City: ${city}.`} />
-      </Helmet>
+  const title = (auction.title as string | undefined) ?? "Auction Property";
+  const city = (auction.city as string | undefined) ?? "";
+  const address = auction.address as string | null | undefined;
+  const region = auction.region as string | null | undefined;
+  const auctionDate = auction.auction_date as string | null | undefined;
+  const bid = asNumber(auction.auction_starting_bid) ?? asNumber(auction.price) ?? 0;
+  const sqm = asNumber(auction.sqm);
+  const yearBuilt = asNumber(auction.year_built);
+  const lat = asNumber(auction.latitude);
+  const lng = asNumber(auction.longitude);
+  const websiteUrl = safeUrl(auction.website_url as string | null | undefined);
+  const propertyType = auction.property_type as string | undefined;
+  const propertyTypeLabel = getPropertyTypeLabel(auction as Parameters<typeof getPropertyTypeLabel>[0]);
+  const images = typeof auction.cover_image_url === "string" && auction.cover_image_url ? [auction.cover_image_url] : [];
+  const days = daysUntil(auctionDate ?? null);
+  const tags = (auction.tags as string[] | undefined) ?? [];
+  const ownershipStatus = normalizeOwnership(getOwnershipStatus(tags));
+  const ownershipPct = getOwnershipPct(tags);
+  const ownershipBadge = ownershipStatus ? OWNERSHIP_BADGE[ownershipStatus] : null;
+  const canonicalUrl = `https://maiprop.co/auction/${id}`;
+  const ogDescription = `Auction: ${title}. Starting bid ${formatPrice(bid)}. City: ${city}.`;
 
+  const detailRows: { label: string; value: string | number }[] = [];
+  if (propertyTypeLabel) detailRows.push({ label: "Property Type", value: propertyTypeLabel });
+  if (sqm && sqm > 1) detailRows.push({ label: "Surface", value: `${sqm} m2` });
+  if (auctionDate) detailRows.push({ label: "Auction Date", value: formatDate(auctionDate) });
+  if (yearBuilt) detailRows.push({ label: "Construction Year", value: yearBuilt });
+  if (region) detailRows.push({ label: "Region", value: region });
+  if (websiteUrl) detailRows.push({ label: "Official Platform", value: "eAuction" });
+
+  const propertyContext = {
+    title,
+    city: city || undefined,
+    address: address ?? undefined,
+    price: bid || undefined,
+    sqm: sqm ?? undefined,
+    propertyType: propertyType ?? undefined,
+    listingType: "auction" as const,
+    yearBuilt: yearBuilt ?? undefined,
+    latitude: lat ?? undefined,
+    longitude: lng ?? undefined,
+    region: region ?? undefined,
+  };
+
+  const handleShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({ title, url: canonicalUrl });
+      } catch (_err: unknown) {
+        return;
+      }
+      return;
+    }
+    await navigator.clipboard.writeText(canonicalUrl);
+    toast.success("Link copied");
+  };
+
+  return (
+    <div className="min-h-screen bg-background pb-bottom-nav lg:pb-0">
+      <Helmet>
+        <title>{title} - maiProp Auctions</title>
+        <meta name="description" content={ogDescription} />
+        <link rel="canonical" href={canonicalUrl} />
+        <meta property="og:title" content={`${title} - maiProp Auctions`} />
+        <meta property="og:description" content={ogDescription} />
+        {images[0] && <meta property="og:image" content={images[0]} />}
+        <meta property="og:url" content={canonicalUrl} />
+      </Helmet>
       <Navbar />
 
-      <main id="main-content" className="min-h-screen bg-background pb-24">
-        {/* ── Breadcrumb ── */}
+      <main id="main-content" className="pt-16">
         <AuctionBreadcrumb title={title} />
 
-        <div className="max-w-5xl mx-auto px-4 pt-6 space-y-6">
-
-          {/* ── Hero image ── */}
-          <div className="relative w-full h-64 sm:h-80 rounded-2xl overflow-hidden bg-secondary border border-border">
-            {coverImage ? (
-              <img
-                src={coverImage}
-                alt={title}
-                className="w-full h-full object-cover"
-                onError={(e) => { if (e.target instanceof HTMLImageElement) e.target.style.display = "none"; }}
+        <div className="container pb-10">
+          <div className="grid lg:grid-cols-[1fr_340px] gap-6 lg:gap-8">
+            <div className="space-y-5">
+              <PropertyGallery
+                images={images}
+                listingType="auction"
+                isFavorited={false}
+                onFavorite={() => toast.info("Saving OS auctions is coming soon.")}
+                onShare={handleShare}
+                viewsCount={0}
+                title={title}
               />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <Gavel className="w-16 h-16 text-muted-foreground/20" />
-              </div>
-            )}
 
-            {/* Countdown badge */}
-            {badge && (
-              <div className={`absolute top-3 left-3 flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${badge.cls}`}>
-                <Clock className="w-3.5 h-3.5" />
-                {badge.label}
-              </div>
-            )}
+              <AuctionTitleSection
+                title={title}
+                city={city}
+                address={address}
+                region={region}
+                propertyTypeLabel={propertyTypeLabel}
+                auctionDate={auctionDate}
+                days={days}
+                sqm={sqm}
+                yearBuilt={yearBuilt}
+                ownershipBadge={ownershipBadge}
+                ownershipPct={ownershipPct}
+              />
 
-            {/* Property type badge */}
-            {propTypeLabel && (
-              <div className="absolute top-3 right-3 bg-primary text-primary-foreground text-xs font-bold px-2.5 py-1 rounded-full">
-                {propTypeLabel}
-              </div>
-            )}
-          </div>
-
-          {/* ── Title row ── */}
-          <AuctionTitleRow
-            title={title}
-            city={city}
-            address={address}
-            region={region}
-            bid={bid}
-            auctionDate={auctionDate}
-            ownershipBadge={ownershipBadge}
-            ownershipPct={ownershipPct}
-          />
-
-          {/* ── Stat chips ── */}
-          <AuctionStatRow sqm={sqm} yearBuilt={yearBuilt} auctionDate={auctionDate} days={days} />
-
-          {/* ── External link CTA ── */}
-          {safeUrl(websiteUrl) && (
-            <div className="glass-card rounded-2xl p-5 border border-primary/20 bg-primary/5 flex items-center justify-between gap-4 flex-wrap">
-              <div>
-                <p className="text-sm font-semibold">View on eAuction platform</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Register, submit bids, and access full legal documents on the official platform.
-                </p>
-              </div>
-              <Button asChild className="shrink-0 gap-2">
-                <a href={safeUrl(websiteUrl) ?? ""} target="_blank" rel="noreferrer noopener">
-                  <ExternalLink className="w-4 h-4" /> Open eAuction
-                </a>
-              </Button>
-            </div>
-          )}
-
-          {/* ── Map ── */}
-          {lat != null && lng != null && (
-            <div className="glass-card rounded-2xl overflow-hidden border border-border">
-              <div className="px-5 py-3 border-b border-border">
-                <h2 className="text-sm font-semibold flex items-center gap-2">
-                  <MapPin className="w-4 h-4 text-primary" /> Location
-                </h2>
-              </div>
-              <div className="h-56">
-                <PropertyMiniMap
-                  latitude={lat}
-                  longitude={lng}
-                  title={title}
-                  address={address ?? ""}
-                  city={city}
+              <Section>
+                <SectionHeader
+                  icon={Gavel}
+                  title="Auction Details"
+                  badge={<span className="text-[10px] bg-brand-gold/20 text-brand-gold px-2 py-0.5 rounded-full font-bold">LIVE</span>}
                 />
-              </div>
-            </div>
-          )}
+                <div className="p-5 space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="glass-card rounded-xl p-4 border border-border text-center">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Auction Date</p>
+                      <p className="font-display font-bold text-sm">{auctionDate ? formatDate(auctionDate) : "TBC"}</p>
+                    </div>
+                    <div className="glass-card rounded-xl p-4 border border-brand-gold/20 text-center">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Starting Bid</p>
+                      <p className="font-display font-bold text-sm text-brand-gold">{formatPrice(bid)}</p>
+                    </div>
+                  </div>
 
-          {/* ── Auction info notes ── */}
-          <div className="glass-card rounded-2xl p-5 border border-border space-y-3">
-            <h2 className="text-sm font-semibold flex items-center gap-2">
-              <Gavel className="w-4 h-4 text-primary" /> About Greek Property Auctions
-            </h2>
-            <ul className="text-xs text-muted-foreground space-y-2 leading-relaxed list-none">
-              {AUCTION_INFO_NOTES.map(({ id, text }) => ( // skipcq: JS-0323
-                <li key={id} className="flex items-start gap-2">
-                  <span className="text-primary shrink-0 mt-0.5">▸</span>
-                  <span>{text}</span>
-                </li>
-              ))}
-            </ul>
+                  {ownershipBadge && (
+                    <div className="flex items-center justify-between rounded-xl bg-secondary border border-border px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <Building2 className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-xs text-muted-foreground font-medium">Ownership Status</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${ownershipBadge.cls}`}>
+                          {ownershipBadge.label}
+                        </span>
+                        {ownershipPct != null && ownershipPct < 100 && (
+                          <span className="text-xs font-bold text-muted-foreground bg-muted px-2 py-1 rounded-full border border-border">
+                            {ownershipPct}%
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="rounded-xl bg-brand-gold/8 border border-brand-gold/20 p-3 text-xs text-muted-foreground leading-relaxed">
+                    Judicial auction - buyer conducts own due diligence. maiProp provides AI-powered pre-auction analysis.
+                  </div>
+                </div>
+              </Section>
+
+              {detailRows.length > 0 && (
+                <Section>
+                  <SectionHeader icon={LayoutGrid} title="Property Details" />
+                  <div className="p-5">
+                    {detailRows.map((row) => <DetailRow key={row.label} label={row.label} value={row.value} />)}
+                  </div>
+                </Section>
+              )}
+
+              {lat != null && lng != null && (
+                <div className="rounded-2xl overflow-hidden">
+                  <Suspense fallback={<div className="h-96 bg-muted animate-pulse rounded-2xl" />}>
+                    <PropertyMiniMap
+                      latitude={lat}
+                      longitude={lng}
+                      title={title}
+                      address={address ?? ""}
+                      city={city}
+                      onWalkScoreChange={setWalkScore}
+                    />
+                  </Suspense>
+                </div>
+              )}
+
+              <Suspense fallback={<div className="h-64 bg-muted animate-pulse rounded-lg" />}>
+                <NeighbourhoodReport
+                  city={city}
+                  address={address ?? undefined}
+                  region={region}
+                  propertyType={propertyType}
+                  lat={lat}
+                  lng={lng}
+                  listingId={null}
+                />
+              </Suspense>
+
+              <Section>
+                <SectionHeader icon={Gavel} title="About Greek Property Auctions" />
+                <ul className="p-5 text-xs text-muted-foreground space-y-2 leading-relaxed list-none">
+                  {AUCTION_INFO_NOTES.map(({ id: noteId, text }) => (
+                    <li key={noteId} className="flex items-start gap-2">
+                      <span className="text-primary shrink-0 mt-0.5">-</span>
+                      <span>{text}</span>
+                    </li>
+                  ))}
+                </ul>
+              </Section>
+            </div>
+
+            <div className="space-y-4 lg:sticky lg:top-24 self-start">
+              <div className="glass-card rounded-2xl overflow-hidden border border-primary/10 shadow-elevated">
+                <div className="bg-gradient-to-br from-primary/10 to-accent/5 border-b border-border px-5 py-4">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Starting Bid</p>
+                  <p className="font-display text-2xl font-black text-foreground">{formatPrice(bid)}</p>
+                  {auctionDate && <p className="text-xs text-muted-foreground mt-1">Auction: {formatDate(auctionDate)}</p>}
+                </div>
+                {websiteUrl && (
+                  <div className="p-5 space-y-3">
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Register, submit bids, and access legal documents on the official eAuction platform.
+                    </p>
+                    <Button asChild className="w-full gap-2">
+                      <a href={websiteUrl} target="_blank" rel="noreferrer noopener">
+                        <ExternalLink className="w-4 h-4" /> Open eAuction
+                      </a>
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              <PropertyScoresSection walkScore={walkScore} walkabilityScore={null} safetyScore={null} noiseScore={null} />
+
+              <PropertyValuation
+                title={title}
+                city={city}
+                address={address ?? undefined}
+                price={bid}
+                sqm={sqm && sqm > 0 ? sqm : 1}
+                propertyType={propertyType}
+                listingType="auction"
+                yearBuilt={yearBuilt}
+                region={region}
+                ownershipStatus={ownershipStatus ?? undefined}
+                ownershipPercentage={ownershipPct ?? undefined}
+              />
+
+              <div className="glass-card rounded-2xl border border-border overflow-hidden">
+                <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-border">
+                  <div className="w-7 h-7 rounded-lg bg-brand-gold/10 flex items-center justify-center">
+                    <Scale className="w-3.5 h-3.5 text-brand-gold" />
+                  </div>
+                  <h4 className="font-display font-semibold text-sm">Professional Add-ons</h4>
+                </div>
+                <div className="p-5">
+                  <p className="text-xs text-muted-foreground mb-3">
+                    Formal valuation reports, legal due diligence, and building legality checks for auction buyers.
+                  </p>
+                  <Link
+                    to={`/professionals${city ? `?search=${encodeURIComponent(city)}` : ""}`}
+                    className="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline"
+                  >
+                    Find valuers & lawyers in {city || "Greece"} <ExternalLink className="w-3.5 h-3.5" />
+                  </Link>
+                </div>
+              </div>
+
+              {websiteUrl && (
+                <Section>
+                  <SectionHeader icon={Globe} title="Official Website" />
+                  <div className="p-5">
+                    <Button asChild variant="outline" className="w-full gap-2">
+                      <a href={websiteUrl} target="_blank" rel="noreferrer noopener">
+                        <ExternalLink className="w-4 h-4" /> View source listing
+                      </a>
+                    </Button>
+                  </div>
+                </Section>
+              )}
+            </div>
           </div>
         </div>
       </main>
 
-      {/* ── AI Assistant — wired with auction context (Bug 4) ── */}
       <Suspense fallback={null}>
         <AIAssistantWidget propertyContext={propertyContext} variant="floating" />
       </Suspense>
 
       <Footer />
-    </>
+    </div>
   );
-};
-
-export default AuctionDetail;
+}

@@ -1,8 +1,7 @@
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
-import { openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
+import { hasAIProviderCredentials, openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
 import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
-import { requireProSubscription } from "../_shared/proGate.ts";
 import { createLogger } from "../_shared/logger.ts";
 
 const log = createLogger("property-valuation");
@@ -211,6 +210,60 @@ Use benchmark table. Apply condition, location, feature adjustments. Range: ±15
 }
 
 // ── Main handler ───────────────────────────────────────────────────────────────
+function fallbackValuation(input: {
+  city: string;
+  price: number;
+  sqm: number;
+  propertyType?: string;
+  listingType?: string;
+}) {
+  const listedPrice = Number.isFinite(input.price) && input.price > 0 ? input.price : input.sqm * 2500;
+  const sqm = Number.isFinite(input.sqm) && input.sqm > 0 ? input.sqm : 1;
+  const pricePerSqm = Math.round(listedPrice / sqm);
+  const isAuction = input.listingType === "auction";
+  const estimatedValue = Math.round(listedPrice);
+  const rangeLow = Math.round(estimatedValue * 0.85);
+  const rangeHigh = Math.round(estimatedValue * 1.12);
+  const executionValue = Math.round(estimatedValue * (1 - (isAuction ? 0.25 : 0.14)));
+
+  return {
+    estimatedValue,
+    rangeLow,
+    rangeHigh,
+    executionValue,
+    pricePerSqmEstimate: pricePerSqm,
+    confidence: 35,
+    confidenceLabel: "Low",
+    liquidityScore: input.propertyType === "apartment" ? 70 : 45,
+    marketComparison: "at_market",
+    marketComparisonPct: 0,
+    pricingPosition: "fair",
+    methodUsed: "Conservative fallback based on submitted listing price and standard transaction friction",
+    valuationMode: "MODE_1_LISTING_ONLY",
+    summary: `Fallback valuation for ${input.city}: the AI provider returned malformed JSON, so this uses the submitted price as the market anchor and applies conservative transaction/legal uncertainty adjustments. Treat this as a temporary estimate until a full AI valuation can be generated.`,
+    keyFactors: [
+      { factor: "Submitted price anchor", impact: "neutral", note: "Used because provider JSON was invalid" },
+      { factor: "2026 market uncertainty", impact: "neutral", note: "Conservative confidence applied" },
+      { factor: "Transaction costs", impact: "negative", note: "Execution value includes friction" },
+      { factor: "Legal/planning data", impact: "negative", note: "Document status unknown" },
+    ],
+    legalCleanliness: 45,
+    planningCertainty: input.propertyType === "apartment" ? 65 : 45,
+    taxFriction: isAuction ? 55 : 30,
+    transferReadiness: 50,
+    legalSummary: "Legal and planning documents were not verified by this fallback valuation. Confirm title, building identity, permits, and restrictions before relying on the estimate.",
+    taxSummary: "Assumes normal Greek transaction costs unless the asset is an auction or complex transfer.",
+    objectiveValueProxy: null,
+    renovationPotential: null,
+    rentalYieldEstimate: input.propertyType === "apartment" ? 4.5 : 3.5,
+    highestBestUseHint: null,
+    redFlags: ["AI provider returned malformed JSON; fallback valuation used"],
+    auctionAdjustedValue: isAuction ? Math.round(estimatedValue / 0.8) : null,
+    listingQualityScore: 40,
+    generatedBy: "fallback",
+  };
+}
+
 Deno.serve(async (req) => {
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
@@ -223,12 +276,7 @@ Deno.serve(async (req) => {
   if (quota.errorResponse) return quota.errorResponse;
   const quotaUserId = quota.userId;
 
-  // Pro subscription gate — this is a Pro-only feature
-  if (quotaUserId) {
-    const proCheck = await requireProSubscription(quotaUserId, corsHeaders);
-    if (proCheck.errorResponse) return proCheck.errorResponse;
-  }
-
+  // Signed-in access gate is handled by enforceAiQuota; free vs Pro caps live in the DB.
   try {
     const body = await req.json();
     const {
@@ -251,7 +299,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (!Deno.env.get("OPENAI_API_KEY")) throw new Error("OPENAI_API_KEY not configured");
+    if (!hasAIProviderCredentials()) throw new Error("AI provider key not configured");
 
     // ── Key property specifics (construction year, condition, heating) for valuation ──
     const keySpecifics = [
@@ -383,14 +431,14 @@ Rules:
     const response = await openAIChatCompletion({
       messages: [{ role: "user", content: prompt }],
       temperature: 0.15,
-      max_tokens: 2000,
+      max_tokens: 8192,
     });
 
     if (!response.ok) {
       const txt = await response.text();
       log.error("AI gateway error", { status: response.status, body: txt.slice(0, 500) });
       const usageLimitMsg = "AI features are temporarily unavailable due to usage limits. Please try again later or contact support.";
-      if (response.status === 402 || response.status === 429) {
+      if (response.status === 402 || response.status === 403 || response.status === 429) {
         return new Response(JSON.stringify({ error: usageLimitMsg }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
       throw new Error(`AI gateway error: ${response.status}`);
@@ -419,8 +467,19 @@ Rules:
     try {
       result = JSON.parse(raw);
     } catch (parseErr) {
-      log.error("JSON parse failed", { err: parseErr instanceof Error ? parseErr.message : String(parseErr), raw: raw.slice(0, 500) });
-      throw new Error("Failed to parse AI response — invalid JSON from model");
+      log.warn("property-valuation: AI returned invalid JSON; using fallback valuation", {
+        err: parseErr instanceof Error ? parseErr.message : String(parseErr),
+        city,
+        rawLength: raw.length,
+        sample: raw.slice(0, 240),
+      });
+      result = fallbackValuation({
+        city: String(city),
+        price: Number(price),
+        sqm: Number(sqm),
+        propertyType: typeof propertyType === "string" ? propertyType : undefined,
+        listingType: typeof listingType === "string" ? listingType : undefined,
+      });
     }
 
     // Ensure backwards-compatible fields

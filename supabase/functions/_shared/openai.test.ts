@@ -7,7 +7,15 @@ import {
   assertStrictEquals,
   assertThrows,
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { getOpenAIModel, readOpenAITextContent, requireOpenAIKey } from "./openai.ts";
+import {
+  getGeminiModel,
+  getOpenAIModel,
+  getOpenAIReasoningEffort,
+  hasAIProviderCredentials,
+  readOpenAITextContent,
+  requireAIProviderKey,
+  requireOpenAIKey,
+} from "./openai.ts";
 
 // ── getOpenAIModel ────────────────────────────────────────────────────────────
 
@@ -41,6 +49,27 @@ Deno.test("getOpenAIModel: supports custom env var name", () => {
   }
 });
 
+Deno.test("getGeminiModel: returns Gemini fallback when env var is unset", () => {
+  const prev = Deno.env.get("GEMINI_MODEL");
+  Deno.env.delete("GEMINI_MODEL");
+  try {
+    assertStrictEquals(getGeminiModel(), "gemini-2.5-flash");
+  } finally {
+    if (prev) Deno.env.set("GEMINI_MODEL", prev);
+  }
+});
+
+Deno.test("getOpenAIReasoningEffort: returns configured reasoning effort", () => {
+  const prev = Deno.env.get("OPENAI_REASONING_EFFORT");
+  Deno.env.set("OPENAI_REASONING_EFFORT", "medium");
+  try {
+    assertStrictEquals(getOpenAIReasoningEffort(), "medium");
+  } finally {
+    if (prev) Deno.env.set("OPENAI_REASONING_EFFORT", prev);
+    else Deno.env.delete("OPENAI_REASONING_EFFORT");
+  }
+});
+
 // ── requireOpenAIKey ──────────────────────────────────────────────────────────
 
 Deno.test("requireOpenAIKey: throws when OPENAI_API_KEY is unset", () => {
@@ -64,6 +93,41 @@ Deno.test("requireOpenAIKey: returns key when set", () => {
   }
 });
 
+Deno.test("hasAIProviderCredentials: accepts Gemini or OpenAI credentials", () => {
+  const prevGemini = Deno.env.get("GEMINI_API_KEY");
+  const prevOpenAI = Deno.env.get("OPENAI_API_KEY");
+  Deno.env.delete("GEMINI_API_KEY");
+  Deno.env.delete("OPENAI_API_KEY");
+  try {
+    assertStrictEquals(hasAIProviderCredentials(), false);
+    Deno.env.set("GEMINI_API_KEY", "gemini-test");
+    assertStrictEquals(hasAIProviderCredentials(), true);
+    Deno.env.delete("GEMINI_API_KEY");
+    Deno.env.set("OPENAI_API_KEY", "openai-test");
+    assertStrictEquals(hasAIProviderCredentials(), true);
+  } finally {
+    if (prevGemini) Deno.env.set("GEMINI_API_KEY", prevGemini);
+    else Deno.env.delete("GEMINI_API_KEY");
+    if (prevOpenAI) Deno.env.set("OPENAI_API_KEY", prevOpenAI);
+    else Deno.env.delete("OPENAI_API_KEY");
+  }
+});
+
+Deno.test("requireAIProviderKey: prefers Gemini over OpenAI", () => {
+  const prevGemini = Deno.env.get("GEMINI_API_KEY");
+  const prevOpenAI = Deno.env.get("OPENAI_API_KEY");
+  Deno.env.set("GEMINI_API_KEY", "gemini-test");
+  Deno.env.set("OPENAI_API_KEY", "openai-test");
+  try {
+    assertStrictEquals(requireAIProviderKey(), "gemini-test");
+  } finally {
+    if (prevGemini) Deno.env.set("GEMINI_API_KEY", prevGemini);
+    else Deno.env.delete("GEMINI_API_KEY");
+    if (prevOpenAI) Deno.env.set("OPENAI_API_KEY", prevOpenAI);
+    else Deno.env.delete("OPENAI_API_KEY");
+  }
+});
+
 // ── readOpenAITextContent ─────────────────────────────────────────────────────
 
 Deno.test("readOpenAITextContent: extracts content from standard response", () => {
@@ -71,6 +135,13 @@ Deno.test("readOpenAITextContent: extracts content from standard response", () =
     choices: [{ message: { content: "Hello world" } }],
   };
   assertStrictEquals(readOpenAITextContent(payload), "Hello world");
+});
+
+Deno.test("readOpenAITextContent: extracts content from Gemini response", () => {
+  const payload = {
+    candidates: [{ content: { parts: [{ text: "Hello " }, { text: "Gemini" }] } }],
+  };
+  assertStrictEquals(readOpenAITextContent(payload), "Hello Gemini");
 });
 
 Deno.test("readOpenAITextContent: returns empty string for null/undefined", () => {

@@ -192,7 +192,12 @@ describe("useCreateOpenHouseRegistration", () => {
     const { result } = renderHookWithQuery(() => useCreateOpenHouseRegistration());
     await expect(
       act(async () => {
-        await result.current.mutateAsync({ listingId: "l-1" });
+        await result.current.mutateAsync({
+          listingId: "l-1",
+          contactName: "Buyer One",
+          contactEmail: "buyer@example.com",
+          contactPhone: "+306900000000",
+        });
       }),
     ).rejects.toBeInstanceOf(Error);
   });
@@ -206,12 +211,24 @@ describe("useCreateOpenHouseRegistration", () => {
     fromMock.mockReturnValue({ insert });
     const { result } = renderHookWithQuery(() => useCreateOpenHouseRegistration());
     await act(async () => {
-      await result.current.mutateAsync({ listingId: "l-1", timeslotIndex: 2, note: "hi" });
+      await result.current.mutateAsync({
+        listingId: "l-1",
+        timeslotIndex: 2,
+        note: "hi",
+        contactName: "Buyer One",
+        contactEmail: "buyer@example.com",
+        contactPhone: "+306900000000",
+        visitPurpose: "Buying",
+      });
     });
     expect(insert).toHaveBeenCalledWith(expect.objectContaining({
       listing_id: "l-1",
       requester_id: "u-1",
+      contact_name: "Buyer One",
+      contact_email: "buyer@example.com",
+      contact_phone: "+306900000000",
       timeslot_index: 2,
+      visit_purpose: "Buying",
       note: "hi",
     }));
     expect(toastMock.success).toHaveBeenCalled();
@@ -227,6 +244,12 @@ describe("useUpdateOpenHouseRegistration", () => {
     requester_id?: string;
     status?: string;
     timeslot_index?: number | null;
+    contact_name?: string | null;
+    contact_email?: string | null;
+    contact_phone?: string | null;
+    contact_permission_at?: string | null;
+    id_verification_consent_at?: string | null;
+    privacy_acknowledged_at?: string | null;
     id_doc_url?: string | null;
     id_verified_at?: string | null;
     waiver_signed_at?: string | null;
@@ -263,6 +286,12 @@ describe("useUpdateOpenHouseRegistration", () => {
       requester_id: "buyer-77",
       status: "pending",
       timeslot_index: 0,
+      contact_name: "Buyer One",
+      contact_email: "buyer@example.com",
+      contact_phone: "+306900000000",
+      contact_permission_at: "2026-01-01T09:00:00.000Z",
+      id_verification_consent_at: "2026-01-01T09:00:00.000Z",
+      privacy_acknowledged_at: "2026-01-01T09:00:00.000Z",
       id_doc_url: "docs/id.pdf",
       id_verified_at: "2026-01-01T10:00:00.000Z",
       waiver_signed_at: "2026-01-01T10:05:00.000Z",

@@ -170,39 +170,11 @@ export function InvitationRequestModal({ user, onClose, onSuccess }: Props) {
         <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
           <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
 
-            {/* Access tiers — shown so applicants know what they're applying for */}
             <div className="rounded-xl border border-border bg-card/50 p-4">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Quick Sale™ Access Tiers</p>
-              <div className="grid sm:grid-cols-2 gap-3">
-                {[
-                  {
-                    name: "Private Investor",
-                    price: "€49 / mo",
-                    features: ["Live deal feed (1 active slot)", "AI valuation report per deal", "Seller contact details", "Portfolio analytics"],
-                  },
-                  {
-                    name: "Institutional",
-                    price: "€199 / mo",
-                    badge: "Most Powerful",
-                    features: ["Unlimited deal slots", "OS data API access", "Dedicated account manager", "Bulk pipeline management"],
-                  },
-                ].map(t => (
-                  <div key={t.name} className={`rounded-lg border p-3 ${t.badge ? "border-orange-500/40 bg-orange-500/5" : "border-border"}`}>
-                    {t.badge && <span className="text-[9px] font-bold uppercase tracking-widest text-orange-400 mb-1 block">{t.badge}</span>}
-                    <p className="font-bold text-sm">{t.name}</p>
-                    <p className="text-primary font-black text-base mb-2">{t.price}</p>
-                    <ul className="space-y-1">
-                      {t.features.map(f => (
-                        <li key={f} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                          <span className="text-emerald-500">✓</span> {f}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-              <p className="text-[10px] text-muted-foreground mt-2.5 leading-snug">
-                Access tier is assigned by our team after reviewing your application. Indicate your preference in the message field below.
+              <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Custom Quick Sale™ Access</p>
+              <p className="text-sm text-foreground font-medium">Investor dashboard access is reviewed and priced individually.</p>
+              <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+                After your application is approved, our team sends a custom payment link that matches your deal flow needs, verification level, and access scope. There are no public fixed monthly tiers.
               </p>
             </div>
 

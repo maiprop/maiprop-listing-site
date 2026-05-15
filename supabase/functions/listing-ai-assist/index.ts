@@ -1,6 +1,6 @@
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
-import { openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
+import { hasAIProviderCredentials, openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
 import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
 import { createLogger } from "../_shared/logger.ts";
 
@@ -20,7 +20,7 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json().catch(() => ({}));
     const { type, property } = body;
-    if (!Deno.env.get("OPENAI_API_KEY")) throw new Error("OPENAI_API_KEY required");
+    if (!hasAIProviderCredentials()) throw new Error("AI provider key required");
 
     if (type === "ping") {
       return new Response(JSON.stringify({ ok: true, message: "listing-ai-assist is available" }), {
