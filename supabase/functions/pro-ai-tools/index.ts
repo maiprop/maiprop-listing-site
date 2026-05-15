@@ -86,7 +86,7 @@ Use current market context (e.g. 2025–2026 trends). Recommend a qualified advi
 Keep answers practical and aligned with Greek law and market practice. Recommend a property manager or lawyer for contract drafting and disputes.`,
 };
 
-Deno.serve(async (req) => {
+Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates auth, quota, tool dispatch, AI output, and response shaping.
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);

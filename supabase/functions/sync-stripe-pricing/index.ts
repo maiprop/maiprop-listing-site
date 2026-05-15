@@ -51,7 +51,7 @@ type PricingConfigRow = {
   metadata?: Record<string, string> | null;
 };
 
-function normalizeAudience(raw: string | null | undefined): string | null {
+function normalizeAudience(raw: string | null | undefined): string | null { // skipcq: JS-R1005 - Legacy and current audience aliases stay centralized for Stripe price sync.
   if (
     raw === "buyer" ||
     raw === "seller" ||
@@ -85,7 +85,7 @@ function entitlementMetadata(config: PricingConfigRow): Record<string, string> {
   };
 }
 
-async function registerProProduct(
+async function registerProProduct( // skipcq: JS-R1005 - Product registration handles absent, mismatched, and already-linked rows in one transaction-like path.
   supabase: unknown,
   productId: string | undefined,
   config: PricingConfigRow,
@@ -108,7 +108,7 @@ async function registerProProduct(
     throw new Error("Failed to register Pro product: " + error.message);
 }
 
-Deno.serve(async (req) => {
+Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates admin auth, Stripe reads, pricing upserts, and product allowlisting.
   const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS")
     return new Response(null, { headers: corsHeaders });

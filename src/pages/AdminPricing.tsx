@@ -140,7 +140,7 @@ function usePricingConfigs() {
 }
 
 /** Embeddable pricing content — use in AdminDashboard tab. Skips Navbar/Footer and access check when embed=true. */
-export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
+export function AdminPricingContent({ embed = false }: { embed?: boolean }) { // skipcq: JS-R1005 - Admin pricing keeps table editing, validation, and Stripe sync controls together for one audited surface.
   const { profile } = useAuth();
   const qc = useQueryClient();
   const isAdmin = isPlatformAdmin(profile);

@@ -105,7 +105,7 @@ function jsonError(
   });
 }
 
-async function requireAuthenticatedUser(
+async function requireAuthenticatedUser( // skipcq: JS-R1005 - Auth parsing must cover missing, malformed, invalid, and valid bearer token states.
   req: Request,
   hdrs: Record<string, string>,
 ): Promise<Response | null> {
@@ -137,7 +137,7 @@ async function requireAuthenticatedUser(
   return null;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates CORS, auth, quota, provider calls, and response shaping.
   const hdrs = corsHeaders(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: hdrs });
 

@@ -49,7 +49,7 @@ export const USER_FOLDER_BUCKETS = [
   "open-house-docs",
 ] as const;
 
-Deno.serve(async (req) => {
+Deno.serve(async (req) => { // skipcq: JS-R1005 - Account deletion coordinates auth, storage cleanup, DB removal, and error reporting in order.
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
@@ -208,7 +208,7 @@ type StorageSubset = {
   };
 };
 
-export async function removeFolderRecursive(
+export async function removeFolderRecursive( // skipcq: JS-R1005 - Recursive storage cleanup handles pagination, nested prefixes, and partial deletion errors.
   supabase: StorageSubset,
   bucket: string,
   prefix: string,

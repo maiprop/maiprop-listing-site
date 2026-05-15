@@ -407,7 +407,7 @@ const getDefaultStripePrice = (
     : null;
 };
 
-const buildDbCheckoutPlan = (
+const buildDbCheckoutPlan = ( // skipcq: JS-R1005 - Mirrors Stripe DB fallback precedence and audience checks in one small resolver.
   row: PricingConfigRow | null,
   planKey: string,
   billingCycle: BillingCycle,

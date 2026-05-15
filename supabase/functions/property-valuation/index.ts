@@ -210,7 +210,7 @@ Use benchmark table. Apply condition, location, feature adjustments. Range: ±15
 }
 
 // ── Main handler ───────────────────────────────────────────────────────────────
-function fallbackValuation(input: {
+function fallbackValuation(input: { // skipcq: JS-R1005 - Deterministic valuation fallback keeps comparable scoring and confidence fields aligned.
   city: string;
   price: number;
   sqm: number;
@@ -264,7 +264,7 @@ function fallbackValuation(input: {
   };
 }
 
-Deno.serve(async (req) => {
+Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates auth, quota, valuation parsing, fallback, and response shaping.
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
