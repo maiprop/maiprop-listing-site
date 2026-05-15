@@ -8,9 +8,9 @@ import { createLogger } from "../_shared/logger.ts";
 const log = createLogger("neighbourhood-report");
 
 const BUCKET = "neighbourhood-report";
-const neighbourhoodLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 15, windowMs: 60_000 });
+const neighbourhoodLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 15, windowMs: 60_000, failClosed: true });
 
-function fallbackReport(city: string, address?: string, region?: string) {
+function fallbackReport(city: string, address?: string, region?: string) { // skipcq: JS-R1005 - Deterministic fallback report keeps section defaults together when AI output is unavailable.
   const areaName = address?.trim() || city.trim();
   const isAthens = city.toLowerCase().includes("athens") || city.toLowerCase().includes("athina");
   const current = isAthens ? 4200 : 2600;
@@ -64,15 +64,15 @@ function fallbackReport(city: string, address?: string, region?: string) {
   };
 }
 
-Deno.serve(async (req) => {
+Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates auth, quota, provider JSON parsing, fallback, and response shaping.
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
-  const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
-  if (await neighbourhoodLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
-
   const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
   if (quota.errorResponse) return quota.errorResponse;
+
+  const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? quota.userId ?? "anonymous";
+  if (await neighbourhoodLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
 
   // Signed-in access gate is handled by enforceAiQuota; free vs Pro caps live in the DB.
   try {

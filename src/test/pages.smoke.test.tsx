@@ -7,6 +7,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { act, screen } from "@testing-library/react";
 import React, { Suspense } from "react";
+import { Route, Routes } from "react-router-dom";
 import { renderWithProviders } from "@/test/utils";
 
 // ── Common mocks ──────────────────────────────────────────────────────────────
@@ -110,7 +111,7 @@ vi.mock("@/hooks/useListings", () => ({
     isFetchingNextPage: false,
   }),
   useListing: vi.fn().mockReturnValue({ data: null, isLoading: false, isError: false }),
-  useTrackListingView: vi.fn().mockReturnValue(vi.fn()),
+  useTrackListingView: vi.fn().mockReturnValue({ mutate: vi.fn() }),
   useUpdateListing: vi.fn().mockReturnValue({ mutate: vi.fn(), mutateAsync: vi.fn() }),
   useDeleteListing: vi.fn().mockReturnValue({ mutate: vi.fn(), mutateAsync: vi.fn() }),
   useCreateListing: vi.fn().mockReturnValue({ mutate: vi.fn(), mutateAsync: vi.fn() }),
@@ -194,6 +195,7 @@ vi.mock("@/hooks/useAuctionAlerts", () => ({
 vi.mock("@/hooks/useConsultations", () => ({
   useMyConsultationRequests: vi.fn().mockReturnValue({ data: [], isLoading: false }),
   useCreateConsultationRequest: vi.fn().mockReturnValue({ mutate: vi.fn() }),
+  useSubmitConsultation: vi.fn().mockReturnValue({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
 }));
 
 vi.mock("@/hooks/useEligibleForQuickSale", () => ({
@@ -419,7 +421,7 @@ vi.mock("@/hooks/usePrivateOwnerAdAlert", () => ({
 }));
 
 vi.mock("@/hooks/useModal", () => ({
-  useModal: vi.fn().mockReturnValue({ isOpen: false, open: vi.fn(), close: vi.fn() }),
+  useModal: vi.fn().mockReturnValue({ isOpen: vi.fn().mockReturnValue(false), open: vi.fn(), close: vi.fn() }),
 }));
 
 // ── Additional component mocks ────────────────────────────────────────────────
@@ -828,6 +830,67 @@ describe("Page smoke tests", () => {
     ).not.toThrow();
   });
 
+  it("OpenHouseDetail includes valuation and property report tools when listing data loads", async () => {
+    const { useListing } = await import("@/hooks/useListings");
+    const useListingMock = useListing as ReturnType<typeof vi.fn>;
+    useListingMock.mockReturnValue({
+      data: {
+        id: "oh-1",
+        title: "Kolonaki Open House",
+        city: "Athens",
+        address: "Patriarchou Ioakim 1",
+        region: "Attica",
+        price: 420000,
+        sqm: 92,
+        bedrooms: 2,
+        bathrooms: 1,
+        property_type: "apartment",
+        listing_type: "open_house",
+        owner_id: "owner-1",
+        description: "Open house viewing",
+        cover_image_url: null,
+        listing_images: [],
+        profiles: null,
+        latitude: null,
+        longitude: null,
+        tags: [],
+        status: "active",
+        open_house_date: "2026-06-01T10:00:00.000Z",
+        floor: null,
+        total_floors: null,
+        year_built: null,
+        energy_class: null,
+        heating_system: null,
+        price_per_sqm: 4565,
+        has_parking: false,
+        has_pool: false,
+        has_elevator: true,
+        has_garden: false,
+        has_storage: false,
+        has_balcony: true,
+        has_view: false,
+        has_furnished: false,
+        views_count: 0,
+      },
+      isLoading: false,
+      isError: false,
+    });
+    const { default: OpenHouseDetail } = await import("@/pages/OpenHouseDetail");
+
+    renderWithProviders(
+      <Suspense fallback={<div>loading</div>}>
+        <Routes>
+          <Route path="/open-house/:id" element={<OpenHouseDetail />} />
+        </Routes>
+      </Suspense>,
+      { initialPath: "/open-house/oh-1" }
+    );
+
+    expect(await screen.findByTestId("property-valuation")).toBeInTheDocument();
+    expect(screen.getByTestId("property-report-card")).toBeInTheDocument();
+    useListingMock.mockReturnValue({ data: null, isLoading: false, isError: false });
+  });
+
   it("Messages page renders without throwing", async () => {
     const { default: Messages } = await import("@/pages/Messages");
     expect(() =>
@@ -905,6 +968,120 @@ describe("Page smoke tests", () => {
         { initialPath: "/professionals/test-id" }
       )
     ).not.toThrow();
+  });
+
+  it("ProfessionalProfile limits free professional profiles to contact details", async () => {
+    const { useProfessional } = await import("@/hooks/useProfessionals");
+    const useProfessionalMock = useProfessional as ReturnType<typeof vi.fn>;
+    useProfessionalMock.mockReturnValue({
+      data: {
+        id: "pro-free",
+        user_id: "user-free",
+        display_name: "Free Professional",
+        title: "Architect",
+        category: "architect",
+        city: "Athens",
+        bio: "Public profile",
+        avatar_url: null,
+        rating: 4.8,
+        reviews_count: 2,
+        verified: true,
+        hourly_rate: 90,
+        experience_years: 8,
+        specialties: ["Renovation"],
+        languages: ["Greek", "English"],
+        license_number: "TEE-123",
+        website_url: "https://example.com",
+        video_link: null,
+        projects_count: 15,
+        average_deal_size: null,
+        average_portfolio_asset_size: null,
+        subscription_tier: "free",
+        calendar_notes: null,
+        notes: null,
+        created_at: "",
+        updated_at: "",
+      },
+      isLoading: false,
+    });
+    const { default: ProfessionalProfile } = await import("@/pages/ProfessionalProfile");
+
+    renderWithProviders(
+      <Suspense fallback={<div>loading</div>}>
+        <Routes>
+          <Route path="/professionals/:id" element={<ProfessionalProfile />} />
+        </Routes>
+      </Suspense>,
+      { initialPath: "/professionals/pro-free" }
+    );
+
+    expect((await screen.findAllByText(/contact details only/i)).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: /send inquiry/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /book consultation/i })).not.toBeInTheDocument();
+    useProfessionalMock.mockReturnValue({ data: null, isLoading: false });
+  });
+
+  it("ProfessionalProfile shows agent portfolio KPIs for Pro agents", async () => {
+    const { useProfessional } = await import("@/hooks/useProfessionals");
+    const { useListings } = await import("@/hooks/useListings");
+    const useProfessionalMock = useProfessional as ReturnType<typeof vi.fn>;
+    const useListingsMock = useListings as ReturnType<typeof vi.fn>;
+    useProfessionalMock.mockReturnValue({
+      data: {
+        id: "agent-pro",
+        user_id: "agent-user",
+        display_name: "Pro Agent",
+        title: "Real Estate Agent",
+        category: "real_estate_agent",
+        city: "Athens",
+        bio: "Agent profile",
+        avatar_url: null,
+        rating: 4.9,
+        reviews_count: 10,
+        verified: true,
+        hourly_rate: null,
+        experience_years: 12,
+        specialties: ["Residential"],
+        languages: ["Greek"],
+        license_number: "AG-1",
+        website_url: null,
+        video_link: null,
+        projects_count: 42,
+        average_deal_size: null,
+        average_portfolio_asset_size: null,
+        subscription_tier: "pro",
+        calendar_notes: null,
+        notes: null,
+        created_at: "",
+        updated_at: "",
+      },
+      isLoading: false,
+    });
+    useListingsMock.mockReturnValue({
+      data: [
+        { id: "l1", price: 300000, property_type: "apartment", listing_type: "sale", city: "Athens", region: "Attica" },
+        { id: "l2", price: 500000, property_type: "apartment", listing_type: "rent", city: "Athens", region: "Attica" },
+        { id: "l3", price: 700000, property_type: "villa", listing_type: "sale", city: "Voula", region: "Attica" },
+      ],
+      isLoading: false,
+    });
+    const { default: ProfessionalProfile } = await import("@/pages/ProfessionalProfile");
+
+    renderWithProviders(
+      <Suspense fallback={<div>loading</div>}>
+        <Routes>
+          <Route path="/professionals/:id" element={<ProfessionalProfile />} />
+        </Routes>
+      </Suspense>,
+      { initialPath: "/professionals/agent-pro" }
+    );
+
+    expect((await screen.findAllByText(/Average Deal Size/i)).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Typology Mix/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Main Area of Service/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Main Deal Type/i).length).toBeGreaterThan(0);
+    useProfessionalMock.mockReturnValue({ data: null, isLoading: false });
+    useListingsMock.mockReturnValue({ data: [], isLoading: false });
   });
 
   it("ProfessionalProfileMe page renders without throwing", async () => {

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useModal } from "@/hooks/useModal";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useSearchParams } from "react-router-dom";
 import {
   MapPin, Star, CheckCircle, Globe, ExternalLink,
   ChevronLeft, Clock, Users, Briefcase, MessageSquare,
@@ -71,12 +71,14 @@ const categoryLabels: Record<string, { label: string; emoji: string; description
   smart_home_installer: { label: "Smart Home Installer", emoji: "📱", description: "Automation, smart systems" },
 };
 
-export default function ProfessionalProfile() {
+export default function ProfessionalProfile() { // skipcq: JS-R1005 - Route shell coordinates profile data, actions, tabs, and modals; sections are delegated below.
   const { id } = useParams<{ id: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { data: pro, isLoading } = useProfessional(id || "");
   const { data: allProfessionals = [] } = useProfessionals();
-  const { data: dbServices = [] } = useProfessionalServices(id || "");
-  const { data: dbAvailability = [] } = useProfessionalAvailability(id || "");
+  const professionalIsPro = (pro?.subscription_tier || "").toLowerCase() === "pro";
+  const { data: dbServices = [] } = useProfessionalServices(professionalIsPro ? id || "" : "");
+  const { data: dbAvailability = [] } = useProfessionalAvailability(professionalIsPro ? id || "" : "");
   const queryClient = useQueryClient();
   const { data: agentListings = [] } = useListings(
     { owner_id: pro?.user_id, status: "active" },
@@ -84,6 +86,43 @@ export default function ProfessionalProfile() {
   );
   const saleListings = agentListings.filter((l) => l.listing_type !== "rent");
   const rentListings = agentListings.filter((l) => l.listing_type === "rent");
+  const listingPrices = agentListings
+    .map((l) => Number(l.price))
+    .filter((price) => Number.isFinite(price) && price > 0);
+  const averageActiveDealSize = listingPrices.length > 0
+    ? new Intl.NumberFormat("en-GB", {
+        style: "currency",
+        currency: "EUR",
+        maximumFractionDigits: 0,
+      }).format(listingPrices.reduce((sum, price) => sum + price, 0) / listingPrices.length)
+    : null;
+  const propertyTypeCounts = agentListings.reduce<Record<string, number>>((acc, listing) => {
+    const key = listing.property_type || "property";
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+  const topTypologies = Object.entries(propertyTypeCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 2)
+    .map(([type, count]) => `${type.replace(/_/g, " ")} ${count}`)
+    .join(", ");
+  const areaCounts = agentListings.reduce<Record<string, number>>((acc, listing) => {
+    const key = listing.city || listing.region || "Greece";
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+  const mainServiceArea = Object.entries(areaCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || pro?.city || "Greece";
+  const mainDealType = saleListings.length === rentListings.length
+    ? "Balanced sale/rent"
+    : saleListings.length > rentListings.length
+      ? "Sale"
+      : "Rent";
+  const agentPortfolioKpis = {
+    averageDealSize: pro?.average_deal_size || averageActiveDealSize || "Not enough data",
+    typologyMix: topTypologies || "Not enough data",
+    mainServiceArea,
+    mainDealType: agentListings.length > 0 ? mainDealType : "Not enough data",
+  };
 
   // Realtime: invalidate agent listings when any listing changes for this agent
   useEffect(() => {
@@ -111,13 +150,22 @@ export default function ProfessionalProfile() {
   const { user } = useAuth();
   const startConversation = useStartConversation();
 
-  // Only Pro professionals can receive in-app messages and calendar bookings
-  const professionalIsPro = (pro?.subscription_tier || "").toLowerCase() === "pro";
-
   const catInfo = pro ? categoryLabels[pro.category] || { label: pro.category, emoji: "👤", description: "" } : null;
   const isRealEstateAgent = pro?.category === "real_estate_agent";
 
   const displayName = pro?.display_name || "Professional";
+
+  useEffect(() => {
+    if (!pro || searchParams.get("contact") !== "1") return;
+    if (professionalIsPro) {
+      modal.open("msg");
+    }
+    setSearchParams((params) => {
+      const next = new URLSearchParams(params);
+      next.delete("contact");
+      return next;
+    }, { replace: true });
+  }, [modal, pro, professionalIsPro, searchParams, setSearchParams]);
 
   const handleOpenChat = async () => {
     if (!user || !pro?.user_id) {
@@ -228,26 +276,32 @@ export default function ProfessionalProfile() {
 
                   {/* CTA buttons */}
                   <div className="flex flex-col gap-2 w-full sm:shrink-0 sm:min-w-[160px]">
-                    {professionalIsPro && user ? (
+                    {professionalIsPro ? (
                       <>
-                        <Button
-                          className="bg-gradient-primary border-0 text-primary-foreground gap-2 w-full"
-                          onClick={handleOpenChat}
-                          disabled={startConversation.isPending}
-                        >
-                          {startConversation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />} Chat
-                        </Button>
+                        {user ? (
+                          <Button
+                            className="bg-gradient-primary border-0 text-primary-foreground gap-2 w-full"
+                            onClick={handleOpenChat}
+                            disabled={startConversation.isPending}
+                          >
+                            {startConversation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />} Chat
+                          </Button>
+                        ) : (
+                          <Button
+                            className="bg-gradient-primary border-0 text-primary-foreground gap-2 w-full"
+                            onClick={() => modal.open("msg")}
+                          >
+                            <MessageSquare className="w-4 h-4" /> Send Inquiry
+                          </Button>
+                        )}
                         <Button variant="outline" className="border-border gap-2 w-full" onClick={() => modal.open("consult")}>
                           <Calendar className="w-4 h-4" /> Book Consultation
                         </Button>
                       </>
                     ) : (
-                      <Button
-                        className="bg-gradient-primary border-0 text-primary-foreground gap-2 w-full"
-                        onClick={() => modal.open("msg")}
-                      >
-                        <MessageSquare className="w-4 h-4" /> Send Inquiry
-                      </Button>
+                      <div className="rounded-xl border border-border bg-secondary/60 px-4 py-3 text-sm text-muted-foreground">
+                        Contact details only. Booking, messaging, callbacks, services and portfolio tools unlock when this professional upgrades to Pro.
+                      </div>
                     )}
                     {pro.website_url && (
                       <a href={pro.website_url} target="_blank" rel="noopener noreferrer"
@@ -341,6 +395,7 @@ export default function ProfessionalProfile() {
                   isRealEstateAgent={isRealEstateAgent}
                   professionalIsPro={professionalIsPro}
                   agentListingsCount={agentListings.length}
+                  agentPortfolioKpis={agentPortfolioKpis}
                 />
               )}
 
@@ -406,15 +461,24 @@ export default function ProfessionalProfile() {
               <div className="glass-card rounded-xl p-5 border border-primary/20 sticky top-24">
                 <h3 className="font-display font-semibold mb-4">Contact {displayName.split(" ")[0]}</h3>
                 <div className="space-y-2.5">
-                  {professionalIsPro && user ? (
-                    <>
-                      <Button
-                        className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2"
-                        onClick={handleOpenChat}
-                        disabled={startConversation.isPending}
-                      >
-                        {startConversation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />} Chat
-                      </Button>
+                    {professionalIsPro ? (
+                      <>
+                      {user ? (
+                        <Button
+                          className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2"
+                          onClick={handleOpenChat}
+                          disabled={startConversation.isPending}
+                        >
+                          {startConversation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />} Chat
+                        </Button>
+                      ) : (
+                        <Button
+                          className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2"
+                          onClick={() => modal.open("msg")}
+                        >
+                          <MessageSquare className="w-4 h-4" /> Send Inquiry
+                        </Button>
+                      )}
                       <Button variant="outline" className="w-full border-border gap-2" onClick={() => modal.open("consult")}>
                         <Calendar className="w-4 h-4" /> Book Consultation
                       </Button>
@@ -422,13 +486,10 @@ export default function ProfessionalProfile() {
                         <Phone className="w-4 h-4" /> Request Callback
                       </Button>
                     </>
-                  ) : (
-                    <Button
-                      className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2"
-                      onClick={() => modal.open("msg")}
-                    >
-                      <MessageSquare className="w-4 h-4" /> Send Inquiry
-                    </Button>
+                    ) : (
+                    <div className="rounded-xl border border-border bg-secondary/60 px-4 py-3 text-sm text-muted-foreground">
+                      This free profile shows public contact details only. Client actions are available on Pro profiles.
+                    </div>
                   )}
                   {!!pro.hourly_rate && (
                     <div className="text-center text-xs text-muted-foreground pt-1">

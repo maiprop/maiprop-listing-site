@@ -26,7 +26,7 @@ function isStripeSubscribed(status: string | null | undefined) {
   return status === "active" || status === "trialing";
 }
 
-async function getDatabaseFallback(
+async function getDatabaseFallback( // skipcq: JS-R1005 - Fallback subscription resolution intentionally checks product IDs, direct subscription state, and investor grants.
   supabaseClient: ReturnType<typeof createClient>,
   userId: string,
 ): Promise<FallbackSubscriptionState> {
@@ -48,15 +48,22 @@ async function getDatabaseFallback(
   const productId =
     (profile as { subscription_product_id?: string | null } | null)
       ?.subscription_product_id ?? null;
+  const { data: validProduct } = productId
+    ? await supabaseClient
+      .from("pro_product_ids")
+      .select("product_id")
+      .eq("product_id", productId)
+      .maybeSingle()
+    : { data: null };
   const investor = investorSub as {
     status?: string;
     expires_at?: string | null;
   } | null;
 
   return {
-    subscribed: Boolean(productId) || investor?.status === "active" ||
+    subscribed: Boolean(validProduct) || investor?.status === "active" ||
       investor?.status === "trial",
-    product_id: productId,
+    product_id: validProduct ? productId : null,
     subscription_end: investor?.expires_at ?? null,
     source: "database",
   };
@@ -104,7 +111,7 @@ async function resolveCustomerAndSubscription(stripe: Stripe, userId: string) {
   return { customer: chosenCustomer, subscription: chosenSubscription };
 }
 
-Deno.serve(async (req) => {
+Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates auth, Stripe lookup, DB fallback, and normalized subscription response.
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);

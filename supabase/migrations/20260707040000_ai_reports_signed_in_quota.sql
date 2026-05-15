@@ -51,3 +51,155 @@ GRANT EXECUTE ON FUNCTION public.get_ai_call_monthly_limit(UUID, TEXT) TO authen
 
 COMMENT ON FUNCTION public.get_ai_call_monthly_limit(UUID, TEXT) IS
   'Returns per-user monthly AI quota. Signed-in non-Pro users get the free cap; Pro users get the pro cap; platform admins are unlimited.';
+
+-- Normalize legacy admin-pricing rows from "user" to the canonical
+-- checkout/subscription audience "participant".
+UPDATE public.pricing_configs
+SET
+  audience = 'participant',
+  updated_at = now()
+WHERE audience = 'user';
+
+CREATE OR REPLACE FUNCTION public.is_pro(p_user_id uuid)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = public
+AS $$
+  SELECT
+    public.has_platform_admin(p_user_id)
+    OR EXISTS (
+      SELECT 1
+      FROM public.profiles p
+      JOIN public.pro_product_ids pp
+        ON pp.product_id = p.subscription_product_id
+      WHERE p.user_id = p_user_id
+    )
+    OR EXISTS (
+      SELECT 1
+      FROM public.investor_subscriptions s
+      WHERE s.user_id = p_user_id
+        AND s.status IN ('active', 'trial')
+    )
+$$;
+
+REVOKE ALL ON FUNCTION public.is_pro(uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.is_pro(uuid) TO service_role;
+COMMENT ON FUNCTION public.is_pro(uuid) IS
+  'Canonical Pro-status reader. Returns true only for platform admins, validated Pro product IDs, or active/trial investor subscriptions.';
+
+-- Role labels alone must not grant paid operational quotas. Users may
+-- self-select public roles like developer during onboarding, so paid limits
+-- are tied to public.is_pro(user_id) and admin override instead.
+
+CREATE OR REPLACE FUNCTION public.get_valuation_monthly_limit(p_user_id UUID)
+RETURNS INTEGER
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_role public.user_role;
+  v_is_pro BOOLEAN;
+BEGIN
+  IF public.has_platform_admin(p_user_id) THEN
+    RETURN 999;
+  END IF;
+
+  v_role := public.authoritative_role(p_user_id);
+  v_is_pro := public.is_pro(p_user_id);
+
+  IF v_role IN ('buyer'::public.user_role, 'seller'::public.user_role) THEN
+    RETURN CASE WHEN v_is_pro THEN 5 ELSE 0 END;
+  END IF;
+
+  IF v_role IN (
+    'agent'::public.user_role,
+    'professional'::public.user_role,
+    'developer'::public.user_role,
+    'investor'::public.user_role,
+    'institutional'::public.user_role
+  ) THEN
+    RETURN CASE WHEN v_is_pro THEN 999 ELSE 0 END;
+  END IF;
+
+  RETURN 0;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.get_report_monthly_limit(p_user_id UUID)
+RETURNS INTEGER
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_role public.user_role;
+  v_is_pro BOOLEAN;
+BEGIN
+  IF public.has_platform_admin(p_user_id) THEN
+    RETURN 999;
+  END IF;
+
+  v_role := public.authoritative_role(p_user_id);
+  v_is_pro := public.is_pro(p_user_id);
+
+  IF v_role IN ('buyer'::public.user_role, 'seller'::public.user_role) THEN
+    RETURN CASE WHEN v_is_pro THEN 3 ELSE 0 END;
+  END IF;
+
+  IF v_role IN (
+    'agent'::public.user_role,
+    'professional'::public.user_role,
+    'developer'::public.user_role,
+    'investor'::public.user_role,
+    'institutional'::public.user_role
+  ) THEN
+    RETURN CASE WHEN v_is_pro THEN 999 ELSE 0 END;
+  END IF;
+
+  RETURN 0;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.get_priority_ad_monthly_limit(p_user_id UUID)
+RETURNS INTEGER
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_role public.user_role;
+  v_is_pro BOOLEAN;
+BEGIN
+  IF public.has_platform_admin(p_user_id) THEN
+    RETURN 999;
+  END IF;
+
+  v_role := public.authoritative_role(p_user_id);
+  v_is_pro := public.is_pro(p_user_id);
+
+  IF v_role = 'seller'::public.user_role THEN
+    RETURN CASE WHEN v_is_pro THEN 1 ELSE 0 END;
+  END IF;
+
+  IF v_role IN (
+    'agent'::public.user_role,
+    'developer'::public.user_role,
+    'investor'::public.user_role,
+    'institutional'::public.user_role
+  ) THEN
+    RETURN CASE WHEN v_is_pro THEN 999 ELSE 0 END;
+  END IF;
+
+  RETURN 0;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.get_valuation_monthly_limit(UUID) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.get_report_monthly_limit(UUID) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.get_priority_ad_monthly_limit(UUID) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.get_valuation_monthly_limit(UUID) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.get_report_monthly_limit(UUID) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.get_priority_ad_monthly_limit(UUID) TO authenticated, service_role;
+
+COMMENT ON FUNCTION public.get_valuation_monthly_limit(UUID) IS
+  'Returns monthly valuation quota. Public roles require paid entitlement; platform admins are unlimited.';
+
+COMMENT ON FUNCTION public.get_report_monthly_limit(UUID) IS
+  'Returns monthly report quota. Public roles require paid entitlement; platform admins are unlimited.';
+
+COMMENT ON FUNCTION public.get_priority_ad_monthly_limit(UUID) IS
+  'Returns monthly priority-ad quota. Public roles require paid entitlement; platform admins are unlimited.';

@@ -196,6 +196,7 @@
     "signInToSave": "Sign in to save properties",
     "signInToContact": "Sign in to contact the owner",
     "contactUnavailable": "Contact details not available",
+    "ownListingContact": "This is your listing. Manage enquiries from My Listings.",
     "errorStartConversation": "Could not start conversation",
     "errorLoad": "Could not load this listing. Please try again.",
     "notAvailable": "This listing is no longer available.",
@@ -759,7 +760,7 @@
     "inPerson": "In-Person",
     "video": "Video",
     "successMessage": "Your request has been sent to the property owner. They will confirm the appointment and you will receive a notification.",
-    "videoNote": "If video viewing is confirmed, a call link will be sent before the scheduled time.",
+    "videoNote": "Video viewings are manually confirmed by the owner or agent. Once confirmed, they will add or send the call link before the scheduled time.",
     "done": "Done",
     "days": {
       "sun": "Sun",

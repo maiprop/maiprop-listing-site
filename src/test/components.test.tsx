@@ -391,10 +391,34 @@ describe("PropertyCard", () => {
     expect(screen.getByText("View Open House")).toBeInTheDocument();
   });
 
-  it("shows 'Contact Agent' CTA for sale listings", async () => {
+  it("does not render a primary contact CTA inside regular listing cards", async () => {
     const { PropertyCard } = await import("@/components/PropertyCard");
     renderWithProviders(<PropertyCard property={makeProperty({ listingType: "sale" })} />);
-    expect(screen.getByText("Contact Agent")).toBeInTheDocument();
+    expect(screen.queryByText("Contact Agent")).not.toBeInTheDocument();
+  });
+});
+
+describe("PropertyAIInsightsSection", () => {
+  it("formats AI estimate as a full currency amount, not compact EUR-k text", async () => {
+    const { PropertyAIInsightsSection } = await import("@/components/property/PropertyAIInsightsSection");
+
+    renderWithProviders(
+      <PropertyAIInsightsSection
+        user={{ id: "u-1" } as import("@supabase/supabase-js").User}
+        isPro
+        loading={false}
+        data={{
+          vsMarket: 6.6,
+          rentalYield: 6.5,
+          estimatedValue: 5_440_000,
+          marketComparison: "above_market",
+          confidenceLabel: "Low",
+        }}
+      />,
+    );
+
+    expect(screen.queryByText(/EUR 5440k/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/5\.440\.000/)).toBeInTheDocument();
   });
 });
 
