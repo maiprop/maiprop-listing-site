@@ -26,6 +26,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { useNominatimAddressSuggestions } from "@/hooks/useNominatimAddressSuggestions";
 import { useFiresalePhotoUploader } from "@/hooks/useFiresalePhotoUploader";
 import { isAiUsageLimitError } from "@/lib/aiErrorUtils";
+import { KAEK_MAX_LENGTH, isValidKaek, normalizeKaek, toFiresalePropertyType } from "@/lib/firesaleValidation";
 import { toast } from "sonner";
 import { QuickSaleSubmittedView } from "@/components/firesale/QuickSaleSubmittedView";
 
@@ -100,7 +101,6 @@ export function FiresaleQuickSaleForm() {
   }, [profile, user]);
 
   const upd = (k: string, v: string) => setForm((prev) => ({ ...prev, [k]: v }));
-  const normalizeKaek = (raw: string) => raw.replace(/\s+/g, "").trim();
 
   // Address autocomplete delegated to a typed hook (debounced + abortable).
   const {
@@ -115,9 +115,10 @@ export function FiresaleQuickSaleForm() {
       next.address = "Please enter a full address (min 5 characters).";
     const kaek = normalizeKaek(form.kaek);
     if (!kaek) next.kaek = "KAEK is required.";
-    else if (!/^\d{12}(\/\d{1,2})?(\/\d{1,2})?$/.test(kaek))
-      next.kaek = "KAEK format looks invalid (e.g. 050240601001/0/1).";
+    else if (!isValidKaek(kaek))
+      next.kaek = "KAEK must be 12 digits, optionally followed by sub-property parts, e.g. 050240601001 or 050240601001/0/1.";
     if (!form.propertyType) next.propertyType = "Property type is required.";
+    else if (!toFiresalePropertyType(form.propertyType)) next.propertyType = "Property type is invalid.";
     const sqm = Number(form.sqm);
     if (!form.sqm || Number.isNaN(sqm)) next.sqm = "Size (m²) is required.";
     else if (sqm < 10 || sqm > 5000) next.sqm = "Size (m²) must be between 10 and 5000.";
@@ -130,8 +131,8 @@ export function FiresaleQuickSaleForm() {
     else if (year < 1800 || year > NOW_YEAR + 1)
       next.constructionYear = `Construction year must be between 1800 and ${NOW_YEAR + 1}.`;
     if (photoFiles.length < 5) next.photos = "Please upload at least 5 property photos.";
-    if (!form.notes.trim() || form.notes.trim().length < 10)
-      next.notes = "Please add a short note (min 10 characters).";
+    if (!form.notes.trim() || form.notes.trim().length < 3)
+      next.notes = "Please add a short note.";
     return next;
   };
 
@@ -148,7 +149,6 @@ export function FiresaleQuickSaleForm() {
     return next;
   };
 
-  const step1Valid = Object.keys(validateStep1()).length === 0;
   const step2Valid = Object.keys(validateStep2()).length === 0;
 
   const generateEstimate = async () => {
@@ -207,6 +207,8 @@ export function FiresaleQuickSaleForm() {
     setSubmitting(true);
     try {
       const estimate = aiEstimate || Math.round(Number(form.sqm) * 1900 * 0.92);
+      const propertyType = toFiresalePropertyType(form.propertyType);
+      if (!propertyType) throw new Error("Property type is invalid.");
       const metaLines: string[] = [];
       if (form.constructionYear.trim()) metaLines.push(`Construction year: ${form.constructionYear.trim()}`);
       if (photoFiles.length > 0) {
@@ -222,7 +224,7 @@ export function FiresaleQuickSaleForm() {
         .insert({
           address: form.address.trim(),
           city: form.address.split(",").pop()?.trim() || "",
-          property_type: form.propertyType as "apartment" | "house" | "villa" | "land" | "office",
+          property_type: propertyType,
           sqm: Number(form.sqm),
           condition: null,
           asking_price: Number(form.askingPrice),
@@ -364,10 +366,15 @@ export function FiresaleQuickSaleForm() {
                   type="text"
                   placeholder="e.g. 050240601001/0/1"
                   value={form.kaek}
-                  onChange={(e) => upd("kaek", e.target.value)}
+                  maxLength={KAEK_MAX_LENGTH}
+                  inputMode="numeric"
+                  onChange={(e) => upd("kaek", normalizeKaek(e.target.value))}
                   className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none font-mono"
                 />
               </div>
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                Greek KAEK is normally 12 digits. Add sub-property parts only when applicable, e.g. /0/1.
+              </p>
               {errors.kaek && <p className="mt-1 text-xs text-destructive">{errors.kaek}</p>}
             </div>
 
@@ -504,7 +511,7 @@ export function FiresaleQuickSaleForm() {
 
             <Button
               className="w-full bg-gradient-primary border-0 text-primary-foreground h-11"
-              disabled={!step1Valid || aiLoading}
+              disabled={aiLoading}
               onClick={handleContinue}
             >
               {aiLoading ? (
