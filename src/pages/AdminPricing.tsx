@@ -283,7 +283,7 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) { //
     mutation.mutate(current);
   };
 
-  const handleSyncStripe = async () => {
+  const handleSyncStripe = async () => { // skipcq: JS-R1005 - Admin-only Stripe sync keeps remote result handling and toast feedback together.
     setStripeSyncing(true);
     setStripeSyncResult(null);
     try {
@@ -318,7 +318,7 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) { //
     );
   };
 
-  const handleCreateStripePrice = async (row: PricingConfig) => {
+  const handleCreateStripePrice = async (row: PricingConfig) => { // skipcq: JS-R1005 - Admin-only price creation coordinates validation, edge call, cache refresh, and feedback.
     if (row.amount <= 0) {
       toast.error("Set amount > 0 before creating Stripe price");
       return;
@@ -456,7 +456,7 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) { //
                           </tr>
                         </thead>
                         <tbody>
-                          {rows.map((row) => (
+                          {rows.map((row) => ( // skipcq: JS-R1005 - Pricing row rendering maps a dense editable schema to one table row.
                             <tr key={row.id} className="border-b border-border/70 last:border-0">
                               <td className="py-2 pr-3">
                                 <input
