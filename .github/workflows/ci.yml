@@ -514,6 +514,7 @@ jobs:
         run: npm ci
 
       - name: Validate Lighthouse authenticated audit secrets
+        id: lighthouse-secrets
         run: |
           required=(
             "VITE_SUPABASE_URL"
@@ -532,18 +533,18 @@ jobs:
             fi
           done
           if [ "$missing" -ne 0 ]; then
-            echo "::error::Authenticated Lighthouse audit cannot run because required secrets are not configured."
-            exit 1
+            echo "::warning::Authenticated Lighthouse audit skipped because required secrets are not configured."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
           else
-            echo "LIGHTHOUSE_ENABLED=true" >> "$GITHUB_ENV"
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Build app
-        if: env.LIGHTHOUSE_ENABLED == 'true'
+        if: steps.lighthouse-secrets.outputs.enabled == 'true'
         run: npm run build
 
       - name: Run Lighthouse CI
-        if: env.LIGHTHOUSE_ENABLED == 'true'
+        if: steps.lighthouse-secrets.outputs.enabled == 'true'
         run: npx @lhci/cli@0.15.1 autorun
         env:
           LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
