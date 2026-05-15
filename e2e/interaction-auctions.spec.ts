@@ -33,35 +33,53 @@ const ADMIN_EMAIL = demoAccounts.admin;
  * Sign in with the given email/password and wait for the post-login redirect.
  * Accepts /dashboard, /onboarding, or /admin as valid landing URLs.
  */
-async function signIn(page: Page, email: string, password: string): Promise<void> {
+const signIn = async (
+  page: Page,
+  email: string,
+  password: string,
+): Promise<void> => {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     await page.goto("/login");
-    await page.locator('input[type="email"], input[name="email"]').first().fill(email);
+    await page
+      .locator('input[type="email"], input[name="email"]')
+      .first()
+      .fill(email);
     await page.locator('input[type="password"]').first().fill(password);
     await page
-      .locator('button[type="submit"], button:has-text("Sign in"), button:has-text("Log in")')
+      .locator(
+        'button[type="submit"], button:has-text("Sign in"), button:has-text("Log in")',
+      )
       .first()
       .click();
 
     try {
-      await page.waitForURL(/\/dashboard|\/onboarding|\/admin/, { timeout: 25_000 });
+      await page.waitForURL(/\/dashboard|\/onboarding|\/admin/, {
+        timeout: 25_000,
+      });
       return;
     } catch (error) {
-      const invalidCredentials = await page.getByText("Invalid email or password", { exact: true })
+      const invalidCredentials = await page
+        .getByText("Invalid email or password", { exact: true })
         .isVisible()
         .catch(() => false);
       if (attempt === 1 || invalidCredentials) throw error;
       await page.waitForTimeout(1_000);
     }
   }
-}
+};
 
-async function expectPageShell(page: Page): Promise<void> {
-  await expect(page.locator("main, #main-content, body").first()).toBeVisible({ timeout: 10_000 });
+const expectPageShell = async (page: Page): Promise<void> => {
+  await expect(page.locator("main, #main-content, body").first()).toBeVisible({
+    timeout: 10_000,
+  });
   await expect(
-    page.locator("h1, h2, [role='heading'], article, [class*='card'], [class*='empty']").first(),
+    page
+      .locator(
+        "h1, h2, [role='heading'], article, [class*='card'], [class*='empty']",
+      )
+      .first(),
   ).toBeVisible({ timeout: 15_000 });
-}
+};
 
 // ─── PUBLIC — auction browsing ────────────────────────────────────────────────
 
@@ -87,7 +105,7 @@ test.describe("Public auction browsing", () => {
 
     const hasEmptyState = await page
       .locator(
-        "[class*='empty'], [class*='no-result'], .text-muted-foreground, [data-testid='empty-state']"
+        "[class*='empty'], [class*='no-result'], .text-muted-foreground, [data-testid='empty-state']",
       )
       .first()
       .isVisible()
@@ -103,14 +121,16 @@ test.describe("Public auction browsing", () => {
 
     const toggle = page
       .locator(
-        'button:has-text("Map"), button:has-text("List"), [aria-label*="map" i], [aria-label*="list" i], button svg'
+        'button:has-text("Map"), button:has-text("List"), [aria-label*="map" i], [aria-label*="list" i], button svg',
       )
       .first();
 
     await expect(toggle).toBeAttached({ timeout: 8_000 });
   });
 
-  test("clicking an auction card navigates to auction detail", async ({ page }) => {
+  test("clicking an auction card navigates to auction detail", async ({
+    page,
+  }) => {
     await page.goto("/auctions");
     await page.waitForLoadState("load", { timeout: 15_000 });
 
@@ -118,7 +138,9 @@ test.describe("Public auction browsing", () => {
       .locator("article, [class*='card'], [data-testid*='auction']")
       .first();
 
-    const cardExists = await card.isVisible({ timeout: 8_000 }).catch(() => false);
+    const cardExists = await card
+      .isVisible({ timeout: 8_000 })
+      .catch(() => false);
     if (!cardExists) {
       // No seeded auction data — nothing to click
       test.skip();
@@ -127,13 +149,17 @@ test.describe("Public auction browsing", () => {
 
     await card.click();
     // After navigation the navbar must still be present
-    await expect(page.locator("nav, header").first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("nav, header").first()).toBeVisible({
+      timeout: 10_000,
+    });
     // Body must have meaningful content (not a blank white screen)
     const bodyText = await page.locator("body").textContent();
     expect((bodyText ?? "").trim().length).toBeGreaterThan(10);
   });
 
-  test("auction detail page shows bid history or property info", async ({ page }) => {
+  test("auction detail page shows bid history or property info", async ({
+    page,
+  }) => {
     await page.goto("/auctions");
     await page.waitForLoadState("load", { timeout: 15_000 });
 
@@ -141,7 +167,9 @@ test.describe("Public auction browsing", () => {
       .locator("article, [class*='card'], [data-testid*='auction']")
       .first();
 
-    const cardExists = await card.isVisible({ timeout: 8_000 }).catch(() => false);
+    const cardExists = await card
+      .isVisible({ timeout: 8_000 })
+      .catch(() => false);
     if (!cardExists) {
       test.skip();
       return;
@@ -208,7 +236,9 @@ test.describe("Authenticated auction interaction", () => {
       .locator("article, [class*='card'], [data-testid*='auction']")
       .first();
 
-    const cardExists = await card.isVisible({ timeout: 8_000 }).catch(() => false);
+    const cardExists = await card
+      .isVisible({ timeout: 8_000 })
+      .catch(() => false);
     if (cardExists) {
       await card.click();
       await page.waitForLoadState("load", { timeout: 15_000 });
@@ -236,7 +266,9 @@ test.describe("Authenticated auction interaction", () => {
     expect(hasGate).toBe(false);
   });
 
-  test("investor.institutional accesses /investor-dashboard", async ({ page }) => {
+  test("investor.institutional accesses /investor-dashboard", async ({
+    page,
+  }) => {
     await signIn(page, INVESTOR_INSTITUTIONAL_EMAIL, PW);
     await page.goto("/investor-dashboard");
     await page.waitForLoadState("load", { timeout: 15_000 });
@@ -261,11 +293,13 @@ test.describe("Authenticated auction interaction", () => {
 
     const alertBtn = page
       .locator(
-        'button:has-text("Alert"), button:has-text("Set Alert"), button[aria-label*="alert" i], button svg'
+        'button:has-text("Alert"), button:has-text("Set Alert"), button[aria-label*="alert" i], button svg',
       )
       .first();
 
-    const btnAttached = await alertBtn.isVisible({ timeout: 8_000 }).catch(() => false);
+    const btnAttached = await alertBtn
+      .isVisible({ timeout: 8_000 })
+      .catch(() => false);
     if (!btnAttached) {
       // Button not present in current build — skip gracefully
       test.skip();
@@ -329,20 +363,22 @@ test.describe("Multi-user simultaneous browsing", () => {
 
       // Both navigate to /auctions simultaneously
       await Promise.all([
-        buyerPage.goto("/auctions").then(() =>
-          buyerPage.waitForLoadState("load", { timeout: 15_000 })
-        ),
-        investorPage.goto("/auctions").then(() =>
-          investorPage.waitForLoadState("load", { timeout: 15_000 })
-        ),
+        buyerPage
+          .goto("/auctions")
+          .then(() => buyerPage.waitForLoadState("load", { timeout: 15_000 })),
+        investorPage
+          .goto("/auctions")
+          .then(() =>
+            investorPage.waitForLoadState("load", { timeout: 15_000 }),
+          ),
       ]);
 
       // Both pages must render a heading
       await expect(
-        buyerPage.locator("h1, h2, [role='heading']").first()
+        buyerPage.locator("h1, h2, [role='heading']").first(),
       ).toBeVisible({ timeout: 10_000 });
       await expect(
-        investorPage.locator("h1, h2, [role='heading']").first()
+        investorPage.locator("h1, h2, [role='heading']").first(),
       ).toBeVisible({ timeout: 10_000 });
 
       // No JS errors in either context
@@ -379,7 +415,7 @@ test.describe("Multi-user simultaneous browsing", () => {
 
     invPrivatePage.on("pageerror", (err) => invPrivateErrors.push(err.message));
     invInstitutionalPage.on("pageerror", (err) =>
-      invInstitutionalErrors.push(err.message)
+      invInstitutionalErrors.push(err.message),
     );
     buyerPage.on("pageerror", (err) => buyerErrors.push(err.message));
 
@@ -395,18 +431,16 @@ test.describe("Multi-user simultaneous browsing", () => {
         invPrivatePage
           .goto("/investor-dashboard")
           .then(() =>
-            invPrivatePage.waitForLoadState("load", { timeout: 15_000 })
+            invPrivatePage.waitForLoadState("load", { timeout: 15_000 }),
           ),
         invInstitutionalPage
           .goto("/auctions")
           .then(() =>
-            invInstitutionalPage.waitForLoadState("load", { timeout: 15_000 })
+            invInstitutionalPage.waitForLoadState("load", { timeout: 15_000 }),
           ),
         buyerPage
           .goto("/auctions")
-          .then(() =>
-            buyerPage.waitForLoadState("load", { timeout: 15_000 })
-          ),
+          .then(() => buyerPage.waitForLoadState("load", { timeout: 15_000 })),
       ]);
 
       await expectPageShell(invPrivatePage);
@@ -455,13 +489,11 @@ test.describe("Multi-user simultaneous browsing", () => {
       await Promise.all([
         adminPage
           .goto("/admin")
-          .then(() =>
-            adminPage.waitForLoadState("load", { timeout: 15_000 })
-          ),
+          .then(() => adminPage.waitForLoadState("load", { timeout: 15_000 })),
         investorPage
           .goto("/investor-dashboard")
           .then(() =>
-            investorPage.waitForLoadState("load", { timeout: 15_000 })
+            investorPage.waitForLoadState("load", { timeout: 15_000 }),
           ),
       ]);
 

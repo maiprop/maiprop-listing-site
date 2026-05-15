@@ -16,6 +16,7 @@ npm run dev   # Starts Vite on port 8080
 The dev server connects to **production Supabase** — all data changes are real. Be careful with destructive operations.
 
 If port 8080 is already in use:
+
 ```bash
 lsof -ti:8080 | xargs kill -9
 npm run dev
@@ -35,6 +36,7 @@ The production frontend is at `portal.maiprop.co` and is behind a **passcode gat
 3. The portal is now accessible for the browser session
 
 **When to use portal vs localhost:**
+
 - Use `portal.maiprop.co` when testing CORS fixes, edge function deployments, or anything that depends on the production origin
 - Use `localhost:8080` for general UI testing — it connects to the same Supabase backend
 - Cloudflare Pages preview URLs (`*.maiprop-listing-site.pages.dev`) may be behind Cloudflare Access — use portal or localhost instead
@@ -42,27 +44,29 @@ The production frontend is at `portal.maiprop.co` and is behind a **passcode gat
 ## Test Accounts
 
 All demo accounts use:
+
 - **Password**: `Demo2025!`
 - **Email domain**: `@maiprop.demo`
 
-| Account | Canonical Email | Legacy Alias | Role | Pro? |
-|---------|------------------|--------------|------|------|
-| Seller Pro | seller.pro@maiprop.demo | - | seller | Yes |
-| Seller Free | seller.free@maiprop.demo | - | seller | No |
-| Buyer Pro | buyer.pro@maiprop.demo | - | buyer | Yes |
-| Buyer Free | buyer.free@maiprop.demo | - | buyer | No |
-| Investor Private | investor.private@maiprop.demo | - | investor (private) | Yes |
-| Investor Institutional | investor.institutional@maiprop.demo | - | investor (institutional) | Yes |
-| Agent Pro | agent.pro@maiprop.demo | - | agent | Yes |
-| Developer Pro | developer.pro@maiprop.demo | - | developer | Yes |
-| Professional (Architect) | architect.pro@maiprop.demo | professional1@maiprop.demo | professional | Yes |
-| Professional (Lawyer) | lawyer.pro@maiprop.demo | professional2@maiprop.demo | professional | Yes |
-| Professional (Valuer) | valuer.pro@maiprop.demo | professional3@maiprop.demo | professional | Yes |
-| Admin | admin@maiprop.demo | - | admin | Yes |
+| Account                  | Canonical Email                       | Legacy Alias                 | Role                     | Pro? |
+| ------------------------ | ------------------------------------- | ---------------------------- | ------------------------ | ---- |
+| Seller Pro               | <seller.pro@maiprop.demo>             | -                            | seller                   | Yes  |
+| Seller Free              | <seller.free@maiprop.demo>            | -                            | seller                   | No   |
+| Buyer Pro                | <buyer.pro@maiprop.demo>              | -                            | buyer                    | Yes  |
+| Buyer Free               | <buyer.free@maiprop.demo>             | -                            | buyer                    | No   |
+| Investor Private         | <investor.private@maiprop.demo>       | -                            | investor (private)       | Yes  |
+| Investor Institutional   | <investor.institutional@maiprop.demo> | -                            | investor (institutional) | Yes  |
+| Agent Pro                | <agent.pro@maiprop.demo>              | -                            | agent                    | Yes  |
+| Developer Pro            | <developer.pro@maiprop.demo>          | -                            | developer                | Yes  |
+| Professional (Architect) | <architect.pro@maiprop.demo>          | <professional1@maiprop.demo> | professional             | Yes  |
+| Professional (Lawyer)    | <lawyer.pro@maiprop.demo>             | <professional2@maiprop.demo> | professional             | Yes  |
+| Professional (Valuer)    | <valuer.pro@maiprop.demo>             | <professional3@maiprop.demo> | professional             | Yes  |
+| Admin                    | <admin@maiprop.demo>                  | -                            | admin                    | Yes  |
 
 Canonical browser-test accounts come from `scripts/seed-demo-accounts.ts`. The `professional1/2/3` identities are legacy aliases from `scripts/seed-mock-users.ts` and `scripts/seed-mock-professionals.ts`; keep them only for backward compatibility with older data snapshots.
 
 Preferred Playwright env overrides:
+
 - `E2E_BUYER_FREE_EMAIL` / `E2E_BUYER_FREE_PASSWORD`
 - `E2E_BUYER_PRO_EMAIL` / `E2E_BUYER_PRO_PASSWORD`
 - `E2E_SELLER_PRO_EMAIL` / `E2E_SELLER_PRO_PASSWORD`
@@ -101,12 +105,12 @@ async def login_as(email, password="Demo2025!"):
         browser = await p.chromium.connect_over_cdp("http://localhost:29229")
         context = browser.contexts[0]
         page = context.pages[-1]
-        
+
         # Clear auth state
         await page.evaluate("localStorage.clear(); sessionStorage.clear();")
         await page.goto("http://localhost:8080/login", wait_until="networkidle")
         await asyncio.sleep(2)
-        
+
         await page.fill('input[type="email"]', email)
         await page.fill('input[type="password"]', password)
         await page.click('button[type="submit"]')
@@ -118,6 +122,7 @@ This is much faster than GUI login for multi-user test flows.
 ## Key Testing Flows
 
 ### Data Input (Agent role)
+
 1. Log in as `agent.pro@maiprop.demo`
 2. Navigate to Dashboard → Data Input tab (sidebar)
 3. Note the current quota (X/20) — this is the precondition
@@ -129,6 +134,7 @@ This is much faster than GUI login for multi-user test flows.
 **What this tests:** The `agent-data-input` edge function RPC call via `supabase.functions.invoke()`. Both the status check (on page load) and form submission use this function.
 
 ### Listing Creation (Seller/Agent/Developer)
+
 1. Navigate to `/listings/new`
 2. Select listing type (Sale, Rent, Open House)
 3. Fill wizard steps (title, beds, baths, size, location, price)
@@ -136,12 +142,14 @@ This is much faster than GUI login for multi-user test flows.
 5. Verify listing appears on `/listings` page
 
 ### Messaging
+
 1. As buyer, find a listing and click "Contact Agent"
 2. Redirects to `/messages` with new conversation
 3. Type and send a message
 4. Switch to seller account to verify message received
 
 ### Video Viewing
+
 1. As buyer, go to property detail page
 2. Click "Video Viewing" button
 3. Select date, time slot, and platform (Zoom/Google Meet/Teams/WhatsApp)
@@ -150,6 +158,7 @@ This is much faster than GUI login for multi-user test flows.
 6. Buyer sees "Join video call" link in Dashboard → Viewings tab once the owner sets the link
 
 ### Open House Registration
+
 1. Navigate to `/open-houses` or directly to `/open-house/{listing-id}`
 2. Click "Pre-register for Open House" in the right sidebar
 3. Dialog opens at Step 1 with "Register" button → click it
@@ -158,6 +167,7 @@ This is much faster than GUI login for multi-user test flows.
 6. Click "Continue" → "Registration Submitted" confirmation with checkmark
 
 **Duplicate registration handling (fixed in PR #52):**
+
 - If the buyer already has a registration, clicking "Register" again catches the PostgreSQL UNIQUE constraint error (code 23505) and returns the existing registration gracefully
 - The success toast still shows — no error is surfaced
 - Previously this showed "Something went wrong" — now it's resilient to retries
@@ -165,28 +175,41 @@ This is much faster than GUI login for multi-user test flows.
 **Known UX behavior:** The sidebar button still shows "Pre-register for Open House" even after a registration exists. It doesn't change to "Continue" or show a pending status. This means users can click it again, but the duplicate handling prevents errors.
 
 **Cleanup for re-testing:** To reset a user's registration state for fresh testing:
+
 ```typescript
 // scripts/cleanup-oh-reg.ts
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from "@supabase/supabase-js";
 const supabase = createClient(url, anonKey);
-await supabase.auth.signInWithPassword({ email: 'buyer.pro@maiprop.demo', password: 'Demo2025!' });
-const { data: { user } } = await supabase.auth.getUser();
-await supabase.from('open_house_registrations').delete().eq('requester_id', user.id).eq('listing_id', LISTING_ID);
+await supabase.auth.signInWithPassword({
+  email: "buyer.pro@maiprop.demo",
+  password: "Demo2025!",
+});
+const {
+  data: { user },
+} = await supabase.auth.getUser();
+await supabase
+  .from("open_house_registrations")
+  .delete()
+  .eq("requester_id", user.id)
+  .eq("listing_id", LISTING_ID);
 ```
 
 ### Quick Sale (Fire Sale)
+
 1. Navigate to `/firesale` as a seller
 2. Fill form: address, KAEK, property type, size, price, year, notes
 3. **Requires min 5 photos** to enable submission — cannot skip this
 4. Upload 5+ photos, then click "Get AI Estimate & Continue"
 
 ### Investor Dashboard
+
 1. Navigate to `/investor-dashboard` as investor user
 2. Should see deal pipeline, stats, filters
 3. Non-investors should see "Investor Access Required" gate page (not blank)
 4. The InvestorRoute has a 6-second timeout — if loading takes longer, shows retry UI
 
 ### Billing Tab Add-ons (role-gated)
+
 1. Navigate to `/dashboard?tab=billing` after logging in
 2. The visible add-on sections depend on `participant_type` in the profile:
    - `agent` → "Agency Add-ons" section (Extra Seat, Branded Profile, Dedicated Manager, White-label Domain)
