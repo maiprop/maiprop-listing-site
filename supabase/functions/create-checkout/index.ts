@@ -72,7 +72,7 @@ const logStep = (step: string, details?: unknown): void => {
 /** Accepts only same-origin absolute paths starting with "/" (and not "//" or "/\\").
  *  Returns null for anything else so callers fall back to a server-controlled default.
  *  Exported so unit tests can cover every branch without spinning up the handler. */
-export function sanitizeRedirectPath(raw: unknown): string | null {
+export const sanitizeRedirectPath = (raw: unknown): string | null => {
   if (typeof raw !== "string" || raw.length === 0) return null;
   // Reject scheme-relative ("//evil") and back-slash escape ("/\\evil") forms,
   // both of which browsers may resolve to attacker-controlled origins.
@@ -84,7 +84,7 @@ export function sanitizeRedirectPath(raw: unknown): string | null {
   if (/[\r\n\t]/.test(raw)) return null;
   if (raw.length > 512) return null;
   return raw;
-}
+};
 
 /** Shape of a single `pricing_configs` row we care about. The full table is
  *  not in the generated types since this is an unregistered Supabase table. */
@@ -117,28 +117,28 @@ type CheckoutProfileRow = {
   participant_type?: string | null;
 };
 
-export function normalizePlanKey(raw: unknown): string | null {
+export const normalizePlanKey = (raw: unknown): string | null => {
   const plan = typeof raw === "string" && raw.trim() ? raw.trim() : "pro";
   return PLAN_KEY_RE.test(plan) ? plan : null;
-}
+};
 
-export function normalizeBillingCycle(raw: unknown): BillingCycle | null {
+export const normalizeBillingCycle = (raw: unknown): BillingCycle | null => {
   if (raw === undefined || raw === null || raw === "") return "monthly";
   if (raw === "monthly" || raw === "month") return "monthly";
   if (raw === "annual" || raw === "yearly" || raw === "year") return "annual";
   return null;
-}
+};
 
-export function isInviteOnlyCheckoutPlan(planKey: string): boolean {
+export const isInviteOnlyCheckoutPlan = (planKey: string): boolean => {
   return INVITE_ONLY_PLAN_KEYS.has(planKey);
-}
+};
 
-export function isSupportedCheckoutPlan(planKey: string): boolean {
+export const isSupportedCheckoutPlan = (planKey: string): boolean => {
   return PUBLIC_CHECKOUT_PLAN_KEYS.has(planKey) ||
     INVITE_ONLY_PLAN_KEYS.has(planKey);
-}
+};
 
-function getConfiguredAllowedOrigins(): string[] {
+const getConfiguredAllowedOrigins = (): string[] => {
   const configured = Deno.env.get("CHECKOUT_ALLOWED_ORIGINS") ??
     Deno.env.get("ALLOWED_CHECKOUT_ORIGINS") ??
     "";
@@ -146,9 +146,9 @@ function getConfiguredAllowedOrigins(): string[] {
     .split(",")
     .map((origin) => origin.trim())
     .filter(Boolean);
-}
+};
 
-function normalizeOrigin(raw: string | null | undefined): string | null {
+const normalizeOrigin = (raw: string | null | undefined): string | null => {
   if (!raw) return null;
   try {
     const url = new URL(raw);
@@ -156,13 +156,13 @@ function normalizeOrigin(raw: string | null | undefined): string | null {
   } catch {
     return null;
   }
-}
+};
 
-function getSiteOrigin(): string {
+const getSiteOrigin = (): string => {
   return normalizeOrigin(Deno.env.get("SITE_URL")) ?? DEFAULT_CHECKOUT_ORIGIN;
-}
+};
 
-export function resolveCheckoutOrigin(rawOrigin: string | null): string {
+export const resolveCheckoutOrigin = (rawOrigin: string | null): string => {
   const siteOrigin = getSiteOrigin();
   const allowed = new Set([
     ...CHECKOUT_ALLOWED_ORIGINS,
@@ -174,11 +174,11 @@ export function resolveCheckoutOrigin(rawOrigin: string | null): string {
     return origin;
   }
   return siteOrigin;
-}
+};
 
-function getPlanEntitlement(planKey: string) {
+const getPlanEntitlement = (planKey: string) => {
   return PLAN_ENTITLEMENT[planKey] ?? null;
-}
+};
 
 const CHECKOUT_AUDIENCE_ALIASES: Record<string, string> = {
   agent: "agent",
@@ -197,33 +197,33 @@ const normalizeAudience = (raw: string | null | undefined): string | null => {
   return raw ? CHECKOUT_AUDIENCE_ALIASES[raw] ?? null : null;
 };
 
-export function isCheckoutAudienceAllowed(
+export const isCheckoutAudienceAllowed = (
   planAudience: string,
   profile: CheckoutProfileRow | null,
-): boolean {
+): boolean => {
   const profileAudience = normalizeAudience(profile?.participant_type) ??
     normalizeAudience(profile?.role);
   return profileAudience === planAudience;
-}
+};
 
-async function getCheckoutProfile(
+const getCheckoutProfile = async (
   supabase: unknown,
   userId: string,
-): Promise<CheckoutProfileRow | null> {
+): Promise<CheckoutProfileRow | null> => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data } = await ((supabase as { from: any }).from as any)("profiles")
     .select("role, participant_type")
     .eq("user_id", userId)
     .maybeSingle();
   return (data as CheckoutProfileRow | null) ?? null;
-}
+};
 
-function buildMockCheckoutUrl(
+const buildMockCheckoutUrl = (
   origin: string,
   successPath: string | null,
   plan: string,
   billingCycle: BillingCycle,
-): string {
+): string => {
   return `${origin}${
     withMockBillingParams(successPath ?? "/pricing?checkout=success", {
       checkout: "success",
@@ -231,16 +231,16 @@ function buildMockCheckoutUrl(
       billing_cycle: billingCycle,
     })
   }`;
-}
+};
 
-export function getStripePriceEnvKey(
+export const getStripePriceEnvKey = (
   planKey: string,
   billingCycle: BillingCycle,
-): string {
+): string => {
   const normalizedPlan = planKey.toUpperCase().replace(/-/g, "_");
   const suffix = billingCycle === "annual" ? "ANNUAL" : "MONTHLY";
   return `STRIPE_PRICE_${normalizedPlan}_${suffix}`;
-}
+};
 
 const PLAN_PRICE_ENV_ALIASES: Record<string, Record<BillingCycle, string[]>> = {
   pro: {
@@ -261,10 +261,10 @@ const PLAN_PRICE_ENV_ALIASES: Record<string, Record<BillingCycle, string[]>> = {
   },
 };
 
-export function getStripePriceEnvKeys(
+export const getStripePriceEnvKeys = (
   planKey: string,
   billingCycle: BillingCycle,
-): string[] {
+): string[] => {
   return Array.from(
     new Set([
       ...(PLAN_PRICE_ENV_ALIASES[planKey]?.[billingCycle] ?? []),
@@ -274,23 +274,23 @@ export function getStripePriceEnvKeys(
         : [`STRIPE_PRICE_${planKey.toUpperCase().replace(/-/g, "_")}`]),
     ]),
   );
-}
+};
 
-function getFirstConfiguredEnvPrice(
+const getFirstConfiguredEnvPrice = (
   planKey: string,
   billingCycle: BillingCycle,
-): string | null {
+): string | null => {
   for (const key of getStripePriceEnvKeys(planKey, billingCycle)) {
     const value = Deno.env.get(key);
     if (value) return value;
   }
   return null;
-}
+};
 
-function getDbStripePriceId(
+const getDbStripePriceId = (
   row: PricingConfigRow | null,
   billingCycle: BillingCycle,
-): string | undefined {
+): string | undefined => {
   const meta = row?.metadata ?? {};
   if (billingCycle === "annual") {
     return meta.stripe_price_id_annual ??
@@ -302,14 +302,14 @@ function getDbStripePriceId(
   return meta.stripe_price_id_monthly ??
     meta.stripe_monthly_price_id ??
     (row?.unit !== "yearly" ? meta.stripe_price_id : undefined);
-}
+};
 
 /** Plan keys: active DB pricing_configs.metadata.stripe_price_id, then env STRIPE_PRICE_<UPPERCASE_KEY>. */
-async function getCheckoutPlan(
+const getCheckoutPlan = async (
   supabase: unknown,
   planKey: string,
   billingCycle: BillingCycle,
-): Promise<CheckoutPlan | null> {
+): Promise<CheckoutPlan | null> => {
   const entitlement = getPlanEntitlement(planKey);
   if (!entitlement) return null;
   // The runtime Supabase client returned by `createClient(url, key)` carries
@@ -361,23 +361,23 @@ async function getCheckoutPlan(
       billingCycle,
     }
     : null;
-}
+};
 
-async function findOwnedStripeCustomer(
+const findOwnedStripeCustomer = async (
   stripe: Stripe,
   userId: string,
-): Promise<Stripe.Customer | null> {
+): Promise<Stripe.Customer | null> => {
   const search = await stripe.customers.search({
     query: `metadata['user_id']:'${userId}'`,
     limit: 1,
   });
   return search.data[0] ?? null;
-}
+};
 
-async function getOrCreateOwnedStripeCustomer(
+const getOrCreateOwnedStripeCustomer = async (
   stripe: Stripe,
   user: { id: string; email: string },
-): Promise<string> {
+): Promise<string> => {
   const existing = await findOwnedStripeCustomer(stripe, user.id);
   if (existing) {
     logStep("Existing Stripe customer found by user metadata", {
@@ -396,9 +396,9 @@ async function getOrCreateOwnedStripeCustomer(
     customerId: created.id,
   });
   return created.id;
-}
+};
 
-async function shortSha256(value: string): Promise<string> {
+const shortSha256 = async (value: string): Promise<string> => {
   const digest = await crypto.subtle.digest(
     "SHA-256",
     new TextEncoder().encode(value),
@@ -407,7 +407,7 @@ async function shortSha256(value: string): Promise<string> {
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("")
     .slice(0, 16);
-}
+};
 
 Deno.serve(async (req) => {
   const corsPreflightResponse = handleCors(req);

@@ -17,14 +17,14 @@ export type StripeSubscriptionStatus =
   | "paused";
 
 /** Returns true for statuses where the user should have Pro access. */
-export function isActiveSubscription(status: StripeSubscriptionStatus | string): boolean {
+export const isActiveSubscription = (status: StripeSubscriptionStatus | string): boolean => {
   return status === "active" || status === "trialing";
-}
+};
 
 /** Returns true if the Stripe subscription object has Pro access. */
-export function isProSubscription(sub: { status: string }): boolean {
+export const isProSubscription = (sub: { status: string }): boolean => {
   return isActiveSubscription(sub.status);
-}
+};
 
 export type SubscriptionAudience =
   | "participant"
@@ -51,11 +51,11 @@ export const normalizeSubscriptionAudience = (raw: string | null | undefined): S
   return raw ? SUBSCRIPTION_AUDIENCE_ALIASES[raw] ?? null : null;
 };
 
-export function isSubscriptionAudienceAllowed(
+export const isSubscriptionAudienceAllowed = (
   productAudience: string | null | undefined,
   profileAudience: string | null | undefined,
-): boolean {
+): boolean => {
   const normalizedProductAudience = normalizeSubscriptionAudience(productAudience);
   const normalizedProfileAudience = normalizeSubscriptionAudience(profileAudience);
   return Boolean(normalizedProductAudience && normalizedProductAudience === normalizedProfileAudience);
-}
+};
