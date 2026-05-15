@@ -547,6 +547,10 @@ jobs:
         if: steps.lighthouse-secrets.outputs.enabled == 'true'
         run: npm run build
 
+      - name: Install Lighthouse browser
+        if: steps.lighthouse-secrets.outputs.enabled == 'true'
+        run: npx playwright install chromium --with-deps
+
       - name: Run Lighthouse CI
         if: steps.lighthouse-secrets.outputs.enabled == 'true'
         run: npx @lhci/cli@0.15.1 autorun
