@@ -155,6 +155,7 @@ jobs:
     # Only run on push to main or when a PR targets main and is not a draft
     if: github.event_name == 'push' || github.event.pull_request.draft == false
     needs: [quality, release-safety]
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -185,7 +186,8 @@ jobs:
           VITE_SUPABASE_PROJECT_ID: abcdefghijklmnop
 
       - name: Run E2E smoke + auth tests
-        run: npx playwright test --project=chromium --grep-invert @perf
+        timeout-minutes: 8
+        run: npx playwright test --project=chromium --grep-invert @perf --reporter=line
         env:
           CI: true
           VITE_SUPABASE_URL: https://abcdefghijklmnop.supabase.co
