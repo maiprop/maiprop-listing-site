@@ -52,13 +52,10 @@ const getAvailableDays = (availability: { day_of_week: number; start_time: strin
 const generateTimeSlots = (startTime: string, endTime: string) => {
   const startMinutes = parseSlotStart(startTime);
   const endMinutes = parseSlotEnd(endTime);
-  const slots: string[] = [];
-
-  for (let current = startMinutes; current <= endMinutes; current += SLOT_INTERVAL_MINUTES) {
-    slots.push(formatSlotTime(current));
-  }
-
-  return slots;
+  const slotCount = Math.max(0, Math.floor((endMinutes - startMinutes) / SLOT_INTERVAL_MINUTES) + 1);
+  return Array.from({ length: slotCount }, (_, index) =>
+    formatSlotTime(startMinutes + index * SLOT_INTERVAL_MINUTES)
+  );
 };
 
 const getCalendarEvent = (selectedDate: string, selectedTime: string, title: string, description: string) => {
