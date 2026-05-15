@@ -7,6 +7,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { act, screen } from "@testing-library/react";
 import React, { Suspense } from "react";
+import { Route, Routes } from "react-router-dom";
 import { renderWithProviders } from "@/test/utils";
 
 // ── Common mocks ──────────────────────────────────────────────────────────────
@@ -110,7 +111,7 @@ vi.mock("@/hooks/useListings", () => ({
     isFetchingNextPage: false,
   }),
   useListing: vi.fn().mockReturnValue({ data: null, isLoading: false, isError: false }),
-  useTrackListingView: vi.fn().mockReturnValue(vi.fn()),
+  useTrackListingView: vi.fn().mockReturnValue({ mutate: vi.fn() }),
   useUpdateListing: vi.fn().mockReturnValue({ mutate: vi.fn(), mutateAsync: vi.fn() }),
   useDeleteListing: vi.fn().mockReturnValue({ mutate: vi.fn(), mutateAsync: vi.fn() }),
   useCreateListing: vi.fn().mockReturnValue({ mutate: vi.fn(), mutateAsync: vi.fn() }),
@@ -419,7 +420,7 @@ vi.mock("@/hooks/usePrivateOwnerAdAlert", () => ({
 }));
 
 vi.mock("@/hooks/useModal", () => ({
-  useModal: vi.fn().mockReturnValue({ isOpen: false, open: vi.fn(), close: vi.fn() }),
+  useModal: vi.fn().mockReturnValue({ isOpen: vi.fn().mockReturnValue(false), open: vi.fn(), close: vi.fn() }),
 }));
 
 // ── Additional component mocks ────────────────────────────────────────────────
@@ -826,6 +827,67 @@ describe("Page smoke tests", () => {
         { initialPath: "/open-houses/test-id" }
       )
     ).not.toThrow();
+  });
+
+  it("OpenHouseDetail includes valuation and property report tools when listing data loads", async () => {
+    const { useListing } = await import("@/hooks/useListings");
+    const useListingMock = useListing as ReturnType<typeof vi.fn>;
+    useListingMock.mockReturnValue({
+      data: {
+        id: "oh-1",
+        title: "Kolonaki Open House",
+        city: "Athens",
+        address: "Patriarchou Ioakim 1",
+        region: "Attica",
+        price: 420000,
+        sqm: 92,
+        bedrooms: 2,
+        bathrooms: 1,
+        property_type: "apartment",
+        listing_type: "open_house",
+        owner_id: "owner-1",
+        description: "Open house viewing",
+        cover_image_url: null,
+        listing_images: [],
+        profiles: null,
+        latitude: null,
+        longitude: null,
+        tags: [],
+        status: "active",
+        open_house_date: "2026-06-01T10:00:00.000Z",
+        floor: null,
+        total_floors: null,
+        year_built: null,
+        energy_class: null,
+        heating_system: null,
+        price_per_sqm: 4565,
+        has_parking: false,
+        has_pool: false,
+        has_elevator: true,
+        has_garden: false,
+        has_storage: false,
+        has_balcony: true,
+        has_view: false,
+        has_furnished: false,
+        views_count: 0,
+      },
+      isLoading: false,
+      isError: false,
+    });
+    const { default: OpenHouseDetail } = await import("@/pages/OpenHouseDetail");
+
+    renderWithProviders(
+      <Suspense fallback={<div>loading</div>}>
+        <Routes>
+          <Route path="/open-house/:id" element={<OpenHouseDetail />} />
+        </Routes>
+      </Suspense>,
+      { initialPath: "/open-house/oh-1" }
+    );
+
+    expect(await screen.findByTestId("property-valuation")).toBeInTheDocument();
+    expect(screen.getByTestId("property-report-card")).toBeInTheDocument();
+    useListingMock.mockReturnValue({ data: null, isLoading: false, isError: false });
   });
 
   it("Messages page renders without throwing", async () => {
