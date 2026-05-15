@@ -21,6 +21,13 @@ on:
         type: boolean
         default: true
 
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-edge-functions-production
+  cancel-in-progress: false
+
 jobs:
   deploy:
     name: Deploy to Supabase
@@ -47,6 +54,19 @@ jobs:
             echo "::error::Missing SUPABASE_ACCESS_TOKEN or VITE_SUPABASE_PROJECT_ID secrets"
             exit 1
           fi
+
+      - name: Guard production deploy ref
+        if: inputs.dry_run != true
+        run: |
+          if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
+            echo "::error::Production edge function deploys must run from main. Current ref: ${GITHUB_REF}"
+            exit 1
+          fi
+          {
+            echo "### Supabase edge function deployment"
+            echo "- Ref: ${GITHUB_REF}"
+            echo "- SHA: ${GITHUB_SHA}"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Link project
         run: supabase link --project-ref "$PROJECT_REF"

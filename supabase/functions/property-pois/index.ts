@@ -7,18 +7,18 @@ import { createLogger } from "../_shared/logger.ts";
 const log = createLogger("property-pois");
 
 const BUCKET = "property-pois";
-const poisLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 20, windowMs: 60_000 });
+const poisLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 20, windowMs: 60_000, failClosed: true });
 
 Deno.serve(async (req) => {
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
 
-  const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
-  if (await poisLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
-
   const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
   if (quota.errorResponse) return quota.errorResponse;
+
+  const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? quota.userId ?? "anonymous";
+  if (await poisLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
 
   try {
     const body = await req.json();

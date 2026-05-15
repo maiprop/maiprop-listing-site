@@ -8,7 +8,7 @@ import { createLogger } from "../_shared/logger.ts";
 const log = createLogger("neighbourhood-report");
 
 const BUCKET = "neighbourhood-report";
-const neighbourhoodLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 15, windowMs: 60_000 });
+const neighbourhoodLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 15, windowMs: 60_000, failClosed: true });
 
 function fallbackReport(city: string, address?: string, region?: string) {
   const areaName = address?.trim() || city.trim();
@@ -68,11 +68,11 @@ Deno.serve(async (req) => {
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
-  const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
-  if (await neighbourhoodLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
-
   const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
   if (quota.errorResponse) return quota.errorResponse;
+
+  const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? quota.userId ?? "anonymous";
+  if (await neighbourhoodLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
 
   // Signed-in access gate is handled by enforceAiQuota; free vs Pro caps live in the DB.
   try {

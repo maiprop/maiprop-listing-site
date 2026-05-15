@@ -7,15 +7,12 @@ import { createLogger } from "../_shared/logger.ts";
 const log = createLogger("listing-ai-assist");
 
 const BUCKET = "listing-ai-assist";
-const listingAiLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 20, windowMs: 60_000 });
+const listingAiLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 20, windowMs: 60_000, failClosed: true });
 
 Deno.serve(async (req) => {
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
-  const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
-  if (await listingAiLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
-
 
   try {
     const body = await req.json().catch(() => ({}));
@@ -32,6 +29,9 @@ Deno.serve(async (req) => {
     // (ping is excluded from both since it's a free health check).
     const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
     if (quota.errorResponse) return quota.errorResponse;
+
+    const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? quota.userId ?? "anonymous";
+    if (await listingAiLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
 
     let systemPrompt = "";
     let userPrompt = "";

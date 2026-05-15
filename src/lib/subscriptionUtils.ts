@@ -35,7 +35,7 @@ export type SubscriptionAudience =
   | "institutional";
 
 export function normalizeSubscriptionAudience(raw: string | null | undefined): SubscriptionAudience | null {
-  if (raw === "buyer" || raw === "seller" || raw === "participant" || raw === "pro") return "participant";
+  if (raw === "buyer" || raw === "seller" || raw === "participant" || raw === "pro" || raw === "user") return "participant";
   if (raw === "agent") return "agent";
   if (raw === "developer") return "developer";
   if (raw === "professional") return "professional";

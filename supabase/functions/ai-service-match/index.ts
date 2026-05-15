@@ -1,13 +1,13 @@
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
-import { openAIChatCompletion } from "../_shared/openai.ts";
+import { openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
 import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
 import { createLogger } from "../_shared/logger.ts";
 
 const log = createLogger("ai-service-match");
 
 const BUCKET = "ai-service-match";
-const serviceMatchLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 20, windowMs: 60_000 });
+const serviceMatchLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 20, windowMs: 60_000, failClosed: true });
 
 const SYSTEM_PROMPT = `You are a Greek real estate professional matchmaker. A user describes their property need in plain text, and you must:
 
@@ -28,18 +28,36 @@ const SYSTEM_PROMPT = `You are a Greek real estate professional matchmaker. A us
 3. Write a brief, friendly explanation of why you recommend this professional
 4. Estimate urgency: low / medium / high
 
-Respond using the match_professional tool ONLY.`;
+Return ONLY one valid JSON object with:
+{
+  "category": "lawyer" | "notary" | "architect" | "civil_engineer" | "contractor" | "interior_designer" | "electrician" | "plumber" | "financial_advisor" | "valuer" | "property_manager",
+  "services": string[],
+  "explanation": string,
+  "urgency": "low" | "medium" | "high",
+  "follow_up_question": string | null
+}`;
+
+const CATEGORIES = new Set(["lawyer", "notary", "architect", "civil_engineer", "contractor", "interior_designer", "electrician", "plumber", "financial_advisor", "valuer", "property_manager"]);
+const URGENCIES = new Set(["low", "medium", "high"]);
+
+function parseMatchJson(raw: string): Record<string, unknown> {
+  const cleaned = raw.replace(/```json\s*/gi, "").replace(/```\s*/gi, "").trim();
+  const start = cleaned.indexOf("{");
+  const end = cleaned.lastIndexOf("}");
+  if (start === -1 || end === -1 || end < start) throw new Error("No JSON in AI response");
+  return JSON.parse(cleaned.slice(start, end + 1)) as Record<string, unknown>;
+}
 
 Deno.serve(async (req) => {
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
 
-  const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
-  if (await serviceMatchLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
-
   const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
   if (quota.errorResponse) return quota.errorResponse;
+
+  const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? quota.userId ?? "anonymous";
+  if (await serviceMatchLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
 
   try {
     const { need } = await req.json();
@@ -55,46 +73,7 @@ Deno.serve(async (req) => {
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: need },
       ],
-      tools: [
-        {
-          type: "function",
-          function: {
-            name: "match_professional",
-            description: "Return the best professional match for the user's real estate need",
-            parameters: {
-              type: "object",
-              properties: {
-                category: {
-                  type: "string",
-                  enum: ["lawyer", "notary", "architect", "civil_engineer", "contractor", "interior_designer", "electrician", "plumber", "financial_advisor", "valuer", "property_manager"],
-                  description: "Best matching professional category",
-                },
-                services: {
-                  type: "array",
-                  items: { type: "string" },
-                  description: "Specific services recommended (1-3)",
-                },
-                explanation: {
-                  type: "string",
-                  description: "Friendly 1-2 sentence explanation of the match",
-                },
-                urgency: {
-                  type: "string",
-                  enum: ["low", "medium", "high"],
-                  description: "Urgency level of the need",
-                },
-                follow_up_question: {
-                  type: "string",
-                  description: "One clarifying question to better serve the user (optional)",
-                },
-              },
-              required: ["category", "services", "explanation", "urgency"],
-              additionalProperties: false,
-            },
-          },
-        },
-      ],
-      tool_choice: { type: "function", function: { name: "match_professional" } },
+      temperature: 0.1,
     });
 
     if (!response.ok) {
@@ -112,12 +91,25 @@ Deno.serve(async (req) => {
     }
 
     const data = await response.json();
-    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
-    if (!toolCall) throw new Error("No tool call in response");
+    const parsed = parseMatchJson(readOpenAITextContent(data));
+    const category = typeof parsed.category === "string" && CATEGORIES.has(parsed.category)
+      ? parsed.category
+      : "lawyer";
+    const services = Array.isArray(parsed.services)
+      ? parsed.services.filter((item): item is string => typeof item === "string").slice(0, 3)
+      : [];
+    const urgency = typeof parsed.urgency === "string" && URGENCIES.has(parsed.urgency)
+      ? parsed.urgency
+      : "medium";
 
-    const result = JSON.parse(toolCall.function.arguments);
     await recordAiCall(quota.userId, BUCKET);
-    return new Response(JSON.stringify(result), {
+    return new Response(JSON.stringify({
+      category,
+      services,
+      explanation: typeof parsed.explanation === "string" ? parsed.explanation : "",
+      urgency,
+      follow_up_question: typeof parsed.follow_up_question === "string" ? parsed.follow_up_question : null,
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {

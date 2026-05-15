@@ -7,7 +7,7 @@ import { createLogger } from "../_shared/logger.ts";
 const log = createLogger("property-valuation");
 
 const BUCKET = "property-valuation";
-const valuationLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 15, windowMs: 60_000 });
+const valuationLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 15, windowMs: 60_000, failClosed: true });
 
 // ── Greece 2026 market benchmarks ─────────────────────────────────────────────
 const MARKET_BENCHMARKS = `
@@ -268,13 +268,13 @@ Deno.serve(async (req) => {
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
-  const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
-  if (await valuationLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
-
   // Enforce AI quota before processing
   const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
   if (quota.errorResponse) return quota.errorResponse;
   const quotaUserId = quota.userId;
+
+  const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? quotaUserId ?? "anonymous";
+  if (await valuationLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
 
   // Signed-in access gate is handled by enforceAiQuota; free vs Pro caps live in the DB.
   try {

@@ -1,13 +1,13 @@
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
-import { openAIChatCompletion } from "../_shared/openai.ts";
+import { openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
 import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
 import { createLogger } from "../_shared/logger.ts";
 
 const log = createLogger("smart-filters");
 
 const BUCKET = "smart-filters";
-const smartFiltersLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 20, windowMs: 60_000 });
+const smartFiltersLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 20, windowMs: 60_000, failClosed: true });
 
 // All available boolean feature fields on listings
 const AVAILABLE_FEATURES = [
@@ -58,27 +58,83 @@ const AVAILABLE_SECTIONS = [
   "land_details", "rental_extras", "commercial_details",
 ];
 
+type SmartFilterArgs = {
+  sections?: unknown;
+  featureKeys?: unknown;
+  sizeLabel?: unknown;
+  priceLabel?: unknown;
+  bedsLabel?: unknown;
+  featuresLabel?: unknown;
+};
+
+function extractJsonObject(raw: string): string {
+  const cleaned = raw.replace(/```json\s*/gi, "").replace(/```\s*/gi, "").trim();
+  const start = cleaned.indexOf("{");
+  const end = cleaned.lastIndexOf("}");
+  if (start === -1 || end === -1 || end < start) {
+    throw new Error("No JSON object in AI response");
+  }
+  return cleaned.slice(start, end + 1);
+}
+
+export function parseSmartFilterArgs(raw: string): SmartFilterArgs {
+  const json = extractJsonObject(raw);
+  try {
+    return JSON.parse(json) as SmartFilterArgs;
+  } catch {
+    const repaired = json
+      .replace(/,\s*}/g, "}")
+      .replace(/,\s*]/g, "]")
+      .replace(/\)\s*}/g, "}")
+      .replace(/\)\s*,/g, ",")
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
+    return JSON.parse(repaired) as SmartFilterArgs;
+  }
+}
+
+function coerceString(value: unknown, fallback: string): string {
+  return typeof value === "string" && value.trim() ? value.trim().slice(0, 80) : fallback;
+}
+
+function coerceStringArray(value: unknown, allowed?: Set<string>): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is string => typeof item === "string" && (!allowed || allowed.has(item)))
+    .slice(0, 24);
+}
+
 Deno.serve(async (req) => {
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
 
-  const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
-  if (await smartFiltersLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
-
   const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
   if (quota.errorResponse) return quota.errorResponse;
+
+  const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? quota.userId ?? "anonymous";
+  if (await smartFiltersLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
 
   try {
     const { type, subtype, listing_type } = await req.json();
 
-    const featureKeys = AVAILABLE_FEATURES.map((f) => f.key).join(", ");
+    const availableFeatureKeys = AVAILABLE_FEATURES.map((f) => f.key).join(", ");
     const sectionKeys = AVAILABLE_SECTIONS.join(", ");
 
     const systemPrompt = `You are a Greek real estate portal filter expert. Given a property type and subtype, determine the most relevant search filters to show buyers/renters. Be precise - only include filters that are genuinely useful for that property type.
 
 Available filter sections: ${sectionKeys}
-Available feature keys: ${featureKeys}
+Available feature keys: ${availableFeatureKeys}
+
+Return ONLY one valid JSON object with this exact shape:
+{
+  "sections": string[],
+  "featureKeys": string[],
+  "sizeLabel": string,
+  "priceLabel": string,
+  "bedsLabel": string | null,
+  "featuresLabel": string
+}
 
 Rules:
 - "size" is always included
@@ -100,37 +156,6 @@ Rules:
         { role: "user", content: userMsg },
       ],
       temperature: 0.1,
-      tools: [
-        {
-          type: "function",
-          function: {
-            name: "set_filters",
-            description: "Define which filter sections and feature chips to display",
-            parameters: {
-              type: "object",
-              properties: {
-                sections: {
-                  type: "array",
-                  items: { type: "string", enum: AVAILABLE_SECTIONS },
-                  description: "Ordered list of filter sections to show",
-                },
-                featureKeys: {
-                  type: "array",
-                  items: { type: "string" },
-                  description: "Feature field keys to show as filter chips",
-                },
-                sizeLabel: { type: "string", description: "Label for size input e.g. 'Plot Area (m²)'" },
-                priceLabel: { type: "string", description: "Label for price e.g. 'Monthly Rent'" },
-                bedsLabel: { type: "string", description: "Label for bedrooms/rooms, omit if not applicable" },
-                featuresLabel: { type: "string", description: "Section heading for features e.g. 'Hotel Amenities'" },
-              },
-              required: ["sections", "featureKeys", "sizeLabel", "priceLabel", "featuresLabel"],
-              additionalProperties: false,
-            },
-          },
-        },
-      ],
-      tool_choice: { type: "function", function: { name: "set_filters" } },
     });
 
     if (!response.ok) {
@@ -148,49 +173,24 @@ Rules:
     }
 
     const aiData = await response.json();
-    const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
-    if (!toolCall) throw new Error("No tool call in AI response");
-
-    let rawArgs = toolCall.function.arguments ?? "";
-    rawArgs = rawArgs.replace(/```json\s*/gi, "").replace(/```\s*/gi, "").trim();
-    const argsStart = rawArgs.indexOf("{");
-    const argsEnd = rawArgs.lastIndexOf("}");
-    if (argsStart !== -1 && argsEnd !== -1) rawArgs = rawArgs.slice(argsStart, argsEnd + 1);
-
-    // OpenAI tool-call args; shape depends on the called tool and is
-    // narrowed once we dispatch on tool name below.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let args: any;
-    try {
-      args = JSON.parse(rawArgs);
-    } catch {
-      const repaired = rawArgs
-        .replace(/,\s*}/g, "}")
-        .replace(/,\s*]/g, "]")
-        .replace(/\)\s*}/g, "}")
-        .replace(/\)\s*,/g, ",")
-        // eslint-disable-next-line no-control-regex
-        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
-      try {
-        args = JSON.parse(repaired);
-      } catch {
-        throw new Error("AI returned invalid JSON in tool call arguments");
-      }
-    }
+    const args = parseSmartFilterArgs(readOpenAITextContent(aiData));
 
     const featureMap = Object.fromEntries(AVAILABLE_FEATURES.map((f) => [f.key, f]));
-    const features = (args.featureKeys as string[])
-      .filter((k) => featureMap[k])
+    const sectionSet = new Set(AVAILABLE_SECTIONS);
+    const featureKeySet = new Set(AVAILABLE_FEATURES.map((f) => f.key));
+    const sections = coerceStringArray(args.sections, sectionSet);
+    const featureKeys = coerceStringArray(args.featureKeys, featureKeySet);
+    const features = featureKeys
       .map((k) => featureMap[k]);
 
     await recordAiCall(quota.userId, BUCKET);
     return new Response(JSON.stringify({
-      sections: args.sections,
+      sections: sections.length ? sections : ["size"],
       features,
-      sizeLabel: args.sizeLabel,
-      priceLabel: args.priceLabel,
-      bedsLabel: args.bedsLabel ?? null,
-      featuresLabel: args.featuresLabel,
+      sizeLabel: coerceString(args.sizeLabel, "Size (m²)"),
+      priceLabel: coerceString(args.priceLabel, listing_type === "rent" ? "Monthly Rent" : "Asking Price"),
+      bedsLabel: typeof args.bedsLabel === "string" ? args.bedsLabel.slice(0, 80) : null,
+      featuresLabel: coerceString(args.featuresLabel, "Features"),
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

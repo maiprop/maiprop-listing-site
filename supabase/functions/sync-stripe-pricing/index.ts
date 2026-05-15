@@ -56,6 +56,7 @@ function normalizeAudience(raw: string | null | undefined): string | null {
     raw === "buyer" ||
     raw === "seller" ||
     raw === "participant" ||
+    raw === "user" ||
     raw === "pro"
   )
     return "participant";

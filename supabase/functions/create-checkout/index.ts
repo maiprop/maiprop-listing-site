@@ -183,6 +183,7 @@ function getPlanEntitlement(planKey: string) {
 function normalizeAudience(raw: string | null | undefined): string | null {
   if (
     raw === "buyer" || raw === "seller" || raw === "participant" ||
+    raw === "user" ||
     raw === "pro"
   ) {
     return "participant";

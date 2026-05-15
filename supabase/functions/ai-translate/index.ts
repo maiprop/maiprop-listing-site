@@ -301,7 +301,6 @@ Output (JSON only):`;
       return new Response(
         JSON.stringify({
           error: "Translation parsing failed",
-          raw: cleaned.slice(0, 500),
         }),
         {
           status: 502,

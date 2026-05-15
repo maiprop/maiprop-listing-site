@@ -48,15 +48,22 @@ async function getDatabaseFallback(
   const productId =
     (profile as { subscription_product_id?: string | null } | null)
       ?.subscription_product_id ?? null;
+  const { data: validProduct } = productId
+    ? await supabaseClient
+      .from("pro_product_ids")
+      .select("product_id")
+      .eq("product_id", productId)
+      .maybeSingle()
+    : { data: null };
   const investor = investorSub as {
     status?: string;
     expires_at?: string | null;
   } | null;
 
   return {
-    subscribed: Boolean(productId) || investor?.status === "active" ||
+    subscribed: Boolean(validProduct) || investor?.status === "active" ||
       investor?.status === "trial",
-    product_id: productId,
+    product_id: validProduct ? productId : null,
     subscription_end: investor?.expires_at ?? null,
     source: "database",
   };
