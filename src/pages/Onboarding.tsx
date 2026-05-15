@@ -279,6 +279,10 @@ export default function Onboarding() {
       // before they ever pick the new typology. This effect runs before the
       // draft-restore effect because it appears earlier in source order.
       localStorage.removeItem("onboarding_draft");
+      // Also clear the listing wizard draft. A buyer switching to seller may
+      // inherit an old create-listing draft from a previous session, making
+      // the first seller landing feel trapped in listing creation.
+      localStorage.removeItem("listing_draft");
     } catch (err: unknown) {
       logger.warn("[Onboarding] role_switch_ctx cleanup failed:", err instanceof Error ? err.message : err);
     }
@@ -869,12 +873,23 @@ export default function Onboarding() {
       ? `Your previous subscription was cancelled at period end. Visit Pricing to activate your ${upgradedPlanName}.`
       : null;
 
+    const isRoleSwitch = Boolean(ctx);
+    const sellerAction = isRoleSwitch
+      ? {
+          primary: { label: "Go to Seller Dashboard", href: "/dashboard" },
+          subtitle: "Your seller account is ready. Review your dashboard before creating a listing.",
+        }
+      : {
+          primary: { label: "Go to Dashboard", href: "/dashboard/listings" },
+          subtitle: "Your account is ready. Head to your dashboard to create your first listing.",
+        };
+
     const PARTICIPANT_ACTIONS: Record<string, {
       primary: { label: string; href: string };
       subtitle: string;
     }> = {
       buyer:         { primary: { label: "Go to Dashboard", href: "/dashboard" },          subtitle: "Your account is ready. Start exploring properties." },
-      seller:        { primary: { label: "Go to Dashboard", href: "/dashboard/listings" }, subtitle: "Your account is ready. Head to your dashboard to create your first listing." },
+      seller:        sellerAction,
       agent:         { primary: { label: "Go to Dashboard", href: "/dashboard/listings" }, subtitle: upgradeSubtitle ?? "Your agent account is ready." },
       developer:     isProOnly
         ? { primary: { label: "Set up your subscription", href: "/pricing?tab=developer" }, subtitle: "A paid plan is required to start creating projects." }
@@ -894,6 +909,7 @@ export default function Onboarding() {
         selectedServicesCount={Object.keys(selectedServices).length}
         actions={actions}
         navigate={navigate}
+        autoRedirect={!isRoleSwitch}
         onUpgradeToPro={participantId === "professional" ? handleUpgradeToPro : undefined}
         professionalProPrice={professionalProPrice}
       />
