@@ -22,37 +22,6 @@ const getAllowedDestructiveProjectRefs = (): string[] =>
     .map((ref) => ref.trim())
     .filter(Boolean);
 
-const destructiveLiveE2EChecks: DestructiveLiveE2ECheck[] = [
-  () =>
-    process.env.E2E_ALLOW_DESTRUCTIVE_LIVE_TESTS === "true"
-      ? null
-      : deny(
-          "Set E2E_ALLOW_DESTRUCTIVE_LIVE_TESTS=true only for an isolated test project.",
-        ),
-  ({ projectRef }) =>
-    projectRef
-      ? null
-      : deny("VITE_SUPABASE_URL must point at a real Supabase project."),
-  ({ projectRef }) =>
-    projectRef && KNOWN_PRODUCTION_PROJECT_REFS.has(projectRef)
-      ? deny(
-          `Refusing destructive E2E against known production Supabase project ${projectRef}.`,
-        )
-      : null,
-  ({ allowlist }) =>
-    allowlist.length > 0
-      ? null
-      : deny(
-          "E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS must explicitly name the isolated destructive-test Supabase project.",
-        ),
-  ({ allowlist, projectRef }) =>
-    projectRef && allowlist.includes(projectRef)
-      ? null
-      : deny(
-          `Supabase project ${projectRef ?? "unknown"} is not in E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS.`,
-        ),
-];
-
 export const getSupabaseProjectRef = (
   url = process.env.VITE_SUPABASE_URL ?? "",
 ): string | null => {
@@ -60,15 +29,70 @@ export const getSupabaseProjectRef = (
   return match?.[1] ?? null;
 };
 
-export const canRunDestructiveLiveE2E = (): DestructiveLiveE2EDecision => {
-  const context: DestructiveLiveE2EContext = {
-    allowlist: getAllowedDestructiveProjectRefs(),
-    projectRef: getSupabaseProjectRef(),
-  };
-  const failedCheck = destructiveLiveE2EChecks
-    .map((check) => check(context))
-    .find((decision) => decision !== null);
+const requireDestructiveLiveE2EFlag: DestructiveLiveE2ECheck = () =>
+  process.env.E2E_ALLOW_DESTRUCTIVE_LIVE_TESTS === "true"
+    ? null
+    : deny(
+        "Set E2E_ALLOW_DESTRUCTIVE_LIVE_TESTS=true only for an isolated test project.",
+      );
 
+const requireSupabaseProjectRef: DestructiveLiveE2ECheck = ({ projectRef }) =>
+  projectRef
+    ? null
+    : deny("VITE_SUPABASE_URL must point at a real Supabase project.");
+
+const rejectKnownProductionProject: DestructiveLiveE2ECheck = ({
+  projectRef,
+}) =>
+  projectRef && KNOWN_PRODUCTION_PROJECT_REFS.has(projectRef)
+    ? deny(
+        `Refusing destructive E2E against known production Supabase project ${projectRef}.`,
+      )
+    : null;
+
+const requireExplicitAllowlist: DestructiveLiveE2ECheck = ({ allowlist }) =>
+  allowlist.length > 0
+    ? null
+    : deny(
+        "E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS must explicitly name the isolated destructive-test Supabase project.",
+      );
+
+const requireAllowedProjectRef: DestructiveLiveE2ECheck = ({
+  allowlist,
+  projectRef,
+}) =>
+  projectRef && allowlist.includes(projectRef)
+    ? null
+    : deny(
+        `Supabase project ${projectRef ?? "unknown"} is not in E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS.`,
+      );
+
+const destructiveLiveE2EChecks: DestructiveLiveE2ECheck[] = [
+  requireDestructiveLiveE2EFlag,
+  requireSupabaseProjectRef,
+  rejectKnownProductionProject,
+  requireExplicitAllowlist,
+  requireAllowedProjectRef,
+];
+
+const getDestructiveLiveE2EContext = (): DestructiveLiveE2EContext => ({
+  allowlist: getAllowedDestructiveProjectRefs(),
+  projectRef: getSupabaseProjectRef(),
+});
+
+const getDestructiveLiveE2EFailure = (
+  context: DestructiveLiveE2EContext,
+): DestructiveLiveE2EDecision | undefined =>
+  destructiveLiveE2EChecks
+    .map((check) => check(context))
+    .find(
+      (decision): decision is DestructiveLiveE2EDecision => decision !== null,
+    );
+
+export const canRunDestructiveLiveE2E = (): DestructiveLiveE2EDecision => {
+  const failedCheck = getDestructiveLiveE2EFailure(
+    getDestructiveLiveE2EContext(),
+  );
   return (
     failedCheck ?? {
       ok: true,
