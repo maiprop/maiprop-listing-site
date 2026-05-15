@@ -69,26 +69,30 @@ const logStep = (step: string, details?: unknown): void => {
   );
 };
 
-/** Accepts only same-origin absolute paths starting with "/" (and not "//" or "/\\").
- *  Returns null for anything else so callers fall back to a server-controlled default.
- *  Exported so unit tests can cover every branch without spinning up the handler. */
-export const sanitizeRedirectPath = (raw: unknown): string | null => {
-  return isSafeRedirectPath(raw) ? raw : null;
-};
-
 const UNSAFE_REDIRECT_PREFIXES = ["//", "/\\"];
 
 const hasUnsafeRedirectPrefix = (raw: string): boolean => {
   return UNSAFE_REDIRECT_PREFIXES.some((prefix) => raw.startsWith(prefix));
 };
 
+const REDIRECT_PATH_VALIDATORS = [
+  (raw: string) => raw.length > 0,
+  (raw: string) => raw.length <= 512,
+  (raw: string) => raw.startsWith("/"),
+  (raw: string) => !hasUnsafeRedirectPrefix(raw),
+  (raw: string) => !/[\r\n\t]/.test(raw),
+];
+
 const isSafeRedirectPath = (raw: unknown): raw is string => {
   return typeof raw === "string" &&
-    raw.length > 0 &&
-    raw.length <= 512 &&
-    raw.startsWith("/") &&
-    !hasUnsafeRedirectPrefix(raw) &&
-    !/[\r\n\t]/.test(raw);
+    REDIRECT_PATH_VALIDATORS.every((validator) => validator(raw));
+};
+
+/** Accepts only same-origin absolute paths starting with "/" (and not "//" or "/\\").
+ *  Returns null for anything else so callers fall back to a server-controlled default.
+ *  Exported so unit tests can cover every branch without spinning up the handler. */
+export const sanitizeRedirectPath = (raw: unknown): string | null => {
+  return isSafeRedirectPath(raw) ? raw : null;
 };
 
 /** Shape of a single `pricing_configs` row we care about. The full table is
@@ -127,11 +131,6 @@ export const normalizePlanKey = (raw: unknown): string | null => {
   return PLAN_KEY_RE.test(plan) ? plan : null;
 };
 
-export const normalizeBillingCycle = (raw: unknown): BillingCycle | null => {
-  const alias = toBillingCycleAlias(raw);
-  return alias === null ? null : BILLING_CYCLE_ALIASES[alias] ?? null;
-};
-
 const BILLING_CYCLE_ALIASES: Record<string, BillingCycle> = {
   "": "monthly",
   annual: "annual",
@@ -144,6 +143,11 @@ const BILLING_CYCLE_ALIASES: Record<string, BillingCycle> = {
 const toBillingCycleAlias = (raw: unknown): string | null => {
   if (raw === undefined || raw === null) return "";
   return typeof raw === "string" ? raw : null;
+};
+
+export const normalizeBillingCycle = (raw: unknown): BillingCycle | null => {
+  const alias = toBillingCycleAlias(raw);
+  return alias === null ? null : BILLING_CYCLE_ALIASES[alias] ?? null;
 };
 
 export const isInviteOnlyCheckoutPlan = (planKey: string): boolean => {
@@ -304,33 +308,10 @@ const getFirstConfiguredEnvPrice = (
   return null;
 };
 
-const getDbStripePriceId = (
-  row: PricingConfigRow | null,
-  billingCycle: BillingCycle,
+const firstConfiguredValue = (
+  values: Array<string | undefined>,
 ): string | undefined => {
-  return billingCycle === "annual"
-    ? getAnnualDbStripePriceId(row)
-    : getMonthlyDbStripePriceId(row);
-};
-
-const getAnnualDbStripePriceId = (
-  row: PricingConfigRow | null,
-): string | undefined => {
-  const meta = row?.metadata ?? {};
-  return meta.stripe_price_id_annual ??
-    meta.stripe_annual_price_id ??
-    meta.stripe_price_id_yearly ??
-    meta.stripe_yearly_price_id ??
-    getUnitScopedStripePriceId(row, "yearly");
-};
-
-const getMonthlyDbStripePriceId = (
-  row: PricingConfigRow | null,
-): string | undefined => {
-  const meta = row?.metadata ?? {};
-  return meta.stripe_price_id_monthly ??
-    meta.stripe_monthly_price_id ??
-    getNonYearlyStripePriceId(row);
+  return values.find((value) => Boolean(value));
 };
 
 const getUnitScopedStripePriceId = (
@@ -344,6 +325,39 @@ const getNonYearlyStripePriceId = (
   row: PricingConfigRow | null,
 ): string | undefined => {
   return row?.unit !== "yearly" ? row?.metadata?.stripe_price_id : undefined;
+};
+
+const getAnnualDbStripePriceId = (
+  row: PricingConfigRow | null,
+): string | undefined => {
+  const meta = row?.metadata ?? {};
+  return firstConfiguredValue([
+    meta.stripe_price_id_annual,
+    meta.stripe_annual_price_id,
+    meta.stripe_price_id_yearly,
+    meta.stripe_yearly_price_id,
+    getUnitScopedStripePriceId(row, "yearly"),
+  ]);
+};
+
+const getMonthlyDbStripePriceId = (
+  row: PricingConfigRow | null,
+): string | undefined => {
+  const meta = row?.metadata ?? {};
+  return firstConfiguredValue([
+    meta.stripe_price_id_monthly,
+    meta.stripe_monthly_price_id,
+    getNonYearlyStripePriceId(row),
+  ]);
+};
+
+const getDbStripePriceId = (
+  row: PricingConfigRow | null,
+  billingCycle: BillingCycle,
+): string | undefined => {
+  return billingCycle === "annual"
+    ? getAnnualDbStripePriceId(row)
+    : getMonthlyDbStripePriceId(row);
 };
 
 const queryActivePricingConfig = async (
@@ -392,6 +406,36 @@ const getDefaultStripePrice = (
     : null;
 };
 
+const buildDbCheckoutPlan = (
+  row: PricingConfigRow | null,
+  planKey: string,
+  billingCycle: BillingCycle,
+  entitlement: NonNullable<ReturnType<typeof getPlanEntitlement>>,
+): CheckoutPlan | null => {
+  const stripePriceId = getDbStripePriceId(row, billingCycle);
+  const rowAudience = normalizeAudience(row?.audience ?? null);
+  return stripePriceId && rowAudience === entitlement.audience
+    ? buildCheckoutPlan(
+      stripePriceId,
+      planKey,
+      billingCycle,
+      row?.metadata?.stripe_product_id,
+    )
+    : null;
+};
+
+const buildFallbackCheckoutPlan = (
+  planKey: string,
+  billingCycle: BillingCycle,
+): CheckoutPlan | null => {
+  const envPrice = getFirstConfiguredEnvPrice(planKey, billingCycle);
+  return buildCheckoutPlan(
+    envPrice ?? getDefaultStripePrice(planKey, billingCycle),
+    planKey,
+    billingCycle,
+  );
+};
+
 /** Plan keys: active DB pricing_configs.metadata.stripe_price_id, then env STRIPE_PRICE_<UPPERCASE_KEY>. */
 const getCheckoutPlan = async (
   supabase: unknown,
@@ -402,23 +446,8 @@ const getCheckoutPlan = async (
   if (!entitlement) return null;
 
   const row = await queryActivePricingConfig(supabase, planKey);
-  const stripePriceId = getDbStripePriceId(row, billingCycle);
-  const rowAudience = normalizeAudience(row?.audience ?? null);
-  if (stripePriceId && rowAudience === entitlement.audience) {
-    return buildCheckoutPlan(
-      stripePriceId,
-      planKey,
-      billingCycle,
-      row?.metadata?.stripe_product_id,
-    );
-  }
-
-  const envPrice = getFirstConfiguredEnvPrice(planKey, billingCycle);
-  return buildCheckoutPlan(
-    envPrice ?? getDefaultStripePrice(planKey, billingCycle),
-    planKey,
-    billingCycle,
-  );
+  return buildDbCheckoutPlan(row, planKey, billingCycle, entitlement) ??
+    buildFallbackCheckoutPlan(planKey, billingCycle);
 };
 
 const findOwnedStripeCustomer = async (
