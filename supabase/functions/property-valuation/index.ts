@@ -7,7 +7,6 @@ import { createLogger } from "../_shared/logger.ts";
 const log = createLogger("property-valuation");
 
 const BUCKET = "property-valuation";
-const AUTH_MODE = "function-verified";
 const valuationLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 15, windowMs: 60_000, failClosed: true });
 
 // ── Greece 2026 market benchmarks ─────────────────────────────────────────────
@@ -267,7 +266,6 @@ function fallbackValuation(input: { // skipcq: JS-R1005 - Deterministic valuatio
 }
 
 Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates auth, quota, valuation parsing, fallback, and response shaping.
-  void AUTH_MODE;
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);

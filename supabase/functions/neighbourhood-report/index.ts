@@ -8,7 +8,6 @@ import { createLogger } from "../_shared/logger.ts";
 const log = createLogger("neighbourhood-report");
 
 const BUCKET = "neighbourhood-report";
-const AUTH_MODE = "function-verified";
 const neighbourhoodLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 15, windowMs: 60_000, failClosed: true });
 
 function fallbackReport(city: string, address?: string, region?: string) { // skipcq: JS-R1005 - Deterministic fallback report keeps section defaults together when AI output is unavailable.
@@ -66,7 +65,6 @@ function fallbackReport(city: string, address?: string, region?: string) { // sk
 }
 
 Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates auth, quota, provider JSON parsing, fallback, and response shaping.
-  void AUTH_MODE;
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);

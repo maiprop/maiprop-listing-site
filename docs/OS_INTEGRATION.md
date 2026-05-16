@@ -113,7 +113,6 @@ Reads from Hub table `firesale_requests`.
 
 **OS API:**
 
-
 - Valuation property report: `GET /api/v1/reports/valuation/property` with flattened `PropertyFeaturesRequest` query params (`constructionYear`, `propertyLatitude`, `propertyLongitude`, `propertySquareMeters`, `propertyFloor`, `propertyCategory`, `address`) plus optional `lang`, `since`, `to`.
 - Valuation AI narrative: `GET /api/v1/reports/valuation/property/ai` with the same query params.
 - Legacy non-valuation fallback: `GET /api/v1/reports/listing/:listingId?type=neighbourhood` or an override path via `MAIPROP_OS_REPORT_PATH`.
@@ -122,14 +121,12 @@ Reads from Hub table `firesale_requests`.
 
 **Response:**  
 
-
 - Valuation success: `{ ok: true, report: { kind: "valuation-property-html", html, ai, features, fileName }, source: "os" }`.
 - Legacy success: `{ ok: true, report: <payload>, source: "os" }` when the OS returns a report.
 - `{ ok: true, report: null, source: "os" }` when the OS has no report (e.g. 404).  
 - `{ ok: false, error }` on failure.
 
 **Frontend:**  
-
 
 - `PropertyReportCard` calls `fetch-report-from-os`. If OS returns printable report HTML, the user gets an `Export PDF` action. If OS has no report, the card enters a disabled "Report unavailable" state.
 - Charging is handled server-side by `fetch-report-from-os`: the first user fetch for a cached report generation inserts `usage_property_reports`; repeated fetches by the same user for that cached generation are not charged. Other users who fetch the same cached report are charged once.

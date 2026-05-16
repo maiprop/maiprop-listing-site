@@ -34,7 +34,11 @@ describe("critical business invariants", () => {
 
     expect(grants).toContain("authenticated must not update public.profiles.force_pro_access");
     expect(authContext).toContain("force_pro_access");
-    expect(authContext).toContain("Sensitive columns");
+    expect(authContext).toContain("const ALLOWED_FIELDS");
+    expect(authContext).toContain("Privileged account fields");
+    expect(authContext).not.toContain('"force_pro_access",');
+    expect(authContext).not.toContain('"subscription_product_id",');
+    expect(authContext).not.toContain('"is_platform_admin",');
   });
 
   it("keeps invite-only investor access out of direct checkout and self-service onboarding", () => {
