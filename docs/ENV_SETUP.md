@@ -171,6 +171,7 @@ fail-fast behavior.
 | `ONBOARDING_TEST_EMAIL` | staging onboarding E2E user | repo or staging environment |
 | `ONBOARDING_TEST_PASSWORD` | staging onboarding E2E password | repo or staging environment |
 | `SUPABASE_SERVICE_ROLE_KEY` | staging-only service role for security tests and fixtures | staging environment only |
+| `MAIPROP_EDGE_TEST_AUTH_BYPASS` | explicit CI-only bypass marker for edge-function tests that exercise handler internals without live Supabase Auth | CI test environment only |
 
 Additional seeded E2E accounts:
 
