@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const migration = readFileSync(
-  resolve(process.cwd(), "supabase/migrations/20260516055821_guard_record_listing_view_public_visibility.sql"),
+  resolve(process.cwd(), "supabase/migrations/20260707090000_guard_record_listing_view_public_visibility.sql"),
   "utf8",
 );
 const normalizedSql = migration.toLowerCase();

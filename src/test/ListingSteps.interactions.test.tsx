@@ -3,6 +3,7 @@ import { fireEvent, screen } from "@testing-library/react";
 import { renderWithProviders } from "@/test/utils";
 import { StepDetails } from "@/components/listings/StepDetails";
 import { StepPricing } from "@/components/listings/StepPricing";
+import { StepType } from "@/components/listings/StepType";
 import type { ListingFormData, AIPriceSuggestion } from "@/hooks/useListingForm";
 
 const baseForm = (overrides: Partial<ListingFormData> = {}) => ({
@@ -57,6 +58,39 @@ const baseForm = (overrides: Partial<ListingFormData> = {}) => ({
 const noopRef = () => () => {};
 
 describe("listing step detail interactions", () => {
+  it("forwards listing type, pre-sale, off-market, property type, and subtype changes", () => {
+    const set = vi.fn();
+    const toggle = vi.fn();
+    renderWithProviders(
+      <StepType
+        form={baseForm({
+          listing_type: "sale",
+          property_type: "commercial",
+          commercial_subtype: "retail",
+          is_pre_sale: true,
+          is_off_market: false,
+        })}
+        set={set}
+        toggle={toggle}
+        showPreSaleOption={true}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /for rent/i }));
+    fireEvent.click(screen.getByLabelText(/pre-sale/i));
+    fireEvent.change(screen.getByRole("spinbutton"), { target: { value: "2028" } });
+    fireEvent.click(screen.getByLabelText(/off-market/i));
+    fireEvent.click(screen.getByRole("button", { name: /land/i }));
+    fireEvent.click(screen.getByTitle(/street-level commercial space/i));
+
+    expect(set).toHaveBeenCalledWith("listing_type", "rent");
+    expect(toggle).toHaveBeenCalledWith("is_pre_sale");
+    expect(set).toHaveBeenCalledWith("year_built", "2028");
+    expect(toggle).toHaveBeenCalledWith("is_off_market");
+    expect(set).toHaveBeenCalledWith("property_type", "land");
+    expect(set).toHaveBeenCalledWith("commercial_subtype", "");
+  });
+
   it("shows validation messages and forwards residential field edits", () => {
     const set = vi.fn();
     const handleAiDescription = vi.fn().mockResolvedValue(undefined);
@@ -77,16 +111,81 @@ describe("listing step detail interactions", () => {
     fireEvent.change(screen.getByPlaceholderText(/modern 2-bed/i), { target: { value: "Sunny apartment" } });
     fireEvent.change(screen.getByPlaceholderText(/Describe the property/i), { target: { value: "Bright corner home" } });
     fireEvent.change(screen.getByPlaceholderText("85"), { target: { value: "91" } });
-    fireEvent.change(screen.getByPlaceholderText("2"), { target: { value: "3" } });
+    fireEvent.change(screen.getByPlaceholderText("2010"), { target: { value: "2008" } });
+    const numericTwos = screen.getAllByPlaceholderText("2");
+    fireEvent.change(numericTwos[0], { target: { value: "3" } });
+    fireEvent.change(screen.getAllByPlaceholderText("1")[0], { target: { value: "2" } });
+    fireEvent.change(screen.getAllByPlaceholderText("1")[1], { target: { value: "1" } });
+    fireEvent.change(screen.getAllByPlaceholderText("1")[2], { target: { value: "1" } });
+    fireEvent.change(screen.getAllByPlaceholderText("1")[3], { target: { value: "1" } });
+    fireEvent.change(screen.getAllByPlaceholderText("1")[4], { target: { value: "2" } });
+    fireEvent.change(screen.getByPlaceholderText("3"), { target: { value: "4" } });
+    fireEvent.change(screen.getByPlaceholderText("6"), { target: { value: "7" } });
+    const [heating, condition] = screen.getAllByRole("combobox");
+    fireEvent.change(heating, { target: { value: "autonomous_gas" } });
+    fireEvent.change(condition, { target: { value: "renovated" } });
     fireEvent.click(screen.getByRole("button", { name: /write with ai/i }));
     fireEvent.click(screen.getByRole("button", { name: "B+" }));
 
     expect(set).toHaveBeenCalledWith("title", "Sunny apartment");
     expect(set).toHaveBeenCalledWith("description", "Bright corner home");
     expect(set).toHaveBeenCalledWith("sqm", "91");
+    expect(set).toHaveBeenCalledWith("year_built", "2008");
     expect(set).toHaveBeenCalledWith("bedrooms", "3");
+    expect(set).toHaveBeenCalledWith("bathrooms", "2");
+    expect(set).toHaveBeenCalledWith("wc_count", "1");
+    expect(set).toHaveBeenCalledWith("kitchens", "1");
+    expect(set).toHaveBeenCalledWith("living_rooms", "1");
+    expect(set).toHaveBeenCalledWith("levels", "2");
+    expect(set).toHaveBeenCalledWith("floor", "4");
+    expect(set).toHaveBeenCalledWith("total_floors", "7");
+    expect(set).toHaveBeenCalledWith("heating_system", "autonomous_gas");
+    expect(set).toHaveBeenCalledWith("construction_status", "renovated");
     expect(set).toHaveBeenCalledWith("energy_class", "B+");
     expect(handleAiDescription).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders commercial-specific fields and forwards every commercial edit", () => {
+    const set = vi.fn();
+    renderWithProviders(
+      <StepDetails
+        form={baseForm({ property_type: "commercial", sqm: "250" })}
+        set={set}
+        errors={{}}
+        setFieldRef={noopRef}
+        aiDescLoading={false}
+        handleAiDescription={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText(/modern 2-bed/i), { target: { value: "Street shop" } });
+    fireEvent.change(screen.getByPlaceholderText(/Describe the property/i), { target: { value: "High-street commercial unit" } });
+    fireEvent.change(screen.getByPlaceholderText("85"), { target: { value: "260" } });
+    fireEvent.change(screen.getByPlaceholderText("2010"), { target: { value: "1998" } });
+    const [subtype, heating, condition] = screen.getAllByRole("combobox");
+    fireEvent.change(subtype, { target: { value: "warehouse" } });
+    fireEvent.change(screen.getByPlaceholderText("500"), { target: { value: "540" } });
+    fireEvent.change(screen.getByPlaceholderText("3.5"), { target: { value: "4.2" } });
+    fireEvent.change(screen.getAllByPlaceholderText("2")[0], { target: { value: "3" } });
+    fireEvent.change(screen.getByPlaceholderText("0"), { target: { value: "1" } });
+    fireEvent.change(screen.getByPlaceholderText("4"), { target: { value: "6" } });
+    fireEvent.change(heating, { target: { value: "central" } });
+    fireEvent.change(condition, { target: { value: "renovated" } });
+    fireEvent.click(screen.getByRole("button", { name: "A" }));
+
+    expect(set).toHaveBeenCalledWith("title", "Street shop");
+    expect(set).toHaveBeenCalledWith("description", "High-street commercial unit");
+    expect(set).toHaveBeenCalledWith("sqm", "260");
+    expect(set).toHaveBeenCalledWith("year_built", "1998");
+    expect(set).toHaveBeenCalledWith("commercial_subtype", "warehouse");
+    expect(set).toHaveBeenCalledWith("plot_surface", "540");
+    expect(set).toHaveBeenCalledWith("floor_height", "4.2");
+    expect(set).toHaveBeenCalledWith("wc_count", "3");
+    expect(set).toHaveBeenCalledWith("floor", "1");
+    expect(set).toHaveBeenCalledWith("total_floors", "6");
+    expect(set).toHaveBeenCalledWith("heating_system", "central");
+    expect(set).toHaveBeenCalledWith("construction_status", "renovated");
+    expect(set).toHaveBeenCalledWith("energy_class", "A");
   });
 
   it("renders land-specific selects and forwards their changes", () => {
@@ -103,12 +202,30 @@ describe("listing step detail interactions", () => {
     );
 
     expect(screen.getByRole("button", { name: /generating/i })).toBeDisabled();
+    fireEvent.change(screen.getByPlaceholderText(/modern 2-bed/i), { target: { value: "Buildable plot" } });
+    fireEvent.change(screen.getByPlaceholderText(/Describe the property/i), { target: { value: "Corner land plot" } });
+    fireEvent.change(screen.getByPlaceholderText("85"), { target: { value: "620" } });
+    fireEvent.change(screen.getByPlaceholderText("2010"), { target: { value: "2000" } });
     fireEvent.change(screen.getByPlaceholderText("21"), { target: { value: "18.5" } });
+    fireEvent.change(screen.getByPlaceholderText("36"), { target: { value: "42" } });
+    fireEvent.change(screen.getByPlaceholderText("50"), { target: { value: "60" } });
+    fireEvent.change(screen.getByPlaceholderText("400"), { target: { value: "450" } });
+    fireEvent.change(screen.getByPlaceholderText("500"), { target: { value: "800" } });
+    fireEvent.change(screen.getByPlaceholderText("2000"), { target: { value: "1800" } });
     fireEvent.change(screen.getAllByRole("combobox")[0], { target: { value: "steep" } });
     fireEvent.change(screen.getAllByRole("combobox")[1], { target: { value: "tourist" } });
     fireEvent.change(screen.getAllByRole("combobox")[2], { target: { value: "paved" } });
 
+    expect(set).toHaveBeenCalledWith("title", "Buildable plot");
+    expect(set).toHaveBeenCalledWith("description", "Corner land plot");
+    expect(set).toHaveBeenCalledWith("sqm", "620");
+    expect(set).toHaveBeenCalledWith("year_built", "2000");
     expect(set).toHaveBeenCalledWith("facade_length", "18.5");
+    expect(set).toHaveBeenCalledWith("plot_depth", "42");
+    expect(set).toHaveBeenCalledWith("coverage_ratio", "60");
+    expect(set).toHaveBeenCalledWith("building_allowance", "450");
+    expect(set).toHaveBeenCalledWith("distance_from_sea", "800");
+    expect(set).toHaveBeenCalledWith("distance_from_city", "1800");
     expect(set).toHaveBeenCalledWith("slope", "steep");
     expect(set).toHaveBeenCalledWith("zone_type", "tourist");
     expect(set).toHaveBeenCalledWith("road_type", "paved");

@@ -1,11 +1,12 @@
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { fireEvent, screen, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { renderWithProviders } from "@/test/utils";
 import type { ListingCardWithRaw } from "@/lib/listingsCardUtils";
 
-const { filterState, setParam, clearAllFilters, toggleMulti, pipelineState } = vi.hoisted(() => {
+const { filterState, setParam, setParams, clearAllFilters, toggleMulti, pipelineState, authState } = vi.hoisted(() => {
   const setParam = vi.fn();
+  const setParams = vi.fn();
   const clearAllFilters = vi.fn();
   const toggleMulti = vi.fn();
   const filterState = {
@@ -35,7 +36,7 @@ const { filterState, setParam, clearAllFilters, toggleMulti, pipelineState } = v
     activeFilterCount: 0,
     currentFilters: {},
     setParam,
-    setParams: vi.fn(),
+    setParams,
     toggleMulti,
     clearAllFilters,
     applyAIFilters: vi.fn(),
@@ -49,7 +50,8 @@ const { filterState, setParam, clearAllFilters, toggleMulti, pipelineState } = v
     isFetchingNextPage: false,
     sentinelRef: { current: null },
   };
-  return { filterState, setParam, clearAllFilters, toggleMulti, pipelineState };
+  const authState = { user: null as null | { id: string } };
+  return { filterState, setParam, setParams, clearAllFilters, toggleMulti, pipelineState, authState };
 });
 
 vi.mock("@/hooks/useListingsFilters", () => ({
@@ -65,7 +67,7 @@ vi.mock("@/hooks/useSmartFilters", () => ({
 }));
 
 vi.mock("@/contexts/AuthContext", () => ({
-  useAuth: () => ({ user: null }),
+  useAuth: () => authState,
 }));
 
 vi.mock("@/hooks/useCookieConsent", () => ({
@@ -133,7 +135,18 @@ vi.mock("@/components/CompareDrawer", () => ({
 }));
 
 vi.mock("@/components/MapView", () => ({
-  MapView: () => <div data-testid="map-view" />,
+  MapView: ({
+    onVisibleListingsChange,
+    onPolygonFilter,
+  }: {
+    onVisibleListingsChange?: (ids: Set<string>) => void;
+    onPolygonFilter?: (ids: Set<string>) => void;
+  }) => (
+    <div data-testid="map-view">
+      <button type="button" onClick={() => onVisibleListingsChange?.(new Set(["one"]))}>Sync viewport</button>
+      <button type="button" onClick={() => onPolygonFilter?.(new Set(["two"]))}>Apply polygon</button>
+    </div>
+  ),
 }));
 
 vi.mock("@/components/listings/MapGate", () => ({
@@ -141,13 +154,17 @@ vi.mock("@/components/listings/MapGate", () => ({
 }));
 
 vi.mock("@/components/AISearchBar", () => ({
-  AISearchBar: ({ onApplyFilters }: { onApplyFilters: (filters: { city: string }) => void }) => (
-    <button type="button" onClick={() => onApplyFilters({ city: "Athens" })}>AI apply</button>
+  AISearchBar: ({ onFiltersApplied }: { onFiltersApplied: (filters: { city: string }) => void }) => (
+    <button type="button" onClick={() => onFiltersApplied({ city: "Athens" })}>AI apply</button>
   ),
 }));
 
 vi.mock("@/components/SaveSearchModal", () => ({
-  SaveSearchModal: () => <div data-testid="save-search-modal" />,
+  SaveSearchModal: ({ onClose }: { onClose: () => void }) => (
+    <div data-testid="save-search-modal">
+      <button type="button" onClick={onClose}>Close save search</button>
+    </div>
+  ),
 }));
 
 const makeListing = (id: string): ListingCardWithRaw => ({
@@ -179,19 +196,31 @@ describe("Listings page interactions", () => {
       searchQuery: "",
       selectedListingType: "sale",
       selectedType: "",
+      selectedSubtype: "",
       selectedPrice: "",
       bedsRange: ["", ""],
+      selectedEnergyClasses: [],
+      selectedFeatures: [],
+      selectedHeating: "",
+      selectedConstruction: "",
       minSqm: "",
       maxSqm: "",
       offMarketOnly: false,
       preSaleOnly: false,
+      hasVideoViewing: false,
+      hasVirtualTour: false,
+      hasMessaging: false,
+      minAiScore: 0,
+      minWalkability: 0,
       activeFilterCount: 0,
     });
+    authState.user = null;
     pipelineState.filtered = [makeListing("one"), makeListing("two"), makeListing("three"), makeListing("four")];
     pipelineState.totalLoaded = 4;
     pipelineState.isLoading = false;
     pipelineState.isError = false;
     pipelineState.hasNextPage = false;
+    pipelineState.isFetchingNextPage = false;
   });
 
   it("wires mobile filters, desktop view toggles, and advanced panel close", async () => {
@@ -261,5 +290,152 @@ describe("Listings page interactions", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Clear all" })[0]);
     expect(clearAllFilters).toHaveBeenCalled();
     expect(toggleMulti).not.toHaveBeenCalled();
+  });
+
+  it("wires dense mobile filter controls and active chips", async () => {
+    Object.assign(filterState, {
+      searchQuery: "Athens",
+      selectedType: "apartment",
+      selectedPrice: "100000-250000",
+      bedsRange: ["2", ""],
+      minSqm: "55",
+      maxSqm: "120",
+      hasVideoViewing: true,
+      hasVirtualTour: true,
+      hasMessaging: true,
+      minAiScore: 80,
+      minWalkability: 70,
+      activeFilterCount: 9,
+    });
+
+    const { default: Listings } = await import("@/pages/Listings");
+    renderWithProviders(<Listings />);
+
+    fireEvent.click(screen.getByRole("button", { name: /listingTypes\.rent/i }));
+    expect(setParam).toHaveBeenCalledWith("listing_type", "rent");
+
+    fireEvent.click(screen.getByRole("button", { name: /filters \(9 active\)/i }));
+    fireEvent.click(screen.getAllByRole("button", { name: /house/i })[0]);
+    expect(setParam).toHaveBeenCalledWith("type", "house");
+    expect(setParam).toHaveBeenCalledWith("subtype", "");
+
+    fireEvent.click(screen.getAllByRole("button", { name: /150k.*300k/i })[0]);
+    expect(setParam).toHaveBeenCalledWith("price", "150000-300000");
+
+    fireEvent.change(screen.getByPlaceholderText("Min m²"), { target: { value: "60" } });
+    fireEvent.change(screen.getByPlaceholderText("Max m²"), { target: { value: "140" } });
+    expect(setParam).toHaveBeenCalledWith("sqm_min", "60");
+    expect(setParam).toHaveBeenCalledWith("sqm_max", "140");
+
+    fireEvent.click(screen.getAllByRole("button", { name: "3+" })[0]);
+    expect(setParam).toHaveBeenCalledWith("beds_min", "3");
+
+    fireEvent.click(screen.getByLabelText(/off-market/i));
+    fireEvent.click(screen.getByLabelText(/pre-sale/i));
+    expect(setParam).toHaveBeenCalledWith("off_market", "1");
+    expect(setParam).toHaveBeenCalledWith("pre_sale", "1");
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear all filters" }));
+    expect(clearAllFilters).toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: /filters \(9 active\)/i }));
+    fireEvent.click(screen.getAllByRole("button", { name: /size/i })[0]);
+    expect(setParam).toHaveBeenCalledWith("sqm_min", "");
+    expect(setParam).toHaveBeenCalledWith("sqm_max", "");
+
+    for (const name of [/video/i, /virtual/i, /messaging/i, /AI 80\+/i, /Walk 70\+/i]) {
+      fireEvent.click(screen.getAllByRole("button", { name })[0]);
+    }
+    expect(setParam).toHaveBeenCalledWith("video_viewing", "");
+    expect(setParam).toHaveBeenCalledWith("virtual_tour", "");
+    expect(setParam).toHaveBeenCalledWith("messaging", "");
+    expect(setParam).toHaveBeenCalledWith("min_ai_score", "");
+    expect(setParam).toHaveBeenCalledWith("min_walkability", "");
+  });
+
+  it("wires desktop dropdowns, AI filters, save search, map sync, and retry paths", async () => {
+    authState.user = { id: "user-1" };
+    Object.assign(filterState, {
+      selectedEnergyClasses: ["A+"],
+      selectedFeatures: ["pool"],
+      selectedHeating: "autonomous",
+      selectedConstruction: "new",
+      offMarketOnly: true,
+      preSaleOnly: true,
+      hasVideoViewing: true,
+      hasVirtualTour: true,
+      hasMessaging: true,
+      minAiScore: 75,
+      minWalkability: 65,
+      activeFilterCount: 10,
+    });
+
+    const reload = vi.fn();
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { ...window.location, reload },
+    });
+
+    const { default: Listings } = await import("@/pages/Listings");
+    const { rerender } = renderWithProviders(<Listings />);
+
+    fireEvent.change(screen.getByLabelText("Price range"), { target: { value: "150000-300000" } });
+    fireEvent.change(screen.getByLabelText("Sort by"), { target: { value: "price-asc" } });
+    expect(setParam).toHaveBeenCalledWith("price", "150000-300000");
+    expect(setParam).toHaveBeenCalledWith("sort", "price-asc");
+
+    fireEvent.click(screen.getByRole("button", { name: "AI apply" }));
+    expect(filterState.applyAIFilters).toHaveBeenCalledWith({ city: "Athens" });
+
+    fireEvent.click(screen.getByRole("button", { name: /listings\.saveSearch/i }));
+    expect(screen.getByTestId("save-search-modal")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Close save search" }));
+    expect(screen.queryByTestId("save-search-modal")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole("button", { name: /listingTypes\.buy/i }).at(-1)!);
+    await waitFor(() => expect(screen.getAllByRole("button", { name: /listingTypes\.buy/i }).length).toBeGreaterThan(0));
+    fireEvent.click(screen.getAllByRole("button", { name: /listingTypes\.buy/i }).at(-1)!);
+    expect(setParam).toHaveBeenCalledWith("listing_type", "sale");
+
+    fireEvent.click(screen.getByRole("button", { name: /filters\.allTypes/i }));
+    await waitFor(() => expect(screen.getAllByRole("button", { name: /apartment/i }).length).toBeGreaterThan(0));
+    fireEvent.click(screen.getAllByRole("button", { name: /apartment/i }).at(-1)!);
+    expect(setParams).toHaveBeenCalledWith([["type", "apartment"], ["subtype", ""]]);
+
+    fireEvent.click(screen.getByRole("button", { name: /split view/i }));
+    await waitFor(() => expect(screen.getByTestId("map-view")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Sync viewport" }));
+    expect(screen.getByText("1 in view")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Apply polygon" }));
+    expect(screen.getByText("1 in area")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^Map$/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^List \(/i }));
+
+    for (const name of [
+      /Energy A\+/i,
+      /pool/i,
+      /Heating:/i,
+      /new/i,
+      /off-market/i,
+      /pre-sale/i,
+      /video viewing/i,
+      /virtual tour/i,
+      /messaging/i,
+      /AI score 75\+/i,
+      /Walk 65\+/i,
+    ]) {
+      const matches = screen.getAllByRole("button", { name });
+      fireEvent.click(matches[matches.length - 1]);
+    }
+    expect(toggleMulti).toHaveBeenCalledWith("energy", "A+");
+    expect(toggleMulti).toHaveBeenCalledWith("features", "pool");
+    expect(setParam).toHaveBeenCalledWith("heating", "");
+    expect(setParam).toHaveBeenCalledWith("construction", "");
+
+    pipelineState.isError = true;
+    pipelineState.filtered = [];
+    rerender(<Listings />);
+    fireEvent.click(screen.getAllByRole("button", { name: /retry/i })[0]);
+    expect(reload).toHaveBeenCalled();
   });
 });

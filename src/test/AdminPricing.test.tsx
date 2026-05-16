@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { createTestQueryClient, renderWithProviders } from "@/test/utils";
 
 const mocks = vi.hoisted(() => ({
   supabase: null as ReturnType<typeof import("@/test/utils").makeMockSupabase> | null,
   deleteEqMock: vi.fn(),
+  upsertMock: vi.fn(),
   toastMock: { success: vi.fn(), error: vi.fn() },
   useAuthMock: vi.fn(),
 }));
@@ -72,6 +73,7 @@ const renderAdminPricing = (rows: TestPricingRow[]) => {
     expect(table).toBe("pricing_configs");
     const builder = pricingQuery(rows) as Record<string, unknown>;
     builder.delete = vi.fn().mockReturnValue({ eq: mocks.deleteEqMock });
+    builder.upsert = mocks.upsertMock;
     return builder;
   });
 
@@ -84,6 +86,8 @@ const renderAdminPricing = (rows: TestPricingRow[]) => {
 beforeEach(() => {
   mocks.deleteEqMock.mockReset();
   mocks.deleteEqMock.mockResolvedValue({ error: null });
+  mocks.upsertMock.mockReset();
+  mocks.upsertMock.mockResolvedValue({ error: null });
   mocks.supabase?.from.mockReset();
   mocks.supabase?.functions.invoke.mockReset();
   mocks.toastMock.success.mockReset();
@@ -171,5 +175,90 @@ describe("AdminPricingContent", () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["admin-pricing-configs"] });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["pricing-configs-public"] });
     expect(mocks.toastMock.success).toHaveBeenCalledWith("Pricing row deleted.");
+  });
+
+  it("adds rows, edits every table field, saves, dismisses sync banners, and closes the add modal paths", async () => {
+    const row = baseRow({ metadata: { stripe_price_id: "price_old" } });
+    mocks.supabase?.functions.invoke.mockResolvedValueOnce({
+      data: { summary: { created: 0, price_updated: 0, product_updated: 0, no_change: 1 }, results: [] },
+      error: null,
+    });
+
+    const { client } = renderAdminPricing([row]);
+    client.setQueryData(["admin-pricing-configs"], [row]);
+
+    await screen.findByDisplayValue("Agent Pro");
+
+    fireEvent.click(screen.getAllByRole("button", { name: /Add to this section/i })[0]);
+    expect(mocks.toastMock.success).toHaveBeenCalledWith("Row added. Edit and save.");
+
+    fireEvent.click(screen.getByRole("button", { name: /^Add item$/i }));
+    const modalCombos = screen.getAllByRole("combobox");
+    fireEvent.change(modalCombos.at(-2)!, { target: { value: "professional_subscription" } });
+    fireEvent.change(modalCombos.at(-1)!, { target: { value: "professional" } });
+    fireEvent.click(screen.getAllByRole("button", { name: /^Add item$/i }).at(-1)!);
+    expect(screen.queryByText("Add pricing item")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Add item$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Cancel$/i }));
+    expect(screen.queryByText("Add pricing item")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Add item$/i }));
+    fireEvent.click(screen.getByRole("button", { name: "" }));
+    expect(screen.queryByText("Add pricing item")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByDisplayValue("Agent Pro"), { target: { value: "Agent Elite" } });
+    fireEvent.change(screen.getByDisplayValue("agent_basic"), { target: { value: "agent_elite" } });
+    fireEvent.change(screen.getByDisplayValue("149"), { target: { value: "199" } });
+    fireEvent.change(screen.getAllByDisplayValue("monthly")[0], { target: { value: "annual" } });
+    fireEvent.change(screen.getAllByDisplayValue("EUR")[0], { target: { value: "USD" } });
+    fireEvent.click(screen.getAllByRole("checkbox")[0]);
+    fireEvent.change(screen.getAllByDisplayValue("2")[0], { target: { value: "9" } });
+    fireEvent.change(screen.getByDisplayValue("Unlimited listings"), { target: { value: "Priority plus" } });
+    fireEvent.change(screen.getByDisplayValue("price_old"), { target: { value: "price_new" } });
+
+    fireEvent.click(screen.getByRole("button", { name: /^Save all$/i }));
+    await waitFor(() => expect(mocks.upsertMock).toHaveBeenCalled());
+    expect(mocks.toastMock.success).toHaveBeenCalledWith("Pricing configuration saved.");
+
+    fireEvent.click(screen.getByRole("button", { name: /Sync to Stripe/i }));
+    await waitFor(() => expect(screen.getByText(/Stripe sync complete/i)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "×" }));
+    expect(screen.queryByText(/Stripe sync complete/i)).not.toBeInTheDocument();
+  });
+
+  it("seeds empty pricing and reports save, seed, delete, and Stripe creation failures", async () => {
+    mocks.upsertMock
+      .mockResolvedValueOnce({ error: null })
+      .mockResolvedValueOnce({ error: new Error("save denied") })
+      .mockResolvedValueOnce({ error: new Error("seed denied") });
+    mocks.deleteEqMock.mockResolvedValueOnce({ error: new Error("delete denied") });
+    mocks.supabase?.functions.invoke.mockResolvedValueOnce({ data: { error: "stripe denied" }, error: null });
+
+    renderAdminPricing([]);
+
+    await screen.findByText(/No pricing rows yet/i);
+    fireEvent.click(screen.getByRole("button", { name: /Seed default pricing/i }));
+    await waitFor(() => expect(mocks.toastMock.success).toHaveBeenCalledWith("Default pricing seeded. You can adjust amounts and save."));
+
+    const paidRow = baseRow();
+    cleanup();
+    const { client, rerender } = renderAdminPricing([paidRow]);
+    client.setQueryData(["admin-pricing-configs"], [paidRow]);
+    rerender(<AdminPricingContent embed />);
+
+    await screen.findByDisplayValue("Agent Pro");
+    fireEvent.click(screen.getAllByRole("button", { name: /^Save all$/i })[0]);
+    await waitFor(() => expect(mocks.toastMock.error).toHaveBeenCalledWith("save denied"));
+
+    fireEvent.click(screen.getByRole("button", { name: /Seed defaults/i }));
+    await waitFor(() => expect(mocks.toastMock.error).toHaveBeenCalledWith("seed denied"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Create Stripe price" }));
+    await waitFor(() => expect(mocks.toastMock.error).toHaveBeenCalledWith("stripe denied"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete pricing row" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(mocks.toastMock.error).toHaveBeenCalledWith("delete denied"));
   });
 });

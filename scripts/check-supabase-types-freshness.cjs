@@ -21,6 +21,23 @@ const supabaseCommand = () => {
     ? join(root, "node_modules", "supabase", "bin", "supabase.exe")
     : join(root, "node_modules", ".bin", "supabase");
   if (existsSync(localBin)) return { command: localBin, prefixArgs: [] };
+
+  if (process.platform === "win32") {
+    try {
+      const found = execFileSync("where.exe", ["supabase"], {
+        cwd: root,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      })
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .find(Boolean);
+      if (found) return { command: found, prefixArgs: [] };
+    } catch {
+      // Fall through to npx below.
+    }
+  }
+
   return {
     command: process.platform === "win32" ? "npx.cmd" : "npx",
     prefixArgs: ["supabase"],

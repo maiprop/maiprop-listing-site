@@ -202,13 +202,45 @@ describe("ProjectDetail", () => {
     expect(screen.getByText("13")).toBeInTheDocument();
 
     fireEvent.change(screen.getByDisplayValue("Marina Heights"), { target: { value: "Marina Bay" } });
+    fireEvent.change(screen.getByDisplayValue("BP-1"), { target: { value: "BP-2" } });
+    fireEvent.change(screen.getByDisplayValue("Mai Dev"), { target: { value: "Mai Urban Dev" } });
+    fireEvent.change(screen.getByDisplayValue("Studio A"), { target: { value: "Studio B" } });
+    fireEvent.change(screen.getByDisplayValue("Build Co"), { target: { value: "Build Partners" } });
+    fireEvent.change(screen.getByDisplayValue("Premium seaside homes"), { target: { value: "Premium city homes" } });
+    fireEvent.change(screen.getByDisplayValue("Akti 1"), { target: { value: "Akti 2" } });
+    fireEvent.change(screen.getByPlaceholderText("e.g. Athens"), { target: { value: "Athens" } });
+    fireEvent.change(screen.getByPlaceholderText("Municipality"), { target: { value: "Athens" } });
+    fireEvent.change(screen.getByDisplayValue("Harbour"), { target: { value: "Metro-side neighbourhood" } });
+    fireEvent.change(screen.getByDisplayValue("37.94"), { target: { value: "37.98" } });
+    fireEvent.change(screen.getByDisplayValue("23.64"), { target: { value: "23.73" } });
+    const dateInputs = Array.from(document.querySelectorAll<HTMLInputElement>('input[type="date"]'));
+    ["2026-03-01", "2026-04-01", "2026-10-01", "2027-02-01"].forEach((value, index) => {
+      fireEvent.change(dateInputs[index], { target: { value } });
+    });
     fireEvent.click(screen.getByRole("button", { name: /save/i }));
 
     await waitFor(() =>
       expect(updateProjectMock).toHaveBeenCalledWith(
         expect.objectContaining({
           id: "project-1",
-          updates: expect.objectContaining({ name: "Marina Bay" }),
+          updates: expect.objectContaining({
+            name: "Marina Bay",
+            building_permit_number: "BP-2",
+            developer_company: "Mai Urban Dev",
+            architect_group: "Studio B",
+            construction_company: "Build Partners",
+            description: "Premium city homes",
+            address: "Akti 2",
+            city: "Athens",
+            municipality: "Athens",
+            area_description: "Metro-side neighbourhood",
+            latitude: 37.98,
+            longitude: 23.73,
+            permit_approval_date: "2026-03-01",
+            construction_start_date: "2026-04-01",
+            structural_completion_date: "2026-10-01",
+            delivery_date: "2027-02-01",
+          }),
         }),
         expect.any(Object),
       ),
@@ -236,26 +268,59 @@ describe("ProjectDetail", () => {
     renderPage();
 
     fireEvent.click(screen.getByRole("button", { name: /add unit/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^cancel$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add unit/i }));
     fireEvent.change(screen.getByPlaceholderText("A101"), { target: { value: "B201" } });
+    fireEvent.change(screen.getByPlaceholderText("1"), { target: { value: "2" } });
+    fireEvent.change(screen.getByPlaceholderText("101"), { target: { value: "201" } });
+    fireEvent.change(screen.getAllByRole("combobox")[0], { target: { value: "reserved" } });
     fireEvent.change(screen.getByPlaceholderText("85"), { target: { value: "100" } });
+    fireEvent.change(screen.getByPlaceholderText("12"), { target: { value: "16" } });
     fireEvent.change(screen.getByPlaceholderText("250000"), { target: { value: "500000" } });
+    screen.getAllByPlaceholderText("2").forEach((input, index) => {
+      fireEvent.change(input, { target: { value: String(index + 2) } });
+    });
+    fireEvent.change(screen.getAllByRole("combobox")[1], { target: { value: "open" } });
+    fireEvent.change(screen.getAllByRole("combobox")[2], { target: { value: "A+" } });
+    screen.getAllByRole("checkbox").forEach((checkbox) => fireEvent.click(checkbox));
     fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
 
     expect(createUnitMock).toHaveBeenCalledWith(
-      expect.objectContaining({ project_id: "project-1", unit_id: "B201", internal_sqm: 100, price: 500000, price_per_sqm: 5000 }),
+      expect.objectContaining({
+        project_id: "project-1",
+        unit_id: "B201",
+        floor: 2,
+        unit_number: "201",
+        availability_status: "reserved",
+        internal_sqm: 100,
+        balcony_sqm: 16,
+        price: 500000,
+        price_per_sqm: 5000,
+        bedrooms: 2,
+        bathrooms: 3,
+        kitchen_type: "open",
+        energy_class: "A+",
+        sea_view: true,
+        city_view: true,
+        mountain_view: true,
+      }),
       expect.any(Object),
     );
 
     fireEvent.click(screen.getAllByRole("button", { name: /edit unit/i })[0]);
     fireEvent.change(screen.getByDisplayValue("A101"), { target: { value: "A101R" } });
+    fireEvent.change(screen.getByDisplayValue("80"), { target: { value: "88" } });
     fireEvent.click(screen.getAllByRole("button", { name: /^save$/i }).at(-1)!);
     expect(updateUnitMock).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "unit-1", projectId: "project-1", updates: expect.objectContaining({ unit_id: "A101R" }) }),
+      expect.objectContaining({ id: "unit-1", projectId: "project-1", updates: expect.objectContaining({ unit_id: "A101R", internal_sqm: 88 }) }),
       expect.any(Object),
     );
 
     fireEvent.click(screen.getByRole("button", { name: /bulk price update/i }));
     fireEvent.change(screen.getByPlaceholderText(/5 for \+5/i), { target: { value: "7.5" } });
+    fireEvent.click(screen.getByRole("button", { name: /apply to available/i }));
+    await waitFor(() => expect(screen.getByText("Apply bulk price change")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /^cancel$/i }));
     fireEvent.click(screen.getByRole("button", { name: /apply to available/i }));
     await waitFor(() => expect(screen.getByText("Apply bulk price change")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /^apply$/i }));
@@ -269,6 +334,9 @@ describe("ProjectDetail", () => {
       expect.any(Object),
     );
 
+    fireEvent.click(screen.getAllByRole("button", { name: /delete unit/i })[0]);
+    await waitFor(() => expect(screen.getByText("Remove unit")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /^cancel$/i }));
     fireEvent.click(screen.getAllByRole("button", { name: /delete unit/i })[0]);
     await waitFor(() => expect(screen.getByText("Remove unit")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /^remove$/i }));
@@ -292,11 +360,25 @@ describe("ProjectDetail", () => {
     renderPage();
 
     fireEvent.click(screen.getByRole("button", { name: /add lead/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^cancel$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add lead/i }));
     fireEvent.change(screen.getByPlaceholderText("Name *"), { target: { value: "  Maria Lead  " } });
     fireEvent.change(screen.getByPlaceholderText("Email"), { target: { value: "maria@example.com" } });
+    fireEvent.change(screen.getByPlaceholderText("Phone"), { target: { value: "+306900000000" } });
+    fireEvent.change(screen.getByPlaceholderText("Source"), { target: { value: "Portal" } });
+    fireEvent.change(screen.getByPlaceholderText("Unit of interest"), { target: { value: "A102" } });
+    fireEvent.change(screen.getByPlaceholderText("Notes"), { target: { value: "Needs a second viewing" } });
     fireEvent.click(screen.getByRole("button", { name: /^add lead$/i }));
     expect(createLeadMock).toHaveBeenCalledWith(
-      expect.objectContaining({ project_id: "project-1", name: "Maria Lead", email: "maria@example.com" }),
+      expect.objectContaining({
+        project_id: "project-1",
+        name: "Maria Lead",
+        email: "maria@example.com",
+        phone: "+306900000000",
+        source: "Portal",
+        unit_id: "A102",
+        notes: "Needs a second viewing",
+      }),
       expect.any(Object),
     );
 
@@ -309,8 +391,10 @@ describe("ProjectDetail", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /delete lead Alex Buyer/i }));
     await waitFor(() => expect(screen.getByText("Remove lead")).toBeInTheDocument());
-    const dialog = screen.getByRole("alertdialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: /^remove$/i }));
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: /^cancel$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /delete lead Alex Buyer/i }));
+    await waitFor(() => expect(screen.getByText("Remove lead")).toBeInTheDocument());
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: /^remove$/i }));
     expect(deleteLeadMock).toHaveBeenCalledWith({ id: "lead-1", projectId: "project-1" });
   });
 

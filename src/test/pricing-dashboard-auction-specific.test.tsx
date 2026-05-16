@@ -364,6 +364,31 @@ describe("Pricing focused page behavior", () => {
 });
 
 describe("Dashboard focused page behavior", () => {
+  it("recovers from lost session by signing out and returning home", async () => {
+    const signOut = vi.fn().mockResolvedValue(undefined);
+    mocks.useAuthMock.mockReturnValue({
+      user: null,
+      profile: null,
+      loading: false,
+      profileLoading: false,
+      signOut,
+      updateProfile: vi.fn(),
+      refreshProfile: vi.fn(),
+    });
+    const { default: Dashboard } = await import("@/pages/Dashboard");
+
+    renderWithProviders(
+      <Routes>
+        <Route path="/dashboard/:section?" element={<Dashboard />} />
+      </Routes>,
+      { initialPath: "/dashboard" },
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /sign out and try again/i }));
+    await waitFor(() => expect(signOut).toHaveBeenCalled());
+    expect(mocks.navigateMock).toHaveBeenCalledWith("/");
+  });
+
   it("opens the professional leads section from the overview CTA", async () => {
     mocks.useAuthMock.mockReturnValue({
       user: { id: "u-pro", email: "pro@example.com" },
@@ -386,6 +411,112 @@ describe("Dashboard focused page behavior", () => {
 
     fireEvent.click((await screen.findAllByRole("button", { name: /View Leads/i }))[0]);
     expect(await screen.findByTestId("contacts-leads")).toBeInTheDocument();
+  });
+
+  it("routes a pro seller through dashboard sections and overview CTAs", async () => {
+    mocks.useAuthMock.mockReturnValue({
+      user: { id: "u-seller", email: "seller@example.com" },
+      profile: { role: "seller", participant_type: "seller", display_name: "Selina" },
+      loading: false,
+      profileLoading: false,
+      signOut: vi.fn(),
+      updateProfile: vi.fn(),
+      refreshProfile: vi.fn(),
+    });
+    mocks.useSubscriptionMock.mockReturnValue({ isPro: true, loading: false });
+    const { default: Dashboard } = await import("@/pages/Dashboard");
+
+    renderWithProviders(
+      <Routes>
+        <Route path="/dashboard/:section?" element={<Dashboard />} />
+      </Routes>,
+      { initialPath: "/dashboard" },
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /Create Listing/i }));
+    expect(await screen.findByTestId("my-listings")).toBeInTheDocument();
+
+    for (const [label, testId] of [
+      [/Saved/i, "saved-properties"],
+      [/Messages/i, null],
+      [/Viewings/i, "viewings-tab"],
+      [/dashNav\.openHouses/i, "open-houses-tab"],
+      [/dashNav\.billing/i, "billing-tab"],
+      [/dashNav\.profile/i, "profile-editor"],
+      [/dashNav\.settings/i, "settings-section"],
+    ] as const) {
+      fireEvent.click(screen.getAllByRole("button", { name: label })[0]);
+      if (testId) expect(await screen.findByTestId(testId)).toBeInTheDocument();
+    }
+  });
+
+  it("routes an admin through every internal dashboard tab and external deal-flow link", async () => {
+    mocks.useAuthMock.mockReturnValue({
+      user: { id: "admin-1", email: "admin@example.com" },
+      profile: { role: "admin", participant_type: "admin", display_name: "Ada", verified: true },
+      loading: false,
+      profileLoading: false,
+      signOut: vi.fn(),
+      updateProfile: vi.fn(),
+      refreshProfile: vi.fn(),
+    });
+    mocks.useSubscriptionMock.mockReturnValue({ isPro: true, loading: false });
+    const { default: Dashboard } = await import("@/pages/Dashboard");
+
+    renderWithProviders(
+      <Routes>
+        <Route path="/dashboard/:section?" element={<Dashboard />} />
+      </Routes>,
+      { initialPath: "/dashboard" },
+    );
+
+    expect((await screen.findAllByRole("link", { name: /dashNav\.investorDashboard/i }))[0]).toHaveAttribute("href", "/investor-dashboard");
+
+    for (const [label, testId] of [
+      [/dashNav\.myListings/i, "my-listings"],
+      [/dashNav\.analytics/i, "analytics-tab"],
+      [/dashNav\.saved$/i, "saved-properties"],
+      [/dashNav\.savedSearches/i, "saved-searches-tab"],
+      [/dashNav\.messages/i, null],
+      [/dashNav\.viewings/i, "viewings-tab"],
+      [/dashNav\.auctionAlerts/i, "auctions-tab"],
+      [/dashNav\.openHouses/i, "open-houses-tab"],
+      [/dashNav\.myServices/i, "services-editor"],
+      [/dashNav\.booking/i, "booking-calendar"],
+      [/dashNav\.leads/i, "contacts-leads"],
+      [/dashNav\.contacts/i, "contacts-contacts"],
+      [/dashNav\.projects/i, "projects-tab"],
+      [/dashNav\.portfolios/i, "portfolios-tab"],
+      [/dashNav\.dataInput/i, "data-input-tab"],
+      [/dashNav\.billing/i, "billing-tab"],
+      [/dashNav\.profile/i, "profile-editor"],
+      [/dashNav\.settings/i, "settings-section"],
+    ] as const) {
+      fireEvent.click(screen.getAllByRole("button", { name: label })[0]);
+      if (testId) expect(await screen.findByTestId(testId)).toBeInTheDocument();
+    }
+  }, 10000);
+
+  it("honors dashboard query tabs for billing", async () => {
+    mocks.useAuthMock.mockReturnValue({
+      user: { id: "u-1", email: "buyer@example.com" },
+      profile: { role: "buyer", participant_type: "buyer", display_name: "Bia" },
+      loading: false,
+      profileLoading: false,
+      signOut: vi.fn(),
+      updateProfile: vi.fn(),
+      refreshProfile: vi.fn(),
+    });
+    const { default: Dashboard } = await import("@/pages/Dashboard");
+
+    renderWithProviders(
+      <Routes>
+        <Route path="/dashboard/:section?" element={<Dashboard />} />
+      </Routes>,
+      { initialPath: "/dashboard?tab=billing" },
+    );
+
+    expect(await screen.findByTestId("billing-tab")).toBeInTheDocument();
   });
 
   it("honors a route section change to settings", async () => {

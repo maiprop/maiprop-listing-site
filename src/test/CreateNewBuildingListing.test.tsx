@@ -140,6 +140,10 @@ describe("CreateNewBuildingListing", () => {
     fillRequiredProject();
     fireEvent.click(screen.getByRole("button", { name: /Next/i }));
     await screen.findByText(/Step 2 of 5/i);
+    fireEvent.click(screen.getByRole("button", { name: /Building/i }));
+    await screen.findByText(/Step 1 of 5/i);
+    fireEvent.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 2 of 5/i);
     fillRequiredUnit();
     fireEvent.click(screen.getByRole("button", { name: /Next/i }));
     await screen.findByText(/Step 3 of 5/i);
@@ -201,5 +205,99 @@ describe("CreateNewBuildingListing", () => {
 
     await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith("Failed to create new building listing. Please try again."));
     expect(navigateMock).not.toHaveBeenCalledWith("/new-build/listing-1");
+  });
+
+  it("exercises every wizard field, previous-step navigation, media upload, drag/drop, and cover selection", async () => {
+    uploadListingImageMock
+      .mockResolvedValueOnce({ id: "img-1", url: "https://cdn.test/drop.jpg" })
+      .mockResolvedValueOnce({ id: "img-2", url: "https://cdn.test/click.jpg" });
+
+    renderPage();
+
+    fireEvent.change(screen.getByPlaceholderText("e.g. Marina Heights"), { target: { value: "Marina Park" } });
+    fireEvent.change(screen.getByPlaceholderText("e.g. 12345/2024"), { target: { value: "98765/2026" } });
+    fireEvent.change(screen.getByPlaceholderText("e.g. Athens"), { target: { value: "Thessaloniki" } });
+    fireEvent.change(screen.getByPlaceholderText("Company name"), { target: { value: "mAI Dev" } });
+    fireEvent.change(screen.getByPlaceholderText("Architect or group"), { target: { value: "Studio North" } });
+    fireEvent.change(screen.getByPlaceholderText("Constructor"), { target: { value: "Build North" } });
+    fireEvent.change(screen.getByPlaceholderText("Δήμος"), { target: { value: "Kalamaria" } });
+    fireEvent.change(screen.getByPlaceholderText("Street, number"), { target: { value: "Seafront 12" } });
+    fireEvent.change(screen.getByPlaceholderText("37.9838"), { target: { value: "40.6401" } });
+    fireEvent.change(screen.getByPlaceholderText("23.7275"), { target: { value: "22.9444" } });
+    fireEvent.change(screen.getByPlaceholderText("Brief description..."), { target: { value: "A full project description" } });
+    fireEvent.change(screen.getByPlaceholderText("Neighbourhood, amenities..."), { target: { value: "Walkable seaside neighbourhood" } });
+    screen.getAllByDisplayValue("").filter((el) => (el as HTMLInputElement).type === "date").forEach((input, index) => {
+      fireEvent.change(input, { target: { value: `2026-0${index + 1}-01` } });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 2 of 5/i);
+
+    fireEvent.change(screen.getByPlaceholderText("A101"), { target: { value: "B203" } });
+    fireEvent.change(screen.getByPlaceholderText("101"), { target: { value: "203" } });
+    fireEvent.change(screen.getByPlaceholderText("85"), { target: { value: "92" } });
+    fireEvent.change(screen.getByPlaceholderText("12"), { target: { value: "18" } });
+    fireEvent.change(screen.getByPlaceholderText("250000"), { target: { value: "345000" } });
+    const twos = screen.getAllByPlaceholderText("2");
+    fireEvent.change(twos[0], { target: { value: "3" } });
+    fireEvent.change(twos[1], { target: { value: "2" } });
+    const ones = screen.getAllByPlaceholderText("1");
+    fireEvent.change(ones[0], { target: { value: "4" } });
+    fireEvent.change(ones[1], { target: { value: "2" } });
+    const zeroes = screen.getAllByPlaceholderText("0");
+    zeroes.forEach((input, index) => fireEvent.change(input, { target: { value: String(index + 1) } }));
+    const unitSelects = screen.getAllByRole("combobox");
+    fireEvent.change(unitSelects[0], { target: { value: "open" } });
+    fireEvent.change(unitSelects[1], { target: { value: "A" } });
+    fireEvent.change(screen.getByPlaceholderText("e.g. heat pump"), { target: { value: "heat pump" } });
+    fireEvent.change(screen.getByPlaceholderText("e.g. AC"), { target: { value: "VRF" } });
+    for (const checkbox of screen.getAllByRole("checkbox")) {
+      fireEvent.click(checkbox);
+    }
+
+    fireEvent.click(screen.getByRole("button", { name: /Back/i }));
+    await screen.findByText(/Step 1 of 5/i);
+    fireEvent.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 2 of 5/i);
+    fireEvent.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 3 of 5/i);
+
+    const mediaInputs = document.querySelectorAll<HTMLInputElement>('input[type="file"]');
+    fireEvent.change(mediaInputs[0], { target: { files: [new File(["media"], "render.jpg", { type: "image/jpeg" })] } });
+    fireEvent.change(mediaInputs[1], { target: { files: [new File(["video"], "tour.mp4", { type: "video/mp4" })] } });
+    fireEvent.change(mediaInputs[3], { target: { files: [new File(["pdf"], "brochure.pdf", { type: "application/pdf" })] } });
+    expect(screen.getByText("render.jpg")).toBeInTheDocument();
+    expect(screen.getByText("tour.mp4")).toBeInTheDocument();
+    expect(screen.getByText("brochure.pdf")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 4 of 5/i);
+    fireEvent.change(screen.getByPlaceholderText("e.g. Marina Heights - Unit A101"), { target: { value: "B203 at Marina Park" } });
+    fireEvent.change(screen.getByPlaceholderText("Describe the unit, building amenities, finishes..."), {
+      target: { value: "Detailed listing copy" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 5 of 5/i);
+
+    const dropZone = screen.getByText(/Drop photos/i).closest("div")!;
+    const dropFile = new File(["drop"], "drop.jpg", { type: "image/jpeg" });
+    fireEvent.dragOver(dropZone);
+    fireEvent.drop(dropZone, { dataTransfer: { files: [dropFile] } });
+    await waitFor(() => expect(uploadListingImageMock).toHaveBeenCalledWith(dropFile, "u-1"));
+
+    const clickFile = new File(["click"], "click.jpg", { type: "image/jpeg" });
+    fireEvent.change(document.querySelector("#nb-photo-input") as HTMLInputElement, {
+      target: { files: [clickFile] },
+    });
+    await waitFor(() => expect(uploadListingImageMock).toHaveBeenCalledWith(clickFile, "u-1"));
+
+    fireEvent.click(await screen.findByRole("button", { name: /Set as cover/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Create Listing/i }));
+
+    await waitFor(() => expect(submitMock).toHaveBeenCalledWith(expect.objectContaining({
+      finalTitle: "B203 at Marina Park",
+      additionalImageUrls: expect.arrayContaining(["https://cdn.test/drop.jpg"]),
+    })));
   });
 });

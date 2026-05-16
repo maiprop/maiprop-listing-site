@@ -2,7 +2,7 @@
 import React from "react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 const {
   useAuthMock,
@@ -208,7 +208,22 @@ describe("OpenHouseAssetControlPanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /asset control settings/i }));
     fireEvent.click(screen.getByRole("button", { name: /\+ add slot/i }));
+    const timeInputs = screen.getAllByDisplayValue(/^\d\d:\d\d$/);
+    fireEvent.change(timeInputs[0], { target: { value: "09:30" } });
+    fireEvent.change(timeInputs[1], { target: { value: "10:30" } });
+    fireEvent.change(screen.getAllByPlaceholderText("Max")[0], { target: { value: "3" } });
+    fireEvent.change(screen.getAllByDisplayValue("2")[0], { target: { value: "4" } });
+    fireEvent.click(screen.getByLabelText(/broker/i));
+    fireEvent.click(screen.getByLabelText(/require proof of funds/i));
+    fireEvent.click(screen.getByLabelText(/require proof of funds/i));
     fireEvent.change(screen.getByPlaceholderText(/Min amount/i), { target: { value: "250000" } });
+    fireEvent.click(screen.getByLabelText(/require investor/i));
+    fireEvent.click(screen.getByLabelText(/require investor/i));
+    fireEvent.change(document.querySelector<HTMLInputElement>('input[type="datetime-local"]')!, {
+      target: { value: "2026-06-01T12:00" },
+    });
+    fireEvent.click(screen.getByLabelText(/allow sealed bids/i));
+    fireEvent.click(screen.getAllByRole("button", { name: "×" })[0]);
     fireEvent.click(screen.getByRole("button", { name: /save/i }));
 
     expect(upsertSettingsMock.mutate).toHaveBeenCalledWith({
@@ -217,8 +232,21 @@ describe("OpenHouseAssetControlPanel", () => {
         min_proof_amount: 250000,
         require_proof_of_funds: true,
         require_investor_declaration: true,
+        broker_required: true,
+        allow_sealed_bids: false,
       }),
     });
+  });
+
+  it("opens registration documents and reports signed-url failures", async () => {
+    renderPanel();
+
+    fireEvent.click(screen.getAllByRole("button", { name: /ID/i })[0]);
+    expect(getOpenHouseDocSignedUrlMock).toHaveBeenCalledWith("docs/id.pdf");
+
+    getOpenHouseDocSignedUrlMock.mockRejectedValueOnce(new Error("storage"));
+    fireEvent.click(screen.getAllByRole("button", { name: /ID/i })[0]);
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith("Could not open document"));
   });
 
   it("shows winner state and hides bulk reveal once an offer is accepted", () => {
