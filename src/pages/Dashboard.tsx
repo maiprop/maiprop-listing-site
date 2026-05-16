@@ -110,7 +110,10 @@ export default function Dashboard() { // skipcq: JS-R1005
   const defaultSection = (sectionNavItems[0]?.key ?? "overview") as NavKey;
   const querySection = searchParams.get("tab") as NavKey | null;
   const requestedSection = (section as NavKey | undefined) || querySection || undefined;
-  const [activeSection, setActiveSection] = useState<NavKey>(requestedSection || defaultSection);
+  const requestedSectionIsAvailable = requestedSection === "settings" || sectionNavItems.some((item) => item.key === requestedSection);
+  const [activeSection, setActiveSection] = useState<NavKey>(
+    requestedSectionIsAvailable && requestedSection ? requestedSection : defaultSection,
+  );
 
   // Quick Sale access application status (invitation_requests) for buyers / non-investors
   const { data: invitationRequestStatus = "none" } = useQuery<"none" | "pending" | "approved" | "rejected">({

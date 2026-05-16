@@ -232,6 +232,42 @@ const LoadReportContent = ({
   </div>
 );
 
+type ReportContentContext = {
+  currentUnavailableReason: string | null;
+  isPro: boolean;
+  loadReport: () => void;
+  osReport: OsPrintableReport | null;
+  reportCount: number;
+  reportLoading: boolean;
+};
+
+const REPORT_CONTENT_RULES = [
+  {
+    when: ({ isPro }: ReportContentContext) => !isPro,
+    render: () => <ProUpgradeContent />,
+  },
+  {
+    when: ({ currentUnavailableReason }: ReportContentContext) => Boolean(currentUnavailableReason),
+    render: ({ currentUnavailableReason }: ReportContentContext) => (
+      <UnavailableContent reason={currentUnavailableReason ?? ""} />
+    ),
+  },
+  {
+    when: ({ osReport }: ReportContentContext) => Boolean(osReport),
+    render: ({ osReport }: ReportContentContext) => (
+      osReport ? <LoadedReportContent osReport={osReport} /> : null
+    ),
+  },
+  {
+    when: ({ reportCount }: ReportContentContext) => reportCount >= REPORT_INCLUDED,
+    render: () => <ExtraReportContent />,
+  },
+  {
+    when: () => true,
+    render: (context: ReportContentContext) => <LoadReportContent {...context} />,
+  },
+];
+
 export const PropertyReportCard = ({ listingId, listing }: Props) => {
   const { isPro } = useSubscription();
   const { data: reportCount = 0 } = useReportUsage();
@@ -242,24 +278,8 @@ export const PropertyReportCard = ({ listingId, listing }: Props) => {
     reportLoaded,
     reportLoading,
   } = usePropertyReportLoader(listingId, listing);
-
-  const content = !isPro
-    ? <ProUpgradeContent />
-    : currentUnavailableReason
-      ? <UnavailableContent reason={currentUnavailableReason} />
-      : osReport
-        ? <LoadedReportContent osReport={osReport} />
-        : reportCount >= REPORT_INCLUDED
-          ? <ExtraReportContent />
-          : (
-            <LoadReportContent
-              currentUnavailableReason={currentUnavailableReason}
-              isPro={isPro}
-              loadReport={loadReport}
-              reportCount={reportCount}
-              reportLoading={reportLoading}
-            />
-          );
+  const contentContext = { currentUnavailableReason, isPro, loadReport, osReport, reportCount, reportLoading };
+  const content = REPORT_CONTENT_RULES.find((rule) => rule.when(contentContext))?.render(contentContext);
 
   return (
     <div className={`glass-card rounded-2xl overflow-hidden border ${reportLoaded ? "border-primary/30" : "border-primary/20"}`}>

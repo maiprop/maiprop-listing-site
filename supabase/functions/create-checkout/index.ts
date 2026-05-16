@@ -652,9 +652,7 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
         );
       }
 
-      const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
-        apiVersion: "2025-08-27.basil",
-      });
+      const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "");
       const customerId = await getOrCreateOwnedStripeCustomer(stripe, user);
       const success = `${origin}${sanitizeRedirectPath(body.success_url) ?? "/dashboard/billing?checkout=success"}`;
       const cancel = `${origin}${sanitizeRedirectPath(body.cancel_url) ?? "/dashboard/billing?checkout=cancelled"}`;
@@ -802,9 +800,7 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
       );
     }
 
-    const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
-      apiVersion: "2025-08-27.basil",
-    });
+    const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "");
 
     const checkoutPlan = await getCheckoutPlan(
       supabaseClient,
