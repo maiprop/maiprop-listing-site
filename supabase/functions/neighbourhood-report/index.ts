@@ -10,7 +10,7 @@ const log = createLogger("neighbourhood-report");
 const BUCKET = "neighbourhood-report";
 const neighbourhoodLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 15, windowMs: 60_000, failClosed: true });
 
-function fallbackReport(city: string, address?: string, region?: string) { // skipcq: JS-R1005 - Deterministic fallback report keeps section defaults together when AI output is unavailable.
+const fallbackReport = (city: string, address?: string, region?: string) => { // skipcq: JS-R1005 - Deterministic fallback report keeps section defaults together when AI output is unavailable.
   const areaName = address?.trim() || city.trim();
   const isAthens = city.toLowerCase().includes("athens") || city.toLowerCase().includes("athina");
   const current = isAthens ? 4200 : 2600;
@@ -62,7 +62,7 @@ function fallbackReport(city: string, address?: string, region?: string) { // sk
     ],
     generatedBy: "fallback",
   };
-}
+};
 
 Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates auth, quota, provider JSON parsing, fallback, and response shaping.
   const corsPreflightResponse = handleCors(req);

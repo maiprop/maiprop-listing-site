@@ -26,8 +26,8 @@ import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 // Pages that have a full-width dark hero image at the top
 const DARK_HERO_ROUTES = ["/"];
 
-// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
-export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = {}) { // skipcq: JS-R1005 - Single responsive nav surface coordinates auth, role, theme, and notification controls.
+// skipcq: JS-R1005 - Single responsive nav surface coordinates auth, role, theme, and notification controls.
+export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = {}) => {
   const [scrolled, setScrolled] = useState(forceScrolled);
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
@@ -538,5 +538,5 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
     </header>
     </>
   );
-}
+};
 export default Navbar;

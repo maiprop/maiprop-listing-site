@@ -136,7 +136,7 @@ execution_value = market_value MINUS transaction_friction MINUS legal_uncertaint
 `;
 
 // ── Property-type specific methodology ────────────────────────────────────────
-function getTypeInstructions(propertyType: string, listingType: string): string {
+const getTypeInstructions = (propertyType: string, listingType: string): string => {
   const isAuction = listingType === "auction";
 
   const base: Record<string, string> = {
@@ -207,17 +207,17 @@ METHODOLOGY: GENERAL PROPERTY — Comparable model with type-specific adjustment
 Use benchmark table. Apply condition, location, feature adjustments. Range: ±15-25%. Liquidity: moderate 0.3-0.5.`;
 
   return (base[propertyType] || fallback) + auctionSuffix;
-}
+};
 
 // ── Main handler ───────────────────────────────────────────────────────────────
-function fallbackValuation(input: { // skipcq: JS-R1005 - Deterministic valuation fallback keeps comparable scoring and confidence fields aligned.
+const fallbackValuation = (input: { // skipcq: JS-R1005 - Deterministic valuation fallback keeps comparable scoring and confidence fields aligned.
   city: string;
   price: number;
   sqm: number;
   propertyType?: string;
   listingType?: string;
   reason?: string;
-}) {
+}) => {
   const listedPrice = Number.isFinite(input.price) && input.price > 0 ? input.price : input.sqm * 2500;
   const sqm = Number.isFinite(input.sqm) && input.sqm > 0 ? input.sqm : 1;
   const pricePerSqm = Math.round(listedPrice / sqm);
@@ -263,7 +263,7 @@ function fallbackValuation(input: { // skipcq: JS-R1005 - Deterministic valuatio
     listingQualityScore: 40,
     generatedBy: "fallback",
   };
-}
+};
 
 Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates auth, quota, valuation parsing, fallback, and response shaping.
   const corsPreflightResponse = handleCors(req);
