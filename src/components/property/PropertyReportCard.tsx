@@ -72,7 +72,7 @@ const openPrintablePdf = (html: string, fileName: string) => {
   }
 };
 
-const getUnavailableReason = (listingId: string, listing?: ListingWithJoins | null): string | null => { // skipcq: JS-R1005 - Ordered validation rules keep report-unavailable reasons deterministic.
+const getUnavailableReason = (listingId: string, listing?: ListingWithJoins | null): string | null => { // skipcq: JS-R1005
   if (!listing) return !listingId ? UNAVAILABLE_RULES[0].reason : null;
   return UNAVAILABLE_RULES.find((rule) => rule.when(listingId, listing))?.reason ?? null;
 };
@@ -294,7 +294,7 @@ const usePropertyReportCardView = ({ listingId, listing }: Props): ReportCardVie
   return { content, reportLoaded };
 };
 
-export const PropertyReportCard = (props: Props) => { // skipcq: JS-R1005 - Card rendering branches are isolated in view-state helpers above.
+export const PropertyReportCard = (props: Props) => { // skipcq: JS-R1005
   const { content, reportLoaded } = usePropertyReportCardView(props);
   return (
     <div className={getReportCardClass(reportLoaded)}>

@@ -657,7 +657,7 @@ const StatusBadge = ({ status }: { status: string | null }) => {
   );
 };
 
-export default function BillingTab() { // skipcq: JS-0067 - React route component is intentionally exported from this module.
+export default function BillingTab() { // skipcq: JS-0067
   const navigate = useNavigate();
   const {
     isPro,
@@ -704,7 +704,7 @@ export default function BillingTab() { // skipcq: JS-0067 - React route componen
     }
   };
 
-  const purchaseAddon = async (item: AddonItem) => { // skipcq: JS-R1005 - Add-on purchase flow keeps eligibility, checkout, and toast feedback together.
+  const purchaseAddon = async (item: AddonItem) => { // skipcq: JS-R1005
     const addonKey = resolveAddonKey(item);
     if (!addonKey) {
       showManualAddonToast();

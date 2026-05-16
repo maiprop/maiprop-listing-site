@@ -38,7 +38,7 @@ const findWindowsSupabase = () => {
   }
 };
 
-// skipcq: JS-R1005 - Platform-specific CLI resolution keeps Windows, local binary, and npx fallbacks together.
+// skipcq: JS-R1005
 const supabaseCommand = () => {
   const localBin = localSupabasePath();
   if (existsSync(localBin)) return { command: localBin, prefixArgs: [] };
