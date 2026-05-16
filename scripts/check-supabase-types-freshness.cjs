@@ -16,7 +16,7 @@ const token = process.env.SUPABASE_ACCESS_TOKEN || "";
 const normalize = (text) => `${text.replace(/\r\n/g, "\n").trimEnd()}\n`;
 const writeStderr = (message) => process.stderr.write(`${message}\n`);
 
-const supabaseCommand = () => {
+const supabaseCommand = () => { // skipcq: JS-R1005 - Windows/Linux Supabase CLI resolution needs a few explicit fallbacks.
   const localBin = process.platform === "win32"
     ? join(root, "node_modules", "supabase", "bin", "supabase.exe")
     : join(root, "node_modules", ".bin", "supabase");
