@@ -340,6 +340,12 @@ export default function Auctions() {
         {/* ── LIST VIEW ── */}
         {viewMode === "list" &&
         <div className="container pb-24 lg:pb-16">
+            <div className="mb-4">
+              <h2 className="font-display text-2xl font-bold text-foreground">Auction Listings</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Browse court auction opportunities with live filters and daily randomized rotation.
+              </p>
+            </div>
             {isLoading &&
           <div className="space-y-4" aria-busy="true" aria-live="polite">
                 <div className="flex items-center gap-3 text-muted-foreground">
