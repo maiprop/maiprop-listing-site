@@ -62,42 +62,51 @@ const getHomepageAuctionImages = (listing: HomepageAuctionListing): string[] => 
 const toOptionalNumber = (value: unknown): number | undefined =>
   value ? Number(value) : undefined;
 
+const valueOr = <T,>(value: T | null | undefined, fallback: T): T =>
+  value ?? fallback;
+
+const valueOrUndefined = <T,>(value: T | null | undefined): T | undefined =>
+  value ?? undefined;
+
+const textOr = (value: string | null | undefined, fallback: string): string =>
+  value || fallback;
+
 const formatAuctionDate = (value: unknown): string | undefined =>
   typeof value === "string" && value
     ? new Date(value).toLocaleDateString("en-GB")
     : undefined;
 
 const getAuctionLocation = (listing: HomepageAuctionListing) => ({
-  address: listing.address || listing.city,
+  address: textOr(listing.address, listing.city),
   city: listing.city,
 });
 
 const getAuctionPriceFields = (listing: HomepageAuctionListing) => ({
-  price: Number(listing.price ?? 0),
+  price: Number(valueOr(listing.price, 0)),
   pricePerSqm: toOptionalNumber(listing.price_per_sqm),
   auctionStartingBid: toOptionalNumber(listing.auction_starting_bid),
 });
 
-const getAuctionDetails = (listing: HomepageAuctionListing) => ({ // skipcq: JS-R1005 - Normalizes nullable auction fields into the PropertyCard contract.
-  bedrooms: listing.bedrooms ?? undefined,
-  bathrooms: listing.bathrooms ?? undefined,
-  sqm: Number(listing.sqm ?? 0),
-  floor: listing.floor ?? undefined,
-  totalFloors: listing.total_floors ?? undefined,
-  yearBuilt: listing.year_built ?? undefined,
-  energyClass: listing.energy_class ?? undefined,
+const getAuctionDetails = (listing: HomepageAuctionListing) => ({
+  bedrooms: valueOrUndefined(listing.bedrooms),
+  bathrooms: valueOrUndefined(listing.bathrooms),
+  sqm: Number(valueOr(listing.sqm, 0)),
+  floor: valueOrUndefined(listing.floor),
+  totalFloors: valueOrUndefined(listing.total_floors),
+  yearBuilt: valueOrUndefined(listing.year_built),
+  energyClass: valueOrUndefined(listing.energy_class),
 });
 
-const getAuctionMetadata = (listing: HomepageAuctionListing) => ({ // skipcq: JS-R1005 - Normalizes nullable auction metadata into the PropertyCard contract.
+const getAuctionMetadata = (listing: HomepageAuctionListing) => ({
   images: getHomepageAuctionImages(listing),
-  type: listing.property_type ?? "apartment",
-  listingType: listing.listing_type ?? "auction",
+  type: valueOr(listing.property_type, "apartment"),
+  listingType: valueOr(listing.listing_type, "auction"),
   auctionDate: formatAuctionDate(listing.auction_date),
-  aiScore: listing.ai_score ?? undefined,
-  views: listing.views_count ?? undefined,
-  tags: listing.tags || [],
-  isPreSale: listing.is_pre_sale ?? false,
-  constructionStatus: listing.construction_status ?? undefined,
+  aiScore: valueOrUndefined(listing.ai_score),
+  views: valueOrUndefined(listing.views_count),
+  tags: valueOr(listing.tags, []),
+  isPreSale: valueOr(listing.is_pre_sale, false),
+  constructionStatus: valueOrUndefined(listing.construction_status),
 });
 
 const toAuctionCardProperty = (listing: HomepageAuctionListing): Property => ({
