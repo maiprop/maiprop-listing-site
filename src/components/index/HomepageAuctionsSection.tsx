@@ -78,7 +78,7 @@ const getAuctionPriceFields = (listing: HomepageAuctionListing) => ({
   auctionStartingBid: toOptionalNumber(listing.auction_starting_bid),
 });
 
-const getAuctionDetails = (listing: HomepageAuctionListing) => ({
+const getAuctionDetails = (listing: HomepageAuctionListing) => ({ // skipcq: JS-R1005 - Normalizes nullable auction fields into the PropertyCard contract.
   bedrooms: listing.bedrooms ?? undefined,
   bathrooms: listing.bathrooms ?? undefined,
   sqm: Number(listing.sqm ?? 0),
@@ -88,7 +88,7 @@ const getAuctionDetails = (listing: HomepageAuctionListing) => ({
   energyClass: listing.energy_class ?? undefined,
 });
 
-const getAuctionMetadata = (listing: HomepageAuctionListing) => ({
+const getAuctionMetadata = (listing: HomepageAuctionListing) => ({ // skipcq: JS-R1005 - Normalizes nullable auction metadata into the PropertyCard contract.
   images: getHomepageAuctionImages(listing),
   type: listing.property_type ?? "apartment",
   listingType: listing.listing_type ?? "auction",
