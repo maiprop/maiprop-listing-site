@@ -150,7 +150,7 @@ export default function Auctions() {
         })}</script>
       </Helmet>
       <Navbar />
-      <div className="pt-16">
+      <main id="main-content" className="pt-16">
         <AuctionHero stats={auctionStats} />
         <AuctionAlertBanner
           isAuthenticated={!!user}
@@ -447,7 +447,7 @@ export default function Auctions() {
             </div>
           </div>
         }
-      </div>
+      </main>
       <Footer />
       {alertModalOpen && (
         <AuctionAlertModal

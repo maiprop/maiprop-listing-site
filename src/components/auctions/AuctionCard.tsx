@@ -98,7 +98,7 @@ export const AuctionCard = memo(function AuctionCard({
 
       <div className="p-4 space-y-2 flex-1 flex flex-col">
         <Link to={`/auction/${a.id}`} state={{ auction: a }}>
-          <h3 className="font-semibold text-sm line-clamp-2 group-hover:text-brand-gold transition-colors">{a.title}</h3>
+          <h2 className="font-semibold text-sm line-clamp-2 group-hover:text-brand-gold transition-colors">{a.title}</h2>
         </Link>
         <div className="flex items-center gap-1 text-xs text-muted-foreground">
           <MapPin className="w-3 h-3 shrink-0" />
@@ -122,12 +122,12 @@ export const AuctionCard = memo(function AuctionCard({
         {(a.year_built || (a.sqm && a.sqm > 1)) && (
           <div className="flex flex-wrap items-center gap-1.5 mt-1">
             {a.year_built && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-brand-slate/10 text-brand-slate border border-brand-slate/25">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-secondary text-foreground border border-border">
                 Built {a.year_built}
               </span>
             )}
             {a.sqm && a.sqm > 1 && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-brand-emerald/10 text-brand-emerald border border-brand-emerald/25">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-secondary text-foreground border border-border">
                 {a.sqm} τ.μ.
               </span>
             )}
