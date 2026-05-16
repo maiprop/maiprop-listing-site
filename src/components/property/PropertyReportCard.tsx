@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { ClipboardList, Download, Loader2, Zap } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
@@ -241,6 +241,11 @@ type ReportContentContext = {
   reportLoading: boolean;
 };
 
+type ReportCardViewState = {
+  content: ReactNode;
+  reportLoaded: boolean;
+};
+
 const REPORT_CONTENT_RULES = [
   {
     when: ({ isPro }: ReportContentContext) => !isPro,
@@ -273,7 +278,7 @@ const getReportCardClass = (reportLoaded: boolean) => [
   reportLoaded ? "border-primary/30" : "border-primary/20",
 ].join(" ");
 
-export const PropertyReportCard = ({ listingId, listing }: Props) => {
+const usePropertyReportCardView = ({ listingId, listing }: Props): ReportCardViewState => {
   const { isPro } = useSubscription();
   const { data: reportCount = 0 } = useReportUsage();
   const {
@@ -286,7 +291,11 @@ export const PropertyReportCard = ({ listingId, listing }: Props) => {
   const contentContext = { currentUnavailableReason, isPro, loadReport, osReport, reportCount, reportLoading };
   const contentRule = REPORT_CONTENT_RULES.find((rule) => rule.when(contentContext)) ?? FALLBACK_CONTENT_RULE;
   const content = contentRule.render(contentContext);
+  return { content, reportLoaded };
+};
 
+export const PropertyReportCard = (props: Props) => {
+  const { content, reportLoaded } = usePropertyReportCardView(props);
   return (
     <div className={getReportCardClass(reportLoaded)}>
       <div className="flex items-center gap-2 px-5 py-3.5 bg-primary/5 border-b border-primary/20">
