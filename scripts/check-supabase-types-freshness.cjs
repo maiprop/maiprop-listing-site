@@ -16,27 +16,34 @@ const token = process.env.SUPABASE_ACCESS_TOKEN || "";
 const normalize = (text) => `${text.replace(/\r\n/g, "\n").trimEnd()}\n`;
 const writeStderr = (message) => process.stderr.write(`${message}\n`);
 
-const supabaseCommand = () => { // skipcq: JS-R1005 - Windows/Linux Supabase CLI resolution needs a few explicit fallbacks.
-  const localBin = process.platform === "win32"
+const localSupabasePath = () =>
+  process.platform === "win32"
     ? join(root, "node_modules", "supabase", "bin", "supabase.exe")
     : join(root, "node_modules", ".bin", "supabase");
+
+const findWindowsSupabase = () => {
+  if (process.platform !== "win32") return null;
+
+  try {
+    return execFileSync("where.exe", ["supabase"], {
+      cwd: root,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    })
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find(Boolean) ?? null;
+  } catch {
+    return null;
+  }
+};
+
+const supabaseCommand = () => {
+  const localBin = localSupabasePath();
   if (existsSync(localBin)) return { command: localBin, prefixArgs: [] };
 
-  if (process.platform === "win32") {
-    try {
-      const found = execFileSync("where.exe", ["supabase"], {
-        cwd: root,
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "ignore"],
-      })
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .find(Boolean);
-      if (found) return { command: found, prefixArgs: [] };
-    } catch {
-      // Fall through to npx below.
-    }
-  }
+  const windowsBin = findWindowsSupabase();
+  if (windowsBin) return { command: windowsBin, prefixArgs: [] };
 
   return {
     command: process.platform === "win32" ? "npx.cmd" : "npx",

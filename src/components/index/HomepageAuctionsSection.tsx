@@ -67,13 +67,18 @@ const formatAuctionDate = (value: unknown): string | undefined =>
     ? new Date(value).toLocaleDateString("en-GB")
     : undefined;
 
-const toAuctionCardProperty = (listing: HomepageAuctionListing): Property => ({ // skipcq: JS-R1005 - Adapts OS auction rows into the shared property card shape.
-  id: listing.id,
-  title: listing.title,
+const getAuctionLocation = (listing: HomepageAuctionListing) => ({
   address: listing.address || listing.city,
   city: listing.city,
+});
+
+const getAuctionPriceFields = (listing: HomepageAuctionListing) => ({
   price: Number(listing.price ?? 0),
   pricePerSqm: toOptionalNumber(listing.price_per_sqm),
+  auctionStartingBid: toOptionalNumber(listing.auction_starting_bid),
+});
+
+const getAuctionDetails = (listing: HomepageAuctionListing) => ({
   bedrooms: listing.bedrooms ?? undefined,
   bathrooms: listing.bathrooms ?? undefined,
   sqm: Number(listing.sqm ?? 0),
@@ -81,16 +86,27 @@ const toAuctionCardProperty = (listing: HomepageAuctionListing): Property => ({ 
   totalFloors: listing.total_floors ?? undefined,
   yearBuilt: listing.year_built ?? undefined,
   energyClass: listing.energy_class ?? undefined,
+});
+
+const getAuctionMetadata = (listing: HomepageAuctionListing) => ({
   images: getHomepageAuctionImages(listing),
   type: listing.property_type ?? "apartment",
   listingType: listing.listing_type ?? "auction",
   auctionDate: formatAuctionDate(listing.auction_date),
-  auctionStartingBid: toOptionalNumber(listing.auction_starting_bid),
   aiScore: listing.ai_score ?? undefined,
   views: listing.views_count ?? undefined,
   tags: listing.tags || [],
   isPreSale: listing.is_pre_sale ?? false,
   constructionStatus: listing.construction_status ?? undefined,
+});
+
+const toAuctionCardProperty = (listing: HomepageAuctionListing): Property => ({
+  id: listing.id,
+  title: listing.title,
+  ...getAuctionLocation(listing),
+  ...getAuctionPriceFields(listing),
+  ...getAuctionDetails(listing),
+  ...getAuctionMetadata(listing),
 });
 
 const LoadingCard = () => (
