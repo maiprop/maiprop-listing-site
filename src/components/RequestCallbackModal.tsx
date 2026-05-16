@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Phone, CheckCircle2, Loader2 } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubmitConsultation } from "@/hooks/useConsultations";
@@ -91,6 +91,9 @@ export default function RequestCallbackModal({ open, onClose, professional }: Re
             <Phone className="w-5 h-5 text-primary" />
             {done ? "Callback Requested!" : `Request a Callback from ${firstName}`}
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Share contact details and a preferred time window for a professional callback.
+          </DialogDescription>
         </DialogHeader>
 
         {done ? (

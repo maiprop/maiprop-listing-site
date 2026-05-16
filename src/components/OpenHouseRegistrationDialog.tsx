@@ -4,7 +4,7 @@ import {
   Mail, Phone, UserRound,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -395,6 +395,9 @@ export default function OpenHouseRegistrationDialog({
           <DialogTitle className="font-display text-lg">
             {step === "done" ? "Registration Submitted" : "Pre-register for Open House"}
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Submit visitor details, scheduling preferences, verification documents, and required open-house consents.
+          </DialogDescription>
         </DialogHeader>
 
         {step === "done" ? (

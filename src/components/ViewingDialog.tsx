@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { Calendar, Video, MapPin, Check, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -117,6 +117,9 @@ export default function ViewingDialog({ open, onClose, property, ownerId, canVid
           <DialogTitle className="font-display text-lg">
             {confirmed ? t("viewingDialog.successTitle") : t("viewingDialog.title")}
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Choose a viewing type, date, time, and optional note for this property.
+          </DialogDescription>
         </DialogHeader>
 
         {confirmed ? (

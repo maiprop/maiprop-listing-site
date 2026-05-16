@@ -5,14 +5,15 @@
  * `.insert().select().single()`, `.update().eq().or()`, etc.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderHook, waitFor, act } from "@testing-library/react";
+import { render, renderHook, waitFor, act, screen, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 
-const { useAuthMock, fromMock, toastMock } = vi.hoisted(() => ({
+const { useAuthMock, fromMock, toastMock, submitConsultationMock } = vi.hoisted(() => ({
   useAuthMock: vi.fn(),
   fromMock: vi.fn(),
   toastMock: { success: vi.fn(), error: vi.fn() },
+  submitConsultationMock: { mutateAsync: vi.fn(), isPending: false },
 }));
 
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => useAuthMock() }));
@@ -21,6 +22,9 @@ vi.mock("@/integrations/supabase/client", () => ({
 }));
 vi.mock("sonner", () => ({ toast: toastMock }));
 vi.mock("@/lib/planLimitErrors", () => ({ getPlanLimitErrorMessage: () => null }));
+vi.mock("@/hooks/useConsultations", () => ({
+  useSubmitConsultation: () => submitConsultationMock,
+}));
 
 import {
   useViewings,
@@ -28,6 +32,8 @@ import {
   useUpdateViewingStatus,
   useUpdateViewing,
 } from "@/hooks/useViewings";
+import OnlineViewingModal from "@/components/OnlineViewingModal";
+import RequestCallbackModal from "@/components/RequestCallbackModal";
 
 const wrapper = () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -41,8 +47,21 @@ beforeEach(() => {
   fromMock.mockReset();
   toastMock.success.mockReset();
   toastMock.error.mockReset();
+  submitConsultationMock.mutateAsync.mockReset();
+  submitConsultationMock.isPending = false;
   useAuthMock.mockReturnValue({ user: { id: "u-1" } });
 });
+
+const clickFirstGeneratedDate = () => {
+  const dateButton = screen.getAllByRole("button").find((button) => {
+    const text = (button.textContent ?? "").replace(/\s+/g, "");
+    return /(?:Mon|Tue|Wed|Thu|Fri)\d{1,2}\w{3}/.test(text);
+  });
+  if (!dateButton) throw new Error("generated date button not found");
+  fireEvent.click(dateButton);
+};
+
+const renderWithClient = (ui: React.ReactElement) => render(ui, { wrapper: wrapper() });
 
 describe("useViewings (query)", () => {
   it("returns empty array when no user is logged in", async () => {
@@ -180,5 +199,178 @@ describe("useUpdateViewing", () => {
     await expect(
       result.current.mutateAsync({ id: "v", updates: {} }),
     ).rejects.toThrow(/denied/);
+  });
+});
+
+describe("viewing request modals", () => {
+  it("books a listing video viewing and renders the confirmation branch", async () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "u-1", email: "buyer@example.com" },
+      profile: { display_name: "Buyer One" },
+    });
+    const insert = vi.fn().mockReturnValue({
+      select: () => ({ single: vi.fn().mockResolvedValue({ data: { id: "v-new" }, error: null }) }),
+    });
+    fromMock.mockReturnValue({ insert });
+
+    renderWithClient(
+      <OnlineViewingModal
+        open
+        onClose={vi.fn()}
+        listing={{ id: "l-1", owner_id: "owner-1", title: "Video Flat", city: "Athens" }}
+      />,
+    );
+
+    clickFirstGeneratedDate();
+    fireEvent.click(screen.getByRole("button", { name: "09:00" }));
+    fireEvent.change(screen.getByPlaceholderText(/specific areas/i), {
+      target: { value: "Show the balcony" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Request Video Viewing/i }));
+
+    await waitFor(() => expect(screen.getByText(/Video request submitted/i)).toBeInTheDocument());
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({
+      listing_id: "l-1",
+      owner_id: "owner-1",
+      requester_id: "u-1",
+      viewing_type: "video",
+      note: "Show the balcony",
+    }));
+  });
+
+  it("requires sign-in for listing video requests from guests after a slot is selected", async () => {
+    useAuthMock.mockReturnValue({ user: null, profile: null });
+    renderWithClient(
+      <OnlineViewingModal
+        open
+        onClose={vi.fn()}
+        listing={{ id: "l-1", owner_id: "owner-1", title: "Guest Flat", city: "Athens" }}
+      />,
+    );
+
+    clickFirstGeneratedDate();
+    fireEvent.click(screen.getByRole("button", { name: "10:00" }));
+    fireEvent.change(screen.getByPlaceholderText("Full name"), { target: { value: "Guest Buyer" } });
+    fireEvent.change(screen.getByPlaceholderText("your@email.com"), { target: { value: "guest@example.com" } });
+    fireEvent.click(screen.getByRole("button", { name: /Request Video Viewing/i }));
+
+    expect(toastMock.error).toHaveBeenCalledWith("Please sign in to request a video viewing");
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it("submits a guest professional video consultation with platform and note", async () => {
+    useAuthMock.mockReturnValue({ user: null, profile: null });
+    submitConsultationMock.mutateAsync.mockResolvedValue({ id: "consult-1" });
+
+    renderWithClient(
+      <OnlineViewingModal
+        open
+        onClose={vi.fn()}
+        professional={{ id: "pro-1", display_name: "Dana Pro", title: "Surveyor" }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /WhatsApp Video/i }));
+    clickFirstGeneratedDate();
+    fireEvent.click(screen.getByRole("button", { name: "11:00" }));
+    fireEvent.change(screen.getByPlaceholderText("Full name"), { target: { value: "Guest Buyer" } });
+    fireEvent.change(screen.getByPlaceholderText("your@email.com"), { target: { value: "guest@example.com" } });
+    fireEvent.change(screen.getByPlaceholderText(/specific areas/i), { target: { value: "Talk financing" } });
+    fireEvent.click(screen.getByRole("button", { name: /Request Video Viewing/i }));
+
+    await waitFor(() => expect(screen.getByText(/Video request submitted/i)).toBeInTheDocument());
+    expect(submitConsultationMock.mutateAsync).toHaveBeenCalledWith(expect.objectContaining({
+      professional_id: "pro-1",
+      requester_name: "Guest Buyer",
+      requester_email: "guest@example.com",
+      request_type: "consultation",
+      message: expect.stringContaining("WhatsApp Video"),
+    }));
+    expect(submitConsultationMock.mutateAsync.mock.calls[0][0].message).toContain("Talk financing");
+  });
+
+  it("surfaces professional video consultation failures", async () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "u-1", email: "buyer@example.com" },
+      profile: { display_name: "Buyer One" },
+    });
+    submitConsultationMock.mutateAsync.mockRejectedValue(new Error("offline"));
+
+    renderWithClient(
+      <OnlineViewingModal
+        open
+        onClose={vi.fn()}
+        professional={{ id: "pro-1", display_name: "Dana Pro", title: "Surveyor" }}
+      />,
+    );
+
+    clickFirstGeneratedDate();
+    fireEvent.click(screen.getByRole("button", { name: "12:00" }));
+    fireEvent.click(screen.getByRole("button", { name: /Request Video Viewing/i }));
+
+    await waitFor(() => {
+      expect(toastMock.error).toHaveBeenCalledWith("Could not submit the request. Please try again.");
+    });
+  });
+});
+
+describe("callback request modal", () => {
+  const professional = { id: "pro-1", display_name: "Dana Pro", title: "Surveyor" };
+
+  const clickMorningWindow = () => {
+    fireEvent.click(screen.getByText("Morning").closest("button") as HTMLButtonElement);
+  };
+
+  it("validates guest name and email once phone and callback window are present", () => {
+    useAuthMock.mockReturnValue({ user: null, profile: null });
+    render(<RequestCallbackModal open onClose={vi.fn()} professional={professional} />);
+
+    fireEvent.change(screen.getByPlaceholderText("+30 6XX XXX XXXX"), { target: { value: "+30 699 000 0000" } });
+    clickMorningWindow();
+    fireEvent.click(screen.getByRole("button", { name: /Request Callback/i }));
+
+    expect(toastMock.error).toHaveBeenCalledWith("Please fill in your name and email");
+    expect(submitConsultationMock.mutateAsync).not.toHaveBeenCalled();
+  });
+
+  it("submits callback requests and shows the done state", async () => {
+    useAuthMock.mockReturnValue({ user: null, profile: null });
+    submitConsultationMock.mutateAsync.mockResolvedValue({ id: "callback-1" });
+    render(<RequestCallbackModal open onClose={vi.fn()} professional={professional} />);
+
+    fireEvent.change(screen.getByPlaceholderText("Full name"), { target: { value: "Guest Buyer" } });
+    fireEvent.change(screen.getByPlaceholderText("your@email.com"), { target: { value: "guest@example.com" } });
+    fireEvent.change(screen.getByPlaceholderText("+30 6XX XXX XXXX"), { target: { value: "+30 699 000 0000" } });
+    clickFirstGeneratedDate();
+    clickMorningWindow();
+    fireEvent.change(screen.getByPlaceholderText(/Briefly describe/i), { target: { value: "Need valuation help" } });
+    fireEvent.click(screen.getByRole("button", { name: /Request Callback/i }));
+
+    await waitFor(() => expect(screen.getByText(/Callback request sent/i)).toBeInTheDocument());
+    expect(submitConsultationMock.mutateAsync).toHaveBeenCalledWith(expect.objectContaining({
+      professional_id: "pro-1",
+      requester_name: "Guest Buyer",
+      requester_email: "guest@example.com",
+      requester_phone: "+30 699 000 0000",
+      request_type: "callback",
+      callback_time: expect.stringContaining("Morning"),
+      message: "Need valuation help",
+    }));
+  });
+
+  it("surfaces callback submission errors", async () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "u-1", email: "buyer@example.com" },
+      profile: { display_name: "Buyer One", phone: "+30 211 000 0000" },
+    });
+    submitConsultationMock.mutateAsync.mockRejectedValue(new Error("offline"));
+    render(<RequestCallbackModal open onClose={vi.fn()} professional={professional} />);
+
+    clickMorningWindow();
+    fireEvent.click(screen.getByRole("button", { name: /Request Callback/i }));
+
+    await waitFor(() => {
+      expect(toastMock.error).toHaveBeenCalledWith("Could not submit request. Please try again.");
+    });
   });
 });

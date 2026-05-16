@@ -162,6 +162,40 @@ describe("InvestorDashboard behavior", () => {
     await waitFor(() => expect(screen.getByText("20.0%")).toBeInTheDocument());
   });
 
+  it("filters the visible deal feed by city, type, and urgency", async () => {
+    renderWithProviders(<InvestorDashboard />);
+
+    await screen.findByText("Kolonaki 12");
+    fireEvent.change(screen.getByLabelText(/city/i), { target: { value: "Athens" } });
+    expect(screen.getByText(/1 deals found/i)).toBeInTheDocument();
+    expect(screen.getByText("Kolonaki 12")).toBeInTheDocument();
+    expect(screen.queryByText("Marina 8")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/property type/i), { target: { value: "villa" } });
+    expect(screen.getByText(/0 deals found/i)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/city/i), { target: { value: "all" } });
+    fireEvent.change(screen.getByLabelText(/property type/i), { target: { value: "all" } });
+    fireEvent.change(screen.getByLabelText(/urgency/i), { target: { value: "HIGH" } });
+    expect(screen.getByText(/1 deals found/i)).toBeInTheDocument();
+    expect(screen.getByText("Kolonaki 12")).toBeInTheDocument();
+  });
+
+  it("exports a deal report for authorized users", async () => {
+    const createObjectURL = vi.fn(() => "blob:deal-report");
+    const revokeObjectURL = vi.fn();
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, value: createObjectURL });
+    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: revokeObjectURL });
+
+    renderWithProviders(<InvestorDashboard />);
+
+    const reportButtons = await screen.findAllByRole("button", { name: /ai report/i });
+    fireEvent.click(reportButtons[0]);
+
+    expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:deal-report");
+  });
+
   it("shows a generic retryable deal-feed error without raw backend detail", async () => {
     feedError = new Error("permission denied for policy firesale_requests_investor_feed");
 

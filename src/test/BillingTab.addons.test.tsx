@@ -61,7 +61,7 @@ describe("BillingTab add-on checkout", () => {
       }
       if (fn === "create-checkout") {
         return Promise.resolve({
-          data: { url: "https://checkout.stripe.test/session" },
+          data: { url: "#stripe-checkout-session" },
           error: null,
         });
       }

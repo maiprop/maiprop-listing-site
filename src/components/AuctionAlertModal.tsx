@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Bell, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useCreateAuctionAlert, useUpdateAuctionAlert, type AuctionAlert } from "@/hooks/useAuctionAlerts";
 
 const PROPERTY_TYPES = [
@@ -59,6 +59,9 @@ export function AuctionAlertModal({ open, onClose, editAlert }: Props) {
             <Bell className="w-4 h-4 text-brand-gold" />
             {isEdit ? "Edit Auction Alert" : "Create Auction Alert"}
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Configure saved auction filters and email notifications.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 pt-1">
