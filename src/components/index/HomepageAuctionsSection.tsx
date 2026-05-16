@@ -87,6 +87,7 @@ const getAuctionPriceFields = (listing: HomepageAuctionListing) => ({
   auctionStartingBid: toOptionalNumber(listing.auction_starting_bid),
 });
 
+// skipcq: JS-R1005 - Field normalization intentionally maps nullable auction values into PropertyCard props.
 const getAuctionDetails = (listing: HomepageAuctionListing) => ({
   bedrooms: valueOrUndefined(listing.bedrooms),
   bathrooms: valueOrUndefined(listing.bathrooms),
@@ -97,6 +98,7 @@ const getAuctionDetails = (listing: HomepageAuctionListing) => ({
   energyClass: valueOrUndefined(listing.energy_class),
 });
 
+// skipcq: JS-R1005 - Field normalization intentionally maps nullable auction metadata into PropertyCard props.
 const getAuctionMetadata = (listing: HomepageAuctionListing) => ({
   images: getHomepageAuctionImages(listing),
   type: valueOr(listing.property_type, "apartment"),
