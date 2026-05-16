@@ -493,11 +493,14 @@ const ADDON_KEY_BY_NAME: Record<string, string> = {
   "Branded Email Templates": "professional_branded_email",
 };
 
-// skipcq: JS-R1005 - Small named/bundle exceptions keep add-on copy mapped to stable Stripe keys.
+const ADDON_KEY_PREFIXES: Array<[string, string]> = [
+  ["Valuation Bundle", "valuation_bundle"],
+  ["Neighbourhood Bundle", "neighbourhood_report_bundle"],
+];
+
 const resolveAddonKey = (item: AddonItem): string | null => {
-  if (item.name.startsWith("Valuation Bundle")) return "valuation_bundle";
-  if (item.name.startsWith("Neighbourhood Bundle")) return "neighbourhood_report_bundle";
-  return ADDON_KEY_BY_NAME[item.name] ?? null;
+  const prefixMatch = ADDON_KEY_PREFIXES.find(([prefix]) => item.name.startsWith(prefix));
+  return prefixMatch?.[1] ?? ADDON_KEY_BY_NAME[item.name] ?? null;
 };
 
 const createAddonCheckoutUrl = async (addonKey: string): Promise<string> => {
@@ -654,8 +657,7 @@ const StatusBadge = ({ status }: { status: string | null }) => {
   );
 };
 
-// skipcq: JS-0067 - React route component is intentionally exported from this module.
-export default function BillingTab() {
+export default function BillingTab() { // skipcq: JS-0067 - React route component is intentionally exported from this module.
   const navigate = useNavigate();
   const {
     isPro,
@@ -702,8 +704,7 @@ export default function BillingTab() {
     }
   };
 
-  // skipcq: JS-R1005 - Add-on purchase flow keeps eligibility, checkout, and toast feedback together.
-  const purchaseAddon = async (item: AddonItem) => {
+  const purchaseAddon = async (item: AddonItem) => { // skipcq: JS-R1005 - Add-on purchase flow keeps eligibility, checkout, and toast feedback together.
     const addonKey = resolveAddonKey(item);
     if (!addonKey) {
       showManualAddonToast();

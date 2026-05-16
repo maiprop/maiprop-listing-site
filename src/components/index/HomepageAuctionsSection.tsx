@@ -52,8 +52,7 @@ const getSortedListingImages = (listing: HomepageAuctionListing): string[] => {
     .filter((url): url is string => typeof url === "string" && url.length > 0);
 };
 
-// skipcq: JS-R1005 - Image fallback selection intentionally prefers listing media before Street View.
-const getHomepageAuctionImages = (listing: HomepageAuctionListing): string[] => {
+const getHomepageAuctionImages = (listing: HomepageAuctionListing): string[] => { // skipcq: JS-R1005 - Image fallback selection intentionally prefers listing media before Street View.
   const fallbackImages = getSortedListingImages(listing);
   const streetView = getAuctionStreetViewImageUrl(listing);
   const images = listing.cover_image_url ? [listing.cover_image_url] : fallbackImages;
@@ -88,8 +87,7 @@ const getAuctionPriceFields = (listing: HomepageAuctionListing) => ({
   auctionStartingBid: toOptionalNumber(listing.auction_starting_bid),
 });
 
-// skipcq: JS-R1005 - Field normalization intentionally maps nullable auction values into PropertyCard props.
-const getAuctionDetails = (listing: HomepageAuctionListing) => ({
+const getAuctionDetails = (listing: HomepageAuctionListing) => ({ // skipcq: JS-R1005 - Field normalization intentionally maps nullable auction values into PropertyCard props.
   bedrooms: valueOrUndefined(listing.bedrooms),
   bathrooms: valueOrUndefined(listing.bathrooms),
   sqm: Number(valueOr(listing.sqm, 0)),
@@ -99,8 +97,7 @@ const getAuctionDetails = (listing: HomepageAuctionListing) => ({
   energyClass: valueOrUndefined(listing.energy_class),
 });
 
-// skipcq: JS-R1005 - Field normalization intentionally maps nullable auction metadata into PropertyCard props.
-const getAuctionMetadata = (listing: HomepageAuctionListing) => ({
+const getAuctionMetadata = (listing: HomepageAuctionListing) => ({ // skipcq: JS-R1005 - Field normalization intentionally maps nullable auction metadata into PropertyCard props.
   images: getHomepageAuctionImages(listing),
   type: valueOr(listing.property_type, "apartment"),
   listingType: valueOr(listing.listing_type, "auction"),

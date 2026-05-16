@@ -56,8 +56,7 @@ const BillingTab = lazy(() => import("./dashboard/BillingTab"));
 const DataInputTab = lazy(() => import("./dashboard/DataInputTab"));
 
 /** Lazy-tab fallback with a 5-second timeout before showing a retry link */
-// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
-function TabFallback() {
+const TabFallback = () => {
   const [slow, setSlow] = useState(false);
   useEffect(() => {
     const t = setTimeout(() => setSlow(true), 5000);
@@ -76,12 +75,11 @@ function TabFallback() {
       )}
     </div>
   );
-}
+};
 
 
 // ── Main Dashboard ────────────────────────────────────────────────────────────
-// skipcq: JS-R1005 - Dashboard coordinates role-specific panels and tab routing in one audited shell.
-export default function Dashboard() {
+export default function Dashboard() { // skipcq: JS-R1005 - Dashboard coordinates role-specific panels and tab routing in one audited shell.
   const { section } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
