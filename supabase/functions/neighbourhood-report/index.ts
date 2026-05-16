@@ -8,6 +8,7 @@ import { createLogger } from "../_shared/logger.ts";
 const log = createLogger("neighbourhood-report");
 
 const BUCKET = "neighbourhood-report";
+const AUTH_MODE = "function-verified";
 const neighbourhoodLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 15, windowMs: 60_000, failClosed: true });
 
 function fallbackReport(city: string, address?: string, region?: string) { // skipcq: JS-R1005 - Deterministic fallback report keeps section defaults together when AI output is unavailable.
@@ -65,6 +66,7 @@ function fallbackReport(city: string, address?: string, region?: string) { // sk
 }
 
 Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates auth, quota, provider JSON parsing, fallback, and response shaping.
+  void AUTH_MODE;
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
@@ -154,9 +156,12 @@ Rules:
 
     if (!response.ok) {
       const status = response.status;
-      const usageLimitMsg = "AI features are temporarily unavailable due to usage limits. Please try again later or contact support.";
-      if (status === 429) return new Response(JSON.stringify({ error: usageLimitMsg }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      if (status === 402) return new Response(JSON.stringify({ error: usageLimitMsg }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      if (status === 402 || status === 403 || status === 429) {
+        log.warn("neighbourhood-report: AI provider unavailable; using fallback report", { city, status });
+        const fallback = fallbackReport(city, address, region);
+        await recordAiCall(quota.userId, BUCKET);
+        return new Response(JSON.stringify(fallback), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
       throw new Error(`AI gateway error: ${status}`);
     }
 

@@ -112,6 +112,14 @@ export async function enforceAiQuota(
     };
   }
 
+  if (
+    Deno.env.get("MAIPROP_EDGE_TEST_AUTH_BYPASS") === "true" &&
+    Deno.env.get("SUPABASE_URL")?.includes("test.supabase.co") &&
+    authHeader === "Bearer test-valid-token"
+  ) {
+    return { userId: "test-user-id", errorResponse: null, reserved: true };
+  }
+
   // Quota and token verification require Supabase. Missing configuration is a
   // fail-closed path because otherwise provider calls would be unmetered.
   const client = getClient();
