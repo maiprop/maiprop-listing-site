@@ -33,6 +33,7 @@ import {
   VALUATION_INCLUDED,
 } from "@/hooks/useUsageAddons";
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function makeWrapper() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   return ({ children }: { children: React.ReactNode }) => (
@@ -40,6 +41,7 @@ function makeWrapper() {
   );
 }
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function selectUsage(data: unknown[] = [], error: Error | null = null) {
   const gte = vi.fn().mockResolvedValue({ data, error });
   const eqBucket = vi.fn().mockReturnValue({ gte });
@@ -76,10 +78,10 @@ describe("useUsageAddons", () => {
     await waitFor(() => expect(report.result.current.data).toBe(1));
     await waitFor(() => expect(priority.result.current.data).toBe(3));
     expect(mocks.from).toHaveBeenNthCalledWith(1, "usage_ai_calls");
-    expect(mocks.from).toHaveBeenNthCalledWith(2, "usage_ai_calls");
+    expect(mocks.from).toHaveBeenNthCalledWith(2, "usage_property_reports");
     expect(mocks.from).toHaveBeenNthCalledWith(3, "usage_priority_ads");
     expect(first.eqBucket).toHaveBeenCalledWith("bucket", "property-valuation");
-    expect(second.eqBucket).toHaveBeenCalledWith("bucket", "property-valuation");
+    expect(second.eqBucket).not.toHaveBeenCalled();
   });
 
   it("does not query anonymous users and throws query errors for callers to handle", async () => {

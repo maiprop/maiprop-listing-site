@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { ClipboardList, Loader2, Zap, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { ClipboardList, Download, Loader2, Zap } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -9,14 +10,9 @@ import { useReportUsage, REPORT_INCLUDED, REPORT_EXTRA_COST } from "@/hooks/useU
 import { supabase } from "@/integrations/supabase/client";
 import type { ListingWithJoins } from "@/hooks/useListings";
 
-interface ReportResult {
-  estimatedValue: number;
-  rangeLow: number;
-  rangeHigh: number;
-  marketComparison: string;
-  marketComparisonPct: number;
-  confidenceLabel: string;
-  source: "os" | "ai";
+interface OsPrintableReport {
+  html: string;
+  fileName: string;
 }
 
 interface Props {
@@ -24,35 +20,81 @@ interface Props {
   listing?: ListingWithJoins | null;
 }
 
+function openPrintablePdf(html: string, fileName: string) {
+  const title = fileName.replace(/\.pdf$/i, "");
+  const printScript = `
+    <script>
+      window.addEventListener("load", function() {
+        document.title = ${JSON.stringify(title)};
+        setTimeout(function() { window.focus(); window.print(); }, 250);
+      });
+    </script>
+  `;
+  const printableHtml = html.includes("</body>")
+    ? html.replace("</body>", `${printScript}</body>`)
+    : `${html}${printScript}`;
+  const blob = new Blob([printableHtml], { type: "text/html;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const opened = window.open(url, "_blank");
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  if (!opened) {
+    toast.error("Popup blocked. Allow popups to export the report as PDF.");
+  }
+}
+
+function getUnavailableReason(listingId: string, listing?: ListingWithJoins | null): string | null {
+  if (!listingId) return "Report unavailable for this listing.";
+  if (!listing) return null;
+  if (listing.latitude == null || listing.longitude == null) {
+    return "Report unavailable: this listing needs map coordinates first.";
+  }
+  if (listing.sqm == null || Number(listing.sqm) <= 0) {
+    return "Report unavailable: this listing needs a valid property size first.";
+  }
+  return null;
+}
+
 export function PropertyReportCard({ listingId, listing }: Props) {
   const { user } = useAuth();
   const { isPro } = useSubscription();
   const queryClient = useQueryClient();
   const { data: reportCount = 0 } = useReportUsage();
-  const [reportResult, setReportResult] = useState<ReportResult | null>(null);
+  const [osReport, setOsReport] = useState<OsPrintableReport | null>(null);
+  const [unavailableReason, setUnavailableReason] = useState<string | null>(() => getUnavailableReason(listingId, listing));
   const [reportLoading, setReportLoading] = useState(false);
-  const reportLoaded = reportResult !== null;
+  const reportLoaded = osReport !== null;
+  const currentUnavailableReason = unavailableReason ?? getUnavailableReason(listingId, listing);
 
   const handleLoad = async () => {
-    if (!user) return;
+    const preflightReason = getUnavailableReason(listingId, listing);
+    if (!user || preflightReason) {
+      if (preflightReason) setUnavailableReason(preflightReason);
+      return;
+    }
+
     setReportLoading(true);
+    setUnavailableReason(null);
+
     try {
-      const { data: osRes } = await supabase.functions.invoke("fetch-report-from-os", {
+      const { data: osRes, error } = await supabase.functions.invoke("fetch-report-from-os", {
         body: { listing_id: listingId, report_type: "valuation" },
       });
-      if (osRes?.ok && osRes.report?.estimatedValue) {
-        const r = osRes.report;
-        setReportResult({ estimatedValue: r.estimatedValue, rangeLow: r.rangeLow ?? r.estimatedValue, rangeHigh: r.rangeHigh ?? r.estimatedValue, marketComparison: r.marketComparison ?? "at_market", marketComparisonPct: r.marketComparisonPct ?? 0, confidenceLabel: r.confidenceLabel ?? "Medium", source: "os" });
+      if (error) throw error;
+
+      if (osRes?.ok && osRes.report?.html) {
+        setOsReport({
+          html: osRes.report.html,
+          fileName: osRes.report.fileName ?? `maiprop-property-report-${listingId}.pdf`,
+        });
+        if (osRes.billing?.charged) {
+          void queryClient.invalidateQueries({ queryKey: ["usage_property_reports"] });
+        }
         return;
       }
-      const body = listing
-        ? { title: listing.title, city: listing.city, address: listing.address, price: Number(listing.price), sqm: Number(listing.sqm), bedrooms: listing.bedrooms, bathrooms: listing.bathrooms, propertyType: listing.property_type, listingType: listing.listing_type, floor: listing.floor, yearBuilt: listing.year_built, energyClass: listing.energy_class, pricePerSqm: listing.price_per_sqm ? Number(listing.price_per_sqm) : undefined, hasParking: listing.has_parking, hasPool: listing.has_pool, hasElevator: listing.has_elevator, region: listing.region }
-        : { listing_id: listingId };
-      const { data } = await supabase.functions.invoke("property-valuation", { body });
-      if (data?.estimatedValue) {
-        setReportResult({ estimatedValue: data.estimatedValue, rangeLow: data.rangeLow ?? data.estimatedValue, rangeHigh: data.rangeHigh ?? data.estimatedValue, marketComparison: data.marketComparison ?? "at_market", marketComparisonPct: data.marketComparisonPct ?? 0, confidenceLabel: data.confidenceLabel ?? "Medium", source: "ai" });
-        void queryClient.invalidateQueries({ queryKey: ["usage_ai_calls"] });
-      }
+
+      setUnavailableReason(osRes?.reason ?? "Report unavailable: MAIProp OS has not generated this property report yet.");
+    } catch (_err) {
+      setUnavailableReason("Report unavailable right now. Please try again later.");
     } finally {
       setReportLoading(false);
     }
@@ -64,7 +106,7 @@ export function PropertyReportCard({ listingId, listing }: Props) {
         <ClipboardList className="w-4 h-4 text-primary" />
         <h4 className="font-display font-semibold text-sm flex-1">Property Report</h4>
         <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/15 text-primary font-semibold">
-          mAI Prop · 2026 Model
+          mAI Prop - 2026 Model
         </span>
       </div>
 
@@ -79,41 +121,42 @@ export function PropertyReportCard({ listingId, listing }: Props) {
                 <Zap className="w-4 h-4" /> Upgrade to Pro
               </Link>
             </Button>
-            <p className="text-[10px] text-muted-foreground">Pro Feature · Unlock full reports</p>
+            <p className="text-[10px] text-muted-foreground">Pro Feature - Unlock full reports</p>
           </div>
-        ) : reportLoaded && reportResult ? (
+        ) : currentUnavailableReason ? (
+          <div className="text-center space-y-3">
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              {currentUnavailableReason}
+            </p>
+            <Button className="w-full gap-2" disabled variant="secondary">
+              <ClipboardList className="w-4 h-4" />
+              Report unavailable
+            </Button>
+            <p className="text-[10px] text-muted-foreground">A downloadable OS report is required for PDF export</p>
+          </div>
+        ) : osReport ? (
           <div className="space-y-3">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">AI Estimated Value</p>
-                <p className="font-display font-bold text-lg">€{reportResult.estimatedValue.toLocaleString()}</p>
-                <p className="text-[10px] text-muted-foreground">€{reportResult.rangeLow.toLocaleString()} – €{reportResult.rangeHigh.toLocaleString()}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-[10px] text-muted-foreground mb-0.5">vs Asking</p>
-                <div className={`flex items-center gap-1 justify-end text-xs font-semibold ${
-                  reportResult.marketComparison === "below_market" ? "text-emerald-500" :
-                  reportResult.marketComparison === "above_market" ? "text-red-500" : "text-yellow-500"
-                }`}>
-                  {reportResult.marketComparison === "below_market" ? <TrendingDown className="w-3.5 h-3.5" /> :
-                   reportResult.marketComparison === "above_market" ? <TrendingUp className="w-3.5 h-3.5" /> :
-                   <Minus className="w-3.5 h-3.5" />}
-                  {reportResult.marketComparisonPct > 0 ? "+" : ""}{reportResult.marketComparisonPct}%
-                </div>
-                <p className="text-[10px] text-muted-foreground mt-0.5">{reportResult.confidenceLabel} confidence</p>
-              </div>
-            </div>
-            <p className="text-[10px] text-muted-foreground">Source: {reportResult.source === "os" ? "maiProp OS" : "AI Model"} · Not a formal valuation</p>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              MAIProp OS generated the printable property report for this listing.
+            </p>
+            <Button
+              className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2"
+              onClick={() => openPrintablePdf(osReport.html, osReport.fileName)}
+            >
+              <Download className="w-4 h-4" />
+              Export PDF
+            </Button>
+            <p className="text-[10px] text-muted-foreground">Source: MAIProp OS - Browser PDF export</p>
           </div>
         ) : reportCount >= REPORT_INCLUDED ? (
           <div className="text-center space-y-3">
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Included reports used this month. Extra reports cost €{REPORT_EXTRA_COST} each.
+              Included reports used this month. Extra reports cost EUR {REPORT_EXTRA_COST} each.
             </p>
             <Button className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2" asChild>
               <Link to="/pricing"><Zap className="w-4 h-4" /> Get Extra Report</Link>
             </Button>
-            <p className="text-[10px] text-muted-foreground">€{REPORT_EXTRA_COST} per extra report</p>
+            <p className="text-[10px] text-muted-foreground">EUR {REPORT_EXTRA_COST} per extra report</p>
           </div>
         ) : (
           <div className="text-center space-y-3">
@@ -128,12 +171,12 @@ export function PropertyReportCard({ listingId, listing }: Props) {
             <Button
               className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2"
               onClick={handleLoad}
-              disabled={reportLoading}
+              disabled={reportLoading || Boolean(currentUnavailableReason)}
             >
               {reportLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ClipboardList className="w-4 h-4" />}
-              {reportLoading ? "Loading…" : "Load Report"}
+              {reportLoading ? "Loading..." : "Load Report"}
             </Button>
-            <p className="text-[10px] text-muted-foreground">Full · Instant · Not a formal report</p>
+            <p className="text-[10px] text-muted-foreground">Full - Instant - OS PDF export</p>
           </div>
         )}
       </div>

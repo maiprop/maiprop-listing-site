@@ -493,7 +493,7 @@ const ADDON_KEY_BY_NAME: Record<string, string> = {
   "Branded Email Templates": "professional_branded_email",
 };
 
-const resolveAddonKey = (item: AddonItem): string | null => {
+const resolveAddonKey = (item: AddonItem): string | null => { // skipcq: JS-R1005 - Small named/bundle exceptions keep add-on copy mapped to stable Stripe keys.
   if (item.name.startsWith("Valuation Bundle")) return "valuation_bundle";
   if (item.name.startsWith("Neighbourhood Bundle")) return "neighbourhood_report_bundle";
   return ADDON_KEY_BY_NAME[item.name] ?? null;

@@ -60,7 +60,7 @@ describe("VirtualizedListingGrid", () => {
       width: 600,
       x: 0,
       y: 0,
-      toJSON: () => ({}),
+      toJSON: () => ({ top: 0, bottom: 400 }),
     });
     const scrollParentRef = { current: scrollParent };
 
@@ -88,7 +88,7 @@ describe("VirtualizedListingGrid", () => {
       width: 600,
       x: 0,
       y: -400,
-      toJSON: () => ({}),
+      toJSON: () => ({ top: -400, bottom: 0 }),
     });
 
     act(() => {

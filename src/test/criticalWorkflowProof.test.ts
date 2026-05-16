@@ -155,6 +155,7 @@ describe("critical workflow proof coverage", () => {
       for (const kind of kinds) {
         expect(
           requirements.some((requirement) => requirement.area === area && requirement.kind === kind),
+          // skipcq - Vitest assertion messages intentionally compose enum values for coverage diagnostics.
           `${area} is missing ${kind} proof`,
         ).toBe(true);
       }
@@ -168,6 +169,7 @@ describe("critical workflow proof coverage", () => {
 
       const contents = read(requirement.file);
       for (const snippet of requirement.snippets) {
+        // skipcq - Vitest assertion messages intentionally compose proof metadata for failure diagnostics.
         expect(contents, `${requirement.area}/${requirement.kind}: ${requirement.file}`).toContain(snippet);
       }
     }

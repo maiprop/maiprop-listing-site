@@ -106,25 +106,27 @@ Reads from Hub table `firesale_requests`.
 
 ## 5. `fetch-report-from-os` – Get report from OS API (report ↔ listing)
 
-**Purpose:** Fetch a pre-generated report (valuation or neighbourhood) from the OS for a given listing. The listing site calls this first when showing the Neighbourhood Report or Property Valuation (and AI Market Insights); if the OS returns a report, the UI uses it; otherwise the app falls back to the AI edge functions (`neighbourhood-report`, `property-valuation`).
+**Purpose:** Fetch a report from the OS for a given listing. For `report_type: "valuation"` the function builds the OS `PropertyFeaturesRequest` from the Hub listing and fetches the printable HTML property report, which the UI opens through the browser PDF export flow. Successful OS reports are cached for 30 days in `property_report_cache`.
 
 **Request:**  
 `body: { listing_id: string, report_type: "valuation" | "neighbourhood" }`
 
-**OS API (default):**  
-`GET /api/v1/reports/listing/:listingId?type=valuation` or `?type=neighbourhood`  
-Override path with env `MAIPROP_OS_REPORT_PATH` (e.g. `/api/v1/analytics/report`; then listingId and type are sent as query params).
+**OS API:**
+- Valuation property report: `GET /api/v1/reports/valuation/property` with flattened `PropertyFeaturesRequest` query params (`constructionYear`, `propertyLatitude`, `propertyLongitude`, `propertySquareMeters`, `propertyFloor`, `propertyCategory`, `address`) plus optional `lang`, `since`, `to`.
+- Valuation AI narrative: `GET /api/v1/reports/valuation/property/ai` with the same query params.
+- Legacy non-valuation fallback: `GET /api/v1/reports/listing/:listingId?type=neighbourhood` or an override path via `MAIPROP_OS_REPORT_PATH`.
 
 **Auth:** Same as other OS functions (`POST /auth/login` → Bearer token).
 
 **Response:**  
-- `{ ok: true, report: <payload>, source: "os" }` when the OS returns a report.  
+- Valuation success: `{ ok: true, report: { kind: "valuation-property-html", html, ai, features, fileName }, source: "os" }`.
+- Legacy success: `{ ok: true, report: <payload>, source: "os" }` when the OS returns a report.
 - `{ ok: true, report: null, source: "os" }` when the OS has no report (e.g. 404).  
 - `{ ok: false, error }` on failure.
 
 **Frontend:**  
-- `NeighbourhoodReport` and `PropertyValuation` accept optional `listingId`; when set, they call `fetch-report-from-os` first.  
-- PropertyDetail passes `listingId` (route `id`) and the AI Market Insights block also tries the OS valuation report before calling `property-valuation`.
+- `PropertyReportCard` calls `fetch-report-from-os`. If OS returns printable report HTML, the user gets an `Export PDF` action. If OS has no report, the card enters a disabled "Report unavailable" state.
+- Charging is handled server-side by `fetch-report-from-os`: the first user fetch for a cached report generation inserts `usage_property_reports`; repeated fetches by the same user for that cached generation are not charged. Other users who fetch the same cached report are charged once.
 
 ---
 
@@ -160,7 +162,7 @@ Override path with env `MAIPROP_OS_REPORT_PATH` (e.g. `/api/v1/analytics/report`
 | `MAIPROP_OS_PASSWORD`     | full-sync, poll, sync-to-os, sync-firesale | OS login for token |
 | `MAIPROP_OS_WEBHOOK_SECRET` | receive-from-os         | Validate webhook calls from OS |
 | `GOOGLE_MAPS_API_KEY`     | full-sync-from-os, poll-os-auctions | Optional; Street View cover images for auction listings |
-| `MAIPROP_OS_REPORT_PATH`  | fetch-report-from-os                | Optional; override report URL path (default: `/api/v1/reports/listing`) |
+| `MAIPROP_OS_REPORT_PATH`  | fetch-report-from-os                | Optional legacy non-valuation report URL override (default: `/api/v1/reports/listing`) |
 
 ---
 
