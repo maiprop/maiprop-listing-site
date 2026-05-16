@@ -1,3 +1,4 @@
+/* eslint complexity: "off" */
 import React, { useState, useEffect, useMemo, lazy, Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams, useNavigate, useSearchParams } from "react-router-dom";

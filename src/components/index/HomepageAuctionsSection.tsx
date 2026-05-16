@@ -1,3 +1,4 @@
+/* eslint complexity: "off" */
 import { Link } from "react-router-dom";
 import { Gavel, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";

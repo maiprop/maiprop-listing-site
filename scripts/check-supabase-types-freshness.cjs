@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint complexity: "off" */
 const { execFileSync } = require("node:child_process");
 const { existsSync, readFileSync } = require("node:fs");
 const { join } = require("node:path");

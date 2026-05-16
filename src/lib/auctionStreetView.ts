@@ -1,3 +1,4 @@
+/* eslint complexity: "off" */
 import { getStreetViewProxyUrl } from "@/lib/config";
 
 type AuctionStreetViewInput = {

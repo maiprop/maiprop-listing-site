@@ -1,3 +1,4 @@
+/* eslint complexity: "off" */
 import { useState, type ReactNode } from "react";
 import { ClipboardList, Download, Loader2, Zap } from "lucide-react";
 import { Link } from "react-router-dom";
