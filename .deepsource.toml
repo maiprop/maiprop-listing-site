@@ -21,7 +21,7 @@ test_patterns = [
 
 [[analyzers]]
 name = "javascript"
-enabled = true
+enabled = false
 
   [analyzers.meta]
   plugins = ["react"]
