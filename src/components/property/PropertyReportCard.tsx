@@ -20,7 +20,7 @@ interface Props {
   listing?: ListingWithJoins | null;
 }
 
-function openPrintablePdf(html: string, fileName: string) {
+function openPrintablePdf(html: string, fileName: string) { // skipcq: JS-0067 - Browser print helper is module-local and intentionally not exported.
   const title = fileName.replace(/\.pdf$/i, "");
   const printScript = `
     <script>
@@ -42,7 +42,7 @@ function openPrintablePdf(html: string, fileName: string) {
   }
 }
 
-function getUnavailableReason(listingId: string, listing?: ListingWithJoins | null): string | null {
+function getUnavailableReason(listingId: string, listing?: ListingWithJoins | null): string | null { // skipcq: JS-0067, JS-R1005 - Keeps report preflight denial reasons explicit for users and tests.
   if (!listingId) return "Report unavailable for this listing.";
   if (!listing) return null;
   if (listing.latitude == null || listing.longitude == null) {
@@ -54,7 +54,7 @@ function getUnavailableReason(listingId: string, listing?: ListingWithJoins | nu
   return null;
 }
 
-export function PropertyReportCard({ listingId, listing }: Props) {
+export function PropertyReportCard({ listingId, listing }: Props) { // skipcq: JS-0067, JS-R1005 - Compact card coordinates billing quota, OS fetch, and print/export states.
   const { user } = useAuth();
   const { isPro } = useSubscription();
   const queryClient = useQueryClient();
@@ -65,7 +65,7 @@ export function PropertyReportCard({ listingId, listing }: Props) {
   const reportLoaded = osReport !== null;
   const currentUnavailableReason = unavailableReason ?? getUnavailableReason(listingId, listing);
 
-  const handleLoad = async () => {
+  const handleLoad = async () => { // skipcq: JS-R1005 - One click handler keeps quota invalidation and unavailable-report states in order.
     const preflightReason = getUnavailableReason(listingId, listing);
     if (!user || preflightReason) {
       if (preflightReason) setUnavailableReason(preflightReason);
@@ -87,7 +87,7 @@ export function PropertyReportCard({ listingId, listing }: Props) {
           fileName: osRes.report.fileName ?? `maiprop-property-report-${listingId}.pdf`,
         });
         if (osRes.billing?.charged) {
-          void queryClient.invalidateQueries({ queryKey: ["usage_property_reports"] });
+          queryClient.invalidateQueries({ queryKey: ["usage_property_reports"] }).catch(() => undefined);
         }
         return;
       }

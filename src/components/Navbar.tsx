@@ -27,7 +27,7 @@ import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 const DARK_HERO_ROUTES = ["/"];
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
-export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = {}) {
+export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = {}) { // skipcq: JS-R1005 - Single responsive nav surface coordinates auth, role, theme, and notification controls.
   const [scrolled, setScrolled] = useState(forceScrolled);
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
