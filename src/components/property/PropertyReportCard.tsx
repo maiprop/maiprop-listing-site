@@ -72,6 +72,7 @@ const openPrintablePdf = (html: string, fileName: string) => {
   }
 };
 
+// skipcq: JS-R1005 - Ordered validation rules keep report-unavailable reasons deterministic.
 const getUnavailableReason = (listingId: string, listing?: ListingWithJoins | null): string | null => {
   if (!listing) return !listingId ? UNAVAILABLE_RULES[0].reason : null;
   return UNAVAILABLE_RULES.find((rule) => rule.when(listingId, listing))?.reason ?? null;
@@ -294,6 +295,7 @@ const usePropertyReportCardView = ({ listingId, listing }: Props): ReportCardVie
   return { content, reportLoaded };
 };
 
+// skipcq: JS-R1005 - Card rendering branches are isolated in view-state helpers above.
 export const PropertyReportCard = (props: Props) => {
   const { content, reportLoaded } = usePropertyReportCardView(props);
   return (

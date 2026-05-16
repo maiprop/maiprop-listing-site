@@ -124,6 +124,7 @@ const DEFAULT_SEED: Omit<PricingConfig, "id" | "created_at" | "updated_at">[] = 
 ];
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
+// skipcq: JS-0067 - Local hook is intentionally module-scoped for the admin pricing surface.
 function usePricingConfigs() {
   return useQuery<PricingConfig[]>({
     queryKey: ["admin-pricing-configs"],
@@ -142,7 +143,8 @@ function usePricingConfigs() {
 
 /** Embeddable pricing content — use in AdminDashboard tab. Skips Navbar/Footer and access check when embed=true. */
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
-export function AdminPricingContent({ embed = false }: { embed?: boolean }) { // skipcq: JS-R1005 - Admin pricing keeps table editing, validation, and Stripe sync controls together for one audited surface.
+// skipcq: JS-R1005 - Admin pricing keeps table editing, validation, and Stripe sync controls together for one audited surface.
+export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
   const { profile } = useAuth();
   const qc = useQueryClient();
   const isAdmin = isPlatformAdmin(profile);

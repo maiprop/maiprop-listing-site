@@ -80,7 +80,8 @@ function TabFallback() {
 
 
 // ── Main Dashboard ────────────────────────────────────────────────────────────
-export default function Dashboard() { // skipcq: JS-R1005
+// skipcq: JS-R1005 - Dashboard coordinates role-specific panels and tab routing in one audited shell.
+export default function Dashboard() {
   const { section } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();

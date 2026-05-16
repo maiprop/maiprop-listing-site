@@ -9,7 +9,8 @@ type AuctionStreetViewInput = {
   region?: string | null;
 };
 
-const toFiniteNumber = (value: unknown): number | null => { // skipcq: JS-R1005 - Keeps string/number/null coercion explicit before coordinate bounds checks.
+// skipcq: JS-R1005 - Keeps string/number/null coercion explicit before coordinate bounds checks.
+const toFiniteNumber = (value: unknown): number | null => {
   if (value === "" || value == null) return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;

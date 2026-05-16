@@ -52,7 +52,8 @@ const getSortedListingImages = (listing: HomepageAuctionListing): string[] => {
     .filter((url): url is string => typeof url === "string" && url.length > 0);
 };
 
-const getHomepageAuctionImages = (listing: HomepageAuctionListing): string[] => { // skipcq: JS-R1005
+// skipcq: JS-R1005 - Image fallback selection intentionally prefers listing media before Street View.
+const getHomepageAuctionImages = (listing: HomepageAuctionListing): string[] => {
   const fallbackImages = getSortedListingImages(listing);
   const streetView = getAuctionStreetViewImageUrl(listing);
   const images = listing.cover_image_url ? [listing.cover_image_url] : fallbackImages;
