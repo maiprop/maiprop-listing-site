@@ -262,11 +262,16 @@ const REPORT_CONTENT_RULES = [
     when: ({ reportCount }: ReportContentContext) => reportCount >= REPORT_INCLUDED,
     render: () => <ExtraReportContent />,
   },
-  {
-    when: () => true,
-    render: (context: ReportContentContext) => <LoadReportContent {...context} />,
-  },
 ];
+
+const FALLBACK_CONTENT_RULE = {
+  render: (context: ReportContentContext) => <LoadReportContent {...context} />,
+};
+
+const getReportCardClass = (reportLoaded: boolean) => [
+  "glass-card rounded-2xl overflow-hidden border",
+  reportLoaded ? "border-primary/30" : "border-primary/20",
+].join(" ");
 
 export const PropertyReportCard = ({ listingId, listing }: Props) => {
   const { isPro } = useSubscription();
@@ -279,10 +284,11 @@ export const PropertyReportCard = ({ listingId, listing }: Props) => {
     reportLoading,
   } = usePropertyReportLoader(listingId, listing);
   const contentContext = { currentUnavailableReason, isPro, loadReport, osReport, reportCount, reportLoading };
-  const content = REPORT_CONTENT_RULES.find((rule) => rule.when(contentContext))?.render(contentContext);
+  const contentRule = REPORT_CONTENT_RULES.find((rule) => rule.when(contentContext)) ?? FALLBACK_CONTENT_RULE;
+  const content = contentRule.render(contentContext);
 
   return (
-    <div className={`glass-card rounded-2xl overflow-hidden border ${reportLoaded ? "border-primary/30" : "border-primary/20"}`}>
+    <div className={getReportCardClass(reportLoaded)}>
       <div className="flex items-center gap-2 px-5 py-3.5 bg-primary/5 border-b border-primary/20">
         <ClipboardList className="w-4 h-4 text-primary" />
         <h4 className="font-display font-semibold text-sm flex-1">Property Report</h4>

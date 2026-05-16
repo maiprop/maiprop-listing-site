@@ -316,10 +316,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (updates: Partial<Profile>) => {
       if (!user) return { error: new Error("Not authenticated") };
 
-      // Allowlist: only these fields may be self-updated by the user.
-      // Sensitive columns (role, is_platform_admin, subscription_product_id,
-      // participant_type, force_pro_access, stripe_customer_id) are excluded —
-      // they must be set server-side via RPC or admin action.
+      // Allowlist: user-editable profile fields only. Privileged account fields
+      // must be set server-side via RPC or admin action.
       const ALLOWED_FIELDS: ReadonlySet<keyof Profile> = new Set([
         "display_name",
         "bio",
