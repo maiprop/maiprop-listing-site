@@ -241,7 +241,15 @@ export function FiresaleQuickSaleForm() {
       if (error) throw error;
 
       if (photoFiles.length > 0 && data?.id) {
-        try { await uploadPhotos(data.id); } catch (_err: unknown) { /* non-blocking */ }
+        const uploadedUrls = await uploadPhotos(data.id);
+        if (uploadedUrls.length < photoFiles.length) {
+          await supabase
+            .from("firesale_requests")
+            .delete()
+            .eq("id", data.id)
+            .eq("user_id", user.id);
+          throw new Error("Photo upload failed. Your request was not submitted; please retry the upload.");
+        }
       }
 
       setAiEstimate(estimate);

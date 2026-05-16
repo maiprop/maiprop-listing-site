@@ -6,6 +6,7 @@ type VirtualizedListingGridProps<T extends { id: string }> = {
   items: T[];
   renderItem: (item: T) => ReactNode;
   className: string;
+  scrollParentRef?: React.RefObject<HTMLElement>;
   estimateItemHeight?: number;
   gap?: number;
   columns?: number | "auto";
@@ -17,6 +18,7 @@ export function VirtualizedListingGrid<T extends { id: string }>({
   items,
   renderItem,
   className,
+  scrollParentRef,
   estimateItemHeight = 420,
   gap = 16,
   columns = "auto",
@@ -43,19 +45,27 @@ export function VirtualizedListingGrid<T extends { id: string }>({
 
     const updateViewport = () => {
       const rect = node.getBoundingClientRect();
+      const scrollParent = scrollParentRef?.current ?? null;
+      if (scrollParent) {
+        const parentRect = scrollParent.getBoundingClientRect();
+        setViewportTop(Math.max(0, parentRect.top - rect.top));
+        setViewportHeight(scrollParent.clientHeight);
+        return;
+      }
       setViewportTop(Math.max(0, -rect.top));
       setViewportHeight(window.innerHeight);
     };
     updateViewport();
-    window.addEventListener("scroll", updateViewport, { passive: true });
+    const scrollTarget = scrollParentRef?.current ?? window;
+    scrollTarget.addEventListener("scroll", updateViewport, { passive: true });
     window.addEventListener("resize", updateViewport);
 
     return () => {
       resizeObserver.disconnect();
-      window.removeEventListener("scroll", updateViewport);
+      scrollTarget.removeEventListener("scroll", updateViewport);
       window.removeEventListener("resize", updateViewport);
     };
-  }, []);
+  }, [scrollParentRef]);
 
   const columnCount = columns === "auto" ? getAutoListingGridColumns(rootWidth) : columns;
   const totalRows = Math.ceil(items.length / columnCount);

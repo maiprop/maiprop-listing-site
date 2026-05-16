@@ -1,4 +1,4 @@
-import { useState, useMemo, lazy, Suspense, useCallback } from "react";
+import { useRef, useState, useMemo, lazy, Suspense, useCallback } from "react";
 import { Helmet } from "react-helmet-async";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
@@ -48,6 +48,7 @@ export default function Listings() {
   const [viewportIds, setViewportIds] = useState<Set<string> | null>(null);
   const [polygonFilterIds, setPolygonFilterIds] = useState<Set<string> | null>(null);
   const [mobileTab, setMobileTab] = useState<"list" | "map">("list");
+  const splitListRef = useRef<HTMLDivElement | null>(null);
   const { user } = useAuth();
   const { consent, accept } = useCookieConsent();
 
@@ -515,6 +516,7 @@ export default function Listings() {
               <VirtualizedListingGrid
                 items={splitDisplayList}
                 columns={1}
+                scrollParentRef={splitListRef}
                 gap={12}
                 estimateItemHeight={380}
                 className="grid grid-cols-1 gap-3"
@@ -545,6 +547,7 @@ export default function Listings() {
                 <div className={`md:w-[420px] shrink-0 overflow-y-auto px-4 space-y-3 pb-8 border-r border-border
                   ${mobileTab === "map" ? "hidden md:block" : "block"}
                   md:h-full h-[60vh]`}
+                  ref={splitListRef}
                 >
                   {isLoading
                     ? <div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => <PropertyCardSkeleton key={i} />)}</div>

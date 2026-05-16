@@ -36,6 +36,23 @@ After a clean run where every recent migration satisfies the rules, bump
 unstamped timestamp. This locks in the new floor without touching historical
 files.
 
+## Future-dated migration allowlist
+
+Some migration timestamps are later than the current calendar date because they
+were already applied to the linked Supabase project before the chronology rule
+was tightened. Those versions are recorded in
+`scripts/applied-future-migrations.json`.
+
+That file is not permission to add new future-dated migrations. It is a
+traceability artifact for already-applied history:
+
+1. Every allowlisted version must still have a source-controlled `.sql` file in
+   this directory.
+2. New migrations must use the real current UTC timestamp from the operator's
+   machine.
+3. If a future-dated migration appears locally but not remotely, do not add it
+   to the allowlist. Rename it before applying.
+
 ## Why historical migrations are exempt
 
 The `migrations-validate` CI job replays every migration file against a fresh
