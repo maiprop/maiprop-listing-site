@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ClipboardList, Download, Loader2, Zap } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
@@ -15,12 +15,42 @@ interface OsPrintableReport {
   fileName: string;
 }
 
+interface OsReportResponse {
+  ok?: boolean;
+  reason?: string;
+  billing?: { charged?: boolean };
+  report?: {
+    html?: string;
+    fileName?: string;
+  };
+}
+
 interface Props {
   listingId: string;
   listing?: ListingWithJoins | null;
 }
 
-function openPrintablePdf(html: string, fileName: string) { // skipcq: JS-0067 - Browser print helper is module-local and intentionally not exported.
+type ReportUnavailableRule = {
+  when: (listingId: string, listing?: ListingWithJoins | null) => boolean;
+  reason: string;
+};
+
+const UNAVAILABLE_RULES: ReportUnavailableRule[] = [
+  {
+    when: (listingId) => !listingId,
+    reason: "Report unavailable for this listing.",
+  },
+  {
+    when: (_listingId, listing) => Boolean(listing && (listing.latitude == null || listing.longitude == null)),
+    reason: "Report unavailable: this listing needs map coordinates first.",
+  },
+  {
+    when: (_listingId, listing) => Boolean(listing && (listing.sqm == null || Number(listing.sqm) <= 0)),
+    reason: "Report unavailable: this listing needs a valid property size first.",
+  },
+];
+
+const openPrintablePdf = (html: string, fileName: string) => {
   const title = fileName.replace(/\.pdf$/i, "");
   const printScript = `
     <script>
@@ -40,35 +70,53 @@ function openPrintablePdf(html: string, fileName: string) { // skipcq: JS-0067 -
   if (!opened) {
     toast.error("Popup blocked. Allow popups to export the report as PDF.");
   }
-}
+};
 
-function getUnavailableReason(listingId: string, listing?: ListingWithJoins | null): string | null { // skipcq: JS-0067, JS-R1005 - Keeps report preflight denial reasons explicit for users and tests.
-  if (!listingId) return "Report unavailable for this listing.";
-  if (!listing) return null;
-  if (listing.latitude == null || listing.longitude == null) {
-    return "Report unavailable: this listing needs map coordinates first.";
-  }
-  if (listing.sqm == null || Number(listing.sqm) <= 0) {
-    return "Report unavailable: this listing needs a valid property size first.";
-  }
-  return null;
-}
+const getUnavailableReason = (listingId: string, listing?: ListingWithJoins | null): string | null => {
+  if (!listing) return !listingId ? UNAVAILABLE_RULES[0].reason : null;
+  return UNAVAILABLE_RULES.find((rule) => rule.when(listingId, listing))?.reason ?? null;
+};
 
-export function PropertyReportCard({ listingId, listing }: Props) { // skipcq: JS-0067, JS-R1005 - Compact card coordinates billing quota, OS fetch, and print/export states.
+const getPrintableReport = (osRes: OsReportResponse | null | undefined, listingId: string): OsPrintableReport | null => {
+  const html = osRes?.report?.html;
+  if (!osRes?.ok || !html) return null;
+  return {
+    html,
+    fileName: osRes.report?.fileName ?? `maiprop-property-report-${listingId}.pdf`,
+  };
+};
+
+const refreshReportUsage = (queryClient: QueryClient, osRes: OsReportResponse | null | undefined) => {
+  if (!osRes?.billing?.charged) return;
+  queryClient.invalidateQueries({ queryKey: ["usage_property_reports"] }).catch(() => undefined);
+};
+
+const usePropertyReportLoader = (listingId: string, listing?: ListingWithJoins | null) => {
   const { user } = useAuth();
-  const { isPro } = useSubscription();
   const queryClient = useQueryClient();
-  const { data: reportCount = 0 } = useReportUsage();
   const [osReport, setOsReport] = useState<OsPrintableReport | null>(null);
   const [unavailableReason, setUnavailableReason] = useState<string | null>(() => getUnavailableReason(listingId, listing));
   const [reportLoading, setReportLoading] = useState(false);
-  const reportLoaded = osReport !== null;
   const currentUnavailableReason = unavailableReason ?? getUnavailableReason(listingId, listing);
 
-  const handleLoad = async () => { // skipcq: JS-R1005 - One click handler keeps quota invalidation and unavailable-report states in order.
+  const handleBlockedLoad = (reason: string | null) => {
+    if (reason) setUnavailableReason(reason);
+  };
+
+  const handleReportResponse = (osRes: OsReportResponse | null | undefined) => {
+    const printableReport = getPrintableReport(osRes, listingId);
+    if (printableReport) {
+      setOsReport(printableReport);
+      refreshReportUsage(queryClient, osRes);
+      return;
+    }
+    setUnavailableReason(osRes?.reason ?? "Report unavailable: MAIProp OS has not generated this property report yet.");
+  };
+
+  const loadReport = async () => {
     const preflightReason = getUnavailableReason(listingId, listing);
     if (!user || preflightReason) {
-      if (preflightReason) setUnavailableReason(preflightReason);
+      handleBlockedLoad(preflightReason);
       return;
     }
 
@@ -76,29 +124,142 @@ export function PropertyReportCard({ listingId, listing }: Props) { // skipcq: J
     setUnavailableReason(null);
 
     try {
-      const { data: osRes, error } = await supabase.functions.invoke("fetch-report-from-os", {
+      const { data: osRes, error } = await supabase.functions.invoke<OsReportResponse>("fetch-report-from-os", {
         body: { listing_id: listingId, report_type: "valuation" },
       });
       if (error) throw error;
-
-      if (osRes?.ok && osRes.report?.html) {
-        setOsReport({
-          html: osRes.report.html,
-          fileName: osRes.report.fileName ?? `maiprop-property-report-${listingId}.pdf`,
-        });
-        if (osRes.billing?.charged) {
-          queryClient.invalidateQueries({ queryKey: ["usage_property_reports"] }).catch(() => undefined);
-        }
-        return;
-      }
-
-      setUnavailableReason(osRes?.reason ?? "Report unavailable: MAIProp OS has not generated this property report yet.");
+      handleReportResponse(osRes);
     } catch (_err) {
       setUnavailableReason("Report unavailable right now. Please try again later.");
     } finally {
       setReportLoading(false);
     }
   };
+
+  return {
+    currentUnavailableReason,
+    loadReport,
+    osReport,
+    reportLoaded: osReport !== null,
+    reportLoading,
+  };
+};
+
+const ProUpgradeContent = () => (
+  <div className="text-center space-y-3">
+    <p className="text-xs text-muted-foreground leading-relaxed">
+      Deep-dive: Area trends, comparable sales, property specifics analysis, and charts.
+    </p>
+    <Button className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2" asChild>
+      <Link to="/pricing">
+        <Zap className="w-4 h-4" /> Upgrade to Pro
+      </Link>
+    </Button>
+    <p className="text-[10px] text-muted-foreground">Pro Feature - Unlock full reports</p>
+  </div>
+);
+
+const UnavailableContent = ({ reason }: { reason: string }) => (
+  <div className="text-center space-y-3">
+    <p className="text-xs text-muted-foreground leading-relaxed">{reason}</p>
+    <Button className="w-full gap-2" disabled variant="secondary">
+      <ClipboardList className="w-4 h-4" />
+      Report unavailable
+    </Button>
+    <p className="text-[10px] text-muted-foreground">A downloadable OS report is required for PDF export</p>
+  </div>
+);
+
+const LoadedReportContent = ({ osReport }: { osReport: OsPrintableReport }) => (
+  <div className="space-y-3">
+    <p className="text-xs text-muted-foreground leading-relaxed">
+      MAIProp OS generated the printable property report for this listing.
+    </p>
+    <Button
+      className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2"
+      onClick={() => openPrintablePdf(osReport.html, osReport.fileName)}
+    >
+      <Download className="w-4 h-4" />
+      Export PDF
+    </Button>
+    <p className="text-[10px] text-muted-foreground">Source: MAIProp OS - Browser PDF export</p>
+  </div>
+);
+
+const ExtraReportContent = () => (
+  <div className="text-center space-y-3">
+    <p className="text-xs text-muted-foreground leading-relaxed">
+      Included reports used this month. Extra reports cost EUR {REPORT_EXTRA_COST} each.
+    </p>
+    <Button className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2" asChild>
+      <Link to="/pricing"><Zap className="w-4 h-4" /> Get Extra Report</Link>
+    </Button>
+    <p className="text-[10px] text-muted-foreground">EUR {REPORT_EXTRA_COST} per extra report</p>
+  </div>
+);
+
+const LoadReportContent = ({
+  currentUnavailableReason,
+  isPro,
+  loadReport,
+  reportCount,
+  reportLoading,
+}: {
+  currentUnavailableReason: string | null;
+  isPro: boolean;
+  loadReport: () => void;
+  reportCount: number;
+  reportLoading: boolean;
+}) => (
+  <div className="text-center space-y-3">
+    {isPro && (
+      <p className="text-[10px] text-muted-foreground">
+        {Math.max(0, REPORT_INCLUDED - reportCount)} of {REPORT_INCLUDED} reports remaining this month
+      </p>
+    )}
+    <p className="text-xs text-muted-foreground leading-relaxed">
+      Deep-dive: Area trends, comparable sales, property specifics analysis, and charts.
+    </p>
+    <Button
+      className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2"
+      onClick={loadReport}
+      disabled={reportLoading || Boolean(currentUnavailableReason)}
+    >
+      {reportLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ClipboardList className="w-4 h-4" />}
+      {reportLoading ? "Loading..." : "Load Report"}
+    </Button>
+    <p className="text-[10px] text-muted-foreground">Full - Instant - OS PDF export</p>
+  </div>
+);
+
+export const PropertyReportCard = ({ listingId, listing }: Props) => {
+  const { isPro } = useSubscription();
+  const { data: reportCount = 0 } = useReportUsage();
+  const {
+    currentUnavailableReason,
+    loadReport,
+    osReport,
+    reportLoaded,
+    reportLoading,
+  } = usePropertyReportLoader(listingId, listing);
+
+  const content = !isPro
+    ? <ProUpgradeContent />
+    : currentUnavailableReason
+      ? <UnavailableContent reason={currentUnavailableReason} />
+      : osReport
+        ? <LoadedReportContent osReport={osReport} />
+        : reportCount >= REPORT_INCLUDED
+          ? <ExtraReportContent />
+          : (
+            <LoadReportContent
+              currentUnavailableReason={currentUnavailableReason}
+              isPro={isPro}
+              loadReport={loadReport}
+              reportCount={reportCount}
+              reportLoading={reportLoading}
+            />
+          );
 
   return (
     <div className={`glass-card rounded-2xl overflow-hidden border ${reportLoaded ? "border-primary/30" : "border-primary/20"}`}>
@@ -110,76 +271,7 @@ export function PropertyReportCard({ listingId, listing }: Props) { // skipcq: J
         </span>
       </div>
 
-      <div className="p-5">
-        {!isPro ? (
-          <div className="text-center space-y-3">
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Deep-dive: Area trends, comparable sales, property specifics analysis, and charts.
-            </p>
-            <Button className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2" asChild>
-              <Link to="/pricing">
-                <Zap className="w-4 h-4" /> Upgrade to Pro
-              </Link>
-            </Button>
-            <p className="text-[10px] text-muted-foreground">Pro Feature - Unlock full reports</p>
-          </div>
-        ) : currentUnavailableReason ? (
-          <div className="text-center space-y-3">
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              {currentUnavailableReason}
-            </p>
-            <Button className="w-full gap-2" disabled variant="secondary">
-              <ClipboardList className="w-4 h-4" />
-              Report unavailable
-            </Button>
-            <p className="text-[10px] text-muted-foreground">A downloadable OS report is required for PDF export</p>
-          </div>
-        ) : osReport ? (
-          <div className="space-y-3">
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              MAIProp OS generated the printable property report for this listing.
-            </p>
-            <Button
-              className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2"
-              onClick={() => openPrintablePdf(osReport.html, osReport.fileName)}
-            >
-              <Download className="w-4 h-4" />
-              Export PDF
-            </Button>
-            <p className="text-[10px] text-muted-foreground">Source: MAIProp OS - Browser PDF export</p>
-          </div>
-        ) : reportCount >= REPORT_INCLUDED ? (
-          <div className="text-center space-y-3">
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Included reports used this month. Extra reports cost EUR {REPORT_EXTRA_COST} each.
-            </p>
-            <Button className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2" asChild>
-              <Link to="/pricing"><Zap className="w-4 h-4" /> Get Extra Report</Link>
-            </Button>
-            <p className="text-[10px] text-muted-foreground">EUR {REPORT_EXTRA_COST} per extra report</p>
-          </div>
-        ) : (
-          <div className="text-center space-y-3">
-            {isPro && (
-              <p className="text-[10px] text-muted-foreground">
-                {Math.max(0, REPORT_INCLUDED - reportCount)} of {REPORT_INCLUDED} reports remaining this month
-              </p>
-            )}
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Deep-dive: Area trends, comparable sales, property specifics analysis, and charts.
-            </p>
-            <Button
-              className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2"
-              onClick={handleLoad}
-              disabled={reportLoading || Boolean(currentUnavailableReason)}
-            >
-              {reportLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ClipboardList className="w-4 h-4" />}
-              {reportLoading ? "Loading..." : "Load Report"}
-            </Button>
-            <p className="text-[10px] text-muted-foreground">Full - Instant - OS PDF export</p>
-          </div>
-        )}
-      </div>
+      <div className="p-5">{content}</div>
     </div>
   );
-}
+};

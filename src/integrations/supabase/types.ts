@@ -2817,6 +2817,62 @@ export type Database = {
         }
         Relationships: []
       }
+      property_report_cache: {
+        Row: {
+          ai: Json | null
+          created_at: string
+          expires_at: string
+          features: Json
+          file_name: string
+          generated_at: string
+          html: string
+          id: string
+          lang: string
+          listing_id: string
+          report_type: string
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          ai?: Json | null
+          created_at?: string
+          expires_at?: string
+          features?: Json
+          file_name: string
+          generated_at?: string
+          html: string
+          id?: string
+          lang?: string
+          listing_id: string
+          report_type?: string
+          source?: string
+          updated_at?: string
+        }
+        Update: {
+          ai?: Json | null
+          created_at?: string
+          expires_at?: string
+          features?: Json
+          file_name?: string
+          generated_at?: string
+          html?: string
+          id?: string
+          lang?: string
+          listing_id?: string
+          report_type?: string
+          source?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "property_report_cache_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rate_limit_counters: {
         Row: {
           bucket: string
