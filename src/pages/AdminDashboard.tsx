@@ -28,7 +28,7 @@ const AdminReports = lazy(() => import("@/components/AdminReports"));
 
 function AdminTabFallback() {
   return (
-    <div className="rounded-lg border border-border bg-card p-8 text-sm text-muted-foreground">
+    <div className="min-h-[560px] rounded-lg border border-border bg-card p-8 text-sm text-muted-foreground">
       Loading...
     </div>
   );
@@ -106,6 +106,7 @@ export default function AdminDashboard() {
             ))}
           </div>
 
+          <div className="min-h-[560px]">
           {activeTab === "pipeline" && <AdminFiresalePipeline />}
           {activeTab === "investor-screening" && <AdminInvestorScreening />}
           {activeTab === "open-houses" && (
@@ -131,6 +132,7 @@ export default function AdminDashboard() {
           {activeTab === "featured" && <AdminFeaturedListings />}
           {activeTab === "pro-verification" && <AdminProfessionalVerification />}
           {activeTab === "pof-review" && <POFVerificationPanel />}
+          </div>
         </div>
       </div>
       <Footer />

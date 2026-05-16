@@ -26,6 +26,27 @@ import {
   AUCTIONS_MAX_PAGES_PRO,
 } from "@/hooks/useAuctionsPipeline";
 
+function AuctionCardSkeleton() {
+  return (
+    <div className="glass-card rounded-xl overflow-hidden border border-border flex flex-col min-h-[382px]" aria-hidden="true">
+      <div className="h-44 bg-muted animate-pulse" />
+      <div className="p-4 space-y-3 flex-1 flex flex-col">
+        <div className="h-4 w-5/6 rounded bg-muted animate-pulse" />
+        <div className="h-3 w-2/3 rounded bg-muted animate-pulse" />
+        <div className="flex gap-2">
+          <div className="h-5 w-20 rounded-full bg-muted animate-pulse" />
+          <div className="h-5 w-16 rounded-full bg-muted animate-pulse" />
+        </div>
+        <div className="h-6 w-28 rounded bg-muted animate-pulse" />
+        <div className="mt-auto pt-3 border-t border-border flex gap-2">
+          <div className="h-8 w-20 rounded-lg bg-muted animate-pulse" />
+          <div className="h-8 w-20 rounded-lg bg-muted animate-pulse" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Auctions() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -320,9 +341,14 @@ export default function Auctions() {
         {viewMode === "list" &&
         <div className="container pb-24 lg:pb-16">
             {isLoading &&
-          <div className="flex items-center justify-center py-20 gap-3 text-muted-foreground">
-                <Loader2 className="w-5 h-5 animate-spin" />
-                <span className="text-sm">Loading auctions from OS…</span>
+          <div className="space-y-4" aria-busy="true" aria-live="polite">
+                <div className="flex items-center gap-3 text-muted-foreground">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span className="text-sm">Loading auctions from OS…</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                  {Array.from({ length: AUCTIONS_PAGE_SIZE }).map((_, i) => <AuctionCardSkeleton key={i} />)}
+                </div>
               </div>
           }
 

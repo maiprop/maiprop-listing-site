@@ -4,7 +4,7 @@ import { Gavel, Crown, Calendar, Clock, MapPin, Euro, Heart, Share2, Flag, Exter
 import { format } from "date-fns";
 import { toast } from "sonner";
 import {
-  daysUntil, countdownBadge, getPropertyTypeLabel, streetViewImg,
+  daysUntil, countdownBadge, getPropertyTypeLabel,
   normalizeOwnership, getOwnershipStatus, getOwnershipPct, OWNERSHIP_BADGE,
 } from "@/lib/auctionUtils";
 import { APP_ORIGIN } from "@/lib/config";
@@ -29,7 +29,7 @@ export const AuctionCard = memo(function AuctionCard({
 }) {
   const days = daysUntil(a.auction_date);
   const badge = countdownBadge(days);
-  const imgSrc = a.cover_image_url ?? streetViewImg(a.latitude, a.longitude);
+  const imgSrc = a.cover_image_url;
   const isFav = favoritedIds.has(a.id);
   const ownershipStatus = normalizeOwnership(getOwnershipStatus(a.tags));
   const ownershipPct = getOwnershipPct(a.tags);
@@ -58,6 +58,9 @@ export const AuctionCard = memo(function AuctionCard({
           <img
             src={imgSrc}
             alt={a.title}
+            width={480}
+            height={256}
+            decoding="async"
             loading="lazy"
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
             onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
