@@ -961,6 +961,36 @@ describe("Component smoke tests", () => {
   it("HomepageAuctionsSection renders without throwing", async () => {
     const { HomepageAuctionsSection } = await import("@/components/index/HomepageAuctionsSection");
     expect(() => renderWithProviders(<HomepageAuctionsSection listings={[]} isLoading={false} />)).not.toThrow();
+    expect(() => renderWithProviders(
+      <HomepageAuctionsSection
+        isLoading={false}
+        listings={[{
+          id: "auction-1",
+          title: "Athens auction flat",
+          address: null,
+          city: "Athens",
+          price: "120000",
+          price_per_sqm: "2400",
+          bedrooms: 2,
+          bathrooms: 1,
+          sqm: "50",
+          floor: 3,
+          total_floors: 5,
+          year_built: 1998,
+          energy_class: "B",
+          listing_images: [{ sort_order: 1, url: "https://example.com/auction.jpg" }],
+          property_type: "apartment",
+          listing_type: "auction",
+          auction_date: "2026-06-01T10:00:00Z",
+          auction_starting_bid: "90000",
+          ai_score: 82,
+          views_count: 12,
+          tags: ["auction"],
+          is_pre_sale: true,
+          construction_status: "resale",
+        }]}
+      />
+    )).not.toThrow();
   });
 
   it("HomepageOpenHousesSection renders without throwing", async () => {
