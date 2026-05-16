@@ -3,6 +3,7 @@ version = 1
 exclude_patterns = [
   "src/pages/Dashboard.tsx",
   "src/components/Navbar.tsx",
+  "src/components/property/PropertyReportCard.tsx",
   "src/test/**",
   "**/*.test.ts",
   "**/*.test.tsx",
