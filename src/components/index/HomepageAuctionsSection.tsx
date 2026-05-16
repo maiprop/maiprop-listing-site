@@ -1,23 +1,58 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Link } from "react-router-dom";
 import { Gavel, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { PropertyCard } from "@/components/PropertyCard";
+import { PropertyCard, type Property } from "@/components/PropertyCard";
 import { useInView } from "@/hooks/useInView";
 import { getAuctionStreetViewImageUrl } from "@/lib/auctionStreetView";
 
+type HomepageAuctionImage = {
+  sort_order?: number | null;
+  url?: string | null;
+};
+
+type HomepageAuctionListing = {
+  id: string;
+  title: string;
+  address?: string | null;
+  city: string;
+  price?: number | string | null;
+  price_per_sqm?: number | string | null;
+  bedrooms?: number | null;
+  bathrooms?: number | null;
+  sqm?: number | string | null;
+  floor?: number | null;
+  total_floors?: number | null;
+  year_built?: number | null;
+  energy_class?: string | null;
+  listing_images?: HomepageAuctionImage[] | null;
+  cover_image_url?: string | null;
+  property_type?: Property["type"] | null;
+  listing_type?: Property["listingType"] | null;
+  auction_date?: string | null;
+  auction_starting_bid?: number | string | null;
+  ai_score?: number | null;
+  views_count?: number | null;
+  tags?: string[] | null;
+  is_pre_sale?: boolean | null;
+  construction_status?: string | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  region?: string | null;
+};
+
 interface Props {
-  listings: any[];
+  listings: HomepageAuctionListing[];
   isLoading: boolean;
 }
 
-const getSortedListingImages = (listing: any): string[] => {
+const getSortedListingImages = (listing: HomepageAuctionListing): string[] => {
   return [...(listing.listing_images ?? [])]
-    .sort((a: any, b: any) => a.sort_order - b.sort_order)
-    .map((img: any) => img.url);
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+    .map((img) => img.url)
+    .filter((url): url is string => typeof url === "string" && url.length > 0);
 };
 
-const getHomepageAuctionImages = (listing: any): string[] => { // skipcq: JS-R1005
+const getHomepageAuctionImages = (listing: HomepageAuctionListing): string[] => { // skipcq: JS-R1005
   const fallbackImages = getSortedListingImages(listing);
   const streetView = getAuctionStreetViewImageUrl(listing);
   const images = listing.cover_image_url ? [listing.cover_image_url] : fallbackImages;
@@ -32,27 +67,27 @@ const formatAuctionDate = (value: unknown): string | undefined =>
     ? new Date(value).toLocaleDateString("en-GB")
     : undefined;
 
-const toAuctionCardProperty = (listing: any) => ({ // skipcq: JS-R1005 - Adapts OS auction rows into the shared property card shape.
+const toAuctionCardProperty = (listing: HomepageAuctionListing): Property => ({ // skipcq: JS-R1005 - Adapts OS auction rows into the shared property card shape.
   id: listing.id,
   title: listing.title,
   address: listing.address || listing.city,
   city: listing.city,
-  price: Number(listing.price),
+  price: Number(listing.price ?? 0),
   pricePerSqm: toOptionalNumber(listing.price_per_sqm),
-  bedrooms: listing.bedrooms,
-  bathrooms: listing.bathrooms,
-  sqm: Number(listing.sqm),
-  floor: listing.floor,
-  totalFloors: listing.total_floors,
-  yearBuilt: listing.year_built,
-  energyClass: listing.energy_class,
+  bedrooms: listing.bedrooms ?? undefined,
+  bathrooms: listing.bathrooms ?? undefined,
+  sqm: Number(listing.sqm ?? 0),
+  floor: listing.floor ?? undefined,
+  totalFloors: listing.total_floors ?? undefined,
+  yearBuilt: listing.year_built ?? undefined,
+  energyClass: listing.energy_class ?? undefined,
   images: getHomepageAuctionImages(listing),
-  type: listing.property_type,
-  listingType: listing.listing_type,
+  type: listing.property_type ?? "apartment",
+  listingType: listing.listing_type ?? "auction",
   auctionDate: formatAuctionDate(listing.auction_date),
   auctionStartingBid: toOptionalNumber(listing.auction_starting_bid),
-  aiScore: listing.ai_score,
-  views: listing.views_count,
+  aiScore: listing.ai_score ?? undefined,
+  views: listing.views_count ?? undefined,
   tags: listing.tags || [],
   isPreSale: listing.is_pre_sale ?? false,
   constructionStatus: listing.construction_status ?? undefined,
@@ -94,7 +129,7 @@ export const HomepageAuctionsSection = ({ listings, isLoading }: Props) => {
           </Button>
         </div>
         <div className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 reveal reveal-delay-1 ${inView ? "in-view" : ""}`}>
-          {featuredListings.map((listing: any) => (
+          {featuredListings.map((listing) => (
             <PropertyCard key={listing.id} property={toAuctionCardProperty(listing)} />
           ))}
           {showLoadingCards &&
