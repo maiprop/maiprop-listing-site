@@ -171,6 +171,7 @@ const evidenceBySurface: Record<Surface, readonly string[]> = {
   platform_map: ["src/App.tsx / AdminRoute /platform-map", "src/pages/PlatformMap.tsx", "e2e/pages-roles.spec.ts"],
 };
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function expectedOutcome(role: RoleTier, surface: Surface): Outcome {
   if (publicSurfaces.includes(surface)) return "public";
   if (role === "anonymous") return "signin_required";

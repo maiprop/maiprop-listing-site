@@ -35,6 +35,7 @@ vi.mock("sonner", () => ({
   },
 }));
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function streamingResponse(chunks: string[]) {
   const encoder = new TextEncoder();
   return new Response(

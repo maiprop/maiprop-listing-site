@@ -66,6 +66,7 @@ const mockSupabase = supabase as unknown as {
 
 const toastMock = toast as unknown as { error: ReturnType<typeof vi.fn> };
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function renderWithRoutes(ui: React.ReactElement, initialPath = "/") {
   return renderWithProviders(
     <Routes>
@@ -78,6 +79,7 @@ function renderWithRoutes(ui: React.ReactElement, initialPath = "/") {
   );
 }
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function streamResponse(chunks: string[]) {
   const encoder = new TextEncoder();
   return new Response(

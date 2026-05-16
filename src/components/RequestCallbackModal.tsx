@@ -13,6 +13,7 @@ const callbackWindows = [
   { label: "Evening", time: "17:00 – 20:00", emoji: "🌆" },
 ];
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function getNextDays(count: number) {
   const days = [];
   const d = new Date();

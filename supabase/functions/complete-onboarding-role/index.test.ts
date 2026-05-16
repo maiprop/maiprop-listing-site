@@ -19,6 +19,7 @@ const tempDir = await Deno.makeTempDir({ prefix: "complete-onboarding-role-test-
 const mockClientPath = `${tempDir}/mockSupabase.ts`;
 const transformedPath = `${tempDir}/index.ts`;
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function fileUrl(path: string) {
   return `file:///${path.replaceAll("\\", "/").replace(/^([A-Za-z]):/, "$1:")}`;
 }
@@ -26,6 +27,7 @@ function fileUrl(path: string) {
 await Deno.writeTextFile(
   mockClientPath,
   `
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 export function createClient() {
   const scenario = globalThis.__completeOnboardingScenario;
   return {

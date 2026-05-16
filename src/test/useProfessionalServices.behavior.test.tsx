@@ -30,6 +30,7 @@ vi.mock("sonner", () => ({
   toast: { success: mocks.toastSuccess, error: mocks.toastError },
 }));
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function wrapper({ children }: { children: ReactNode }) {
   const client = new QueryClient({
     defaultOptions: {
@@ -40,6 +41,7 @@ function wrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function queryBuilder(result: unknown = { data: [], error: null }) {
   const builder = {
     select: vi.fn(() => builder),

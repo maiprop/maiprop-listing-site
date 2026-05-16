@@ -10,6 +10,7 @@ import {
 import { APP_ORIGIN } from "@/lib/config";
 import { getAuctionStreetViewImageUrl } from "@/lib/auctionStreetView";
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 export function PremiumBadge() {
   return (
     <span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-gradient-primary text-primary-foreground border border-primary/30">

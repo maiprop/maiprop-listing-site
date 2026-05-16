@@ -120,6 +120,7 @@ const incompleteRegistration = {
   investor_declaration_signed_at: null,
 };
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function renderPanel(props: Partial<React.ComponentProps<typeof OpenHouseAssetControlPanel>> = {}) {
   return render(<OpenHouseAssetControlPanel listingId="listing-1" isOwner listingPrice={350000} {...props} />);
 }

@@ -22,6 +22,7 @@ const timeSlots = [
   "09:00", "10:00", "11:00", "12:00", "14:00", "15:00", "16:00", "17:00", "18:00"
 ];
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function buildDynamicDays(dayNames: string[]): { label: string; date: string; iso: string }[] {
   const days: { label: string; date: string; iso: string }[] = [];
   const now = new Date();

@@ -101,6 +101,7 @@ const auction = {
   longitude: 23.72,
 };
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function setPipeline(overrides: Record<string, unknown> = {}) {
   const value = {
     isPro: false,

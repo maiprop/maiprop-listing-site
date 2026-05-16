@@ -70,6 +70,7 @@ const baseSettings = {
   require_investor_declaration: false,
 };
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function renderDialog(props: Partial<React.ComponentProps<typeof OpenHouseRegistrationDialog>> = {}) {
   return render(
     <OpenHouseRegistrationDialog
@@ -84,6 +85,7 @@ function renderDialog(props: Partial<React.ComponentProps<typeof OpenHouseRegist
   );
 }
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function acceptContactPacket() {
   fireEvent.change(screen.getByLabelText(/phone/i), { target: { value: "+306900000000" } });
   screen.getAllByRole("checkbox").forEach((box) => fireEvent.click(box));

@@ -59,6 +59,7 @@ vi.mock("@/lib/analytics", () => ({ trackAnalyticsEvent: (...args: unknown[]) =>
 vi.mock("@/lib/logger", () => ({ logger: { error: vi.fn() } }));
 vi.mock("sonner", () => ({ toast: mocks.toast }));
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function renderHarness(ui: React.ReactElement) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   return render(

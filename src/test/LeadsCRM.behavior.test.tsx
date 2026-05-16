@@ -36,6 +36,7 @@ const lead = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function renderLeads() {
   return render(
     <MemoryRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>

@@ -31,6 +31,7 @@ let subscriptionRow: Record<string, unknown> | null = {
 let invitationRow: Record<string, unknown> | null = null;
 let myInterestsMap = new Map<string, Record<string, unknown>>();
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function makeQuery(table: string) {
   queriedTables.push(table);
   const query = {

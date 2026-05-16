@@ -22,6 +22,7 @@ interface Props {
   editAlert?: AuctionAlert | null;
 }
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 export function AuctionAlertModal({ open, onClose, editAlert }: Props) {
   const isEdit = !!editAlert;
   const [city, setCity] = useState(editAlert?.city ?? "");

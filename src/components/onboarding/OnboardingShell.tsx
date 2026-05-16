@@ -4,6 +4,7 @@ import logoImg from "@/assets/logo.png";
 import { cn } from "@/lib/utils";
 import type { OnboardingStep } from "@/lib/onboardingConfig";
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 export function OnboardingShell({
   children,
   stepIndex,

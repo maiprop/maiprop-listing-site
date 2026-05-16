@@ -123,6 +123,7 @@ const DEFAULT_SEED: Omit<PricingConfig, "id" | "created_at" | "updated_at">[] = 
   { key: "auction_intelligence",      label: "Auction Intelligence",    description: "Full court auction schedule, minimum bids & outcome DB for legal pros",    audience: "participant",         module: "os_data_products",         unit: "monthly",    currency: "EUR", amount: 149,  is_active: true, sort_order: 3,  metadata: {} },
 ];
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function usePricingConfigs() {
   return useQuery<PricingConfig[]>({
     queryKey: ["admin-pricing-configs"],
@@ -140,6 +141,7 @@ function usePricingConfigs() {
 }
 
 /** Embeddable pricing content — use in AdminDashboard tab. Skips Navbar/Footer and access check when embed=true. */
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 export function AdminPricingContent({ embed = false }: { embed?: boolean }) { // skipcq: JS-R1005 - Admin pricing keeps table editing, validation, and Stripe sync controls together for one audited surface.
   const { profile } = useAuth();
   const qc = useQueryClient();

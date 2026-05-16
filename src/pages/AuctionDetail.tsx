@@ -82,6 +82,7 @@ const asNumber = (value: unknown): number | null => {
   return null;
 };
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function AuctionBreadcrumb({ title }: { title: string }) {
   return (
     <nav aria-label="Breadcrumb" className="container py-2 sm:py-3">
@@ -102,6 +103,7 @@ function AuctionBreadcrumb({ title }: { title: string }) {
   );
 }
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function StatChip({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
     <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
@@ -111,6 +113,7 @@ function StatChip({ icon, label }: { icon: React.ReactNode; label: string }) {
   );
 }
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function AuctionTitleSection({
   title,
   city,

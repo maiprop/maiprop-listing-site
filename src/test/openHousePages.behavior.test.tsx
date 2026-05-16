@@ -140,6 +140,7 @@ vi.mock("sonner", () => ({
   },
 }));
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function createListing(overrides: Record<string, unknown> = {}) {
   return {
     id: "oh-1",
@@ -185,6 +186,7 @@ function createListing(overrides: Record<string, unknown> = {}) {
   };
 }
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function makeListingsQuery(data: Array<Record<string, unknown>>, error: Error | null = null) {
   const chain = {
     select: vi.fn().mockReturnThis(),
@@ -198,11 +200,13 @@ function makeListingsQuery(data: Array<Record<string, unknown>>, error: Error | 
   return chain;
 }
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 async function renderOpenHouses(initialPath = "/open-houses") {
   const { default: OpenHouses } = await import("@/pages/OpenHouses");
   return renderWithProviders(<OpenHouses />, { initialPath });
 }
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 async function renderOpenHouseDetail(initialPath = "/open-house/oh-1") {
   const { default: OpenHouseDetail } = await import("@/pages/OpenHouseDetail");
   return renderWithProviders(

@@ -28,6 +28,7 @@ vi.mock("@/hooks/useOpenHouseAssetControl", () => ({
 
 import OpenHouseOfferDialog from "@/components/OpenHouseOfferDialog";
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function renderDialog(props: Partial<React.ComponentProps<typeof OpenHouseOfferDialog>> = {}) {
   const onClose = vi.fn();
   render(

@@ -18,6 +18,7 @@ type StatusRequest = {
   listingId?: unknown;
 };
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function parseListingId(body: StatusRequest): string {
   if (
     typeof body.listingId !== "string" ||

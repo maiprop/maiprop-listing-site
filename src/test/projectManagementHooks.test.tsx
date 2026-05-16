@@ -31,6 +31,7 @@ import {
 } from "@/hooks/useProjectUnits";
 import { useCreateProjectLead, useDeleteProjectLead, useProjectLeads, useUpdateProjectLead } from "@/hooks/useProjectLeads";
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function wrapper({ children }: { children: React.ReactNode }) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0, staleTime: 0 }, mutations: { retry: false } },

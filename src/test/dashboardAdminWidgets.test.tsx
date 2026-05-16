@@ -60,6 +60,7 @@ import AdminInvitationRequests from "@/components/AdminInvitationRequests";
 import AdminSubscribers from "@/components/AdminSubscribers";
 import AdminPanel from "@/components/AdminPanel";
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function queryClient() {
   return new QueryClient({
     defaultOptions: {
@@ -69,6 +70,7 @@ function queryClient() {
   });
 }
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function renderWithProviders(ui: React.ReactElement, initialPath = "/") {
   return render(
     <MemoryRouter initialEntries={[initialPath]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
@@ -77,6 +79,7 @@ function renderWithProviders(ui: React.ReactElement, initialPath = "/") {
   );
 }
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function renderAdminRoute(initialPath: string) {
   return renderWithProviders(
     <Suspense fallback={<div>loading tab</div>}>
@@ -88,12 +91,14 @@ function renderAdminRoute(initialPath: string) {
   );
 }
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function thenableResult(data: unknown, error: unknown = null) {
   return {
     then: (resolve: (value: unknown) => unknown) => Promise.resolve(resolve({ data, error })),
   };
 }
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function selectBuilder(data: unknown, error: unknown = null) {
   const b: Record<string, unknown> = thenableResult(data, error);
   b.select = vi.fn().mockReturnValue(b);
@@ -106,6 +111,7 @@ function selectBuilder(data: unknown, error: unknown = null) {
   return b;
 }
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function tableBuilder(rows: Record<string, unknown[]>, updates: Record<string, unknown> = {}) {
   return (table: string) => ({
     ...selectBuilder(rows[table] ?? []),

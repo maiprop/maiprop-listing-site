@@ -56,6 +56,7 @@ const BillingTab = lazy(() => import("./dashboard/BillingTab"));
 const DataInputTab = lazy(() => import("./dashboard/DataInputTab"));
 
 /** Lazy-tab fallback with a 5-second timeout before showing a retry link */
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function TabFallback() {
   const [slow, setSlow] = useState(false);
   useEffect(() => {

@@ -18,6 +18,7 @@ import { HelmetProvider } from "react-helmet-async";
  * - No retries (fail fast so tests don't wait 3× retry on expected errors)
  * - GC time 0 so stale queries don't bleed between tests
  */
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 export function createTestQueryClient() {
   return new QueryClient({
     defaultOptions: {
@@ -39,6 +40,7 @@ interface WrapperProps {
   queryClient?: QueryClient;
 }
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function AllProviders({ children, initialPath = "/", queryClient = createTestQueryClient() }: WrapperProps) {
   return (
     <HelmetProvider>
@@ -58,6 +60,7 @@ function AllProviders({ children, initialPath = "/", queryClient = createTestQue
  *
  * Does NOT include AuthProvider — mock `useAuth` separately per test when needed.
  */
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 export function renderWithProviders(
   ui: ReactElement,
   options?: Omit<RenderOptions, "wrapper"> & { initialPath?: string; queryClient?: QueryClient }
@@ -78,6 +81,7 @@ export function renderWithProviders(
  *   const sb = makeMockSupabase();
  *   sb.from.mockReturnValueOnce({ select: vi.fn().mockReturnValue({ data: [...], error: null }) });
  */
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 export function makeMockSupabase() {
   return {
     from: vi.fn().mockReturnValue({

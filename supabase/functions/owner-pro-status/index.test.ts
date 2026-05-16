@@ -31,6 +31,7 @@ const tempDir = await Deno.makeTempDir({ prefix: "owner-pro-status-test-" });
 const mockClientPath = `${tempDir}/mockSupabase.ts`;
 const transformedPath = `${tempDir}/index.ts`;
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function fileUrl(path: string) {
   return `file:///${path.replaceAll("\\", "/").replace(/^([A-Za-z]):/, "$1:")}`;
 }
@@ -68,6 +69,7 @@ class QueryBuilder {
   }
 }
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 export function createClient() {
   const scenario = globalThis.__ownerProStatusScenario;
   return {
