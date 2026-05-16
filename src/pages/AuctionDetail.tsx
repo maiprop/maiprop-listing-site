@@ -41,6 +41,7 @@ import {
   getPropertyTypeLabel,
   normalizeOwnership,
 } from "@/lib/auctionUtils";
+import { getAuctionImageList } from "@/lib/auctionStreetView";
 
 const AIAssistantWidget = lazy(() => import("@/components/AIAssistantWidget"));
 const PropertyMiniMap = lazy(() => import("@/components/PropertyMiniMap"));
@@ -249,7 +250,14 @@ export default function AuctionDetail() {
   const websiteUrl = safeUrl(auction.website_url as string | null | undefined);
   const propertyType = auction.property_type as string | undefined;
   const propertyTypeLabel = getPropertyTypeLabel(auction as Parameters<typeof getPropertyTypeLabel>[0]);
-  const images = typeof auction.cover_image_url === "string" && auction.cover_image_url ? [auction.cover_image_url] : [];
+  const images = getAuctionImageList({
+    cover_image_url: auction.cover_image_url as string | null | undefined,
+    latitude: auction.latitude as number | string | null | undefined,
+    longitude: auction.longitude as number | string | null | undefined,
+    address,
+    city,
+    region,
+  });
   const days = daysUntil(auctionDate ?? null);
   const tags = (auction.tags as string[] | undefined) ?? [];
   const ownershipStatus = normalizeOwnership(getOwnershipStatus(tags));
@@ -295,10 +303,10 @@ export default function AuctionDetail() {
   return (
     <div className="min-h-screen bg-background pb-bottom-nav lg:pb-0">
       <Helmet>
-        <title>{title} - maiProp Auctions</title>
+        <title>{title} - mAI prop Auctions</title>
         <meta name="description" content={ogDescription} />
         <link rel="canonical" href={canonicalUrl} />
-        <meta property="og:title" content={`${title} - maiProp Auctions`} />
+        <meta property="og:title" content={`${title} - mAI prop Auctions`} />
         <meta property="og:description" content={ogDescription} />
         {images[0] && <meta property="og:image" content={images[0]} />}
         <meta property="og:url" content={canonicalUrl} />

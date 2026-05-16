@@ -1,5 +1,6 @@
 ﻿import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { Helmet } from "react-helmet-async";
 import { InvitationRequestModal } from "@/components/InvitationRequestModal";
 import { FiresaleInvestorPanel } from "@/components/firesale/FiresaleInvestorPanel";
 import { FiresaleQuickSaleForm } from "@/components/firesale/FiresaleQuickSaleForm";
@@ -32,6 +33,10 @@ export default function Firesale() {
 
   return (
     <div className="min-h-screen bg-background pb-bottom-nav lg:pb-0">
+      <Helmet>
+        <title>Quick Sale - mAI prop</title>
+        <meta property="og:title" content="Quick Sale - mAI prop" />
+      </Helmet>
       <Navbar />
       <div className="pt-16">
         {/* Hero */}

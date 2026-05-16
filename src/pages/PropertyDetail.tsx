@@ -280,16 +280,16 @@ export default function PropertyDetail() {
   return (
     <div className="min-h-screen bg-background pb-bottom-nav lg:pb-0">
       <Helmet>
-        <title>{`${title} — maiProp`}</title>
+        <title>{`${title} — mAI prop`}</title>
         <meta name="description" content={ogDescription} />
         <link rel="canonical" href={canonicalUrl} />
-        <meta property="og:title" content={`${title} — maiProp`} />
+        <meta property="og:title" content={`${title} — mAI prop`} />
         <meta property="og:description" content={ogDescription} />
         <meta property="og:image" content={ogImage} />
         <meta property="og:url" content={canonicalUrl} />
         <meta property="og:type" content="website" />
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content={`${title} — maiProp`} />
+        <meta name="twitter:title" content={`${title} — mAI prop`} />
         <meta name="twitter:description" content={ogDescription} />
         <meta name="twitter:image" content={ogImage} />
         <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>

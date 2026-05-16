@@ -11,7 +11,7 @@ export function useProjects(ownerId?: string) {
     queryFn: async () => {
       let query = supabase
         .from("projects")
-        .select("id, owner_id, name, description, city, address, municipality, cover_image_url, status, latitude, longitude, building_permit_number, developer_company, architect_group, construction_company, area_description, permit_approval_date, construction_start_date, structural_completion_date, delivery_date, created_at, updated_at")
+        .select("id, owner_id, name, description, city, address, municipality, cover_image_url, status, latitude, longitude, building_permit_number, developer_company, architect_group, construction_company, area_description, permit_approval_date, construction_start_date, structural_completion_date, delivery_date, archived_at, created_at, updated_at")
         .order("updated_at", { ascending: false });
       if (ownerId) query = query.eq("owner_id", ownerId);
       const { data, error } = await query;
@@ -29,7 +29,7 @@ export function useProject(id: string | undefined) {
       if (!id) return null;
       const { data, error } = await supabase
         .from("projects")
-        .select("id, owner_id, name, description, city, address, municipality, cover_image_url, status, latitude, longitude, building_permit_number, developer_company, architect_group, construction_company, area_description, permit_approval_date, construction_start_date, structural_completion_date, delivery_date, created_at, updated_at")
+        .select("id, owner_id, name, description, city, address, municipality, cover_image_url, status, latitude, longitude, building_permit_number, developer_company, architect_group, construction_company, area_description, permit_approval_date, construction_start_date, structural_completion_date, delivery_date, archived_at, created_at, updated_at")
         .eq("id", id)
         .single();
       if (error) throw error;

@@ -8,7 +8,9 @@ describe("critical business invariants", () => {
   it("binds checkout and webhook entitlements to role-specific pricing products", () => {
     const checkout = read("supabase/functions/create-checkout/index.ts");
     const webhook = read("supabase/functions/stripe-webhook/index.ts");
-    const hardening = read("supabase/migrations/20260707040000_ai_reports_signed_in_quota.sql");
+    const hardening = read("supabase/migrations/20260707070000_audience_scoped_pro_entitlements.sql");
+    const grants = read("supabase/migrations/20260707060000_explicit_data_api_grants.sql");
+    const authContext = read("src/contexts/AuthContext.tsx");
 
     expect(checkout).toContain('developer_pro: { audience: "developer", role: "developer" }');
     expect(checkout).toContain("isCheckoutAudienceAllowed");
@@ -21,8 +23,18 @@ describe("critical business invariants", () => {
     expect(webhook).toContain("plan_key: entitlement?.planKey");
 
     expect(hardening).toContain("CREATE OR REPLACE FUNCTION public.is_pro(p_user_id uuid)");
-    expect(hardening).toContain("public.pro_product_ids pp");
-    expect(hardening).toContain("ON pp.product_id = p.subscription_product_id");
+    expect(hardening).toContain("public.has_audience_scoped_pro_entitlement(p_user_id)");
+    expect(hardening).toContain("pc.audience = public.profile_pricing_audience");
+    expect(hardening).toContain("pc.key = ANY (ARRAY['pro', 'agent_basic', 'developer_pro', 'professional_basic'])");
+    expect(hardening).toContain(
+      "pc.module = ANY (ARRAY['user_subscription', 'agent_subscription', 'developer_subscription', 'professional_subscription'])",
+    );
+    expect(hardening).toContain("pc.metadata->>'stripe_product_id' = p.subscription_product_id");
+    expect(hardening).not.toContain("JOIN public.pro_product_ids pp");
+
+    expect(grants).toContain("authenticated must not update public.profiles.force_pro_access");
+    expect(authContext).toContain("force_pro_access");
+    expect(authContext).toContain("Sensitive columns");
   });
 
   it("keeps invite-only investor access out of direct checkout and self-service onboarding", () => {
@@ -43,6 +55,16 @@ describe("critical business invariants", () => {
     expect(invitation).toContain("v_subscription_status TEXT := 'pending_payment'");
     expect(activation).toContain("sync_profile_role_from_investor_subscription");
     expect(activation).toContain("NEW.status NOT IN ('active', 'trial')");
+  });
+
+  it("does not claim mock checkout creates a live paid entitlement", () => {
+    const pricing = read("src/pages/Pricing.tsx");
+    const checkout = read("supabase/functions/create-checkout/index.ts");
+
+    expect(checkout).toContain("withMockBillingParams");
+    expect(checkout).toContain('mode: "mock"');
+    expect(pricing).toContain('searchParams.get("billing_mode") === "mock"');
+    expect(pricing).toContain("Mock checkout completed. No live payment or subscription entitlement was created.");
   });
 
   it("enforces signed-in AI quota for costly public AI endpoints", () => {
@@ -91,12 +113,20 @@ describe("critical business invariants", () => {
 
   it("serializes firesale reservations and account erasure covers proof documents", () => {
     const firesale = read("supabase/migrations/20260514150000_firesale_interest_reservation_workflow.sql");
+    const firesaleVisibility = read("supabase/migrations/20260518000000_quick_sale_eligible_buyers_only.sql");
     const deleteAccount = read("supabase/functions/delete-account/index.ts");
     const deleteAccountTest = read("supabase/functions/delete-account/index.test.ts");
 
     expect(firesale).toContain("pg_advisory_xact_lock(hashtext(NEW.deal_id::text))");
     expect(firesale).toContain("active_reservation_exists_for_deal");
     expect(firesale).toContain("admin_update_firesale_interest_workflow");
+    expect(firesale).toContain("investor_cannot_change_admin_managed_fields");
+    expect(firesale).toContain("invalid_investor_status_transition");
+
+    expect(firesaleVisibility).toContain("Eligible buyers view published Quick Sale deals");
+    expect(firesaleVisibility).toContain("published_to_investors = true");
+    expect(firesaleVisibility).toContain("public.investor_subscriptions");
+    expect(firesaleVisibility).toContain("status IN ('active', 'trial')");
 
     expect(deleteAccount).toContain('"open-house-docs"');
     expect(deleteAccount).toContain("USER_FOLDER_BUCKETS");

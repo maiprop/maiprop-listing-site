@@ -7,7 +7,7 @@ import { test, expect } from "@playwright/test";
 test.describe("Public pages", () => {
   test("homepage loads and shows hero heading", async ({ page }) => {
     await page.goto("/");
-    await expect(page).toHaveTitle(/maiprop|MaiProp/i);
+    await expect(page).toHaveTitle(/mAI\s*prop|maiprop|MaiProp/i);
     // Hero section should be visible
     await expect(page.locator("main, #main-content")).toBeVisible();
   });

@@ -138,7 +138,7 @@ export function useFiresaleInterestQueue(dealId: string | undefined) {
 
       const { data, error } = await supabase
         .from("firesale_interest")
-        .select(`${INTEREST_SELECT}, profiles:investor_id (first_name, last_name, display_name, investor_mode)`)
+        .select(`${INTEREST_SELECT}, profiles!firesale_interest_investor_id_fkey (first_name, last_name, display_name, investor_mode)`)
         .eq("deal_id", dealId)
         .order("created_at", { ascending: true });
 

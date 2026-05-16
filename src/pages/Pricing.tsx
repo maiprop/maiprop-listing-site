@@ -11,7 +11,7 @@ import {
   Crown, Sparkles, Building2, Gavel, Home, Layers,
   MessageSquare, Eye, FileText, FolderKanban,
   Loader2, Database,
-  Wallet, Globe, ChevronRight,
+  Wallet, Globe,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getPricingAudienceFromProfile, getParticipantTypeFromProfile, type PricingAudienceId } from "@/lib/participantConfig";
@@ -270,7 +270,11 @@ export default function Pricing() {
   useEffect(() => {
     const checkoutStatus = searchParams.get("checkout");
     if (checkoutStatus === "success") {
-      toast.success("Payment successful! Your plan has been activated.");
+      if (searchParams.get("billing_mode") === "mock") {
+        toast.info("Mock checkout completed. No live payment or subscription entitlement was created.");
+      } else {
+        toast.success("Payment successful! Your plan has been activated.");
+      }
       refreshSubscription();
     } else if (checkoutStatus === "cancelled") {
       toast.info("Checkout cancelled — no charge was made.");
@@ -349,26 +353,45 @@ export default function Pricing() {
 
             {/* Billing toggle */}
             <div className="flex items-center justify-center gap-3 mb-6">
-              <span className={cn("text-sm font-medium", billingCycle === "monthly" ? "text-foreground" : "text-muted-foreground")}>Monthly</span>
               <button
+                type="button"
+                onClick={() => setBillingCycle("monthly")}
+                className={cn(
+                  "text-sm font-medium transition-colors",
+                  billingCycle === "monthly" ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+                )}
+                aria-pressed={billingCycle === "monthly"}
+              >
+                Monthly
+              </button>
+              <button
+                type="button"
                 role="switch"
                 aria-checked={billingCycle === "annual"}
-                aria-label="Annual billing"
+                aria-label={`Billing cycle: ${billingCycle}`}
                 onClick={() => setBillingCycle(c => c === "monthly" ? "annual" : "monthly")}
                 className={cn(
-                  "relative w-12 h-6 rounded-full transition-colors duration-200 border",
+                  "relative w-12 h-6 rounded-full transition-colors duration-200 border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
                   billingCycle === "annual" ? "bg-primary border-primary" : "bg-secondary border-border"
                 )}
               >
                 <span className={cn(
-                  "absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200",
+                  "absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 pointer-events-none",
                   billingCycle === "annual" ? "translate-x-6" : "translate-x-0.5"
                 )} />
               </button>
-              <span className={cn("text-sm font-medium flex items-center gap-1.5", billingCycle === "annual" ? "text-foreground" : "text-muted-foreground")}>
+              <button
+                type="button"
+                onClick={() => setBillingCycle("annual")}
+                className={cn(
+                  "text-sm font-medium flex items-center gap-1.5 transition-colors",
+                  billingCycle === "annual" ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+                )}
+                aria-pressed={billingCycle === "annual"}
+              >
                 Annual
                 <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">2 months FREE</span>
-              </span>
+              </button>
             </div>
 
             {/* Audience tab strip */}
@@ -559,36 +582,6 @@ export default function Pricing() {
               </div>
             </div>
           </div>
-
-          {/* Agency add-on pointer — shown only on agent tab */}
-          {activeTab === "agent" && (
-            <div className="mt-4 rounded-2xl border border-brand-purple/30 bg-brand-purple/5 p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
-              <div className="flex-1">
-                <p className="text-sm font-bold text-brand-purple mb-0.5">Running a team or agency?</p>
-                <p className="text-xs text-muted-foreground">Stay on Agent Pro and add what you need: extra agent seats, an agency-branded profile, a dedicated account manager and white-label — all available as add-ons in your dashboard's Billing tab.</p>
-              </div>
-              <Link to={user ? "/dashboard?tab=billing" : "/signup?type=agent"} className="shrink-0">
-                <Button variant="outline" size="sm" className="border-brand-purple/40 text-brand-purple hover:bg-brand-purple/10 gap-1.5">
-                  See add-ons <ChevronRight className="w-3.5 h-3.5" />
-                </Button>
-              </Link>
-            </div>
-          )}
-
-          {/* Professional Premium add-on pointer — shown only on professional tab */}
-          {activeTab === "professional" && (
-            <div className="mt-4 rounded-2xl border border-rose-500/30 bg-rose-500/5 p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
-              <div className="flex-1">
-                <p className="text-sm font-bold text-rose-600 dark:text-rose-400 mb-0.5">Need more than Pro?</p>
-                <p className="text-xs text-muted-foreground">Stay on Professional Pro and unlock API access, the referral network and additional client seats as add-ons from your dashboard's Billing tab.</p>
-              </div>
-              <Link to={user ? "/dashboard?tab=billing" : "/signup?type=professional"} className="shrink-0">
-                <Button variant="outline" size="sm" className="border-rose-500/40 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 gap-1.5">
-                  See add-ons <ChevronRight className="w-3.5 h-3.5" />
-                </Button>
-              </Link>
-            </div>
-          )}
 
           <p className="text-center text-xs text-muted-foreground mt-10 max-w-xl mx-auto">
             All prices are in EUR and exclude VAT where applicable.

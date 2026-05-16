@@ -2,7 +2,10 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { AuthError, verifyBearerToken } from "../_shared/auth.ts";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { createLogger } from "../_shared/logger.ts";
-import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
+import {
+  makeRateLimiter,
+  tooManyRequestsResponse,
+} from "../_shared/rateLimit.ts";
 
 const log = createLogger("owner-pro-status");
 const limiter = makeRateLimiter({
@@ -16,7 +19,10 @@ type StatusRequest = {
 };
 
 function parseListingId(body: StatusRequest): string {
-  if (typeof body.listingId !== "string" || !/^[0-9a-f-]{36}$/i.test(body.listingId)) {
+  if (
+    typeof body.listingId !== "string" ||
+    !/^[0-9a-f-]{36}$/i.test(body.listingId)
+  ) {
     throw new Error("Invalid listingId");
   }
   return body.listingId;
@@ -34,7 +40,8 @@ Deno.serve(async (req) => {
     });
   }
 
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    "anonymous";
   if (await limiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);
 
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -58,6 +65,8 @@ Deno.serve(async (req) => {
       .from("listings")
       .select("owner_id")
       .eq("id", listingId)
+      .eq("status", "active")
+      .eq("is_off_market", false)
       .maybeSingle();
     if (listingError) throw listingError;
     if (!listing?.owner_id) {
@@ -67,7 +76,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { data, error } = await supabase.rpc("is_pro", { p_user_id: listing.owner_id });
+    const { data, error } = await supabase.rpc("is_pro", {
+      p_user_id: listing.owner_id,
+    });
     if (error) throw error;
 
     return new Response(JSON.stringify({ isPro: data === true }), {
@@ -82,7 +93,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    const message = err instanceof Error ? err.message : "Failed to resolve owner status";
+    const message = err instanceof Error
+      ? err.message
+      : "Failed to resolve owner status";
     log.warn("resolve failed", { err: message });
     return new Response(JSON.stringify({ error: message }), {
       status: 400,

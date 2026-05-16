@@ -134,10 +134,10 @@ export default function Auctions() {
   return (
     <div className="min-h-screen bg-background">
       <Helmet>
-        <title>Property Auctions in Greece — maiProp</title>
+        <title>Property Auctions in Greece — mAI prop</title>
         <meta name="description" content="Browse real-time Greek court property auctions. Filter by city, type, and bid range." />
         <link rel="canonical" href="https://maiprop.co/auctions" />
-        <meta property="og:title" content="Property Auctions in Greece — maiProp" />
+        <meta property="og:title" content="Property Auctions in Greece — mAI prop" />
         <meta property="og:description" content="Real-time court auction data for Greek properties." />
         <meta property="og:url" content="https://maiprop.co/auctions" />
         <script type="application/ld+json">{JSON.stringify({
@@ -146,7 +146,7 @@ export default function Auctions() {
           "name": "Greek Property Auctions",
           "description": "Real-time court auction listings for properties across Greece.",
           "url": "https://maiprop.co/auctions",
-          "provider": { "@type": "Organization", "name": "maiProp", "url": "https://maiprop.co" },
+          "provider": { "@type": "Organization", "name": "mAI prop", "url": "https://maiprop.co" },
         })}</script>
       </Helmet>
       <Navbar />

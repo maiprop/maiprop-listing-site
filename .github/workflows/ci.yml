@@ -60,6 +60,9 @@ jobs:
       - name: Lint migrations (timestamp chronology)
         run: npm run lint:migrations:chronology
 
+      - name: Check public edge function protections
+        run: npm run check:public-functions
+
       - name: Lint
         run: npm run lint
 
@@ -209,9 +212,11 @@ jobs:
           VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder_not_real
           VITE_SUPABASE_PROJECT_ID: abcdefghijklmnop
 
-      - name: Run E2E smoke + auth tests
+      - name: Run placeholder Supabase E2E smoke + auth tests
         timeout-minutes: 8
-        run: npx playwright test --project=chromium --grep-invert @perf --reporter=line
+        run: |
+          echo "This job uses placeholder Supabase env and is a UI smoke gate, not staging integration proof."
+          npx playwright test --project=chromium --grep-invert @perf --reporter=line
         env:
           CI: true
           VITE_SUPABASE_URL: https://abcdefghijklmnop.supabase.co
@@ -253,6 +258,7 @@ jobs:
       ONBOARDING_TEST_EMAIL: ${{ secrets.ONBOARDING_TEST_EMAIL }}
       ONBOARDING_TEST_PASSWORD: ${{ secrets.ONBOARDING_TEST_PASSWORD }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -276,6 +282,7 @@ jobs:
             "ONBOARDING_TEST_EMAIL"
             "ONBOARDING_TEST_PASSWORD"
             "SUPABASE_SERVICE_ROLE_KEY"
+            "SUPABASE_ACCESS_TOKEN"
           )
 
           missing=0
@@ -292,6 +299,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Check generated Supabase types against staging
+        run: node scripts/check-supabase-types-freshness.cjs
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium

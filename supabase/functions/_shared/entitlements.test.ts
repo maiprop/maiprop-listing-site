@@ -46,13 +46,31 @@ Deno.test("getProfilePricingAudience maps buyer and seller to participant", () =
   );
 });
 
-Deno.test("getProfilePricingAudience prefers explicit participant_type", () => {
+Deno.test("getProfilePricingAudience derives paid audience from role", () => {
   assertEquals(
     getProfilePricingAudience({
       role: "buyer",
       participant_type: "developer",
     }),
+    "participant",
+  );
+  assertEquals(
+    getProfilePricingAudience({
+      role: "developer",
+      participant_type: "buyer",
+    }),
     "developer",
+  );
+});
+
+Deno.test("getProfilePricingAudience only falls back to participant_type for participant roles", () => {
+  assertEquals(
+    getProfilePricingAudience({ role: null, participant_type: "seller" }),
+    "participant",
+  );
+  assertEquals(
+    getProfilePricingAudience({ role: null, participant_type: "developer" }),
+    null,
   );
 });
 
@@ -124,6 +142,41 @@ Deno.test("resolveSubscriptionEntitlement rejects cross-audience products", asyn
       planKey: "developer_pro",
       audience: "developer",
       productId: "prod_dev",
+    },
+  );
+});
+
+Deno.test("resolveSubscriptionEntitlement ignores user-writable participant_type mismatch", async () => {
+  const supabase = fakeSupabase(
+    { role: "buyer", participant_type: "developer" },
+    [
+      {
+        key: "pro",
+        audience: "participant",
+        metadata: { stripe_product_id: "prod_participant" },
+      },
+      {
+        key: "developer_pro",
+        audience: "developer",
+        metadata: { stripe_product_id: "prod_dev" },
+      },
+    ],
+  );
+
+  assertEquals(
+    await resolveSubscriptionEntitlement(supabase, "user_123", {
+      productId: "prod_dev",
+    }),
+    null,
+  );
+  assertEquals(
+    await resolveSubscriptionEntitlement(supabase, "user_123", {
+      productId: "prod_participant",
+    }),
+    {
+      planKey: "pro",
+      audience: "participant",
+      productId: "prod_participant",
     },
   );
 });

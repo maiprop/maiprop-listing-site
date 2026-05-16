@@ -16,12 +16,14 @@ import Stripe from "npm:stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { createLogger } from "../_shared/logger.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { shouldSkipProfileEntitlementSync } from "./addonGuard.ts";
 
 const log = createLogger("stripe-webhook");
 
 type PricingConfigRow = {
   key?: string | null;
   audience?: string | null;
+  module?: string | null;
   metadata?: {
     stripe_price_id?: string | null;
     stripe_product_id?: string | null;
@@ -190,6 +192,7 @@ async function resolveSubscriptionEntitlement(
   supabase: SupabaseAdminClient,
   sub: Stripe.Subscription,
 ): Promise<SubscriptionEntitlement> {
+  if (shouldSkipProfileEntitlementSync(sub)) return null;
   const item = firstSubscriptionItem(sub);
   const priceId = item?.price?.id ?? null;
   const productId = typeof item?.price?.product === "string" ? item.price.product : null;
@@ -198,11 +201,17 @@ async function resolveSubscriptionEntitlement(
   const metadataPlan = (sub.metadata?.plan_key ?? sub.metadata?.plan ?? "") as string;
   const { data } = await supabase
     .from("pricing_configs")
-    .select("key, audience, metadata")
+    .select("key, audience, module, metadata")
     .eq("is_active", true);
 
   const rows = (data ?? []) as PricingConfigRow[];
   const row = rows.find((candidate) => {
+    if (
+      !["user_subscription", "agent_subscription", "developer_subscription", "professional_subscription"]
+        .includes(candidate.module ?? "")
+    ) {
+      return false;
+    }
     const meta = candidate.metadata ?? {};
     const matchesProductOrPrice = meta.stripe_product_id === productId || meta.stripe_price_id === priceId;
     if (metadataPlan) {
@@ -226,6 +235,14 @@ async function syncSubscription(
   stripe: Stripe,
   sub: Stripe.Subscription,
 ) {
+  if (shouldSkipProfileEntitlementSync(sub)) {
+    log.info("skipping profile entitlement sync for add-on subscription", {
+      sub_id: sub.id,
+      addon_key: sub.metadata?.addon_key ?? null,
+    });
+    return;
+  }
+
   const customerId = sub.customer as string;
   const customer = await stripe.customers.retrieve(customerId) as Stripe.Customer;
   const filter = resolveProfileFilter(customer);

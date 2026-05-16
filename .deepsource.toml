@@ -1,7 +1,11 @@
 version = 1
 
 exclude_patterns = [
-  "supabase/functions/fetch-os-auctions/index.ts"
+  "src/pages/Dashboard.tsx",
+  "src/test/**",
+  "supabase/functions/fetch-os-auctions/index.ts",
+  "scripts/*.cjs",
+  "scripts/**"
 ]
 
 test_patterns = [

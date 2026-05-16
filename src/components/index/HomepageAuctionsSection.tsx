@@ -4,15 +4,77 @@ import { Gavel, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PropertyCard } from "@/components/PropertyCard";
 import { useInView } from "@/hooks/useInView";
-import { getStreetViewProxyUrl } from "@/lib/config";
+import { getAuctionStreetViewImageUrl } from "@/lib/auctionStreetView";
 
 interface Props {
   listings: any[];
   isLoading: boolean;
 }
 
-export function HomepageAuctionsSection({ listings, isLoading }: Props) {
+const getSortedListingImages = (listing: any): string[] => {
+  return [...(listing.listing_images ?? [])]
+    .sort((a: any, b: any) => a.sort_order - b.sort_order)
+    .map((img: any) => img.url);
+};
+
+const getHomepageAuctionImages = (listing: any): string[] => { // skipcq: JS-R1005
+  const fallbackImages = getSortedListingImages(listing);
+  const streetView = getAuctionStreetViewImageUrl(listing);
+  const images = listing.cover_image_url ? [listing.cover_image_url] : fallbackImages;
+  return images.length ? images : streetView ? [streetView] : [];
+};
+
+const toOptionalNumber = (value: unknown): number | undefined =>
+  value ? Number(value) : undefined;
+
+const formatAuctionDate = (value: unknown): string | undefined =>
+  typeof value === "string" && value
+    ? new Date(value).toLocaleDateString("en-GB")
+    : undefined;
+
+const toAuctionCardProperty = (listing: any) => ({ // skipcq: JS-R1005 - Adapts OS auction rows into the shared property card shape.
+  id: listing.id,
+  title: listing.title,
+  address: listing.address || listing.city,
+  city: listing.city,
+  price: Number(listing.price),
+  pricePerSqm: toOptionalNumber(listing.price_per_sqm),
+  bedrooms: listing.bedrooms,
+  bathrooms: listing.bathrooms,
+  sqm: Number(listing.sqm),
+  floor: listing.floor,
+  totalFloors: listing.total_floors,
+  yearBuilt: listing.year_built,
+  energyClass: listing.energy_class,
+  images: getHomepageAuctionImages(listing),
+  type: listing.property_type,
+  listingType: listing.listing_type,
+  auctionDate: formatAuctionDate(listing.auction_date),
+  auctionStartingBid: toOptionalNumber(listing.auction_starting_bid),
+  aiScore: listing.ai_score,
+  views: listing.views_count,
+  tags: listing.tags || [],
+  isPreSale: listing.is_pre_sale ?? false,
+  constructionStatus: listing.construction_status ?? undefined,
+});
+
+const LoadingCard = () => (
+  <div className="glass-card rounded-2xl border border-border overflow-hidden animate-pulse">
+    <div className="bg-muted h-52 w-full" />
+    <div className="p-4 space-y-3">
+      <div className="h-4 bg-muted rounded-md w-3/4" />
+      <div className="h-3 bg-muted rounded-md w-1/2" />
+      <div className="h-5 bg-muted rounded-md w-1/3" />
+    </div>
+  </div>
+);
+
+const LOADING_CARD_KEYS = ["auction-loading-1", "auction-loading-2", "auction-loading-3", "auction-loading-4"];
+
+export const HomepageAuctionsSection = ({ listings, isLoading }: Props) => {
   const { ref, inView } = useInView();
+  const featuredListings = listings.slice(0, 4);
+  const showLoadingCards = isLoading && listings.length === 0;
 
   return (
     <section className="py-10 sm:py-16 bg-secondary">
@@ -32,61 +94,15 @@ export function HomepageAuctionsSection({ listings, isLoading }: Props) {
           </Button>
         </div>
         <div className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 reveal reveal-delay-1 ${inView ? "in-view" : ""}`}>
-          {listings.slice(0, 4).map((l: any) => {
-            const svFallback =
-              l.latitude != null && l.longitude != null
-                ? getStreetViewProxyUrl({ lat: Number(l.latitude), lng: Number(l.longitude) })
-                : null;
-            const imgs: string[] = l.cover_image_url ? [l.cover_image_url] : [];
-            if (!imgs.length && l.listing_images?.length) {
-              const sorted = [...l.listing_images].sort((a: any, b: any) => a.sort_order - b.sort_order);
-              sorted.forEach((img: any) => imgs.push(img.url));
-            }
-            if (!imgs.length && svFallback) imgs.push(svFallback);
-            return (
-              <PropertyCard
-                key={l.id}
-                property={{
-                  id: l.id,
-                  title: l.title,
-                  address: l.address || l.city,
-                  city: l.city,
-                  price: Number(l.price),
-                  pricePerSqm: l.price_per_sqm ? Number(l.price_per_sqm) : undefined,
-                  bedrooms: l.bedrooms,
-                  bathrooms: l.bathrooms,
-                  sqm: Number(l.sqm),
-                  floor: l.floor,
-                  totalFloors: l.total_floors,
-                  yearBuilt: l.year_built,
-                  energyClass: l.energy_class,
-                  images: imgs,
-                  type: l.property_type,
-                  listingType: l.listing_type,
-                  auctionDate: l.auction_date ? new Date(l.auction_date).toLocaleDateString("en-GB") : undefined,
-                  auctionStartingBid: l.auction_starting_bid ? Number(l.auction_starting_bid) : undefined,
-                  aiScore: l.ai_score,
-                  views: l.views_count,
-                  tags: l.tags || [],
-                  isPreSale: l.is_pre_sale ?? false,
-                  constructionStatus: l.construction_status ?? undefined,
-                }}
-              />
-            );
-          })}
-          {isLoading && listings.length === 0 &&
-            Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="glass-card rounded-2xl border border-border overflow-hidden animate-pulse">
-                <div className="bg-muted h-52 w-full" />
-                <div className="p-4 space-y-3">
-                  <div className="h-4 bg-muted rounded-md w-3/4" />
-                  <div className="h-3 bg-muted rounded-md w-1/2" />
-                  <div className="h-5 bg-muted rounded-md w-1/3" />
-                </div>
-              </div>
+          {featuredListings.map((listing: any) => (
+            <PropertyCard key={listing.id} property={toAuctionCardProperty(listing)} />
+          ))}
+          {showLoadingCards &&
+            LOADING_CARD_KEYS.map((key) => (
+              <LoadingCard key={key} />
             ))}
         </div>
       </div>
     </section>
   );
-}
+};

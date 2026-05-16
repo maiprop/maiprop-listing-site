@@ -36,10 +36,10 @@ export function createTestQueryClient() {
 interface WrapperProps {
   children: React.ReactNode;
   initialPath?: string;
+  queryClient?: QueryClient;
 }
 
-function AllProviders({ children, initialPath = "/" }: WrapperProps) {
-  const queryClient = createTestQueryClient();
+function AllProviders({ children, initialPath = "/", queryClient = createTestQueryClient() }: WrapperProps) {
   return (
     <HelmetProvider>
       <MemoryRouter initialEntries={[initialPath]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
@@ -60,12 +60,12 @@ function AllProviders({ children, initialPath = "/" }: WrapperProps) {
  */
 export function renderWithProviders(
   ui: ReactElement,
-  options?: Omit<RenderOptions, "wrapper"> & { initialPath?: string }
+  options?: Omit<RenderOptions, "wrapper"> & { initialPath?: string; queryClient?: QueryClient }
 ) {
-  const { initialPath, ...rest } = options ?? {};
+  const { initialPath, queryClient, ...rest } = options ?? {};
   return render(ui, {
     wrapper: ({ children }) => (
-      <AllProviders initialPath={initialPath}>{children}</AllProviders>
+      <AllProviders initialPath={initialPath} queryClient={queryClient}>{children}</AllProviders>
     ),
     ...rest,
   });

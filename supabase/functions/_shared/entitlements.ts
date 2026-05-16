@@ -45,9 +45,17 @@ export const normalizeEntitlementAudience = (
 
 export const getProfilePricingAudience = (
   profile: ProfileAudienceRow | null,
-): string | null =>
-  normalizeEntitlementAudience(profile?.participant_type) ??
-  normalizeEntitlementAudience(profile?.role);
+): string | null => {
+  const roleAudience = normalizeEntitlementAudience(profile?.role);
+  if (roleAudience) return roleAudience;
+
+  const participantTypeAudience = normalizeEntitlementAudience(
+    profile?.participant_type,
+  );
+  return participantTypeAudience === "participant"
+    ? participantTypeAudience
+    : null;
+};
 
 const metadataPriceIds = (metadata: PricingMetadata | null | undefined) => [
   metadata?.stripe_price_id,

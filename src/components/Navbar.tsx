@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import logoImg from "@/assets/logo.png";
+import logoDarkImg from "@/assets/logo-dark.png";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Bell, MessageSquare, Menu, X, ChevronDown, Plus, LogOut, LayoutDashboard, Building2, Sun, Moon, Home, Flame, DoorOpen, Search, Zap, Gavel, Calendar, CheckCheck, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -32,7 +33,7 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
   const navigate = useNavigate();
   const { user, profile, signOut } = useAuth();
   const { isPro } = useSubscription();
-  const { theme, setTheme } = useTheme();
+  const { theme, resolvedTheme, setTheme } = useTheme();
   const { t } = useTranslation();
 
   const participantType = getParticipantTypeFromProfile(profile);
@@ -96,6 +97,7 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
   // When transparent AND over a dark hero, force white text; otherwise use semantic tokens
   const isTransparent = !scrolled;
   const forceLight = isTransparent && hasDarkHero;
+  const useLightLogo = forceLight || resolvedTheme === "dark";
 
   useEffect(() => {
     if (forceScrolled) return;
@@ -156,8 +158,8 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
         {/* Logo */}
         <Link to="/" className="flex items-center shrink-0">
           <img
-            src={logoImg}
-            alt="maiProp — Real estate | Real decisions."
+            src={useLightLogo ? logoDarkImg : logoImg}
+            alt="mAI prop"
             className="h-10 w-auto object-contain transition-all duration-300"
           />
         </Link>
@@ -437,7 +439,7 @@ export function Navbar({ forceScrolled = false }: { forceScrolled?: boolean } = 
                       : "bg-primary/10 border-primary/25 text-primary hover:bg-primary/20"
                   }`}
                 >
-                  <Zap className="w-3 h-3" /> Pro
+                  <Zap className="w-3 h-3" /> Upgrade
                 </Link>
               )}
             </>

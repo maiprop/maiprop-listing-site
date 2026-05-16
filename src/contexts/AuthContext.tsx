@@ -315,8 +315,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Allowlist: only these fields may be self-updated by the user.
       // Sensitive columns (role, is_platform_admin, subscription_product_id,
-      // force_pro_access, stripe_customer_id) are excluded — they must be set
-      // server-side via RPC or admin action.
+      // participant_type, force_pro_access, stripe_customer_id) are excluded —
+      // they must be set server-side via RPC or admin action.
       const ALLOWED_FIELDS: ReadonlySet<keyof Profile> = new Set([
         "display_name",
         "bio",
@@ -329,7 +329,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         "video_link",
         "website_url",
         "investor_mode",
-        "participant_type",
       ] as const);
 
       const safe: Partial<Tables<"profiles">> = {};

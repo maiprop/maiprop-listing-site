@@ -1,4 +1,5 @@
 import { useState, useMemo, lazy, Suspense } from "react";
+import { Helmet } from "react-helmet-async";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   Calendar, MapPin, Loader2, DoorOpen, SlidersHorizontal, X,
@@ -187,6 +188,10 @@ export default function OpenHouses() {
 
   return (
     <div className="min-h-screen bg-background">
+      <Helmet>
+        <title>Open Houses - mAI prop</title>
+        <meta property="og:title" content="Open Houses - mAI prop" />
+      </Helmet>
       <Navbar />
       <div className="pt-16">
         {/* Hero header */}

@@ -1,0 +1,430 @@
+{
+  "generated_at": "2026-05-16T07:08:52.361Z",
+  "public_function_count": 22,
+  "entries": [
+    {
+      "name": "ai-search",
+      "source": true,
+      "has_test": true,
+      "status": "ready",
+      "caller": "signed-in browser",
+      "classification": "costly_ai",
+      "mechanisms": [
+        "signed_in_quota",
+        "fail_closed_quota"
+      ],
+      "requiredSnippets": [
+        "enforceAiQuota(req",
+        "recordAiCall",
+        "failClosed: true"
+      ],
+      "notes": "verify_jwt is false for CORS/browser invocation, but handler requires a valid user token before provider work.",
+      "missing_required_snippets": []
+    },
+    {
+      "name": "ai-translate",
+      "source": true,
+      "has_test": true,
+      "status": "ready",
+      "caller": "signed-in browser",
+      "classification": "costly_ai",
+      "mechanisms": [
+        "bearer_user_auth",
+        "rate_limit",
+        "bounded_payload"
+      ],
+      "requiredSnippets": [
+        "requireAuthenticatedUser(req",
+        "MAX_TRANSLATION_KEYS",
+        "makeRateLimiter"
+      ],
+      "notes": "verify_jwt is false for browser compatibility; handler requires auth.",
+      "missing_required_snippets": []
+    },
+    {
+      "name": "auth-email-hook",
+      "source": true,
+      "has_test": true,
+      "status": "ready",
+      "caller": "supabase_auth_hook",
+      "classification": "webhook_mutation",
+      "mechanisms": [
+        "standard_webhook_signature",
+        "shared_secret"
+      ],
+      "requiredSnippets": [
+        "SEND_EMAIL_HOOK_SECRET",
+        "standardwebhooks",
+        "webhook.verify"
+      ],
+      "notes": "Supabase Auth send-email hook, plus secret-protected preview path.",
+      "missing_required_snippets": []
+    },
+    {
+      "name": "csp-report",
+      "source": true,
+      "has_test": true,
+      "status": "ready",
+      "caller": "browser_reporting_api",
+      "classification": "public_log_receiver",
+      "mechanisms": [
+        "rate_limit",
+        "bounded_payload",
+        "no_private_response"
+      ],
+      "requiredSnippets": [
+        "makeRateLimiter",
+        "MAX_REPORT_BYTES",
+        "tooManyRequestsResponse"
+      ],
+      "notes": "Write-only report collector with no response body.",
+      "missing_required_snippets": []
+    },
+    {
+      "name": "fetch-os-auctions",
+      "source": true,
+      "has_test": true,
+      "status": "ready",
+      "caller": "signed-in browser",
+      "classification": "private_read_proxy",
+      "mechanisms": [
+        "bearer_user_auth",
+        "fail_closed_rate_limit",
+        "role_or_plan_authorization"
+      ],
+      "requiredSnippets": [
+        "failClosed: true",
+        "auth.getUser",
+        "force_pro_access"
+      ],
+      "notes": "Public platform JWT is disabled; handler enforces caller eligibility.",
+      "missing_required_snippets": []
+    },
+    {
+      "name": "full-sync-from-os",
+      "source": true,
+      "has_test": true,
+      "status": "conditional",
+      "caller": "admin/operator or cron",
+      "classification": "bulk_private_sync",
+      "mechanisms": [
+        "bearer_user_auth",
+        "rate_limit"
+      ],
+      "requiredSnippets": [
+        "makeRateLimiter",
+        "Missing or invalid Authorization header",
+        "auth.getUser"
+      ],
+      "notes": "Bulk sync blast radius; release review should inspect logs after deploy.",
+      "missing_required_snippets": []
+    },
+    {
+      "name": "healthz",
+      "source": true,
+      "has_test": true,
+      "status": "ready",
+      "caller": "public monitor/admin",
+      "classification": "coarse_public_health",
+      "mechanisms": [
+        "coarse_public_response",
+        "monitor_secret_for_details",
+        "admin_for_details"
+      ],
+      "requiredSnippets": [
+        "HEALTHZ_MONITOR_SECRET",
+        "isAuthorizedAdmin",
+        "detailed"
+      ],
+      "notes": "Public response is coarse; details require monitor secret or admin JWT.",
+      "missing_required_snippets": []
+    },
+    {
+      "name": "invitation-notify",
+      "source": true,
+      "has_test": true,
+      "status": "ready",
+      "caller": "admin/operator",
+      "classification": "email_mutation",
+      "mechanisms": [
+        "bearer_user_auth",
+        "admin_authorization",
+        "rate_limit"
+      ],
+      "requiredSnippets": [
+        "makeRateLimiter",
+        "auth.getUser",
+        "is_platform_admin"
+      ],
+      "notes": "Admin-only notification sender.",
+      "missing_required_snippets": []
+    },
+    {
+      "name": "oh-registration-notify",
+      "source": true,
+      "has_test": true,
+      "status": "ready",
+      "caller": "database webhook",
+      "classification": "email_mutation",
+      "mechanisms": [
+        "shared_secret"
+      ],
+      "requiredSnippets": [
+        "WEBHOOK_SECRET",
+        "verifyWebhookSecret",
+        "Authorization"
+      ],
+      "notes": "Database-triggered notification path.",
+      "missing_required_snippets": []
+    },
+    {
+      "name": "os-diagnose",
+      "source": true,
+      "has_test": true,
+      "status": "ready",
+      "caller": "admin/operator",
+      "classification": "diagnostic",
+      "mechanisms": [
+        "bearer_user_auth",
+        "admin_authorization",
+        "rate_limit",
+        "sanitized_output"
+      ],
+      "requiredSnippets": [
+        "makeRateLimiter",
+        "auth.getUser",
+        "Platform admin required"
+      ],
+      "notes": "Diagnostic output must never include upstream secrets or raw auth bodies.",
+      "missing_required_snippets": []
+    },
+    {
+      "name": "os-sales-coordinates",
+      "source": true,
+      "has_test": true,
+      "status": "ready",
+      "caller": "public browser",
+      "classification": "public_read_proxy",
+      "mechanisms": [
+        "rate_limit",
+        "bounded_query",
+        "allowlisted_response_fields"
+      ],
+      "requiredSnippets": [
+        "makeRateLimiter",
+        "radius",
+        "limit"
+      ],
+      "notes": "Public read endpoint; keep bounds and response allowlist intact.",
+      "missing_required_snippets": []
+    },
+    {
+      "name": "poll-os-auctions",
+      "source": true,
+      "has_test": true,
+      "status": "conditional",
+      "caller": "admin/operator or cron",
+      "classification": "private_mutation_sync",
+      "mechanisms": [
+        "bearer_user_auth",
+        "rate_limit"
+      ],
+      "requiredSnippets": [
+        "makeRateLimiter",
+        "Missing or invalid Authorization header",
+        "auth.getUser"
+      ],
+      "notes": "Public platform JWT is disabled; handler auth and rate limit are the control plane.",
+      "missing_required_snippets": []
+    },
+    {
+      "name": "receive-from-os",
+      "source": true,
+      "has_test": true,
+      "status": "ready",
+      "caller": "external_os_webhook",
+      "classification": "webhook_mutation",
+      "mechanisms": [
+        "hmac_signature",
+        "shared_secret"
+      ],
+      "requiredSnippets": [
+        "verifyHmacSignature",
+        "x-os-signature",
+        "MAIPROP_OS_WEBHOOK_SECRET"
+      ],
+      "notes": "Rejects unsigned OS webhook payloads before mutation.",
+      "missing_required_snippets": []
+    },
+    {
+      "name": "record-listing-view",
+      "source": true,
+      "has_test": true,
+      "status": "ready",
+      "caller": "public browser",
+      "classification": "public_analytics_mutation",
+      "mechanisms": [
+        "rate_limit",
+        "body_validation",
+        "visibility_guarded_rpc"
+      ],
+      "requiredSnippets": [
+        "makeRateLimiter",
+        "record_listing_view",
+        "listing_id"
+      ],
+      "notes": "RPC now guards active/public listing visibility before counting.",
+      "missing_required_snippets": []
+    },
+    {
+      "name": "scheduled-followups",
+      "source": true,
+      "has_test": true,
+      "status": "ready",
+      "caller": "cron",
+      "classification": "private_mutation_cron",
+      "mechanisms": [
+        "cron_secret"
+      ],
+      "requiredSnippets": [
+        "CRON_SECRET",
+        "x-cron-secret"
+      ],
+      "notes": "Cron-only follow-up job; browser callers must be rejected.",
+      "missing_required_snippets": []
+    },
+    {
+      "name": "send-saved-search-alerts",
+      "source": true,
+      "has_test": true,
+      "status": "ready",
+      "caller": "cron",
+      "classification": "email_mutation",
+      "mechanisms": [
+        "cron_secret"
+      ],
+      "requiredSnippets": [
+        "CRON_SECRET",
+        "verifyCronSecret",
+        "Authorization"
+      ],
+      "notes": "Cron-only email job; browser callers must be rejected.",
+      "missing_required_snippets": []
+    },
+    {
+      "name": "sitemap",
+      "source": true,
+      "has_test": true,
+      "status": "ready",
+      "caller": "crawler/public",
+      "classification": "public_read",
+      "mechanisms": [
+        "read_only_public_output"
+      ],
+      "requiredSnippets": [
+        "sitemap"
+      ],
+      "notes": "SEO endpoint; no private payloads or mutations.",
+      "missing_required_snippets": []
+    },
+    {
+      "name": "smart-filters",
+      "source": true,
+      "has_test": true,
+      "status": "ready",
+      "caller": "signed-in browser",
+      "classification": "costly_ai",
+      "mechanisms": [
+        "signed_in_quota",
+        "fail_closed_quota"
+      ],
+      "requiredSnippets": [
+        "enforceAiQuota(req",
+        "recordAiCall",
+        "failClosed: true"
+      ],
+      "notes": "Same quota contract as ai-search.",
+      "missing_required_snippets": []
+    },
+    {
+      "name": "streetview-proxy",
+      "source": true,
+      "has_test": true,
+      "status": "conditional",
+      "caller": "public browser",
+      "classification": "public_proxy",
+      "mechanisms": [
+        "rate_limit",
+        "bounded_query"
+      ],
+      "requiredSnippets": [
+        "makeRateLimiter",
+        "lat",
+        "lng"
+      ],
+      "notes": "Cost-control endpoint; rate limits and input bounds are required.",
+      "missing_required_snippets": []
+    },
+    {
+      "name": "stripe-webhook",
+      "source": true,
+      "has_test": true,
+      "status": "ready",
+      "caller": "stripe",
+      "classification": "webhook_mutation",
+      "mechanisms": [
+        "stripe_signature",
+        "shared_secret"
+      ],
+      "requiredSnippets": [
+        "stripe-signature",
+        "STRIPE_WEBHOOK_SECRET",
+        "constructEventAsync"
+      ],
+      "notes": "Signature verification must happen before event handling.",
+      "missing_required_snippets": []
+    },
+    {
+      "name": "sync-firesale-to-os",
+      "source": true,
+      "has_test": true,
+      "status": "conditional",
+      "caller": "admin/operator",
+      "classification": "private_mutation_sync",
+      "mechanisms": [
+        "bearer_user_auth",
+        "admin_or_agent_authorization"
+      ],
+      "requiredSnippets": [
+        "Missing or invalid Authorization header",
+        "auth.getUser",
+        "role"
+      ],
+      "notes": "Touches Quick Sale sync data; keep auth tests green.",
+      "missing_required_snippets": []
+    },
+    {
+      "name": "sync-to-os",
+      "source": true,
+      "has_test": true,
+      "status": "conditional",
+      "caller": "admin/operator",
+      "classification": "private_mutation_sync",
+      "mechanisms": [
+        "bearer_user_auth",
+        "admin_or_agent_authorization"
+      ],
+      "requiredSnippets": [
+        "Missing or invalid Authorization header",
+        "auth.getUser",
+        "role"
+      ],
+      "notes": "High-impact sync path; must stay covered by Deno tests for missing/invalid auth.",
+      "missing_required_snippets": []
+    }
+  ],
+  "unclassified": [],
+  "missing_source": [],
+  "missing_required_snippets": [],
+  "without_tests": []
+}

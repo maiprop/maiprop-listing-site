@@ -24,6 +24,7 @@ npm test
 npm run build
 npm audit --omit=dev --audit-level=high
 npm run lint:migrations
+npm run check:public-functions
 npm run check:release-safety
 npm run test:e2e:live-smoke
 ```
@@ -65,6 +66,7 @@ applying constraints.
 - [ ] Apply migrations to staging only.
 - [ ] Deploy edge functions to staging only.
 - [ ] Deploy the frontend to staging only.
+- [ ] Run `node scripts/check-supabase-types-freshness.cjs --strict` against the staging project.
 - [ ] Run staging RLS/security E2E.
 - [ ] Run `npm run test:e2e:live-smoke` for account deletion auth, checkout eligibility, role approval, firesale, and open-house smoke coverage.
 - [ ] Run destructive GDPR deletion and mutation drills only against the allowlisted staging Supabase project.
@@ -78,6 +80,8 @@ Production is eligible only after staging is green:
 - [ ] Branch protection requires quality, release-safety, E2E, migration validation, staging security, Lighthouse, and build jobs.
 - [ ] Live inventory drift has an approved disposition.
 - [ ] Migration preflight queries return zero rows in production.
+- [ ] Run `.github/workflows/deploy-edge-functions.yml` from `main` with `dry_run=true`; review the target list before any production edge deploy.
+- [ ] If production edge functions must deploy, rerun the same workflow with explicit function names, or set `confirm_deploy_all=true` only for an approved full redeploy.
 - [ ] Rollback owner and on-call owner are named.
 - [ ] A rollback path is recorded for frontend, edge functions, and database compensating migrations.
 

@@ -173,6 +173,7 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) { //
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-pricing-configs"] });
+      qc.invalidateQueries({ queryKey: ["pricing-configs-public"] });
       toast.success("Pricing row deleted.");
     },
     onError: (e: unknown) => toast.error((e instanceof Error ? e.message : null) ?? "Failed to delete pricing row."),
@@ -622,6 +623,14 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) { //
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Delete pricing row"
+        description="This cannot be undone."
+        confirmLabel="Delete"
+        onConfirm={() => { if (deleteTarget) deleteMutation.mutate(deleteTarget); setDeleteTarget(null); }}
+        onCancel={() => setDeleteTarget(null)}
+      />
         </>
   );
 
@@ -637,15 +646,6 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) { //
         </div>
       </div>
       <Footer />
-      <ConfirmDialog
-        open={!!deleteTarget}
-        title="Delete pricing row"
-        description="This cannot be undone."
-        confirmLabel="Delete"
-        onConfirm={() => { if (deleteTarget) deleteMutation.mutate(deleteTarget); setDeleteTarget(null); }}
-        onCancel={() => setDeleteTarget(null)}
-      />
     </div>
   );
 }
-

@@ -144,20 +144,20 @@ const { handler, restore } = await captureHandler(
   { RATE_LIMIT_FORCE_MEMORY: "true" },
 );
 
-function resetScenario(overrides: Partial<MockScenario> = {}) {
+const resetScenario = (overrides: Partial<MockScenario> = {}) => {
   globalThis.__agentDataInputScenario = {
     user: { id: "11111111-1111-4111-8111-111111111111" },
     calls: [],
     ...overrides,
   };
-}
+};
 
-function authedJson(body: unknown) {
+const authedJson = (body: unknown) => {
   return req("POST", body, {
-    authorization: "Bearer test-token",
+    authorization: `Bearer ${crypto.randomUUID()}`,
     "x-forwarded-for": crypto.randomUUID(),
   });
-}
+};
 
 function validSubmitPayload() {
   return {

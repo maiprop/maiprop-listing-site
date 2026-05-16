@@ -8,6 +8,7 @@ import {
   normalizeOwnership, getOwnershipStatus, getOwnershipPct, OWNERSHIP_BADGE,
 } from "@/lib/auctionUtils";
 import { APP_ORIGIN } from "@/lib/config";
+import { getAuctionStreetViewImageUrl } from "@/lib/auctionStreetView";
 
 export function PremiumBadge() {
   return (
@@ -29,7 +30,7 @@ export const AuctionCard = memo(function AuctionCard({
 }) {
   const days = daysUntil(a.auction_date);
   const badge = countdownBadge(days);
-  const imgSrc = a.cover_image_url;
+  const imgSrc = getAuctionStreetViewImageUrl(a);
   const isFav = favoritedIds.has(a.id);
   const ownershipStatus = normalizeOwnership(getOwnershipStatus(a.tags));
   const ownershipPct = getOwnershipPct(a.tags);
