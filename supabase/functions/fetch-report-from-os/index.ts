@@ -16,6 +16,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { createLogger } from "../_shared/logger.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import type { Database, Json } from "../../../src/integrations/supabase/types.ts";
 
 const log = createLogger("fetch-report-from-os");
 const limiter = makeRateLimiter({ bucket: "fetch-report-from-os", maxRequests: 20, windowMs: 60_000 });
@@ -56,8 +57,35 @@ type PropertyReportCacheRow = {
   expires_at: string;
 };
 
-// deno-lint-ignore no-explicit-any
-type SupabaseAdminClient = ReturnType<typeof createClient<any>>;
+type PropertyReportCacheDbRow = {
+  id: string;
+  listing_id: string;
+  report_type: string;
+  lang: string;
+  report_payload: Json;
+  generated_at: string;
+  expires_at: string;
+  created_by: string | null;
+};
+
+type FunctionDatabase = Database & {
+  public: Database["public"] & {
+    Tables: Database["public"]["Tables"] & {
+      property_report_cache: {
+        Row: PropertyReportCacheDbRow;
+        Insert: Omit<PropertyReportCacheDbRow, "id" | "generated_at" | "expires_at"> & {
+          id?: string;
+          generated_at?: string;
+          expires_at?: string;
+        };
+        Update: Partial<PropertyReportCacheDbRow>;
+        Relationships: [];
+      };
+    };
+  };
+};
+
+type SupabaseAdminClient = ReturnType<typeof createClient<FunctionDatabase>>;
 
 class ReportBillingError extends Error {
   status = 402;

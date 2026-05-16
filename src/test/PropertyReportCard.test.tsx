@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { PropertyReportCard } from "@/components/property/PropertyReportCard";
+import type { ListingWithJoins } from "@/hooks/useListings";
 
 const mocks = vi.hoisted(() => ({
   useAuth: vi.fn(),
@@ -38,7 +39,7 @@ function renderCard(props = {}) {
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
-        <PropertyReportCard listingId="listing-1" listing={listing as any} {...props} />
+        <PropertyReportCard listingId="listing-1" listing={listing as ListingWithJoins} {...props} />
       </MemoryRouter>
     </QueryClientProvider>,
   );
