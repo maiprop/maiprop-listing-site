@@ -370,7 +370,7 @@ describe("OpenHouseDetail page behavior", () => {
     await waitFor(() => {
       expect(mocks.updateListing.mutateAsync).toHaveBeenCalledWith({
         id: "oh-1",
-        updates: { open_house_date: "2026-06-02T09:30:00.000Z" },
+        updates: { open_house_date: new Date("2026-06-02T12:30").toISOString() },
       });
     });
 

@@ -3,7 +3,10 @@ version = 1
 exclude_patterns = [
   "src/pages/Dashboard.tsx",
   "src/test/**",
+  "**/*.test.ts",
+  "**/*.test.tsx",
   "supabase/functions/fetch-os-auctions/index.ts",
+  "supabase/functions/_shared/testUtils.ts",
   "scripts/*.cjs",
   "scripts/**"
 ]
