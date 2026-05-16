@@ -341,7 +341,7 @@ export default function Auctions() {
         {viewMode === "list" &&
         <div className="container pb-24 lg:pb-16">
             <div className="mb-4">
-              <h2 className="font-display text-2xl font-bold text-foreground">Auction Listings</h2>
+              <h2 className="font-display text-3xl sm:text-4xl font-bold text-foreground">Greek Property Auction Listings</h2>
               <p className="text-sm text-muted-foreground mt-1">
                 Browse court auction opportunities with live filters and daily randomized rotation.
               </p>
