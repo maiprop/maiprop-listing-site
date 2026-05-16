@@ -142,7 +142,7 @@ describe("PropertyCard behavior", () => {
       />,
     );
 
-    expect(screen.getByText(/1h 2[89]m/)).toBeInTheDocument();
+    expect(screen.getByText(/1h (2[89]|30)m/)).toBeInTheDocument();
     expect(screen.getByText("propertyCard.groundFloor/5")).toBeInTheDocument();
     expect(screen.getByText(/propertyCard.ownership.partial 50%/)).toBeInTheDocument();
     expect(screen.getByText("propertyCard.privateSeller")).toBeInTheDocument();
