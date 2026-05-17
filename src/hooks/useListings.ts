@@ -275,7 +275,7 @@ const normalizeListingWithJoins = (listing: Database["public"]["Tables"]["listin
   } as ListingWithJoins;
 };
 
-export function useListing(id: string, options: UseListingOptions = {}) {
+export const useListing = (id: string, options: UseListingOptions = {}) => {
   return useQuery({
     queryKey: ["listing", id],
     queryFn: async () => {
@@ -311,11 +311,11 @@ export function useListing(id: string, options: UseListingOptions = {}) {
       }
       return normalizeListingWithJoins({ ...data, profiles, ownerParticipantType });
     },
-    enabled: !!id,
+    enabled: Boolean(id),
     placeholderData: options.initialData ? normalizeListingWithJoins(options.initialData) : undefined,
     staleTime: CATALOG_STATIC_QUERY_STALE_TIME,
   });
-}
+};
 
 export const useOwnerProStatus = (listingId?: string, ownerId?: string | null) => {
   const hasListingId = Boolean(listingId);
