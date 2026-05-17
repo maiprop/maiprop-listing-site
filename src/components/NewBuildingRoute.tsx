@@ -5,15 +5,7 @@ import { isPlatformAdmin } from "@/lib/authUtils";
 import { getExplicitParticipantTypeFromProfile } from "@/lib/participantConfig";
 import { useSubscription } from "@/hooks/useSubscription";
 import { Button } from "@/components/ui/button";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
-
-function LoadingGate() {
-  return (
-    <div className="min-h-screen bg-background flex items-center justify-center">
-      <div className="w-10 h-10 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />
-    </div>
-  );
-}
+import { RoleRoute, type RoleRouteGuardResult } from "@/components/RoleRoute";
 
 function GateMessage({
   title,
@@ -49,29 +41,32 @@ function GateMessage({
   );
 }
 
-function NewBuildingGate({ children }: { children: React.ReactNode }) {
+function useNewBuildingRouteGuard(): RoleRouteGuardResult {
   const { profile, loading } = useAuth();
   const { hasDeveloperPro, loading: subLoading } = useSubscription();
   const switching = profileRoleSwitchInProgress(profile);
   const participantType = switching ? null : getExplicitParticipantTypeFromProfile(profile);
 
-  if (loading || subLoading) return <LoadingGate />;
+  if (loading || subLoading) return { loading: true };
 
   if (!profile) {
-    return (
+    return {
+      denied: (
       <GateMessage
         title="Profile Required"
         message="We could not load your account profile. Refresh your session or return to the dashboard before creating a new-building listing."
         primary={{ to: "/dashboard", label: "Back to Dashboard" }}
         secondary={{ to: "/login", label: "Sign In Again" }}
       />
-    );
+      ),
+    };
   }
 
-  if (isPlatformAdmin(profile)) return children as React.ReactElement;
+  if (isPlatformAdmin(profile)) return { allowed: true };
 
   if (profile.role !== "developer" || participantType !== "developer") {
-    return (
+    return {
+      denied: (
       <GateMessage
         title="Developer Access Required"
         message={switching
@@ -80,25 +75,26 @@ function NewBuildingGate({ children }: { children: React.ReactNode }) {
         primary={{ to: "/dashboard/settings", label: "Switch Account Type" }}
         secondary={{ to: "/dashboard", label: "Back to Dashboard" }}
       />
-    );
+      ),
+    };
   }
 
   if (!hasDeveloperPro) {
-    return (
+    return {
+      denied: (
       <GateMessage
         title="Developer Pro Required"
         message="New-building listings require an active Developer Pro subscription."
         primary={{ to: "/pricing?audience=developer", label: "View Developer Plan" }}
         secondary={{ to: "/dashboard", label: "Back to Dashboard" }}
       />
-    );
+      ),
+    };
   }
 
-  return children as React.ReactElement;
+  return { allowed: true };
 }
 
 export const NewBuildingRoute = ({ children }: { children: React.ReactNode }) => (
-  <ProtectedRoute>
-    <NewBuildingGate>{children}</NewBuildingGate>
-  </ProtectedRoute>
+  <RoleRoute useGuard={useNewBuildingRouteGuard}>{children}</RoleRoute>
 );

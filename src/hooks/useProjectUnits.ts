@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { requireOwnedProject } from "@/hooks/projectOwnership";
 import { toast } from "sonner";
 import type { Database } from "@/integrations/supabase/types";
+import { FAST_CHANGING_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
 
 /** A project_units row as fetched by the list query. */
 export type ProjectUnit = Database["public"]["Tables"]["project_units"]["Row"];
@@ -58,6 +59,7 @@ export const useProjectUnits = (projectId: string | undefined) => {
       return data || [];
     },
     enabled: Boolean(projectId),
+    staleTime: FAST_CHANGING_QUERY_STALE_TIME,
   });
 };
 

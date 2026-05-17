@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { FAST_CHANGING_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
 
 /** Views per day for the last N days for my listings */
 export function useListingViewTrends(listingIds: string[], days = 14) {
@@ -28,6 +29,7 @@ export function useListingViewTrends(listingIds: string[], days = 14) {
         .sort((a, b) => a.date.localeCompare(b.date));
     },
     enabled: listingIds.length > 0,
+    staleTime: FAST_CHANGING_QUERY_STALE_TIME,
   });
 }
 
@@ -61,5 +63,6 @@ export function useLeadFunnel(professionalId: string | undefined) {
       };
     },
     enabled: !!professionalId,
+    staleTime: FAST_CHANGING_QUERY_STALE_TIME,
   });
 }

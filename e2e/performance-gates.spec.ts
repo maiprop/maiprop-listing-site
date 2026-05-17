@@ -13,8 +13,34 @@ const ROUTE_JS_BUDGET_KB: Record<string, number> = {
   "/platform-map": 2200,
 };
 
+const WEB_VITAL_ROUTES = ["/", "/listings", "/pricing"];
+const WEB_VITAL_BUDGETS = {
+  lcp: 4000,
+  cls: 0.15,
+  inp: 200,
+};
+
 const LAZY_ONLY_CHUNK_RE = /(?:LazyRecharts|recharts|d3-|BarChart|LineChart|AreaChart|PieChart|ResponsiveContainer|mapbox-gl|react-map-gl|vendor-mapbox|vendor-charts)/i;
 const CHART_CHUNK_RE = /(?:LazyRecharts|recharts|d3-|BarChart|LineChart|AreaChart|PieChart|ResponsiveContainer|vendor-charts)/i;
+
+type WebVitalsSnapshot = {
+  fcp: number;
+  lcp: number;
+  cls: number;
+  inp: number;
+  inpSamples: number;
+};
+
+type BrowserVitalsState = WebVitalsSnapshot & {
+  eventDurations: number[];
+};
+
+declare global {
+  interface Window {
+    __maipropWebVitals?: BrowserVitalsState;
+    __maipropReadWebVitals?: () => WebVitalsSnapshot;
+  }
+}
 
 const perfProfile = {
   id: "perf-profile",
@@ -133,7 +159,140 @@ async function installAuthenticatedSupabaseMocks(page: Page) {
   });
 }
 
+async function installWebVitalsCollector(page: Page) {
+  await page.addInitScript(() => {
+    const vitals: BrowserVitalsState = {
+      fcp: 0,
+      lcp: 0,
+      cls: 0,
+      inp: 0,
+      inpSamples: 0,
+      eventDurations: [],
+    };
+
+    window.__maipropWebVitals = vitals;
+
+    const updateFromPerformanceEntries = () => {
+      const fcpEntry = performance.getEntriesByName("first-contentful-paint").at(-1);
+      if (fcpEntry) vitals.fcp = fcpEntry.startTime;
+
+      const lcpEntry = performance.getEntriesByType("largest-contentful-paint").at(-1);
+      if (lcpEntry) vitals.lcp = lcpEntry.startTime;
+
+      for (const entry of performance.getEntriesByType("event")) {
+        const eventEntry = entry as PerformanceEntry & { duration?: number; interactionId?: number };
+        if ((eventEntry.interactionId ?? 0) <= 0) continue;
+        vitals.inp = Math.max(vitals.inp, eventEntry.duration ?? 0);
+        vitals.inpSamples = Math.max(vitals.inpSamples, vitals.eventDurations.length);
+      }
+    };
+
+    const observe = (
+      options: PerformanceObserverInit & { durationThreshold?: number },
+      callback: (entry: PerformanceEntry) => void,
+    ) => {
+      try {
+        const observer = new PerformanceObserver((list) => {
+          for (const entry of list.getEntries()) callback(entry);
+        });
+        observer.observe(options);
+      } catch {
+        // Older browsers may not expose every metric type. Chromium in CI does.
+      }
+    };
+
+    observe({ type: "paint", buffered: true }, (entry) => {
+      if (entry.name === "first-contentful-paint") vitals.fcp = entry.startTime;
+    });
+
+    observe({ type: "largest-contentful-paint", buffered: true }, (entry) => {
+      vitals.lcp = entry.startTime;
+    });
+
+    observe({ type: "layout-shift", buffered: true }, (entry) => {
+      const shift = entry as PerformanceEntry & { value?: number; hadRecentInput?: boolean };
+      if (!shift.hadRecentInput) vitals.cls += shift.value ?? 0;
+    });
+
+    observe({ type: "event", buffered: true, durationThreshold: 16 }, (entry) => {
+      const eventEntry = entry as PerformanceEntry & { duration?: number; interactionId?: number };
+      if ((eventEntry.interactionId ?? 0) <= 0) return;
+      const duration = eventEntry.duration ?? 0;
+      vitals.eventDurations.push(duration);
+      vitals.inp = Math.max(vitals.inp, duration);
+      vitals.inpSamples = vitals.eventDurations.length;
+    });
+
+    window.__maipropReadWebVitals = () => {
+      updateFromPerformanceEntries();
+      return {
+        fcp: vitals.fcp,
+        lcp: vitals.lcp,
+        cls: vitals.cls,
+        inp: vitals.inp,
+        inpSamples: vitals.inpSamples,
+      };
+    };
+  });
+}
+
+async function exerciseInputForVitals(page: Page) {
+  await page.evaluate(() => {
+    document.querySelector("[data-web-vitals-probe]")?.remove();
+    const probe = document.createElement("button");
+    probe.type = "button";
+    probe.dataset.webVitalsProbe = "true";
+    probe.setAttribute("aria-label", "Web vitals probe");
+    Object.assign(probe.style, {
+      position: "fixed",
+      right: "0",
+      bottom: "0",
+      width: "4px",
+      height: "4px",
+      opacity: "0",
+      zIndex: "2147483647",
+    });
+    probe.addEventListener("click", () => {
+      const start = performance.now();
+      while (performance.now() - start < 32) {
+        // Keep the interaction measurable without approaching the INP budget.
+      }
+    });
+    document.body.appendChild(probe);
+  });
+
+  await page.locator("[data-web-vitals-probe]").click({ force: true });
+  await page.waitForTimeout(250);
+}
+
 test.describe("authenticated performance gates @perf", () => {
+  test("public routes stay within Core Web Vitals budgets", async ({ page }) => {
+    await installWebVitalsCollector(page);
+    await installAuthenticatedSupabaseMocks(page);
+
+    for (const path of WEB_VITAL_ROUTES) {
+      await page.goto(path, { waitUntil: "domcontentloaded" });
+      await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => undefined);
+      await expect(page.locator("body")).toBeVisible();
+      await exerciseInputForVitals(page);
+
+      const vitals = await page.evaluate(() => window.__maipropReadWebVitals?.() ?? {
+        fcp: 0,
+        lcp: 0,
+        cls: 0,
+        inp: 0,
+        inpSamples: 0,
+      });
+
+      expect(vitals.fcp, `${path} FCP was not captured`).toBeGreaterThan(0);
+      expect(vitals.lcp, `${path} LCP was not captured`).toBeGreaterThan(0);
+      expect(vitals.inpSamples, `${path} INP interaction sample was not captured`).toBeGreaterThan(0);
+      expect(vitals.lcp, `${path} LCP ${vitals.lcp.toFixed(1)} ms`).toBeLessThanOrEqual(WEB_VITAL_BUDGETS.lcp);
+      expect(vitals.cls, `${path} CLS ${vitals.cls.toFixed(3)}`).toBeLessThanOrEqual(WEB_VITAL_BUDGETS.cls);
+      expect(vitals.inp, `${path} INP ${vitals.inp.toFixed(1)} ms`).toBeLessThanOrEqual(WEB_VITAL_BUDGETS.inp);
+    }
+  });
+
   test("protected and property routes stay within JS budgets and keep chart/map chunks lazy", async ({ page }) => {
     await installAuthenticatedSupabaseMocks(page);
 

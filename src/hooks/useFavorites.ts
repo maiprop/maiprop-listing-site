@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { USER_SCOPED_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
 
 /** Returns the current user's saved/favorited listings with full listing data joined. */
 export function useFavorites() {
@@ -20,6 +21,7 @@ export function useFavorites() {
       return data || [];
     },
     enabled: !!user,
+    staleTime: USER_SCOPED_QUERY_STALE_TIME,
   });
 }
 

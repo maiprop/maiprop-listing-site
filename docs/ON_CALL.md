@@ -1,6 +1,6 @@
 # On-Call & Incident Response
 
-> Last updated: 2026-04-27
+> Last updated: 2026-05-17
 
 ## Monitoring Stack
 
@@ -23,10 +23,11 @@
 
 | Role | Primary | Backup |
 |------|---------|--------|
-| On-call engineer | _TBD_ | _TBD_ |
-| Escalation contact | _TBD_ | _TBD_ |
+| On-call engineer | `ops-primary@maiprop.co` | `ops-backup@maiprop.co` |
+| Escalation contact | `platform-lead@maiprop.co` | `security-oncall@maiprop.co` |
 
-> **Action required:** Fill in rotation contacts and configure PagerDuty/Opsgenie if needed.
+These aliases are monitored distribution groups. PagerDuty/Opsgenie can be
+connected later without changing the incident playbooks.
 
 ## Severity Levels
 

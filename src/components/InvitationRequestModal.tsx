@@ -6,6 +6,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 const INVESTMENT_FOCUS_OPTIONS = [
   { value: "", label: "Select focus" },
@@ -69,6 +70,7 @@ interface Props {
 }
 
 export function InvitationRequestModal({ user, onClose, onSuccess }: Props) {
+  const dialogRef = useFocusTrap<HTMLDivElement>({ onEscape: onClose });
   const [email, setEmail] = useState(user?.email ?? "");
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
@@ -145,7 +147,15 @@ export function InvitationRequestModal({ user, onClose, onSuccess }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-md p-4" onClick={onClose}>
-      <div className="w-full max-w-2xl max-h-[90vh] flex flex-col glass-card rounded-2xl border border-border shadow-elevated overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Request Quick Sale access"
+        tabIndex={-1}
+        className="w-full max-w-2xl max-h-[90vh] flex flex-col glass-card rounded-2xl border border-border shadow-elevated overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
         <div className="shrink-0 px-6 py-5 border-b border-border bg-card/80">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">

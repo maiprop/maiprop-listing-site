@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { USER_SCOPED_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
 
 export function useDealChecklists() {
   const { user } = useAuth();
@@ -18,6 +19,7 @@ export function useDealChecklists() {
       return data || [];
     },
     enabled: !!user,
+    staleTime: USER_SCOPED_QUERY_STALE_TIME,
   });
 }
 
@@ -38,6 +40,7 @@ export function useDealChecklist(entityType: string, entityId: string | undefine
       return data;
     },
     enabled: !!user && !!entityId,
+    staleTime: USER_SCOPED_QUERY_STALE_TIME,
   });
 }
 

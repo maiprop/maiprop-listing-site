@@ -5,7 +5,7 @@ import { isPlatformAdmin } from "@/lib/authUtils";
 import { getExplicitParticipantTypeFromProfile } from "@/lib/participantConfig";
 import { useSubscription } from "@/hooks/useSubscription";
 import { Button } from "@/components/ui/button";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { RoleRoute, type RoleRouteGuardResult } from "@/components/RoleRoute";
 
 type GateStatus =
   | "loading"
@@ -70,12 +70,6 @@ const gateMessageContent: Record<
   },
 };
 
-const LoadingGate = () => (
-  <div className="min-h-screen bg-background flex items-center justify-center">
-    <div className="w-10 h-10 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />
-  </div>
-);
-
 const GateIcon = ({ tone }: Pick<GateMessageProps, "tone">) => {
   const iconClass =
     tone === "orange" ? "bg-orange-500/10 text-orange-500" : "bg-muted text-muted-foreground";
@@ -125,20 +119,18 @@ const gateChecks: GateCheck[] = [
   { status: "allowed", matches: ({ hasDeveloperPro }) => hasDeveloperPro },
 ];
 
-const DeveloperGate = ({ children }: { children: React.ReactNode }) => {
+function useDeveloperRouteGuard(): RoleRouteGuardResult {
   const { profile, loading } = useAuth();
   const { hasDeveloperPro, loading: subLoading } = useSubscription();
   const context = { profile, loading, subLoading, hasDeveloperPro };
   const status = gateChecks.find((check) => check.matches(context))?.status ?? "missing-plan";
 
-  if (status === "loading") return <LoadingGate />;
-  if (status === "admin" || status === "allowed") return children as React.ReactElement;
-  return <GateMessage {...gateMessageContent[status]} />;
-};
+  if (status === "loading") return { loading: true };
+  if (status === "admin" || status === "allowed") return { allowed: true };
+  return { denied: <GateMessage {...gateMessageContent[status]} /> };
+}
 
 /** Protects Developer-only project and portfolio modules. */
 export const DeveloperRoute = ({ children }: { children: React.ReactNode }) => (
-  <ProtectedRoute>
-    <DeveloperGate>{children}</DeveloperGate>
-  </ProtectedRoute>
+  <RoleRoute useGuard={useDeveloperRouteGuard}>{children}</RoleRoute>
 );

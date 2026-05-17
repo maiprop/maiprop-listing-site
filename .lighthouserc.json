@@ -37,6 +37,7 @@
         "first-contentful-paint":     ["error", { "maxNumericValue": 2500 }],
         "largest-contentful-paint":   ["error", { "maxNumericValue": 4000 }],
         "total-blocking-time":        ["error", { "maxNumericValue": 400 }],
+        "max-potential-fid":          ["error", { "maxNumericValue": 200 }],
         "cumulative-layout-shift":    ["error", { "maxNumericValue": 0.15 }],
         "unused-javascript":          "off",
         "unused-css-rules":           "off"

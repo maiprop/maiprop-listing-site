@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
+import { USER_SCOPED_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
 
 export type SavedSearch = {
   id: string;
@@ -21,6 +22,7 @@ export function useSavedSearches() {
   return useQuery({
     queryKey: ["saved_searches", user?.id],
     enabled: !!user,
+    staleTime: USER_SCOPED_QUERY_STALE_TIME,
     queryFn: async () => {
       if (!user) return [];
       const { data, error } = await supabase

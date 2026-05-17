@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { requireOwnedProject } from "@/hooks/projectOwnership";
 import { toast } from "sonner";
 import type { Database } from "@/integrations/supabase/types";
+import { CATALOG_STATIC_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
 
 export type ProjectMediaType =
   | "rendering"
@@ -36,6 +37,7 @@ export function useProjectMedia(projectId: string | undefined) {
       return data || [];
     },
     enabled: !!projectId,
+    staleTime: CATALOG_STATIC_QUERY_STALE_TIME,
   });
 }
 

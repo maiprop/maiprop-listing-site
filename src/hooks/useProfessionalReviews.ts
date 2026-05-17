@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { CATALOG_STATIC_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
 
 export interface ProfessionalReview {
   id: string;
@@ -52,6 +53,7 @@ export function useProfessionalReviews(professionalId: string) {
   return useQuery({
     queryKey: ["professional-reviews", professionalId],
     enabled: !!professionalId,
+    staleTime: CATALOG_STATIC_QUERY_STALE_TIME,
     queryFn: async (): Promise<ProfessionalReview[]> => {
       type ReviewRow = Omit<ProfessionalReview, "reviewer"> & {
         profiles: { display_name: string | null; avatar_url: string | null } | null;

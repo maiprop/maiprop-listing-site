@@ -167,7 +167,7 @@ operable by a single person.
 
 ### Risks accepted
 
-- **Bus factor of 1 human** (see `docs/ENTERPRISE_ASSESSMENT_2026-04-27.md`).
+- **Bus factor of 1 human** (see `docs/archive/audits/ENTERPRISE_ASSESSMENT_2026-04-27.md`).
   Mitigated by: (a) this ADR + `CLAUDE.md` + `CONTRIBUTING.md` make the
   architecture intelligible to a successor; (b) `CODEOWNERS` formalizes
   blast-radius modules; (c) Supabase's hosted nature means a successor

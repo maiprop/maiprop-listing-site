@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { CATEGORY_LABELS } from "@/lib/professionalServiceCatalog";
 import { supabase } from "@/integrations/supabase/client";
 import { SERVICE_URGENCY_COLORS } from "@/lib/statusColors";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 const CATEGORY_EMOJI: Record<string, string> = {
   real_estate_agent: "🏠", architect: "🏛️", civil_engineer: "⚙️", lawyer: "⚖️", notary: "📜",
@@ -35,6 +36,7 @@ interface AIServiceMatchModalProps {
 }
 
 export function AIServiceMatchModal({ onClose, onNavigate }: AIServiceMatchModalProps) {
+  const dialogRef = useFocusTrap<HTMLDivElement>({ onEscape: onClose });
   const [need, setNeed] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<MatchResult | null>(null);
@@ -72,7 +74,14 @@ export function AIServiceMatchModal({ onClose, onNavigate }: AIServiceMatchModal
       className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center sm:p-4 bg-background/70 backdrop-blur-sm"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="w-full sm:max-w-lg bg-card border border-border sm:rounded-2xl shadow-elevated overflow-hidden">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Find matching professional"
+        tabIndex={-1}
+        className="w-full sm:max-w-lg bg-card border border-border sm:rounded-2xl shadow-elevated overflow-hidden"
+      >
         <div className="flex items-center gap-3 px-5 py-4 border-b border-border" style={{ background: "linear-gradient(135deg, hsl(var(--primary) / 0.08), hsl(var(--accent) / 0.06))" }}>
           <div className="w-9 h-9 rounded-xl bg-gradient-primary flex items-center justify-center shrink-0">
             <Brain className="w-4.5 h-4.5 text-primary-foreground" />

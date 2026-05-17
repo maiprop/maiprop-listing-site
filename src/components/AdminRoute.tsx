@@ -1,31 +1,23 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { isPlatformAdmin } from "@/lib/authUtils";
-import { ProtectedRoute } from "./ProtectedRoute";
+import { RoleRoute, type RoleRouteGuardResult } from "./RoleRoute";
 
 /** Protects admin-only routes. Only users with role='admin' can access. */
 export function AdminRoute({ children }: { children: React.ReactNode }) {
-  return (
-    <ProtectedRoute>
-      <AdminGate>{children}</AdminGate>
-    </ProtectedRoute>
-  );
+  return <RoleRoute useGuard={useAdminRouteGuard}>{children}</RoleRoute>;
 }
 
-function AdminGate({ children }: { children: React.ReactNode }) {
+function useAdminRouteGuard(): RoleRouteGuardResult {
   const { profile, loading } = useAuth();
 
   if (loading || !profile) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="w-10 h-10 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />
-      </div>
-    );
+    return { loading: true };
   }
 
   if (!isPlatformAdmin(profile)) {
-    return <Navigate to="/dashboard" replace />;
+    return { denied: <Navigate to="/dashboard" replace /> };
   }
 
-  return <>{children}</>;
+  return { allowed: true };
 }

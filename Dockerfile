@@ -1,33 +1,51 @@
-# Development Dockerfile — for local dev and CI reproducibility.
-# NOT used in production (Cloudflare Pages handles builds + hosting).
+# Multi-stage Dockerfile for the Vite app.
 #
-# Usage:
-#   docker build -t maiprop-dev .
-#   docker run -p 8080:8080 --env-file .env maiprop-dev
+# Production image:
+#   docker build -t maiprop-listing-site .
+#   docker run -p 8080:8080 maiprop-listing-site
+#
+# Development image with Node and Deno:
+#   docker build --target dev -t maiprop-listing-site-dev .
+#   docker run -p 8080:8080 --env-file .env maiprop-listing-site-dev
 
-FROM node:20.19.5-slim AS base
-
-WORKDIR /app
-
+ARG NODE_VERSION=20.19.5
 ARG DENO_VERSION=2.7.12
 
-# Install Deno for edge function development.
-RUN apt-get update && apt-get install -y curl unzip && \
-    curl -fsSL https://deno.land/install.sh | sh -s "v${DENO_VERSION}" && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
-ENV DENO_INSTALL="/root/.deno"
-ENV PATH="$DENO_INSTALL/bin:$PATH"
+FROM node:${NODE_VERSION}-slim AS base
+WORKDIR /app
+ENV HUSKY=0
 
-# Install dependencies
+FROM base AS deps
 COPY package.json package-lock.json ./
 COPY scripts/check-runtime.mjs ./scripts/check-runtime.mjs
 RUN npm run check:runtime && npm ci
 
-# Copy source
+FROM deps AS build
+ARG APP_SUPABASE_URL=https://abcdefghijklmnop.supabase.co
+ARG APP_SUPABASE_PUBLIC=sb_publishable_ci_placeholder_not_real
+ARG APP_SUPABASE_PROJECT=abcdefghijklmnop
 COPY . .
+RUN VITE_SUPABASE_URL="${APP_SUPABASE_URL}" \
+    VITE_SUPABASE_PUBLISHABLE_KEY="${APP_SUPABASE_PUBLIC}" \
+    VITE_SUPABASE_PROJECT_ID="${APP_SUPABASE_PROJECT}" \
+    npm run build
 
-# Expose dev server port
+FROM deps AS dev
+ARG DENO_VERSION
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl unzip \
+    && curl -fsSL https://deno.land/install.sh | sh -s "v${DENO_VERSION}" \
+    && apt-get purge -y --auto-remove curl unzip \
+    && rm -rf /var/lib/apt/lists/*
+ENV DENO_INSTALL=/root/.deno
+ENV PATH="${DENO_INSTALL}/bin:${PATH}"
+COPY . .
 EXPOSE 8080
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "8080"]
 
-# Default: start dev server
-CMD ["npm", "run", "dev"]
+FROM nginxinc/nginx-unprivileged:1.27-alpine AS production
+COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/dist /usr/share/nginx/html
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget -qO- http://127.0.0.1:8080/healthz >/dev/null || exit 1

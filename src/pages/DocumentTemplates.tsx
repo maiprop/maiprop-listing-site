@@ -16,6 +16,7 @@ import {
   Home,
   TrendingUp,
 } from "lucide-react";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 // ── Template content ──────────────────────────────────────────────────────────
 
@@ -44,6 +45,14 @@ export default function DocumentTemplates() {
   const [activeCategory, setActiveCategory] = useState<Category>("sale");
   const [previewTemplate, setPreviewTemplate] = useState<typeof TEMPLATES[0] | null>(null);
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
+  const previewDialogRef = useFocusTrap<HTMLDivElement>({
+    active: Boolean(previewTemplate),
+    onEscape: () => setPreviewTemplate(null),
+  });
+  const upgradeDialogRef = useFocusTrap<HTMLDivElement>({
+    active: showUpgradePrompt,
+    onEscape: () => setShowUpgradePrompt(false),
+  });
 
   const filtered = TEMPLATES.filter((t) => t.category === activeCategory);
 
@@ -201,6 +210,11 @@ export default function DocumentTemplates() {
           onClick={() => setPreviewTemplate(null)}
         >
           <div
+            ref={previewDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Preview ${previewTemplate.name}`}
+            tabIndex={-1}
             className="bg-card border border-border rounded-2xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
@@ -245,6 +259,11 @@ export default function DocumentTemplates() {
           onClick={() => setShowUpgradePrompt(false)}
         >
           <div
+            ref={upgradeDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Pro plan required"
+            tabIndex={-1}
             className="bg-card border border-border rounded-2xl w-full max-w-md p-6 shadow-2xl text-center"
             onClick={(e) => e.stopPropagation()}
           >

@@ -82,6 +82,48 @@ const SYSTEM_TAG_PREFIXES = [
   "round:", "status:", "posted", "sync:", "land_type:", "commercial_type:",
 ];
 
+const PROPERTY_IMAGE_WIDTHS = [320, 480, 768, 1024];
+const PROPERTY_CARD_IMAGE_SIZES = "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw";
+const COMPACT_PROPERTY_IMAGE_SIZES = "96px";
+
+function getSizedImageUrl(src: string, width: number): string | null {
+  try {
+    const url = new URL(src, APP_ORIGIN);
+    if (!["http:", "https:"].includes(url.protocol)) return null;
+
+    if (url.hostname.includes("images.unsplash.com")) {
+      url.searchParams.set("auto", "format");
+      url.searchParams.set("q", "80");
+      url.searchParams.set("w", String(width));
+      return url.toString();
+    }
+
+    if (url.hostname.endsWith("supabase.co") && url.pathname.includes("/storage/v1/object/public/")) {
+      url.pathname = url.pathname.replace("/storage/v1/object/public/", "/storage/v1/render/image/public/");
+      url.searchParams.set("quality", "80");
+      url.searchParams.set("resize", "cover");
+      url.searchParams.set("width", String(width));
+      return url.toString();
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function getPropertyImageSrcSet(src: string): string | undefined {
+  const srcSet = PROPERTY_IMAGE_WIDTHS
+    .map((width) => {
+      const sizedUrl = getSizedImageUrl(src, width);
+      return sizedUrl ? `${sizedUrl} ${width}w` : null;
+    })
+    .filter(Boolean)
+    .join(", ");
+
+  return srcSet || undefined;
+}
+
 export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(function PropertyCard({ property, compact = false }, _ref) {
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -165,11 +207,19 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
 
   if (compact) {
     const thumb = property.images?.[0];
+    const thumbSrcSet = thumb ? getPropertyImageSrcSet(thumb) : undefined;
     return (
       <Link to={detailPath} className="glass-card rounded-xl overflow-hidden flex gap-3 p-3 property-card group" data-testid="property-card">
         <div className="relative w-24 h-20 rounded-lg overflow-hidden shrink-0 bg-muted">
           {thumb ? (
-            <img src={thumb} alt={property.title} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+            <img
+              src={thumb}
+              srcSet={thumbSrcSet}
+              sizes={thumbSrcSet ? COMPACT_PROPERTY_IMAGE_SIZES : undefined}
+              alt={property.title}
+              loading="lazy"
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            />
           ) : (
             <div className="w-full h-full flex items-center justify-center"><Home className="w-6 h-6 text-muted-foreground/30" /></div>
           )}
@@ -198,6 +248,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
   }
 
   const mainImage = property.images?.[0];
+  const mainImageSrcSet = mainImage ? getPropertyImageSrcSet(mainImage) : undefined;
 
   return (
     <div data-testid="property-card" className={`property-card rounded-2xl overflow-hidden group flex flex-col bg-card transition-shadow duration-300 ${
@@ -210,6 +261,8 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
         {mainImage ? (
           <img
             src={mainImage}
+            srcSet={mainImageSrcSet}
+            sizes={mainImageSrcSet ? PROPERTY_CARD_IMAGE_SIZES : undefined}
             alt={property.title}
             loading="lazy"
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"

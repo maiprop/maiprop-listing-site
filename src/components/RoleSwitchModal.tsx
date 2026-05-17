@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import type { ParticipantId } from "@/lib/participantConfig";
 import { PARTICIPANT_LABELS } from "@/lib/participantConfig";
 import { getPlanForParticipant, classifySwitch, type SwitchKind } from "@/lib/rolePlanMap";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 interface RoleSwitchModalProps {
   fromType: ParticipantId;
@@ -64,6 +65,7 @@ export function RoleSwitchModal({
   onCancel,
   confirming = false,
 }: RoleSwitchModalProps) {
+  const dialogRef = useFocusTrap<HTMLDivElement>({ onEscape: onCancel });
   const fromPlan = getPlanForParticipant(fromType);
   const toPlan   = getPlanForParticipant(toType);
   const kind     = classifySwitch(fromType, toType);
@@ -74,7 +76,14 @@ export function RoleSwitchModal({
   return (
     // Backdrop
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-md bg-background border border-border rounded-2xl shadow-2xl overflow-hidden">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Switching account type"
+        tabIndex={-1}
+        className="w-full max-w-md bg-background border border-border rounded-2xl shadow-2xl overflow-hidden"
+      >
 
         {/* Header */}
         <div className={cn(

@@ -36,25 +36,24 @@ export default defineConfig({
         "functions/**/*.{test,spec}.ts",
         "functions/tsconfig.json",
       ],
-      // Baseline thresholds — these are FLOORS, not targets.
+      // Baseline thresholds are floors, not targets.
       //
-      // Measured coverage (2026-05-05 — after Finding 7 any-removal sweep,
-      // verified on CI Linux runner):
-      //   lines      63.93%   threshold 63
-      //   statements 63.93%   threshold 63
-      //   functions  43.28%   threshold 43
-      //   branches   60.92%   threshold 60
+      // Measured locally on 2026-05-17 after strict roadmap test hardening.
+      //   lines      89.85%   threshold 89
+      //   statements 89.85%   threshold 89
+      //   functions  80.73%   threshold 80
+      //   branches   78.42%   threshold 77
       //
-      // The roadmap to lines 75 lives in docs/testing.md. Whenever a PR
+      // Whenever a PR
       // adds meaningful coverage to a P0 page (Pricing, Dashboard,
       // Onboarding, Login, Signup, Messages), bump the threshold in the
       // SAME PR so we ratchet up monotonically and can never silently
       // regress. Do not lower these without explicit team agreement.
       thresholds: {
-        lines: 63,
-        functions: 43,
-        branches: 60,
-        statements: 63,
+        lines: 89,
+        functions: 80,
+        branches: 77,
+        statements: 89,
       },
     },
   },

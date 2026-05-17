@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { CompareAIReports } from "@/components/CompareAIReports";
 import { ENERGY_CLASS_COLORS } from "@/lib/statusColors";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 // Compare drawer renders an arbitrary listing column row at runtime; the
 // formatter receives whatever the (heavily projected) listing record holds.
@@ -115,6 +116,7 @@ export function CompareDrawer({
 
 function CompareModal({ listings, onRemove }: { listings: Listing[]; onRemove: (id: string) => void }) {
   const [open, setOpen] = useState(false);
+  const dialogRef = useFocusTrap<HTMLDivElement>({ active: open, onEscape: () => setOpen(false) });
 
   return (
     <>
@@ -124,7 +126,14 @@ function CompareModal({ listings, onRemove }: { listings: Listing[]; onRemove: (
 
       {open && (
         <div className="fixed inset-0 z-[60] flex items-start justify-center bg-background/80 backdrop-blur-sm overflow-y-auto pt-8 pb-16 px-4">
-          <div className="bg-card border border-border rounded-2xl shadow-elevated w-full max-w-5xl">
+          <div
+            ref={dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Property comparison"
+            tabIndex={-1}
+            className="bg-card border border-border rounded-2xl shadow-elevated w-full max-w-5xl"
+          >
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-border">
               <h2 className="font-display font-bold text-xl">Property Comparison</h2>

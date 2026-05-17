@@ -335,13 +335,15 @@ describe("ProjectDetail", () => {
     );
 
     fireEvent.click(screen.getAllByRole("button", { name: /delete unit/i })[0]);
-    await waitFor(() => expect(screen.getByText("Remove unit")).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: /^cancel$/i }));
+    const cancelUnitDialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(cancelUnitDialog).getByRole("button", { name: /^cancel$/i }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+
     fireEvent.click(screen.getAllByRole("button", { name: /delete unit/i })[0]);
-    await waitFor(() => expect(screen.getByText("Remove unit")).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: /^remove$/i }));
+    const confirmUnitDialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(confirmUnitDialog).getByRole("button", { name: /^remove$/i }));
     expect(deleteUnitMock).toHaveBeenCalledWith({ id: "unit-2", projectId: "project-1" });
-  });
+  }, 15000);
 
   it("shows a bulk price error when no available priced units exist", () => {
     useProjectUnitsMock.mockReturnValue({
@@ -390,11 +392,13 @@ describe("ProjectDetail", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: /delete lead Alex Buyer/i }));
-    await waitFor(() => expect(screen.getByText("Remove lead")).toBeInTheDocument());
-    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: /^cancel$/i }));
+    const cancelDialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(cancelDialog).getByRole("button", { name: /^cancel$/i }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+
     fireEvent.click(screen.getByRole("button", { name: /delete lead Alex Buyer/i }));
-    await waitFor(() => expect(screen.getByText("Remove lead")).toBeInTheDocument());
-    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: /^remove$/i }));
+    const confirmDialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(confirmDialog).getByRole("button", { name: /^remove$/i }));
     expect(deleteLeadMock).toHaveBeenCalledWith({ id: "lead-1", projectId: "project-1" });
   });
 

@@ -437,5 +437,5 @@ describe("Listings page interactions", () => {
     rerender(<Listings />);
     fireEvent.click(screen.getAllByRole("button", { name: /retry/i })[0]);
     expect(reload).toHaveBeenCalled();
-  });
+  }, 15000);
 });

@@ -3,6 +3,7 @@ import { Bookmark, Bell, BellOff, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCreateSavedSearch } from "@/hooks/useSavedSearches";
 import { useAuth } from "@/contexts/AuthContext";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 interface Props {
   currentFilters: Record<string, string>;
@@ -11,6 +12,7 @@ interface Props {
 
 export function SaveSearchModal({ currentFilters, onClose }: Props) {
   const { user } = useAuth();
+  const dialogRef = useFocusTrap<HTMLDivElement>({ active: Boolean(user), onEscape: onClose });
   const [name, setName] = useState("My Search");
   const [emailAlerts, setEmailAlerts] = useState(false);
   const createSavedSearch = useCreateSavedSearch();
@@ -30,7 +32,14 @@ export function SaveSearchModal({ currentFilters, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/70 backdrop-blur-sm p-4">
-      <div className="bg-card border border-border rounded-2xl shadow-elevated w-full max-w-sm">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Save this search"
+        tabIndex={-1}
+        className="bg-card border border-border rounded-2xl shadow-elevated w-full max-w-sm"
+      >
         <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-border">
           <div className="flex items-center gap-2">
             <Bookmark className="w-4 h-4 text-primary" />

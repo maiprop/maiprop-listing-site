@@ -4,6 +4,7 @@ dist
 *.md
 !README.md
 playwright-report
+test-results
 coverage
 .env
 .env.*

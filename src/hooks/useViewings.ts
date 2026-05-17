@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
 import type { TablesUpdate } from "@/integrations/supabase/types";
+import { FAST_CHANGING_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
 
 /**
  * Returns viewings for the current user.
@@ -25,6 +26,7 @@ export function useViewings(role: "requester" | "owner" = "requester") {
       return data || [];
     },
     enabled: !!user,
+    staleTime: FAST_CHANGING_QUERY_STALE_TIME,
   });
 }
 

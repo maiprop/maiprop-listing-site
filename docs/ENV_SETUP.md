@@ -177,6 +177,7 @@ fail-fast behavior.
 | `SUPABASE_STAGING_DB_URL` | optional staging Postgres connection string for CI `supabase db push --db-url`; enables automatic staging DB migration before edge-function deploy | staging environment only |
 | `SUPABASE_PROJECT_REF` | optional project ref alias used by release-safety live inventory | manual release certification |
 | `RELEASE_SAFETY_SUPABASE_PROJECT_REF` | optional project ref override for release-safety live inventory; defaults to `supabase/config.toml` `project_id` when unset | manual release certification |
+| `SUPABASE_MANAGEMENT_API_BASE` | optional override for Supabase Management API advisor checks; defaults to `https://api.supabase.com/v1` | local/CI diagnostics only |
 | `SENTRY_AUTH_TOKEN` | optional read-only token for local production telemetry checks; never required by app runtime | local operator shell only |
 | `RLS_USER_A_EMAIL` | staging RLS test user A | repo or staging environment |
 | `RLS_USER_B_EMAIL` | staging RLS test user B | repo or staging environment |
@@ -224,6 +225,14 @@ $env:RELEASE_SAFETY_LIVE_FUNCTIONS="true"
 # Optional override. If omitted, the script reads supabase/config.toml project_id.
 $env:RELEASE_SAFETY_SUPABASE_PROJECT_REF="<project-ref>"
 npm run check:release-safety -- --live-functions
+```
+
+Live Supabase advisor checks use the same Management API token and project ref:
+
+```powershell
+$env:SUPABASE_ACCESS_TOKEN="<redacted>"
+$env:SUPABASE_PROJECT_REF="<project-ref>"
+npm run check:supabase-advisor -- --out supabase-advisor-summary.json
 ```
 
 For local production telemetry verification, set a read-only Sentry token only in

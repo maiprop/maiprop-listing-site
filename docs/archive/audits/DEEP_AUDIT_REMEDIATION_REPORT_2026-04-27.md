@@ -3,7 +3,7 @@
 **Status:** All 7 audit findings closed. **Final Grade: A (92/100).**
 
 This report captures the second remediation pass performed on 2026-04-27 against
-the deep audit findings that survived the first pass (`docs/GO_LIVE_SECURITY_AUDIT_2026-04-27.md`).
+the deep audit findings that survived the first pass (`docs/archive/audits/GO_LIVE_SECURITY_AUDIT_2026-04-27.md`).
 Every fix is committed to `main` and verified against the full CI gauntlet
 (typecheck, lint, migration lint, bundle-size, vitest with 1179 tests, build).
 

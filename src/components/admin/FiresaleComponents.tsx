@@ -13,6 +13,7 @@ import {
   type InterestStatus,
 } from "@/hooks/useFiresaleInterest";
 import { formatTimeAgo } from "@/lib/format";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 // ── Shared types & constants ──────────────────────────────────────────────────
 
@@ -201,6 +202,10 @@ export function AdminDealRow({ deal, onUpdate }: { deal: AdminDeal; onUpdate: (i
   const [offerConditions, setOfferConditions] = useState("");
   const [showCounterInput, setShowCounterInput] = useState(false);
   const [counterPrice, setCounterPrice] = useState("");
+  const offerDialogRef = useFocusTrap<HTMLDivElement>({
+    active: showOfferModal,
+    onEscape: () => setShowOfferModal(false),
+  });
   const statusCfg = STATUS_CONFIG[deal.status] || STATUS_CONFIG.pending;
 
   const handleSave = async () => {
@@ -386,7 +391,14 @@ export function AdminDealRow({ deal, onUpdate }: { deal: AdminDeal; onUpdate: (i
 
       {showOfferModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
-          <div className="glass-card rounded-2xl border border-border w-full max-w-md p-6 space-y-5 shadow-elevated">
+          <div
+            ref={offerDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Send offer"
+            tabIndex={-1}
+            className="glass-card rounded-2xl border border-border w-full max-w-md p-6 space-y-5 shadow-elevated"
+          >
             <div className="flex items-start justify-between">
               <div><h3 className="font-display font-bold text-lg">Send Offer</h3><p className="text-xs text-muted-foreground mt-0.5">{deal.address}, {deal.city}</p></div>
               <button aria-label="Close" className="p-1 rounded-lg text-muted-foreground hover:text-foreground" onClick={() => setShowOfferModal(false)}><XIcon className="w-4 h-4" aria-hidden="true" /></button>
