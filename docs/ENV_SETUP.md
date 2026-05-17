@@ -174,6 +174,7 @@ fail-fast behavior.
 | `STAGING_SUPABASE_PUBLISHABLE_KEY` | staging anon/publishable key | repo or staging environment |
 | `STAGING_SUPABASE_PROJECT_ID` | staging Supabase project ref | repo or staging environment |
 | `SUPABASE_ACCESS_TOKEN` | Supabase CLI deploy/list token | repo or environment scoped to deploy jobs |
+| `SUPABASE_STAGING_DB_URL` | staging Postgres connection string for CI `supabase db push --db-url` | staging environment only |
 | `SUPABASE_PROJECT_REF` | optional project ref alias used by release-safety live inventory | manual release certification |
 | `RELEASE_SAFETY_SUPABASE_PROJECT_REF` | optional project ref override for release-safety live inventory; defaults to `supabase/config.toml` `project_id` when unset | manual release certification |
 | `SENTRY_AUTH_TOKEN` | optional read-only token for local production telemetry checks; never required by app runtime | local operator shell only |

@@ -259,6 +259,8 @@ jobs:
       ONBOARDING_TEST_PASSWORD: ${{ secrets.ONBOARDING_TEST_PASSWORD }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      E2E_ALLOW_DESTRUCTIVE_LIVE_TESTS: true
+      E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -276,6 +278,7 @@ jobs:
           required=(
             "VITE_SUPABASE_URL"
             "VITE_SUPABASE_PUBLISHABLE_KEY"
+            "VITE_SUPABASE_PROJECT_ID"
             "RLS_USER_A_EMAIL"
             "RLS_USER_B_EMAIL"
             "RLS_USER_PASSWORD"
@@ -640,29 +643,36 @@ jobs:
       # Pages *project* settings (NOT from the GitHub Actions env and NOT from
       # the built Vite bundle). Sync the runtime bindings from GitHub secrets
       # so functions/sitemap-dynamic.xml.ts can resolve SUPABASE_PROJECT_ID on
-      # every request, and functions/_middleware.ts can resolve the optional
-      # SITE_LOCK_PASSWORD for the pre-launch passcode gate.
+      # every request, the SEO Pages Functions can read public listing data via
+      # SUPABASE_PUBLISHABLE_KEY, and functions/_middleware.ts can resolve the
+      # optional SITE_LOCK_PASSWORD for the pre-launch passcode gate.
       - name: Sync Cloudflare Pages runtime environment variables
         env:
-          SUPABASE_PROJECT_ID:  ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
-          SITE_LOCK_PASSWORD:   ${{ secrets.SITE_LOCK_PASSWORD }}
+          SUPABASE_PROJECT_ID:       ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
+          SUPABASE_PUBLISHABLE_KEY:  ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          SITE_LOCK_PASSWORD:        ${{ secrets.SITE_LOCK_PASSWORD }}
         run: |
           set -euo pipefail
           if [ -z "${SUPABASE_PROJECT_ID}" ]; then
             echo "::warning::VITE_SUPABASE_PROJECT_ID secret is empty; sitemap function will use static fallback"
           fi
+          if [ -z "${SUPABASE_PUBLISHABLE_KEY}" ]; then
+            echo "::warning::VITE_SUPABASE_PUBLISHABLE_KEY secret is empty; SEO Functions will use the static app shell"
+          fi
 
-          # Build env_vars payload. SITE_LOCK_PASSWORD is optional — only
-          # include it when the GitHub secret is set. Remove the secret (and
-          # redeploy) to unlock the site. `secret_text` stores the value
-          # encrypted-at-rest on Cloudflare's side.
+          # Build env_vars payload. SITE_LOCK_PASSWORD is optional; when the
+          # GitHub secret is absent, send a null binding so Cloudflare removes
+          # any previously stored passcode instead of preserving stale state.
+          # `secret_text` stores the value encrypted-at-rest on Cloudflare's side.
           ENV_JSON=$(jq -n \
             --arg pid "$SUPABASE_PROJECT_ID" \
+            --arg pkey "$SUPABASE_PUBLISHABLE_KEY" \
             --arg lock "$SITE_LOCK_PASSWORD" \
             '
             ({} +
               (if $pid  != "" then { SUPABASE_PROJECT_ID: { value: $pid,  type: "plain_text"  } } else {} end) +
-              (if $lock != "" then { SITE_LOCK_PASSWORD: { value: $lock, type: "secret_text" } } else {} end)
+              (if $pkey != "" then { SUPABASE_PUBLISHABLE_KEY: { value: $pkey, type: "plain_text" } } else {} end) +
+              (if $lock != "" then { SITE_LOCK_PASSWORD: { value: $lock, type: "secret_text" } } else { SITE_LOCK_PASSWORD: null } end)
             )')
 
           PAYLOAD=$(jq -n --argjson env "$ENV_JSON" '{
@@ -730,7 +740,7 @@ jobs:
     # Keep deployments out of arbitrary PRs; staging receives mainline and manual
     # deployments after the quality gate passes.
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
-    needs: [quality, release-safety]
+    needs: [quality, release-safety, migrations-validate]
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -739,6 +749,7 @@ jobs:
         run: |
           required=(
             "STAGING_SUPABASE_PROJECT_ID"
+            "SUPABASE_STAGING_DB_URL"
             "SUPABASE_ACCESS_TOKEN"
           )
           missing=0
@@ -753,6 +764,7 @@ jobs:
           fi
         env:
           STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          SUPABASE_STAGING_DB_URL:     ${{ secrets.SUPABASE_STAGING_DB_URL }}
           SUPABASE_ACCESS_TOKEN:       ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -770,6 +782,16 @@ jobs:
         uses: supabase/setup-cli@b60b5899c73b63a2d2d651b1e90db8d4c9392f51 # v1.6.0
         with:
           version: 2.98.1
+
+      - name: Dry-run staging database migrations
+        run: supabase db push --db-url "$SUPABASE_STAGING_DB_URL" --dry-run
+        env:
+          SUPABASE_STAGING_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
+
+      - name: Apply database migrations to staging
+        run: supabase db push --db-url "$SUPABASE_STAGING_DB_URL" --yes
+        env:
+          SUPABASE_STAGING_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
 
       - name: Capture staging live function drift inventory
         run: npm run check:release-safety -- --live-functions --out release-safety-staging-live-functions.json
@@ -811,11 +833,30 @@ jobs:
       - name: Checkout (for Pages Functions in functions/)
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - name: Download dist artifact
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          name: dist
-          path: dist/
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Check runtime
+        run: npm run check:runtime
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build app with staging environment
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL:             ${{ secrets.STAGING_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_SUPABASE_PROJECT_ID:      ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          VITE_MAPBOX_TOKEN:             ${{ secrets.VITE_MAPBOX_TOKEN }}
+          VITE_SENTRY_DSN:               ${{ secrets.VITE_SENTRY_DSN }}
+          VITE_STRIPE_PRO_PRODUCT_ID:    ${{ secrets.VITE_STRIPE_PRO_PRODUCT_ID }}
+          VITE_TURNSTILE_SITE_KEY:       ${{ secrets.VITE_TURNSTILE_SITE_KEY }}
+          VITE_GOOGLE_MAPS_API_KEY:      ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
+          VITE_PLAUSIBLE_DOMAIN:         ${{ secrets.VITE_PLAUSIBLE_DOMAIN }}
+          VITE_APP_URL:                  ${{ secrets.VITE_APP_URL }}
 
       - name: Deploy to Cloudflare Pages (PR preview)
         uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3.15.0
