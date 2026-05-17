@@ -147,7 +147,7 @@ describe("PropertyMiniMap", () => {
     await waitFor(() => {
       const card = document.body.textContent ?? "";
       // Should show the REAL message, not the generic SDK string
-      expect(card).toMatch(/usage limit|Monthly AI/i);
+      expect(card).toMatch(/AI allowance|usage limit|Monthly AI/i);
       expect(card).not.toMatch(/Edge Function returned a non-2xx/i);
     });
   });

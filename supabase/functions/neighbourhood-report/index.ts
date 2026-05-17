@@ -85,7 +85,12 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
       );
     }
 
-    if (!hasAIProviderCredentials()) throw new Error("AI provider key not configured");
+    if (!hasAIProviderCredentials()) {
+      log.warn("neighbourhood-report: AI provider key missing; using fallback report", { city });
+      const fallback = fallbackReport(city, address, region);
+      await recordAiCall(quota.userId, BUCKET);
+      return new Response(JSON.stringify(fallback), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
     const locationStr = [address, city, region, "Greece"].filter(Boolean).join(", ");
     const coordStr = lat && lng ? ` (coords: ${lat}, ${lng})` : "";
@@ -154,13 +159,15 @@ Rules:
 
     if (!response.ok) {
       const status = response.status;
-      if (status === 402 || status === 403 || status === 429) {
-        log.warn("neighbourhood-report: AI provider unavailable; using fallback report", { city, status });
-        const fallback = fallbackReport(city, address, region);
-        await recordAiCall(quota.userId, BUCKET);
-        return new Response(JSON.stringify(fallback), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-      throw new Error(`AI gateway error: ${status}`);
+      const text = await response.text();
+      log.warn("neighbourhood-report: AI provider unavailable; using fallback report", {
+        city,
+        status,
+        body: text.slice(0, 500),
+      });
+      const fallback = fallbackReport(city, address, region);
+      await recordAiCall(quota.userId, BUCKET);
+      return new Response(JSON.stringify(fallback), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const aiData = await response.json();

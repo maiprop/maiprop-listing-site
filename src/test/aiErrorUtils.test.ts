@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { isAiUsageLimitError, getAiErrorMessage, AI_USAGE_LIMIT_MESSAGE } from "@/lib/aiErrorUtils";
+import {
+  isAiMonthlyLimitError,
+  isAiUsageLimitError,
+  getAiErrorMessage,
+  AI_MONTHLY_LIMIT_MESSAGE,
+  AI_USAGE_LIMIT_MESSAGE,
+} from "@/lib/aiErrorUtils";
 
 describe("isAiUsageLimitError", () => {
   it("returns true when error message contains '402'", () => {
@@ -27,6 +33,12 @@ describe("isAiUsageLimitError", () => {
     expect(isAiUsageLimitError(null, { error: "usage limit reached" })).toBe(true);
     expect(isAiUsageLimitError(null, { error: "402 from gateway" })).toBe(true);
     expect(isAiUsageLimitError(null, { error: "credits exhausted" })).toBe(true);
+  });
+
+  it("recognizes monthly feature quota limits separately", () => {
+    expect(isAiMonthlyLimitError(null, { error: "monthly_limit_reached" })).toBe(true);
+    expect(isAiMonthlyLimitError(null, { error: "Monthly AI usage limit reached. Resets on the 1st of next month." })).toBe(true);
+    expect(isAiUsageLimitError(null, { error: "monthly_limit_reached" })).toBe(true);
   });
 
   it("returns false for a generic error", () => {
@@ -87,5 +99,11 @@ describe("getAiErrorMessage", () => {
     expect(getAiErrorMessage(null, { error: "credits exhausted" })).toBe(AI_USAGE_LIMIT_MESSAGE);
     expect(getAiErrorMessage(null, { error: "402 limit" })).toBe(AI_USAGE_LIMIT_MESSAGE);
     expect(getAiErrorMessage(null, { error: "usage limit reached" })).toBe(AI_USAGE_LIMIT_MESSAGE);
+  });
+
+  it("returns a specific monthly allowance message for app quota caps", () => {
+    expect(getAiErrorMessage(null, { error: "monthly_limit_reached" })).toBe(AI_MONTHLY_LIMIT_MESSAGE);
+    expect(getAiErrorMessage(null, { error: "Monthly AI usage limit reached. Resets on the 1st of next month." }))
+      .toBe(AI_MONTHLY_LIMIT_MESSAGE);
   });
 });

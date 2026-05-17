@@ -9,13 +9,15 @@ const log = createLogger("property-pois");
 const BUCKET = "property-pois";
 const poisLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 20, windowMs: 60_000, failClosed: true });
 
-function fallbackPois(city: string): Array<{
+type FallbackPoi = {
   name: string;
   category: "school" | "transit" | "cafe" | "hospital" | "shopping" | "park";
   distanceKm: number;
   walkMinutes: number;
   description: string;
-}> {
+};
+
+const fallbackPois = (city: string): FallbackPoi[] => {
   const area = city?.trim() || "the area";
   return [
     { name: `${area} Primary School`, category: "school", distanceKm: 0.45, walkMinutes: 5, description: "Local education option" },
@@ -31,19 +33,19 @@ function fallbackPois(city: string): Array<{
     { name: `${area} Pocket Park`, category: "park", distanceKm: 0.75, walkMinutes: 9, description: "Local green space" },
     { name: `${area} Public Square`, category: "park", distanceKm: 1.2, walkMinutes: 14, description: "Open public space" },
   ];
-}
+};
 
-function fallbackPoisResponse(
+const fallbackPoisResponse = (
   city: string,
   corsHeaders: Record<string, string>,
   reason: string,
-): Response {
+): Response => {
   log.warn("property-pois: using fallback POIs", { city, reason });
   return new Response(
     JSON.stringify({ pois: fallbackPois(city), generatedBy: "fallback", warning: reason }),
     { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
   );
-}
+};
 
 const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS-R1005 - One Edge handler coordinates auth, quota, listing context, AI parsing, and response shaping.
   const corsPreflightResponse = handleCors(req);
@@ -69,7 +71,13 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
       );
     }
 
-    if (!hasAIProviderCredentials()) throw new Error("AI provider key not configured");
+    if (!hasAIProviderCredentials()) {
+      return fallbackPoisResponse(
+        String(city ?? ""),
+        corsHeaders,
+        "AI provider is not configured; deterministic nearby-place fallback used",
+      );
+    }
 
     const prompt = `You are a Greek real estate assistant. Given a property at address "${address}" in ${city}, Greece (coordinates: ${lat}, ${lng}), generate exactly 12 nearby points of interest that a prospective buyer would care about.
 
@@ -103,16 +111,13 @@ Rules:
 
     if (!response.ok) {
       const status = response.status;
-      if (status === 402 || status === 403 || status === 429) {
-        return fallbackPoisResponse(
-          String(city ?? ""),
-          corsHeaders,
-          `AI provider returned ${status}; deterministic nearby-place fallback used`,
-        );
-      }
       const text = await response.text();
       log.error("AI gateway error", { status, body: text.slice(0, 500) });
-      throw new Error(`AI gateway error: ${status}`);
+      return fallbackPoisResponse(
+        String(city ?? ""),
+        corsHeaders,
+        `AI provider returned ${status}; deterministic nearby-place fallback used`,
+      );
     }
 
     const aiData = await response.json();

@@ -300,7 +300,19 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
       );
     }
 
-    if (!hasAIProviderCredentials()) throw new Error("AI provider key not configured");
+    if (!hasAIProviderCredentials()) {
+      log.warn("property-valuation: AI provider key missing; using fallback valuation", { city });
+      const fallback = fallbackValuation({
+        city: String(city),
+        price: Number(price),
+        sqm: Number(sqm),
+        propertyType: typeof propertyType === "string" ? propertyType : undefined,
+        listingType: typeof listingType === "string" ? listingType : undefined,
+        reason: "the AI provider is not configured",
+      });
+      await recordAiCall(quotaUserId, BUCKET);
+      return new Response(JSON.stringify(fallback), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
     // ── Key property specifics (construction year, condition, heating) for valuation ──
     const keySpecifics = [
@@ -438,19 +450,16 @@ Rules:
     if (!response.ok) {
       const txt = await response.text();
       log.error("AI gateway error", { status: response.status, body: txt.slice(0, 500) });
-      if (response.status === 402 || response.status === 403 || response.status === 429) {
-        const fallback = fallbackValuation({
-          city: String(city),
-          price: Number(price),
-          sqm: Number(sqm),
-          propertyType: typeof propertyType === "string" ? propertyType : undefined,
-          listingType: typeof listingType === "string" ? listingType : undefined,
-          reason: `the AI provider returned ${response.status}`,
-        });
-        await recordAiCall(quotaUserId, BUCKET);
-        return new Response(JSON.stringify(fallback), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-      throw new Error(`AI gateway error: ${response.status}`);
+      const fallback = fallbackValuation({
+        city: String(city),
+        price: Number(price),
+        sqm: Number(sqm),
+        propertyType: typeof propertyType === "string" ? propertyType : undefined,
+        listingType: typeof listingType === "string" ? listingType : undefined,
+        reason: `the AI provider returned ${response.status}`,
+      });
+      await recordAiCall(quotaUserId, BUCKET);
+      return new Response(JSON.stringify(fallback), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const aiData = await response.json();
